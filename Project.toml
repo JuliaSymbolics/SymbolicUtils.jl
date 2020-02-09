@@ -1,0 +1,4 @@
+name = "SymbolicUtils"
+uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
+authors = ["Shashi Gowda <shashigowda91@gmail.com>"]
+version = "0.1.0"

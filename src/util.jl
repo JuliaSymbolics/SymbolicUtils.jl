@@ -4,9 +4,9 @@ struct LL
 end
 
 islist(::Any) = false
-islist(l::Union{LL, AbstractArray, Tuple}) = true
+islist(l::Union{LL, Term, AbstractArray, Tuple}) = true
 
-Base.isempty(l::LL) = (@assert l.i <= length(l.v); l.i == length(l.v))
+Base.isempty(l::LL) = l.i > length(l.v)
 
 Base.length(l::LL) = length(l.v)-v.i+1
 @inline car(l::LL) = l.v[l.i]

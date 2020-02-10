@@ -45,7 +45,7 @@ end
 macro rule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs,rhs = expr.args[2], expr.args[3]
-    :(Rule($(makepattern(lhs)), __MATCHES__ -> $(@show makeconsequent(rhs))))
+    :(Rule($(makepattern(lhs)), __MATCHES__ -> $(makeconsequent(rhs))))
 end
 
 makesegment(s::Symbol) = Segment(s)
@@ -113,13 +113,13 @@ function makeconsequent(expr)
 end
 
 
-function match_literal(val)
+function matcher(val::Any)
     function literal_matcher(data, bindings, next)
         isequal(car(data), val) && next(bindings, 1)
     end
 end
 
-function match_slot(slot)
+function matcher(slot::Slot)
     function slot_matcher(data, bindings, next)
         if haskey(bindings, slot.name) # Namedtuple?
             isequal(bindings[slot.name], car(data)) && next(bindings, 1)
@@ -164,7 +164,9 @@ end
     end
 end
 
-function match_segment(segment)
+drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
+
+function matcher(segment::Segment)
     function segment_matcher(data, bindings, success)
         if haskey(bindings, segment.name)
             n = trymatchexpr(data, bindings[segment.name], 0)
@@ -186,3 +188,27 @@ function match_segment(segment)
     end
 end
 
+function matcher(term::Term)
+    matchers = (matcher(car(term)), map(matcher, cdr(term))...)
+    function term_matcher(data, bindings, success)
+        function loop(bindings′, matchers′, data′)
+            !islist(data′) && return
+            if isempty(matchers′)
+                if isempty(data′)
+                    # perfectly emptied
+                    success(bindings′, 1)
+                else
+                    return
+                end
+            else
+                car(matchers′)(data′,
+                               bindings′,
+                              (bindings′′, n) -> loop(bindings′′,
+                                                     cdr(matchers′),
+                                                     drop_n(data′, n)))
+            end
+        end
+
+        loop(bindings, matchers, data)
+    end
+end

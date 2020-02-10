@@ -7,8 +7,8 @@ A named variable with an optional domain.
 domain defaults to number.
 """
 struct Variable
+    type::Type
     name::Symbol
-    domain
 end
 
 Base.convert(::Type{Expr}, v::Variable) = v.name
@@ -17,7 +17,7 @@ Base.show(io::IO, v::Variable) = print(io, v.name, "::", v.domain)
 
 Variable(x) = Variable(x, Number)
 
-domain(v::Variable) = v.domain
+symtype(v::Variable) = v.type
 
 _name(x::Symbol) = x
 function _name(x::Expr)

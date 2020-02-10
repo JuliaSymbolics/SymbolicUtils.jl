@@ -1,9 +1,7 @@
 module SymbolicUtils
 
-using FunctionalCollections
-const pdict = PersistentHashMap
+abstract type Symbolic end
 
-include("util.jl")
 include("variable.jl")
 include("term.jl")
 

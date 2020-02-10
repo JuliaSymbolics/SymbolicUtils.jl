@@ -6,7 +6,7 @@ export @vars
 A named variable with an optional domain.
 domain defaults to number.
 """
-struct Variable
+struct Variable <: Symbolic
     type::Type
     name::Symbol
 end

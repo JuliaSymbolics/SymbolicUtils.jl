@@ -112,18 +112,6 @@ function makeconsequent(expr)
     end
 end
 
-# From the book:
-#
-# (a ~x ~y ~x c)
-#
-# has many many matches for
-#
-# (a b b b b b b c)
-#
-# Ref [42] for research on term rewriting with equational theories
-#
-# Bidirectional rules are not discussed.
-#
 
 function match_literal(val)
     function literal_matcher(data, bindings, next)
@@ -132,14 +120,69 @@ function match_literal(val)
 end
 
 function match_slot(slot)
-    function slot_matcher(data, bindings, success)
+    function slot_matcher(data, bindings, next)
         if haskey(bindings, slot.name) # Namedtuple?
             isequal(bindings[slot.name], car(data)) && next(bindings, 1)
         else
-            next(assoc(bindings, slot.name, car(data)), 1)
+            if slot.predicate(car(data))
+                next(assoc(bindings, slot.name, car(data)), 1)
+            end
         end
     end
 end
 
-function match_segment(segment)
+function trymatchexpr(data, value, n)
+    if isempty(value)
+        return n
+    elseif islist(value) && islist(data)
+        if isempty(data)
+            # didn't fully match
+            return 0
+        end
+
+        while isequal(car(value), car(data))
+            n += 1
+            value = cdr(value)
+            data = cdr(data)
+            if isempty(value)
+                return n
+            elseif isempty(data)
+                return 0
+            end
+        end
+        return isempty(value) ? n : 0
+    elseif isequal(value, data)
+        return n + 1
+    end
 end
+
+@inline function take_n(ll, n)
+    if isempty(ll) || n == 0
+        return ()
+    else
+        (car(ll), take_n(cdr(ll), n-1)...,)
+    end
+end
+
+function match_segment(segment)
+    function segment_matcher(data, bindings, success)
+        if haskey(bindings, segment.name)
+            n = trymatchexpr(data, bindings[segment.name], 0)
+            if n > 0
+                success(bindings, n)
+            end
+        else
+            # create a new match
+            for i=0:length(data)
+                subexpr = take_n(data, i)
+                if segment.predicate(subexpr)
+                    res = success(assoc(bindings, segment.name, subexpr), i)
+                    if res !== false
+                        break
+                    end
+                end
+            end
+        end
+    end
+end
+

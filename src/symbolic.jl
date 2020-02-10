@@ -15,6 +15,7 @@ end
 Variable(x) = Variable(x, Number)
 symtype(v::Variable) = v.type
 
+Base.isequal(v1::Variable, v2::Variable) = isequal(v1.name, v1.name)
 Base.show(io::IO, v::Variable) = print(io, v.name, "::", v.type)
 
 function vars_syntax_error()
@@ -54,6 +55,10 @@ operation(x::Term) = x.f
 symtype(x::Term)   = x.type
 arguments(x::Term) = x.arguments
 
+function Base.isequal(t1::Term, t2::Term)
+    isequal(operation(t1), operation(t2)) && all(isequal, arguments(t1), arguments(t2))
+end
+
 function term(f, args...; type = nothing)
     if type === nothing
         t = promote_symtype(f, map(symtype, args)...)
@@ -81,6 +86,7 @@ struct LiteralFunction <: Symbolic
 end
 
 Base.nameof(f::LiteralFunction) = f.name
+Base.isequal(l1::LiteralFunction, l2::LiteralFunction) = isequal(nameof(f1), nameof(f2))
 
 function (f::LiteralFunction)(args...)
 

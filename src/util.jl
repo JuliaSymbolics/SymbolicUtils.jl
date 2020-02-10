@@ -2,15 +2,25 @@ struct LL
     v
     i::Int
 end
-@inline car(l::LL) = l.v[l.i]
-@inline cdr(l::LL) = l.i >= length(l.v) ? nothing : LL(l.v, l.i+1)
 
+islist(::Any) = false
+islist(l::Union{LL, AbstractArray, Tuple}) = true
+
+Base.isempty(l::LL) = (@assert l.i <= length(l.v); l.i == length(l.v))
+
+Base.length(l::LL) = length(l.v)-v.i+1
+@inline car(l::LL) = l.v[l.i]
+@inline cdr(l::LL) = isempty(l) ? () : LL(l.v, l.i+1)
+
+Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
+Base.isempty(t::Term) = false
 @inline car(t::Term) = operation(t)
 @inline cdr(t::Term) = arguments(t)
+
 @inline car(v) = first(v)
 @inline function cdr(v)
     if isempty(v)
-        return nothing
+        return ()
     else
         # return a linked list starting at 2
         return LL(v, 2)
@@ -21,8 +31,10 @@ struct Cons
     car
     cdr
 end
+islist(c::Cons) = true
 
 @inline cons(car,cdr) = Cons(car, cdr)
+Base.length(c::Cons) = length(c.cdr) + 1
 @inline car(c::Cons) = c.car
 @inline cdr(c::Cons) = c.cdr
 

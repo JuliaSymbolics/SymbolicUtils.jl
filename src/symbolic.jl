@@ -64,14 +64,6 @@ function term(f, args...; type = nothing)
     Term(f, t, args)
 end
 
-function arguments(x::Term)
-    if termstyle(x) === AC{false, false}()
-        (a=>1 for a in x.arguments)
-    else
-        x.arguments
-    end
-end
-
 function Base.show(io::IO, t::Term)
     f = operation(t)
     fname = nameof(f)

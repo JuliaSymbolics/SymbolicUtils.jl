@@ -138,13 +138,14 @@ function matcher(slot::Slot)
     end
 end
 
+# returns n == offset, 0 if failed
 function trymatchexpr(data, value, n)
     if isempty(value)
         return n
     elseif islist(value) && islist(data)
         if isempty(data)
             # didn't fully match
-            return 0
+            return nothing
         end
 
         while isequal(car(value), car(data))
@@ -154,10 +155,10 @@ function trymatchexpr(data, value, n)
             if isempty(value)
                 return n
             elseif isempty(data)
-                return 0
+                return nothing
             end
         end
-        return isempty(value) ? n : 0
+        return isempty(value) ? n : nothing
     elseif isequal(value, data)
         return n + 1
     end
@@ -177,7 +178,7 @@ function matcher(segment::Segment)
     function segment_matcher(data, bindings, success)
         if haskey(bindings, segment.name)
             n = trymatchexpr(data, bindings[segment.name], 0)
-            if n > 0
+            if n !== nothing
                 success(bindings, n)
             end
         else
@@ -205,11 +206,7 @@ function matcher(term::Term)
             if isempty(matchers′)
                 if  isempty(term)
                     return success(bindings′, 1)
-                else
-                    return nothing
                 end
-            elseif isempty(term)
-                # exhausted before full match
                 return nothing
             end
             res = car(matchers′)(term, bindings′,

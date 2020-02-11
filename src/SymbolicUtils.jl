@@ -9,6 +9,7 @@ symtype(x) = typeof(x) # For types outside of SymbolicUtils
 end
 
 include("symbolic.jl")
+include("methods.jl")
 include("util.jl")
 include("pattern.jl")
 

@@ -56,7 +56,10 @@ symtype(x::Term)   = x.type
 arguments(x::Term) = x.arguments
 
 function Base.isequal(t1::Term, t2::Term)
-    isequal(operation(t1), operation(t2)) && all(isequal, arguments(t1), arguments(t2))
+    a1 = arguments(t1)
+    a2 = arguments(t2)
+    isequal(operation(t1), operation(t2)) && length(a1) == length(a2) &&
+        all(isequal(l,r) for (l, r) in zip(a1,a2))
 end
 
 function term(f, args...; type = nothing)

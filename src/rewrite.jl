@@ -199,7 +199,8 @@ end
 function matcher(term::Term)
     matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
     function term_matcher(data, bindings, success)
-        !isempty(data) && !(car(data) isa Term) && return nothing
+        isempty(data) && return nothing
+        !(car(data) isa Term) && return nothing
         function loop(term, bindings′, matchers′) # Get it to compile faster
             if isempty(matchers′) && isempty(term)
                 return success(bindings′, 1)
@@ -217,7 +218,7 @@ end
 
 ### Rewriting
 
-function make_rewriter(rule::Rule)
+function rewriter(rule::Rule)
     m = matcher(rule.lhs)
     rhs = rule.rhs
     function rule_rewriter(term)
@@ -227,7 +228,7 @@ function make_rewriter(rule::Rule)
 end
 
 function rewriter(rules::Vector)
-    compiled_rules = (map(make_rewriter, rules)...,)
+    compiled_rules = (map(rewriter, rules)...,)
 
     function rewrite(term)
         # simplify the subexpressions

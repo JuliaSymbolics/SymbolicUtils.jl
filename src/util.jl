@@ -1,5 +1,5 @@
-struct LL
-    v
+struct LL{V}
+    v::V
     i::Int
 end
 
@@ -8,7 +8,7 @@ islist(l::Union{LL, Term, AbstractArray, Tuple}) = true
 
 Base.isempty(l::LL) = l.i > length(l.v)
 
-Base.length(l::LL) = length(l.v)-v.i+1
+Base.length(l::LL) = length(l.v)-l.i+1
 @inline car(l::LL) = l.v[l.i]
 @inline cdr(l::LL) = isempty(l) ? () : LL(l.v, l.i+1)
 

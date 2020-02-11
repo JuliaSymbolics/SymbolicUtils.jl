@@ -199,25 +199,18 @@ end
 function matcher(term::Term)
     matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
     function term_matcher(data, bindings, success)
-        !(car(data) isa Term) && return nothing
-        term = car(data) # Try to eat one term
-        matchers′ = matchers
-        while true
+        !isempty(data) && !(car(data) isa Term) && return nothing
+        function loop(term, bindings′, matchers′) # Get it to compile faster
             if isempty(matchers′) && isempty(term)
-                return success(bindings, 1)
+                return success(bindings′, 1)
             elseif isempty(term)
                 # exhausted before full match
                 return nothing
             end
-            res = car(matchers′)(term, bindings, (b, i) -> (b,i))
-            if res === nothing
-                return nothing
-            else
-                bindings, n = res
-                matchers′ = cdr(matchers′)
-                term = drop_n(term, n)
-            end
+            res = car(matchers′)(term, bindings′,
+                                 (b, n) -> loop(drop_n(term, n), b, cdr(matchers′)))
         end
+        loop(car(data), bindings, matchers) # Try to eat exactly one term
     end
 end
 

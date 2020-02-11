@@ -54,7 +54,7 @@ function makesegment(s::Expr)
         error("Syntax for specifying a segment is ~~x::\$predicate, where predicate is a boolean function")
     end
     name = s.args[1]
-    :(Segment($(QuoteNode(name)), $(s.args[2])))
+    :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
 end
 makeslot(s::Symbol) = Slot(s)
 function makeslot(s::Expr)
@@ -62,7 +62,7 @@ function makeslot(s::Expr)
         error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
     end
     name = s.args[1]
-    :(Slot($(QuoteNode(name)), $(s.args[2])))
+    :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
 end
 
 function makepattern(expr)
@@ -84,7 +84,7 @@ function makepattern(expr)
         end
     else
         # treat as a literal
-        return expr
+        return esc(expr)
     end
 end
 
@@ -182,7 +182,7 @@ function matcher(segment::Segment)
             end
         else
             res = nothing
-            for i=0:length(data)
+            for i=length(data):-1:0
                 subexpr = take_n(data, i)
                 if segment.predicate(subexpr)
                     res = success(assoc(bindings, segment.name, subexpr), i)
@@ -202,8 +202,12 @@ function matcher(term::Term)
         isempty(data) && return nothing
         !(car(data) isa Term) && return nothing
         function loop(term, bindings′, matchers′) # Get it to compile faster
-            if isempty(matchers′) && isempty(term)
-                return success(bindings′, 1)
+            if isempty(matchers′)
+                if  isempty(term)
+                    return success(bindings′, 1)
+                else
+                    return nothing
+                end
             elseif isempty(term)
                 # exhausted before full match
                 return nothing

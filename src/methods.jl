@@ -27,3 +27,5 @@ for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = Number
     @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a, type=Number)
 end
+
+# TODO: Define variadic functions!

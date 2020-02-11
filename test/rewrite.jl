@@ -29,3 +29,7 @@ end
 @test rewriter(@rule (~x)^(~x) => ~x)(a+a) === nothing
 @test rewriter(@rule (~x)^(~x) => ~x)(sin(a)^sin(a)) === sin(a)
 
+@test rewriter(@rule +(~~x) => ~~x)(a + b) == (a,b)
+# FIXME: variadic
+@test rewriter(@rule +(~~x) => ~~x)(a + b + c) == (a+b,c)
+@test rewriter(@rule +(~~x) => ~~x)(+(a, b, c)) == (a,b,c)

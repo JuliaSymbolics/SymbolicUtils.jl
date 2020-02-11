@@ -12,5 +12,6 @@ include("symbolic.jl")
 include("methods.jl")
 include("util.jl")
 include("rewrite.jl")
+include("simplify.jl")
 
 end # module

@@ -27,13 +27,15 @@ Base.isempty(t::Term) = false
     end
 end
 
-struct Cons
-    car
-    cdr
+struct Cons{A, B}
+    car::A
+    cdr::B
 end
 islist(c::Cons) = true
 
+Base.map(f, c::Cons) = cons(f(car(c)), map(f, cdr(c)))
 @inline cons(car,cdr) = Cons(car, cdr)
+Base.isempty(c::Cons) = false
 Base.length(c::Cons) = length(c.cdr) + 1
 @inline car(c::Cons) = c.car
 @inline cdr(c::Cons) = c.cdr

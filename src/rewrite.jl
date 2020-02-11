@@ -1,4 +1,4 @@
-export @rule
+export @rule, rewriter
 
 #### Pattern matching basics
 
@@ -119,14 +119,17 @@ end
 #
 function matcher(val::Any)
     function literal_matcher(data, bindings, next)
-        isequal(car(data), val) && next(bindings, 1)
+        !isempty(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
     end
 end
 
 function matcher(slot::Slot)
     function slot_matcher(data, bindings, next)
+        isempty(data) && return
         if haskey(bindings, slot.name) # Namedtuple?
-            isequal(bindings[slot.name], car(data)) && next(bindings, 1)
+            if isequal(bindings[slot.name], car(data))
+                return next(bindings, 1)
+            end
         else
             if slot.predicate(car(data))
                 next(assoc(bindings, slot.name, car(data)), 1)
@@ -194,49 +197,44 @@ function matcher(segment::Segment)
 end
 
 function matcher(term::Term)
-    matchers = (matcher(car(term)), map(matcher, cdr(term))...)
+    matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
     function term_matcher(data, bindings, success)
-        function loop(bindings′, matchers′, data′)
-            !islist(data′) && return
-            if isempty(matchers′)
-                if isempty(data′)
-                    # perfectly emptied
-                    return success(bindings′, 1)
-                else
-                    return
-                end
+        !(car(data) isa Term) && return nothing
+        term = car(data) # Try to eat one term
+        matchers′ = matchers
+        while true
+            if isempty(matchers′) && isempty(term)
+                return success(bindings, 1)
+            elseif isempty(term)
+                # exhausted before full match
+                return nothing
+            end
+            res = car(matchers′)(term, bindings, (b, i) -> (b,i))
+            if res === nothing
+                return nothing
             else
-                car(matchers′)(data′,
-                               bindings′,
-                              (bindings′′, n) -> loop(bindings′′,
-                                                     cdr(matchers′),
-                                                     drop_n(data′, n)))
+                bindings, n = res
+                matchers′ = cdr(matchers′)
+                term = drop_n(term, n)
             end
         end
-
-        loop(bindings, matchers, data)
     end
 end
 
 
 ### Rewriting
 
-function rewriter(rule::Rule)
+function make_rewriter(rule::Rule)
     m = matcher(rule.lhs)
     rhs = rule.rhs
     function rule_rewriter(term)
-        match_res = m(term, Dict{Symbol, Any}(),
-                      (dict, n) -> n == 1 ? dict : nothing)
-        if match_res === nothing
-            return nothing
-        else
-            return rhs(match_res)
-        end
+        return m((term,), Dict{Symbol, Any}(),
+                 (dict, n) -> n == 1 ? rhs(dict) : nothing)
     end
 end
 
 function rewriter(rules::Vector)
-    compiled_rules = (map(rewriter, rules)...,)
+    compiled_rules = (map(make_rewriter, rules)...,)
 
     function rewrite(term)
         # simplify the subexpressions

@@ -15,7 +15,7 @@ end
 Variable(x) = Variable(x, Number)
 symtype(v::Variable) = v.type
 
-Base.isequal(v1::Variable, v2::Variable) = isequal(v1.name, v1.name)
+Base.isequal(v1::Variable, v2::Variable) = isequal(v1.name, v2.name)
 Base.show(io::IO, v::Variable) = print(io, v.name, "::", v.type)
 
 function vars_syntax_error()

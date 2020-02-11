@@ -65,8 +65,6 @@ function makeslot(s::Expr)
     :(Slot($(QuoteNode(name)), $(s.args[2])))
 end
 
-struct Pattern end # used as domain type for terms here
-
 function makepattern(expr)
     if expr isa Expr
         if expr.head === :call
@@ -79,7 +77,7 @@ function makepattern(expr)
                     return makeslot(expr.args[2])
                 end
             else
-                return :(term($(map(makepattern, expr.args)...); type=Pattern))
+                return :(term($(map(makepattern, expr.args)...); type=Any))
             end
         else
             error("Unsupported Expr of type $(expr.head) found in pattern")
@@ -95,16 +93,16 @@ function makeconsequent(expr)
         if expr.head === :call
             if expr.args[1] === :(~)
                 if expr.args[2] isa Symbol
-                    return :(getfield(__MATCHES__, $(QuoteNode(expr.args[2]))))
+                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2]))))
                 elseif expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
                     @assert expr.args[2].args[2]
-                    return :(getfield(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
+                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
                 end
             else
                 return Expr(:call, map(makeconsequent, expr.args)...)
             end
         else
-            error("Unsupported Expr of type $(expr.head) found in pattern")
+            return Expr(expr.head, map(makeconsequent, expr.args)...)
         end
     else
         # treat as a literal
@@ -113,6 +111,12 @@ function makeconsequent(expr)
 end
 
 
+### Matching procedures
+# A matcher is a function which takes 3 arguments
+# 1. Expression
+# 2. Dictionary
+# 3. Callback: Dictionary × Number of elements matched
+#
 function matcher(val::Any)
     function literal_matcher(data, bindings, next)
         isequal(car(data), val) && next(bindings, 1)
@@ -175,15 +179,17 @@ function matcher(segment::Segment)
             end
         else
             # create a new match
+            res = nothing
             for i=0:length(data)
                 subexpr = take_n(data, i)
                 if segment.predicate(subexpr)
                     res = success(assoc(bindings, segment.name, subexpr), i)
-                    if res !== false
+                    if res !== nothing
                         break
                     end
                 end
             end
+            return res
         end
     end
 end
@@ -196,7 +202,7 @@ function matcher(term::Term)
             if isempty(matchers′)
                 if isempty(data′)
                     # perfectly emptied
-                    success(bindings′, 1)
+                    return success(bindings′, 1)
                 else
                     return
                 end
@@ -211,4 +217,25 @@ function matcher(term::Term)
 
         loop(bindings, matchers, data)
     end
+end
+
+
+### Rewriting
+
+function rewriter(r::Rule)
+    m = matcher(r.lhs)
+    rhs = r.rhs
+    term_rewriter(term) = m(term, Dict{Symbol,Any}(), (dict, n)->rhs(dict))
+end
+
+rewriter(rules::Vector) = foldl(∘, map(rewriter, rules))
+
+function fixpoint(f, x0)
+    prev = x0
+    next = f(x0)
+    while next !== nothing
+        prev = next
+        next = f(next)
+    end
+    prev
 end

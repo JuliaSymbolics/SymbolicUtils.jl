@@ -11,6 +11,6 @@ end
 include("symbolic.jl")
 include("methods.jl")
 include("util.jl")
-include("pattern.jl")
+include("rewrite.jl")
 
 end # module

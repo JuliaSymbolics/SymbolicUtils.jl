@@ -95,7 +95,7 @@ function makeconsequent(expr)
                 if expr.args[2] isa Symbol
                     return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2]))))
                 elseif expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
-                    @assert expr.args[2].args[2]
+                    @assert expr.args[2].args[2] isa Symbol
                     return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
                 end
             else
@@ -115,7 +115,7 @@ end
 # A matcher is a function which takes 3 arguments
 # 1. Expression
 # 2. Dictionary
-# 3. Callback: Dictionary × Number of elements matched
+# 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 function matcher(val::Any)
     function literal_matcher(data, bindings, next)
@@ -178,7 +178,6 @@ function matcher(segment::Segment)
                 success(bindings, n)
             end
         else
-            # create a new match
             res = nothing
             for i=0:length(data)
                 subexpr = take_n(data, i)
@@ -222,20 +221,40 @@ end
 
 ### Rewriting
 
-function rewriter(r::Rule)
-    m = matcher(r.lhs)
-    rhs = r.rhs
-    term_rewriter(term) = m(term, Dict{Symbol,Any}(), (dict, n)->rhs(dict))
+function rewriter(rule::Rule)
+    m = matcher(rule.lhs)
+    rhs = rule.rhs
+    function rule_rewriter(term)
+        match_res = m(term, Dict{Symbol, Any}(),
+                      (dict, n) -> n == 1 ? dict : nothing)
+        if match_res === nothing
+            return nothing
+        else
+            return rhs(match_res)
+        end
+    end
 end
 
-rewriter(rules::Vector) = foldl(∘, map(rewriter, rules))
+function rewriter(rules::Vector)
+    compiled_rules = (map(rewriter, rules)...,)
 
-function fixpoint(f, x0)
-    prev = x0
-    next = f(x0)
-    while next !== nothing
-        prev = next
-        next = f(next)
+    function rewrite(term)
+        # simplify the subexpressions
+        if term isa Term
+            expr = Term(operation(term),
+                         symtype(term),
+                         map(rewrite, arguments(term)))
+            for r in compiled_rules
+                expr′ = r(expr)
+                if expr′ === nothing
+                    continue
+                else
+                    return rewrite(expr′) # apply next matching rule
+                end
+            end
+        else
+            expr = term
+        end
+        return expr # no rule applied
     end
-    prev
 end

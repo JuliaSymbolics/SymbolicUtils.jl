@@ -166,16 +166,6 @@ function trymatchexpr(data, value, n)
     end
 end
 
-@inline function take_n(ll, n)
-    if isempty(ll) || n == 0
-        return ()
-    else
-        (car(ll), take_n(cdr(ll), n-1)...,)
-    end
-end
-
-drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
-
 function matcher(segment::Segment)
     function segment_matcher(data, bindings, success)
         if haskey(bindings, segment.name)

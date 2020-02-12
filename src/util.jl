@@ -31,13 +31,15 @@ drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
 @inline drop_n(ll::LL, n) = LL(ll.v, ll.i+n)
 
 # Fastest possible dict
-struct MatchDict{K<:NamedTuple}
+struct MatchDict{K,V}
     k::K
-    v::Vector{Any}
+    v::V
 end
 function matchdict(names)
-    MatchDict((; map(=>, names, 1:length(names))...), Any[nothing for n in names])
+    MatchDict((; map(=>, names, 1:length(names))...),
+              ((Ref{Any}(nothing) for n in names)...,))
 end
-assoc(d::MatchDict, k, v) = MatchDict(d.k, (d1 = copy(d.v); d1[d.k[k]] = v; d1))
+@inline _copy(r) = Ref{Any}(r[])
+assoc(d::MatchDict, k, v) = MatchDict(d.k, (d1 = map(_copy,d.v); d1[d.k[k]][] = v; d1))
 #Base.haskey(d::MatchDict, k) = d.v[d.k[k]] !== nothing
-Base.getindex(d::MatchDict, k) = d.v[d.k[k]]
+Base.getindex(d::MatchDict, k) = d.v[d.k[k]][]

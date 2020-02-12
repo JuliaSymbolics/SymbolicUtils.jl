@@ -11,6 +11,11 @@
 <ₑ(a::Variable, b::Variable) = a.name < b.name
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 
+_iszero(t) = false
+_iszero(x::Number) = iszero(x)
+_isone(t) = false
+_isone(x::Number) = isone(x)
+
 function <ₑ(a::Term, b::Term)
     na = nameof(operation(a))
     nb = nameof(operation(b))
@@ -19,7 +24,7 @@ function <ₑ(a::Term, b::Term)
     else
         aa, ab = arguments(a), arguments(b)
         if length(aa) !== length(ab)
-            return aa < ab
+            return length(aa) < length(ab)
         else
             return any((a<ₑ b for (a, b) in zip(aa, ab))) || false
         end
@@ -51,7 +56,7 @@ PLUS_AND_SCALAR_MUL = let
      # Commute *
      @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x)),
 
-     @rule(~x - ~y => ~x + (-~y)),
+     @rule(~x - ~y => ~x + (-1 * ~y)),
      #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...)),
      # Flatten +
      @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x)),
@@ -59,9 +64,15 @@ PLUS_AND_SCALAR_MUL = let
      @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x)),
 
      # Group terms
-     @rule(+(~~a, *(~~x, ~α::isnumber), *(~~x, ~β::isnumber), ~~b) => +((~~a)..., *(*(~α, ~β), (~x)...), (~b)...))
+     @rule(*(~~x, ~a::isnumber, ~b::isnumber) => *((~~x)..., ~a * ~b)),
+     @rule(+(~~a, *(~~x, ~α::isnumber), *(~~x, ~β::isnumber), ~~b) => +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
+     @rule(*(~~x, ~z::_iszero) => ~z),
 
-     # Group terms
+     # remove the idenitities
+     @rule(*(~~x::(!isempty), ~z::_isone) => *((~~x)...)),
+     @rule(*(~x) => ~x),
+     @rule(+(~~x::(!isempty), ~z::_iszero) => +((~~x)...)),
+     @rule(+(~x) => ~x)
     ]
 end
 

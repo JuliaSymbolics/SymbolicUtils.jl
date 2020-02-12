@@ -36,9 +36,9 @@ end
 @test rewriter(@rule (~x)^(~x) => ~x)(sin(a)^sin(a)) == sin(a)
 @test rewriter(@rule (~x*~y + ~x*~z)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
 
-@test rewriter(@rule +(~~x) => ~~x)(a + b) == (a,b)
-@test rewriter(@rule +(~~x) => ~~x)(a + b + c) == (a,b,c)
-@test rewriter(@rule +(~~x) => ~~x)(+(a, b, c)) == (a,b,c)
-@test rewriter(@rule +(~~x,~y, ~~x) => (~~x, ~y))(term(+,9,8,9,type=Any)) == ((9,),8)
-@test rewriter(@rule +(~~x,~y, ~~x) => (~~x, ~y, ~~x))(term(+,9,8,9,9,8,type=Any)) == ((9,8), 9, (9,8))
-@test rewriter(@rule +(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ((), 6, ())
+@test rewriter(@rule +(~~x) => ~~x)(a + b) == [a,b]
+@test rewriter(@rule +(~~x) => ~~x)(a + b + c) == [a,b,c]
+@test rewriter(@rule +(~~x) => ~~x)(+(a, b, c)) == [a,b,c]
+@test rewriter(@rule +(~~x,~y, ~~x) => (~~x, ~y))(term(+,9,8,9,type=Any)) == ([9,],8)
+@test rewriter(@rule +(~~x,~y, ~~x) => (~~x, ~y, ~~x))(term(+,9,8,9,9,8,type=Any)) == ([9,8], 9, [9,8])
+@test rewriter(@rule +(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])

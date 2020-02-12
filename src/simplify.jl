@@ -14,10 +14,11 @@ _isone(x::Number) = isone(x)
 <ₑ(a::Real,    b::Complex) = true
 <ₑ(a::Complex, b::Real) = false
 
-<ₑ(a::Symbolic, b::Number) = true
-<ₑ(a::Number,   b::Symbolic) = false
+<ₑ(a::Symbolic, b::Number) = false
+<ₑ(a::Number,   b::Symbolic) = true
 
-<ₑ(a::Variable, b::Symbolic) = true
+<ₑ(a::Variable, b::Symbolic) = false
+<ₑ(a::Symbolic, b::Variable) = true
 <ₑ(a::Variable, b::Variable) = a.name < b.name
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 
@@ -31,7 +32,20 @@ function <ₑ(a::Term, b::Term)
         if length(aa) !== length(ab)
             return length(aa) < length(ab)
         else
-            return any((a<ₑ b for (a, b) in zip(aa, ab))) || false
+            terms = zip(Iterators.filter(!isnumber, aa), Iterators.filter(!isnumber, ab))
+
+            for (x,y) in terms
+                if x <ₑ y
+                    return true
+                elseif y <ₑ x
+                    return false
+                end
+            end
+
+            # compare the numbers
+            nums = zip(Iterators.filter(isnumber, aa),
+                       Iterators.filter(isnumber, ab))
+            return any(a <ₑ b for (a, b) in nums)
         end
     end
 end

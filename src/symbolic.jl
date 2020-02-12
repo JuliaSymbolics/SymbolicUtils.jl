@@ -69,7 +69,7 @@ function term(f, args...; type = nothing)
         t = type
     end
 
-    Term(f, t, args)
+    Term(f, t, [args...])
 end
 
 function Base.show(io::IO, t::Term)

@@ -24,9 +24,11 @@ Base.isempty(t::Term) = false
 @inline take_n(ll::LL, n) = isempty(ll) || n == 0 ? empty(ll) : @views ll.v[ll.i:n+ll.i-1] # @views handles Tuple
 @inline take_n(ll, n) = @views ll[1:n]
 
-@inline drop_n(ll::Term, n) = drop_n(arguments(ll), n)
+drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
+
+@inline drop_n(ll::Term, n) = drop_n(arguments(ll), n-1)
 @inline drop_n(ll::AbstractArray, n) = drop_n(LL(ll, 1), n)
-@inline drop_n(ll::LL, n) = LL(ll.v, max(1, ll.i-n))
+@inline drop_n(ll::LL, n) = LL(ll.v, ll.i+n)
 
 @inline assoc(d::Dict, k, v) = merge(d, Dict(k=>v))
 @inline assoc(f, d::Dict, k, v) = merge(f, d, Dict(k=>v))

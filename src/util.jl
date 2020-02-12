@@ -21,11 +21,11 @@ Base.isempty(t::Term) = false
 @inline car(v) = first(v)
 @inline cdr(v) = isempty(v) ? empty(l) : LL(v, 2)
 
-@inline take_n(ll::LL, n) = isempty(ll) || n == 0 ? empty(ll) : @view ll.v[ll.i:min(end, n+ll.i-1)]
-@inline take_n(ll, n) = @view ll[1:min(end, n)]
+@inline take_n(ll::LL, n) = isempty(ll) || n == 0 ? empty(ll) : @views ll.v[ll.i:n+ll.i-1] # @views handles Tuple
+@inline take_n(ll, n) = @views ll[1:n]
 
 @inline drop_n(ll::Term, n) = drop_n(arguments(ll), n)
-@inline drop_n(ll::Array, n) = drop_n(LL(ll, 1), n)
+@inline drop_n(ll::AbstractArray, n) = drop_n(LL(ll, 1), n)
 @inline drop_n(ll::LL, n) = LL(ll.v, max(1, ll.i-n))
 
 @inline assoc(d::Dict, k, v) = merge(d, Dict(k=>v))

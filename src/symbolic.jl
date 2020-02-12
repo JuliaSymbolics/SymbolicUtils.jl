@@ -10,9 +10,9 @@ Base.:(==)(a::Symbolic, b::Symbolic) = a === b || isequal(a,b)
 A named variable with an optional domain.
 domain defaults to number.
 """
-struct Variable <: Symbolic
+struct Variable{T} <: Symbolic{T}
     name::Symbol
-    type::Type
+    type::Type{T}
 end
 Variable(x) = Variable(x, Number)
 symtype(v::Variable) = v.type
@@ -50,9 +50,9 @@ end
 
 #### Terms
 
-struct Term <: Symbolic
+struct Term{T} <: Symbolic{T}
     f::Any
-    type::Type
+    type::Type{T}
     arguments::Any
 end
 
@@ -90,11 +90,14 @@ end
 
 #### Literal functions
 
-struct LiteralFunction <: Symbolic
+# Maybe don't even need a new type, can just use Variable{FnType}
+struct FnType{X<:Tuple,Y} end
+struct LiteralFunction{F} <: Symbolic{F}
     name::Symbol
-    input_type::Type
-    output_type::Type
+    type::F
 end
+
+LiteralFunction(name, X,Y) = LiteralFunction(name, FnType{X,Y}())
 
 Base.nameof(f::LiteralFunction) = f.name
 Base.isequal(l1::LiteralFunction, l2::LiteralFunction) = isequal(nameof(f1), nameof(f2))

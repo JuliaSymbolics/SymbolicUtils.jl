@@ -2,7 +2,7 @@ using SpecialFunctions, NaNMath
 
 const monadic = [deg2rad, +, rad2deg, transpose, -, conj, asind, log1p, acsch, acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh, abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, inv, acotd, asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10, sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd, atand, sec, acscd, cot, exp2, expm1, atanh]
 
-const diadic = [+, rem2pi, -,  max, min, *, /, \, hypot, atan, mod, rem, ^]
+const diadic = [+, rem2pi, -, max, min, *, /, \, hypot, atan, mod, rem, ^]
 
 # TODO: keep domains tighter than this
 for f in diadic
@@ -27,5 +27,22 @@ for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = Number
     @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a, type=Number)
 end
+rec_promote_symtype(f, x) = promote_symtype(f, x)
+rec_promote_symtype(f, x,y) = promote_symtype(f, x,y)
+rec_promote_symtype(f, x,y,z...) = rec_promote_symtype(f, promote_symtype(f, x,y), z...)
 
-# TODO: Define variadic functions!
+# Variadic methods
+for f in [+, *]
+    @eval function (::$(typeof(f)))(x::Symbolic, w...)
+        term($f, x,w...,
+             type=rec_promote_symtype($f, map(symtype, (x,w...))...))
+    end
+    @eval function (::$(typeof(f)))(x, y::Symbolic, w...)
+        term($f, x, y, w...,
+             type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
+    end
+    @eval function (::$(typeof(f)))(x::Symbolic, y::Symbolic, w...)
+        term($f, x, y, w...,
+             type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
+    end
+end

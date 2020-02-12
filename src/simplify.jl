@@ -72,7 +72,7 @@ PLUS_AND_SCALAR_MUL = let
      @rule(*(~~x::(!isempty), ~z::_isone) => *((~~x)...)),
      @rule(*(~x) => ~x),
      @rule(+(~~x::(!isempty), ~z::_iszero) => +((~~x)...)),
-     @rule(+(~x) => ~x)
+     @rule(+(~x) => ~x),
     ]
 end
 

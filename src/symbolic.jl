@@ -16,6 +16,9 @@ struct Variable <: Symbolic
 end
 Variable(x) = Variable(x, Number)
 symtype(v::Variable) = v.type
+Base.:(==)(a::Variable, b::Variable) = a === b
+Base.:(==)(::Variable, ::Symbolic) = false
+Base.:(==)(::Symbolic, ::Variable) = false
 
 Base.isequal(v1::Variable, v2::Variable) = isequal(v1.name, v2.name)
 Base.show(io::IO, v::Variable) = print(io, v.name, "::", v.type)

@@ -5,6 +5,12 @@ using SymbolicUtils: Rule, rewriter
 
 @vars a b c
 
+@test a == a
+@test a != b
+@test a*b == a*b
+@test a*b != a
+@test a != a*b
+
 # Literal matcher
 let r = rewriter(Rule(1, d->4))
     @test r(1) === 4

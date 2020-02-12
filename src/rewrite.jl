@@ -51,8 +51,8 @@ macro rule(expr)
     keys = Symbol[]
     lhs_term = makepattern(lhs, keys)
     unique!(keys)
-    empty_namedtuple = NamedTuple{(keys...,), NTuple{length(keys), Any}}((map(_->nothing, keys)...,))
-    :(Rule($(lhs_term), __MATCHES__ -> $(makeconsequent(rhs)), $empty_namedtuple))
+    dict = matchdict(keys)
+    :(Rule($(lhs_term), __MATCHES__ -> $(makeconsequent(rhs)), $dict))
 end
 
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
@@ -102,10 +102,10 @@ function makeconsequent(expr)
         if expr.head === :call
             if expr.args[1] === :(~)
                 if expr.args[2] isa Symbol
-                    return :(getfield(__MATCHES__, $(QuoteNode(expr.args[2]))))
+                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2]))))
                 elseif expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
                     @assert expr.args[2].args[2] isa Symbol
-                    return :(getfield(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
+                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
                 end
             else
                 return Expr(:call, map(makeconsequent, expr.args)...)
@@ -136,7 +136,7 @@ function matcher(slot::Slot)
     function slot_matcher(data, bindings, next)
         isempty(data) && return
         val = bindings[slot.name]
-        if val !== nothing # Namedtuple?
+        if val !== nothing
             if isequal(val, car(data))
                 return next(bindings, 1)
             end

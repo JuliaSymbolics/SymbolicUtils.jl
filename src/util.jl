@@ -30,8 +30,14 @@ drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
 @inline drop_n(ll::AbstractArray, n) = drop_n(LL(ll, 1), n)
 @inline drop_n(ll::LL, n) = LL(ll.v, ll.i+n)
 
-@inline assoc(d::Dict, k, v) = merge(d, Dict(k=>v))
-@inline assoc(f, d::Dict, k, v) = merge(f, d, Dict(k=>v))
-
-@inline assoc(d::NamedTuple, k, v) = Base.setindex(d, v, k)
-@inline assoc(f, d::NamedTuple, k, v) = Base.setindex(d, v, k)
+# Fastest possible dict
+struct MatchDict{K<:NamedTuple}
+    k::K
+    v::Vector{Any}
+end
+function matchdict(names)
+    MatchDict((; map(=>, names, 1:length(names))...), Any[nothing for n in names])
+end
+assoc(d::MatchDict, k, v) = MatchDict(d.k, (d1 = copy(d.v); d1[d.k[k]] = v; d1))
+#Base.haskey(d::MatchDict, k) = d.v[d.k[k]] !== nothing
+Base.getindex(d::MatchDict, k) = d.v[d.k[k]]

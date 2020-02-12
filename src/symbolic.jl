@@ -1,5 +1,7 @@
 export @vars, term, @fun
 
+Base.:(==)(a::Symbolic, b::Symbolic) = a === b || isequal(a,b)
+
 #### Variables
 
 """

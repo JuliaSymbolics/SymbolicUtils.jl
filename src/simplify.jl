@@ -1,3 +1,13 @@
+##### Numeric simplification
+### Predicates
+
+isnumber(x) = x isa Number
+
+_iszero(t) = false
+_iszero(x::Number) = iszero(x)
+_isone(t) = false
+_isone(x::Number) = isone(x)
+
 # A total ordering
 <ₑ(a::Real,    b::Real) = a < b
 <ₑ(a::Complex, b::Complex) = (real(a), imag(a)) < (real(b), imag(b))
@@ -10,11 +20,6 @@
 <ₑ(a::Variable, b::Symbolic) = true
 <ₑ(a::Variable, b::Variable) = a.name < b.name
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
-
-_iszero(t) = false
-_iszero(x::Number) = iszero(x)
-_isone(t) = false
-_isone(x::Number) = isone(x)
 
 function <ₑ(a::Term, b::Term)
     na = nameof(operation(a))
@@ -31,12 +36,12 @@ function <ₑ(a::Term, b::Term)
     end
 end
 
-isnumber(x) = x isa Number
 issortedₑ(args) = issorted(args, lt=<ₑ)
 issortedₑ(args::Tuple) = issorted([args...], lt=<ₑ)
 issortedₑ((a,b,)::Tuple{Any,Any}) = isequal(a, b) || a <ₑ b
 issortedₑ(a::Tuple{Any}) = true
 
+# are there nested ⋆ terms?
 function isnotflat(⋆)
     function (args)
         for t in args
@@ -47,6 +52,8 @@ function isnotflat(⋆)
         return false
     end
 end
+
+### Simplification rules
 
 PLUS_AND_SCALAR_MUL = let
     [
@@ -64,7 +71,10 @@ PLUS_AND_SCALAR_MUL = let
      @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x)),
 
      # Group terms
+     @rule(+(~~a, ~x, ~x, ~~b) => +((~~a)..., 2(~x), (~~b)...)),
      @rule(*(~~x, ~a::isnumber, ~b::isnumber) => *((~~x)..., ~a * ~b)),
+     @rule(+(~~x, ~a::isnumber, ~b::isnumber) => +((~~x)..., ~a * ~b)),
+     @rule(+(~~a, *(~~x), *(~~x, ~β::isnumber), ~~b) => +((~~a)..., *(1 + ~β, (~x)...), (~b)...)),
      @rule(+(~~a, *(~~x, ~α::isnumber), *(~~x, ~β::isnumber), ~~b) => +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
      @rule(*(~~x, ~z::_iszero) => ~z),
 

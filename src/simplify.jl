@@ -73,7 +73,7 @@ PLUS_AND_SCALAR_MUL = let
      # Group terms
      @rule(+(~~a, ~x, ~x, ~~b) => +((~~a)..., 2(~x), (~~b)...)),
      @rule(*(~~x, ~a::isnumber, ~b::isnumber) => *((~~x)..., ~a * ~b)),
-     @rule(+(~~x, ~a::isnumber, ~b::isnumber) => +((~~x)..., ~a * ~b)),
+     @rule(+(~~x, ~a::isnumber, ~b::isnumber) => +((~~x)..., ~a + ~b)),
      @rule(+(~~a, *(~~x), *(~~x, ~β::isnumber), ~~b) => +((~~a)..., *(1 + ~β, (~x)...), (~b)...)),
      @rule(+(~~a, *(~~x, ~α::isnumber), *(~~x, ~β::isnumber), ~~b) => +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
      @rule(*(~~x, ~z::_iszero) => ~z),

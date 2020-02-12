@@ -32,3 +32,6 @@ drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
 
 @inline assoc(d::Dict, k, v) = merge(d, Dict(k=>v))
 @inline assoc(f, d::Dict, k, v) = merge(f, d, Dict(k=>v))
+
+@inline assoc(d::NamedTuple, k, v) = Base.setindex(d, v, k)
+@inline assoc(f, d::NamedTuple, k, v) = Base.setindex(d, v, k)

@@ -12,7 +12,7 @@ using SymbolicUtils: Rule, rewriter
 @test a != a*b
 
 # Literal matcher
-let r = rewriter(Rule(1, d->4))
+let r = rewriter(Rule(1, d->4, ()))
     @test r(1) === 4
     @test r(1.0) === 4
     @test r(2) === nothing

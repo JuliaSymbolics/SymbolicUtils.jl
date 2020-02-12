@@ -34,6 +34,7 @@ Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
 struct Rule
     lhs
     rhs
+    _init_matches
 end
 
 function Base.show(io::IO, r::Rule)
@@ -47,39 +48,45 @@ end
 macro rule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs,rhs = expr.args[2], expr.args[3]
-    :(Rule($(makepattern(lhs)), __MATCHES__ -> $(makeconsequent(rhs))))
+    keys = Symbol[]
+    lhs_term = makepattern(lhs, keys)
+    unique!(keys)
+    empty_namedtuple = NamedTuple{(keys...,), NTuple{length(keys), Any}}((map(_->nothing, keys)...,))
+    :(Rule($(lhs_term), __MATCHES__ -> $(makeconsequent(rhs)), $empty_namedtuple))
 end
 
-makesegment(s::Symbol) = Segment(s)
-function makesegment(s::Expr)
+makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
+function makesegment(s::Expr, keys)
     if !(s.head == :(::))
         error("Syntax for specifying a segment is ~~x::\$predicate, where predicate is a boolean function")
     end
     name = s.args[1]
+    push!(keys, name)
     :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
 end
-makeslot(s::Symbol) = Slot(s)
-function makeslot(s::Expr)
+makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
+function makeslot(s::Expr, keys)
     if !(s.head == :(::))
         error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
     end
     name = s.args[1]
+    push!(keys, name)
     :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
 end
 
-function makepattern(expr)
+function makepattern(expr, keys)
     if expr isa Expr
         if expr.head === :call
             if expr.args[1] === :(~)
                 if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
                     # matches ~~x::predicate
-                    return makesegment(expr.args[2].args[2])
+                    return makesegment(expr.args[2].args[2], keys)
                 else
                     # matches ~x::predicate
-                    return makeslot(expr.args[2])
+                    return makeslot(expr.args[2], keys)
                 end
             else
-                return :(term($(map(makepattern, expr.args)...); type=Any))
+                return :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
             end
         else
             error("Unsupported Expr of type $(expr.head) found in pattern")
@@ -95,10 +102,10 @@ function makeconsequent(expr)
         if expr.head === :call
             if expr.args[1] === :(~)
                 if expr.args[2] isa Symbol
-                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2]))))
+                    return :(getfield(__MATCHES__, $(QuoteNode(expr.args[2]))))
                 elseif expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
                     @assert expr.args[2].args[2] isa Symbol
-                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
+                    return :(getfield(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
                 end
             else
                 return Expr(:call, map(makeconsequent, expr.args)...)
@@ -128,8 +135,9 @@ end
 function matcher(slot::Slot)
     function slot_matcher(data, bindings, next)
         isempty(data) && return
-        if haskey(bindings, slot.name) # Namedtuple?
-            if isequal(bindings[slot.name], car(data))
+        val = bindings[slot.name]
+        if val !== nothing # Namedtuple?
+            if isequal(val, car(data))
                 return next(bindings, 1)
             end
         else
@@ -168,8 +176,9 @@ end
 
 function matcher(segment::Segment)
     function segment_matcher(data, bindings, success)
-        if haskey(bindings, segment.name)
-            n = trymatchexpr(data, bindings[segment.name], 0)
+        val = bindings[segment.name]
+        if val !== nothing
+            n = trymatchexpr(data, val, 0)
             if n !== nothing
                 success(bindings, n)
             end
@@ -214,8 +223,9 @@ end
 function rewriter(rule::Rule)
     m = matcher(rule.lhs)
     rhs = rule.rhs
+    dict = rule._init_matches
     function rule_rewriter(term)
-        return m((term,), Dict{Symbol, Any}(),
+        return m((term,), dict,
                  (dict, n) -> n == 1 ? rhs(dict) : nothing)
     end
 end

@@ -27,29 +27,6 @@ Base.isempty(t::Term) = false
     end
 end
 
-struct Cons{A, B}
-    car::A
-    cdr::B
-end
-islist(c::Cons) = true
-
-Base.map(f, c::Cons) = cons(f(car(c)), map(f, cdr(c)))
-@inline cons(car,cdr) = Cons(car, cdr)
-Base.isempty(c::Cons) = false
-Base.length(c::Cons) = length(c.cdr) + 1
-@inline car(c::Cons) = c.car
-@inline cdr(c::Cons) = c.cdr
-
-llfuncs = Dict(:a=>car, :d=>cdr)
-for i = 1:5
-    ad = keys(llfuncs)
-    options = Iterators.product([ad for _ in 1:i]...)
-    for seq in options
-        fn = Symbol(:c, seq..., :r)
-        @eval const $fn = $(foldr(∘, map(k->llfuncs[k], seq)))
-    end
-end
-
 
 @inline assoc(d::Dict, k, v) = merge(d, Dict(k=>v))
 @inline assoc(f, d::Dict, k, v) = merge(f, d, Dict(k=>v))

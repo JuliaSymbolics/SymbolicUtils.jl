@@ -29,6 +29,8 @@ or(f,g) = x->f(x) || g(x)
 Slot(s) = Slot(s, alwaystrue)
 Segment(s) = Segment(s, alwaystrue)
 
+Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
+
 struct Rule
     lhs
     rhs

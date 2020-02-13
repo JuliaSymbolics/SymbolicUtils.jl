@@ -243,12 +243,8 @@ function rewriter(rules::Vector)
                 if expr′ === nothing
                     # this rule doesn't apply
                     continue
-                elseif !(expr′ isa Term)
-                    # e.g. 0 or 1
-                    return expr′
                 else
-                    expr = expr′
-                    i = 1 # go around one more time
+                    return rewrite(expr′)
                 end
             end
         else

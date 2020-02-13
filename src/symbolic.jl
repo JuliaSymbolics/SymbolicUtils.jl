@@ -16,6 +16,7 @@ struct Variable{T} <: Symbolic{T}
 end
 Variable(x) = Variable(x, Number)
 symtype(v::Variable) = v.type
+Base.nameof(v::Variable) = v.name
 Base.:(==)(a::Variable, b::Variable) = a === b
 Base.:(==)(::Variable, ::Symbolic) = false
 Base.:(==)(::Symbolic, ::Variable) = false
@@ -99,19 +100,11 @@ end
 
 # Maybe don't even need a new type, can just use Variable{FnType}
 struct FnType{X<:Tuple,Y} end
-struct LiteralFunction{F} <: Symbolic{F}
-    name::Symbol
-    type::F
-end
 
-LiteralFunction(name, X,Y) = LiteralFunction(name, FnType{X,Y}())
+fun(f,X=Tuple{Real},Y=Real) = Variable(f,FnType{X,Y})
 
-Base.nameof(f::LiteralFunction) = f.name
-Base.isequal(l1::LiteralFunction, l2::LiteralFunction) = isequal(nameof(f1), nameof(f2))
-
-function (f::LiteralFunction)(args...)
-
-    nrequired = fieldcount(f.input_type)
+function (f::Variable{<:FnType{X,Y}})(args...) where {X,Y}
+    nrequired = fieldcount(X)
     ngiven    = nfields(args)
 
     if nrequired !== ngiven
@@ -119,16 +112,22 @@ function (f::LiteralFunction)(args...)
     end
 
     for i in 1:ngiven
-        t = f.input_type.parameters[i]
+        t = X.parameters[i]
         if !(symtype(args[i]) <: t)
             error("Argument to $f at position $i must be of symbolic type $t")
         end
     end
-    term(f, args...; type = f.output_type)
+    term(f, args...; type = Y)
+end
+
+function (f::Variable)(args...)
+    error("Variable $f of type $F are not callable. " *
+          "Use @fun $f to create it as a callable. " *
+          "See ?@fun for more options")
 end
 
 macro fun(name::Symbol)
-    :(@fun $name(::$Real)) |> esc
+    :(@fun $name(::$Number)) |> esc
 end
 
 macro fun(expr::Expr)
@@ -137,9 +136,9 @@ macro fun(expr::Expr)
         output_type = expr.args[2]
     elseif expr.head == :call
         fexpr       = expr
-        output_type = Real
+        output_type = Number
     else
-        error("Not a @fun syntax. Try `@fun f(::Real, ::Real)::Real`, for instance.")
+        error("Not a @fun syntax. Try `@fun f(::Number, ::Number)::Number`, for instance.")
     end
 
     fname = fexpr.args[1]
@@ -147,12 +146,12 @@ macro fun(expr::Expr)
         if arg isa Expr && arg.head == :(::)
             arg.args[end]
         elseif arg isa Symbol
-            Real
+            Number
         end
     end
 
     rhs = Expr(:call,
-               LiteralFunction,
+               fun,
                Expr(:quote, fname),
                :(Tuple{$(input_types...)}) |> esc,
                output_type |> esc,
@@ -160,9 +159,9 @@ macro fun(expr::Expr)
     :($(esc(fname)) = $rhs)
 end
 
-function Base.show(io::IO, f::LiteralFunction)
+function Base.show(io::IO, f::Variable{<:FnType{X,Y}}) where {X,Y}
     print(io, f.name)
-    argrepr = join(map(t->"::"*string(t), f.input_type.parameters), ", ")
+    argrepr = join(map(t->"::"*string(t), X.parameters), ", ")
     print(io, "(", argrepr, ")")
-    print(io, "::", f.output_type)
+    print(io, "::", Y)
 end

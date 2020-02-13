@@ -225,7 +225,7 @@ function rewriter(rule::Rule)
     dict = rule._init_matches
     function rule_rewriter(term)
         return m((term,), dict,
-                 (dict, n) -> n == 1 ? (@timer "RHS" rhs(dict)) : nothing)
+                 (d, n) -> n == 1 ? (@timer "RHS" rhs(d)) : nothing)
     end
 end
 

@@ -80,7 +80,7 @@ end
 function Base.show(io::IO, t::Term)
     f = operation(t)
     fname = nameof(f)
-    binary = fname in [:+, :-, :*, :/]
+    binary = fname in [:+, :-, :*, :/, :^]
     binary && Base.print(io, "(")
     Base.print(io, Expr(:call, fname, arguments(t)...))
     binary && Base.print(io, ")")

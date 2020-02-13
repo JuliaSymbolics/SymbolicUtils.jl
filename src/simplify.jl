@@ -121,19 +121,22 @@ PLUS_AND_SCALAR_MUL = let
            +((~~a)..., *(1 + ~β, (~x)...), (~b)...)),
      @rule(+(~~a, *(~α::isnumber, ~~x), *(~β::isnumber, ~~x), ~~b) =>
            +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
-     @rule(*(~~a, ^(~x, ~e1), ^(~x, ~e2), ~~b) =>
-           *((~~a)..., ^(~x, (~e1 + ~e2)), (~b)...)),
 
      # group stuff
+     @rule(~x / ~y => ~x * Base.:^(~y, -1)),
+     @rule(^(*(~~x), ~y) => *(map(a->a^(~y), ~~x)...)),
+     @rule(*(~~a, ^(~x, ~e1), ^(~x, ~e2), ~~b) =>
+           *((~~a)..., ^(~x, (~e1 + ~e2)), (~b)...)),
+     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q))),
      @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...)),
      @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...)),
 
-     # Group terms
      @rule(*(~z::_iszero, ~~x) => ~z),
 
      # remove the idenitities
      @rule(*(~z::_isone, ~~x::(!isempty)) => *((~~x)...)),
      @rule(+(~z::_iszero, ~~x::(!isempty)) => +((~~x)...)),
+     @rule(^(~x, ~z::_iszero) => 1),
     ]
 end
 

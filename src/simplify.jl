@@ -19,8 +19,35 @@ _isone(x::Number) = isone(x)
 <ₑ(a::Symbolic, b::Number) = false
 <ₑ(a::Number,   b::Symbolic) = true
 
-<ₑ(a::Variable, b::Symbolic) = false
-<ₑ(a::Symbolic, b::Variable) = true
+arglength(a) = length(arguments(a))
+function <ₑ(a::Variable, b::Term)
+    args = arguments(b)
+    if length(args) === 2
+        n1, n2 = !isnumber(args[1]) , !isnumber(args[2])
+        if n1 && n2
+            # both subterms are terms, so it's definitely firster
+            return true
+        elseif n1
+            if a <ₑ args[1]
+                return true
+            else
+                return false
+            end
+        elseif n2
+            if a <ₑ args[2]
+                return true
+            else
+                return false
+            end
+        end
+    elseif length(args) === 1
+    else
+        # variables to the right
+        return false
+    end
+end
+
+<ₑ(a::Symbolic, b::Variable) = !(b <ₑ a)
 <ₑ(a::Variable, b::Variable) = a.name < b.name
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 

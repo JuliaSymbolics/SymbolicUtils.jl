@@ -1,12 +1,17 @@
 module SymbolicUtils
 
 const TIMER_OUTPUTS = true
+const being_timed = Ref{Bool}(false)
 
 if TIMER_OUTPUTS
     using TimerOutputs
 
     macro timer(name, expr)
-        :(@timeit $name $expr) |> esc
+        :(if being_timed[]
+              @timeit $(esc(name)) $(esc(expr))
+          else
+              $(esc(expr))
+          end)
     end
 
     macro iftimer(expr)

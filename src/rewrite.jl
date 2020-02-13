@@ -264,8 +264,11 @@ function timerewrite(f)
               "TIMER_OUTPUTS in the main file of this package")
     end
     reset_timer!()
+    being_timed[] = true
     x = f()
+    being_timed[] = false
     print_timer()
+    println()
     x
 end
 

@@ -9,8 +9,8 @@ _isone(t) = false
 _isone(x::Number) = isone(x)
 
 # A total ordering
-<ₑ(a::Real,    b::Real) = a < b
-<ₑ(a::Complex, b::Complex) = (real(a), imag(a)) < (real(b), imag(b))
+<ₑ(a::Real,    b::Real) = abs(a) < abs(b)
+<ₑ(a::Complex, b::Complex) = (abs(real(a)), abs(imag(a))) < (abs(real(b)), abs(imag(b)))
 <ₑ(a::Real,    b::Complex) = true
 <ₑ(a::Complex, b::Real) = false
 

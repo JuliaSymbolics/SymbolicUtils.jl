@@ -157,13 +157,14 @@ pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
 
 BASIC_NUMBER_RULES = let
     [
+     @rule(~x - ~y => ~x + (-1 * ~y)),
+     @rule(~x / ~y => ~x * pow(~y, -1)),
      #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...)),
      @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x)),
      @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x)),
      @rule(*(~a::isnumber, ~b::isnumber, ~~x) => *(~a * ~b, (~~x)...)),
 
      #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...)),
-     @rule(~x - ~y => ~x + (-1 * ~y)),
      @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x)),
      @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x)),
      @rule(+(~a::isnumber, ~b::isnumber, ~~x) => +((~~x)..., ~a + ~b)),
@@ -176,8 +177,8 @@ BASIC_NUMBER_RULES = let
            +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
 
      # group stuff
-     @rule(~x / ~y => ~x * pow(~y, -1)),
-     @rule(^(*(~~x), ~y) => *(map(a->a^(~y), ~~x)...)),
+     @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...)),
+     @rule(*(~~x, ^(~y, ~n), ~y, ~~z) => *((~~x)..., ^(~y, ~n+1), (~~z)...)),
      @rule(*(~~a, ^(~x, ~e1), ^(~x, ~e2), ~~b) =>
            *((~~a)..., ^(~x, (~e1 + ~e2)), (~b)...)),
      @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q))),

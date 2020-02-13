@@ -231,7 +231,7 @@ function rewriter(rule::Rule)
 end
 
 function rewriter(rules::Vector)
-    compiled_rules = (map(rewriter, rules)...,)
+    compiled_rules = map(rewriter, rules)
 
     function rewrite(term)
         # simplify the subexpressions
@@ -239,12 +239,17 @@ function rewriter(rules::Vector)
             expr = Term(operation(term),
                          symtype(term),
                          map(rewrite, arguments(term)))
-            for r in compiled_rules
-                expr′ = r(expr)
+            for i in 1:length(rules)
+                expr′ = compiled_rules[i](expr)
                 if expr′ === nothing
+                    # this rule doesn't apply
                     continue
+                elseif !(expr′ isa Term)
+                    # e.g. 0 or 1
+                    return expr′
                 else
-                    return rewrite(expr′) # apply next matching rule
+                    expr = expr′
+                    i = 1 # go around one more time
                 end
             end
         else

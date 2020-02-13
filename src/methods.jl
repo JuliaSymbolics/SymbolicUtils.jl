@@ -33,6 +33,8 @@ rec_promote_symtype(f, x,y,z...) = rec_promote_symtype(f, promote_symtype(f, x,y
 
 # Variadic methods
 for f in [+, *]
+
+    @eval (::$(typeof(f)))(x::Symbolic) = x
     # single arg
     @eval function (::$(typeof(f)))(x::Symbolic, w...)
         term($f, x,w...,

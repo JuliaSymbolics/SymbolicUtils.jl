@@ -67,36 +67,73 @@ function isnotflat(⋆)
     end
 end
 
+function hasrepeats(x)
+    length(x) <= 1 && return false
+    for i=1:length(x)-1
+        if isequal(x[i], x[i+1])
+            return true
+        end
+    end
+    return false
+end
+
+function merge_repeats(merge, xs)
+    length(xs) <= 1 && return false
+    merged = Any[]
+    i=1
+
+    while i<=length(xs)
+        l = 1
+        for j=i+1:length(xs)
+            if isequal(xs[i], xs[j])
+                l += 1
+            else
+                break
+            end
+        end
+        if l > 1
+            push!(merged, merge(xs[i], l))
+        else
+            push!(merged, xs[i])
+        end
+        i+=l
+    end
+    return merged
+end
+
 ### Simplification rules
 
 PLUS_AND_SCALAR_MUL = let
     [
      #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...)),
-     # Flatten *
      @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x)),
-     # Commute *
      @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x)),
 
-     @rule(~x - ~y => ~x + (-1 * ~y)),
      #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...)),
-     # Flatten +
+     @rule(~x - ~y => ~x + (-1 * ~y)),
      @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x)),
-     # Commute +
      @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x)),
 
+     @rule(*(~a::isnumber, ~b::isnumber, ~~x) => *((~~x)..., ~a * ~b)),
+     @rule(+(~a::isnumber, ~b::isnumber, ~~x) => +((~~x)..., ~a + ~b)),
+
+     @rule(+(~~a, *(~~x), *(~β::isnumber, ~~x), ~~b) =>
+           +((~~a)..., *(1 + ~β, (~x)...), (~b)...)),
+     @rule(+(~~a, *(~α::isnumber, ~~x), *(~β::isnumber, ~~x), ~~b) =>
+           +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
+     @rule(*(~~a, ^(~x, ~e1), ^(~x, ~e2), ~~b) =>
+           *((~~a)..., ^(~x, (~e1 + ~e2)), (~b)...)),
+
+     # group stuff
+     @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...)),
+     @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...)),
+
      # Group terms
-     @rule(+(~~a, ~x, ~x, ~~b) => +((~~a)..., 2(~x), (~~b)...)),
-     @rule(*(~~x, ~a::isnumber, ~b::isnumber) => *((~~x)..., ~a * ~b)),
-     @rule(+(~~x, ~a::isnumber, ~b::isnumber) => +((~~x)..., ~a + ~b)),
-     @rule(+(~~a, *(~~x), *(~~x, ~β::isnumber), ~~b) => +((~~a)..., *(1 + ~β, (~x)...), (~b)...)),
-     @rule(+(~~a, *(~~x, ~α::isnumber), *(~~x, ~β::isnumber), ~~b) => +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
-     @rule(*(~~x, ~z::_iszero) => ~z),
+     @rule(*(~z::_iszero, ~~x) => ~z),
 
      # remove the idenitities
-     @rule(*(~~x::(!isempty), ~z::_isone) => *((~~x)...)),
-     @rule(*(~x) => ~x),
-     @rule(+(~~x::(!isempty), ~z::_iszero) => +((~~x)...)),
-     @rule(+(~x) => ~x),
+     @rule(*(~z::_isone, ~~x::(!isempty)) => *((~~x)...)),
+     @rule(+(~z::_iszero, ~~x::(!isempty)) => +((~~x)...)),
     ]
 end
 

@@ -77,13 +77,21 @@ function term(f, args...; type = nothing)
     Term(f, t, [args...])
 end
 
-function Base.show(io::IO, t::Term)
-    f = operation(t)
-    fname = nameof(f)
-    binary = fname in [:+, :-, :*, :/, :^]
-    binary && Base.print(io, "(")
-    Base.print(io, Expr(:call, fname, arguments(t)...))
-    binary && Base.print(io, ")")
+const show_simplified = Ref(true)
+function Base.show(io::IOContext, t::Term)
+    if get(io, :simplify, show_simplified[])
+        s = simplify(t)
+        color = isequal(s, t) ? :white : :yellow
+        Base.show(IOContext(io, :simplify=>false, :withcolor=>color), s)
+    else
+        f = operation(t)
+        fname = nameof(f)
+        binary = fname in [:+, :-, :*, :/, :^]
+        color = get(io, :withcolor, :white)
+        binary && Base.printstyled(io, "(",color=color)
+        Base.printstyled(io, Expr(:call, fname, arguments(t)...), color=color)
+        binary && Base.printstyled(io, ")", color=color)
+    end
 end
 
 

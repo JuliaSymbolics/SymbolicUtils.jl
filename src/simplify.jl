@@ -1,3 +1,5 @@
+export simplify
+
 ##### Numeric simplification
 ### Predicates
 
@@ -103,7 +105,7 @@ end
 
 ### Simplification rules
 
-PLUS_AND_SCALAR_MUL = let
+const BASIC_NUMBER_RULES = let
     [
      #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...)),
      @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x)),
@@ -119,6 +121,8 @@ PLUS_AND_SCALAR_MUL = let
 
      @rule(+(~~a, *(~~x), *(~β::isnumber, ~~x), ~~b) =>
            +((~~a)..., *(1 + ~β, (~x)...), (~b)...)),
+     @rule(+(~~a, *(~α::isnumber, ~x), ~~b, ~x, ~~c) =>
+           +((~~a)..., *(+(~α+1), ~x), (~~b)..., (~~c)...)),
      @rule(+(~~a, *(~α::isnumber, ~~x), *(~β::isnumber, ~~x), ~~b) =>
            +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
 
@@ -138,6 +142,16 @@ PLUS_AND_SCALAR_MUL = let
      @rule(+(~z::_iszero, ~~x::(!isempty)) => +((~~x)...)),
      @rule(^(~x, ~z::_iszero) => 1),
     ]
+end
+
+const cached_rewriters = IdDict{Any,Any}()
+function simplify(x; rules=BASIC_NUMBER_RULES)
+    if !haskey(cached_rewriters, rules)
+        r = cached_rewriters[rules] = rewriter(rules)
+    else
+        r = rewriter(rules)
+    end
+    r(x)
 end
 
 simplifynum(x) = rewriter(PLUS_AND_SCALAR_MUL)(x)

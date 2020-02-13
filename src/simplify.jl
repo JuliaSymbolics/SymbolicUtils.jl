@@ -48,6 +48,26 @@ function <ₑ(a::Variable, b::Term)
 end
 
 <ₑ(a::Symbolic, b::Variable) = !(b <ₑ a)
+
+function <ₑ(a::Symbol, b::Symbol)
+    # Enforce the order [+,-,\,/,^,*]
+    if b === :*
+        a in (:^, :/, :\, :-, :+)
+    elseif b === :^
+        a in (:/, :\, :-, :+) && return true
+    elseif b === :/
+        a in (:\, :-, :+) && return true
+    elseif b === :\
+        a in (:-, :+) && return true
+    elseif b === :-
+        a === :+ && return true
+    elseif a in (:*, :^, :/, :-, :+)
+        false
+    else
+        a < b
+    end
+end
+
 <ₑ(a::Variable, b::Variable) = a.name < b.name
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 
@@ -132,18 +152,20 @@ end
 
 ### Simplification rules
 
-const BASIC_NUMBER_RULES = let
+pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
+pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
+
+BASIC_NUMBER_RULES = let
     [
      #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...)),
      @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x)),
      @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x)),
+     @rule(*(~a::isnumber, ~b::isnumber, ~~x) => *(~a * ~b, (~~x)...)),
 
      #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...)),
      @rule(~x - ~y => ~x + (-1 * ~y)),
      @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x)),
      @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x)),
-
-     @rule(*(~a::isnumber, ~b::isnumber, ~~x) => *((~~x)..., ~a * ~b)),
      @rule(+(~a::isnumber, ~b::isnumber, ~~x) => +((~~x)..., ~a + ~b)),
 
      @rule(+(~~a, *(~~x), *(~β::isnumber, ~~x), ~~b) =>
@@ -154,7 +176,7 @@ const BASIC_NUMBER_RULES = let
            +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
 
      # group stuff
-     @rule(~x / ~y => ~x * Base.:^(~y, -1)),
+     @rule(~x / ~y => ~x * pow(~y, -1)),
      @rule(^(*(~~x), ~y) => *(map(a->a^(~y), ~~x)...)),
      @rule(*(~~a, ^(~x, ~e1), ^(~x, ~e2), ~~b) =>
            *((~~a)..., ^(~x, (~e1 + ~e2)), (~b)...)),
@@ -168,6 +190,7 @@ const BASIC_NUMBER_RULES = let
      @rule(*(~z::_isone, ~~x::(!isempty)) => *((~~x)...)),
      @rule(+(~z::_iszero, ~~x::(!isempty)) => +((~~x)...)),
      @rule(^(~x, ~z::_iszero) => 1),
+     @rule(^(~x, ~z::_isone) => ~x),
     ]
 end
 

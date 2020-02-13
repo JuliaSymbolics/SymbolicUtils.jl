@@ -21,7 +21,7 @@ Base.:(==)(::Variable, ::Symbolic) = false
 Base.:(==)(::Symbolic, ::Variable) = false
 
 Base.isequal(v1::Variable, v2::Variable) = isequal(v1.name, v2.name)
-Base.show(io::IO, v::Variable) = print(io, v.name, "::", v.type)
+Base.show(io::IO, v::Variable) = print(io, v.name)
 
 function vars_syntax_error()
     error("Incorrect @vars syntax. Try `@vars x::Real y::Complex` for instance.")
@@ -84,7 +84,6 @@ function Base.show(io::IO, t::Term)
     binary && Base.print(io, "(")
     Base.print(io, Expr(:call, fname, arguments(t)...))
     binary && Base.print(io, ")")
-    Base.print(io, "::", symtype(t))
 end
 
 

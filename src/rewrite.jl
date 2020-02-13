@@ -32,15 +32,14 @@ Segment(s) = Segment(s, alwaystrue)
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
 
 struct Rule
+    expr
     lhs
     rhs
     _init_matches
 end
 
 function Base.show(io::IO, r::Rule)
-    Base.show(io, r.lhs)
-    Base.print(io, "=>")
-    Base.show(io, r.rhs)
+    Base.print(io, r.expr)
 end
 
 #### Syntactic diabetes
@@ -52,7 +51,7 @@ macro rule(expr)
     lhs_term = makepattern(lhs, keys)
     unique!(keys)
     dict = matchdict(keys)
-    :(Rule($(lhs_term), __MATCHES__ -> $(makeconsequent(rhs)), $dict))
+    :(Rule($(QuoteNode(expr)), $(lhs_term), __MATCHES__ -> $(makeconsequent(rhs)), $dict))
 end
 
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
@@ -226,7 +225,7 @@ function rewriter(rule::Rule)
     dict = rule._init_matches
     function rule_rewriter(term)
         return m((term,), dict,
-                 (dict, n) -> n == 1 ? rhs(dict) : nothing)
+                 (dict, n) -> n == 1 ? (@timer "RHS" rhs(dict)) : nothing)
     end
 end
 
@@ -239,8 +238,8 @@ function rewriter(rules::Vector)
             expr = Term(operation(term),
                          symtype(term),
                          map(rewrite, arguments(term)))
-            for i in 1:length(rules)
-                expr′ = compiled_rules[i](expr)
+            for i in 1:length(compiled_rules)
+                @timer repr(rules[i]) expr′ = compiled_rules[i](expr)
                 if expr′ === nothing
                     # this rule doesn't apply
                     continue
@@ -257,4 +256,19 @@ function rewriter(rules::Vector)
         end
         return expr # no rule applied
     end
+end
+
+function timerewrite(f)
+    if !TIMER_OUTPUTS
+        error("timerewrite must be called after enabling " *
+              "TIMER_OUTPUTS in the main file of this package")
+    end
+    reset_timer!()
+    x = f()
+    print_timer()
+    x
+end
+
+macro timerewrite(expr)
+    :(timerewrite(()->$(esc(expr))))
 end

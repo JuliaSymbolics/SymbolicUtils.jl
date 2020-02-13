@@ -41,6 +41,12 @@ function <ₑ(a::Variable, b::Term)
             end
         end
     elseif length(args) === 1
+        # make sure a < sin(a) < b^2 < b
+        if isequal(a, args[1])
+            return true # e.g sin(a)*a should become a*sin(a)
+        else
+            return a<ₑargs[1]
+        end
     else
         # variables to the right
         return false
@@ -72,11 +78,18 @@ end
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 
 function <ₑ(a::Term, b::Term)
+    if arglength(a) <= 2 && arglength(b) <= 2
+        # e.g. a < sin(a) < b ^ 2 < b
+        @goto compare_args
+    end
     na = nameof(operation(a))
     nb = nameof(operation(b))
     if na !== nb
         return na < nb
+    elseif arglength(a) != arglength(b)
+        return arglength(a) < arglength(b)
     else
+        @label compare_args
         aa, ab = arguments(a), arguments(b)
         if length(aa) !== length(ab)
             return length(aa) < length(ab)
@@ -96,6 +109,7 @@ function <ₑ(a::Term, b::Term)
                        Iterators.filter(isnumber, ab))
             return any(a <ₑ b for (a, b) in nums)
         end
+        return na <ₑ nb
     end
 end
 

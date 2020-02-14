@@ -32,10 +32,20 @@ Segment(s) = Segment(s, alwaystrue)
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
 
 struct Rule
-    expr
-    lhs
-    rhs
-    _init_matches
+    expr           # rule pattern stored for pretty printing
+    lhs            # pattern
+    rhs            # consequent
+    depth::Int     # number of levels of expr this rule touches
+    _init_matches  # empty dictionary with the required fields set to nothing, see MatchDict
+end
+
+function rule_depth(rule, d=0, maxdepth=0)
+    if rule isa Term
+        maxdepth = maximum(rule_depth(r, d+1, maxdepth) for r in arguments(rule))
+    elseif rule isa Slot || rule isa Segment
+        maxdepth = max(d, maxdepth)
+    end
+    return maxdepth
 end
 
 function Base.show(io::IO, r::Rule)
@@ -51,7 +61,14 @@ macro rule(expr)
     lhs_term = makepattern(lhs, keys)
     unique!(keys)
     dict = matchdict(keys)
-    :(Rule($(QuoteNode(expr)), $(lhs_term), __MATCHES__ -> $(makeconsequent(rhs)), $dict))
+    quote
+        lhs_pattern = $(lhs_term)
+        Rule($(QuoteNode(expr)),
+             lhs_pattern,
+             __MATCHES__ -> $(makeconsequent(rhs)),
+             rule_depth($lhs_term),
+             $dict)
+    end
 end
 
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
@@ -79,13 +96,13 @@ function makepattern(expr, keys)
             if expr.args[1] === :(~)
                 if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
                     # matches ~~x::predicate
-                    return makesegment(expr.args[2].args[2], keys)
+                    makesegment(expr.args[2].args[2], keys)
                 else
                     # matches ~x::predicate
-                    return makeslot(expr.args[2], keys)
+                    makeslot(expr.args[2], keys)
                 end
             else
-                return :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
+                :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
             end
         else
             error("Unsupported Expr of type $(expr.head) found in pattern")
@@ -232,19 +249,22 @@ end
 function rewriter(rules::Vector)
     compiled_rules = map(rewriter, rules)
 
-    function rewrite(term)
+    function rewrite(term, depth=-1)
         # simplify the subexpressions
+        if depth == 0
+            return term
+        end
         if term isa Term
             expr = Term(operation(term),
                          symtype(term),
-                         map(rewrite, arguments(term)))
+                         map(t->rewrite(t, max(-1, depth-1)), arguments(term)))
             for i in 1:length(compiled_rules)
                 @timer repr(rules[i]) expr′ = compiled_rules[i](expr)
                 if expr′ === nothing
                     # this rule doesn't apply
                     continue
                 else
-                    return rewrite(expr′)
+                    return rewrite(expr′, rules[i].depth+1) # levels touched
                 end
             end
         else

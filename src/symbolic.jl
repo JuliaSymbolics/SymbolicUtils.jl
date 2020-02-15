@@ -1,4 +1,4 @@
-export @vars, term, @fun
+export @vars, term, @fun, showraw
 
 Base.:(==)(a::Symbolic, b::Symbolic) = a === b || isequal(a,b)
 
@@ -95,6 +95,8 @@ function Base.show(io::IOContext, t::Term)
     end
 end
 
+showraw(io, t) = Base.show(IOContext(stdout, :simplify=>false), t)
+showraw(t) = showraw(stdout, t)
 
 #### Literal functions
 

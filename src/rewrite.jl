@@ -263,7 +263,12 @@ function rewriter(rules::Vector)
                 expr = term
             end
             for i in 1:length(compiled_rules)
-                @timer repr(rules[i]) expr′ = compiled_rules[i](expr)
+                expr′ = try
+                    @timer repr(rules[i]) compiled_rules[i](expr)
+                catch err
+                    show_rule_error(rules[i], expr)
+                    rethrow()
+                end
                 if expr′ === nothing
                     # this rule doesn't apply
                     continue
@@ -276,6 +281,12 @@ function rewriter(rules::Vector)
         end
         return expr # no rule applied
     end
+end
+
+@noinline function show_rule_error(rule, expr)
+    msg = "\nFailed to apply rule $(rule) on expression "
+    msg *= sprint(io->showraw(io, expr))
+    #Base.showerror(stderr, ErrorException(msg), backtrace[1:min(100, end)])
 end
 
 function timerewrite(f)

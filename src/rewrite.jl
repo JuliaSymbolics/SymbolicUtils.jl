@@ -254,10 +254,14 @@ function rewriter(rules::Vector)
         if depth == 0
             return term
         end
-        if term isa Term
-            expr = Term(operation(term),
-                         symtype(term),
-                         map(t->rewrite(t, max(-1, depth-1)), arguments(term)))
+        if term isa Symbolic
+            if term isa Term
+                expr = Term(operation(term),
+                             symtype(term),
+                             map(t->rewrite(t, max(-1, depth-1)), arguments(term)))
+            else
+                expr = term
+            end
             for i in 1:length(compiled_rules)
                 @timer repr(rules[i]) expr′ = compiled_rules[i](expr)
                 if expr′ === nothing

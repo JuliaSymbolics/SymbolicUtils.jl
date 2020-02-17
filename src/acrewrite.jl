@@ -31,10 +31,12 @@ function rewriter(acrule::ACRule)
         if term isa Variable
             r(term)
         else
-            f = operation(term)
+            f =  operation(term)
+            f == operation(acrule.lhs) || return nothing
+            
             T = symtype(term)
             args = arguments(term)
-
+            
             for inds in permutations(eachindex(args), acrule.arity)
                 result = r(Term(f, T, args[inds]))
                 if !isnothing(result)

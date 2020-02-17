@@ -1,5 +1,3 @@
-
-
 @testset "Trig" begin
     @vars a::Integer x::Real y::Number
     r = rewriter(SymbolicUtils.TRIG_RULES)
@@ -11,5 +9,4 @@
 
     @test r(cos(x + 2π + a)) == cos(x + a)
     @test r(tan(x + 2π * a)) == tan(x)
-    
 end

@@ -1,4 +1,3 @@
-
 BASIC_NUMBER_RULES = let
     [@rule(~x - ~y => ~x + (-1 * ~y)),
      @rule(~x / ~y => ~x * pow(~y, -1)),
@@ -35,10 +34,9 @@ BASIC_NUMBER_RULES = let
      @rule(+(~z::_iszero, ~~x::(!isempty)) => +((~~x)...)),
      @rule(^(~x, ~z::_iszero) => 1),
      @rule(^(~x, ~z::_isone) => ~x),
+     @rule(+(~x) => ~x),
     ]
 end
-
-multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
 
 TRIG_RULES = let
     [[[@rule trig_f(~~x + ~y::multiple_of(2π) + ~~z) => trig_f(+(~~x..., ~~z...))
@@ -50,7 +48,8 @@ TRIG_RULES = let
        @rule trig_f(~~x + ~n::oftype(Integer) * ~y::multiple_of(2π) + ~~z) => trig_f(+(~~x..., ~~z...))]
       for trig_f ∈ (sin, cos, tan)]...
      
-     @rule ~~a + sin(~x)^2 + ~~b + cos(~x)^2 + ~~c => +(~~a..., one(~x), ~~b..., ~~c...)
-     @rule ~~a + cos(~x)^2 + ~~b + sin(~x)^2 + ~~c => +(~~a..., one(~x), ~~b..., ~~c...)
+     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
      ]
 end
+
+SIMPLIFY_RULES = vcat(BASIC_NUMBER_RULES, TRIG_RULES)

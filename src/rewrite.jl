@@ -1,5 +1,3 @@
-export @rule, rewriter
-
 #### Pattern matching basics
 
 # matches one term
@@ -273,7 +271,7 @@ function rewriter(rules::Vector)
                     # this rule doesn't apply
                     continue
                 else
-                    return rewrite(expr′, rules[i].depth+1) # levels touched
+                    return rewrite(expr′, rules[i].depth + 1) # levels touched
                 end
             end
         else

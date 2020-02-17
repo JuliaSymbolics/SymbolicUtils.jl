@@ -1,7 +1,7 @@
-export simplify
-
 ##### Numeric simplification
 ### Predicates
+
+multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
 
 isnumber(x) = x isa Number
 
@@ -171,7 +171,7 @@ pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
 
 
 const cached_rewriters = IdDict{Any,Any}()
-function simplify(x; rules=BASIC_NUMBER_RULES)
+function simplify(x; rules=SIMPLIFY_RULES)
     if !haskey(cached_rewriters, rules)
         r = cached_rewriters[rules] = rewriter(rules)
     else

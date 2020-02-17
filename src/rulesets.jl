@@ -62,12 +62,12 @@ end
 TRIG_RULES = let
     [@repeat(f => (sin, cos, tan),
              [@rule f(~~x + ~y::multiple_of(2π) + ~~z) => f(+(~~x..., ~~z...))
-              
-              @rule f(~~x + ~y::multiple_of(2π) * ~n::oftype(Integer)) => f(+(~~x...))
-              @rule f(~~x + ~n::oftype(Integer) * ~y::multiple_of(2π)) => f(+(~~x...)) # make multiplication commute
+       
+              @rule f(~~x + ~y::multiple_of(2π) * ~n::oftype(Integer) + ~~z) => f(+(~~x..., ~~z...))
+              @rule f(~~x + ~n::oftype(Integer) * ~y::multiple_of(2π) + ~~z) => f(+(~~x..., ~~z...)) # make multiplication commute
 
-              @rule f(~y::multiple_of(2π) * ~n::oftype(Integer) + ~~x) => f(+(~~x...)) # reverse addition order
-              @rule f(~n::oftype(Integer) * ~y::multiple_of(2π) + ~~x) => f(+(~~x...))]...)
+              @rule f(~~x + ~y::multiple_of(2π) * ~n::oftype(Integer) + ~~z) => f(+(~~x..., ~~z...)) # reverse addition order
+              @rule f(~~x + ~n::oftype(Integer) * ~y::multiple_of(2π) + ~~z) => f(+(~~x..., ~~z...))]...)
      
      @rule ~~a + sin(~x)^2 + ~~b + cos(~x)^2 + ~~c => +(~~a..., one(~x), ~~b..., ~~c...)
      @rule ~~a + cos(~x)^2 + ~~b + sin(~x)^2 + ~~c => +(~~a..., one(~x), ~~b..., ~~c...)

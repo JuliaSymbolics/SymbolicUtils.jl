@@ -131,7 +131,7 @@ function makeconsequent(expr)
         end
     else
         # treat as a literal
-        return expr
+        return esc(expr)
     end
 end
 

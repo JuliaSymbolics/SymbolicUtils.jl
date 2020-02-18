@@ -30,6 +30,7 @@ BASIC_NUMBER_RULES = let
      @rule(^(~x, ~z::_iszero) => 1),
      @rule(^(~x, ~z::_isone) => ~x),
      @rule(+(~x) => ~x),
+     @rule(*(~x) => ~x),
     ]
 end
 

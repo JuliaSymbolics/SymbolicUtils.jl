@@ -7,7 +7,7 @@
     @test simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == (3 * x * y) + a + b + c + d
     @test simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == (4 * x * y) + a + b + c + d
 
-    @test simplify(a * x^y * b * x^d) == (x^(y+d) * a * b)
+    @test simplify(a * x^y * b * x^d) == (a * b * (x ^ (d + y)))
 
     @test simplify(a + b + 0*c + d) == a + b + d
     @test simplify(a * b * c^0 * d) == a * b * d

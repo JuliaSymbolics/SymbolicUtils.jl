@@ -14,7 +14,6 @@ end
 Base.propertynames(r::ACRule) = (:rule, :expr, :lhs, :rhs, :depth, :_init_matches)
 
 Rule(acr::ACRule) = acr.rule
-# getdepth(acr::ACRule) = depth(acr.rule)
 
 macro acrule(expr)
     arity = length(expr.args[2].args[2:end])
@@ -40,8 +39,7 @@ function rewriter(acrule::ACRule)
             for inds in permutations(eachindex(args), acrule.arity)
                 result = r(Term(f, T, args[inds]))
                 if !isnothing(result)
-                    deleteat!(args, sort(inds))
-                    return Term(f, T, pushfirst!!(args, result))
+                    return Term(f, T, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
                 end
             end
         end

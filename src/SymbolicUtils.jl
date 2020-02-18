@@ -39,7 +39,6 @@ include("util.jl")
 export @rule, rewriter
 include("rewrite.jl")
 #--------------------
-using BangBang: pushfirst!!
 using Combinatorics: permutations
 export @acrule
 include("acrewrite.jl")

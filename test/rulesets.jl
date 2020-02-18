@@ -1,3 +1,19 @@
+@testset "Numeric" begin
+    @vars a::Integer b c d x::Real y::Number 
+    @test simplify(x - y) == x + -1*y
+    @test simplify(1 * x * 2) == 2 * x
+    @test simplify(1 + x + 2) == 3 + x
+    
+    @test simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == (3 * x * y) + a + b + c + d
+    @test simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == (4 * x * y) + a + b + c + d
+
+    @test simplify(a * x^y * b * x^d) == (x^(y+d) * a * b)
+
+    @test simplify(a + b + 0*c + d) == a + b + d
+    @test simplify(a * b * c^0 * d) == a * b * d
+    @test simplify(a * b * 1*c * d) == a * b * c * d
+end
+
 @testset "Pythagorean Identities" begin
     @vars a::Integer x::Real y::Number
     

@@ -1,3 +1,4 @@
+
 abstract type AbstractRule end # Currently doesn't really do anything. Can be removed.
 
 #-----------------------------

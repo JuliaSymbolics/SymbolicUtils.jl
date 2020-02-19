@@ -42,7 +42,7 @@ include("matchers.jl")
 
 using Combinatorics: permutations
 export @rule, @acrule, RuleSet
-include("rewrite.jl")
+include("rulerewriters.jl")
 
 export simplify
 include("simplify.jl")

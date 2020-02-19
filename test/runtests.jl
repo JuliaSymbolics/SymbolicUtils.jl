@@ -1,7 +1,7 @@
 using Test
 using SymbolicUtils
 
-using SymbolicUtils: Rule, rewriter
+#using SymbolicUtils: Rule
 
 include("rewrite.jl")
 include("rulesets.jl")

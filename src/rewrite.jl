@@ -99,7 +99,6 @@ end
 struct RuleSet <: AbstractRule
     rules::Vector{AbstractRule}
 end
-RuleSet(rules::Vector...) = RuleSet(reduce(vcat, rules))
 
 function (r::RuleSet)(term, depth=-1)
     rules = r.rules

@@ -166,7 +166,7 @@ end
 
 ### Simplification rules
 
-simplify(x, rules::Vararg{Vector}=SIMPLIFY_RULES) = RuleSet(rules...)(x)
+simplify(x, rules=SIMPLIFY_RULES) = RuleSet(rules)(x)
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)

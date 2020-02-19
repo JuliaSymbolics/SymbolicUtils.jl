@@ -42,9 +42,6 @@ using Combinatorics: permutations
 export @rule, rewriter, @acrule
 include("rewrite.jl")
 
-include("acrewrite.jl")
-
-
 export simplify
 include("simplify.jl")
 

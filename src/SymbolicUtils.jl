@@ -27,25 +27,28 @@ else
     end
 end
 
-#--------------------
+
 export @vars, term, @fun, showraw
 include("symbolic.jl")
-#--------------------
+
+
 using SpecialFunctions, NaNMath
 include("methods.jl")
-#--------------------
+
+
 include("util.jl")
-#--------------------
-export @rule, rewriter
-include("rewrite.jl")
-#--------------------
+
 using Combinatorics: permutations
-export @acrule
+export @rule, rewriter, @acrule
+include("rewrite.jl")
+
 include("acrewrite.jl")
-#--------------------
+
+
 export simplify
 include("simplify.jl")
-#--------------------
+
+
 include("rulesets.jl")
 
 end # module

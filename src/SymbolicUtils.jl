@@ -38,16 +38,14 @@ include("methods.jl")
 
 include("util.jl")
 
+include("matchers.jl")
+
 using Combinatorics: permutations
-export @rule, rewriter, @acrule
+export @rule, @acrule, RuleSet
 include("rewrite.jl")
-
-include("acrewrite.jl")
-
 
 export simplify
 include("simplify.jl")
-
 
 include("rulesets.jl")
 

@@ -166,21 +166,10 @@ end
 
 ### Simplification rules
 
+simplify(x, rules::Vararg{Vector}=SIMPLIFY_RULES) = RuleSet(rules...)(x)
+
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
-
-
-const cached_rewriters = IdDict{Any,Any}()
-function simplify(x; rules=SIMPLIFY_RULES)
-    if !haskey(cached_rewriters, rules)
-        r = cached_rewriters[rules] = rewriter(rules)
-    else
-        r = rewriter(rules)
-    end
-    r(x)
-end
-
-simplifynum(x) = rewriter(PLUS_AND_SCALAR_MUL)(x)
 
 # Numbers to the back
 function flatten_term(⋆, args)

@@ -1,41 +1,18 @@
-#### Pattern matching basics
+abstract type AbstractRule end # Currently doesn't really do anything. Can be removed.
 
-# matches one term
-# syntax:  :x
-struct Slot{P}
-    name::Symbol
-    predicate::P
-end
-Base.isequal(s1::Slot, s2::Slot) = s1.name == s2.name
-Base.show(io::IO, s::Slot) = (print(io, "~"); print(io, s.name))
+#-----------------------------
+#### Regular Rewriting Rules
 
-# matches zero or more terms
-# syntax: ~x
-struct Segment{F}
-    name::Symbol
-    predicate::F
+struct Rule{M, R} <: AbstractRule
+    expr::Expr               # rule pattern stored for pretty printing
+    lhs                      # the pattern
+    matcher::M               # matcher(lhs)
+    rhs::R                   # consequent
+    depth::Int               # number of levels of expr this rule touches
+    _init_matches::MatchDict # empty dictionary with the required fields set to nothing, see MatchDict
 end
 
-ismatch(s::Segment, t) = s.predicate(t)
-_oftype(T) = x->symtype(x)<:T
-_oftype(T::Type{<:Tuple}) = x->Tuple{map(symtype, x)...}<:T # used for segments
-oftype(T) = _oftype(T)
-and(f,g) = x->f(x) && g(x)
-or(f,g) = x->f(x) || g(x)
-@inline alwaystrue(x) = true
-
-Slot(s) = Slot(s, alwaystrue)
-Segment(s) = Segment(s, alwaystrue)
-
-Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
-
-struct Rule
-    expr           # rule pattern stored for pretty printing
-    lhs            # pattern
-    rhs            # consequent
-    depth::Int     # number of levels of expr this rule touches
-    _init_matches  # empty dictionary with the required fields set to nothing, see MatchDict
-end
+getdepth(r::Rule) = r.depth
 
 function rule_depth(rule, d=0, maxdepth=0)
     if rule isa Term
@@ -50,7 +27,10 @@ function Base.show(io::IO, r::Rule)
     Base.print(io, r.expr)
 end
 
-#### Syntactic diabetes
+function (r::Rule)(term)
+    m, rhs, dict = r.matcher, r.rhs, r._init_matches
+    m((term,), dict, (d, n) -> n == 1 ? (@timer "RHS" rhs(d)) : nothing)
+end
 
 macro rule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
@@ -63,222 +43,96 @@ macro rule(expr)
         lhs_pattern = $(lhs_term)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
+             matcher(lhs_pattern),
              __MATCHES__ -> $(makeconsequent(rhs)),
              rule_depth($lhs_term),
              $dict)
     end
 end
 
-makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
-function makesegment(s::Expr, keys)
-    if !(s.head == :(::))
-        error("Syntax for specifying a segment is ~~x::\$predicate, where predicate is a boolean function")
-    end
-    name = s.args[1]
-    push!(keys, name)
-    :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
-end
-makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
-function makeslot(s::Expr, keys)
-    if !(s.head == :(::))
-        error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
-    end
-    name = s.args[1]
-    push!(keys, name)
-    :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
+#-----------------------------
+#### Associative Commutative Rules
+
+struct ACRule{M, R} <: AbstractRule
+    rule::Rule{M, R}
+    arity::Int
 end
 
-function makepattern(expr, keys)
-    if expr isa Expr
-        if expr.head === :call
-            if expr.args[1] === :(~)
-                if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
-                    # matches ~~x::predicate
-                    makesegment(expr.args[2].args[2], keys)
-                else
-                    # matches ~x::predicate
-                    makeslot(expr.args[2], keys)
-                end
-            else
-                :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
-            end
-        else
-            error("Unsupported Expr of type $(expr.head) found in pattern")
-        end
+Rule(acr::ACRule)   = acr.rule
+getdepth(r::ACRule) = getdepth(r.rule)
+
+macro acrule(expr)
+    arity = length(expr.args[2].args[2:end])
+    quote
+        ACRule(@rule($expr), $arity)
+    end
+end
+
+Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
+
+function (acr::ACRule)(term)
+    r = Rule(acr)
+    if term isa Variable
+        r(term)
     else
-        # treat as a literal
-        return esc(expr)
-    end
-end
-
-function makeconsequent(expr)
-    if expr isa Expr
-        if expr.head === :call
-            if expr.args[1] === :(~)
-                if expr.args[2] isa Symbol
-                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2]))))
-                elseif expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
-                    @assert expr.args[2].args[2] isa Symbol
-                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
-                end
-            else
-                return Expr(:call, map(makeconsequent, expr.args)...)
-            end
-        else
-            return Expr(expr.head, map(makeconsequent, expr.args)...)
-        end
-    else
-        # treat as a literal
-        return esc(expr)
-    end
-end
-
-
-### Matching procedures
-# A matcher is a function which takes 3 arguments
-# 1. Expression
-# 2. Dictionary
-# 3. Callback: takes arguments Dictionary × Number of elements matched
-#
-function matcher(val::Any)
-    function literal_matcher(data, bindings, next)
-        !isempty(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
-    end
-end
-
-function matcher(slot::Slot)
-    function slot_matcher(data, bindings, next)
-        isempty(data) && return
-        val = bindings[slot.name]
-        if val !== nothing
-            if isequal(val, car(data))
-                return next(bindings, 1)
-            end
-        else
-            if slot.predicate(car(data))
-                next(assoc(bindings, slot.name, car(data)), 1)
-            end
-        end
-    end
-end
-
-# returns n == offset, 0 if failed
-function trymatchexpr(data, value, n)
-    if isempty(value)
-        return n
-    elseif islist(value) && islist(data)
-        if isempty(data)
-            # didn't fully match
+        f =  operation(term)
+        # Assume that the matcher was formed by closing over a term
+        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
             return nothing
         end
-
-        while isequal(car(value), car(data))
-            n += 1
-            value = cdr(value)
-            data = cdr(data)
-            if isempty(value)
-                return n
-            elseif isempty(data)
-                return nothing
+        
+        T = symtype(term)
+        args = arguments(term)
+        
+        for inds in permutations(eachindex(args), acr.arity)
+            result = r(Term(f, T, args[inds]))
+            if !isnothing(result)
+                return Term(f, T, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
             end
-        end
-        return isempty(value) ? n : nothing
-    elseif isequal(value, data)
-        return n + 1
-    end
-end
-
-function matcher(segment::Segment)
-    function segment_matcher(data, bindings, success)
-        val = bindings[segment.name]
-        if val !== nothing
-            n = trymatchexpr(data, val, 0)
-            if n !== nothing
-                success(bindings, n)
-            end
-        else
-            res = nothing
-            for i=length(data):-1:0
-                subexpr = take_n(data, i)
-                if segment.predicate(subexpr)
-                    res = success(assoc(bindings, segment.name, subexpr), i)
-                    if res !== nothing
-                        break
-                    end
-                end
-            end
-            return res
         end
     end
 end
 
-function matcher(term::Term)
-    matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
-    function term_matcher(data, bindings, success)
-        isempty(data) && return nothing
-        !(car(data) isa Term) && return nothing
-        function loop(term, bindings′, matchers′) # Get it to compile faster
-            if isempty(matchers′)
-                if  isempty(term)
-                    return success(bindings′, 1)
-                end
-                return nothing
-            end
-            res = car(matchers′)(term, bindings′,
-                                 (b, n) -> loop(drop_n(term, n), b, cdr(matchers′)))
-        end
-        loop(car(data), bindings, matchers) # Try to eat exactly one term
-    end
+#-----------------------------
+#### Rulesets
+
+struct RuleSet <: AbstractRule
+    rules::Vector{AbstractRule}
 end
+RuleSet(rules::Vector...) = RuleSet(reduce(vcat, rules))
 
-
-### Rewriting
-
-function rewriter(rule::Rule)
-    m = matcher(rule.lhs)
-    rhs = rule.rhs
-    dict = rule._init_matches
-    function rule_rewriter(term)
-        return m((term,), dict,
-                 (d, n) -> n == 1 ? (@timer "RHS" rhs(d)) : nothing)
+function (r::RuleSet)(term, depth=-1)
+    rules = r.rules
+    # simplify the subexpressions
+    if depth == 0
+        return term
     end
-end
-
-function rewriter(rules::Vector)
-    compiled_rules = map(rewriter, rules)
-
-    function rewrite(term, depth=-1)
-        # simplify the subexpressions
-        if depth == 0
-            return term
-        end
-        if term isa Symbolic
-            if term isa Term
-                expr = Term(operation(term),
-                             symtype(term),
-                             map(t->rewrite(t, max(-1, depth-1)), arguments(term)))
-            else
-                expr = term
-            end
-            for i in 1:length(compiled_rules)
-                expr′ = try
-                    @timer repr(rules[i]) compiled_rules[i](expr)
-                catch err
-                    show_rule_error(rules[i], expr)
-                    rethrow()
-                end
-                if expr′ === nothing
-                    # this rule doesn't apply
-                    continue
-                else
-                    return rewrite(expr′, rules[i].depth + 1) # levels touched
-                end
-            end
+    if term isa Symbolic
+        if term isa Term
+            expr = Term(operation(term),
+                        symtype(term),
+                        map(t -> r(t, max(-1, depth-1)), arguments(term)))
         else
             expr = term
         end
-        return expr # no rule applied
+        for i in 1:length(rules)
+            expr′ = try
+                @timer(repr(rules[i]), rules[i](expr))
+            catch err
+                show_rule_error(rules[i], expr)
+                rethrow()
+            end
+            if expr′ === nothing
+                # this rule doesn't apply
+                continue
+            else
+                return r(expr′, getdepth(rules[i]) + 1) # levels touched
+            end
+        end
+    else
+        expr = term
     end
+    return expr # no rule applied
 end
 
 @noinline function show_rule_error(rule, expr)
@@ -303,56 +157,4 @@ end
 
 macro timerewrite(expr)
     :(timerewrite(()->$(esc(expr))))
-end
-
-
-#-----------------------------
-#### Associative Commutative Rules
-
-struct ACRule
-    rule::Rule
-    arity::Int
-end
-
-function Base.getproperty(acr::ACRule, s::Symbol)
-    if s ∈ fieldnames(Rule)
-        getproperty(acr.rule, s)
-    else
-        getfield(acr, s)
-    end
-end
-
-Base.propertynames(r::ACRule) = (:rule, :expr, :lhs, :rhs, :depth, :_init_matches)
-
-Rule(acr::ACRule) = acr.rule
-
-macro acrule(expr)
-    arity = length(expr.args[2].args[2:end])
-    quote
-        ACRule(@rule($expr), $arity)
-    end
-end
-
-Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
-
-function rewriter(acrule::ACRule)
-    r = (rewriter ∘ Rule)(acrule)
-    function acrule_rewriter(term)
-        if term isa Variable
-            r(term)
-        else
-            f =  operation(term)
-            f == operation(acrule.lhs) || return nothing
-            
-            T = symtype(term)
-            args = arguments(term)
-            
-            for inds in permutations(eachindex(args), acrule.arity)
-                result = r(Term(f, T, args[inds]))
-                if !isnothing(result)
-                    return Term(f, T, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
-                end
-            end
-        end
-    end
 end

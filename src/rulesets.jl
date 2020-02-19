@@ -1,36 +1,36 @@
 BASIC_NUMBER_RULES = let
-    [@rule(-(~x, ~~y) => ~x + *(-1, (~~y)...)),
-     @rule(~x / ~y => ~x * pow(~y, -1)),
-     #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...)),
-     @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x)),
-     @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x)),
-     @acrule(~a::isnumber * ~b::isnumber => ~a * ~b),
+    [@rule(-(~x, ~~y) => ~x + *(-1, (~~y)...))
+     @rule(~x / ~y => ~x * pow(~y, -1))
+     #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...))
+     @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
+     @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x))
+     @acrule(~a::isnumber * ~b::isnumber => ~a * ~b)
 
-     #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...)),
-     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x)),
-     @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x)),
-     @acrule(~a::isnumber + ~b::isnumber => ~a + ~b),
+     #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...))
+     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
+     @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
+     @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
-     @acrule(*(~~x) + *(~β::isnumber, ~~x) => *(1 + ~β, (~~x)...)),
-     @acrule(*(~α::isnumber, ~~x) + *(~β::isnumber, ~~x) => *(~α +  ~β, (~~x)...)),
+     @acrule(*(~~x) + *(~β::isnumber, ~~x) => *(1 + ~β, (~~x)...))
+     @acrule(*(~α::isnumber, ~~x) + *(~β::isnumber, ~~x) => *(~α +  ~β, (~~x)...))
 
      # group stuff
-     @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...)),
-     @acrule((~y)^(~n) * ~y => (~y)^(~n+1)),
-     @acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m)),
-     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q))),
-     @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...)),
-     @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...)),
+     @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
+     @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
+     @acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
+     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q)))
+     @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...))
+     @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))
 
-     @acrule((~z::_iszero *  ~x) => ~z),
+     @acrule((~z::_iszero *  ~x) => ~z)
 
      # remove the idenitities
-     @acrule((~z::_isone  * ~x) => ~x),
-     @acrule((~z::_iszero + ~x) => ~x),
-     @rule(^(~x, ~z::_iszero) => 1),
-     @rule(^(~x, ~z::_isone) => ~x),
-     @rule(+(~x) => ~x),
-     @rule(*(~x) => ~x),
+     @acrule((~z::_isone  * ~x) => ~x)
+     @acrule((~z::_iszero + ~x) => ~x)
+     @rule(^(~x, ~z::_iszero) => 1)
+     @rule(^(~x, ~z::_isone) => ~x)
+     @rule(+(~x) => ~x)
+     @rule(*(~x) => ~x)
     ]
 end
 
@@ -55,9 +55,8 @@ TRIG_RULES = let
      @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
      @acrule(cot(~x)^2 +  1 => csc(~x)^2)
      @acrule(csc(~x)^2 + -1 => cot(~x)^2)
-
-
      ]
 end
+
 
 SIMPLIFY_RULES = vcat(BASIC_NUMBER_RULES, TRIG_RULES)

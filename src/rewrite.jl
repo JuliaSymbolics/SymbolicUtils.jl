@@ -3,11 +3,11 @@ abstract type AbstractRule end # Currently doesn't really do anything. Can be re
 #-----------------------------
 #### Regular Rewriting Rules
 
-struct Rule{M, R} <: AbstractRule
+struct Rule <: AbstractRule
     expr::Expr               # rule pattern stored for pretty printing
     lhs                      # the pattern
-    matcher::M               # matcher(lhs)
-    rhs::R                   # consequent
+    matcher                  # matcher(lhs)
+    rhs                      # consequent
     depth::Int               # number of levels of expr this rule touches
     _init_matches::MatchDict # empty dictionary with the required fields set to nothing, see MatchDict
 end
@@ -53,8 +53,8 @@ end
 #-----------------------------
 #### Associative Commutative Rules
 
-struct ACRule{M, R} <: AbstractRule
-    rule::Rule{M, R}
+struct ACRule <: AbstractRule
+    rule::Rule
     arity::Int
 end
 

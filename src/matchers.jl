@@ -1,5 +1,3 @@
-export @rule, rewriter
-
 #### Pattern matching basics
 
 # matches one term
@@ -31,45 +29,6 @@ Segment(s) = Segment(s, alwaystrue)
 
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
 
-struct Rule
-    expr           # rule pattern stored for pretty printing
-    lhs            # pattern
-    rhs            # consequent
-    depth::Int     # number of levels of expr this rule touches
-    _init_matches  # empty dictionary with the required fields set to nothing, see MatchDict
-end
-
-function rule_depth(rule, d=0, maxdepth=0)
-    if rule isa Term
-        maxdepth = maximum(rule_depth(r, d+1, maxdepth) for r in arguments(rule))
-    elseif rule isa Slot || rule isa Segment
-        maxdepth = max(d, maxdepth)
-    end
-    return maxdepth
-end
-
-function Base.show(io::IO, r::Rule)
-    Base.print(io, r.expr)
-end
-
-#### Syntactic diabetes
-
-macro rule(expr)
-    @assert expr.head == :call && expr.args[1] == :(=>)
-    lhs,rhs = expr.args[2], expr.args[3]
-    keys = Symbol[]
-    lhs_term = makepattern(lhs, keys)
-    unique!(keys)
-    dict = matchdict(keys)
-    quote
-        lhs_pattern = $(lhs_term)
-        Rule($(QuoteNode(expr)),
-             lhs_pattern,
-             __MATCHES__ -> $(makeconsequent(rhs)),
-             rule_depth($lhs_term),
-             $dict)
-    end
-end
 
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
 function makesegment(s::Expr, keys)
@@ -131,10 +90,9 @@ function makeconsequent(expr)
         end
     else
         # treat as a literal
-        return expr
+        return esc(expr)
     end
 end
-
 
 ### Matching procedures
 # A matcher is a function which takes 3 arguments
@@ -231,78 +189,4 @@ function matcher(term::Term)
         end
         loop(car(data), bindings, matchers) # Try to eat exactly one term
     end
-end
-
-
-### Rewriting
-
-function rewriter(rule::Rule)
-    m = matcher(rule.lhs)
-    rhs = rule.rhs
-    dict = rule._init_matches
-    function rule_rewriter(term)
-        return m((term,), dict,
-                 (d, n) -> n == 1 ? (@timer "RHS" rhs(d)) : nothing)
-    end
-end
-
-function rewriter(rules::Vector)
-    compiled_rules = map(rewriter, rules)
-
-    function rewrite(term, depth=-1)
-        # simplify the subexpressions
-        if depth == 0
-            return term
-        end
-        if term isa Symbolic
-            if term isa Term
-                expr = Term(operation(term),
-                             symtype(term),
-                             map(t->rewrite(t, max(-1, depth-1)), arguments(term)))
-            else
-                expr = term
-            end
-            for i in 1:length(compiled_rules)
-                expr′ = try
-                    @timer repr(rules[i]) compiled_rules[i](expr)
-                catch err
-                    show_rule_error(rules[i], expr)
-                    rethrow()
-                end
-                if expr′ === nothing
-                    # this rule doesn't apply
-                    continue
-                else
-                    return rewrite(expr′, rules[i].depth+1) # levels touched
-                end
-            end
-        else
-            expr = term
-        end
-        return expr # no rule applied
-    end
-end
-
-@noinline function show_rule_error(rule, expr)
-    msg = "\nFailed to apply rule $(rule) on expression "
-    msg *= sprint(io->showraw(io, expr))
-    #Base.showerror(stderr, ErrorException(msg), backtrace[1:min(100, end)])
-end
-
-function timerewrite(f)
-    if !TIMER_OUTPUTS
-        error("timerewrite must be called after enabling " *
-              "TIMER_OUTPUTS in the main file of this package")
-    end
-    reset_timer!()
-    being_timed[] = true
-    x = f()
-    being_timed[] = false
-    print_timer()
-    println()
-    x
-end
-
-macro timerewrite(expr)
-    :(timerewrite(()->$(esc(expr))))
 end

@@ -1,7 +1,7 @@
-export simplify
-
 ##### Numeric simplification
 ### Predicates
+
+multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
 
 isnumber(x) = x isa Number
 
@@ -166,60 +166,10 @@ end
 
 ### Simplification rules
 
+simplify(x, rules=SIMPLIFY_RULES) = RuleSet(rules)(x)
+
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
-
-BASIC_NUMBER_RULES = let
-    [
-     @rule(~x - ~y => ~x + (-1 * ~y)),
-     @rule(~x / ~y => ~x * pow(~y, -1)),
-     #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...)),
-     @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x)),
-     @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x)),
-     @rule(*(~a::isnumber, ~b::isnumber, ~~x) => *(~a * ~b, (~~x)...)),
-
-     #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...)),
-     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x)),
-     @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x)),
-     @rule(+(~a::isnumber, ~b::isnumber, ~~x) => +((~~x)..., ~a + ~b)),
-
-     @rule(+(~~a, *(~~x), *(~β::isnumber, ~~x), ~~b) =>
-           +((~~a)..., *(1 + ~β, (~x)...), (~b)...)),
-     @rule(+(~~a, *(~α::isnumber, ~x), ~~b, ~x, ~~c) =>
-           +((~~a)..., *(+(~α+1), ~x), (~~b)..., (~~c)...)),
-     @rule(+(~~a, *(~α::isnumber, ~~x), *(~β::isnumber, ~~x), ~~b) =>
-           +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
-
-     # group stuff
-     @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...)),
-     @rule(*(~~x, ^(~y, ~n), ~y, ~~z) => *((~~x)..., ^(~y, ~n+1), (~~z)...)),
-     @rule(*(~~a, ^(~x, ~e1), ^(~x, ~e2), ~~b) =>
-           *((~~a)..., ^(~x, (~e1 + ~e2)), (~b)...)),
-     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q))),
-     @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...)),
-     @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...)),
-
-     @rule(*(~z::_iszero, ~~x) => ~z),
-
-     # remove the idenitities
-     @rule(*(~z::_isone, ~~x::(!isempty)) => *((~~x)...)),
-     @rule(+(~z::_iszero, ~~x::(!isempty)) => +((~~x)...)),
-     @rule(^(~x, ~z::_iszero) => 1),
-     @rule(^(~x, ~z::_isone) => ~x),
-    ]
-end
-
-const cached_rewriters = IdDict{Any,Any}()
-function simplify(x; rules=BASIC_NUMBER_RULES)
-    if !haskey(cached_rewriters, rules)
-        r = cached_rewriters[rules] = rewriter(rules)
-    else
-        r = rewriter(rules)
-    end
-    r(x)
-end
-
-simplifynum(x) = rewriter(PLUS_AND_SCALAR_MUL)(x)
 
 # Numbers to the back
 function flatten_term(⋆, args)

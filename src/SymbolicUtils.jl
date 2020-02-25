@@ -27,19 +27,26 @@ else
     end
 end
 
-abstract type Symbolic{T} end
 
-symtype(x) = typeof(x) # For types outside of SymbolicUtils
-symtype(::Symbolic{T}) where {T} = T
-
-@noinline function promote_symtype(f, xs...)
-    error("promote_symtype($f, $(join(xs, ", "))) not defined")
-end
-
+export @vars, term, @fun, showraw
 include("symbolic.jl")
+
+
+using SpecialFunctions, NaNMath
 include("methods.jl")
+
+
 include("util.jl")
-include("rewrite.jl")
+
+include("matchers.jl")
+
+using Combinatorics: permutations
+export @rule, @acrule, RuleSet
+include("rulerewriters.jl")
+
+export simplify
 include("simplify.jl")
+
+include("rulesets.jl")
 
 end # module

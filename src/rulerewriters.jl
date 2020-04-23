@@ -86,9 +86,9 @@ function (acr::ACRule)(term)
         args = arguments(term)
         
         for inds in permutations(eachindex(args), acr.arity)
-            result = r(Term(f, T, args[inds]))
+            result = r(Term{T}(f, args[inds]))
             if !isnothing(result)
-                return Term(f, T, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
+                return Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
             end
         end
     end
@@ -109,8 +109,7 @@ function (r::RuleSet)(term, depth=-1)
     end
     if term isa Symbolic
         if term isa Term
-            expr = Term(operation(term),
-                        symtype(term),
+            expr = Term{symtype(term)}(operation(term),
                         map(t -> r(t, max(-1, depth-1)), arguments(term)))
         else
             expr = term

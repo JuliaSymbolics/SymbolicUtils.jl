@@ -186,17 +186,17 @@ function flatten_term(⋆, args)
     end
     T = if (⋆) ∈ (+, *)
          promote_type(types...)
-    else   
+    else
         # This will just give Any for abstract types. We need to roll our own or use concrete types concrete types
         Base.promote_op(f, types...)
     end
-    Term{T}(⋆, flattened_args) 
+    Term{T}(⋆, flattened_args)
 end
 
 function sort_args(f, args)
     T = if f ∈ (+, *) # It'd be better to just pass in the type of the original term
          promote_type(typeof.(args)...)
-    else   
+    else
         # This will just give Any for abstract types. We need to roll our own or use concrete types concrete types
         Base.promote_op(f, typeof.(args)...)
     end

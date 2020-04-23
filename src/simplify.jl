@@ -175,37 +175,23 @@ pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
 function flatten_term(⋆, args)
     # flatten nested ⋆
     flattened_args = []
-    types = Type[]
     for t in args
         if t isa Term && operation(t) === (⋆)
             append!(flattened_args, arguments(t))
         else
             push!(flattened_args, t)
         end
-        push!(types, symtype(t))
     end
-    T = if (⋆) ∈ (+, *)
-         promote_type(types...)
-    else
-        # This will just give Any for abstract types. We need to roll our own or use concrete types concrete types
-        Base.promote_op(f, types...)
-    end
-    Term{T}(⋆, flattened_args)
+    Term(⋆, flattened_args)
 end
 
 function sort_args(f, args)
-    T = if f ∈ (+, *) # It'd be better to just pass in the type of the original term
-         promote_type(typeof.(args)...)
-    else
-        # This will just give Any for abstract types. We need to roll our own or use concrete types concrete types
-        Base.promote_op(f, typeof.(args)...)
-    end
     if length(args) < 2
-        return Term{T}(f, args)
+        return Term(f, args)
     elseif length(args) == 2
         x, y = args
-        return Term{T}(f, x <ₑ y ? [x,y] : [y,x])
+        return Term(f, x <ₑ y ? [x,y] : [y,x])
     end
     args = args isa Tuple ? [args...] : args
-    Term{T}(f, sort(args, lt=<ₑ))
+    Term(f, sort(args, lt=<ₑ))
 end

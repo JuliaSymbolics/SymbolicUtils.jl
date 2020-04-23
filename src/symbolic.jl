@@ -72,6 +72,7 @@ struct Term{T} <: Symbolic{T}
     f::Any
     arguments::Any
 end
+Term(f, args) = Term{rec_promote_symtype(f, symtype.(args)...)}(f, args)
 
 operation(x::Term) = x.f
 arguments(x::Term) = x.arguments
@@ -85,7 +86,7 @@ end
 
 function term(f, args...; type = nothing)
     if type === nothing
-        T = promote_symtype(f, map(symtype, args)...)
+        T = rec_promote_symtype(f, symtype.(args)...)
     else
         T = type
     end

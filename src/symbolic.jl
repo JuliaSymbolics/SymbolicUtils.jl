@@ -30,10 +30,8 @@ domain defaults to number.
 """
 struct Variable{T} <: Symbolic{T}
     name::Symbol
-    type::Type{T}
 end
-Variable(x) = Variable(x, Number)
-symtype(v::Variable) = v.type
+Variable(x) = Variable{Number}(x)
 Base.nameof(v::Variable) = v.name
 Base.:(==)(a::Variable, b::Variable) = a === b
 Base.:(==)(::Variable, ::Symbolic) = false
@@ -59,7 +57,7 @@ end
 macro vars(xs...)
     defs = map(xs) do x
         n, t = _name_type(x)
-        :($(esc(n)) = Variable($(Expr(:quote, n)), $(esc(t))))
+        :($(esc(n)) = Variable{$(esc(t))}($(Expr(:quote, n))))
     end
 
     Expr(:block, defs...,
@@ -72,13 +70,10 @@ end
 #--------------------
 struct Term{T} <: Symbolic{T}
     f::Any
-    type::Type{T}
     arguments::Any
 end
 
-
 operation(x::Term) = x.f
-symtype(x::Term)   = x.type
 arguments(x::Term) = x.arguments
 
 function Base.isequal(t1::Term, t2::Term)
@@ -90,12 +85,11 @@ end
 
 function term(f, args...; type = nothing)
     if type === nothing
-        t = promote_symtype(f, map(symtype, args)...)
+        T = promote_symtype(f, map(symtype, args)...)
     else
-        t = type
+        T = type
     end
-
-    Term(f, t, [args...])
+    Term{T}(f, [args...])
 end
 
 const show_simplified = Ref(true)

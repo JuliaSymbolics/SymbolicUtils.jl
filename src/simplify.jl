@@ -166,7 +166,18 @@ end
 
 ### Simplification rules
 
-simplify(x, rules=SIMPLIFY_RULES) = RuleSet(rules)(x)
+to_symbolic(x::Symbolic) = x
+function to_symbolic(x)
+    if !istree(x)
+        return x
+    end
+
+    Term(operation(x),
+         symtype(x),
+         map(to_symbolic, args(x)))
+end
+
+simplify(x, rules=SIMPLIFY_RULES) = RuleSet(rules)(to_symbolic(x))
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)

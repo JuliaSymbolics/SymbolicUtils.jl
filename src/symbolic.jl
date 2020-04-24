@@ -67,10 +67,18 @@ function to_symbolic(x)
         return x
     end
 
+    op = operation(x)
+
+    # This is a valid transformation, it helps ModelingToolkit IR
+    # get simpler for many constant related rules to apply
+    if op === identity && length(arguments(x)) === 1
+        return to_symbolic(arguments(x))
+    end
+
     if symtype(x) === Any
-        Term(operation(x), map(to_symbolic, args(x)))
+        Term(op, map(to_symbolic, arguments(x)))
     else
-        Term(operation(x), symtype(x), map(to_symbolic, args(x)))
+        Term(op, symtype(x), map(to_symbolic, arguments(x)))
     end
 end
 

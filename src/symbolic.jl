@@ -67,12 +67,12 @@ function to_symbolic(x)
         return x
     end
 
-    op = operation(x)
+    op = to_symbolic(operation(x))
 
     if symtype(x) === Any
         Term(op, map(to_symbolic, arguments(x)))
     else
-        Term(op, symtype(x), map(to_symbolic, arguments(x)))
+        Term{symtype(x)}(op, map(to_symbolic, arguments(x)))
     end
 end
 
@@ -190,7 +190,7 @@ showraw(t) = showraw(stdout, t)
 # Maybe don't even need a new type, can just use Variable{FnType}
 struct FnType{X<:Tuple,Y} end
 
-fun(f,X=Tuple{Real},Y=Real) = Variable(f,FnType{X,Y})
+fun(f,X=Tuple{Real},Y=Real) = Variable{FnType{X,Y}}(f)
 
 function (f::Variable{<:FnType{X,Y}})(args...) where {X,Y}
     nrequired = fieldcount(X)

@@ -48,3 +48,5 @@ for f in [+, *]
              type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
     end
 end
+
+promote_symtype(::typeof(identity), T) = T

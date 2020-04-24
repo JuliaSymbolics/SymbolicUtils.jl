@@ -53,14 +53,25 @@ symtype(x::Number) = typeof(x)
 symtype(x) = Any
 symtype(::Symbolic{T}) where {T} = T
 
-# Convert other's types into Symbolic
+### End of interface
+
+"""
+    to_symbolic(x)
+
+Convert `x` to a `Symbolic` type, using the `istree`, `operation`, `arguments`,
+and optionally `symtype` if available.
+"""
 to_symbolic(x::Symbolic) = x
 function to_symbolic(x)
     if !istree(x)
         return x
     end
 
-    Term{symtype(x)}(operation(x), map(to_symbolic, args(x)))
+    if symtype(x) === Any
+        Term(operation(x), map(to_symbolic, args(x)))
+    else
+        Term(operation(x), symtype(x), map(to_symbolic, args(x)))
+    end
 end
 
 Base.one( s::Symbolic) = one( symtype(s))

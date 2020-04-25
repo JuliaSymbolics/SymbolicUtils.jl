@@ -1,0 +1,21 @@
+# Documentation: http://docs.travis-ci.com/user/languages/julia/
+language: julia
+# avoid duplicate tests in PRs
+branches:
+  only:
+    - master
+os:
+  - linux
+julia:
+  - 1
+  - nightly
+matrix:
+  allow_failures:
+    - julia: nightly
+notifications:
+  email: false
+after_success:
+  # push coverage results to Coveralls
+  - julia -e 'import Pkg; cd(Pkg.dir("SymbolicUtils")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
+  # push coverage results to Codecov
+  - julia -e 'import Pkg; cd(Pkg.dir("SymbolicUtils")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'

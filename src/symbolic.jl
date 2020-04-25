@@ -179,7 +179,7 @@ function Base.show(io::IOContext, t::Term)
     end
 end
 
-showraw(io, t) = Base.show(IOContext(stdout, :simplify=>false), t)
+showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)
 showraw(t) = showraw(stdout, t)
 
 #--------------------

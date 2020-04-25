@@ -137,7 +137,7 @@ end
 @noinline function show_rule_error(rule, expr)
     msg = "\nFailed to apply rule $(rule) on expression "
     msg *= sprint(io->showraw(io, expr))
-    #Base.showerror(stderr, ErrorException(msg), backtrace[1:min(100, end)])
+    Base.showerror(stderr, ErrorException(msg), backtrace()[1:min(100, end)])
 end
 
 function timerewrite(f)

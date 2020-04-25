@@ -1,6 +1,8 @@
 @testset "Numeric" begin
     @vars a::Integer b c d x::Real y::Number 
     @test simplify(x - y) == x + -1*y
+    @test simplify(x - sin(y)) == x + -1*sin(y)
+    @test simplify(-sin(x)) == -sin(x)
     @test simplify(1 * x * 2) == 2 * x
     @test simplify(1 + x + 2) == 3 + x
     

@@ -1,6 +1,6 @@
 BASIC_NUMBER_RULES = let
     [@rule(identity(~x) => ~x)
-     @rule(-(~x, ~~y::!isempty) => ~x + *(-1, (~~y)...))
+     @rule(-(~x, ~~y::(!isempty)) => ~x + *(-1, (~~y)...))
      @rule(~x / ~y => ~x * pow(~y, -1))
      #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...))
      @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))

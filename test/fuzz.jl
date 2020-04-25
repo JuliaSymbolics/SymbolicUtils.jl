@@ -17,7 +17,6 @@ function gen_rand_expr(inputs; leaf_prob=0.92, depth=0, min_depth=1, max_depth=5
     if depth > max_depth  || (min_depth <= depth && rand() < leaf_prob)
         leaf = rand(leaf_funcs)()
         if leaf isa SymbolicUtils.Variable
-            @show leaf
             push!(inputs, leaf)
         end
         return leaf
@@ -48,6 +47,7 @@ end
 function fuzz_test(ntrials)
     inputs = Set()
     expr = gen_rand_expr(inputs)
+    inputs = collect(inputs)
     unsimplifiedstr = """
     function $(tuple(inputs...))
         $(sprint(io->showraw(io, expr)))
@@ -61,18 +61,17 @@ function fuzz_test(ntrials)
     """
     f = include_string(Main, unsimplifiedstr)
     g = include_string(Main, simplifiedstr)
-    @show inputs
 
     for i=1:ntrials
         args = [randn() for j in 1:length(inputs)]
-        #unsimplified = try
-            f(args...)
-        #catch err
-        #    Errored(err)
-        #end
+        unsimplified = try
+            Base.invokelatest(f, args...)
+        catch err
+            Errored(err)
+        end
 
         simplified  = try
-            g(args...)
+            Base.invokelatest(g, args...)
         catch err
             Errored(err)
         end
@@ -80,14 +79,16 @@ function fuzz_test(ntrials)
         if unsimplified isa Errored
             @test typeof(simplified.err) == typeof(unsimplified.err)
         else
-            if unsimplified ≈ simplified
+            try
                 @test unsimplified ≈ simplified
-            else
-                @test unsimplified ≈ simplified
+                if !(unsimplified ≈ simplified)
+                    error("Failed")
+                end
+            catch err
                 println("""Test failed for expression
-                               $(sprint(io->showraw(io, expr)))
+                               $(sprint(io->showraw(io, expr))) = $unsimplified
                            Simplified to:
-                               $(sprint(io->showraw(io, simplify(expr))))
+                               $(sprint(io->showraw(io, simplify(expr)))) = $simplified
                            On inputs:
                                $inputs = $args
                            """)

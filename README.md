@@ -4,17 +4,146 @@ SymbolicUtils.jl provides various utilities for symbolic computing.
 
 [![Build Status](https://travis-ci.org/shashi/SymbolicUtils.jl.svg?branch=master)](https://travis-ci.org/shashi/SymbolicUtils.jl)  [![Coverage Status](https://coveralls.io/repos/github/shashi/SymbolicUtils.jl/badge.svg?branch=master)](https://coveralls.io/github/shashi/SymbolicUtils.jl?branch=master)
 
-## Symbolic simplification
+## Variables and expressions
+
+Variables can be created using the `@vars` macro:
 
 ```julia
 julia> using SymbolicUtils
 
 julia> @vars a::Integer b c d x::Real y::Number
 (a, b, c, d, x, y)
+```
+
+The types annotated are used by the rewrite rules for symbolic simplification. 
+
+Variables can be defined as callable:
+
+```julia
+julia> @vars f(x) g(x::Real, y::Real)::Real
+(f(::Number)::Number, g(::Real, ::Real)::Real)
+
+julia> f(c)
+f(c)
+
+julia> g(a, x)
+g(a, x)
+```
+
+Arithmetic and math functions are defined on variables.
+
+## Symbolic simplification
+
+Use the `simplify` function to apply a built in list of rules to simplify an expression.
+```julia
 
 julia> simplify(a + b + (x * y) + c + 2 * (x * y) + d + sin(x)^2 + cos(x)^2 - y^0)
 ((3 * x * y) + a + b + c + d)
 ```
+
+## Pattern matching and rewriting
+
+Expression rewriting rules can be created using the `@rule` macro `@rule LHS => RHS`.
+
+Creates a `Rule` object. A rule object is callable, and  takes an expression and rewrites
+it if it matches the LHS pattern to the RHS pattern, returns `nothing` otherwise.
+The rule language is described below.
+
+LHS can be any possibly nested function call expression where any of the arugments can
+optionally be a Slot (`~x`) or a Segment (`~~x`) (described below).
+
+If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS
+Segment (`~x`) and slot variables (`~~x`) on the RHS will substitute the result of the
+matches found for these variables in the LHS.
+
+**Slot**:
+
+A Slot variable is written as `~x` and matches a single expression. `x` is the name of the variable. If a slot appears more than once in an LHS expression then expression matched at every such location must be equal (as shown by `isequal`).
+
+_Example:_
+
+Simple rule to turn any `sin` into `cos`:
+
+```julia
+julia> @vars a b c
+(a, b, c)
+
+julia> r = @rule sin(~x) => cos(~x)
+sin(~x) => cos(~x)
+
+julia> r(sin(1+a))
+cos((1 + a))
+```
+
+A rule with 2 segment variables
+
+```julia
+julia> r = @rule ~x - ~y => ~x + (-(~y))
+~x - ~y => ~x + -(~y)
+
+julia> r(a-2b)
+(a + (-(2 * b)))
+```
+
+A rule that matches two of the same expressions:
+
+```julia
+julia> r = @rule sin(~x)^2 + cos(~x)^2 => 1
+sin(~x) ^ 2 + cos(~x) ^ 2 => 1
+
+julia> r(sin(2a)^2 + cos(2a)^2)
+1
+
+julia> r(sin(2a)^2 + cos(a)^2)
+# nothing
+```
+
+**Segment**:
+
+A Segment variable is written as `~~x` and matches zero or more expressions in the
+function call.
+
+_Example:_
+
+This implements the distributive property of multiplication: `+(~~ys)` matches expressions
+like `a + b`, `a+b+c` and so on. On the RHS `~~ys` presents as any old julia array.
+
+```julia
+julia> r = @rule ~x * +((~~ys)) => sum(map(y-> ~x * y, ~~ys));
+
+julia> r(2 * (a+b+c))
+((2 * a) + (2 * b) + (2 * c))
+```
+
+**Predicates**:
+
+Predicates can be used on both `~x` and `~~x` by using the `~x::f` or `~~x::f`.
+Here `f` can be any julia function. In the case of a slot the function gets a single
+matched subexpression, in the case of segment, it gets an array of matched expressions.
+
+The predicate should return `true` if the current match is acceptable, and `false`
+otherwise.
+
+```julia
+julia> two_πs(x::Number) = abs(round(x/(2π)) - x/(2π)) < 10^-9
+two_πs (generic function with 1 method)
+
+julia> two_πs(x) = false
+two_πs (generic function with 2 methods)
+
+julia> r = @rule sin(~~x + ~y::two_πs + ~~z) => sin(+(~~x..., ~~z...))
+sin(~(~x) + ~(y::two_πs) + ~(~z)) => sin(+(~(~x)..., ~(~z)...))
+
+julia> r(sin(a+3π))
+
+julia> r(sin(a+6π))
+sin(a)
+
+julia> r(sin(a+6π+c))
+sin((a + c))
+```
+
+Predicate function gets an array of values if attached to a segment variable (`~~x`).
 
 ## Type conversion interface
 

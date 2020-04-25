@@ -145,14 +145,30 @@ sin((a + c))
 
 The predicate function gets an array of values if attached to a segment variable (`~~x`).
 
+### Associative-Commutative Rules
+Given an expression `f(x, f(y, z, u), v, w)`, a `f` is said to be associative if the expression
+is equivalent to `f(x, y, z, u, v, w)` and commutative if the order of arguments does not matter.
+SymbolicUtils has a special `@acrule` macro meant for rules on functions which are associate 
+and commutative such as addition and multiplication of real and complex numbers.
+```
+julia> @vars x y
+(x, y)
+
+julia> acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
+ACRule((~y) ^ ~n * ~y => (~y) ^ (~n + 1))
+
+julia> acr(x^2 * y * x)
+((x ^ 3) * y)
+```
+
 ### RuleSets
 
 Rules are applied to an entire term, they do not see sub-terms
 ```julia
 julia> using SymbolicUtils
 
-julia> @vars x y z
-(x, y, z)
+julia> @vars x y
+(x, y)
 
 julia> r = @rule sin(~x) => cos(~x)
 sin(~x) => cos(~x)

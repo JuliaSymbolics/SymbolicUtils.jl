@@ -143,7 +143,39 @@ julia> r(sin(a+6π+c))
 sin((a + c))
 ```
 
-Predicate function gets an array of values if attached to a segment variable (`~~x`).
+The predicate function gets an array of values if attached to a segment variable (`~~x`).
+
+### RuleSets
+
+Rules are applied to an entire term, they do not see sub-terms
+```julia
+julia> using SymbolicUtils
+
+julia> @vars x y z
+(x, y, z)
+
+julia> r = @rule sin(~x) => cos(~x)
+sin(~x) => cos(~x)
+
+julia> r(sin(sin(sin(y))))
+cos(sin(sin(y)))
+```
+however, SymbolicUtils also defines a `RuleSet` type which stores a `Vector` of rules. `RuleSets` 
+when applied to terms will recursively walk through the expression and apply each of it's
+consitituent rules until the term stops changing.
+```julia
+julia> R = RuleSet([r, @rule(~x + 1 => ~x - 1)])
+RuleSet(SymbolicUtils.AbstractRule[sin(~x) => cos(~x), ~x + 1 => ~x - 1])
+
+julia> R(sin(sin(sin(x + 1))))
+cos(cos(cos((-1 + x))))
+```
+You can use the keyword argument `depth` to set a maximum number of recursions that a `RuleSet` is
+allowed to do
+```julia
+julia> R(sin(sin(sin(x -1))), depth=2)
+cos(cos(sin((x + -1))))
+```
 
 ## Type conversion interface
 

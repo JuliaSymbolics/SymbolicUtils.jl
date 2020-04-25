@@ -204,7 +204,7 @@ struct RuleSet <: AbstractRule
     rules::Vector{AbstractRule}
 end
 
-function (r::RuleSet)(term, depth=-1)
+function (r::RuleSet)(term; depth=typemax(Int))
     rules = r.rules
     # simplify the subexpressions
     if depth == 0
@@ -213,7 +213,7 @@ function (r::RuleSet)(term, depth=-1)
     if term isa Symbolic
         if term isa Term
             expr = Term{symtype(term)}(operation(term),
-                        map(t -> r(t, max(-1, depth-1)), arguments(term)))
+                                       map(t -> r(t, depth=depth-1), arguments(term)))
         else
             expr = term
         end
@@ -228,7 +228,7 @@ function (r::RuleSet)(term, depth=-1)
                 # this rule doesn't apply
                 continue
             else
-                return r(expr′, getdepth(rules[i]) + 1) # levels touched
+                return r(expr′, depth=getdepth(rules[i])) # levels touched
             end
         end
     else

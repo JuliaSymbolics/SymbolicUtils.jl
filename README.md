@@ -150,7 +150,7 @@ Given an expression `f(x, f(y, z, u), v, w)`, a `f` is said to be associative if
 is equivalent to `f(x, y, z, u, v, w)` and commutative if the order of arguments does not matter.
 SymbolicUtils has a special `@acrule` macro meant for rules on functions which are associate 
 and commutative such as addition and multiplication of real and complex numbers.
-```
+```julia
 julia> @vars x y
 (x, y)
 

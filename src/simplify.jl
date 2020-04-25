@@ -1,7 +1,8 @@
 ##### Numeric simplification
 ### Predicates
 
-multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
+# https://github.com/shashi/SymbolicUtils.jl/issues/23
+#multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
 
 isnumber(x) = x isa Number
 

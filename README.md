@@ -17,6 +17,8 @@ julia> @vars a::Integer b c d x::Real y::Number
 
 The types annotated are used by the rewrite rules for symbolic simplification. 
 
+Arithmetic and math functions are defined on variables and return `Term` objects which represent bigger expressions.
+
 Variables can be defined as callable:
 
 ```julia
@@ -29,8 +31,6 @@ f(c)
 julia> g(a, x)
 g(a, x)
 ```
-
-Arithmetic and math functions are defined on variables.
 
 ## Symbolic simplification
 

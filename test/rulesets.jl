@@ -6,6 +6,9 @@
     @test simplify(1 * x * 2) == 2 * x
     @test simplify(1 + x + 2) == 3 + x
 
+    @test simplify(1x + 2x) == 3x
+    @test simplify(3x + 2x) == 5x
+
     @test simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == (3 * x * y) + a + b + c + d
     @test simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == (4 * x * y) + a + b + c + d
 

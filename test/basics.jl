@@ -1,4 +1,4 @@
-using SymbolicUtils: Variable, FnType, Term
+using SymbolicUtils: Variable, FnType, Term, symtype
 using SymbolicUtils
 using Test
 
@@ -19,11 +19,12 @@ using Test
         @test g.name === :g
 
         @test f(b) isa Term
+        @test symtype(f(b)) === Number
         @test_throws ErrorException f(a)
 
         @test g(b, f) isa Term
         @test_throws ErrorException g(b, a)
 
-        @test g(b, f) isa Term
+        @test symtype(g(b, f)) === Int
     end
 end

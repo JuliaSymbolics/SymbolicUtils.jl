@@ -2,6 +2,8 @@
 
 SymbolicUtils.jl provides various utilities for symbolic computing.
 
+[![Build Status](https://travis-ci.org/shashi/SymbolicUtils.jl.svg?branch=master)](https://travis-ci.org/shashi/SymbolicUtils.jl)  [![Coverage Status](https://coveralls.io/repos/github/shashi/SymbolicUtils.jl/badge.svg?branch=master)](https://coveralls.io/github/shashi/SymbolicUtils.jl?branch=master)
+
 ## Symbolic simplification
 
 ```julia

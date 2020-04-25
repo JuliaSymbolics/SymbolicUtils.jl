@@ -7,4 +7,5 @@ SymbolicUtils.show_simplified[] = false
 
 include("basics.jl")
 include("rewrite.jl")
+include("interface.jl")
 include("rulesets.jl")

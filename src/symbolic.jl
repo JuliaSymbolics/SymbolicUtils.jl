@@ -157,7 +157,7 @@ function promote_symtype(f::Variable{FnType{X,Y}}, args...) where {X, Y}
 
     for i in 1:ngiven
         t = X.parameters[i]
-        if !(symtype(args[i]) <: t)
+        if !(args[i] <: t)
             error("Argument to $f at position $i must be of symbolic type $t")
         end
     end
@@ -190,7 +190,7 @@ function _name_type(x)
         return (name=x, type=Number)
     elseif x isa Expr && x.head === :(::)
         if length(x.args) == 1
-            return (name=nothing, type=x.args[2])
+            return (name=nothing, type=x.args[1])
         end
         lhs, rhs = x.args[1:2]
         if lhs isa Expr && lhs.head === :call
@@ -201,7 +201,7 @@ function _name_type(x)
             return (name=lhs, type=rhs)
         end
     elseif x isa Expr && x.head === :call
-        return _name_type(:($x::Any))
+        return _name_type(:($x::Number))
     else
         vars_syntax_error()
     end

@@ -25,6 +25,19 @@ for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = Number
     @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a, type=Number)
 end
+
+function promote_symtype(f::Variable{FnType{X,Y}}, xs...) where {X, Y}
+    @show typeof(f)
+    if Tuple{xs...} <: X
+        return Y
+    else
+        # XXX: maybe should error
+        warn("Symbolic function $f called with the wrong input types $xs")
+        return Y
+    end
+end
+
+rec_promote_symtype(f) = promote_symtype(f)
 rec_promote_symtype(f, x) = promote_symtype(f, x)
 rec_promote_symtype(f, x,y) = promote_symtype(f, x,y)
 rec_promote_symtype(f, x,y,z...) = rec_promote_symtype(f, promote_symtype(f, x,y), z...)
@@ -49,4 +62,6 @@ for f in [+, *]
     end
 end
 
-promote_symtype(::typeof(identity), T) = T
+for f in [identity, one, *, +]
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
+end

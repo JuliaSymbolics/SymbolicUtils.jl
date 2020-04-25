@@ -17,8 +17,7 @@ BASIC_NUMBER_RULES = let
 
      @acrule(~x + *(~β::isnumber, ~x) => *(1 + ~β, ~x))
      @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
-        
-        
+     
      # group stuff
      @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
      @acrule((~y)^(~n) * ~y => (~y)^(~n+1))

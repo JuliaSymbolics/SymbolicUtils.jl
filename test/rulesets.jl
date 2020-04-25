@@ -32,5 +32,12 @@ end
    
     @test simplify(cos(x + 2π + a)) == cos(a + x)
     @test simplify(tan(x + 2π * a)) == tan(x)
+end
 
+@testset "Depth" begin
+    @vars x
+    R = RuleSet([@rule(sin(~x) => cos(~x)),
+                 @rule( ~x + 1 => ~x - 1)])
+    @test R(sin(sin(sin(x + 1)))) == cos(cos(cos(x - 1)))
+    @test R(sin(sin(sin(x + 1))), depth=2) == cos(cos(sin(x + 1)))
 end

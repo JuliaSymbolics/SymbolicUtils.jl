@@ -8,3 +8,4 @@ SymbolicUtils.show_simplified[] = false
 include("basics.jl")
 include("rewrite.jl")
 include("rulesets.jl")
+include("fuzz.jl")

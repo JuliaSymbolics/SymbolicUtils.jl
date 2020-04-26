@@ -27,8 +27,8 @@ function gen_rand_expr(inputs; leaf_prob=0.92, depth=0, min_depth=1, max_depth=5
                           depth=depth+1,
                           min_depth=min_depth,
                           max_depth=max_depth) for i in 1:arity]
-    return try
-        f(args...)
+    try
+        return f(args...)
     catch err
         if err isa DomainError
             return gen_rand_expr(inputs,
@@ -36,6 +36,8 @@ function gen_rand_expr(inputs; leaf_prob=0.92, depth=0, min_depth=1, max_depth=5
                                  depth=depth,
                                  min_depth=min_depth,
                                  max_depth=max_depth)
+        else
+            rethrow(err)
         end
     end
 end
@@ -94,5 +96,11 @@ function fuzz_test(ntrials)
                            """)
             end
         end
+    end
+end
+
+@testset "Fuzz test" begin
+    for i=1:100
+        fuzz_test(10)
     end
 end

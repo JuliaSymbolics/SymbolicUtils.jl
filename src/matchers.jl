@@ -1,50 +1,55 @@
-#### Pattern matching basics
+#### Pattern matching
+
+@inline alwaystrue(x) = true
 
 # matches one term
-# syntax:  :x
+# syntax:  ~x
 struct Slot{P}
     name::Symbol
     predicate::P
 end
+
+Slot(s) = Slot(s, alwaystrue)
+
 Base.isequal(s1::Slot, s2::Slot) = s1.name == s2.name
+
 Base.show(io::IO, s::Slot) = (print(io, "~"); print(io, s.name))
 
 # matches zero or more terms
-# syntax: ~x
+# syntax: ~~x
 struct Segment{F}
     name::Symbol
     predicate::F
 end
 
 ismatch(s::Segment, t) = s.predicate(t)
-_oftype(T) = x->symtype(x)<:T
-_oftype(T::Type{<:Tuple}) = x->Tuple{map(symtype, x)...}<:T # used for segments
-oftype(T) = _oftype(T)
-and(f,g) = x->f(x) && g(x)
-or(f,g) = x->f(x) || g(x)
-@inline alwaystrue(x) = true
 
-Slot(s) = Slot(s, alwaystrue)
 Segment(s) = Segment(s, alwaystrue)
 
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
 
-
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
+
 function makesegment(s::Expr, keys)
     if !(s.head == :(::))
         error("Syntax for specifying a segment is ~~x::\$predicate, where predicate is a boolean function")
     end
+
     name = s.args[1]
+
     push!(keys, name)
     :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
 end
+
 makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
+
 function makeslot(s::Expr, keys)
     if !(s.head == :(::))
         error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
     end
+
     name = s.args[1]
+
     push!(keys, name)
     :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
 end
@@ -136,12 +141,14 @@ function trymatchexpr(data, value, n)
             n += 1
             value = cdr(value)
             data = cdr(data)
+
             if isempty(value)
                 return n
             elseif isempty(data)
                 return nothing
             end
         end
+
         return isempty(value) ? n : nothing
     elseif isequal(value, data)
         return n + 1
@@ -151,6 +158,7 @@ end
 function matcher(segment::Segment)
     function segment_matcher(data, bindings, success)
         val = bindings[segment.name]
+
         if val !== nothing
             n = trymatchexpr(data, val, 0)
             if n !== nothing
@@ -158,8 +166,10 @@ function matcher(segment::Segment)
             end
         else
             res = nothing
+
             for i=length(data):-1:0
                 subexpr = take_n(data, i)
+
                 if segment.predicate(subexpr)
                     res = success(assoc(bindings, segment.name, subexpr), i)
                     if res !== nothing
@@ -167,6 +177,7 @@ function matcher(segment::Segment)
                     end
                 end
             end
+
             return res
         end
     end
@@ -175,8 +186,10 @@ end
 function matcher(term::Term)
     matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
     function term_matcher(data, bindings, success)
+
         isempty(data) && return nothing
         !(car(data) isa Term) && return nothing
+
         function loop(term, bindings′, matchers′) # Get it to compile faster
             if isempty(matchers′)
                 if  isempty(term)
@@ -187,6 +200,7 @@ function matcher(term::Term)
             res = car(matchers′)(term, bindings′,
                                  (b, n) -> loop(drop_n(term, n), b, cdr(matchers′)))
         end
+
         loop(car(data), bindings, matchers) # Try to eat exactly one term
     end
 end

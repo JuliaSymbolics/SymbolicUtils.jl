@@ -28,3 +28,20 @@ using Test
         @test symtype(g(b, f)) === Int
     end
 end
+
+@testset "methods test" begin
+    @vars w::Complex z::Complex a::Real b::Real x
+
+    @test w + z == Term{Complex}(+, [w, z])
+    @test z + a == Term{Number}(+, [z, a])
+    @test a + b == Term{Real}(+, [a, b])
+    @test a + x == Term{Number}(+, [a, x])
+    @test a + z == Term{Number}(+, [a, z])
+
+    # promote_symtype of identity
+    @test Term(identity, [w]) == Term{Complex}(identity, [w])
+    @test +(w) == w
+    @test +(a) == a
+
+    @test rem2pi(a, RoundNearest) == Term{Real}(rem2pi, [a, RoundNearest])
+end

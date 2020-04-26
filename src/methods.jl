@@ -26,7 +26,7 @@ Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = Number
-    @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a, type=Number)
+    @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a)
 end
 
 rec_promote_symtype(f) = promote_symtype(f)

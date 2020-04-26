@@ -5,6 +5,8 @@
     @test simplify(-sin(x)) == -sin(x)
     @test simplify(1 * x * 2) == 2 * x
     @test simplify(1 + x + 2) == 3 + x
+    @test simplify(b*b) == b^2 # tests merge_repeats
+    @test simplify((a*b)^c) == a^c * b^c
 
     @test simplify(1x + 2x) == 3x
     @test simplify(3x + 2x) == 5x

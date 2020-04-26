@@ -86,7 +86,7 @@ function <ₑ(a::Term, b::Term)
     na = nameof(operation(a))
     nb = nameof(operation(b))
     if na !== nb
-        return na < nb
+        return na <ₑ nb
     elseif arglength(a) != arglength(b)
         return arglength(a) < arglength(b)
     else

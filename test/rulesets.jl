@@ -44,3 +44,14 @@ end
     @test R(sin(sin(sin(x + 1)))) == cos(cos(cos(x - 1)))
     @test R(sin(sin(sin(x + 1))), depth=2) == cos(cos(sin(x + 1)))
 end
+
+@testset "RuleRewriteError" begin
+    pred(x) = error("Fail")
+
+    @vars a b
+
+    rs = RuleSet([@rule ~x + ~y::pred => ~x])
+    @test_throws SymbolicUtils.RuleRewriteError rs(a+b)
+    err = try rs(a+b) catch err; err; end
+    @test sprint(io->Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression (a + b)"
+end

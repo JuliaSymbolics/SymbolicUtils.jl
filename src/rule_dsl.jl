@@ -204,6 +204,11 @@ struct RuleSet <: AbstractRule
     rules::Vector{AbstractRule}
 end
 
+struct RuleRewriteError
+    rule
+    expr
+end
+
 function (r::RuleSet)(term; depth=typemax(Int))
     rules = r.rules
     # simplify the subexpressions
@@ -221,8 +226,7 @@ function (r::RuleSet)(term; depth=typemax(Int))
             expr′ = try
                 @timer(repr(rules[i]), rules[i](expr))
             catch err
-                show_rule_error(rules[i], expr)
-                rethrow()
+                throw(RuleRewriteError(rules[i], expr))
             end
             if expr′ === nothing
                 # this rule doesn't apply
@@ -237,10 +241,10 @@ function (r::RuleSet)(term; depth=typemax(Int))
     return expr # no rule applied
 end
 
-@noinline function show_rule_error(rule, expr)
-    msg = "\nFailed to apply rule $(rule) on expression "
-    msg *= sprint(io->showraw(io, expr))
-    Base.showerror(stderr, ErrorException(msg), backtrace()[1:min(100, end)])
+@noinline function Base.showerror(io::IO, err::RuleRewriteError)
+    msg = "Failed to apply rule $(err.rule) on expression "
+    msg *= sprint(io->showraw(io, err.expr))
+    print(io, msg)
 end
 
 function timerewrite(f)

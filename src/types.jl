@@ -105,7 +105,7 @@ struct Variable{T} <: Symbolic{T}
     name::Symbol
 end
 
-Variable(x) = Variable{Number}(x)
+Variable(x) = Variable{symtype(x)}(x)
 
 Base.nameof(v::Variable) = v.name
 

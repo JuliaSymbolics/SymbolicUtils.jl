@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Variable, to_symbolic, istree, operation, arguments
+using SymbolicUtils: Term, Variable, to_symbolic, istree, operation, arguments, symtype
 
 SymbolicUtils.istree(ex::Expr) = ex.head == :call
 SymbolicUtils.operation(ex::Expr) = ex.args[1]
@@ -25,6 +25,6 @@ to_expr(x) = x
 
 @test to_expr(simplify(ex)) == Expr(:call, +, -1, :x)
 
-SymbolicUtils.symtype(::Symbol) = Number
+SymbolicUtils.symtype(::Symbol) = Real
 
-
+@test symtype(simplify(ex)) == Real

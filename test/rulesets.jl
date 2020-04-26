@@ -1,5 +1,5 @@
 @testset "Numeric" begin
-    @vars a::Integer b c d x::Real y::Number
+    @syms a::Integer b c d x::Real y::Number
     @test simplify(x - y) == x + -1*y
     @test simplify(x - sin(y)) == x + -1*sin(y)
     @test simplify(-sin(x)) == -sin(x)
@@ -22,7 +22,7 @@
 end
 
 @testset "Pythagorean Identities" begin
-    @vars a::Integer x::Real y::Number
+    @syms a::Integer x::Real y::Number
 
     @test simplify(cos(x)^2 + 1 + sin(x)^2) == 2
     @test simplify(cos(y)^2 + 1 + sin(y)^2) == 2
@@ -33,14 +33,14 @@ end
 end
 
 #@testset "2π Identities" begin
-#    @vars a::Integer x::Real y::Number
+#    @syms a::Integer x::Real y::Number
 #
 #    @test simplify(cos(x + 2π + a)) == cos(a + x)
 #    @test simplify(tan(x + 2π * a)) == tan(x)
 #end
 
 @testset "Depth" begin
-    @vars x
+    @syms x
     R = RuleSet([@rule(sin(~x) => cos(~x)),
                  @rule( ~x + 1 => ~x - 1)])
     @test R(sin(sin(sin(x + 1)))) == cos(cos(cos(x - 1)))
@@ -50,7 +50,7 @@ end
 @testset "RuleRewriteError" begin
     pred(x) = error("Fail")
 
-    @vars a b
+    @syms a b
 
     rs = RuleSet([@rule ~x + ~y::pred => ~x])
     @test_throws SymbolicUtils.RuleRewriteError rs(a+b)
@@ -59,7 +59,7 @@ end
 end
 
 @testset "timerwrite" begin
-    @vars a b c d
+    @syms a b c d
     expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))
     SymbolicUtils.@timerewrite simplify(expr1)
 end

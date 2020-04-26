@@ -4,27 +4,27 @@ SymbolicUtils.jl provides various utilities for symbolic computing.
 
 [![Build Status](https://travis-ci.org/JuliaSymbolics/SymbolicUtils.jl.svg?branch=master)](https://travis-ci.com/github/JuliaSymbolics/SymbolicUtils.jl)  [![Coverage Status](https://coveralls.io/repos/github/JuliaSymbolics/SymbolicUtils.jl/badge.svg?branch=master)](https://coveralls.io/github/JuliaSymbolics/SymbolicUtils.jl?branch=master)
 
-## Variables and expressions
+## Symbols and expressions
 
-Symbolic variables can be created using the `@vars` macro:
+Symbols can be created using the `@syms` macro:
 
 ```julia
 julia> using SymbolicUtils
 
-julia> @vars a::Integer b c d x::Real y::Number
+julia> @syms a::Integer b c d x::Real y::Number
 (a, b, c, d, x, y)
 ```
 
-This macro also defines the Julia variables of the same name and each is set to the its respective symbolic variable object.
+This macro also defines the Julia variables of the same name and each is set to the its respective symbolic object.
 
-The associated type `T` in the `@vars a::T` syntax, called `symtype` of the variable, is the type the value of the variable is supposed to be of. These types may determine the rules of symbolic simplification.
+The associated type `T` in the `@syms a::T` syntax, called `symtype` of the symbol, is the type the value of the symbol is supposed to be of. These types may determine the rules of symbolic simplification.
 
-Arithmetic and math functions are defined on variables and return `Term` objects which represent function call expressions.
+Arithmetic and math functions are defined on symbols and return `Term` objects which represent function call expressions.
 
-Variables can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbolic variables of the same `symtype`.
+Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same `symtype`.
 
 ```julia
-julia> @vars f(x) g(x::Real, y::Real)::Real
+julia> @syms f(x) g(x::Real, y::Real)::Real
 (f(::Number)::Number, g(::Real, ::Real)::Real)
 
 julia> f(c)
@@ -67,7 +67,7 @@ _Example:_
 Simple rule to turn any `sin` into `cos`:
 
 ```julia
-julia> @vars a b c
+julia> @syms a b c
 (a, b, c)
 
 julia> r = @rule sin(~x) => cos(~x)
@@ -153,7 +153,7 @@ is equivalent to `f(x, y, z, u, v, w)` and commutative if the order of arguments
 SymbolicUtils has a special `@acrule` macro meant for rules on functions which are associate 
 and commutative such as addition and multiplication of real and complex numbers.
 ```julia
-julia> @vars x y
+julia> @syms x y
 (x, y)
 
 julia> acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
@@ -169,7 +169,7 @@ Rules are applied to an entire term, they do not see sub-terms
 ```julia
 julia> using SymbolicUtils
 
-julia> @vars x y
+julia> @syms x y
 (x, y)
 
 julia> r = @rule sin(~x) => cos(~x)
@@ -233,7 +233,7 @@ Called only if `istree(x)` is `true`. Part of the API required
 for `simplify` to work. Other required methods are `operation` and `istree`
 
 #### `to_symbolic(x::S)`
-Convert your variable type to a `SymbolicUtils.Variable`. Suppose you have
+Convert your variable type to a `SymbolicUtils.Sym`. Suppose you have
 ```julia
 struct MySymbol
    s::Symbol
@@ -241,7 +241,7 @@ end
 ```
 which could represent any type symbolically, then you would define 
 ```julia
-SymbolicUtils.to_symbolic(s::MySymbol) = SymbolicUtils.Variable(s.s)
+SymbolicUtils.to_symbolic(s::MySymbol) = SymbolicUtils.Sym(s.s)
 ```
 
 ### Optional
@@ -283,12 +283,12 @@ julia> ex = 1 + (:x - 2)
 How can we use SymbolicUtils.jl to convert `ex` to `(-)(:x, 1)`? We simply implement `istree`,
 `operation`, `arguments` and `to_symbolic` and we'll be off to the races:
 ```julia
-using SymbolicUtils: Variable, istree, operation, arguments, to_symbolic
+using SymbolicUtils: Sym, istree, operation, arguments, to_symbolic
 
 SymbolicUtils.istree(ex::Expr) = ex.head == :call
 SymbolicUtils.operation(ex::Expr) = ex.args[1]
 SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
-SymbolicUtils.to_symbolic(s::Symbol) = Variable(s)
+SymbolicUtils.to_symbolic(s::Symbol) = Sym(s)
 
 julia> simplify(ex)
 (-1 + x)
@@ -298,7 +298,7 @@ Term{Any}
   f: + (function of type typeof(+))
   arguments: Array{Any}((2,))
     1: Int64 -1
-    2: Variable{Any}
+    2: Sym{Any}
       name: Symbol x
 ```
 this thing returns a `Term{Any}`, but it's not hard to convert back to `Expr`:
@@ -327,7 +327,7 @@ Term{Real}
   f: + (function of type typeof(+))
   arguments: Array{Any}((2,))
     1: Int64 -1
-    2: Variable{Real}
+    2: Sym{Real}
       name: Symbol x
 ```
 and now all our analysis is able to figure out that the `Term`s are `Number`s.

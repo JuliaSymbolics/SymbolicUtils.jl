@@ -21,7 +21,7 @@ _isone(x::Number) = isone(x)
 <ₑ(a::Number,   b::Symbolic) = true
 
 arglength(a) = length(arguments(a))
-function <ₑ(a::Variable, b::Term)
+function <ₑ(a::Sym, b::Term)
     args = arguments(b)
     if length(args) === 2
         n1, n2 = !isnumber(args[1]) , !isnumber(args[2])
@@ -54,7 +54,7 @@ function <ₑ(a::Variable, b::Term)
     end
 end
 
-<ₑ(a::Symbolic, b::Variable) = !(b <ₑ a)
+<ₑ(a::Symbolic, b::Sym) = !(b <ₑ a)
 
 function <ₑ(a::Symbol, b::Symbol)
     # Enforce the order [+,-,\,/,^,*]
@@ -75,7 +75,7 @@ function <ₑ(a::Symbol, b::Symbol)
     end
 end
 
-<ₑ(a::Variable, b::Variable) = a.name < b.name
+<ₑ(a::Sym, b::Sym) = a.name < b.name
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 
 function <ₑ(a::Term, b::Term)

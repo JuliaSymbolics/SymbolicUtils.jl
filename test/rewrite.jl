@@ -1,4 +1,4 @@
-@vars a b c
+@syms a b c
 
 @testset "Equality" begin
     @test a == a

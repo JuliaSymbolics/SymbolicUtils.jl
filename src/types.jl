@@ -129,11 +129,7 @@ Base.show(io::IO, v::Variable) = print(io, v.name)
 # Maybe don't even need a new type, can just use Variable{FnType}
 struct FnType{X<:Tuple,Y} end
 
-fun(f,X=Tuple{Real},Y=Real) = Variable{FnType{X,Y}}(f)
-
-function (f::Variable{<:FnType{X,Y}})(args...) where {X,Y}
-    term(f, args...)
-end
+(f::Variable{<:FnType})(args...) = term(f, args...)
 
 function (f::Variable)(args...)
     error("Variable $f of type $F are not callable. " *
@@ -276,7 +272,7 @@ function Base.show(io::IOContext, t::Term)
     else
         f = operation(t)
         fname = nameof(f)
-        binary = fname in [:+, :-, :*, :/, :^]
+        binary = Base.isbinaryoperator(fname)
         color = get(io, :withcolor, :white)
 
         binary && Base.printstyled(io, "(",color=color)

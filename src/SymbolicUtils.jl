@@ -29,7 +29,7 @@ end
 
 
 export @vars, term, @fun, showraw
-include("symbolic.jl")
+include("types.jl")
 
 
 using SpecialFunctions, NaNMath
@@ -42,9 +42,10 @@ include("matchers.jl")
 
 using Combinatorics: permutations
 export @rule, @acrule, RuleSet
-include("rulerewriters.jl")
+include("rule_dsl.jl")
 
 export simplify
+
 include("simplify.jl")
 
 include("rulesets.jl")

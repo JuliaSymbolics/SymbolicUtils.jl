@@ -2,11 +2,11 @@
 
 SymbolicUtils.jl provides various utilities for symbolic computing.
 
-[![Build Status](https://travis-ci.org/shashi/SymbolicUtils.jl.svg?branch=master)](https://travis-ci.org/shashi/SymbolicUtils.jl)  [![Coverage Status](https://coveralls.io/repos/github/shashi/SymbolicUtils.jl/badge.svg?branch=master)](https://coveralls.io/github/shashi/SymbolicUtils.jl?branch=master)
+[![Build Status](https://travis-ci.org/JuliaSymbolics/SymbolicUtils.jl.svg?branch=master)](https://travis-ci.org/JuliaSymbolics/SymbolicUtils.jl)  [![Coverage Status](https://coveralls.io/repos/github/JuliaSymbolics/SymbolicUtils.jl/badge.svg?branch=master)](https://coveralls.io/github/JuliaSymbolics/SymbolicUtils.jl?branch=master)
 
 ## Variables and expressions
 
-Variables can be created using the `@vars` macro:
+Symbolic variables can be created using the `@vars` macro:
 
 ```julia
 julia> using SymbolicUtils
@@ -15,11 +15,13 @@ julia> @vars a::Integer b c d x::Real y::Number
 (a, b, c, d, x, y)
 ```
 
-The types annotated are used by the rewrite rules for symbolic simplification. 
+This macro also defines the Julia variables of the same name and each is set to the its respective symbolic variable object.
 
-Arithmetic and math functions are defined on variables and return `Term` objects which represent bigger expressions.
+The associated type `T` in the `@vars a::T` syntax, called `symtype` of the variable, is the type the value of the variable is supposed to be of. These types may determine the rules of symbolic simplification.
 
-Variables can be defined as callable:
+Arithmetic and math functions are defined on variables and return `Term` objects which represent function call expressions.
+
+Variables can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbolic variables of the same `symtype`.
 
 ```julia
 julia> @vars f(x) g(x::Real, y::Real)::Real
@@ -28,13 +30,13 @@ julia> @vars f(x) g(x::Real, y::Real)::Real
 julia> f(c)
 f(c)
 
-julia> g(a, x)
-g(a, x)
+julia> g(1, x)
+g(1, x)
 ```
 
 ## Symbolic simplification
 
-Use the `simplify` function to apply a built in list of rules to simplify an expression.
+Use the `simplify` function to apply a built in list of rules to simplify an expression:
 ```julia
 
 julia> simplify(a + b + (x * y) + c + 2 * (x * y) + d + sin(x)^2 + cos(x)^2 - y^0)
@@ -199,7 +201,7 @@ This section is for Julia package developers who may want to use the `simplify` 
 
 The following functions should be defined for `T` to work.
 
-### `istree(x::T)`
+#### `istree(x::T)`
 
 Check if `x` represents an expression tree. If returns true,
 it will be assumed that `operation(::T)` and `arguments(::T)`
@@ -207,13 +209,13 @@ methods are defined. Definining these three should allow use
 of `simplify` on custom types. Optionally `symtype(x)` can be
 defined to return the expected type of the symbolic expression.
 
-### `operation(x::T)`
+#### `operation(x::T)`
 
 Returns the operation (a function object) performed by an expression
 tree. Called only if `istree(::T)` is true. Part of the API required
 for `simplify` to work. Other required methods are `arguments` and `istree`
 
-### `arguments(x::T)`
+#### `arguments(x::T)`
 
 Returns the arguments (a `Vector`) for an expression tree.
 Called only if `istree(x)` is `true`. Part of the API required
@@ -222,7 +224,7 @@ for `simplify` to work. Other required methods are `operation` and `istree`
 
 ### Optional
 
-### `symtype(x)`
+#### `symtype(x)`
 
 The supposed type of values in the domain of x. Tracing tools can use this type to
 pick the right method to run or analyse code.
@@ -234,6 +236,6 @@ Define this for your symbolic types if you want `simplify` to apply rules
 specific to numbers (such as commutativity of multiplication). Or such
 rules that may be implemented in the future.
 
-### `promote_symtype(f, arg_symtypes...)`
+#### `promote_symtype(f, arg_symtypes...)`
 
 Returns the appropriate output type of applying `f` on arguments of type `arg_symtypes`.

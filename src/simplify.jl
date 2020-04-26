@@ -1,7 +1,7 @@
 ##### Numeric simplification
 ### Predicates
 
-# https://github.com/shashi/SymbolicUtils.jl/issues/23
+# https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/23
 #multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
 
 isnumber(x) = x isa Number
@@ -86,7 +86,7 @@ function <ₑ(a::Term, b::Term)
     na = nameof(operation(a))
     nb = nameof(operation(b))
     if na !== nb
-        return na < nb
+        return na <ₑ nb
     elseif arglength(a) != arglength(b)
         return arglength(a) < arglength(b)
     else
@@ -115,9 +115,6 @@ function <ₑ(a::Term, b::Term)
 end
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
-issortedₑ(args::Tuple) = issorted([args...], lt=<ₑ)
-issortedₑ((a,b,)::Tuple{Any,Any}) = isequal(a, b) || a <ₑ b
-issortedₑ(a::Tuple{Any}) = true
 
 # are there nested ⋆ terms?
 function isnotflat(⋆)

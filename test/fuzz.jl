@@ -100,7 +100,9 @@ function fuzz_test(ntrials)
 end
 
 @testset "Fuzz test" begin
-    for i=1:1000
-        fuzz_test(10)
+    for i=1:100
+        ntrials = 100
+        fuzz_test(ntrials)
+        println("$ntrials successful fuzztest trials")
     end
 end

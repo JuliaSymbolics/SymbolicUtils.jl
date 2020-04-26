@@ -90,7 +90,7 @@ OLD_BASIC_NUMBER_RULES = let # Keep these around for benchmarking purposes
            +((~~a)..., *(~α + ~β, (~x)...), (~b)...)),
 
      # group stuff
-     @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...)),
+     @rule(^(*(~~x), ~y) => *(map(a->a ^ (~y), ~~x)...)),
      @rule(*(~~x, ^(~y, ~n), ~y, ~~z) => *((~~x)..., ^(~y, ~n+1), (~~z)...)),
      @rule(*(~~a, ^(~x, ~e1), ^(~x, ~e2), ~~b) =>
            *((~~a)..., ^(~x, (~e1 + ~e2)), (~b)...)),

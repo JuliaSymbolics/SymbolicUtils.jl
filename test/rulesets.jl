@@ -57,3 +57,9 @@ end
     err = try rs(a+b) catch err; err; end
     @test sprint(io->Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression (a + b)"
 end
+
+@testset "timerwrite" begin
+    @vars a b c d
+    expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 1000))
+    SymbolicUtils.@timerewrite simplify(expr1+expr2)
+end

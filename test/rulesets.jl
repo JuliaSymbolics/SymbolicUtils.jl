@@ -73,7 +73,7 @@ using Random: shuffle
         R2 = RuleSet(shuffle(R1.rules))
         simplify_shuffle_tester(ex) = R1(ex) == R1(R2(ex))
 
-        @test simplify_shuffle_tester(foldr((x,y)->rand([*, /, +, -, ^])(x,y), rand([a,b,c], 20)))
+        @test simplify_shuffle_tester(foldr((x,y)->rand([*, /, +, -, ^])(x,y), rand([a,b,c, 1, 2, 1e-2], 20)))
         
         @test simplify_shuffle_tester(x - y)
         @test simplify_shuffle_tester(x - sin(y))

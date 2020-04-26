@@ -100,7 +100,7 @@ function fuzz_test(ntrials)
 end
 
 @testset "Fuzz test" begin
-    for i=1:100
+    for i=1:1000
         fuzz_test(10)
     end
 end

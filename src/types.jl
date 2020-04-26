@@ -272,7 +272,7 @@ function Base.show(io::IOContext, t::Term)
     else
         f = operation(t)
         fname = nameof(f)
-        binary = fname in [:+, :-, :*, :/, :^]
+        binary = Base.isbinaryoperator(fname)
         color = get(io, :withcolor, :white)
 
         binary && Base.printstyled(io, "(",color=color)

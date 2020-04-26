@@ -10,6 +10,7 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
+NaNMath = "0.3"
 TimerOutputs = "0.5"
 SpecialFunctions = "0.10"
 

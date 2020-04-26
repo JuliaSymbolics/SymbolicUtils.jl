@@ -84,9 +84,7 @@ Base.one( s::Symbolic) = one( symtype(s))
 
 Base.zero(s::Symbolic) = zero(symtype(s))
 
-@noinline function promote_symtype(f, xs...)
-    error("promote_symtype($f, $(join(xs, ", "))) not defined")
-end
+promote_symtype(f, xs...) = Any
 
 
 
@@ -107,7 +105,7 @@ struct Variable{T} <: Symbolic{T}
     name::Symbol
 end
 
-Variable(x) = Variable{Number}(x)
+Variable(x) = Variable{symtype(x)}(x)
 
 Base.nameof(v::Variable) = v.name
 

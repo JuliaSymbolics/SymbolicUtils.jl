@@ -195,11 +195,22 @@ julia> R(sin(sin(sin(x -1))), depth=2)
 cos(cos(sin((x + -1))))
 ```
 
-## Type conversion interface
+## Interfacing with SymbolicUtils.jl
 
 This section is for Julia package developers who may want to use the `simplify` and rule rewriting system on their own expression types.
 
-The following functions should be defined for `T` to work.
+Our intention is for SymbolicUtils to be useful even for packages with their own custom symbolic types which
+differ from those offered by SymbolicUtils. To this end, SymbolicUtils provides an interface to convert expression
+tree types which have 
+*  an `operation`, (i.e. function to apply)
+* `arguments` which the `operation` is applied to
+* `variable` types which are the atoms from which the expression tree is built 
+* optionally, a type which should `typeof(operation(arguments...))` should return if it were to be run.
+
+SymbolicUtils uses a function `to_symbolic` to convert aribtrarty types to it's own internal types. 
+
+The following methods should be defined for an expression tree type `T` with symbol types `S` to  work
+with SymbolicUtils.jl
 
 #### `istree(x::T)`
 
@@ -221,6 +232,17 @@ Returns the arguments (a `Vector`) for an expression tree.
 Called only if `istree(x)` is `true`. Part of the API required
 for `simplify` to work. Other required methods are `operation` and `istree`
 
+#### `to_symbolic(x::S)`
+Convert your variable type to a `SymbolicUtils.Variable`. Suppose you have
+```julia
+struct MySymbol
+   s::Symbol
+end
+```
+which could represent any type symbolically, then you would define 
+```julia
+SymbolicUtils.to_symbolic(s::MySymbol) = SymbolicUtils.Variable(s.s)
+```
 
 ### Optional
 
@@ -239,3 +261,73 @@ rules that may be implemented in the future.
 #### `promote_symtype(f, arg_symtypes...)`
 
 Returns the appropriate output type of applying `f` on arguments of type `arg_symtypes`.
+
+### Example
+
+Suppose you were feeling the temptations of type piracy and wanted to make a quick and dirty
+symbolic library built on top of Julia's `Expr` type, e.g.
+
+```julia
+for f ∈ [:+, :-, :*, :/, :^] #Note, this is type piracy!
+    @eval begin
+        Base.$f(x::Union{Expr, Symbol}, y::Number) = Expr(:call, $f, x, y)
+        Base.$f(x::Number, y::Union{Expr, Symbol}) = Expr(:call, $f, x, y)
+        Base.$f(x::Union{Expr, Symbol}, y::Union{Expr, Symbol}) = (Expr(:call, $f, x, y))
+    end
+end
+
+
+julia> ex = 1 + (:x - 2)
+:((+)(1, (-)(x, 2)))
+```
+How can we use SymbolicUtils.jl to convert `ex` to `(-)(:x, 1)`? We simply implement `istree`,
+`operation`, `arguments` and `to_symbolic` and we'll be off to the races:
+```julia
+using SymbolicUtils: Variable, istree, operation, arguments, to_symbolic
+
+SymbolicUtils.istree(ex::Expr) = ex.head == :call
+SymbolicUtils.operation(ex::Expr) = ex.args[1]
+SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
+SymbolicUtils.to_symbolic(s::Symbol) = Variable(s)
+
+julia> simplify(ex)
+(-1 + x)
+
+julia> dump(simplify(ex))
+Term{Any}
+  f: + (function of type typeof(+))
+  arguments: Array{Any}((2,))
+    1: Int64 -1
+    2: Variable{Any}
+      name: Symbol x
+```
+this thing returns a `Term{Any}`, but it's not hard to convert back to `Expr`:
+```julia
+to_expr(t::Term) = Expr(:call, operation(t), to_expr.(arguments(t))...) 
+to_expr(x) = x
+
+julia> to_expr(simplify(ex))
+:((+)(-1, x))
+
+julia> dump(ans)
+Expr
+  head: Symbol call
+  args: Array{Any}((3,))
+    1: + (function of type typeof(+))
+    2: Int64 -1
+    3: Symbol x
+```
+
+Now suppose we actaully wanted all `Symbol`s to be treated as `Real` numbers. We can simply define
+```julia
+SymbolicUtils.symtype(s::Symbol) = Real
+
+julia> dump(simplify(ex))
+Term{Real}
+  f: + (function of type typeof(+))
+  arguments: Array{Any}((2,))
+    1: Int64 -1
+    2: Variable{Real}
+      name: Symbol x
+```
+and now all our analysis is able to figure out that the `Term`s are `Number`s.

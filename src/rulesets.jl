@@ -40,7 +40,7 @@ end
 
 TRIG_RULES = let
     [
-     # https://github.com/shashi/SymbolicUtils.jl/issues/23
+     # https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/23
      #[[@rule trig_f(~~x + ~y::multiple_of(2π) + ~~z) => trig_f(+(~~x..., ~~z...))
      #
      #  @rule trig_f(~~x + ~y::multiple_of(2π) * ~n::oftype(Integer) + ~~z) => trig_f(+(~~x..., ~~z...))

@@ -319,7 +319,7 @@ Expr
 ```
 
 Now suppose we actaully wanted all `Symbol`s to be treated as `Real` numbers. We can simply define
-```
+```julia
 SymbolicUtils.symtype(s::Symbol) = Real
 
 julia> dump(simplify(ex))

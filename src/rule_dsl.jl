@@ -29,8 +29,9 @@ function Base.show(io::IO, r::Rule)
 end
 
 function (r::Rule)(term)
+    term = to_symbolic(term)
     m, rhs, dict = r.matcher, r.rhs, r._init_matches
-    m((term,), dict, (d, n) -> n == 1 ? (@timer "RHS" rhs(d)) : nothing)
+    (to_symbolic ∘ m)((term,), dict, (d, n) -> n == 1 ? (@timer "RHS" rhs(d)) : nothing)
 end
 
 """

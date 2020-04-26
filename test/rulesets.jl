@@ -61,6 +61,5 @@ end
 @testset "timerwrite" begin
     @vars a b c d
     expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))
-    expr2 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))
-    SymbolicUtils.@timerewrite simplify(expr1-2expr2+expr1+expr2)
+    SymbolicUtils.@timerewrite simplify(expr1)
 end

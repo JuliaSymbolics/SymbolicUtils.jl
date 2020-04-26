@@ -115,9 +115,6 @@ function <ₑ(a::Term, b::Term)
 end
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
-issortedₑ(args::Tuple) = issorted([args...], lt=<ₑ)
-issortedₑ((a,b,)::Tuple{Any,Any}) = isequal(a, b) || a <ₑ b
-issortedₑ(a::Tuple{Any}) = true
 
 # are there nested ⋆ terms?
 function isnotflat(⋆)

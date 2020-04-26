@@ -5,8 +5,8 @@ using SymbolicUtils: showraw
 
 const leaf_funcs = [()->100*randn(),
                     ()->rand(-100:100),
-                    ()->rand(@vars a b c d e f),
-                    ()->rand(@vars a b c d e f)]
+                    ()->rand(@syms a b c d e f),
+                    ()->rand(@syms a b c d e f)]
 
 const fns = vcat(1 .=> SymbolicUtils.monadic,
                  2 .=> vcat(SymbolicUtils.diadic, fill(+, 5), [-,-], fill(*, 5)),
@@ -16,7 +16,7 @@ const fns = vcat(1 .=> SymbolicUtils.monadic,
 function gen_rand_expr(inputs; leaf_prob=0.92, depth=0, min_depth=1, max_depth=5)
     if depth > max_depth  || (min_depth <= depth && rand() < leaf_prob)
         leaf = rand(leaf_funcs)()
-        if leaf isa SymbolicUtils.Variable
+        if leaf isa SymbolicUtils.Sym
             push!(inputs, leaf)
         end
         return leaf

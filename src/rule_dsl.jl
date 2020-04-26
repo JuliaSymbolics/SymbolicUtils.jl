@@ -56,7 +56,7 @@ _Example:_
 Simple rule to turn any `sin` into `cos`:
 
 ```julia
-julia> @vars a b c
+julia> @syms a b c
 (a, b, c)
 
 julia> r = @rule sin(~x) => cos(~x)
@@ -176,7 +176,7 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if term isa Variable
+    if term isa Sym
         r(term)
     else
         f =  operation(term)

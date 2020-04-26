@@ -92,56 +92,57 @@ Base.:(==)(a::Symbolic, b::Symbolic) = a === b || isequal(a,b)
 
 #--------------------
 #--------------------
-#### Variables
+#### Syms
 #--------------------
 """
-    Variable{T}(name::Symbol)
+    Sym{T}(name::Symbol)
 
 A named variable of type `T`. Type `T` can be `FnType{X,Y}` which
 means the variable is a function with the type signature X -> Y where
 `X` is a tuple type of arguments and `Y` is any type.
 """
-struct Variable{T} <: Symbolic{T}
+struct Sym{T} <: Symbolic{T}
     name::Symbol
 end
 
-Variable(x) = Variable{symtype(x)}(x)
+const Variable = Sym # old name
+Sym(x) = Sym{symtype(x)}(x)
 
-Base.nameof(v::Variable) = v.name
+Base.nameof(v::Sym) = v.name
 
-Base.:(==)(a::Variable, b::Variable) = a === b
+Base.:(==)(a::Sym, b::Sym) = a === b
 
-Base.:(==)(::Variable, ::Symbolic) = false
+Base.:(==)(::Sym, ::Symbolic) = false
 
-Base.:(==)(::Symbolic, ::Variable) = false
+Base.:(==)(::Symbolic, ::Sym) = false
 
-Base.isequal(v1::Variable, v2::Variable) = isequal(v1.name, v2.name)
+Base.isequal(v1::Sym, v2::Sym) = isequal(v1.name, v2.name)
 
-Base.show(io::IO, v::Variable) = print(io, v.name)
+Base.show(io::IO, v::Sym) = print(io, v.name)
 
 #---------------------------
 #---------------------------
 #### Function-like variables
 #---------------------------
 
-# Maybe don't even need a new type, can just use Variable{FnType}
+# Maybe don't even need a new type, can just use Sym{FnType}
 struct FnType{X<:Tuple,Y} end
 
-(f::Variable{<:FnType})(args...) = term(f, args...)
+(f::Sym{<:FnType})(args...) = term(f, args...)
 
-function (f::Variable)(args...)
-    error("Variable $f of type $F are not callable. " *
-          "Use @vars $f(var1, var2,...) to create it as a callable. " *
+function (f::Sym)(args...)
+    error("Sym $f of type $F are not callable. " *
+          "Use @syms $f(var1, var2,...) to create it as a callable. " *
           "See ?@fun for more options")
 end
 
 """
-`promote_symtype(f::Variable{FnType{X,Y}}, arg_symtypes...)`
+`promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)`
 
 The resultant type of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
-function promote_symtype(f::Variable{FnType{X,Y}}, args...) where {X, Y}
+function promote_symtype(f::Sym{FnType{X,Y}}, args...) where {X, Y}
     nrequired = fieldcount(X)
     ngiven    = nfields(args)
 
@@ -159,39 +160,39 @@ function promote_symtype(f::Variable{FnType{X,Y}}, args...) where {X, Y}
 end
 
 """
-    @vars <lhs_expr>[::T1] <lhs_expr>[::T2]...
+    @syms <lhs_expr>[::T1] <lhs_expr>[::T2]...
 
 For instance:
 
-    @vars foo::Real bar baz(x, y::Real)::Complex
+    @syms foo::Real bar baz(x, y::Real)::Complex
 
 Create one or more variables. `<lhs_expr>` can be just a symbol in which case
 it will be the name of the variable, or a function call in which case a function-like
-variable which has the same name as the function being called. The Variable type, or
-in the case of a function-like Variable, the output type of calling the function
+variable which has the same name as the function being called. The Sym type, or
+in the case of a function-like Sym, the output type of calling the function
 can be set using the `::T` syntax.
 
 # Examples:
 
-- `@vars foo bar::Real baz::Int` will create
+- `@syms foo bar::Real baz::Int` will create
 variable `foo` of symtype `Number` (the default), `bar` of symtype `Real`
 and `baz` of symtype `Int`
-- `@vars f(x) g(y::Real, x)::Int h(a::Int, f(b))` creates 1-arg `f` 2-arg `g`
+- `@syms f(x) g(y::Real, x)::Int h(a::Int, f(b))` creates 1-arg `f` 2-arg `g`
 and 2 arg `f`. The second argument to `h` must be a one argument function-like
 variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
-macro vars(xs...)
+macro syms(xs...)
     defs = map(xs) do x
         n, t = _name_type(x)
-        :($(esc(n)) = Variable{$(esc(t))}($(Expr(:quote, n))))
+        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
     end
 
     Expr(:block, defs...,
          :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
 end
 
-function vars_syntax_error()
-    error("Incorrect @vars syntax. Try `@vars x::Real y::Complex g(a) f(::Real)::Real` for instance.")
+function syms_syntax_error()
+    error("Incorrect @syms syntax. Try `@syms x::Real y::Complex g(a) f(::Real)::Real` for instance.")
 end
 
 function _name_type(x)
@@ -212,11 +213,11 @@ function _name_type(x)
     elseif x isa Expr && x.head === :call
         return _name_type(:($x::Number))
     else
-        vars_syntax_error()
+        syms_syntax_error()
     end
 end
 
-function Base.show(io::IO, f::Variable{<:FnType{X,Y}}) where {X,Y}
+function Base.show(io::IO, f::Sym{<:FnType{X,Y}}) where {X,Y}
     print(io, f.name)
     argrepr = join(map(t->"::"*string(t), X.parameters), ", ")
     print(io, "(", argrepr, ")")

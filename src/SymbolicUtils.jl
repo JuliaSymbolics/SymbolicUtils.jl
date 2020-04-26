@@ -28,7 +28,7 @@ else
 end
 
 
-export @vars, term, @fun, showraw
+export @syms, term, @fun, showraw
 include("types.jl")
 
 

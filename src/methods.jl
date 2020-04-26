@@ -8,8 +8,8 @@ for f in diadic
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
 
-    for T in [Variable, Term]
-        for S in [Variable, Term]
+    for T in [Sym, Term]
+        for S in [Sym, Term]
             @eval (::$(typeof(f)))(a::$T, b::$S) = term($f, a, b)
         end
         @eval begin

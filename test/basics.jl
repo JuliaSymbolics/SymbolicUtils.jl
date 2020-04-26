@@ -1,21 +1,21 @@
-using SymbolicUtils: Variable, FnType, Term, symtype
+using SymbolicUtils: Sym, FnType, Term, symtype
 using SymbolicUtils
 using Test
 
-@testset "@vars" begin
+@testset "@syms" begin
     let
-        @vars a b::Float64 f(::Real) g(p, h(q::Real))::Int
+        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
 
-        @test a isa Variable{Number}
+        @test a isa Sym{Number}
         @test a.name === :a
 
-        @test b isa Variable{Float64}
+        @test b isa Sym{Float64}
         @test b.name === :b
 
-        @test f isa Variable{FnType{Tuple{Real}, Number}}
+        @test f isa Sym{FnType{Tuple{Real}, Number}}
         @test f.name === :f
 
-        @test g isa Variable{FnType{Tuple{Number, FnType{Tuple{Real}, Number}}, Int}}
+        @test g isa Sym{FnType{Tuple{Number, FnType{Tuple{Real}, Number}}, Int}}
         @test g.name === :g
 
         @test f(b) isa Term
@@ -30,7 +30,7 @@ using Test
 end
 
 @testset "methods test" begin
-    @vars w::Complex z::Complex a::Real b::Real x
+    @syms w::Complex z::Complex a::Real b::Real x
 
     @test w + z == Term{Complex}(+, [w, z])
     @test z + a == Term{Number}(+, [z, a])

@@ -2,7 +2,7 @@ using Test
 using SymbolicUtils: <ₑ
 SymbolicUtils.show_simplified[] = false
 
-@vars a b c
+@syms a b c
 
 function istotal(x,y)
     #either

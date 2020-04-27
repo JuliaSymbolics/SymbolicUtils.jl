@@ -63,17 +63,3 @@ end
     expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))
     SymbolicUtils.@timerewrite simplify(expr1)
 end
-
-using Random: shuffle
-
-@testset "Shuffle Rules" begin
-    @syms a::Integer b c d x::Real y::Number
-    R1 = RuleSet(SymbolicUtils.SIMPLIFY_RULES)
-    R2 = RuleSet(shuffle(R1.rules))
-    simplify_shuffle_tester(ex) = (R2 ∘ R1)(ex) == (R1 ∘ R2)(ex)
-
-    for ex ∈ [foldr((x,y)->rand([*, +, -, ^, /])(x,y), rand([a, b, c, d, x, y, 0, 1, 2], 5))
-              for _ ∈ 1:20]
-        @test (R2 ∘ R1)(ex) == (R1 ∘ R2)(ex)
-    end
-end

@@ -41,16 +41,6 @@ end
 
 TRIG_RULES = let
     [
-     # https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/23
-     #[[@rule trig_f(~~x + ~y::multiple_of(2π) + ~~z) => trig_f(+(~~x..., ~~z...))
-     #
-     #  @rule trig_f(~~x + ~y::multiple_of(2π) * ~n::oftype(Integer) + ~~z) => trig_f(+(~~x..., ~~z...))
-     #  @rule trig_f(~~x + ~n::oftype(Integer) * ~y::multiple_of(2π) + ~~z) => trig_f(+(~~x..., ~~z...)) # make multiplication commute
-
-     #  @rule trig_f(~~x + ~y::multiple_of(2π) * ~n::oftype(Integer) + ~~z) => trig_f(+(~~x..., ~~z...)) # reverse addition order
-     #  @rule trig_f(~~x + ~n::oftype(Integer) * ~y::multiple_of(2π) + ~~z) => trig_f(+(~~x..., ~~z...))]
-     # for trig_f ∈ (sin, cos, tan)]...
-
      @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
      @acrule(sin(~x)^2 + -1        => cos(~x)^2)
      @acrule(cos(~x)^2 + -1        => sin(~x)^2)

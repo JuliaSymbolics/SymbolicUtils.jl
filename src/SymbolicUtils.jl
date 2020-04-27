@@ -41,7 +41,7 @@ include("util.jl")
 include("matchers.jl")
 
 using Combinatorics: permutations
-export @rule, @acrule, RuleSet, fixpoint
+export @rule, @acrule, RuleSet
 include("rule_dsl.jl")
 
 export simplify

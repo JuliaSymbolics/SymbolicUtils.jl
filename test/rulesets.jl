@@ -68,31 +68,12 @@ using Random: shuffle
 
 @testset "Shuffle Rules" begin
     @syms a::Integer b c d x::Real y::Number
-    for _ ∈ 1:10
-        R1 = RuleSet(SymbolicUtils.SIMPLIFY_RULES)
-        R2 = RuleSet(shuffle(R1.rules))
-        simplify_shuffle_tester(ex) = R1(ex) == R1(R2(ex))
+    R1 = RuleSet(SymbolicUtils.SIMPLIFY_RULES)
+    R2 = RuleSet(shuffle(R1.rules))
+    simplify_shuffle_tester(ex) = (R2 ∘ R1)(ex) == (R1 ∘ R2)(ex)
 
-        @test simplify_shuffle_tester(foldr((x,y)->rand([*, /, +, -, ^])(x,y), rand([a,b,c, 1, 2, 1e-2], 20)))
-        
-        @test simplify_shuffle_tester(x - y)
-        @test simplify_shuffle_tester(x - sin(y))
-        @test simplify_shuffle_tester(-sin(x)) 
-        @test simplify_shuffle_tester(1 * x * 2)
-        @test simplify_shuffle_tester(1 + x + 2)
-        @test simplify_shuffle_tester(b*b)
-        @test simplify_shuffle_tester((a*b)^c) 
-
-        @test simplify_shuffle_tester(1x + 2x)
-        @test simplify_shuffle_tester(3x + 2x)
-
-        @test simplify_shuffle_tester(a + b + (x * y) + c + 2 * (x * y) + d)
-        @test simplify_shuffle_tester(a + b + 2 * (x * y) + c + 2 * (x * y) + d)
-
-        @test simplify_shuffle_tester(a * x^y * b * x^d)
-
-        @test simplify_shuffle_tester(a + b + 0*c + d)
-        @test simplify_shuffle_tester(a * b * c^0 * d)
-        @test simplify_shuffle_tester(a * b * 1*c * d)
+    for ex ∈ [foldr((x,y)->rand([*, +, -, ^, /])(x,y), rand([a, b, c, d, x, y, 0, 1, 2], 5))
+              for _ ∈ 1:20]
+        @test (R2 ∘ R1)(ex) == (R1 ∘ R2)(ex)
     end
 end

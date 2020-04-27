@@ -270,14 +270,27 @@ function Base.show(io::IO, t::Term)
         Base.show(IOContext(io, :simplify=>false, :withcolor=>color), s)
     else
         f = operation(t)
+        args = arguments(t)
         fname = nameof(f)
         binary = Base.isbinaryoperator(fname)
         color = get(io, :withcolor, :white)
-
-        get(io, :paren, false) && binary && Base.printstyled(io, "(",color=color)
-        Base.printstyled(IOContext(io, :paren=> true), # nested exprs should have paren
-                         Expr(:call, fname, arguments(t)...), color=color)
-        get(io, :paren, false) && binary && Base.printstyled(io, ")", color=color)
+        if binary
+            get(io, :paren, false) && Base.printstyled(io, "(",color=color)
+            for i = 1:length(args)
+                Base.printstyled(IOContext(io, :paren => true),
+                                 args[i], color=color)
+                i != length(args) && Base.printstyled(io, " $fname ", color=color)
+            end
+            get(io, :paren, false) && Base.printstyled(io, ")", color=color)
+        else
+            Base.printstyled(io, "$fname(", color=color)
+            for i=1:length(args)
+                Base.printstyled(IOContext(io, :paren => false),
+                                 args[i], color=color)
+                i != length(args) && Base.printstyled(io, ", ", color=color)
+            end
+            Base.printstyled(io, ")", color=color)
+        end
     end
 end
 

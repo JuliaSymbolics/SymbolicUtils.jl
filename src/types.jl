@@ -292,6 +292,7 @@ function Base.show(io::IO, t::Term)
             Base.printstyled(io, ")", color=color)
         end
     end
+    return nothing
 end
 
 showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)

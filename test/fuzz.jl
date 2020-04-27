@@ -99,8 +99,12 @@ function fuzz_test(ntrials)
     end
 end
 
+using Random: seed!
+seed!(6174)
+
 @testset "Fuzz test" begin
-    for i=1:1000
+
+    for i=1:2000
         fuzz_test(10)
     end
 end

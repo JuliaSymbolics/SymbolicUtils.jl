@@ -59,7 +59,7 @@ end
     rs = RuleSet([@rule ~x + ~y::pred => ~x])
     @test_throws SymbolicUtils.RuleRewriteError rs(a+b)
     err = try rs(a+b) catch err; err; end
-    @test sprint(io->Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression (a + b)"
+    @test sprint(io->Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
 end
 
 @testset "timerwrite" begin

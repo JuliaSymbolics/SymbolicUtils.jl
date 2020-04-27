@@ -262,7 +262,7 @@ end
 #--------------------
 const show_simplified = Ref(true)
 
-function Base.show(io::IOContext, t::Term)
+function Base.show(io::IO, t::Term)
     if get(io, :simplify, show_simplified[])
         s = simplify(t)
         color = isequal(s, t) ? :white : :yellow
@@ -274,9 +274,10 @@ function Base.show(io::IOContext, t::Term)
         binary = Base.isbinaryoperator(fname)
         color = get(io, :withcolor, :white)
 
-        binary && Base.printstyled(io, "(",color=color)
-        Base.printstyled(io, Expr(:call, fname, arguments(t)...), color=color)
-        binary && Base.printstyled(io, ")", color=color)
+        get(io, :paren, false) && binary && Base.printstyled(io, "(",color=color)
+        Base.printstyled(IOContext(io, :paren=> true), # nested exprs should have paren
+                         Expr(:call, fname, arguments(t)...), color=color)
+        get(io, :paren, false) && binary && Base.printstyled(io, ")", color=color)
     end
 end
 

@@ -211,6 +211,7 @@ end
 
 function (r::RuleSet)(term; depth=typemax(Int))
     rules = r.rules
+    term = to_symbolic(term)
     # simplify the subexpressions
     if depth == 0
         return term
@@ -240,6 +241,17 @@ function (r::RuleSet)(term; depth=typemax(Int))
     end
     return expr # no rule applied
 end
+
+function fixpoint(f, x)
+    x1 = f(x)
+    while !isequal(x1, x)
+        x = x1
+        x1 = f(x)
+    end
+    return x1
+end
+
+fixpoint(f) = x->fixpoint(f, x)
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
     msg = "Failed to apply rule $(err.rule) on expression "

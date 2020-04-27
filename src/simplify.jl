@@ -164,7 +164,13 @@ end
 
 ### Simplification rules
 
-simplify(x, rules=SIMPLIFY_RULES) = RuleSet(rules)(to_symbolic(x))
+function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true)
+    if fixpoint
+        SymbolicUtils.fixpoint(RuleSet(rules))(x)
+    else
+        RuleSet(rules)(x)
+    end
+end
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)

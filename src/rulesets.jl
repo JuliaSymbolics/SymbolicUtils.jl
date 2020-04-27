@@ -12,12 +12,13 @@ BASIC_NUMBER_RULES = let
      @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
      @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
-     @acrule(*(~~x) + *(~β::isnumber, ~~x) => *(1 + ~β, (~~x)...))
-     @acrule(*(~α::isnumber, ~~x) + *(~β::isnumber, ~~x) => *(~α +  ~β, (~~x)...))
+     @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
+     @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α +  ~β, (~~x)...))
+     @acrule(*(~~x, ~α) + *(~~x, ~β,) => *(~α +  ~β, (~~x)...))
 
-     @acrule(~x + *(~β::isnumber, ~x) => *(1 + ~β, ~x))
+     @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
      @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
-     
+
      # group stuff
      @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
      @acrule((~y)^(~n) * ~y => (~y)^(~n+1))

@@ -5,9 +5,6 @@
     <img src="https://travis-ci.org/JuliaSymbolics/SymbolicUtils.jl.svg?branch=master"
          alt="Build Status (Linux)">
   </a>
-  <a href="https://ci.appveyor.com/project/tlienart/Franklin-jl">
-    <img src="https://ci.appveyor.com/api/projects/status/github/tlienart/Franklin.jl?branch=master&svg=true"
-         alt="Build Status (Windows)">
   </a>
   <a href="https://coveralls.io/github/JuliaSymbolics/SymbolicUtils.jl?branch=master">
     <img src="https://coveralls.io/repos/github/JuliaSymbolics/SymbolicUtils.jl/badge.svg?branch=master"

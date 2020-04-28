@@ -87,11 +87,11 @@ SymbolicUtils.to_symbolic(s::Symbol) = Sym(s)
 @show simplify(ex)
 
 dump(simplify(ex))</code></pre> <div class="code-output"><pre><code class="plaintext">simplify(ex) = -1 + x
-SymbolicUtils.Term{Real}
+SymbolicUtils.Term{Any}
   f: + (function of type typeof(+))
   arguments: Array{Any}((2,))
     1: Int64 -1
-    2: SymbolicUtils.Sym{Real}
+    2: SymbolicUtils.Sym{Any}
       name: Symbol x
 </code></pre></div>
 <p>this thing returns a <code>Term&#123;Any&#125;</code>, but it&#39;s not hard to convert back to <code>Expr</code>:</p>
@@ -106,7 +106,7 @@ Expr
   args: Array{Any}((3,))
     1: + (function of type typeof(+))
     2: Int64 -1
-    3: SymbolicUtils.Sym{Real}
+    3: SymbolicUtils.Sym{Any}
       name: Symbol x
 </code></pre></div>
 <p>Now suppose we actaully wanted all <code>Symbol</code>s to be treated as <code>Real</code> numbers. We can simply define <pre><code class="language-julia">SymbolicUtils.symtype(s::Symbol) = Real

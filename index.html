@@ -31,7 +31,7 @@
 <div class="franklin-content">
 <h1 id="user_manual"><a href="#user_manual">User Manual</a></h1>
 <p><strong>SymbolicUtils</strong> is an extensible symbolic programming utility written in Julia. It lets you <a href="#creating_symbolic_expressions">create</a>, <a href="#rule-based_rewriting">rewrite</a> and <a href="#simplification">simplify</a> symbolic expressions.</p>
-<div class="franklin-toc"><ol><li><a href="#user_manual">User Manual</a><ol><li><a href="#creating_symbolic_expressions">Creating symbolic expressions</a></li><li><a href="#rule-based_rewriting">Rule-based rewriting</a><ol><li><a href="#predicates_for_matching">Predicates for matching</a></li><li><a href="#associative-commutative_rules">Associative-Commutative Rules</a></li></ol></li><li><a href="#simplification">Simplification</a></li></ol></li></ol></div> </p>
+<div class="franklin-toc"><ol><li><a href="#user_manual">User Manual</a><ol><li><a href="#creating_symbolic_expressions">Creating symbolic expressions</a></li><li><a href="#rule-based_rewriting">Rule-based rewriting</a><ol><li><a href="#predicates_for_matching">Predicates for matching</a></li><li><a href="#associative-commutative_rules">Associative-Commutative Rules</a></li></ol></li><li><a href="#simplification">Simplification</a></li><li><a href="#learn_more">Learn more</a></li></ol></li></ol></div> </p>
 <p>Symbols carry type information. Compound expressions propagate them. A <a href="#rule-based_rewriting">rule-based rewriting language</a> can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful <a href="#simplification">simplification rules</a> for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.</p>
 <h2 id="creating_symbolic_expressions"><a href="#creating_symbolic_expressions">Creating symbolic expressions</a></h2>
 <p>First, let&#39;s use the <code>@syms</code> macro to create a few symbols.</p>
@@ -49,12 +49,16 @@ expr1 + expr2</code></pre> <div class="code-output"><pre><code class="plaintext"
 showraw(expr1 + expr2)</code></pre> <div class="code-output"><pre><code class="plaintext">((α * (sin(w) ^ 2)) + (β * (cos(z) ^ 2))) + ((α * (cos(z) ^ 2)) + (β * (sin(w) ^ 2)))</code></pre></div>
 <p><strong>Function-like symbols</strong></p>
 <p>Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same <code>symtype</code>.</p>
-<pre><code class="language-julia">@syms f(x) g(x::Real, y::Real)::Real
+<pre><code class="language-julia">using SymbolicUtils
+@syms f(x) g(x::Real, y::Real)::Real
 
-f(c) + g(1, α) + sin(w)</code></pre>
-<div class="code-output"><pre><code class="plaintext">UndefVarError: c not defined
+f(z) + g(1, α) + sin(w)</code></pre> <div class="code-output"><pre><code class="plaintext">sin(w) + f(z) + g(1, α)</code></pre></div>
+<pre><code class="language-julia">g(1, z)</code></pre>
+<div class="code-output"><pre><code class="plaintext">Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real
 </code></pre></div>
-<pre><code class="language-julia">f(z) + g(1, α) + sin(w)</code></pre> <div class="code-output"><pre><code class="plaintext">f(z) + g(1, α) + sin(w)</code></pre></div>
+<p>This does not work since <code>z</code> is a <code>Number</code>, not a <code>Real</code>.</p>
+<pre><code class="language-julia">g(2//5, g(1, β))</code></pre> <div class="code-output"><pre><code class="plaintext">g(2//5, g(1, β))</code></pre></div>
+<p>This works because <code>g</code> &quot;returns&quot; a <code>Real</code>.</p>
 <h2 id="rule-based_rewriting"><a href="#rule-based_rewriting">Rule-based rewriting</a></h2>
 <p>So the simplification in SymbolicUtils is done by a set of rules. We will get into more details about the <code>simplify</code> function in the next section, but first, let us look at how you can write a rewrite rule to match and transform an expression.</p>
 <p>A rule is written using either the <code>@rule</code> macro or the <code>@acrule</code> macro.</p>
@@ -82,16 +86,16 @@ showraw(rset_result)</code></pre> <div class="code-output"><pre><code class="pla
 <p>Right on. Since there is no way to know how many times one should apply an <code>rset</code>, the package exports a convenient <code>fixpoint</code> function that applies the <code>rset</code> as many times as there are no changes to the expression.</p>
 <pre><code class="language-julia">using SymbolicUtils: fixpoint
 
-fixpoint(rset, 2 * (w+w+α+β))</code></pre> <div class="code-output"><pre><code class="plaintext">((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
+fixpoint(rset, 2 * (w+w+α+β))</code></pre> <div class="code-output"><pre><code class="plaintext">(4 * w) + (2 * (α + β))</code></pre></div>
 <h3 id="predicates_for_matching"><a href="#predicates_for_matching">Predicates for matching</a></h3>
 <p>Matcher pattern may contain slot variables with attached predicates, written as <code>~x::f</code> where <code>f</code> is a function that takes a matched expression &#40;a <code>Term</code> object a <code>Sym</code> or any other Julia value that is in the expression tree&#41; and returns a boolean value. Such a slot will be considered a match only if <code>f</code> returns true.</p>
 <p>Similarly <code>~~x::g</code> is a way of attaching a predicate <code>g</code> to a segment variable. In the case of segment variables <code>g</code> gets a vector of 0 or more expressions and must return a boolean value.</p>
 <p>If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate. For example.</p>
-<pre><code class="language-julia">r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd number of terms"
+<pre><code class="language-julia">r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
 
 @show r(w + z + z)
 @show r(w + z)</code></pre>
-<div class="code-output"><pre><code class="plaintext">r(w + z + z) = "odd number of terms"
+<div class="code-output"><pre><code class="plaintext">r(w + z + z) = "odd terms"
 r(w + z) = nothing
 </code></pre></div>
 <h3 id="associative-commutative_rules"><a href="#associative-commutative_rules">Associative-Commutative Rules</a></h3>
@@ -110,7 +114,11 @@ julia> acr(x^2 * y * x)
 <code>simplify</code> optionally takes a <code>rules</code> argument, a vector of rules to use to simplify instead of the default set. Let&#39;s try it with the <code>r1</code> and <code>r2</code> rules we defined above.</p>
 <pre><code class="language-julia">showraw(simplify(2 * (w+w+α+β), [r1,r2]))</code></pre> <div class="code-output"><pre><code class="plaintext">((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <code>simplify</code> runs through the rules repeatedly until there are no changes to be had. To disable this, you can pass in a <code>fixpoint&#61;false</code> keyword argument.</p>
-<pre><code class="language-julia">showraw(simplify(2 * (w+w+α+β), [r1,r2], fixpoint=false))</code></pre> <div class="code-output"><pre><code class="plaintext">(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
+<pre><code class="language-julia">showraw(simplify(2 * (w+w+α+β), [r1,r2], fixpoint=false))</code></pre>
+<div class="code-output"><pre><code class="plaintext">(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
+<h2 id="learn_more"><a href="#learn_more">Learn more</a></h2>
+<p>If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the <a href="/SymbolicUtils.jl/interface/">Interfacing</a> section.</p>
+<p>Head over to the github repository to <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a> or ask questions&#33;
 <div class="page-foot">
   <div class="copyright">
     &copy; THE AUTHOR. Last modified: April 28, 2020. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.

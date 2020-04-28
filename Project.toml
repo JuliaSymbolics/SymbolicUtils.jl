@@ -1,24 +1,2 @@
-name = "SymbolicUtils"
-uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
-authors = ["Shashi Gowda"]
-version = "0.1.0"
-
 [deps]
-Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
-NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
-SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
-TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
-
-[compat]
-Combinatorics = "1.0"
-NaNMath = "0.3"
-TimerOutputs = "0.5"
-SpecialFunctions = "0.10"
-julia = "1"
-
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-
-[targets]
-test = ["Test", "Random"]
+SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"

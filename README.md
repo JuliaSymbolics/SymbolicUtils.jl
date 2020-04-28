@@ -1,6 +1,5 @@
 <h1 align="center"><a href="https://juliasymbolics.github.io/SymbolicUtils.jl/">SymbolicUtils.jl</a></h1>
 
-[![Build Status](https://travis-ci.org/JuliaSymbolics/SymbolicUtils.jl.svg?branch=master)](https://travis-ci.com/github/JuliaSymbolics/SymbolicUtils.jl)  [![Coverage Status](https://coveralls.io/repos/github/JuliaSymbolics/SymbolicUtils.jl/badge.svg?branch=master)](https://coveralls.io/github/JuliaSymbolics/SymbolicUtils.jl?branch=master)
 <p align="center">
   <a href="https://travis-ci.com/github/JuliaSymbolics/SymbolicUtils.jl">
     <img src="https://travis-ci.org/JuliaSymbolics/SymbolicUtils.jl.svg?branch=master"
@@ -17,8 +16,6 @@
 </p>
 
 SymbolicUtils.jl provides various utilities for symbolic computing.
-
-[![Build Status](https://travis-ci.org/JuliaSymbolics/SymbolicUtils.jl.svg?branch=master)](https://travis-ci.com/github/JuliaSymbolics/SymbolicUtils.jl)  [![Coverage Status](https://coveralls.io/repos/github/JuliaSymbolics/SymbolicUtils.jl/badge.svg?branch=master)](https://coveralls.io/github/JuliaSymbolics/SymbolicUtils.jl?branch=master)
 
 [Symbols in SymbolicUtils](https://juliasymbolics.github.io/SymbolicUtils.jl/#creating_symbolic_expressions) carry type information. Operations on them propagate this information. [A rule-based rewriting language](https://juliasymbolics.github.io/SymbolicUtils.jl/#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification](https://juliasymbolics.github.io/SymbolicUtils.jl/#simplification) rules for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
 

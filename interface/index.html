@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+     <link rel="stylesheet" href="/libs/highlight/github.min.css">
+   
+    <link rel="stylesheet" href="/css/franklin.css">
+    <link rel="stylesheet" href="/css/tufte.css">
+    <link rel="stylesheet" href="/css/latex.css">
+    <link rel="stylesheet" href="/css/adjust.css"> <!-- sheet to overwrite some clashing styles -->
+    <link rel="icon" href="/assets/favicon.png">
+     <title>SymbolicUtils.jl -- Symbolic programming in Julia</title>  
+</head>
+
+<body>
+    <h1>SymbolicUtils.jl</h1>
+  <div id="layout">
+    <div id="menu">
+      <ul>
+        <li><a href="/">Manual</a></li>
+        <li><a href="/interface/">Interfacing</a></li>
+      </ul>
+    </div>
+    <div id="main">
+
+
+<!-- Content appended here -->
+
+<div class="franklin-content">
+<h1 id="interfacing_with_symbolicutilsjl"><a href="#interfacing_with_symbolicutilsjl">Interfacing with SymbolicUtils.jl</a></h1>
+<div class="franklin-toc"><ol><li><a href="#interfacing_with_symbolicutilsjl">Interfacing with SymbolicUtils.jl</a><ol><li><a href="#defining_the_interface">Defining the interface</a><ol><li><ol><li><a href="#istreext"><code>istree&#40;x::T&#41;</code></a></li><li><a href="#operationxt"><code>operation&#40;x::T&#41;</code></a></li><li><a href="#argumentsxt"><code>arguments&#40;x::T&#41;</code></a></li><li><a href="#to_symbolicxs"><code>to_symbolic&#40;x::S&#41;</code></a></li></ol></li><li><a href="#optional">Optional</a><ol><li><a href="#symtypex"><code>symtype&#40;x&#41;</code></a></li><li><a href="#promote_symtypef_arg_symtypes"><code>promote_symtype&#40;f, arg_symtypes...&#41;</code></a></li></ol></li></ol></li><li><a href="#example">Example</a></li></ol></li></ol></div> </p>
+<p>This section is for Julia package developers who may want to use the <code>simplify</code> and rule rewriting system on their own expression types.</p>
+<p>If not directly using <code>@syms</code> and methods defined on symbols, <strong>the easiest way to interface with SymbolicUtils  is to convert your symbolic types into SymbolicUtils&#39; types, perform the desired rewrites, and convert back to the original types.</strong></p>
+<p>This may sound like a roundabout way of doing it, but it can be really fast. In our experements with using this package to impliment simplification for <a href="https://mtk.sciml.ai/dev/">ModelingToolkit.jl</a> the conversion accounted for about 3&#37; of the total time taken for <code>simplify</code>. This approach also means that you don&#39;t ahve to take for face value the assumptions and reservations of SymbolicUtils.</p>
+<h2 id="defining_the_interface"><a href="#defining_the_interface">Defining the interface</a></h2>
+<p>SymbolicUtils uses a function <code>to_symbolic</code> to convert aribtrarty types to it&#39;s own internal types. Our intention is for SymbolicUtils to be useful even for packages with their own custom symbolic types which differ from those offered by SymbolicUtils. To this end, SymbolicUtils provides an interface which if implemented, will enable automatic conversion of types to SymbolicUtils types.</p>
+<ul>
+<li><p>an <code>operation</code>, &#40;i.e. function to apply&#41;</p>
+</li>
+<li><p><code>arguments</code> which the <code>operation</code> is applied to</p>
+</li>
+<li><p><code>variable</code> types which are the atoms from which the expression tree is built </p>
+</li>
+<li><p>optionally, a type which should <code>typeof&#40;operation&#40;arguments...&#41;&#41;</code> should return if it were to be run.</p>
+</li>
+</ul>
+<p>In particular, the following methods should be defined for an expression tree type <code>T</code> with symbol types <code>S</code> to  work with SymbolicUtils.jl</p>
+<h4 id="istreext"><a href="#istreext"><code>istree&#40;x::T&#41;</code></a></h4>
+<p>Check if <code>x</code> represents an expression tree. If returns true, it will be assumed that <code>operation&#40;::T&#41;</code> and <code>arguments&#40;::T&#41;</code> methods are defined. Definining these three should allow use of <code>simplify</code> on custom types. Optionally <code>symtype&#40;x&#41;</code> can be defined to return the expected type of the symbolic expression.</p>
+<h4 id="operationxt"><a href="#operationxt"><code>operation&#40;x::T&#41;</code></a></h4>
+<p>Returns the operation &#40;a function object&#41; performed by an expression tree. Called only if <code>istree&#40;::T&#41;</code> is true. Part of the API required for <code>simplify</code> to work. Other required methods are <code>arguments</code> and <code>istree</code>
+<h4 id="argumentsxt"><a href="#argumentsxt"><code>arguments&#40;x::T&#41;</code></a></h4>
+<p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code>
+<h4 id="to_symbolicxs"><a href="#to_symbolicxs"><code>to_symbolic&#40;x::S&#41;</code></a></h4>  Convert your variable type to a <code>SymbolicUtils.Sym</code>. Suppose you have <pre><code class="language-julia">struct MySymbol
+   s::Symbol
+end</code></pre> which could represent any type symbolically, then you would define  <pre><code class="language-julia">SymbolicUtils.to_symbolic(s::MySymbol) = SymbolicUtils.Sym(s.s)</code></pre>
+<h3 id="optional"><a href="#optional">Optional</a></h3>
+<h4 id="symtypex"><a href="#symtypex"><code>symtype&#40;x&#41;</code></a></h4>
+<p>The supposed type of values in the domain of x. Tracing tools can use this type to pick the right method to run or analyse code.</p>
+<p>This defaults to <code>typeof&#40;x&#41;</code> if <code>x</code> is numeric, or <code>Any</code> otherwise. For the types defined in this package, namely <code>T&lt;:Symbolic&#123;S&#125;</code> it is <code>S</code>.</p>
+<p>Define this for your symbolic types if you want <code>simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
+<h4 id="promote_symtypef_arg_symtypes"><a href="#promote_symtypef_arg_symtypes"><code>promote_symtype&#40;f, arg_symtypes...&#41;</code></a></h4>
+<p>Returns the appropriate output type of applying <code>f</code> on arguments of type <code>arg_symtypes</code>.</p>
+<h2 id="example"><a href="#example">Example</a></h2>
+<p>Suppose you were feeling the temptations of type piracy and wanted to make a quick and dirty symbolic library built on top of Julia&#39;s <code>Expr</code> type, e.g.</p>
+<pre><code class="language-julia">for f ∈ [:+, :-, :*, :/, :^] #Note, this is type piracy!
+    @eval begin
+        Base.$f(x::Union{Expr, Symbol}, y::Number) = Expr(:call, $f, x, y)
+        Base.$f(x::Number, y::Union{Expr, Symbol}) = Expr(:call, $f, x, y)
+        Base.$f(x::Union{Expr, Symbol}, y::Union{Expr, Symbol}) = (Expr(:call, $f, x, y))
+    end
+end
+
+
+ex = 1 + (:x - 2)</code></pre>
+<div class="code-output"><pre><code class="plaintext">:((+)(1, (-)(x, 2)))</code></pre></div>
+<p>How can we use SymbolicUtils.jl to convert <code>ex</code> to <code>&#40;-&#41;&#40;:x, 1&#41;</code>? We simply implement <code>istree</code>, <code>operation</code>, <code>arguments</code> and <code>to_symbolic</code> and we&#39;ll be off to the races: <pre><code class="language-julia">using SymbolicUtils
+using SymbolicUtils: Sym, Term, istree, operation, arguments, to_symbolic
+
+SymbolicUtils.istree(ex::Expr) = ex.head == :call
+SymbolicUtils.operation(ex::Expr) = ex.args[1]
+SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
+SymbolicUtils.to_symbolic(s::Symbol) = Sym(s)
+
+@show simplify(ex)
+
+dump(simplify(ex))</code></pre> <div class="code-output"><pre><code class="plaintext">simplify(ex) = -1 + x
+SymbolicUtils.Term{Real}
+  f: + (function of type typeof(+))
+  arguments: Array{Any}((2,))
+    1: Int64 -1
+    2: SymbolicUtils.Sym{Real}
+      name: Symbol x
+</code></pre></div>
+<p>this thing returns a <code>Term&#123;Any&#125;</code>, but it&#39;s not hard to convert back to <code>Expr</code>:</p>
+<pre><code class="language-julia">to_expr(t::Term) = Expr(:call, operation(t), to_expr.(arguments(t))...) 
+to_expr(x) = x
+
+@show expr = to_expr(simplify(ex))
+
+dump(expr)</code></pre> <div class="code-output"><pre><code class="plaintext">expr = to_expr(simplify(ex)) = :((+)(-1, x))
+Expr
+  head: Symbol call
+  args: Array{Any}((3,))
+    1: + (function of type typeof(+))
+    2: Int64 -1
+    3: SymbolicUtils.Sym{Real}
+      name: Symbol x
+</code></pre></div>
+<p>Now suppose we actaully wanted all <code>Symbol</code>s to be treated as <code>Real</code> numbers. We can simply define <pre><code class="language-julia">SymbolicUtils.symtype(s::Symbol) = Real
+
+dump(simplify(ex))</code></pre> <div class="code-output"><pre><code class="plaintext">SymbolicUtils.Term{Real}
+  f: + (function of type typeof(+))
+  arguments: Array{Any}((2,))
+    1: Int64 -1
+    2: SymbolicUtils.Sym{Real}
+      name: Symbol x
+</code></pre></div>
+<p>and now all our analysis is able to figure out that the <code>Term</code>s are <code>Number</code>s.
+<div class="page-foot">
+  <div class="copyright">
+    &copy; THE AUTHOR. Last modified: April 27, 2020. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+  </div>
+</div>
+
+</div>
+<!-- CONTENT ENDS HERE -->
+        </div> <!-- end of id=main -->
+    </div> <!-- end of id=layout -->
+    
+    
+        <script src="/libs/highlight/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+
+    
+  </body>
+</html>

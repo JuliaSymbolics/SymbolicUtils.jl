@@ -12,6 +12,6 @@ jobs:
     - name: Build and Deploy
       uses: JamesIves/github-pages-deploy-action@releases/v3
       with:
-        ACCESS_TOKEN: ${{ secrets.FRANKLIN_PRIV }}
+        ACCESS_TOKEN: ${{ secrets.FRANKLIN_SHASHI }}
         BRANCH: gh-pages
         FOLDER: __site

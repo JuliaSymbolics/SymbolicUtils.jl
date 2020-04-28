@@ -24,6 +24,8 @@ First, let's use the `@syms` macro to create a few symbols.
 using SymbolicUtils
 
 @syms w z α::Real β::Real
+
+(w, z, α, β) # hide
 ```
 \out{syms1}
 
@@ -51,17 +53,28 @@ showraw(expr1 + expr2)
 Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same `symtype`.
 
 ```julia:syms2
+using SymbolicUtils
 @syms f(x) g(x::Real, y::Real)::Real
 
-f(c) + g(1, α) + sin(w)
-```
-
-\out{syms2}
-
-```julia:syms3
 f(z) + g(1, α) + sin(w)
 ```
-\out{syms3}
+\out{syms2}
+
+
+```julia:sym3
+g(1, z)
+```
+
+\out{sym3}
+
+This does not work since `z` is a `Number`, not a `Real`.
+
+```julia:sym4
+g(2//5, g(1, β))
+```
+\out{sym4}
+
+This works because `g` "returns" a `Real`.
 
 ## Rule-based rewriting
 
@@ -144,7 +157,7 @@ If the same slot or segment variable appears twice in the matcher pattern, then 
 
 ```julia:pred1
 
-r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd number of terms"
+r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
 
 @show r(w + z + z)
 @show r(w + z)
@@ -189,4 +202,11 @@ showraw(simplify(2 * (w+w+α+β), [r1,r2]))
 ```julia:simplify3
 showraw(simplify(2 * (w+w+α+β), [r1,r2], fixpoint=false))
 ```
+
 \out{simplify3}
+
+## Learn more
+
+If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the [Interfacing](/interface/) section.
+
+Head over to the github repository to [report problems](https://github.com/JuliaSymbolics/SymbolicUtils.jl) or ask questions!

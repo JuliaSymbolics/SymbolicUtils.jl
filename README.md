@@ -16,9 +16,30 @@ SymbolicUtils.jl provides various utilities for symbolic computing.
 
 [Symbols in SymbolicUtils](https://juliasymbolics.github.io/SymbolicUtils.jl/#creating_symbolic_expressions) carry type information. Operations on them propagate this information. [A rule-based rewriting language](https://juliasymbolics.github.io/SymbolicUtils.jl/#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification](https://juliasymbolics.github.io/SymbolicUtils.jl/#simplification) rules for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
 
+
 If you are a Julia package develper in need of a rule rewriting system for your own types, have a look at the [interfacing guide](https://juliasymbolics.github.io/SymbolicUtils.jl/interface/).
 
 [**Go to the manual**](https://juliasymbolics.github.io/SymbolicUtils.jl/)
+
+## "I don't want to read your manual, just show me some cool code"
+```julia
+julia> using SymbolicUtils
+
+julia> @syms x::Real y::Real z::Complex
+(x, y, z)
+
+julia> 2x^2 - y + x^2
+(3 * (x ^ 2)) + (-1 * y)
+
+julia> r = @rule sinh(im * ~x) => sin(~x)
+sinh(im * ~x) => sin(~x)
+
+julia> r(sinh(im * y))
+sin(y)
+
+julia> simplify(cos(y)^2 + sinh(im*y)^2, [r])
+1
+```
 
 # Citations
 

@@ -102,7 +102,7 @@ r1(sin(1+z) + sin(1+w)) === nothing
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~ys` in the following example is a segment variable:
 
 ```julia:rewrite2.5
-@rule(+(~~xs) => ~~xs)(simplify(x + y + z))
+@rule(+(~~xs) => ~~xs)(x + y + z)
 ```
 \out{rewrite2.5}
 

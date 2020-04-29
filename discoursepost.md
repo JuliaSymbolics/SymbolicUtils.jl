@@ -39,3 +39,5 @@ julia> simplify(cos(y)^2 + sinh(im*y)^2, [r])
 We encourage you to [read the docs](https://juliasymbolics.github.io/SymbolicUtils.jl/) for more info.
 
 Collaboration and documentation improvements / suggestions are quite welcome! If you want to chat about SymbolicUtils.jl, you can find us here, on GitHub, or in the [symbolic programming](https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming) Zulip stream.
+
+We want to give a big thanks to Harrison Grodin for doing a lot of pioneering work in this approach with [Rewrite.jl](https://github.com/HarrisonGrodin/Rewrite.jl) and [Simplify.jl](https://github.com/HarrisonGrodin/Simplify.jl) which we  hybridized with a more [scmutils](https://groups.csail.mit.edu/mac/users/gjs/6946/refman.txt) like approach and added some flavour of our own.

@@ -21,6 +21,15 @@ If you are a Julia package develper in need of a rule rewriting system for your 
 
 [**Go to the manual**](https://juliasymbolics.github.io/SymbolicUtils.jl/)
 
+SymbolicUtils.jl is on the general registry and can be added the usual way:
+```julia
+pkg> add SymbolicUtils
+```
+or
+```julia
+julia> using Pkg; pkg"add SymbolicUtils"
+```
+
 ### "I don't want to read your manual, just show me some cool code"
 ```julia
 julia> using SymbolicUtils

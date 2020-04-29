@@ -21,7 +21,7 @@ If you are a Julia package develper in need of a rule rewriting system for your 
 
 [**Go to the manual**](https://juliasymbolics.github.io/SymbolicUtils.jl/)
 
-## "I don't want to read your manual, just show me some cool code"
+### "I don't want to read your manual, just show me some cool code"
 ```julia
 julia> using SymbolicUtils
 

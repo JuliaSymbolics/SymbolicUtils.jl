@@ -100,10 +100,10 @@ function fuzz_test(ntrials)
 end
 
 using Random: seed!
-seed!(6174)
 
 @testset "Fuzz test" begin
 
+    seed!(6174)
     for i=1:2000
         fuzz_test(10)
     end

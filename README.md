@@ -25,11 +25,14 @@ If you are a Julia package develper in need of a rule rewriting system for your 
 ```julia
 julia> using SymbolicUtils
 
-julia> @syms x::Real y::Real z::Complex
+julia> @syms x::Real y::Real z::Complex f(::Number)::Real
 (x, y, z)
 
 julia> 2x^2 - y + x^2
 (3 * (x ^ 2)) + (-1 * y)
+
+julia> f(sin(x)^2 + cos(x)^2) + z
+f(1) + z
 
 julia> r = @rule sinh(im * ~x) => sin(~x)
 sinh(im * ~x) => sin(~x)

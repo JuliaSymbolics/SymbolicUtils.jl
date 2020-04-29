@@ -131,7 +131,7 @@ struct FnType{X<:Tuple,Y} end
 (f::Sym{<:FnType})(args...) = term(f, args...)
 
 function (f::Sym)(args...)
-    error("Sym $f of type $F are not callable. " *
+    error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable. " *
           "See ?@fun for more options")
 end

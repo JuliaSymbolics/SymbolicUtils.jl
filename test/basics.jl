@@ -45,3 +45,8 @@ end
 
     @test rem2pi(a, RoundNearest) == Term{Real}(rem2pi, [a, RoundNearest])
 end
+
+@testset "err test" begin
+    @syms t()
+    @test_throws ErrorException t(2)
+end

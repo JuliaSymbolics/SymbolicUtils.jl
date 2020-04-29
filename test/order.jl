@@ -52,7 +52,7 @@ end
 end
 
 @testset "0-arg variable calls ordering" begin
-    @syms z ρ
+    @syms z() ρ()
 
     @test -1z() <ₑ ρ()
     @test !(ρ() <ₑ -1z())

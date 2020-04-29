@@ -1,7 +1,9 @@
 
 Hello everyone, we (Shashi Gowda, Yingbo Ma and Mason Protter) are pleased to present to you [SymbolicUtils.jl](https://github.com/JuliaSymbolics/SymbolicUtils.jl). This is the first of hopefully many packages to live in the JuliaSymbolics Github organization, and we hope that SymbolicUtils.jl can lay the groundwork for a vibrant, interacting symbolic programming ecosystem in julia.
 
- Building symbolic programming systems is **hard** and there are various reasons to think it is unlikely that one person, or even a small, coordinated group of people, will be able to to build a monolithic symbolic programming system in Julia that can compete with something like Mathematica or SymPy. Hence, we think it's important to build flexible infrastructure that other's can build on, and interoperate with. Other packages are welcome to build on top of our symbolic types but do not have to. We build extensive infrastructure for [interfacting with SymbolicUtils](https://juliasymbolics.github.io/SymbolicUtils.jl/interface/) so that packages can use their own types if they wish, but plug into our rule rewriting infrastructure.
+Building symbolic programming systems is **hard** and there are various reasons to think it is unlikely that one person, or even a small, coordinated group of people, will be able to to build a monolithic symbolic programming system in Julia that can compete with something like Mathematica or SymPy. Hence, we think it's important to build flexible infrastructure that other's can build on, and interoperate with. Other packages are welcome to build on top of our symbolic types but do not have to. We build extensive infrastructure for [interfacting with SymbolicUtils](https://juliasymbolics.github.io/SymbolicUtils.jl/interface/) so that packages can use their own types if they wish, but plug into our rule rewriting infrastructure.
+ 
+We're happy to say that [ModelingToolkit.jl](https://github.com/SciML/ModelingToolkit.jl/pull/326) from the SciML organization is the first package to depend on and interoperate with SymbolicUtils.jl.
 
 SymbolicUtils.jl is on the general registry and can be added the usual way:
 ```julia

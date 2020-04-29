@@ -34,5 +34,6 @@ sin(y)
 julia> simplify(cos(y)^2 + sinh(im*y)^2, [r])
 1
 ```
+We encourage you to [read the docs](https://juliasymbolics.github.io/SymbolicUtils.jl/) for more info.
 
-and I encourage you to [read the docs](https://juliasymbolics.github.io/SymbolicUtils.jl/) for more info. Collaboration and documentation improvements / suggestions are quite welcome! If you want to chat about SymbolicUtils.jl, you can find us here, on GitHub, or in the [symbolic programming](https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming) Zulip stream.
+Collaboration and documentation improvements / suggestions are quite welcome! If you want to chat about SymbolicUtils.jl, you can find us here, on GitHub, or in the [symbolic programming](https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming) Zulip stream.

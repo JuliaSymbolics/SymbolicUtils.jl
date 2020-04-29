@@ -28,7 +28,7 @@ pkg> add SymbolicUtils
 or
 ```
 julia> using Pkg; pkg"add SymbolicUtils"
-``
+```
 
 Here's a quick and unexplained code sample:
 ```julia

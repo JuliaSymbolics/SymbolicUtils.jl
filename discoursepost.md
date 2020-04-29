@@ -26,7 +26,7 @@ SymbolicUtils.jl is on the general registry and can be added the usual way:
 pkg> add SymbolicUtils
 ```
 or
-```
+```julia
 julia> using Pkg; pkg"add SymbolicUtils"
 ```
 

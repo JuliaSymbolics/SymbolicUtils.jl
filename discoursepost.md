@@ -21,6 +21,15 @@ SymbolicUtils](https://juliasymbolics.github.io/SymbolicUtils.jl/interface/)
 so that packages can use their own types if they wish, but plug into
 our rule rewriting infrastructure.
 
+SymbolicUtils.jl is on the general registry and can be added the usual way:
+```julia
+pkg> add SymbolicUtils
+```
+or
+```
+julia> using Pkg; pkg"add SymbolicUtils"
+``
+
 Here's a quick and unexplained code sample:
 ```julia
 julia> using SymbolicUtils

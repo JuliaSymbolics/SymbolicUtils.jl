@@ -13,7 +13,7 @@ where appropriate -->
 \tableofcontents <!-- you can use \toc as well -->
 
 
-Symbols carry type information. Compound expressions propagate them. A [rule-based rewriting language](#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification rules](#simplification) for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
+In SymbolicUtils, `Sym`, our equivalent of `Symbol`, can carry type information. Compound expressions composed of `Sym`s propagate this information. A [rule-based rewriting language](#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification rules](#simplification) for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
 
 
 ## Creating symbolic expressions
@@ -101,6 +101,11 @@ r1(sin(1+z) + sin(1+w)) === nothing
 
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~ys` in the following example is a segment variable:
 
+```julia:rewrite2.5
+@rule(+(~~xs) => ~~xs)(simplify(x + y + z))
+```
+\out{rewrite2.5}
+
 ```julia:rewrite3
 r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
 
@@ -169,20 +174,18 @@ r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
 
 Given an expression `f(x, f(y, z, u), v, w)`, a `f` is said to be associative if the expression is equivalent to `f(x, y, z, u, v, w)` and commutative if the order of arguments does not matter.  SymbolicUtils has a special `@acrule` macro meant for rules on functions which are associate and commutative such as addition and multiplication of real and complex numbers.
 
-```julia
-julia> @syms x y
-(x, y)
+```julia:acr
+@syms x y
 
-julia> acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
-ACRule((~y) ^ ~n * ~y => (~y) ^ (~n + 1))
+acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
 
-julia> acr(x^2 * y * x)
-((x ^ 3) * y)
+acr(x^2 * y * x)
 ```
+\out{acr}
 
 ## Simplification
 
-Now that you have learned how to write rewrite rules, you should now be able to read and understand these [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify` to simplify an expression. The rules can be accessed in the vector `SymbolicUtils.SIMPLIFY_RULES`.
+Now that you have learned how to write rewrite rules, you should be able to read and understand these [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify` to simplify an expression. The rules can be accessed in the vector `SymbolicUtils.SIMPLIFY_RULES`.
 
 ```julia:simplify1
 showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))

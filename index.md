@@ -7,7 +7,7 @@ where appropriate -->
 
 # User Manual
 
-**SymbolicUtils** is an extensible symbolic programming utility written in Julia. It lets you [create](#creating_symbolic_expressions), [rewrite](#rule-based_rewriting) and [simplify](#simplification) symbolic expressions.
+**SymbolicUtils** is an practical symbolic programming utility written in Julia. It lets you [create](#creating_symbolic_expressions), [rewrite](#rule-based_rewriting) and [simplify](#simplification) symbolic expressions.
 
 
 \tableofcontents <!-- you can use \toc as well -->

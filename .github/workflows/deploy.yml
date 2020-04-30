@@ -28,7 +28,7 @@ jobs:
         run: julia -e '
               using Pkg; Pkg.add(["NodeJS", "Franklin"]);
               using NodeJS; run(`$(npm_cmd()) install highlight.js`);
-              using Franklin; optimize();
+              using Franklin; optimize();'
       - name: Deploy (preview)
         if: github.event_name == 'pull_request'
         uses: JamesIves/github-pages-deploy-action@3.4.2

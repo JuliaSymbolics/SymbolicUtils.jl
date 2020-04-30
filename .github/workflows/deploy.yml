@@ -30,7 +30,9 @@ jobs:
               Pkg.activate(".");
               Pkg.instantiate();
               using NodeJS; run(`$(npm_cmd()) install highlight.js`);
-              using Franklin; optimize();'
+              using Franklin; optimize();
+              rm("__site", recursive=true); # needed to fix printing
+              optimize();'
       - name: Deploy (preview)
         if: github.event_name == 'pull_request'
         uses: JamesIves/github-pages-deploy-action@3.4.2

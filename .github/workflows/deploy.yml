@@ -33,7 +33,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: JamesIves/github-pages-deploy-action@3.4.2
         with:
-          ACCESS_TOKEN: ${{ secrets.FRANKLIN_SHASHI }}
+          SSH: true
           BRANCH: gh-preview
           FOLDER: __site
       - name: Deploy (main)

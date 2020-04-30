@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+     <link rel="stylesheet" href="/SymbolicUtils.jl/libs/katex/katex.min.css">
+     
+    
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/franklin.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/tufte.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/latex.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/adjust.css"> <!-- sheet to overwrite some clashing styles -->
+     <title>The base with Markdown</title>  
+</head>
+
+<body>
+    <h1>SymbolicUtils.jl</h1>
+  <div id="layout">
+    <div id="menu">
+      <ul>
+        <li><a href="/SymbolicUtils.jl/">Manual</a></li>
+        <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a></li>
+      </ul>
+    </div>
+    <div id="main">
+
+
+<!-- Content appended here -->
+
+<div class="franklin-content">
+<p>This section is meant as a refresher if you&#39;re new to Franklin. Have a look at both how the website renders and the corresponding markdown &#40;<code>index.md</code>&#41;. Modify at will to get a feeling for how things work&#33;</p>
+<p>Ps: if you want to modify the header or footer or the general look of the website, adjust the files in</p>
+<ul>
+<li><p><code>src/_css/</code> and</p>
+</li>
+<li><p><code>src/_html_parts/</code>.</p>
+</li>
+</ul>
+<h2 id="the_base_with_markdown"><a href="#the_base_with_markdown">The base with Markdown</a></h2>
+<p>The <a href="https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet">standard markdown syntax</a> can be used such as titles using <code>#</code>, lists:</p>
+<ul>
+<li><p>element with <strong>bold</strong></p>
+</li>
+<li><p>element with <em>emph</em></p>
+</li>
+</ul>
+<p>or code-blocks <code>inline</code> or with highlighting &#40;note the <code>@def hascode &#61; true</code> in the source to allow <a href="https://highlightjs.org/">highlight.js</a> to do its job&#41;:</p>
+<pre><code class="language-julia">abstract type Point end
+struct PointR2{T<:Real} <: Point
+    x::T
+    y::T
+end
+struct PointR3{T<:Real} <: Point
+    x::T
+    y::T
+    z::T
+end
+function len(p::T) where T<:Point
+  sqrt(sum(getfield(p, η)^2 for η ∈ fieldnames(T)))
+end</code></pre>
+<p>You can also quote stuff</p>
+<blockquote>
+<p>You must have chaos within you to ...</p>
+</blockquote>
+<p>or have tables:</p>
+<table><tr><th align="right">English</th><th align="right">Mandarin</th></tr><tr><td align="right">winnie the pooh</td><td align="right">维尼熊</td></tr></table>
+<p>Note that you may have to do a bit of CSS-styling to get these elements to look the way you want them &#40;the same holds for the whole page in fact&#41;.</p>
+<h3 id="symbols_and_html_entities"><a href="#symbols_and_html_entities">Symbols and html entities</a></h3>
+<p>If you want a dollar sign you have to escape it like so: &#36;, you can also use html entities like so: &rarr; or &pi; or, if you&#39;re using Juno for instance, you can use <code>\pi&#91;TAB&#93;</code> to insert the symbol as is: π &#40;it will be converted to a html entity&#41;.<sup id="fnref:1"><a href="#fndef:1" class="fnref">[1]</a></sup>
+<p>If you want to show a backslash, just use it like so: &#92; ; if you want to force a line break, use a <code> \\ </code> like <br/> so &#40;this is on a new line&#41;.<sup id="fnref:blah"><a href="#fndef:blah" class="fnref">[2]</a></sup>
+<p>If you want to show a backtick, escape it like so: &#96; and if you want to show a tick in inline code use double backticks like <code>so &#96; ...</code>.</p>
+<p>Footnotes are nice too:</p>
+<table class="fndef" id="fndef:1">
+    <tr>
+        <td class="fndef-backref"><a href="#fnref:1">[1]</a></td>
+        <td class="fndef-content">this is the text for the first footnote, you can style all this looking at <code>.fndef</code> elements; note that the whole footnote definition is <em>expected to be on the same line</em>.</td>
+    </tr>
+</table>
+<table class="fndef" id="fndef:blah">
+    <tr>
+        <td class="fndef-backref"><a href="#fnref:blah">[2]</a></td>
+        <td class="fndef-content">and this is a longer footnote with some blah from veggie ipsum: turnip greens yarrow ricebean rutabaga endive cauliflower sea lettuce kohlrabi amaranth water spinach avocado daikon napa cabbage asparagus winter purslane kale. Celery potato scallion desert raisin horseradish spinach carrot soko.</td>
+    </tr>
+</table>
+ <h2 id="basic_franklin_extensions"><a href="#basic_franklin_extensions">Basic Franklin extensions</a></h2>
+<h3 id="divs"><a href="#divs">Divs</a></h3>
+<p>It is sometimes useful to have a short way to make a part of the page belong to a div so that it can be styled separately. You can do this easily with Franklin by using <code>@@divname ... @@</code>. For instance, you could want a blue background behind some text.</p>
+<div class="colbox-blue">Here we go&#33; &#40;this is styled in the css sheet with name &quot;colbox-blue&quot;&#41;.</div>
+<p>Since it&#39;s just a <code>&lt;div&gt;</code> block, you can put this construction wherever you like and locally style your text.</p>
+<h3 id="latex_and_maths"><a href="#latex_and_maths">LaTeX and Maths</a></h3>
+<p>Essentially three things are imitated from LaTeX</p>
+<ol>
+<li><p>you can introduce definitions using <code>\newcommand</code></p>
+</li>
+<li><p>you can use hyper-references with <code>\eqref</code>, <code>\cite</code>, ...</p>
+</li>
+<li><p>you can show nice maths &#40;via KaTeX&#41;</p>
+</li>
+</ol>
+<p>The definitions can be introduced in the page or in the <code>config.md</code> &#40;in which case they&#39;re available everywhere as opposed to just in that page&#41;. For instance, the commands <code>\scal</code> and <code>\R</code> are defined in the config file &#40;see <code>src/config.md</code>&#41; and can directly be used whereas the command <code>\E</code> is defined below &#40;and therefore only available on this page&#41;:</p>
+<p>Now we can write something like</p>
+<a id="equation_blah"></a><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>φ</mi><mo stretchy="false">(</mo><mi mathvariant="double-struck">E</mi><mrow><mo fence="true">[</mo><mi>X</mi><mo fence="true">]</mo></mrow><mo stretchy="false">)</mo><mo>≤</mo><mi mathvariant="double-struck">E</mi><mrow><mo fence="true">[</mo><mi>φ</mi><mo stretchy="false">(</mo><mi>X</mi><mo stretchy="false">)</mo><mo fence="true">]</mo></mrow><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">  \varphi(\mathbb E\left[ X\right]) \le \mathbb E\left[ \varphi(X)\right].  </annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault">φ</span><span class="mopen">(</span><span class="mord mathbb">E</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">[</span><span class="mord mathdefault" style="margin-right:0.07847em;">X</span><span class="mclose delimcenter" style="top:0em;">]</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathbb">E</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">[</span><span class="mord mathdefault">φ</span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right:0.07847em;">X</span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;">]</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">.</span></span></span></span></span>
+<p>since we&#39;ve given it the label <code>\label&#123;equation blah&#125;</code>, we can refer it like so: <span class="eqref">(<a href="#equation_blah">1</a>)</span> which can be convenient for pages that are math-heavy.</p>
+<p>In a similar vein you can cite references that would be at the bottom of the page: <span class="bibref">(<a href="#noether15">Noether (1915)</a>, <a href="#bezanson17">Bezanson et al. (2017)</a>)</span>.</p>
+<p><strong>Note</strong>: the LaTeX commands you define can also incorporate standard markdown &#40;though not in a math environment&#41; so for instance let&#39;s define a silly <code>\bolditalic</code> command.</p>
+<p>and use it <em><strong>here for example</strong></em>.</p>
+<p>Here&#39;s another quick one, a command to change the color:</p>
+<p>This is <span style="color: blue"> in blue</span> or <span style="color: #bf37bc"> in #bf37bc</span>.</p>
+<h3 id="a_quick_note_on_whitespaces"><a href="#a_quick_note_on_whitespaces">A quick note on whitespaces</a></h3>
+<p>For most commands you will use <code>#k</code> to refer to the <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.03148em;">k</span></span></span></span>-th argument as in LaTeX. In order to reduce headaches, this forcibly introduces a whitespace on the left of whatever is inserted which, usually, changes nothing visible &#40;e.g. in a math settings&#41;. However there <em>may be</em> situations where you do not want this to happen and you know that the insertion will not clash with anything else. In that case, you should simply use <code>&#33;#k</code> which will not introduce that whitespace. It&#39;s probably easier to see this in action:</p>
+<ul>
+<li><p>with: <code>/usr/local/bin/ script.jl</code>, there&#39;s a whitespace you don&#39;t want 🚫</p>
+</li>
+<li><p>without: <code>/usr/local/bin/script.jl</code> here there isn&#39;t ✅</p>
+</li>
+</ul>
+<h3 id="raw_html"><a href="#raw_html">Raw HTML</a></h3>
+<p>You can include raw HTML by just surrounding a block with <code>~~~</code>. Not much more to add. This may be useful for local custom layouts like having a photo next to a text in a specific way.</p>
+
+<div class="row">
+  <div class="container">
+    <img class="left" src="/SymbolicUtils.jl/assets/rndimg.jpg">
+    <p>
+    Marine iguanas are truly splendid creatures. They're found on the Gálapagos islands, have skin that basically acts as a solar panel, can swim and may have the ability to adapt their body size depending on whether there's food or not.
+    </p>
+    <p>
+    Evolution is cool.
+    </p>
+    <div style="clear: both"></div>      
+  </div>
+</div>
+
+<p><strong>Note 1</strong>: again, entire such blocks can be made into latex-like commands via <code>\newcommand&#123;\mynewblock&#125;&#91;1&#93;&#123;...&#125;</code>.</p>
+<p><strong>Note 2</strong>: whatever is in a raw HTML block is <em>not</em> further processed &#40;so you can&#39;t have LaTeX in there for instance&#41;. A partial way around this is to use <code>@@...</code> blocks which <em>will</em> be recursively parsed. The following code gives the same result as above with the small difference that there is LaTeX being processed in the inner div.</p>
+<div class="row"><div class="container"><div class="left"><img src="/SymbolicUtils.jl/assets/rndimg.jpg" alt="" /></div></div> Marine iguanas are <strong>truly splendid</strong> creatures. They&#39;re not found in equations like <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><mo>−</mo><mi>i</mi><mi>π</mi><mo stretchy="false">)</mo><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\exp(-i\pi)+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord">−</span><span class="mord mathdefault">i</span><span class="mord mathdefault" style="margin-right:0.03588em;">π</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span></span></span></span>. But they&#39;re still quite cool. 
+<div style="clear: both"></div>
+</div>
+<h2 id="pages_and_structure"><a href="#pages_and_structure">Pages and structure</a></h2>
+<p>Here are a few empty pages connecting to the menu links to show where files can go and the resulting paths. &#40;It&#39;s probably best if you look at the source folder for this&#41;.</p>
+<ul>
+<li><p><a href="/SymbolicUtils.jl/menu1/">menu 1</a></p>
+</li>
+<li><p><a href="/SymbolicUtils.jl/menu2/">menu 2</a></p>
+</li>
+<li><p><a href="/SymbolicUtils.jl/menu3/">menu 3</a></p>
+</li>
+</ul>
+<h2 id="references_not_really"><a href="#references_not_really">References &#40;not really&#41;</a></h2>
+<ul>
+<li><p><a id="noether15"></a> <strong>Noether</strong>,  Körper und Systeme rationaler Funktionen, 1915.</p>
+</li>
+<li><p><a id="bezanson17"></a> <strong>Bezanson</strong>, <strong>Edelman</strong>, <strong>Karpinski</strong> and <strong>Shah</strong>, <a href="https://julialang.org/research/julia-fresh-approach-BEKS.pdf">Julia: a fresh approach to numerical computing</a>, SIAM review 2017.</p>
+</li>
+</ul>
+<h2 id="header_and_footer"><a href="#header_and_footer">Header and Footer</a></h2>
+<p>As you can see here at the bottom of the page, there is a footer which you may want on all pages but for instance you may want the date of last modification to be displayed. In a fashion heavily inspired by <a href="https://gohugo.io">Hugo</a>, you can write things like</p>
+<pre><code class="language-html">Last modified: &#123;&#123; fill fd_mtime &#125;&#125;.</code></pre>
+<p>&#40;cf. <code>src/_html_parts/page_foot.html</code>&#41; which will then replace these braces with the content of a dictionary of variables at the key <code>fd_mtime</code>. This dictionary of variables is accessed locally by pages through <code>@def varname &#61; value</code> and globally through the <code>config.md</code> page via the same syntax.</p>
+<p>There&#39;s a few other such functions of the form <code>&#123;&#123;fname p₁ p₂&#125;&#125;</code> as well as support for conditional blocks. If you wander through the <code>src/_html_parts/</code> folder and its content, you should be able to see those in action.</p>
+
+<div class="page-foot">
+  <div class="copyright">
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: April 28, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+  </div>
+</div>
+
+</div>
+<!-- CONTENT ENDS HERE -->
+        </div> <!-- end of id=main -->
+    </div> <!-- end of id=layout -->
+    
+        
+
+
+
+    
+    
+  </body>
+</html>

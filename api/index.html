@@ -1,1 +1,212 @@
-<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <title>SymbolicUtils.jl -- API</title> <h1>SymbolicUtils.jl</h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> </ul> </div> <div id=main > <div class=franklin-content ><div class=page-foot > <div class=copyright > &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: April 30, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>. </div> </div> </div> </div> </div>
+<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/custom.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <title>SymbolicUtils.jl — API</title> <h1>SymbolicUtils.jl</h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> <li><a href="/SymbolicUtils.jl/api/">API</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=api_reference ><a href="#api_reference">API Reference</a></h1> <h2 id=symbolic_types_and_expressions ><a href="#symbolic_types_and_expressions">Symbolic types and expressions</a></h2> <div class=docstring > <h2 class=doc-header  id="@syms()"> <a href="#@syms">@syms</a> <div class=doc-type >macro</div></h2> <div class=doc-content ><pre><code class=hljs>@syms &lt;lhs_expr&gt;&#91;::T1&#93; &lt;lhs_expr&gt;&#91;::T2&#93;...</code></pre>
+<p>For instance:</p>
+<pre><code class=hljs>@syms foo::Real bar baz&#40;x, y::Real&#41;::Complex</code></pre>
+<p>Create one or more variables. <code>&lt;lhs_expr&gt;</code> can be just a symbol in which case it will be the name of the variable, or a function call in which case a function-like variable which has the same name as the function being called. The Sym type, or in the case of a function-like Sym, the output type of calling the function can be set using the <code>::T</code> syntax.</p>
+<h1>Examples:</h1>
+<ul>
+<li><p><code>@syms foo bar::Real baz::Int</code> will create</p>
+
+</ul>
+<p>variable <code>foo</code> of symtype <code>Number</code> &#40;the default&#41;, <code>bar</code> of symtype <code>Real</code> and <code>baz</code> of symtype <code>Int</code></p>
+<ul>
+<li><p><code>@syms f&#40;x&#41; g&#40;y::Real, x&#41;::Int h&#40;a::Int, f&#40;b&#41;&#41;</code> creates 1-arg <code>f</code> 2-arg <code>g</code></p>
+
+</ul>
+<p>and 2 arg <code>f</code>. The second argument to <code>h</code> must be a one argument function-like variable. So, <code>h&#40;1, g&#41;</code> will fail and <code>h&#40;1, f&#41;</code> will work.</p>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="Sym()">
+        <a href="#Sym">Sym</a>
+        <div class=doc-type >type</div></h2>
+      <div class=doc-content ><pre><code class=hljs>Sym&#123;T&#125;&#40;name::Symbol&#41;</code></pre>
+<p>A named variable of type <code>T</code>. Type <code>T</code> can be <code>FnType&#123;X,Y&#125;</code> which means the variable is a function with the type signature X -&gt; Y where <code>X</code> is a tuple type of arguments and <code>Y</code> is any type.</p>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="symtype()">
+        <a href="#symtype">symtype</a>
+        <div class=doc-type >fn</div></h2>
+      <div class=doc-content ><pre><code class=hljs>symtype&#40;x&#41;</code></pre>
+<p>The supposed type of values in the domain of x. Tracing tools can use this type to pick the right method to run or analyse code.</p>
+<p>This defaults to <code>typeof&#40;x&#41;</code> if <code>x</code> is numeric, or <code>Any</code> otherwise. For the types defined in this package, namely <code>T&lt;:Symbolic&#123;S&#125;</code> it is <code>S</code>.</p>
+<p>Define this for your symbolic types if you want <code>simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="Term()">
+        <a href="#Term">Term</a>
+        <div class=doc-type >type</div></h2>
+      <div class=doc-content ><p>No documentation found.</p>
+<p><code>SymbolicUtils.Term</code> is of type <code>UnionAll</code>.</p>
+<h1>Summary</h1>
+<pre><code class=hljs>struct UnionAll &lt;: Type&#123;T&#125;</code></pre>
+<h1>Fields</h1>
+<pre><code class=hljs>var  :: TypeVar
+body :: Any</code></pre>
+<h1>Supertype Hierarchy</h1>
+<pre><code class=hljs>UnionAll &lt;: Type&#123;T&#125; &lt;: Any</code></pre>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="promote_symtype()">
+        <a href="#promote_symtype">promote_symtype</a>
+        <div class=doc-type >fn</div></h2>
+      <div class=doc-content ><p><code>promote_symtype&#40;f::Sym&#123;FnType&#123;X,Y&#125;&#125;, arg_symtypes...&#41;</code></p>
+<p>The resultant type of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</p>
+</div>
+  </div>
+
+<h1 id=interfacing ><a href="#interfacing">Interfacing</a></h1>
+  <div class=docstring >
+      <h2 class=doc-header  id="to_symbolic()">
+        <a href="#to_symbolic">to_symbolic</a>
+        <div class=doc-type >fn</div></h2>
+      <div class=doc-content ><pre><code class=hljs>to_symbolic&#40;x&#41;</code></pre>
+<p>Convert <code>x</code> to a <code>Symbolic</code> type, using the <code>istree</code>, <code>operation</code>, <code>arguments</code>, and optionally <code>symtype</code> if available.</p>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="istree()">
+        <a href="#istree">istree</a>
+        <div class=doc-type >fn</div></h2>
+      <div class=doc-content ><pre><code class=hljs>istree&#40;x::T&#41;</code></pre>
+<p>Check if <code>x</code> represents an expression tree. If returns true, it will be assumed that <code>operation&#40;::T&#41;</code> and <code>arguments&#40;::T&#41;</code> methods are defined. Definining these three should allow use of <code>simplify</code> on custom types. Optionally <code>symtype&#40;x&#41;</code> can be defined to return the expected type of the symbolic expression.</p>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="operation()">
+        <a href="#operation">operation</a>
+        <div class=doc-type >fn</div></h2>
+      <div class=doc-content ><pre><code class=hljs>operation&#40;x::T&#41;</code></pre>
+<p>Returns the operation &#40;a function object&#41; performed by an expression tree. Called only if <code>istree&#40;::T&#41;</code> is true. Part of the API required for <code>simplify</code> to work. Other required methods are <code>arguments</code> and <code>istree</code></p>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="arguments()">
+        <a href="#arguments">arguments</a>
+        <div class=doc-type >fn</div></h2>
+      <div class=doc-content ><pre><code class=hljs>arguments&#40;x::T&#41;</code></pre>
+<p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code></p>
+</div>
+  </div>
+
+<h2 id=rules ><a href="#rules">Rules</a></h2>
+  <div class=docstring >
+      <h2 class=doc-header  id="@rule()">
+        <a href="#@rule">@rule</a>
+        <div class=doc-type >macro</div></h2>
+      <div class=doc-content ><pre><code class=hljs>&#96;@rule LHS &#61;&gt; RHS&#96;</code></pre>
+<p>Creates a <code>Rule</code> object. A rule object is callable, and  takes an expression and rewrites it if it matches the LHS pattern to the RHS pattern, returns <code>nothing</code> otherwise. The rule language is described below.</p>
+<p>LHS can be any possibly nested function call expression where any of the arugments can optionally be a Slot &#40;<code>~x</code>&#41; or a Segment &#40;<code>~~x</code>&#41; &#40;described below&#41;.</p>
+<p>If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS Segment &#40;<code>~x</code>&#41; and slot variables &#40;<code>~~x</code>&#41; on the RHS will substitute the result of the matches found for these variables in the LHS.</p>
+<p><strong>Slot</strong>:</p>
+<p>A Slot variable is written as <code>~x</code> and matches a single expression. <code>x</code> is the name of the variable. If a slot appears more than once in an LHS expression then expression matched at every such location must be equal &#40;as shown by <code>isequal</code>&#41;.</p>
+<p><em>Example:</em></p>
+<p>Simple rule to turn any <code>sin</code> into <code>cos</code>:</p>
+<pre><code class="julia hljs">julia&amp;gt; <span class=hljs-meta >@syms</span> a b c
+&amp;<span class=hljs-comment >#40;a, b, c&amp;#41;</span>
+
+julia&amp;gt; r &amp;<span class=hljs-comment >#61; @rule sin&amp;#40;~x&amp;#41; &amp;#61;&amp;gt; cos&amp;#40;~x&amp;#41;</span>
+sin&amp;<span class=hljs-comment >#40;~x&amp;#41; &amp;#61;&amp;gt; cos&amp;#40;~x&amp;#41;</span>
+
+julia&amp;gt; r&amp;<span class=hljs-comment >#40;sin&amp;#40;1&amp;#43;a&amp;#41;&amp;#41;</span>
+cos&amp;<span class=hljs-comment >#40;&amp;#40;1 &amp;#43; a&amp;#41;&amp;#41;</span></code></pre>
+<p>A rule with 2 segment variables</p>
+<pre><code class="julia hljs">julia&amp;gt; r &amp;<span class=hljs-comment >#61; @rule ~x - ~y &amp;#61;&amp;gt; ~x &amp;#43; &amp;#40;-&amp;#40;~y&amp;#41;&amp;#41;</span>
+~x - ~y &amp;<span class=hljs-comment >#61;&amp;gt; ~x &amp;#43; -&amp;#40;~y&amp;#41;</span>
+
+julia&amp;gt; r&amp;<span class=hljs-comment >#40;a-2b&amp;#41;</span>
+&amp;<span class=hljs-comment >#40;a &amp;#43; &amp;#40;-&amp;#40;2 * b&amp;#41;&amp;#41;&amp;#41;</span></code></pre>
+<p>A rule that matches two of the same expressions:</p>
+<pre><code class="julia hljs">julia&amp;gt; r &amp;<span class=hljs-comment >#61; @rule sin&amp;#40;~x&amp;#41;^2 &amp;#43; cos&amp;#40;~x&amp;#41;^2 &amp;#61;&amp;gt; 1</span>
+sin&amp;<span class=hljs-comment >#40;~x&amp;#41; ^ 2 &amp;#43; cos&amp;#40;~x&amp;#41; ^ 2 &amp;#61;&amp;gt; 1</span>
+
+julia&amp;gt; r&amp;<span class=hljs-comment >#40;sin&amp;#40;2a&amp;#41;^2 &amp;#43; cos&amp;#40;2a&amp;#41;^2&amp;#41;</span>
+<span class=hljs-number >1</span>
+
+julia&amp;gt; r&amp;<span class=hljs-comment >#40;sin&amp;#40;2a&amp;#41;^2 &amp;#43; cos&amp;#40;a&amp;#41;^2&amp;#41;</span>
+<span class=hljs-comment ># nothing</span></code></pre>
+<p><strong>Segment</strong>:</p>
+<p>A Segment variable is written as <code>~~x</code> and matches zero or more expressions in the function call.</p>
+<p><em>Example:</em></p>
+<p>This implements the distributive property of multiplication: <code>&#43;&#40;~~ys&#41;</code> matches expressions like <code>a &#43; b</code>, <code>a&#43;b&#43;c</code> and so on. On the RHS <code>~~ys</code> presents as any old julia array.</p>
+<pre><code class="julia hljs">julia&amp;gt; r &amp;<span class=hljs-comment >#61; @rule ~x * &amp;#43;&amp;#40;&amp;#40;~~ys&amp;#41;&amp;#41; &amp;#61;&amp;gt; sum&amp;#40;map&amp;#40;y-&amp;gt; ~x * y, ~~ys&amp;#41;&amp;#41;;</span>
+
+julia&amp;gt; r&amp;<span class=hljs-comment >#40;2 * &amp;#40;a&amp;#43;b&amp;#43;c&amp;#41;&amp;#41;</span>
+&amp;<span class=hljs-comment >#40;&amp;#40;2 * a&amp;#41; &amp;#43; &amp;#40;2 * b&amp;#41; &amp;#43; &amp;#40;2 * c&amp;#41;&amp;#41;</span></code></pre>
+<p><strong>Predicates</strong>:</p>
+<p>Predicates can be used on both <code>~x</code> and <code>~~x</code> by using the <code>~x::f</code> or <code>~~x::f</code>. Here <code>f</code> can be any julia function. In the case of a slot the function gets a single matched subexpression, in the case of segment, it gets an array of matched expressions.</p>
+<p>The predicate should return <code>true</code> if the current match is acceptable, and <code>false</code> otherwise.</p>
+<pre><code class="julia hljs">julia&amp;gt; two_πs&amp;<span class=hljs-comment >#40;x::Number&amp;#41; &amp;#61; abs&amp;#40;round&amp;#40;x/&amp;#40;2π&amp;#41;&amp;#41; - x/&amp;#40;2π&amp;#41;&amp;#41; &amp;lt; 10^-9</span>
+two_πs &amp;<span class=hljs-comment >#40;generic function with 1 method&amp;#41;</span>
+
+julia&amp;gt; two_πs&amp;<span class=hljs-comment >#40;x&amp;#41; &amp;#61; false</span>
+two_πs &amp;<span class=hljs-comment >#40;generic function with 2 methods&amp;#41;</span>
+
+julia&amp;gt; r &amp;<span class=hljs-comment >#61; @rule sin&amp;#40;~~x &amp;#43; ~y::two_πs &amp;#43; ~~z&amp;#41; &amp;#61;&amp;gt; sin&amp;#40;&amp;#43;&amp;#40;~~x..., ~~z...&amp;#41;&amp;#41;</span>
+sin&amp;<span class=hljs-comment >#40;~&amp;#40;~x&amp;#41; &amp;#43; ~&amp;#40;y::two_πs&amp;#41; &amp;#43; ~&amp;#40;~z&amp;#41;&amp;#41; &amp;#61;&amp;gt; sin&amp;#40;&amp;#43;&amp;#40;~&amp;#40;~x&amp;#41;..., ~&amp;#40;~z&amp;#41;...&amp;#41;&amp;#41;</span>
+
+julia&amp;gt; r&amp;<span class=hljs-comment >#40;sin&amp;#40;a&amp;#43;3π&amp;#41;&amp;#41;</span>
+
+julia&amp;gt; r&amp;<span class=hljs-comment >#40;sin&amp;#40;a&amp;#43;6π&amp;#41;&amp;#41;</span>
+sin&amp;<span class=hljs-comment >#40;a&amp;#41;</span>
+
+julia&amp;gt; r&amp;<span class=hljs-comment >#40;sin&amp;#40;a&amp;#43;6π&amp;#43;c&amp;#41;&amp;#41;</span>
+sin&amp;<span class=hljs-comment >#40;&amp;#40;a &amp;#43; c&amp;#41;&amp;#41;</span></code></pre>
+<p>Predicate function gets an array of values if attached to a segment variable &#40;<code>~~x</code>&#41;.</p>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="RuleSet()">
+        <a href="#RuleSet">RuleSet</a>
+        <div class=doc-type >type</div></h2>
+      <div class=doc-content ><p>No documentation found.</p>
+<h1>Summary</h1>
+<pre><code class=hljs>struct SymbolicUtils.RuleSet &lt;: SymbolicUtils.AbstractRule</code></pre>
+<h1>Fields</h1>
+<pre><code class=hljs>rules :: Array&#123;SymbolicUtils.AbstractRule,1&#125;</code></pre>
+<h1>Supertype Hierarchy</h1>
+<pre><code class=hljs>SymbolicUtils.RuleSet &lt;: SymbolicUtils.AbstractRule &lt;: Any</code></pre>
+</div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id="simplify()">
+        <a href="#simplify">simplify</a>
+        <div class=doc-type >fn</div></h2>
+      <div class=doc-content ><p>No documentation found.</p>
+<p><code>SymbolicUtils.simplify</code> is a <code>Function</code>.</p>
+<pre><code class=hljs># 2 methods for generic function &quot;simplify&quot;:
+&#91;1&#93; simplify&#40;x&#41; in SymbolicUtils at /home/runner/.julia/packages/SymbolicUtils/krclm/src/simplify.jl:174
+&#91;2&#93; simplify&#40;x, rules; fixpoint&#41; in SymbolicUtils at /home/runner/.julia/packages/SymbolicUtils/krclm/src/simplify.jl:174</code></pre>
+</div>
+  </div>
+
+<h2 id=utilities ><a href="#utilities">Utilities</a></h2>
+  <div class=docstring >
+      <h2 class=doc-header  id="@timerewrite()">
+        <a href="#@timerewrite">@timerewrite</a>
+        <div class=doc-type >macro</div></h2>
+      <div class=doc-content ><p>No documentation found.</p>
+<p><code>SymbolicUtils.@timerewrite</code> is a macro.</p>
+<pre><code class=hljs># 1 method for macro &quot;@timerewrite&quot;:
+&#91;1&#93; @timerewrite&#40;__source__::LineNumberNode, __module__::Module, expr&#41; in SymbolicUtils at /home/runner/.julia/packages/SymbolicUtils/krclm/src/rule_dsl.jl:277</code></pre>
+</div>
+  </div>
+<div class=page-foot >
+  <div class=copyright >
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: April 30, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+  </div>
+</div>
+</div>
+        </div> 
+    </div>

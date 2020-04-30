@@ -40,15 +40,19 @@
       <h2 class=doc-header  id="Term()">
         <a href="#Term">Term</a>
         <div class=doc-type >type</div></h2>
-      <div class=doc-content ><p>No documentation found.</p>
-<p><code>SymbolicUtils.Term</code> is of type <code>UnionAll</code>.</p>
-<h1>Summary</h1>
-<pre><code class=hljs>struct UnionAll &lt;: Type&#123;T&#125;</code></pre>
-<h1>Fields</h1>
-<pre><code class=hljs>var  :: TypeVar
-body :: Any</code></pre>
-<h1>Supertype Hierarchy</h1>
-<pre><code class=hljs>UnionAll &lt;: Type&#123;T&#125; &lt;: Any</code></pre>
+      <div class=doc-content ><pre><code class=hljs>Term&#123;T&#125;&#40;f, args::AbstractArray&#41;</code></pre>
+<p>or     Term&#40;f, args::AbstractArray&#41;</p>
+<p>Symbolic expression representing the result of calling <code>f&#40;args...&#41;</code>.</p>
+<ul>
+<li><p><code>operation&#40;t::Term&#41;</code> returns <code>f</code></p>
+
+<li><p><code>arguments&#40;t::Term&#41;</code> returns <code>args</code></p>
+
+<li><p><code>symtype&#40;t::Term&#41;</code> returns <code>T</code></p>
+
+</ul>
+<p>If <code>T</code> is not provided during construction, it is queried by calling <code>SymbolicUtils.promote_symtype&#40;f, map&#40;symtype, args&#41;...&#41;</code>.</p>
+<p>See <a href="#promote_symtype">promote_symtype</a></p>
 </div>
   </div>
 
@@ -56,8 +60,22 @@ body :: Any</code></pre>
       <h2 class=doc-header  id="promote_symtype()">
         <a href="#promote_symtype">promote_symtype</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><p><code>promote_symtype&#40;f::Sym&#123;FnType&#123;X,Y&#125;&#125;, arg_symtypes...&#41;</code></p>
-<p>The resultant type of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</p>
+      <div class=doc-content ><pre><code class=hljs>promote_symtype&#40;f, Ts...&#41;</code></pre>
+<p>The result of applying <code>f</code> to arguments of <a href="#symtype"><code>symtype</code></a> <code>Ts...</code></p>
+<pre><code class="julia hljs">julia&amp;gt; promote_symtype&amp;<span class=hljs-comment >#40;&amp;#43;, Real, Real&amp;#41;</span>
+<span class=hljs-built_in >Real</span>
+
+julia&amp;gt; promote_symtype&amp;<span class=hljs-comment >#40;&amp;#43;, Complex, Real&amp;#41;</span>
+<span class=hljs-built_in >Number</span>
+
+julia&amp;gt; <span class=hljs-meta >@syms</span> f&amp;<span class=hljs-comment >#40;x&amp;#41;::Complex</span>
+&amp;<span class=hljs-comment >#40;f&amp;#40;::Number&amp;#41;::Complex,&amp;#41;</span>
+
+julia&amp;gt; promote_symtype&amp;<span class=hljs-comment >#40;f, Number&amp;#41;</span>
+<span class=hljs-built_in >Complex</span></code></pre>
+<p>When constructing <a href="#Term"><code>Term</code></a>s without an explicit symtype, <code>promote_symtype</code> is used to figure out the symtype of the Term.</p>
+<p><code>promote_symtype&#40;f::Sym&#123;FnType&#123;X,Y&#125;&#125;, arg_symtypes...&#41;</code></p>
+<p>The output symtype of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</p>
 </div>
   </div>
 
@@ -169,13 +187,9 @@ sin&amp;<span class=hljs-comment >#40;&amp;#40;a &amp;#43; c&amp;#41;&amp;#41;</
       <h2 class=doc-header  id="RuleSet()">
         <a href="#RuleSet">RuleSet</a>
         <div class=doc-type >type</div></h2>
-      <div class=doc-content ><p>No documentation found.</p>
-<h1>Summary</h1>
-<pre><code class=hljs>struct SymbolicUtils.RuleSet &lt;: SymbolicUtils.AbstractRule</code></pre>
-<h1>Fields</h1>
-<pre><code class=hljs>rules :: Array&#123;SymbolicUtils.AbstractRule,1&#125;</code></pre>
-<h1>Supertype Hierarchy</h1>
-<pre><code class=hljs>SymbolicUtils.RuleSet &lt;: SymbolicUtils.AbstractRule &lt;: Any</code></pre>
+      <div class=doc-content ><pre><code class=hljs>RuleSet&#40;rules::Vector&#123;AbstractRules&#125;&#41;&#40;expr&#41;</code></pre>
+<p><code>RuleSet</code> is an <code>AbstractRule</code> which applies the given <code>rules</code> to every subexpression in <code>expr</code>.</p>
+<p>Note that this only applies the rules in one pass, not until there are no changes to be applied. Use <code>SymbolicUtils.fixpoint&#40;ruleset, expr&#41;</code> to apply a RuleSet until there are no changes.</p>
 </div>
   </div>
 
@@ -183,11 +197,8 @@ sin&amp;<span class=hljs-comment >#40;&amp;#40;a &amp;#43; c&amp;#41;&amp;#41;</
       <h2 class=doc-header  id="simplify()">
         <a href="#simplify">simplify</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><p>No documentation found.</p>
-<p><code>SymbolicUtils.simplify</code> is a <code>Function</code>.</p>
-<pre><code class=hljs># 2 methods for generic function &quot;simplify&quot;:
-&#91;1&#93; simplify&#40;x&#41; in SymbolicUtils at /home/runner/.julia/packages/SymbolicUtils/krclm/src/simplify.jl:174
-&#91;2&#93; simplify&#40;x, rules; fixpoint&#41; in SymbolicUtils at /home/runner/.julia/packages/SymbolicUtils/krclm/src/simplify.jl:174</code></pre>
+      <div class=doc-content ><pre><code class=hljs>simplify&#40;x, &#91;rules&#61;SIMPLIFY_RULES&#93;; fixpoint&#61;true&#41;</code></pre>
+<p>Apply a vector of rules provided in <code>rules</code>. By default these rules are <code>SymbolicUtils.SIMPLIFY_RULES</code>. If <code>fixpoint&#61;true</code> repeatedly applies the set of rules until there are no changes. Applies them once if <code>fixpoint&#61;false</code>.</p>
 </div>
   </div>
 
@@ -196,10 +207,31 @@ sin&amp;<span class=hljs-comment >#40;&amp;#40;a &amp;#43; c&amp;#41;&amp;#41;</
       <h2 class=doc-header  id="@timerewrite()">
         <a href="#@timerewrite">@timerewrite</a>
         <div class=doc-type >macro</div></h2>
-      <div class=doc-content ><p>No documentation found.</p>
-<p><code>SymbolicUtils.@timerewrite</code> is a macro.</p>
-<pre><code class=hljs># 1 method for macro &quot;@timerewrite&quot;:
-&#91;1&#93; @timerewrite&#40;__source__::LineNumberNode, __module__::Module, expr&#41; in SymbolicUtils at /home/runner/.julia/packages/SymbolicUtils/krclm/src/rule_dsl.jl:277</code></pre>
+      <div class=doc-content ><pre><code class=hljs>@timerewrite expr</code></pre>
+<p>If <code>expr</code> calls <code>simplify</code> or a <code>RuleSet</code> object, track the amount of time it spent on applying each rule and pretty print the timing.</p>
+<p>This uses <a href="https://github.com/KristofferC/TimerOutputs.jl">TimerOutputs.jl</a>.</p>
+<h2>Example:</h2>
+<pre><code class="julia hljs">
+julia&amp;gt; expr &amp;<span class=hljs-comment >#61; foldr&amp;#40;*, rand&amp;#40;&amp;#91;a,b,c,d&amp;#93;, 100&amp;#41;&amp;#41;</span>
+&amp;<span class=hljs-comment >#40;a ^ 26&amp;#41; * &amp;#40;b ^ 30&amp;#41; * &amp;#40;c ^ 16&amp;#41; * &amp;#40;d ^ 28&amp;#41;</span>
+
+julia&amp;gt; <span class=hljs-meta >@timerewrite</span> simplify&amp;<span class=hljs-comment >#40;expr&amp;#41;</span>
+ ────────────────────────────────────────────────────────────────────────────────────────────────
+                                                         Time                   Allocations
+                                                 ──────────────────────   ───────────────────────
+                Tot / &amp;<span class=hljs-comment >#37; measured:                     340ms / 15.3&amp;#37;           92.2MiB / 10.8&amp;#37;</span>
+
+ Section                                 ncalls     time   &amp;<span class=hljs-comment >#37;tot     avg     alloc   &amp;#37;tot      avg</span>
+ ────────────────────────────────────────────────────────────────────────────────────────────────
+ ACRule&amp;<span class=hljs-comment >#40;&amp;#40;~y&amp;#41; ^ ~n * ~y &amp;#61;&amp;gt; &amp;#40;~y&amp;#41; ^ &amp;#40;~n ...    667   11.1ms  21.3&amp;#37;  16.7μs   2.66MiB  26.8&amp;#37;  4.08KiB</span>
+   RHS                                       <span class=hljs-number >92</span>    <span class=hljs-number >277</span>μs  <span class=hljs-number >0.53</span>&amp;<span class=hljs-comment >#37;  3.01μs   14.4KiB  0.14&amp;#37;     160B</span>
+ ACRule&amp;<span class=hljs-comment >#40;&amp;#40;~x&amp;#41; ^ ~n * &amp;#40;~x&amp;#41; ^ ~m &amp;#61;&amp;gt; &amp;#40;~x&amp;#41;...    575   7.63ms  14.6&amp;#37;  13.3μs   1.83MiB  18.4&amp;#37;  3.26KiB</span>
+ &amp;<span class=hljs-comment >#40;*&amp;#41;&amp;#40;~&amp;#40;~&amp;#40;x::&amp;#33;issortedₑ&amp;#41;&amp;#41;&amp;#41; &amp;#61;&amp;gt; sort_arg...    831   6.31ms  12.1&amp;#37;  7.59μs    738KiB  7.26&amp;#37;     910B</span>
+   RHS                                      <span class=hljs-number >164</span>   <span class=hljs-number >3.03</span>ms  <span class=hljs-number >5.81</span>&amp;<span class=hljs-comment >#37;  18.5μs    250KiB  2.46&amp;#37;  1.52KiB</span>
+   ...
+   ...
+ ────────────────────────────────────────────────────────────────────────────────────────────────
+&amp;<span class=hljs-comment >#40;a ^ 26&amp;#41; * &amp;#40;b ^ 30&amp;#41; * &amp;#40;c ^ 16&amp;#41; * &amp;#40;d ^ 28&amp;#41;</span></code></pre>
 </div>
   </div>
 <div class=page-foot >

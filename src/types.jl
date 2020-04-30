@@ -84,7 +84,29 @@ Base.one( s::Symbolic) = one( symtype(s))
 
 Base.zero(s::Symbolic) = zero(symtype(s))
 
-promote_symtype(f, xs...) = Any
+"""
+    promote_symtype(f, Ts...)
+
+The result of applying `f` to arguments of [`symtype`](#symtype) `Ts...`
+
+```julia
+julia> promote_symtype(+, Real, Real)
+Real
+
+julia> promote_symtype(+, Complex, Real)
+Number
+
+julia> @syms f(x)::Complex
+(f(::Number)::Complex,)
+
+julia> promote_symtype(f, Number)
+Complex
+```
+
+When constructing [`Term`](#Term)s without an explicit symtype,
+`promote_symtype` is used to figure out the symtype of the Term.
+"""
+promote_symtype(f, Ts...) = Any
 
 
 
@@ -139,7 +161,7 @@ end
 """
 `promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)`
 
-The resultant type of applying variable `f` to arugments of symtype `arg_symtypes...`.
+The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
 function promote_symtype(f::Sym{FnType{X,Y}}, args...) where {X, Y}

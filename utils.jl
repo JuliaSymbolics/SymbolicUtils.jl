@@ -10,14 +10,12 @@ function hfun_doc(params)
     txt = Markdown.plain(doc)
     # possibly further processing here
     body = Markdown.html(Markdown.parse(txt))
-    h = IOBuffer()
-    write(h, """
-          <div class="docstring">
-              <h2 class="doc-header" id="$fname()">
-                <a href="#$fname">$head</a>
-                <div class="doc-type">$type</div></h2>
-              <div class="doc-content">$body</div>
-          </div>
-        """)
-    return String(take!(h))
+    return """
+      <div class="docstring">
+          <h2 class="doc-header" id="$fname">
+            <a href="#$fname">$head</a>
+            <div class="doc-type">$type</div></h2>
+          <div class="doc-content">$body</div>
+      </div>
+    """
 end

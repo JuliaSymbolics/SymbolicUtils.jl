@@ -29,9 +29,9 @@ jobs:
               using Pkg; Pkg.add(["Franklin"]);
               Pkg.activate(".");
               Pkg.resolve();
-              using Franklin; optimize();
+              using Franklin; optimize(clear=true, prerender=false, minify=false);
               rm("__site", recursive=true);
-              optimize();'
+              optimize(clear=true, prerender=false);'
       - name: Deploy (preview)
         if: github.event_name == 'pull_request'
         uses: JamesIves/github-pages-deploy-action@3.4.2

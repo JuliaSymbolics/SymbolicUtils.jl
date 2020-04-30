@@ -31,7 +31,7 @@ jobs:
               Pkg.instantiate();
               using NodeJS; run(`$(npm_cmd()) install highlight.js`);
               using Franklin; optimize();
-              rm("__site", recursive=true); # needed to fix printing
+              rm("__site", recursive=true);
               optimize();'
       - name: Deploy (preview)
         if: github.event_name == 'pull_request'

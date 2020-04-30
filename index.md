@@ -29,7 +29,26 @@ using SymbolicUtils
 ```
 \out{syms1}
 
-Type annotations are optional when creating symbols. Here `α`, `β` behave like Real numbers. `w` and `z` behave like `Number`, which is the default. You can do basic arithmetic on these to get symbolic expressions:
+Type annotations are optional when creating symbols. Here `α`, `β` behave like Real numbers. `w` and `z` behave like `Number`, which is the default. You can use the `symtype` function to find the type of a symbol.
+
+```julia:symtype
+using SymbolicUtils: symtype
+
+symtype(w), symtype(z),  symtype(α), symtype(β)
+```
+\out{symtype}
+
+Note however that they are not subtypes of these types!
+
+```julia:symtype2
+@show w isa Real
+@show α isa Number
+```
+\out{symtype2}
+
+(see [this post](https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u=shashi) for why they are all just subtypes of `Number`)
+
+You can do basic arithmetic on symbols to get symbolic expressions:
 
 ```julia:expr
 expr1 = α*sin(w)^2 +  β*cos(z)^2
@@ -78,9 +97,7 @@ This works because `g` "returns" a `Real`.
 
 ## Rule-based rewriting
 
-So the simplification in SymbolicUtils is done by a set of rules. We will get into more details about the `simplify` function in the next section, but first, let us look at how you can write a rewrite rule to match and transform an expression.
-
-A rule is written using either the `@rule` macro or the `@acrule` macro.
+Rewrite rules match and transform an expression. A rule is written using either the `@rule` macro or the `@acrule` macro.
 
 Here is a simple rewrite rule:
 
@@ -91,7 +108,9 @@ showraw(r1(sin(1+z) + sin(1+z)))
 ```
 \out{rewrite1}
 
-The `@rule` macro takes a pair of patterns -- the matcher and the consequent (`@rule matcher => consequent`). If an expression matches the matcher pattern, it is rewritten to the consequent pattern. `~x` in the example is what is called a **slot variable** named `x`. In a matcher pattern, slot variables are place holders that match exactly one expression. When used on the consequent side they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, then all corresponding matches must be equal (as tested by `Base.isequal` function). Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.
+The `@rule` macro takes a pair of patterns -- the _matcher_ and the _consequent_ (`@rule matcher => consequent`). If an expression matches the matcher pattern, it is rewritten to the consequent pattern. `@rule` returns a callable object that applies the rule to an expression.
+
+`~x` in the example is what is a **slot variable** named `x`. In a matcher pattern, slot variables are placeholders that match exactly one expression. When used on the consequent side, they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, all corresponding matches must be equal (as tested by `Base.isequal` function). Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.
 
 If you try to apply this rule to an expression where the two summands are not equal, it will return `nothing` -- this is the way a rule signifies failure to match.
 ```julia:rewrite2
@@ -99,12 +118,14 @@ r1(sin(1+z) + sin(1+w)) === nothing
 ```
 \out{rewrite2}
 
-If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~ys` in the following example is a segment variable:
+If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~xs` in the following example is a segment variable:
 
 ```julia:rewrite3
 @rule(+(~~xs) => ~~xs)(x + y + z)
 ```
 \out{rewrite3}
+
+`~~xs` is a vector of subexpressions matched. You can use it to construct something more useful:
 
 ```julia:rewrite4
 r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
@@ -113,7 +134,7 @@ showraw(r2(2 * (w+w+α+β)))
 ```
 \out{rewrite4}
 
-Notice that there is a subexpression `(2 * w) + (2 * w)` that could be simplified by the previous rule `r1`.
+Notice that there is a subexpression `(2 * w) + (2 * w)` that could be simplified by the previous rule `r1`. Can we chain `r2` and `r1`?
 
 
 ```julia:rewrite5
@@ -121,7 +142,7 @@ showraw(r1(r2(2 * (w+w+α+β))))
 ```
 \out{rewrite5}
 
-Oops! It didn't work! That is because a rule object created by `@rule` matches the whole expression given to it as input.
+Oops! It didn't work! That is because a rule object created by `@rule` matches the whole expression, and not subexpressions.
 
 There is a much better way of combining multiple rules and apply them to subexpressions recursively. That is the `RuleSet`.
 
@@ -154,16 +175,17 @@ fixpoint(rset, 2 * (w+w+α+β))
 
 ### Predicates for matching
 
-Matcher pattern may contain slot variables with attached predicates, written as `~x::f` where `f` is a function that takes a matched expression (a `Term` object a `Sym` or any other Julia value that is in the expression tree) and returns a boolean value. Such a slot will be considered a match only if `f` returns true.
+Matcher pattern may contain slot variables with attached predicates, written as `~x::f` where `f` is a function that takes a matched expression (a `Term` object a `Sym` or any Julia value that is in the expression tree) and returns a boolean value. Such a slot will be considered a match only if `f` returns true.
 
-Similarly `~~x::g` is a way of attaching a predicate `g` to a segment variable. In the case of segment variables `g` gets a vector of 0 or more expressions and must return a boolean value.
+Similarly `~~x::g` is a way of attaching a predicate `g` to a segment variable. In the case of segment variables `g` gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate.
 
-If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate. For example.
+For example,
 
 ```julia:pred1
 
 r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
 
+@show r(w + z + z + w)
 @show r(w + z + z)
 @show r(w + z)
 ```
@@ -185,14 +207,16 @@ acr(x^2 * y * x)
 
 ## Simplification
 
-Now that you have learned how to write rewrite rules, you should be able to read and understand these [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify` to simplify an expression. The rules can be accessed in the vector `SymbolicUtils.SIMPLIFY_RULES`.
+The `simplify` function applies a built-in set of rules to simplify expressions.
 
 ```julia:simplify1
 showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))
 ```
 \out{simplify1}
 
-`simplify` optionally takes a `rules` argument, a vector of rules to use to simplify instead of the default set. Let's try it with the `r1` and `r2` rules we defined above.
+If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify`. These rules can be accessed in the vector `SymbolicUtils.SIMPLIFY_RULES`, if you want to extend them.
+
+`simplify` optionally takes a `rules` argument, a vector of rules to apply instead of the default set. Let's try it with the `r1` and `r2` rules we defined in the previous section.
 
 
 ```julia:simplify2
@@ -210,6 +234,6 @@ showraw(simplify(2 * (w+w+α+β), [r1,r2], fixpoint=false))
 
 ## Learn more
 
-If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the [Interfacing](/interface/) section.
+Head over to the github repository to ask questions and [report problems](https://github.com/JuliaSymbolics/SymbolicUtils.jl)! Join the [Zulip stream](https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming) to chat!
 
-Head over to the github repository to [report problems](https://github.com/JuliaSymbolics/SymbolicUtils.jl) or ask questions!
+If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the [Interfacing](/interface/) section to find out how you can do that without any fundamental changes to your package.

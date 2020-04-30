@@ -125,9 +125,9 @@ version = "0.10.0"
 
 [[SymbolicUtils]]
 deps = ["Combinatorics", "NaNMath", "SpecialFunctions", "TimerOutputs"]
-path = "/home/shashi/.julia/dev/SymbolicUtils"
+git-tree-sha1 = "b0be4302a14bd294c2eb3b468857994912ecbd8c"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
-version = "0.1.0"
+version = "0.1.1"
 
 [[TimeZones]]
 deps = ["Dates", "EzXML", "Mocking", "Printf", "RecipesBase", "Serialization", "Unicode"]

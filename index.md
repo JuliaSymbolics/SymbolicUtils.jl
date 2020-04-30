@@ -41,12 +41,12 @@ symtype(w), symtype(z),  symtype(α), symtype(β)
 Note however that they are not subtypes of these types!
 
 ```julia:symtype2
-@show w isa Real
-@show α isa Number
+@show w isa Number
+@show α isa Real
 ```
 \out{symtype2}
 
-(see [this post](https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u=shashi) for why they are all just subtypes of `Number`)
+(see [this post](https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u=shashi) for why they are all not just subtypes of `Number`)
 
 You can do basic arithmetic on symbols to get symbolic expressions:
 

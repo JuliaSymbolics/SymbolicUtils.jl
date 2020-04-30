@@ -1,2 +1,2 @@
-LoadError: UndefVarError: @rule not defined
-in expression starting at none:1
+r(w + z + z) = "odd terms"
+r(w + z) = nothing

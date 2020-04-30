@@ -1,25 +1,114 @@
-<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <link rel=icon  href="/SymbolicUtils.jl/assets/favicon.png"> <title>Code blocks</title> <h1>SymbolicUtils.jl</h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=working_with_code_blocks ><a href="#working_with_code_blocks">Working with code blocks</a></h1> <h2 id=live_evaluation_of_code_blocks ><a href="#live_evaluation_of_code_blocks">Live evaluation of code blocks</a></h2> <p>If you would like to show code as well as what the code outputs, you only need to specify where the script corresponding to the code block will be saved.</p> <p>Indeed, what happens is that the code block gets saved as a script which then gets executed. This also allows for that block to not be re-executed every time you change something <em>else</em> on the page.</p> <p>Here&#39;s a simple example &#40;change values in <code>a</code> to see the results being live updated&#41;:</p> <pre><code class=language-julia >using LinearAlgebra
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+     <link rel="stylesheet" href="/SymbolicUtils.jl/libs/katex/katex.min.css">
+     
+     <link rel="stylesheet" href="/SymbolicUtils.jl/libs/highlight/github.min.css">
+   
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/franklin.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/tufte.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/latex.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/adjust.css"> <!-- sheet to overwrite some clashing styles -->
+     <title>Code blocks</title>  
+</head>
+
+<body>
+    <h1>SymbolicUtils.jl</h1>
+  <div id="layout">
+    <div id="menu">
+      <ul>
+        <li><a href="/SymbolicUtils.jl/">Manual</a></li>
+        <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a></li>
+      </ul>
+    </div>
+    <div id="main">
+
+
+<!-- Content appended here -->
+
+<div class="franklin-content">
+<h1 id="working_with_code_blocks"><a href="#working_with_code_blocks">Working with code blocks</a></h1>
+<h2 id="live_evaluation_of_code_blocks"><a href="#live_evaluation_of_code_blocks">Live evaluation of code blocks</a></h2>
+<p>If you would like to show code as well as what the code outputs, you only need to specify where the script corresponding to the code block will be saved.</p>
+<p>Indeed, what happens is that the code block gets saved as a script which then gets executed. This also allows for that block to not be re-executed every time you change something <em>else</em> on the page.</p>
+<p>Here&#39;s a simple example &#40;change values in <code>a</code> to see the results being live updated&#41;:</p>
+<pre><code class="language-julia">using LinearAlgebra
 a = [1, 2, 3, 3, 4, 5, 2, 2]
 @show dot(a, a)
-println(dot(a, a))</code></pre> <p>You can now show what this would look like:</p> <pre><code class=plaintext >dot(a, a) = 72
+println(dot(a, a))</code></pre>
+<p>You can now show what this would look like:</p>
+<pre><code class="plaintext">dot(a, a) = 72
 72
-</code></pre> <p><strong>Notes</strong>:</p> <ul> <li><p>you don&#39;t have to specify the <code>.jl</code> &#40;see below&#41;,</p> <li><p>you do need to explicitly use print statements or <code>@show</code> for things to show, so just leaving a variable at the end like you would in the REPL will show nothing,</p> <li><p>only Julia code blocks are supported at the moment, there may be a support for scripting languages like <code>R</code> or <code>python</code> in the future,</p> <li><p>the way you specify the path is important; see <a href="https://tlienart.github.io/franklindocs/code/index.html#more_on_paths">the docs</a> for more info. If you don&#39;t care about how things are structured in your <code>/assets/</code> folder, just use <code>./scriptname.jl</code>. If you want things to be grouped, use <code>./group/scriptname.jl</code>. For more involved uses, see the docs.</p> </ul> <p>Lastly, it&#39;s important to realise that if you don&#39;t change the content of the code, then that code will only be executed <em>once</em> even if you make multiple changes to the text around it.</p> <p>Here&#39;s another example,</p> <pre><code class=language-julia >for i ∈ 1:5, j ∈ 1:5
+</code></pre>
+<p><strong>Notes</strong>:</p>
+<ul>
+<li><p>you don&#39;t have to specify the <code>.jl</code> &#40;see below&#41;,</p>
+</li>
+<li><p>you do need to explicitly use print statements or <code>@show</code> for things to show, so just leaving a variable at the end like you would in the REPL will show nothing,</p>
+</li>
+<li><p>only Julia code blocks are supported at the moment, there may be a support for scripting languages like <code>R</code> or <code>python</code> in the future,</p>
+</li>
+<li><p>the way you specify the path is important; see <a href="https://tlienart.github.io/franklindocs/code/index.html#more_on_paths">the docs</a> for more info. If you don&#39;t care about how things are structured in your <code>/assets/</code> folder, just use <code>./scriptname.jl</code>. If you want things to be grouped, use <code>./group/scriptname.jl</code>. For more involved uses, see the docs.</p>
+</li>
+</ul>
+<p>Lastly, it&#39;s important to realise that if you don&#39;t change the content of the code, then that code will only be executed <em>once</em> even if you make multiple changes to the text around it.</p>
+<p>Here&#39;s another example,</p>
+<pre><code class="language-julia">for i ∈ 1:5, j ∈ 1:5
     print(" ", rpad("*"^i,5), lpad("*"^(6-i),5), j==5 ? "\n" : " "^4)
-end</code></pre> <p>which gives the &#40;utterly useless&#41;:</p> <pre><code class=plaintext > *    *****     *    *****     *    *****     *    *****     *    *****
+end</code></pre>
+<p>which gives the &#40;utterly useless&#41;:</p>
+<pre><code class="plaintext"> *    *****     *    *****     *    *****     *    *****     *    *****
  **    ****     **    ****     **    ****     **    ****     **    ****
  ***    ***     ***    ***     ***    ***     ***    ***     ***    ***
  ****    **     ****    **     ****    **     ****    **     ****    **
  *****    *     *****    *     *****    *     *****    *     *****    *
-</code></pre> <p>note the absence of <code>.jl</code>, it&#39;s inferred.</p> <p>You can also hide lines &#40;that will be executed nonetheless&#41;:</p> <pre><code class=language-julia >using Random
-@show randn(2)</code></pre> <pre><code class=plaintext >randn(2) = [0.2972879845354616, 0.3823959677906078]
-</code></pre> <h2 id=including_scripts ><a href="#including_scripts">Including scripts</a></h2> <p>Another approach is to include the content of a script that has already been executed. This can be an alternative to the description above if you&#39;d like to only run the code once because it&#39;s particularly slow or because it&#39;s not Julia code. For this you can use the <code>\input</code> command specifying which language it should be tagged as:</p> <pre><code class=language-julia >x = randn(5)
+</code></pre>
+<p>note the absence of <code>.jl</code>, it&#39;s inferred.</p>
+<p>You can also hide lines &#40;that will be executed nonetheless&#41;:</p>
+<pre><code class="language-julia">using Random
+@show randn(2)</code></pre>
+<pre><code class="plaintext">randn(2) = [0.2972879845354616, 0.3823959677906078]
+</code></pre>
+<h2 id="including_scripts"><a href="#including_scripts">Including scripts</a></h2>
+<p>Another approach is to include the content of a script that has already been executed. This can be an alternative to the description above if you&#39;d like to only run the code once because it&#39;s particularly slow or because it&#39;s not Julia code. For this you can use the <code>\input</code> command specifying which language it should be tagged as:</p>
+<pre><code class="language-julia">x = randn(5)
 y = randn(5)
 
 for i in 1:5
     println(rpad("*"^i, 10, '-'), round(dot(x, y), digits=1))
-end</code></pre> </p> <p>these scripts can be run in such a way that their output is also saved to file, see <code>scripts/generate_results.jl</code> for instance, and you can then also input the results:</p> <pre><code class=plaintext >*---------1.3
+end</code></pre> </p>
+<p>these scripts can be run in such a way that their output is also saved to file, see <code>scripts/generate_results.jl</code> for instance, and you can then also input the results:</p>
+<pre><code class="plaintext">*---------1.3
 **--------1.3
 ***-------1.3
 ****------1.3
 *****-----1.3
-</code></pre> </p> <p>which is convenient if you&#39;re presenting code.</p> <p><strong>Note</strong>: paths specification matters, see <a href="https://tlienart.github.io/franklindocs/code/index.html#more_on_paths">the docs</a> for details.</p> <p>Using this approach with the <code>generate_results.jl</code> file also makes sure that all the code on your website works and that all results match the code which makes maintenance easier.<div class=page-foot > <div class=copyright > &copy; THE AUTHOR. Last modified: April 29, 2020. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>. </div> </div> </div> </div> </div> <script src="/SymbolicUtils.jl/libs/highlight/highlight.pack.js"></script> <script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: ' '});</script>
+</code></pre> </p>
+<p>which is convenient if you&#39;re presenting code.</p>
+<p><strong>Note</strong>: paths specification matters, see <a href="https://tlienart.github.io/franklindocs/code/index.html#more_on_paths">the docs</a> for details.</p>
+<p>Using this approach with the <code>generate_results.jl</code> file also makes sure that all the code on your website works and that all results match the code which makes maintenance easier.
+<div class="page-foot">
+  <div class="copyright">
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: April 28, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+  </div>
+</div>
+
+</div>
+<!-- CONTENT ENDS HERE -->
+        </div> <!-- end of id=main -->
+    </div> <!-- end of id=layout -->
+    
+        
+
+
+
+    
+    
+        <script src="/SymbolicUtils.jl/libs/highlight/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+
+    
+  </body>
+</html>

@@ -1,2 +1,1 @@
-LoadError: UndefVarError: @rule not defined
-in expression starting at none:1
+(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)

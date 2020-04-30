@@ -1,29 +1,91 @@
-<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <link rel=icon  href="/SymbolicUtils.jl/assets/favicon.png"> <title>More goodies</title> <h1>SymbolicUtils.jl</h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=more_goodies ><a href="#more_goodies">More goodies</a></h1> <h2 id=more_markdown_support ><a href="#more_markdown_support">More markdown support</a></h2> <p>The Julia Markdown parser in Julia&#39;s stdlib is not exactly complete and Franklin strives to bring useful extensions that are either defined in standard specs such as Common Mark or that just seem like useful extensions.</p> <ul> <li><p>indirect references for instance <a href="http://existentialcomics.com/">like so</a></p> </ul> or also for images</p> <p><img src="https://upload.wikimedia.org/wikipedia/commons/9/90/Krul.svg" alt="some image"></p> <p>some people find that useful as it allows referring multiple times to the same link for instance.</p> <ul> <li><p>un-qualified code blocks and indented code blocks are allowed and are julia by default</p> <p>a &#61; 1 b &#61; a&#43;1</p> </ul> <p>or</p> <pre><code class=language-julia >a = 1
-b = a+1</code></pre> <p>you can specify the default language with <code>@def lang &#61; &quot;julia&quot;</code>. If you actually want a &quot;plain&quot; code block, qualify it as <code>plaintext</code> like</p> <pre><code class=language-plaintext >so this is plain-text stuff.</code></pre>
-<h2 id=a_bit_more_highlighting ><a href="#a_bit_more_highlighting">A bit more highlighting</a></h2>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+     <link rel="stylesheet" href="/SymbolicUtils.jl/libs/katex/katex.min.css">
+     
+     <link rel="stylesheet" href="/SymbolicUtils.jl/libs/highlight/github.min.css">
+   
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/franklin.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/tufte.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/latex.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/adjust.css"> <!-- sheet to overwrite some clashing styles -->
+     <title>More goodies</title>  
+</head>
+
+<body>
+    <h1>SymbolicUtils.jl</h1>
+  <div id="layout">
+    <div id="menu">
+      <ul>
+        <li><a href="/SymbolicUtils.jl/">Manual</a></li>
+        <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a></li>
+      </ul>
+    </div>
+    <div id="main">
+
+
+<!-- Content appended here -->
+
+<div class="franklin-content">
+<h1 id="more_goodies"><a href="#more_goodies">More goodies</a></h1>
+<h2 id="more_markdown_support"><a href="#more_markdown_support">More markdown support</a></h2>
+<p>The Julia Markdown parser in Julia&#39;s stdlib is not exactly complete and Franklin strives to bring useful extensions that are either defined in standard specs such as Common Mark or that just seem like useful extensions.</p>
+<ul>
+<li><p>indirect references for instance <a href="http://existentialcomics.com/">like so</a></p>
+</li>
+</ul>
+ or also for images</p>
+<p><img src="https://upload.wikimedia.org/wikipedia/commons/9/90/Krul.svg" alt="some image"></p>
+<p>some people find that useful as it allows referring multiple times to the same link for instance.</p>
+
+<ul>
+<li><p>un-qualified code blocks and indented code blocks are allowed and are julia by default</p>
+</li>
+</ul>
+<pre><code class="language-julia">a = 1
+b = a+1</code></pre> or</p>
+<pre><code class="language-julia">a = 1
+b = a+1</code></pre>
+<p>you can specify the default language with <code>@def lang &#61; &quot;julia&quot;</code>. If you actually want a &quot;plain&quot; code block, qualify it as <code>plaintext</code> like</p>
+<pre><code class="language-plaintext">so this is plain-text stuff.</code></pre>
+<h2 id="a_bit_more_highlighting"><a href="#a_bit_more_highlighting">A bit more highlighting</a></h2>
 <p>Extension of highlighting for <code>pkg</code> an <code>shell</code> mode in Julia:</p>
-<pre><code class=language-julia-repl >(v1.4) pkg> add Franklin
+<pre><code class="language-julia-repl">(v1.4) pkg> add Franklin
 shell> blah
 julia> 1+1
 (Sandbox) pkg> resolve</code></pre>
 <p>you can tune the colouring in the CSS etc via the following classes:</p>
 <ul>
 <li><p><code>.hljs-meta</code> &#40;for <code>julia&gt;</code>&#41;</p>
-
+</li>
 <li><p><code>.hljs-metas</code> &#40;for <code>shell&gt;</code>&#41;</p>
-
+</li>
 <li><p><code>.hljs-metap</code> &#40;for <code>...pkg&gt;</code>&#41;</p>
-
+</li>
 </ul>
-<div class=page-foot >
-  <div class=copyright >
-    &copy; THE AUTHOR. Last modified: April 29, 2020. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+
+<div class="page-foot">
+  <div class="copyright">
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: April 28, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
+
 </div>
-        </div> 
-    </div> 
+<!-- CONTENT ENDS HERE -->
+        </div> <!-- end of id=main -->
+    </div> <!-- end of id=layout -->
+    
+        
+
+
+
     
     
         <script src="/SymbolicUtils.jl/libs/highlight/highlight.pack.js"></script>
 <script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+
+    
+  </body>
+</html>

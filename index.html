@@ -1,108 +1,139 @@
-<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <link rel=icon  href="/SymbolicUtils.jl/assets/favicon.png"> <title>SymbolicUtils.jl -- Symbolic programming in Julia</title> <h1>SymbolicUtils.jl</h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=user_manual ><a href="#user_manual">User Manual</a></h1> <p><strong>SymbolicUtils</strong> is an practical symbolic programming utility written in Julia. It lets you <a href="#creating_symbolic_expressions">create</a>, <a href="#rule-based_rewriting">rewrite</a> and <a href="#simplification">simplify</a> symbolic expressions.</p> <div class=franklin-toc ><ol><li><a href="#user_manual">User Manual</a><ol><li><a href="#creating_symbolic_expressions">Creating symbolic expressions</a><li><a href="#rule-based_rewriting">Rule-based rewriting</a><ol><li><a href="#predicates_for_matching">Predicates for matching</a><li><a href="#associative-commutative_rules">Associative-Commutative Rules</a></ol><li><a href="#simplification">Simplification</a><li><a href="#learn_more">Learn more</a></ol></ol></div> </p> <p>In SymbolicUtils, <code>Sym</code>, our equivalent of <code>Symbol</code>, can carry type information. Compound expressions composed of <code>Sym</code>s propagate this information. A <a href="#rule-based_rewriting">rule-based rewriting language</a> can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful <a href="#simplification">simplification rules</a> for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.</p> <h2 id=creating_symbolic_expressions ><a href="#creating_symbolic_expressions">Creating symbolic expressions</a></h2> <p>First, let&#39;s use the <code>@syms</code> macro to create a few symbols.</p> <pre><code class=language-julia >using SymbolicUtils
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+     <link rel="stylesheet" href="/SymbolicUtils.jl/libs/highlight/github.min.css">
+   
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/franklin.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/tufte.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/latex.css">
+    <link rel="stylesheet" href="/SymbolicUtils.jl/css/adjust.css"> <!-- sheet to overwrite some clashing styles -->
+     <title>SymbolicUtils.jl -- Symbolic programming in Julia</title>  
+</head>
 
-@syms w z α::Real β::Real</code></pre> <div class=code-output ><pre><code class=plaintext >(w, z, α, β)</code></pre></div>
+<body>
+    <h1>SymbolicUtils.jl</h1>
+  <div id="layout">
+    <div id="menu">
+      <ul>
+        <li><a href="/SymbolicUtils.jl/">Manual</a></li>
+        <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a></li>
+      </ul>
+    </div>
+    <div id="main">
+
+
+<!-- Content appended here -->
+
+<div class="franklin-content">
+<h1 id="user_manual"><a href="#user_manual">User Manual</a></h1>
+<p><strong>SymbolicUtils</strong> is an practical symbolic programming utility written in Julia. It lets you <a href="#creating_symbolic_expressions">create</a>, <a href="#rule-based_rewriting">rewrite</a> and <a href="#simplification">simplify</a> symbolic expressions.</p>
+<div class="franklin-toc"><ol><li><a href="#user_manual">User Manual</a><ol><li><a href="#creating_symbolic_expressions">Creating symbolic expressions</a></li><li><a href="#rule-based_rewriting">Rule-based rewriting</a><ol><li><a href="#predicates_for_matching">Predicates for matching</a></li><li><a href="#associative-commutative_rules">Associative-Commutative Rules</a></li></ol></li><li><a href="#simplification">Simplification</a></li><li><a href="#learn_more">Learn more</a></li></ol></li></ol></div> </p>
+<p>In SymbolicUtils, <code>Sym</code>, our equivalent of <code>Symbol</code>, can carry type information. Compound expressions composed of <code>Sym</code>s propagate this information. A <a href="#rule-based_rewriting">rule-based rewriting language</a> can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful <a href="#simplification">simplification rules</a> for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.</p>
+<h2 id="creating_symbolic_expressions"><a href="#creating_symbolic_expressions">Creating symbolic expressions</a></h2>
+<p>First, let&#39;s use the <code>@syms</code> macro to create a few symbols.</p>
+<pre><code class="language-julia">using SymbolicUtils
+
+@syms w z α::Real β::Real</code></pre> <div class="code-output"><pre><code class="plaintext">(w, z, α, β)</code></pre></div>
 <p>Type annotations are optional when creating symbols. Here <code>α</code>, <code>β</code> behave like Real numbers. <code>w</code> and <code>z</code> behave like <code>Number</code>, which is the default. You can do basic arithmetic on these to get symbolic expressions:</p>
-<pre><code class=language-julia >expr1 = α*sin(w)^2 +  β*cos(z)^2
+<pre><code class="language-julia">expr1 = α*sin(w)^2 +  β*cos(z)^2
 expr2 = α*cos(z)^2 +  β*sin(w)^2
 
-expr1 + expr2</code></pre> <div class=code-output ><pre><code class=plaintext >((sin(w) ^ 2) + (cos(z) ^ 2)) * (α + β)</code></pre></div>
+expr1 + expr2</code></pre> <div class="code-output"><pre><code class="plaintext">((sin(w) ^ 2) + (cos(z) ^ 2)) * (α + β)</code></pre></div>
 <p>Notice the output is simplified&#33; By default SymbolicUtils simplifies expressions before printing. In the REPL, if an expression was successfully simplified before printing, it will appear in yellow rather than white, as a visual cue that what you are looking at is not the exact datastructure. You can set <code>SymbolicUtils.show_simplified&#91;&#93; &#61; false</code> to disable simplification on printing, or call <code>SymbolicUtils.showraw&#40;expr&#41;</code> to display an expression without simplification.</p>
-<pre><code class=language-julia >using SymbolicUtils: showraw
+<pre><code class="language-julia">using SymbolicUtils: showraw
 
-showraw(expr1 + expr2)</code></pre> <div class=code-output ><pre><code class=plaintext >((α * (sin(w) ^ 2)) + (β * (cos(z) ^ 2))) + ((α * (cos(z) ^ 2)) + (β * (sin(w) ^ 2)))</code></pre></div>
+showraw(expr1 + expr2)</code></pre> <div class="code-output"><pre><code class="plaintext">((α * (sin(w) ^ 2)) + (β * (cos(z) ^ 2))) + ((α * (cos(z) ^ 2)) + (β * (sin(w) ^ 2)))</code></pre></div>
 <p><strong>Function-like symbols</strong></p>
 <p>Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same <code>symtype</code>.</p>
-<pre><code class=language-julia >using SymbolicUtils
+<pre><code class="language-julia">using SymbolicUtils
 @syms f(x) g(x::Real, y::Real)::Real
 
-f(z) + g(1, α) + sin(w)</code></pre> <div class=code-output ><pre><code class=plaintext >sin(w) + f(z) + g(1, α)</code></pre></div>
-<pre><code class=language-julia >g(1, z)</code></pre>
-<div class=code-output ><pre><code class=plaintext >Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real
+f(z) + g(1, α) + sin(w)</code></pre> <div class="code-output"><pre><code class="plaintext">sin(w) + f(z) + g(1, α)</code></pre></div>
+<pre><code class="language-julia">g(1, z)</code></pre>
+<div class="code-output"><pre><code class="plaintext">Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real
 </code></pre></div>
 <p>This does not work since <code>z</code> is a <code>Number</code>, not a <code>Real</code>.</p>
-<pre><code class=language-julia >g(2//5, g(1, β))</code></pre> <div class=code-output ><pre><code class=plaintext >g(2//5, g(1, β))</code></pre></div>
+<pre><code class="language-julia">g(2//5, g(1, β))</code></pre> <div class="code-output"><pre><code class="plaintext">g(2//5, g(1, β))</code></pre></div>
 <p>This works because <code>g</code> &quot;returns&quot; a <code>Real</code>.</p>
-<h2 id=rule-based_rewriting ><a href="#rule-based_rewriting">Rule-based rewriting</a></h2>
+<h2 id="rule-based_rewriting"><a href="#rule-based_rewriting">Rule-based rewriting</a></h2>
 <p>So the simplification in SymbolicUtils is done by a set of rules. We will get into more details about the <code>simplify</code> function in the next section, but first, let us look at how you can write a rewrite rule to match and transform an expression.</p>
 <p>A rule is written using either the <code>@rule</code> macro or the <code>@acrule</code> macro.</p>
 <p>Here is a simple rewrite rule:</p>
-<pre><code class=language-julia >r1 = @rule ~x + ~x => 2 * (~x)
+<pre><code class="language-julia">r1 = @rule ~x + ~x => 2 * (~x)
 
-showraw(r1(sin(1+z) + sin(1+z)))</code></pre> <div class=code-output ><pre><code class=plaintext >2 * sin(1 + z)</code></pre></div>
+showraw(r1(sin(1+z) + sin(1+z)))</code></pre> <div class="code-output"><pre><code class="plaintext">2 * sin(1 + z)</code></pre></div>
 <p>The <code>@rule</code> macro takes a pair of patterns – the matcher and the consequent &#40;<code>@rule matcher &#61;&gt; consequent</code>&#41;. If an expression matches the matcher pattern, it is rewritten to the consequent pattern. <code>~x</code> in the example is what is called a <strong>slot variable</strong> named <code>x</code>. In a matcher pattern, slot variables are place holders that match exactly one expression. When used on the consequent side they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, then all corresponding matches must be equal &#40;as tested by <code>Base.isequal</code> function&#41;. Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.</p>
-<p>If you try to apply this rule to an expression where the two summands are not equal, it will return <code>nothing</code> – this is the way a rule signifies failure to match. <pre><code class=language-julia >r1(sin(1+z) + sin(1+w)) === nothing</code></pre> <div class=code-output ><pre><code class=plaintext >true</code></pre></div>
+<p>If you try to apply this rule to an expression where the two summands are not equal, it will return <code>nothing</code> – this is the way a rule signifies failure to match. <pre><code class="language-julia">r1(sin(1+z) + sin(1+w)) === nothing</code></pre> <div class="code-output"><pre><code class="plaintext">true</code></pre></div>
 <p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~ys</code> in the following example is a segment variable:</p>
-<pre><code class=language-julia >@rule(+(~~xs) => ~~xs)(x + y + z)</code></pre> <div class=code-output ><pre><code class=plaintext >LoadError: UndefVarError: @rule not defined
-in expression starting at none:1
-</code></pre></div>
-<pre><code class=language-julia >r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+<pre><code class="language-julia">@rule(+(~~xs) => ~~xs)(x + y + z)</code></pre> <div class="code-output"><pre><code class="plaintext">3-element view(::Array{SymbolicUtils.Sym{Number},1}, 1:3) with eltype SymbolicUtils.Sym{Number}:
+ x
+ y
+ z</code></pre></div>
+<pre><code class="language-julia">r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
 
-showraw(r2(2 * (w+w+α+β)))</code></pre> <div class=code-output ><pre><code class=plaintext >LoadError: UndefVarError: @rule not defined
-in expression starting at none:1
-</code></pre></div>
+showraw(r2(2 * (w+w+α+β)))</code></pre> <div class="code-output"><pre><code class="plaintext">(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <p>Notice that there is a subexpression <code>&#40;2 * w&#41; &#43; &#40;2 * w&#41;</code> that could be simplified by the previous rule <code>r1</code>.</p>
-<pre><code class=language-julia >showraw(r1(r2(2 * (w+w+α+β))))</code></pre> <div class=code-output ><pre><code class=plaintext >UndefVarError: w not defined
-</code></pre></div>
+<pre><code class="language-julia">showraw(r1(r2(2 * (w+w+α+β))))</code></pre> <div class="code-output"><pre><code class="plaintext">nothing</code></pre></div>
 <p>Oops&#33; It didn&#39;t work&#33; That is because a rule object created by <code>@rule</code> matches the whole expression given to it as input.</p>
 <p>There is a much better way of combining multiple rules and apply them to subexpressions recursively. That is the <code>RuleSet</code>.</p>
 <p>A ruleset is a series of rules that are applied to every subexpression of the tree.</p>
-<pre><code class=language-julia >rset = RuleSet([r1, r2])
+<pre><code class="language-julia">rset = RuleSet([r1, r2])
 rset_result = rset(2 * (w+w+α+β))
 
-showraw(rset_result)</code></pre> <div class=code-output ><pre><code class=plaintext >UndefVarError: r1 not defined
-</code></pre></div>
+showraw(rset_result)</code></pre> <div class="code-output"><pre><code class="plaintext">(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <p>It applied <code>r1</code>, but didn&#39;t get the opportunity to apply <code>r2</code>. So we need to apply the ruleset again on the result.</p>
-<pre><code class=language-julia >showraw(rset(rset_result))</code></pre> <div class=code-output ><pre><code class=plaintext >UndefVarError: rset not defined
-</code></pre></div>
+<pre><code class="language-julia">showraw(rset(rset_result))</code></pre> <div class="code-output"><pre><code class="plaintext">((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <p>Right on. Since there is no way to know how many times one should apply an <code>rset</code>, the package exports a convenient <code>fixpoint</code> function that applies the <code>rset</code> as many times as there are no changes to the expression.</p>
-<pre><code class=language-julia >using SymbolicUtils: fixpoint
+<pre><code class="language-julia">using SymbolicUtils: fixpoint
 
-fixpoint(rset, 2 * (w+w+α+β))</code></pre> <div class=code-output ><pre><code class=plaintext >ArgumentError: Package SymbolicUtils [d1185830-fcd6-423d-90d6-eec64667417b] is required but does not seem to be installed:
- - Run `Pkg.instantiate()` to install all recorded dependencies.
-
-</code></pre></div>
-<h3 id=predicates_for_matching ><a href="#predicates_for_matching">Predicates for matching</a></h3>
+fixpoint(rset, 2 * (w+w+α+β))</code></pre> <div class="code-output"><pre><code class="plaintext">(4 * w) + (2 * (α + β))</code></pre></div>
+<h3 id="predicates_for_matching"><a href="#predicates_for_matching">Predicates for matching</a></h3>
 <p>Matcher pattern may contain slot variables with attached predicates, written as <code>~x::f</code> where <code>f</code> is a function that takes a matched expression &#40;a <code>Term</code> object a <code>Sym</code> or any other Julia value that is in the expression tree&#41; and returns a boolean value. Such a slot will be considered a match only if <code>f</code> returns true.</p>
 <p>Similarly <code>~~x::g</code> is a way of attaching a predicate <code>g</code> to a segment variable. In the case of segment variables <code>g</code> gets a vector of 0 or more expressions and must return a boolean value.</p>
 <p>If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate. For example.</p>
-<pre><code class=language-julia >r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
+<pre><code class="language-julia">r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
 
 @show r(w + z + z)
 @show r(w + z)</code></pre>
-<div class=code-output ><pre><code class=plaintext >LoadError: UndefVarError: @rule not defined
-in expression starting at none:1
+<div class="code-output"><pre><code class="plaintext">r(w + z + z) = "odd terms"
+r(w + z) = nothing
 </code></pre></div>
-<h3 id=associative-commutative_rules ><a href="#associative-commutative_rules">Associative-Commutative Rules</a></h3>
+<h3 id="associative-commutative_rules"><a href="#associative-commutative_rules">Associative-Commutative Rules</a></h3>
 <p>Given an expression <code>f&#40;x, f&#40;y, z, u&#41;, v, w&#41;</code>, a <code>f</code> is said to be associative if the expression is equivalent to <code>f&#40;x, y, z, u, v, w&#41;</code> and commutative if the order of arguments does not matter.  SymbolicUtils has a special <code>@acrule</code> macro meant for rules on functions which are associate and commutative such as addition and multiplication of real and complex numbers.</p>
-<pre><code class=language-julia >@syms x y
+<pre><code class="language-julia">@syms x y
 
 acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
 
-acr(x^2 * y * x)</code></pre> <div class=code-output ><pre><code class=plaintext >LoadError: UndefVarError: @syms not defined
-in expression starting at none:1
-</code></pre></div>
-<h2 id=simplification ><a href="#simplification">Simplification</a></h2>
+acr(x^2 * y * x)</code></pre> <div class="code-output"><pre><code class="plaintext">(x ^ 3) * y</code></pre></div>
+<h2 id="simplification"><a href="#simplification">Simplification</a></h2>
 <p>Now that you have learned how to write rewrite rules, you should be able to read and understand these <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl">rules</a> that are used by <code>simplify</code> to simplify an expression. The rules can be accessed in the vector <code>SymbolicUtils.SIMPLIFY_RULES</code>.</p>
-<pre><code class=language-julia >showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))</code></pre> <div class=code-output ><pre><code class=plaintext >UndefVarError: z not defined
-</code></pre></div>
+<pre><code class="language-julia">showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))</code></pre> <div class="code-output"><pre><code class="plaintext">2 * ((2 * w) + α + β)</code></pre></div>
 <code>simplify</code> optionally takes a <code>rules</code> argument, a vector of rules to use to simplify instead of the default set. Let&#39;s try it with the <code>r1</code> and <code>r2</code> rules we defined above.</p>
-<pre><code class=language-julia >showraw(simplify(2 * (w+w+α+β), [r1,r2]))</code></pre> <div class=code-output ><pre><code class=plaintext >UndefVarError: w not defined
-</code></pre></div>
+<pre><code class="language-julia">showraw(simplify(2 * (w+w+α+β), [r1,r2]))</code></pre> <div class="code-output"><pre><code class="plaintext">((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <code>simplify</code> runs through the rules repeatedly until there are no changes to be had. To disable this, you can pass in a <code>fixpoint&#61;false</code> keyword argument.</p>
-<pre><code class=language-julia >showraw(simplify(2 * (w+w+α+β), [r1,r2], fixpoint=false))</code></pre>
-<div class=code-output ><pre><code class=plaintext >UndefVarError: w not defined
-</code></pre></div>
-<h2 id=learn_more ><a href="#learn_more">Learn more</a></h2>
+<pre><code class="language-julia">showraw(simplify(2 * (w+w+α+β), [r1,r2], fixpoint=false))</code></pre>
+<div class="code-output"><pre><code class="plaintext">(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
+<h2 id="learn_more"><a href="#learn_more">Learn more</a></h2>
 <p>If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the <a href="/SymbolicUtils.jl/interface/">Interfacing</a> section.</p>
-<p>Head over to the github repository to <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a> or ask questions&#33;<div class=page-foot >
-  <div class=copyright >
-    &copy; THE AUTHOR. Last modified: April 30, 2020. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+<p>Head over to the github repository to <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a> or ask questions&#33;
+<div class="page-foot">
+  <div class="copyright">
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: April 30, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
+
 </div>
-        </div> 
-    </div> 
+<!-- CONTENT ENDS HERE -->
+        </div> <!-- end of id=main -->
+    </div> <!-- end of id=layout -->
     
     
         <script src="/SymbolicUtils.jl/libs/highlight/highlight.pack.js"></script>
 <script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+
+    
+  </body>
+</html>

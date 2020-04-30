@@ -4,7 +4,9 @@
 
 # API Reference
 
-## Symbolic types and expressions
+\tableofcontents
+
+## Symbols and Terms
 
 ```julia:load_symutils
 using SymbolicUtils # hide
@@ -20,7 +22,7 @@ using SymbolicUtils # hide
 
 {{doc promote_symtype promote_symtype fn}}
 
-# Interfacing
+## Interfacing
 
 {{doc to_symbolic to_symbolic fn}}
 
@@ -30,7 +32,7 @@ using SymbolicUtils # hide
 
 {{doc arguments arguments fn}}
 
-## Rules
+## Rules and RuleSets
 
 {{doc @rule @rule macro}}
 

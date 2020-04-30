@@ -228,6 +228,23 @@ end
 #--------------------
 #### Terms
 #--------------------
+"""
+    Term{T}(f, args::AbstractArray)
+
+or
+    Term(f, args::AbstractArray)
+
+Symbolic expression representing the result of calling `f(args...)`.
+
+- `operation(t::Term)` returns `f`
+- `arguments(t::Term)` returns `args`
+- `symtype(t::Term)` returns `T`
+
+If `T` is not provided during construction, it is queried by calling
+`SymbolicUtils.promote_symtype(f, map(symtype, args)...)`.
+
+See [promote_symtype](#promote_symtype)
+"""
 struct Term{T} <: Symbolic{T}
     f::Any
     arguments::Any

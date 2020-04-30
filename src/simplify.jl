@@ -1,4 +1,21 @@
 ##### Numeric simplification
+
+"""
+    simplify(x, [rules=SIMPLIFY_RULES]; fixpoint=true)
+
+Apply a vector of rules provided in `rules`. By default
+these rules are `SymbolicUtils.SIMPLIFY_RULES`. If `fixpoint=true`
+repeatedly applies the set of rules until there are no changes.
+Applies them once if `fixpoint=false`.
+"""
+function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true)
+    if fixpoint
+        SymbolicUtils.fixpoint(RuleSet(rules))(x)
+    else
+        RuleSet(rules)(x)
+    end
+end
+
 ### Predicates
 
 # https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/23
@@ -169,14 +186,6 @@ function merge_repeats(merge, xs)
 end
 
 ### Simplification rules
-
-function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true)
-    if fixpoint
-        SymbolicUtils.fixpoint(RuleSet(rules))(x)
-    else
-        RuleSet(rules)(x)
-    end
-end
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)

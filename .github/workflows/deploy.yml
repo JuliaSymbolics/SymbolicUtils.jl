@@ -29,7 +29,6 @@ jobs:
               using Pkg; Pkg.add(["NodeJS", "Franklin"]);
               using NodeJS; run(`$(npm_cmd()) install highlight.js`);
               using Franklin; optimize();
-              cp(joinpath("__site", "feed.xml"), joinpath("__site", "index.xml"))'
       - name: Deploy (preview)
         if: github.event_name == 'pull_request'
         uses: JamesIves/github-pages-deploy-action@3.4.2

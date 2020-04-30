@@ -1,3 +1,3 @@
 # This file was generated, do not modify it. # hide
-@show w isa Real
-@show α isa Number
+@show w isa Number
+@show α isa Real

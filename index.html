@@ -6,11 +6,11 @@
 
 symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre> <div class=code-output ><pre><code class="plaintext hljs">(Number, Number, Real, Real)</code></pre></div>
 <p>Note however that they are not subtypes of these types&#33;</p>
-<pre><code class="julia hljs"><span class=hljs-meta >@show</span> w <span class=hljs-keyword >isa</span> <span class=hljs-built_in >Real</span>
-<span class=hljs-meta >@show</span> α <span class=hljs-keyword >isa</span> <span class=hljs-built_in >Number</span></code></pre> <div class=code-output ><pre><code class="plaintext hljs">w isa Real = false
-α isa Number = false
+<pre><code class="julia hljs"><span class=hljs-meta >@show</span> w <span class=hljs-keyword >isa</span> <span class=hljs-built_in >Number</span>
+<span class=hljs-meta >@show</span> α <span class=hljs-keyword >isa</span> <span class=hljs-built_in >Real</span></code></pre> <div class=code-output ><pre><code class="plaintext hljs">w isa Number = false
+α isa Real = false
 </code></pre></div>
-<p>&#40;see <a href="https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u&#61;shashi">this post</a> for why they are all just subtypes of <code>Number</code>&#41;</p>
+<p>&#40;see <a href="https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u&#61;shashi">this post</a> for why they are all not just subtypes of <code>Number</code>&#41;</p>
 <p>You can do basic arithmetic on symbols to get symbolic expressions:</p>
 <pre><code class="julia hljs">expr1 = α*sin(w)^<span class=hljs-number >2</span> +  β*cos(z)^<span class=hljs-number >2</span>
 expr2 = α*cos(z)^<span class=hljs-number >2</span> +  β*sin(w)^<span class=hljs-number >2</span>

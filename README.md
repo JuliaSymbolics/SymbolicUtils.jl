@@ -27,7 +27,7 @@ pkg> add SymbolicUtils
 ```
 or
 ```julia
-julia> using Pkg; pkg"add SymbolicUtils"
+julia> using Pkg; Pkg.add("SymbolicUtils")
 ```
 
 ### "I don't want to read your manual, just show me some cool code"

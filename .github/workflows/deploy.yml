@@ -28,7 +28,7 @@ jobs:
         run: julia -e '
               using Pkg; Pkg.add(["NodeJS", "Franklin"]);
               Pkg.activate(".");
-              Pkg.instantiate();
+              Pkg.resolve();
               using NodeJS; run(`$(npm_cmd()) install highlight.js`);
               using Franklin; optimize();
               rm("__site", recursive=true);

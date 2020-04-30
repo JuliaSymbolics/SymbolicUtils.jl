@@ -1,2 +1,3 @@
+r(w + z + z + w) = nothing
 r(w + z + z) = "odd terms"
 r(w + z) = nothing

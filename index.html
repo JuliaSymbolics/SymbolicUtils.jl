@@ -1,7 +1,17 @@
 <!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <title>SymbolicUtils.jl -- Symbolic programming in Julia</title> <h1>SymbolicUtils.jl</h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=user_manual ><a href="#user_manual">User Manual</a></h1> <p><a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl"><strong>SymbolicUtils</strong></a> is an practical symbolic programming utility written in Julia. It lets you <a href="#creating_symbolic_expressions">create</a>, <a href="#rule-based_rewriting">rewrite</a> and <a href="#simplification">simplify</a> symbolic expressions.</p> <div class=franklin-toc ><ol><li><a href="#user_manual">User Manual</a><ol><li><a href="#creating_symbolic_expressions">Creating symbolic expressions</a><li><a href="#rule-based_rewriting">Rule-based rewriting</a><ol><li><a href="#predicates_for_matching">Predicates for matching</a><li><a href="#associative-commutative_rules">Associative-Commutative Rules</a></ol><li><a href="#simplification">Simplification</a><li><a href="#learn_more">Learn more</a></ol></ol></div> </p> <p>In SymbolicUtils, <code>Sym</code>, our equivalent of <code>Symbol</code>, can carry type information. Compound expressions composed of <code>Sym</code>s propagate this information. A <a href="#rule-based_rewriting">rule-based rewriting language</a> can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful <a href="#simplification">simplification rules</a> for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.</p> <h2 id=creating_symbolic_expressions ><a href="#creating_symbolic_expressions">Creating symbolic expressions</a></h2> <p>First, let&#39;s use the <code>@syms</code> macro to create a few symbols.</p> <pre><code class="julia hljs"><span class=hljs-keyword >using</span> SymbolicUtils
 
 <span class=hljs-meta >@syms</span> w z α::<span class=hljs-built_in >Real</span> β::<span class=hljs-built_in >Real</span></code></pre> <div class=code-output ><pre><code class="plaintext hljs">(w, z, α, β)</code></pre></div>
-<p>Type annotations are optional when creating symbols. Here <code>α</code>, <code>β</code> behave like Real numbers. <code>w</code> and <code>z</code> behave like <code>Number</code>, which is the default. You can do basic arithmetic on these to get symbolic expressions:</p>
+<p>Type annotations are optional when creating symbols. Here <code>α</code>, <code>β</code> behave like Real numbers. <code>w</code> and <code>z</code> behave like <code>Number</code>, which is the default. You can use the <code>symtype</code> function to find the type of a symbol.</p>
+<pre><code class="julia hljs"><span class=hljs-keyword >using</span> SymbolicUtils: symtype
+
+symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre> <div class=code-output ><pre><code class="plaintext hljs">(Number, Number, Real, Real)</code></pre></div>
+<p>Note however that they are not subtypes of these types&#33;</p>
+<pre><code class="julia hljs"><span class=hljs-meta >@show</span> w <span class=hljs-keyword >isa</span> <span class=hljs-built_in >Real</span>
+<span class=hljs-meta >@show</span> α <span class=hljs-keyword >isa</span> <span class=hljs-built_in >Number</span></code></pre> <div class=code-output ><pre><code class="plaintext hljs">w isa Real = false
+α isa Number = false
+</code></pre></div>
+<p>&#40;see <a href="https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u&#61;shashi">this post</a> for why they are all just subtypes of <code>Number</code>&#41;</p>
+<p>You can do basic arithmetic on symbols to get symbolic expressions:</p>
 <pre><code class="julia hljs">expr1 = α*sin(w)^<span class=hljs-number >2</span> +  β*cos(z)^<span class=hljs-number >2</span>
 expr2 = α*cos(z)^<span class=hljs-number >2</span> +  β*sin(w)^<span class=hljs-number >2</span>
 
@@ -23,25 +33,26 @@ f(z) + g(<span class=hljs-number >1</span>, α) + sin(w)</code></pre> <div class
 <pre><code class="julia hljs">g(<span class=hljs-number >2</span>//<span class=hljs-number >5</span>, g(<span class=hljs-number >1</span>, β))</code></pre> <div class=code-output ><pre><code class="plaintext hljs">g(2//5, g(1, β))</code></pre></div>
 <p>This works because <code>g</code> &quot;returns&quot; a <code>Real</code>.</p>
 <h2 id=rule-based_rewriting ><a href="#rule-based_rewriting">Rule-based rewriting</a></h2>
-<p>So the simplification in SymbolicUtils is done by a set of rules. We will get into more details about the <code>simplify</code> function in the next section, but first, let us look at how you can write a rewrite rule to match and transform an expression.</p>
-<p>A rule is written using either the <code>@rule</code> macro or the <code>@acrule</code> macro.</p>
+<p>Rewrite rules match and transform an expression. A rule is written using either the <code>@rule</code> macro or the <code>@acrule</code> macro.</p>
 <p>Here is a simple rewrite rule:</p>
 <pre><code class="julia hljs">r1 = <span class=hljs-meta >@rule</span> ~x + ~x =&gt; <span class=hljs-number >2</span> * (~x)
 
 showraw(r1(sin(<span class=hljs-number >1</span>+z) + sin(<span class=hljs-number >1</span>+z)))</code></pre> <div class=code-output ><pre><code class="plaintext hljs">2 * sin(1 + z)</code></pre></div>
-<p>The <code>@rule</code> macro takes a pair of patterns – the matcher and the consequent &#40;<code>@rule matcher &#61;&gt; consequent</code>&#41;. If an expression matches the matcher pattern, it is rewritten to the consequent pattern. <code>~x</code> in the example is what is called a <strong>slot variable</strong> named <code>x</code>. In a matcher pattern, slot variables are place holders that match exactly one expression. When used on the consequent side they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, then all corresponding matches must be equal &#40;as tested by <code>Base.isequal</code> function&#41;. Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.</p>
+<p>The <code>@rule</code> macro takes a pair of patterns – the <em>matcher</em> and the <em>consequent</em> &#40;<code>@rule matcher &#61;&gt; consequent</code>&#41;. If an expression matches the matcher pattern, it is rewritten to the consequent pattern. <code>@rule</code> returns a callable object that applies the rule to an expression.</p>
+<code>~x</code> in the example is what is a <strong>slot variable</strong> named <code>x</code>. In a matcher pattern, slot variables are placeholders that match exactly one expression. When used on the consequent side, they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, all corresponding matches must be equal &#40;as tested by <code>Base.isequal</code> function&#41;. Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.</p>
 <p>If you try to apply this rule to an expression where the two summands are not equal, it will return <code>nothing</code> – this is the way a rule signifies failure to match. <pre><code class="julia hljs">r1(sin(<span class=hljs-number >1</span>+z) + sin(<span class=hljs-number >1</span>+w)) === <span class=hljs-literal >nothing</span></code></pre> <div class=code-output ><pre><code class="plaintext hljs">true</code></pre></div>
-<p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~ys</code> in the following example is a segment variable:</p>
+<p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~xs</code> in the following example is a segment variable:</p>
 <pre><code class="julia hljs"><span class=hljs-meta >@rule</span>(+(~~xs) =&gt; ~~xs)(x + y + z)</code></pre> <div class=code-output ><pre><code class="plaintext hljs">3-element view(::Array{SymbolicUtils.Sym{Number},1}, 1:3) with eltype SymbolicUtils.Sym{Number}:
  x
  y
  z</code></pre></div>
+<code>~~xs</code> is a vector of subexpressions matched. You can use it to construct something more useful:</p>
 <pre><code class="julia hljs">r2 = <span class=hljs-meta >@rule</span> ~x * +(~~ys) =&gt; sum(map(y-&gt; ~x * y, ~~ys));
 
 showraw(r2(<span class=hljs-number >2</span> * (w+w+α+β)))</code></pre> <div class=code-output ><pre><code class="plaintext hljs">(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
-<p>Notice that there is a subexpression <code>&#40;2 * w&#41; &#43; &#40;2 * w&#41;</code> that could be simplified by the previous rule <code>r1</code>.</p>
+<p>Notice that there is a subexpression <code>&#40;2 * w&#41; &#43; &#40;2 * w&#41;</code> that could be simplified by the previous rule <code>r1</code>. Can we chain <code>r2</code> and <code>r1</code>?</p>
 <pre><code class="julia hljs">showraw(r1(r2(<span class=hljs-number >2</span> * (w+w+α+β))))</code></pre> <div class=code-output ><pre><code class="plaintext hljs">nothing</code></pre></div>
-<p>Oops&#33; It didn&#39;t work&#33; That is because a rule object created by <code>@rule</code> matches the whole expression given to it as input.</p>
+<p>Oops&#33; It didn&#39;t work&#33; That is because a rule object created by <code>@rule</code> matches the whole expression, and not subexpressions.</p>
 <p>There is a much better way of combining multiple rules and apply them to subexpressions recursively. That is the <code>RuleSet</code>.</p>
 <p>A ruleset is a series of rules that are applied to every subexpression of the tree.</p>
 <pre><code class="julia hljs">rset = RuleSet([r1, r2])
@@ -55,14 +66,16 @@ showraw(rset_result)</code></pre> <div class=code-output ><pre><code class="plai
 
 fixpoint(rset, <span class=hljs-number >2</span> * (w+w+α+β))</code></pre> <div class=code-output ><pre><code class="plaintext hljs">(4 * w) + (2 * (α + β))</code></pre></div>
 <h3 id=predicates_for_matching ><a href="#predicates_for_matching">Predicates for matching</a></h3>
-<p>Matcher pattern may contain slot variables with attached predicates, written as <code>~x::f</code> where <code>f</code> is a function that takes a matched expression &#40;a <code>Term</code> object a <code>Sym</code> or any other Julia value that is in the expression tree&#41; and returns a boolean value. Such a slot will be considered a match only if <code>f</code> returns true.</p>
-<p>Similarly <code>~~x::g</code> is a way of attaching a predicate <code>g</code> to a segment variable. In the case of segment variables <code>g</code> gets a vector of 0 or more expressions and must return a boolean value.</p>
-<p>If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate. For example.</p>
+<p>Matcher pattern may contain slot variables with attached predicates, written as <code>~x::f</code> where <code>f</code> is a function that takes a matched expression &#40;a <code>Term</code> object a <code>Sym</code> or any Julia value that is in the expression tree&#41; and returns a boolean value. Such a slot will be considered a match only if <code>f</code> returns true.</p>
+<p>Similarly <code>~~x::g</code> is a way of attaching a predicate <code>g</code> to a segment variable. In the case of segment variables <code>g</code> gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate.</p>
+<p>For example,</p>
 <pre><code class="julia hljs">r = <span class=hljs-meta >@rule</span> ~x + ~~y::(ys-&gt;iseven(length(ys))) =&gt; <span class=hljs-string >"odd terms"</span>
 
+<span class=hljs-meta >@show</span> r(w + z + z + w)
 <span class=hljs-meta >@show</span> r(w + z + z)
 <span class=hljs-meta >@show</span> r(w + z)</code></pre>
-<div class=code-output ><pre><code class="plaintext hljs">r(w + z + z) = "odd terms"
+<div class=code-output ><pre><code class="plaintext hljs">r(w + z + z + w) = nothing
+r(w + z + z) = "odd terms"
 r(w + z) = nothing
 </code></pre></div>
 <h3 id=associative-commutative_rules ><a href="#associative-commutative_rules">Associative-Commutative Rules</a></h3>
@@ -73,16 +86,17 @@ acr = <span class=hljs-meta >@acrule</span>((~y)^(~n) * ~y =&gt; (~y)^(~n+<span 
 
 acr(x^<span class=hljs-number >2</span> * y * x)</code></pre> <div class=code-output ><pre><code class="plaintext hljs">(x ^ 3) * y</code></pre></div>
 <h2 id=simplification ><a href="#simplification">Simplification</a></h2>
-<p>Now that you have learned how to write rewrite rules, you should be able to read and understand these <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl">rules</a> that are used by <code>simplify</code> to simplify an expression. The rules can be accessed in the vector <code>SymbolicUtils.SIMPLIFY_RULES</code>.</p>
+<p>The <code>simplify</code> function applies a built-in set of rules to simplify expressions.</p>
 <pre><code class="julia hljs">showraw(simplify(<span class=hljs-number >2</span> * (w+w+α+β + sin(z)^<span class=hljs-number >2</span> + cos(z)^<span class=hljs-number >2</span> - <span class=hljs-number >1</span>)))</code></pre> <div class=code-output ><pre><code class="plaintext hljs">2 * ((2 * w) + α + β)</code></pre></div>
-<code>simplify</code> optionally takes a <code>rules</code> argument, a vector of rules to use to simplify instead of the default set. Let&#39;s try it with the <code>r1</code> and <code>r2</code> rules we defined above.</p>
+<p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl">rules</a> that are used by <code>simplify</code>. These rules can be accessed in the vector <code>SymbolicUtils.SIMPLIFY_RULES</code>, if you want to extend them.</p>
+<code>simplify</code> optionally takes a <code>rules</code> argument, a vector of rules to apply instead of the default set. Let&#39;s try it with the <code>r1</code> and <code>r2</code> rules we defined in the previous section.</p>
 <pre><code class="julia hljs">showraw(simplify(<span class=hljs-number >2</span> * (w+w+α+β), [r1,r2]))</code></pre> <div class=code-output ><pre><code class="plaintext hljs">((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <code>simplify</code> runs through the rules repeatedly until there are no changes to be had. To disable this, you can pass in a <code>fixpoint&#61;false</code> keyword argument.</p>
 <pre><code class="julia hljs">showraw(simplify(<span class=hljs-number >2</span> * (w+w+α+β), [r1,r2], fixpoint=<span class=hljs-literal >false</span>))</code></pre>
 <div class=code-output ><pre><code class="plaintext hljs">(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <h2 id=learn_more ><a href="#learn_more">Learn more</a></h2>
-<p>If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the <a href="/SymbolicUtils.jl/interface/">Interfacing</a> section.</p>
-<p>Head over to the github repository to <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a> or ask questions&#33;<div class=page-foot >
+<p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
+<p>If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the <a href="/SymbolicUtils.jl/interface/">Interfacing</a> section to find out how you can do that without any fundamental changes to your package.<div class=page-foot >
   <div class=copyright >
       &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: April 30, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>

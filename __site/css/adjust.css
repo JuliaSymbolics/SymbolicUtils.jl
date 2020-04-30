@@ -23,7 +23,6 @@
     padding: 10px 10px
 }
 #menu ul li a:after {
-    content: "";
     position: absolute;
     height: 2px;
     bottom: 7px;

@@ -1,4 +1,4 @@
-@def title = "SymbolicUtils.jl -- Symbolic programming in Julia"
+@def title = "SymbolicUtils.jl — Interfacing"
 @def hasmath = false
 @def hascode = true
 <!-- Note: by default hasmath == true and hascode == false. You can change this in

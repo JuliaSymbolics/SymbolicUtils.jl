@@ -254,15 +254,3 @@ code {
     margin-bottom: 5px;
     border-radius: 0 10px 10px 0;
     border-left: 5px solid #4C9CF1; }
-
-.code-output pre {
-    background: lightgreen;
-    border: 1px solid lightgreen;
-    padding-left: 1em;
-}
-
-.code-output code {
-    border-radius: 0;
-    padding-left: 1em;
-    background: white;
-}

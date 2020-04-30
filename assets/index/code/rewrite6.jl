@@ -1,2 +1,5 @@
 # This file was generated, do not modify it. # hide
-showraw(rset(rset_result))
+rset = RuleSet([r1, r2])
+rset_result = rset(2 * (w+w+α+β))
+
+showraw(rset_result)

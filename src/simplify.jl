@@ -8,7 +8,7 @@ these rules are `SymbolicUtils.SIMPLIFY_RULES`. If `fixpoint=true`
 repeatedly applies the set of rules until there are no changes.
 Applies them once if `fixpoint=false`.
 """
-function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true)
+function simplify(x, rules=SIMPLIFY_RULES.rules; fixpoint=true)
     if fixpoint
         SymbolicUtils.fixpoint(RuleSet(rules))(x)
     else
@@ -21,6 +21,9 @@ end
 # https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/23
 #multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
 
+sym_isa(::Type{T}) where {T} = x -> x isa T || symtype(x) <: T
+is_operation(f) = x -> (x isa Term) && (operation(x) == f)
+    
 isnumber(x) = x isa Number
 
 _iszero(t) = false

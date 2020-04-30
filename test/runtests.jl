@@ -8,6 +8,6 @@ SymbolicUtils.show_simplified[] = false
 include("basics.jl")
 include("order.jl")
 include("rewrite.jl")
-include("interface.jl")
 include("rulesets.jl")
+include("interface.jl")
 include("fuzz.jl")

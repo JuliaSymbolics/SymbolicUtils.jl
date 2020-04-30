@@ -68,7 +68,7 @@ end
 
 @testset "Shuffle Rules" begin
     @syms a::Integer b c d x::Real y::Number
-    R1 = RuleSet(SymbolicUtils.SIMPLIFY_RULES)
+    R1 = SymbolicUtils.SIMPLIFY_RULES
 
     seed!(1729)
     R2 = RuleSet(shuffle(R1.rules))

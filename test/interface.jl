@@ -17,6 +17,11 @@ end
 ex = 1 + (:x - 2)
 
 @test to_symbolic(ex) == Term{Any}(+, [1, Term{Any}(-, [Sym{Any}(:x), 2])])
+@test simplify(ex) == to_symbolic(ex) # Not simplified because symtype Any
+
+
+SymbolicUtils.symtype(::Symbol) = Real
+
 @test simplify(ex) == to_symbolic(-1 + :x)
 
 to_expr(t::Term) = Expr(:call, operation(t), to_expr.(arguments(t))...) 
@@ -24,7 +29,3 @@ to_expr(s::Sym) = s.name
 to_expr(x) = x
 
 @test to_expr(simplify(ex)) == Expr(:call, +, -1, :x)
-
-SymbolicUtils.symtype(::Symbol) = Real
-
-@test symtype(simplify(ex)) == Real

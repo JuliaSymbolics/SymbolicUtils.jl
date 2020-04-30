@@ -176,7 +176,7 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if term isa Sym
+    if !(term isa Term)
         r(term)
     else
         f =  operation(term)
@@ -196,6 +196,7 @@ function (acr::ACRule)(term)
         end
     end
 end
+
 
 #-----------------------------
 #### Rulesets
@@ -243,7 +244,7 @@ function (r::RuleSet)(term; depth=typemax(Int))
                 # this rule doesn't apply
                 continue
             else
-                return r(expr′, depth=getdepth(rules[i])) # levels touched
+                expr = r(expr′, depth=getdepth(rules[i]))# levels touched
             end
         end
     else
@@ -251,6 +252,10 @@ function (r::RuleSet)(term; depth=typemax(Int))
     end
     return expr # no rule applied
 end
+
+getdepth(::RuleSet) = typemax(Int)
+
+Base.vcat(Rs::RuleSet...) = RuleSet(vcat((R -> R.rules).(Rs)...))
 
 function fixpoint(f, x)
     x1 = f(x)

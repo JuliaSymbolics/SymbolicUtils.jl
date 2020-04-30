@@ -1,4 +1,4 @@
-<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/custom.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <title>SymbolicUtils.jl — API</title> <h1>SymbolicUtils.jl</h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> <li><a href="/SymbolicUtils.jl/api/">API</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=api_reference ><a href="#api_reference">API Reference</a></h1> <div class=franklin-toc ><ol><li><a href="#api_reference">API Reference</a><ol><li><a href="#symbols_and_terms">Symbols and Terms</a><li><a href="#interfacing">Interfacing</a><li><a href="#rules_and_rulesets">Rules and RuleSets</a><li><a href="#utilities">Utilities</a></ol></ol></div> <h2 id=symbols_and_terms ><a href="#symbols_and_terms">Symbols and Terms</a></h2> <div class=docstring > <h2 class=doc-header  id="@syms()"> <a href="#@syms">@syms</a> <div class=doc-type >macro</div></h2> <div class=doc-content ><pre><code class=hljs>@syms &lt;lhs_expr&gt;&#91;::T1&#93; &lt;lhs_expr&gt;&#91;::T2&#93;...</code></pre>
+<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/custom.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <title>SymbolicUtils.jl — API</title> <h1>SymbolicUtils.jl</h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> <li><a href="/SymbolicUtils.jl/api/">API</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=api_reference ><a href="#api_reference">API Reference</a></h1> <div class=franklin-toc ><ol><li><a href="#api_reference">API Reference</a><ol><li><a href="#symbols_and_terms">Symbols and Terms</a><li><a href="#interfacing">Interfacing</a><li><a href="#rules_and_rulesets">Rules and RuleSets</a><li><a href="#utilities">Utilities</a></ol></ol></div> <h2 id=symbols_and_terms ><a href="#symbols_and_terms">Symbols and Terms</a></h2> <div class=docstring > <h2 class=doc-header  id="@syms"> <a href="#@syms">@syms</a> <div class=doc-type >macro</div></h2> <div class=doc-content ><pre><code class=hljs>@syms &lt;lhs_expr&gt;&#91;::T1&#93; &lt;lhs_expr&gt;&#91;::T2&#93;...</code></pre>
 <p>For instance:</p>
 <pre><code class=hljs>@syms foo::Real bar baz&#40;x, y::Real&#41;::Complex</code></pre>
 <p>Create one or more variables. <code>&lt;lhs_expr&gt;</code> can be just a symbol in which case it will be the name of the variable, or a function call in which case a function-like variable which has the same name as the function being called. The Sym type, or in the case of a function-like Sym, the output type of calling the function can be set using the <code>::T</code> syntax.</p>
@@ -17,7 +17,7 @@
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="Sym()">
+      <h2 class=doc-header  id=Sym >
         <a href="#Sym">Sym</a>
         <div class=doc-type >type</div></h2>
       <div class=doc-content ><pre><code class=hljs>Sym&#123;T&#125;&#40;name::Symbol&#41;</code></pre>
@@ -26,7 +26,7 @@
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="symtype()">
+      <h2 class=doc-header  id=symtype >
         <a href="#symtype">symtype</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=hljs>symtype&#40;x&#41;</code></pre>
@@ -37,7 +37,7 @@
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="Term()">
+      <h2 class=doc-header  id=Term >
         <a href="#Term">Term</a>
         <div class=doc-type >type</div></h2>
       <div class=doc-content ><pre><code class=hljs>Term&#123;T&#125;&#40;f, args::AbstractArray&#41;</code></pre>
@@ -57,7 +57,7 @@
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="promote_symtype()">
+      <h2 class=doc-header  id=promote_symtype >
         <a href="#promote_symtype">promote_symtype</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=hljs>promote_symtype&#40;f, Ts...&#41;</code></pre>
@@ -81,7 +81,7 @@ julia&amp;gt; promote_symtype&amp;<span class=hljs-comment >#40;f, Number&amp;#4
 
 <h2 id=interfacing ><a href="#interfacing">Interfacing</a></h2>
   <div class=docstring >
-      <h2 class=doc-header  id="to_symbolic()">
+      <h2 class=doc-header  id=to_symbolic >
         <a href="#to_symbolic">to_symbolic</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=hljs>to_symbolic&#40;x&#41;</code></pre>
@@ -90,7 +90,7 @@ julia&amp;gt; promote_symtype&amp;<span class=hljs-comment >#40;f, Number&amp;#4
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="istree()">
+      <h2 class=doc-header  id=istree >
         <a href="#istree">istree</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=hljs>istree&#40;x::T&#41;</code></pre>
@@ -99,7 +99,7 @@ julia&amp;gt; promote_symtype&amp;<span class=hljs-comment >#40;f, Number&amp;#4
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="operation()">
+      <h2 class=doc-header  id=operation >
         <a href="#operation">operation</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=hljs>operation&#40;x::T&#41;</code></pre>
@@ -108,7 +108,7 @@ julia&amp;gt; promote_symtype&amp;<span class=hljs-comment >#40;f, Number&amp;#4
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="arguments()">
+      <h2 class=doc-header  id=arguments >
         <a href="#arguments">arguments</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=hljs>arguments&#40;x::T&#41;</code></pre>
@@ -118,7 +118,7 @@ julia&amp;gt; promote_symtype&amp;<span class=hljs-comment >#40;f, Number&amp;#4
 
 <h2 id=rules_and_rulesets ><a href="#rules_and_rulesets">Rules and RuleSets</a></h2>
   <div class=docstring >
-      <h2 class=doc-header  id="@rule()">
+      <h2 class=doc-header  id="@rule">
         <a href="#@rule">@rule</a>
         <div class=doc-type >macro</div></h2>
       <div class=doc-content ><pre><code class=hljs>&#96;@rule LHS &#61;&gt; RHS&#96;</code></pre>
@@ -184,7 +184,7 @@ sin&amp;<span class=hljs-comment >#40;&amp;#40;a &amp;#43; c&amp;#41;&amp;#41;</
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="RuleSet()">
+      <h2 class=doc-header  id=RuleSet >
         <a href="#RuleSet">RuleSet</a>
         <div class=doc-type >type</div></h2>
       <div class=doc-content ><pre><code class=hljs>RuleSet&#40;rules::Vector&#123;AbstractRules&#125;&#41;&#40;expr&#41;</code></pre>
@@ -194,7 +194,7 @@ sin&amp;<span class=hljs-comment >#40;&amp;#40;a &amp;#43; c&amp;#41;&amp;#41;</
   </div>
 
   <div class=docstring >
-      <h2 class=doc-header  id="simplify()">
+      <h2 class=doc-header  id=simplify >
         <a href="#simplify">simplify</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=hljs>simplify&#40;x, &#91;rules&#61;SIMPLIFY_RULES&#93;; fixpoint&#61;true&#41;</code></pre>
@@ -204,7 +204,7 @@ sin&amp;<span class=hljs-comment >#40;&amp;#40;a &amp;#43; c&amp;#41;&amp;#41;</
 
 <h2 id=utilities ><a href="#utilities">Utilities</a></h2>
   <div class=docstring >
-      <h2 class=doc-header  id="@timerewrite()">
+      <h2 class=doc-header  id="@timerewrite">
         <a href="#@timerewrite">@timerewrite</a>
         <div class=doc-type >macro</div></h2>
       <div class=doc-content ><pre><code class=hljs>@timerewrite expr</code></pre>

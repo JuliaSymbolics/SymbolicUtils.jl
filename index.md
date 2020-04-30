@@ -101,25 +101,25 @@ r1(sin(1+z) + sin(1+w)) === nothing
 
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~ys` in the following example is a segment variable:
 
-```julia:rewrite2.5
+```julia:rewrite3
 @rule(+(~~xs) => ~~xs)(x + y + z)
 ```
-\out{rewrite2.5}
+\out{rewrite3}
 
-```julia:rewrite3
+```julia:rewrite4
 r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
 
 showraw(r2(2 * (w+w+α+β)))
 ```
-\out{rewrite3}
+\out{rewrite4}
 
 Notice that there is a subexpression `(2 * w) + (2 * w)` that could be simplified by the previous rule `r1`.
 
 
-```julia:rewrite4
+```julia:rewrite5
 showraw(r1(r2(2 * (w+w+α+β))))
 ```
-\out{rewrite4}
+\out{rewrite5}
 
 Oops! It didn't work! That is because a rule object created by `@rule` matches the whole expression given to it as input.
 
@@ -127,29 +127,29 @@ There is a much better way of combining multiple rules and apply them to subexpr
 
 A ruleset is a series of rules that are applied to every subexpression of the tree.
 
-```julia:rewrite5
+```julia:rewrite6
 rset = RuleSet([r1, r2])
 rset_result = rset(2 * (w+w+α+β))
 
 showraw(rset_result)
 ```
-\out{rewrite5}
+\out{rewrite6}
 
 It applied `r1`, but didn't get the opportunity to apply `r2`. So we need to apply the ruleset again on the result.
 
-```julia:rewrite6
+```julia:rewrite7
 showraw(rset(rset_result))
 ```
-\out{rewrite6}
+\out{rewrite7}
 
 Right on. Since there is no way to know how many times one should apply an `rset`, the package exports a convenient `fixpoint` function that applies the `rset` as many times as there are no changes to the expression.
 
-```julia:rewrite7
+```julia:rewrite8
 using SymbolicUtils: fixpoint
 
 fixpoint(rset, 2 * (w+w+α+β))
 ```
-\out{rewrite7}
+\out{rewrite8}
 
 
 ### Predicates for matching

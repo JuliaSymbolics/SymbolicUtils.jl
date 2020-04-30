@@ -1,2 +1,4 @@
 # This file was generated, do not modify it. # hide
-showraw(r1(r2(2 * (w+w+α+β))))
+r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+
+showraw(r2(2 * (w+w+α+β)))

@@ -1,15 +1,15 @@
 
 const SIMPLIFY_RULES = RuleSet([
     @rule ~t::sym_isa(Number) => NUMBER_RULES(~t)
-], applyall=true)
+], applyall=true, recurse=false)
 
 const NUMBER_RULES = RuleSet([
-    @rule ~t::is_operation(+) => PLUS_RULES(~t)
-    @rule ~t::is_operation(*) => TIMES_RULES(~t)
-    @rule ~t::is_operation(^) => POW_RULES(~t)
-    @rule ~t => TRIG_RULES(~t)
     @rule ~t => ASSORTED_RULES(~t)
-], true)
+    @rule ~t::is_operation(*) => TIMES_RULES(~t)
+    @rule ~t::is_operation(+) => PLUS_RULES(~t)
+    @rule ~t::is_operation(^) => POW_RULES(~t)
+  #  @rule ~t => TRIG_RULES(~t)
+], applyall=true, recurse=false)
 
 const PLUS_RULES = RuleSet([
     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
@@ -26,6 +26,18 @@ const PLUS_RULES = RuleSet([
     
     @acrule((~z::_iszero + ~x) => ~x)
     @rule(+(~x) => ~x)
+
+    @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
+    @acrule(sin(~x)^2 + -1        => cos(~x)^2)
+    @acrule(cos(~x)^2 + -1        => sin(~x)^2)
+
+    @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
+    @acrule(tan(~x)^2 +  1 => sec(~x)^2)
+    @acrule(sec(~x)^2 + -1 => tan(~x)^2)
+
+    @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
+    @acrule(cot(~x)^2 +  1 => csc(~x)^2)
+    @acrule(csc(~x)^2 + -1 => cot(~x)^2)
 ])
 
 const TIMES_RULES = RuleSet([
@@ -56,19 +68,19 @@ const ASSORTED_RULES = RuleSet([
     @rule(~x / ~y => ~x * pow(~y, -1))
 ])
 
-const TRIG_RULES = RuleSet([
-    @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
-    @acrule(sin(~x)^2 + -1        => cos(~x)^2)
-    @acrule(cos(~x)^2 + -1        => sin(~x)^2)
+# const TRIG_RULES = RuleSet([
+#     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
+#     @acrule(sin(~x)^2 + -1        => cos(~x)^2)
+#     @acrule(cos(~x)^2 + -1        => sin(~x)^2)
 
-    @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
-    @acrule(tan(~x)^2 +  1 => sec(~x)^2)
-    @acrule(sec(~x)^2 + -1 => tan(~x)^2)
+#     @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
+#     @acrule(tan(~x)^2 +  1 => sec(~x)^2)
+#     @acrule(sec(~x)^2 + -1 => tan(~x)^2)
 
-    @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
-    @acrule(cot(~x)^2 +  1 => csc(~x)^2)
-    @acrule(csc(~x)^2 + -1 => cot(~x)^2)
-])
+#     @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
+#     @acrule(cot(~x)^2 +  1 => csc(~x)^2)
+#     @acrule(csc(~x)^2 + -1 => cot(~x)^2)
+# ])
 
 
 

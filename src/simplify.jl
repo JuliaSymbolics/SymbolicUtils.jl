@@ -15,14 +15,21 @@ function simplify(x, rules=SIMPLIFY_RULES.rules; fixpoint=true)
         RuleSet(rules)(x)
     end
 end
+function simplify(x, rules::RuleSet; fixpoint=true)
+    if fixpoint
+        SymbolicUtils.fixpoint(rules)(x)
+    else
+        rules(x)
+    end
+end
 
 ### Predicates
 
 # https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/23
 #multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
 
-sym_isa(::Type{T}) where {T} = x -> x isa T || symtype(x) <: T
-is_operation(f) = x -> (x isa Term) && (operation(x) == f)
+sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
+is_operation(f) = @nospecialize(x) -> (x isa Term) && (operation(x) == f)
     
 isnumber(x) = x isa Number
 

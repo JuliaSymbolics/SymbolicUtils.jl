@@ -213,7 +213,10 @@ a RuleSet until there are no changes.
 """
 struct RuleSet <: AbstractRule
     rules::Vector{AbstractRule}
+    applyall::Bool
 end
+RuleSet(rules; applyall=false) = RuleSet(rules, applyall)
+
 
 struct RuleRewriteError
     rule
@@ -245,6 +248,7 @@ function (r::RuleSet)(term; depth=typemax(Int))
                 continue
             else
                 expr = r(expr′, depth=getdepth(rules[i]))# levels touched
+                r.applyall || return expr
             end
         end
     else

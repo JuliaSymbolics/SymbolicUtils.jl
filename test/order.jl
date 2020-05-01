@@ -26,6 +26,8 @@ end
 @test istotal(b*a, a)
 @test a <ₑ b*a 
 @test !(b*a <ₑ b+a)
+@test Term(^, [1,-1]) <ₑ a
+@test istotal(a, Term(^, [1,-1]))
 
 @testset "operator order" begin
     fs = (*, ^, /, \, -, +)

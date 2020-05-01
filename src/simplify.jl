@@ -52,17 +52,14 @@ function <ₑ(a::Sym, b::Term)
             # both subterms are terms, so it's definitely firster
             return true
         elseif n1
-            if a <ₑ args[1]
-                return true
-            else
-                return false
-            end
+            return a <ₑ args[1]
         elseif n2
-            if a <ₑ args[2]
-                return true
-            else
-                return false
-            end
+            return a <ₑ args[2]
+        else
+            # both arguments are not numbers
+            # This case when a <ₑ Term(^, [1,-1])
+            # so this term should go to the left.
+            return false
         end
     elseif length(args) === 1
         # make sure a < sin(a) < b^2 < b

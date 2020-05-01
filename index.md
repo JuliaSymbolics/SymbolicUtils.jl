@@ -233,6 +233,7 @@ showraw(simplify(2 * (w+w+α+β), RuleSet([r1,r2]), fixpoint=false))
 
 ## Learn more
 
+If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the [Interfacing](/interface/) section to find out how you can do that without any fundamental changes to your package. Look at the [API documentation](/api/) for docstrings about specific functions or macros.
+
 Head over to the github repository to ask questions and [report problems](https://github.com/JuliaSymbolics/SymbolicUtils.jl)! Join the [Zulip stream](https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming) to chat!
 
-If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the [Interfacing](/interface/) section to find out how you can do that without any fundamental changes to your package.

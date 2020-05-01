@@ -1,4 +1,22 @@
 using Random: shuffle, seed!
+using SymbolicUtils: fixpoint, getdepth
+
+@testset "RuleSet" begin
+    @syms w z α::Real β::Real
+    
+    r1 = @rule ~x + ~x => 2 * (~x)
+    r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+
+    rset = RuleSet([r1, r2])
+    @test getdepth(rset) == typemax(Int)
+
+    ex = 2 * (w+w+α+β)
+    
+    @test rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
+    @test rset(ex) == simplify(ex, rset; fixpoint=false, applyall=false) 
+    
+    @test fixpoint(rset, ex) == ((2 * (2 * w)) + (2 * α)) + (2 * β)
+end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number

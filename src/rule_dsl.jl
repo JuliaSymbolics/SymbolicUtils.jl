@@ -257,8 +257,6 @@ end
 
 getdepth(::RuleSet) = typemax(Int)
 
-Base.vcat(Rs::RuleSet...) = RuleSet(vcat((R -> R.rules).(Rs)...))
-
 function fixpoint(f, x; kwargs...)
     x1 = f(x; kwargs...)
     while !isequal(x1, x)

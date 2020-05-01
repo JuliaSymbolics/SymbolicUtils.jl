@@ -8,7 +8,7 @@ these rules are `SymbolicUtils.SIMPLIFY_RULES`. If `fixpoint=true`
 repeatedly applies the set of rules until there are no changes.
 Applies them once if `fixpoint=false`.
 """
-function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true, recurse=true, applyall=true)
+function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true, applyall=true, recurse=true)
     if fixpoint
         SymbolicUtils.fixpoint(rules; recurse=recurse, applyall=recurse)(x)
     else

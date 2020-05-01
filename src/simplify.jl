@@ -8,14 +8,14 @@ these rules are `SymbolicUtils.SIMPLIFY_RULES`. If `fixpoint=true`
 repeatedly applies the set of rules until there are no changes.
 Applies them once if `fixpoint=false`.
 """
-function simplify(x, rules=SIMPLIFY_RULES.rules; fixpoint=true)
+function simplify(x, rules::Vector; fixpoint=true)
     if fixpoint
         SymbolicUtils.fixpoint(RuleSet(rules))(x)
     else
         RuleSet(rules)(x)
     end
 end
-function simplify(x, rules::RuleSet; fixpoint=true)
+function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true)
     if fixpoint
         SymbolicUtils.fixpoint(rules)(x)
     else

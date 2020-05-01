@@ -1,7 +1,7 @@
 
 const SIMPLIFY_RULES = RuleSet([
     @rule ~t::sym_isa(Number) => NUMBER_RULES(~t)
-], applyall=true, recurse=false)
+], applyall=true)
 
 const NUMBER_RULES = RuleSet([
     @rule ~t => ASSORTED_RULES(~t)
@@ -9,7 +9,7 @@ const NUMBER_RULES = RuleSet([
     @rule ~t::is_operation(+) => PLUS_RULES(~t)
     @rule ~t::is_operation(^) => POW_RULES(~t)
   #  @rule ~t => TRIG_RULES(~t)
-], applyall=true, recurse=false)
+], applyall=true)
 
 const PLUS_RULES = RuleSet([
     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))

@@ -13,8 +13,8 @@ using Random: shuffle, seed!
     @test simplify(1x + 2x) == 3x
     @test simplify(3x + 2x) == 5x
 
-    @test simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == (3 * x * y) + a + b + c + d
-    @test simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == (4 * x * y) + a + b + c + d
+    @test simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == a + b + c + d + (3 * (x * y))
+    @test simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == a + b + c + d + (4 * (x * y))
 
     @test simplify(a * x^y * b * x^d) == (a * b * (x ^ (d + y)))
 

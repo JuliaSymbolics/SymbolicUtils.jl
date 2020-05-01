@@ -1,1 +1,6 @@
-(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
+MethodError: Cannot `convert` an object of type SymbolicUtils.RuleSet to an object of type Array{SymbolicUtils.AbstractRule,1}
+Closest candidates are:
+  convert(::Type{T}, !Matched::AbstractArray) where T<:Array at array.jl:490
+  convert(::Type{T}, !Matched::T) where T<:AbstractArray at abstractarray.jl:14
+  convert(::Type{T}, !Matched::LinearAlgebra.Factorization) where T<:AbstractArray at /buildworker/worker/package_linux64/build/usr/share/julia/stdlib/v1.3/LinearAlgebra/src/factorization.jl:53
+  ...

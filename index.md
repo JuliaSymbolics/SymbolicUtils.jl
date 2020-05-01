@@ -213,7 +213,7 @@ showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))
 ```
 \out{simplify1}
 
-If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify`. These rules can be accessed in the `RuleSet` object, `SymbolicUtils.SIMPLIFY_RULES`, if you want to extend them.
+If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify`.
 
 `simplify` optionally takes a `rules` argument, a vector of rules to apply instead of the default set. Let's try it with the `r1` and `r2` rules we defined in the previous section.
 

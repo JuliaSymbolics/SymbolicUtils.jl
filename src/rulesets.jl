@@ -5,10 +5,9 @@ const SIMPLIFY_RULES = RuleSet([
 
 const NUMBER_RULES = RuleSet([
     @rule ~t => ASSORTED_RULES(~t)
-    @rule ~t::is_operation(*) => TIMES_RULES(~t)
     @rule ~t::is_operation(+) => PLUS_RULES(~t)
+    @rule ~t::is_operation(*) => TIMES_RULES(~t)
     @rule ~t::is_operation(^) => POW_RULES(~t)
-  #  @rule ~t => TRIG_RULES(~t)
 ], applyall=true)
 
 const PLUS_RULES = RuleSet([
@@ -38,7 +37,7 @@ const PLUS_RULES = RuleSet([
     @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
     @acrule(cot(~x)^2 +  1 => csc(~x)^2)
     @acrule(csc(~x)^2 + -1 => cot(~x)^2)
-])
+], recurse=false)
 
 const TIMES_RULES = RuleSet([
     @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
@@ -53,20 +52,20 @@ const TIMES_RULES = RuleSet([
     @acrule((~z::_isone  * ~x) => ~x)
     @acrule((~z::_iszero *  ~x) => ~z)
     @rule(*(~x) => ~x)
-])
+], recurse=false)
 
 const POW_RULES = RuleSet([
     @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q)))
     @rule(^(~x, ~z::_iszero) => 1)
     @rule(^(~x, ~z::_isone) => ~x)
-])
+], recurse=false)
 
 const ASSORTED_RULES = RuleSet([
     @rule(identity(~x) => ~x)
     @rule(-(~x, ~y) => ~x + -1(~y))
     @rule(~x / ~y => ~x * pow(~y, -1))
-])
+], recurse=false)
 
 # const TRIG_RULES = RuleSet([
 #     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))

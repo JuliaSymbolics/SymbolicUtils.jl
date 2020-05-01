@@ -214,8 +214,9 @@ a RuleSet until there are no changes.
 struct RuleSet <: AbstractRule
     rules::Vector{AbstractRule}
     applyall::Bool
+    recurse::Bool
 end
-RuleSet(rules; applyall=false) = RuleSet(rules, applyall)
+RuleSet(rules; applyall=false, recurse=true) = RuleSet(rules, applyall, recurse)
 
 
 struct RuleRewriteError
@@ -231,7 +232,7 @@ function (r::RuleSet)(@nospecialize(term); depth=typemax(Int))
         return term
     end
     if term isa Symbolic
-        if term isa Term
+        if term isa Term && r.recurse
             expr = Term{symtype(term)}(operation(term),
                                        map(t -> r(t, depth=depth-1), arguments(term)))
         else

@@ -34,13 +34,6 @@ end
     @test simplify(1 + y + cot(x)^2) == csc(x)^2 + y
 end
 
-#@testset "2π Identities" begin
-#    @syms a::Integer x::Real y::Number
-#
-#    @test simplify(cos(x + 2π + a)) == cos(a + x)
-#    @test simplify(tan(x + 2π * a)) == tan(x)
-#end
-
 @testset "Depth" begin
     @syms x
     R = RuleSet([@rule(sin(~x) => cos(~x)),

@@ -49,7 +49,7 @@ sinh(im * ~x) => sin(~x)
 julia> r(sinh(im * y))
 sin(y)
 
-julia> simplify(cos(y)^2 + sinh(im*y)^2, [r])
+julia> simplify(cos(y)^2 + sinh(im*y)^2, RuleSet([r]))
 1
 ```
 

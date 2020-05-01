@@ -176,7 +176,7 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if term isa Sym
+    if !(term isa Term)
         r(term)
     else
         f =  operation(term)
@@ -197,6 +197,7 @@ function (acr::ACRule)(term)
     end
 end
 
+
 #-----------------------------
 #### Rulesets
 
@@ -214,12 +215,13 @@ struct RuleSet <: AbstractRule
     rules::Vector{AbstractRule}
 end
 
+
 struct RuleRewriteError
     rule
     expr
 end
 
-function (r::RuleSet)(term; depth=typemax(Int))
+function (r::RuleSet)(@nospecialize(term); depth=typemax(Int), applyall=false, recurse=true)
     rules = r.rules
     term = to_symbolic(term)
     # simplify the subexpressions
@@ -227,7 +229,7 @@ function (r::RuleSet)(term; depth=typemax(Int))
         return term
     end
     if term isa Symbolic
-        if term isa Term
+        if term isa Term && recurse
             expr = Term{symtype(term)}(operation(term),
                                        map(t -> r(t, depth=depth-1), arguments(term)))
         else
@@ -243,7 +245,8 @@ function (r::RuleSet)(term; depth=typemax(Int))
                 # this rule doesn't apply
                 continue
             else
-                return r(expr′, depth=getdepth(rules[i])) # levels touched
+                expr = r(expr′, depth=getdepth(rules[i]))# levels touched
+                applyall || return expr
             end
         end
     else
@@ -252,16 +255,18 @@ function (r::RuleSet)(term; depth=typemax(Int))
     return expr # no rule applied
 end
 
-function fixpoint(f, x)
-    x1 = f(x)
+getdepth(::RuleSet) = typemax(Int)
+
+function fixpoint(f, x; kwargs...)
+    x1 = f(x; kwargs...)
     while !isequal(x1, x)
         x = x1
-        x1 = f(x)
+        x1 = f(x; kwargs...)
     end
     return x1
 end
 
-fixpoint(f) = x->fixpoint(f, x)
+fixpoint(f; kwargs...) = x -> fixpoint(f, x; kwargs...)
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
     msg = "Failed to apply rule $(err.rule) on expression "

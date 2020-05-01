@@ -1,62 +1,75 @@
-BASIC_NUMBER_RULES = let
-    [@rule(identity(~x) => ~x)
-     @rule(-(~x, ~y) => ~x + -1(~y))
-     @rule(~x / ~y => ~x * pow(~y, -1))
-     #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...))
-     @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
-     @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x))
-     @acrule(~a::isnumber * ~b::isnumber => ~a * ~b)
 
-     #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...))
-     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
-     @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
-     @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
+const SIMPLIFY_RULES = RuleSet([
+    @rule ~t::sym_isa(Number) => NUMBER_RULES(~t, applyall=true, recurse=true)
+])
 
-     @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
-     @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α +  ~β, (~~x)...))
-     @acrule(*(~~x, ~α) + *(~~x, ~β,) => *(~α +  ~β, (~~x)...))
+const NUMBER_RULES = RuleSet([
+    @rule ~t               => ASSORTED_RULES(~t, recurse=false)
+    @rule ~t::is_operation(+) =>  PLUS_RULES(~t, recurse=false)
+    @rule ~t::is_operation(*) => TIMES_RULES(~t, recurse=false)
+    @rule ~t::is_operation(^) =>   POW_RULES(~t, recurse=false)
+    @rule ~t                  =>  TRIG_RULES(~t, recurse=false)
+])
 
-     @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
-     @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
+const PLUS_RULES = RuleSet([
+    @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
+    @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
+    @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
-     # group stuff
-     @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
-     @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
-     @acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
-     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q)))
-     @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...))
-     @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))
+    @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
+    @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α +  ~β, (~~x)...))
+    @acrule(*(~~x, ~α) + *(~~x, ~β,) => *(~α +  ~β, (~~x)...))
 
-     @acrule((~z::_iszero *  ~x) => ~z)
+    @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
+    @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
+    @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...))
+    
+    @acrule((~z::_iszero + ~x) => ~x)
+    @rule(+(~x) => ~x)
+])
 
-     # remove the idenitities
-     @acrule((~z::_isone  * ~x) => ~x)
-     @acrule((~z::_iszero + ~x) => ~x)
-     @rule(^(~x, ~z::_iszero) => 1)
-     @rule(^(~x, ~z::_isone) => ~x)
-     @rule(+(~x) => ~x)
-     @rule(*(~x) => ~x)
-    ]
-end
+const TIMES_RULES = RuleSet([
+    @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
+    @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x))
+    
+    @acrule(~a::isnumber * ~b::isnumber => ~a * ~b)
+    @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))
+    
+    @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
+    @acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
 
-TRIG_RULES = let
-    [
-     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
-     @acrule(sin(~x)^2 + -1        => cos(~x)^2)
-     @acrule(cos(~x)^2 + -1        => sin(~x)^2)
+    @acrule((~z::_isone  * ~x) => ~x)
+    @acrule((~z::_iszero *  ~x) => ~z)
+    @rule(*(~x) => ~x)
+])
 
-     @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
-     @acrule(tan(~x)^2 +  1 => sec(~x)^2)
-     @acrule(sec(~x)^2 + -1 => tan(~x)^2)
+const POW_RULES = RuleSet([
+    @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
+    @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q)))
+    @rule(^(~x, ~z::_iszero) => 1)
+    @rule(^(~x, ~z::_isone) => ~x)
+])
 
-     @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
-     @acrule(cot(~x)^2 +  1 => csc(~x)^2)
-     @acrule(csc(~x)^2 + -1 => cot(~x)^2)
-     ]
-end
+const ASSORTED_RULES = RuleSet([
+    @rule(identity(~x) => ~x)
+    @rule(-(~x, ~y) => ~x + -1(~y))
+    @rule(~x / ~y => ~x * pow(~y, -1))
+])
 
+const TRIG_RULES = RuleSet([
+    @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
+    @acrule(sin(~x)^2 + -1        => cos(~x)^2)
+    @acrule(cos(~x)^2 + -1        => sin(~x)^2)
 
-SIMPLIFY_RULES = vcat(BASIC_NUMBER_RULES, TRIG_RULES)
+    @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
+    @acrule(tan(~x)^2 +  1 => sec(~x)^2)
+    @acrule(sec(~x)^2 + -1 => tan(~x)^2)
+
+    @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
+    @acrule(cot(~x)^2 +  1 => csc(~x)^2)
+    @acrule(csc(~x)^2 + -1 => cot(~x)^2)
+])
+
 
 
 OLD_BASIC_NUMBER_RULES = let # Keep these around for benchmarking purposes

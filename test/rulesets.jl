@@ -1,4 +1,22 @@
 using Random: shuffle, seed!
+using SymbolicUtils: fixpoint, getdepth
+
+@testset "RuleSet" begin
+    @syms w z α::Real β::Real
+    
+    r1 = @rule ~x + ~x => 2 * (~x)
+    r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+
+    rset = RuleSet([r1, r2])
+    @test getdepth(rset) == typemax(Int)
+
+    ex = 2 * (w+w+α+β)
+    
+    @test rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
+    @test rset(ex) == simplify(ex, rset; fixpoint=false, applyall=false) 
+    
+    @test fixpoint(rset, ex) == ((2 * (2 * w)) + (2 * α)) + (2 * β)
+end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number
@@ -34,13 +52,6 @@ end
     @test simplify(1 + y + cot(x)^2) == csc(x)^2 + y
 end
 
-#@testset "2π Identities" begin
-#    @syms a::Integer x::Real y::Number
-#
-#    @test simplify(cos(x + 2π + a)) == cos(a + x)
-#    @test simplify(tan(x + 2π * a)) == tan(x)
-#end
-
 @testset "Depth" begin
     @syms x
     R = RuleSet([@rule(sin(~x) => cos(~x)),
@@ -64,19 +75,4 @@ end
     @syms a b c d
     expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))
     SymbolicUtils.@timerewrite simplify(expr1)
-end
-
-@testset "Shuffle Rules" begin
-    @syms a::Integer b c d x::Real y::Number
-    R1 = RuleSet(SymbolicUtils.SIMPLIFY_RULES)
-
-    seed!(1729)
-    R2 = RuleSet(shuffle(R1.rules))
-    simplify_shuffle_tester(ex) = (R2 ∘ R1)(ex) == (R1 ∘ R2)(ex)
-
-    for ex ∈ [foldr((x,y)->rand([*, +, -, ^, /])(x,y),
-                        rand([a, b, c, d, x, y, 0, 1.0, 2], 5))
-              for _ ∈ 1:20]
-        @test isequal((R2 ∘ R1)(ex), (R1 ∘ R2)(ex))
-    end
 end

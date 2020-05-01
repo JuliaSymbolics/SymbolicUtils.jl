@@ -214,20 +214,20 @@ showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))
 ```
 \out{simplify1}
 
-If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify`. These rules can be accessed in the vector `SymbolicUtils.SIMPLIFY_RULES`, if you want to extend them.
+If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify`. These rules can be accessed in the `RuleSet` object, `SymbolicUtils.SIMPLIFY_RULES`, if you want to extend them.
 
 `simplify` optionally takes a `rules` argument, a vector of rules to apply instead of the default set. Let's try it with the `r1` and `r2` rules we defined in the previous section.
 
 
 ```julia:simplify2
-showraw(simplify(2 * (w+w+α+β), [r1,r2]))
+showraw(simplify(2 * (w+w+α+β), RuleSet([r1,r2])))
 ```
 \out{simplify2}
 
 `simplify` runs through the rules repeatedly until there are no changes to be had. To disable this, you can pass in a `fixpoint=false` keyword argument.
 
 ```julia:simplify3
-showraw(simplify(2 * (w+w+α+β), [r1,r2], fixpoint=false))
+showraw(simplify(2 * (w+w+α+β), RuleSet([r1,r2]), fixpoint=false))
 ```
 
 \out{simplify3}

@@ -88,24 +88,12 @@ acr(x^2 * y * x)</code></pre> <div class=code-output ><pre><code class=plaintext
 <h2 id=simplification ><a href="#simplification">Simplification</a></h2>
 <p>The <code>simplify</code> function applies a built-in set of rules to simplify expressions.</p>
 <pre><code class=language-julia >showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))</code></pre> <div class=code-output ><pre><code class=plaintext >2 * ((2 * w) + α + β)</code></pre></div>
-<p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl">rules</a> that are used by <code>simplify</code>. These rules can be accessed in the <code>RuleSet</code> object, <code>SymbolicUtils.SIMPLIFY_RULES</code>, if you want to extend them.</p>
+<p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl">rules</a> that are used by <code>simplify</code>.</p>
 <code>simplify</code> optionally takes a <code>rules</code> argument, a vector of rules to apply instead of the default set. Let&#39;s try it with the <code>r1</code> and <code>r2</code> rules we defined in the previous section.</p>
-<pre><code class=language-julia >showraw(simplify(2 * (w+w+α+β), RuleSet([r1,r2])))</code></pre> <div class=code-output ><pre><code class=plaintext >MethodError: Cannot `convert` an object of type SymbolicUtils.RuleSet to an object of type Array{SymbolicUtils.AbstractRule,1}
-Closest candidates are:
-  convert(::Type{T}, !Matched::AbstractArray) where T<:Array at array.jl:490
-  convert(::Type{T}, !Matched::T) where T<:AbstractArray at abstractarray.jl:14
-  convert(::Type{T}, !Matched::LinearAlgebra.Factorization) where T<:AbstractArray at /buildworker/worker/package_linux64/build/usr/share/julia/stdlib/v1.3/LinearAlgebra/src/factorization.jl:53
-  ...
-</code></pre></div>
+<pre><code class=language-julia >showraw(simplify(2 * (w+w+α+β), RuleSet([r1,r2])))</code></pre> <div class=code-output ><pre><code class=plaintext >((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <code>simplify</code> runs through the rules repeatedly until there are no changes to be had. To disable this, you can pass in a <code>fixpoint&#61;false</code> keyword argument.</p>
 <pre><code class=language-julia >showraw(simplify(2 * (w+w+α+β), RuleSet([r1,r2]), fixpoint=false))</code></pre>
-<div class=code-output ><pre><code class=plaintext >MethodError: Cannot `convert` an object of type SymbolicUtils.RuleSet to an object of type Array{SymbolicUtils.AbstractRule,1}
-Closest candidates are:
-  convert(::Type{T}, !Matched::AbstractArray) where T<:Array at array.jl:490
-  convert(::Type{T}, !Matched::T) where T<:AbstractArray at abstractarray.jl:14
-  convert(::Type{T}, !Matched::LinearAlgebra.Factorization) where T<:AbstractArray at /buildworker/worker/package_linux64/build/usr/share/julia/stdlib/v1.3/LinearAlgebra/src/factorization.jl:53
-  ...
-</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <h2 id=learn_more ><a href="#learn_more">Learn more</a></h2>
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <p>If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the <a href="/SymbolicUtils.jl/interface/">Interfacing</a> section to find out how you can do that without any fundamental changes to your package.<div class=page-foot >

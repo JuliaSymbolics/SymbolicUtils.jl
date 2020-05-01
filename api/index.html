@@ -187,9 +187,25 @@ sin&#40;&#40;a &#43; c&#41;&#41;</code></pre>
       <h2 class=doc-header  id=RuleSet >
         <a href="#RuleSet">RuleSet</a>
         <div class=doc-type >type</div></h2>
-      <div class=doc-content ><pre><code>RuleSet&#40;rules::Vector&#123;AbstractRules&#125;&#41;&#40;expr&#41;</code></pre>
-<p><code>RuleSet</code> is an <code>AbstractRule</code> which applies the given <code>rules</code> to every subexpression in <code>expr</code>.</p>
-<p>Note that this only applies the rules in one pass, not until there are no changes to be applied. Use <code>SymbolicUtils.fixpoint&#40;ruleset, expr&#41;</code> to apply a RuleSet until there are no changes.</p>
+      <div class=doc-content ><pre><code>RuleSet&#40;rules::Vector&#123;AbstractRules&#125;&#41;&#40;expr; depth&#61;typemax&#40;Int&#41;, applyall&#61;false, recurse&#61;true&#41;</code></pre>
+<p><code>RuleSet</code> is an <code>AbstractRule</code> which applies the given <code>rules</code> throughout an <code>expr</code>. </p>
+<p><code>RuleSet&#40;rules&#41;&#40;expr&#41;</code> Note that this only applies the rules in one pass, not until there are no changes to be applied. Use <code>SymbolicUtils.fixpoint&#40;ruleset, expr&#41;</code> to apply a RuleSet until there  are no changes.</p>
+<p>Keyword arguments:</p>
+<ul>
+<li><p><code>recurse&#61;true</code> Set whether or not the rules in the <code>RuleSet</code> are applied recursively to</p>
+
+</ul>
+<p>subexpressions</p>
+<ul>
+<li><p><code>depth&#61;typemax&#40;Int&#41;</code> Set this argument to a positive integer to only recurse <code>depth</code> levels deep</p>
+
+</ul>
+<p>into the expression. </p>
+<ul>
+<li><p><code>applyall&#61;false</code> By default, <code>&#40;::RuleSet&#41;&#40;ex&#41;</code> will only apply rules to <code>ex</code> until one rule</p>
+
+</ul>
+<p>matches at each <code>depth</code> level. Set <code>applyall</code> to <code>true</code> to ensure each rule gets applied.</p>
 </div>
   </div>
 
@@ -197,8 +213,9 @@ sin&#40;&#40;a &#43; c&#41;&#41;</code></pre>
       <h2 class=doc-header  id=simplify >
         <a href="#simplify">simplify</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code>simplify&#40;x, &#91;rules&#61;SIMPLIFY_RULES&#93;; fixpoint&#61;true&#41;</code></pre>
-<p>Apply a vector of rules provided in <code>rules</code>. By default these rules are <code>SymbolicUtils.SIMPLIFY_RULES</code>. If <code>fixpoint&#61;true</code> repeatedly applies the set of rules until there are no changes. Applies them once if <code>fixpoint&#61;false</code>.</p>
+      <div class=doc-content ><pre><code>simplify&#40;x, &#91;rules&#61;SIMPLIFY_RULES&#93;; fixpoint&#61;true, applyall&#61;true, recurse&#61;true&#41;</code></pre>
+<p>Apply a <code>RuleSet</code> of rules provided in <code>rules</code>. By default these rules are <code>SymbolicUtils.SIMPLIFY_RULES</code>. If <code>fixpoint&#61;true</code> repeatedly applies the set of rules until there are no changes. Applies them once if <code>fixpoint&#61;false</code>.</p>
+<p>The <code>applyall</code> and <code>recurse</code> keywords are forwarded to the enclosed <code>RuleSet</code>.</p>
 </div>
   </div>
 

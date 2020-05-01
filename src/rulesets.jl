@@ -1,14 +1,15 @@
 
 const SIMPLIFY_RULES = RuleSet([
-    @rule ~t::sym_isa(Number) => NUMBER_RULES(~t)
-], applyall=true)
+    @rule ~t::sym_isa(Number) => NUMBER_RULES(~t, applyall=true, recurse=true)
+])
 
 const NUMBER_RULES = RuleSet([
-    @rule ~t => ASSORTED_RULES(~t)
-    @rule ~t::is_operation(+) => PLUS_RULES(~t)
-    @rule ~t::is_operation(*) => TIMES_RULES(~t)
-    @rule ~t::is_operation(^) => POW_RULES(~t)
-], applyall=true)
+    @rule ~t               => ASSORTED_RULES(~t, recurse=false)
+    @rule ~t::is_operation(+) =>  PLUS_RULES(~t, recurse=false)
+    @rule ~t::is_operation(*) => TIMES_RULES(~t, recurse=false)
+    @rule ~t::is_operation(^) =>   POW_RULES(~t, recurse=false)
+    @rule ~t                  =>  TRIG_RULES(~t, recurse=false)
+])
 
 const PLUS_RULES = RuleSet([
     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
@@ -25,19 +26,7 @@ const PLUS_RULES = RuleSet([
     
     @acrule((~z::_iszero + ~x) => ~x)
     @rule(+(~x) => ~x)
-
-    @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
-    @acrule(sin(~x)^2 + -1        => cos(~x)^2)
-    @acrule(cos(~x)^2 + -1        => sin(~x)^2)
-
-    @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
-    @acrule(tan(~x)^2 +  1 => sec(~x)^2)
-    @acrule(sec(~x)^2 + -1 => tan(~x)^2)
-
-    @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
-    @acrule(cot(~x)^2 +  1 => csc(~x)^2)
-    @acrule(csc(~x)^2 + -1 => cot(~x)^2)
-], recurse=false)
+])
 
 const TIMES_RULES = RuleSet([
     @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
@@ -52,34 +41,34 @@ const TIMES_RULES = RuleSet([
     @acrule((~z::_isone  * ~x) => ~x)
     @acrule((~z::_iszero *  ~x) => ~z)
     @rule(*(~x) => ~x)
-], recurse=false)
+])
 
 const POW_RULES = RuleSet([
     @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q)))
     @rule(^(~x, ~z::_iszero) => 1)
     @rule(^(~x, ~z::_isone) => ~x)
-], recurse=false)
+])
 
 const ASSORTED_RULES = RuleSet([
     @rule(identity(~x) => ~x)
     @rule(-(~x, ~y) => ~x + -1(~y))
     @rule(~x / ~y => ~x * pow(~y, -1))
-], recurse=false)
+])
 
-# const TRIG_RULES = RuleSet([
-#     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
-#     @acrule(sin(~x)^2 + -1        => cos(~x)^2)
-#     @acrule(cos(~x)^2 + -1        => sin(~x)^2)
+const TRIG_RULES = RuleSet([
+    @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
+    @acrule(sin(~x)^2 + -1        => cos(~x)^2)
+    @acrule(cos(~x)^2 + -1        => sin(~x)^2)
 
-#     @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
-#     @acrule(tan(~x)^2 +  1 => sec(~x)^2)
-#     @acrule(sec(~x)^2 + -1 => tan(~x)^2)
+    @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
+    @acrule(tan(~x)^2 +  1 => sec(~x)^2)
+    @acrule(sec(~x)^2 + -1 => tan(~x)^2)
 
-#     @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
-#     @acrule(cot(~x)^2 +  1 => csc(~x)^2)
-#     @acrule(csc(~x)^2 + -1 => cot(~x)^2)
-# ])
+    @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
+    @acrule(cot(~x)^2 +  1 => csc(~x)^2)
+    @acrule(csc(~x)^2 + -1 => cot(~x)^2)
+])
 
 
 

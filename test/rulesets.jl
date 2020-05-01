@@ -39,6 +39,9 @@ end
     @test simplify(a + b + 0*c + d) == a + b + d
     @test simplify(a * b * c^0 * d) == a * b * d
     @test simplify(a * b * 1*c * d) == a * b * c * d
+    
+    @test simplify(a^2 + 2*a*b + b^2) == (a + b)^2
+    @test simplify(a^2 + 2*a*b - 2*a*c + b^2 + 2*b*c + c^2) == (a - b - c)^2
 end
 
 @testset "Pythagorean Identities" begin

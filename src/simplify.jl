@@ -1,12 +1,15 @@
 ##### Numeric simplification
 
 """
-    simplify(x, [rules=SIMPLIFY_RULES]; fixpoint=true)
+    simplify(x, [rules=SIMPLIFY_RULES]; fixpoint=true, applyall=true, recurse=true)
 
-Apply a vector of rules provided in `rules`. By default
+Apply a `RuleSet` of rules provided in `rules`. By default
 these rules are `SymbolicUtils.SIMPLIFY_RULES`. If `fixpoint=true`
 repeatedly applies the set of rules until there are no changes.
 Applies them once if `fixpoint=false`.
+
+The `applyall` and `recurse` keywords are forwarded to the enclosed
+`RuleSet`.
 """
 function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true, applyall=true, recurse=true)
     if fixpoint

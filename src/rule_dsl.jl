@@ -202,14 +202,23 @@ end
 #### Rulesets
 
 """
-    RuleSet(rules::Vector{AbstractRules})(expr)
+    RuleSet(rules::Vector{AbstractRules})(expr; depth=typemax(Int), applyall=false, recurse=true)
 
-`RuleSet` is an `AbstractRule` which applies the given `rules` to every
-subexpression in `expr`.
+`RuleSet` is an `AbstractRule` which applies the given `rules` throughout an `expr`. 
 
-Note that this only applies the rules in one pass, not until there are no
-changes to be applied. Use `SymbolicUtils.fixpoint(ruleset, expr)` to apply
-a RuleSet until there are no changes.
+`RuleSet(rules)(expr)` Note that this only applies the rules in one pass, not until there are no
+changes to be applied. Use `SymbolicUtils.fixpoint(ruleset, expr)` to apply a RuleSet until there 
+are no changes.
+
+Keyword arguments:
+* `recurse=true` Set whether or not the rules in the `RuleSet` are applied recursively to
+subexpressions
+
+* `depth=typemax(Int)` Set this argument to a positive integer to only recurse `depth` levels deep
+into the expression. 
+
+* `applyall=false` By default, `(::RuleSet)(ex)` will only apply rules to `ex` until one rule
+matches at each `depth` level. Set `applyall` to `true` to ensure each rule gets applied.
 """
 struct RuleSet <: AbstractRule
     rules::Vector{AbstractRule}

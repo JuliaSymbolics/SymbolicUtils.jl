@@ -114,7 +114,7 @@ end
 function matcher(slot::Slot)
     function slot_matcher(data, bindings, next)
         isempty(data) && return
-        val = bindings[slot.name]
+        val = get(bindings, slot.name, nothing)
         if val !== nothing
             if isequal(val, car(data))
                 return next(bindings, 1)
@@ -157,7 +157,7 @@ end
 
 function matcher(segment::Segment)
     function segment_matcher(data, bindings, success)
-        val = bindings[segment.name]
+        val = get(bindings, segment.name, nothing)
 
         if val !== nothing
             n = trymatchexpr(data, val, 0)

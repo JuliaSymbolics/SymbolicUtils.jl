@@ -8,7 +8,7 @@ const NUMBER_RULES = RuleSet([
     @rule ~t::is_operation(+) =>   PLUS_RULES(~t, recurse=false)
     @rule ~t::is_operation(*) =>  TIMES_RULES(~t, recurse=false)
     @rule ~t::is_operation(^) =>    POW_RULES(~t, recurse=false)
-    @rule ~t::is_operation(^) => POWSUM_RULES(~t, recurse=false)
+    @rule ~t::is_operation(+) => POWSUM_RULES(~t, recurse=false)
     @rule ~t                  =>   TRIG_RULES(~t, recurse=false)
 ])
 

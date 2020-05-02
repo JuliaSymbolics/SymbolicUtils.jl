@@ -17,4 +17,14 @@ let r = @rule(~x => ~x), rs = RuleSet([r])
     overhead["ruleset"]["noop:Int"]  = @benchmarkable $rs(1)
     overhead["ruleset"]["noop:Sym"]  = @benchmarkable $rs($a)
     overhead["ruleset"]["noop:Term"] = @benchmarkable $rs($(a+2))
+
+    overhead["simplify"]  = BenchmarkGroup()
+    overhead["simplify"]["noop:Int"]  = @benchmarkable simplify(1)
+    overhead["simplify"]["noop:Sym"]  = @benchmarkable simplify($a)
+    overhead["simplify"]["noop:Term"] = @benchmarkable simplify($(a+2))
+
+    overhead["simplify_no_fixp"]  = BenchmarkGroup()
+    overhead["simplify_no_fixp"]["noop:Int"]  = @benchmarkable simplify(1, fixpoint=false)
+    overhead["simplify_no_fixp"]["noop:Sym"]  = @benchmarkable simplify($a, fixpoint=false)
+    overhead["simplify_no_fixp"]["noop:Term"] = @benchmarkable simplify($(a+2), fixpoint=false)
 end

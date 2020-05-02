@@ -27,9 +27,15 @@ function Base.show(io::IO, r::Rule)
     Base.print(io, r.expr)
 end
 
+const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
+
 function (r::Rule)(term)
-    m, rhs, dict = r.matcher, r.rhs, ImmutableDict{Symbol, Any}(:____, nothing)
-    m((term,), dict, (d, n) -> n == 1 ? (@timer "RHS" rhs(d)) : nothing)
+    match_function = r.matcher
+    rhs = r.rhs
+
+    match_function((term,),
+                   EMPTY_DICT,
+                   (d, n) -> n === 1 ? (@timer "RHS" rhs(d)) : nothing)
 end
 
 """

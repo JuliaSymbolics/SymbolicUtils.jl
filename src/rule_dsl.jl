@@ -227,7 +227,7 @@ struct RuleRewriteError
     expr
 end
 
-function (r::RuleSet)(@nospecialize(term); depth=typemax(Int), applyall=false, recurse=true)
+function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true)
     rules = r.rules
     term = to_symbolic(term)
     # simplify the subexpressions

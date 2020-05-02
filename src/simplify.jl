@@ -21,9 +21,6 @@ end
 
 ### Predicates
 
-# https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/23
-#multiple_of(x, tol=1e-10) = y -> (y isa Number) && abs(y % x) < 1e-10
-
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 is_operation(f) = @nospecialize(x) -> (x isa Term) && (operation(x) == f)
     

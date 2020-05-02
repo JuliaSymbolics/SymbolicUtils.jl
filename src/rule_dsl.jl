@@ -10,7 +10,6 @@ struct Rule{L, M, R} <: AbstractRule
     matcher::M               # matcher(lhs)
     rhs::R                   # consequent
     depth::Int               # number of levels of expr this rule touches
-    _init_matches::MatchDict # empty dictionary with the required fields set to nothing, see MatchDict
 end
 
 getdepth(r::Rule) = r.depth
@@ -29,7 +28,7 @@ function Base.show(io::IO, r::Rule)
 end
 
 function (r::Rule)(term)
-    m, rhs, dict = r.matcher, r.rhs, r._init_matches
+    m, rhs, dict = r.matcher, r.rhs, ImmutableDict{Symbol, Any}(:____, nothing)
     m((term,), dict, (d, n) -> n == 1 ? (@timer "RHS" rhs(d)) : nothing)
 end
 
@@ -142,15 +141,13 @@ macro rule(expr)
     keys = Symbol[]
     lhs_term = makepattern(lhs, keys)
     unique!(keys)
-    dict = matchdict(keys)
     quote
         lhs_pattern = $(lhs_term)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
              __MATCHES__ -> $(makeconsequent(rhs)),
-             rule_depth($lhs_term),
-             $dict)
+             rule_depth($lhs_term))
     end
 end
 

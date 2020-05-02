@@ -184,19 +184,20 @@ function (acr::ACRule)(term)
     else
         f =  operation(term)
         # Assume that the matcher was formed by closing over a term
-        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
+        if f !== operation(r.lhs) # Maybe offer a fallback if m.term errors.
             return nothing
         end
-        
+
         T = symtype(term)
         args = arguments(term)
-        
+
         for inds in permutations(eachindex(args), acr.arity)
-            result = r(Term{T}(f, args[inds]))
+            result = r(Term{T}(f, @views args[inds]))
             if !isnothing(result)
                 return Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
             end
         end
+        return nothing
     end
 end
 

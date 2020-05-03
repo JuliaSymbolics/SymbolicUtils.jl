@@ -1,4 +1,5 @@
 using BenchmarkTools, SymbolicUtils
+using SymbolicUtils: isnumber
 
 using Random
 

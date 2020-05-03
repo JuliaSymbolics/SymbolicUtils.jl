@@ -117,16 +117,20 @@ struct ACMatcher{M<:Term}
     matcher::M
 end
 
+function add_pos(bindings, p)
+end
+
 function matcher(m::ACMatcher)
     term = m.matcher
     op_matcher = matcher(operation(term))
     arg_matchers = (map(matcher, arguments(term))...,)
     perms = collect(permutations(1:length(arg_matchers)))
+
     function ac_matcher(data, bindings, success)
         isempty(data) && return nothing
         !(car(data) isa Term) && return nothing
 
-        function loop(term, bindings′, matchers′, i) # Get it to compile faster
+        function loop(term, bindings′, matchers′, i, pos) # Get it to compile faster
             if isempty(matchers′)
                 return success(bindings′, 1)
             end
@@ -137,7 +141,8 @@ function matcher(m::ACMatcher)
 
             res = lead_with(term,
                             bindings′,
-                            (b, n) -> loop(drop_n(term, n), b, rest, 1))
+                            (b, n) -> loop(drop_n(term, n),
+                                           add_pos(b, pos), rest, 1, pos+n))
 
             if res === nothing
                 if i == length(matchers′)

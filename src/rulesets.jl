@@ -4,11 +4,11 @@ const SIMPLIFY_RULES = RuleSet([
 ])
 
 const NUMBER_RULES = RuleSet([
-    @rule ~t               => ASSORTED_RULES(~t, recurse=false)
-    @rule ~t::is_operation(+) =>  PLUS_RULES(~t, recurse=false)
+    @rule ~t                  => ASSORTED_RULES(~t, recurse=false)
+    @rule ~t::is_operation(+) => PLUS_RULES(~t, recurse=false)
     @rule ~t::is_operation(*) => TIMES_RULES(~t, recurse=false)
-    @rule ~t::is_operation(^) =>   POW_RULES(~t, recurse=false)
-    @rule ~t                  =>  TRIG_RULES(~t, recurse=false)
+    @rule ~t::is_operation(^) => POW_RULES(~t, recurse=false)
+    @rule ~t                  => TRIG_RULES(~t, recurse=false)
 ])
 
 const PLUS_RULES = RuleSet([
@@ -44,7 +44,7 @@ const TIMES_RULES = RuleSet([
 ])
 
 const POW_RULES = RuleSet([
-    @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
+    @rule(^(~x::is_operation(*), ~y) => *(map(a->a^(~y), arguments(~x))...))
     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q)))
     @rule(^(~x, ~z::_iszero) => 1)
     @rule(^(~x, ~z::_isone) => ~x)

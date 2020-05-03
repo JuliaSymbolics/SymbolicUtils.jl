@@ -160,10 +160,12 @@ end
 #-----------------------------
 #### Associative Commutative Rules
 
-struct ACRule{L, M, R} <: AbstractRule
-    rule::Rule{L, M, R}
+struct ACRule{R<:Rule, P} <: AbstractRule
+    rule::R
     arity::Int
+    perms::P
 end
+ACRule(rule, arity) = ACRule(rule, arity, map(x->(x...,), collect(permutations(1:arity))))
 
 Rule(acr::ACRule)   = acr.rule
 getdepth(r::ACRule) = getdepth(r.rule)
@@ -176,6 +178,41 @@ macro acrule(expr)
 end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
+
+# assume that ys is sorted
+# and all elems of ys are present in xs
+@inbounds function index_diff(xs, ys)
+    lx = length(xs)
+    ly = length(ys)
+
+    arr = Array{eltype(xs)}(undef, length(xs)-length(ys))
+
+    i = j = k = 1
+
+    while i <= lx && j <= ly
+        if xs[i] < ys[j]
+            arr[k] = xs[i]
+            k+=1
+            i += 1
+        elseif xs[i] > ys[j]
+            arr[k] = xs[i]
+            k+=1
+            j += 1
+        else
+            i += 1
+            j += 1
+        end
+    end
+
+    arr[k:end] .= xs[i:end]
+
+    arr
+end
+
+@inbounds @generated function subargs(args, inds, perm::NTuple{N}) where {N}
+    exprs = [:(args[inds[perm[$i]]]) for i=1:N]
+    :([$(exprs...)])
+end
 
 function (acr::ACRule)(term)
     r = Rule(acr)
@@ -190,11 +227,14 @@ function (acr::ACRule)(term)
 
         T = symtype(term)
         args = arguments(term)
+        allinds = eachindex(args)
 
-        for inds in permutations(eachindex(args), acr.arity)
-            result = r(Term{T}(f, @views args[inds]))
-            if !isnothing(result)
-                return Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
+        for inds in combinations(allinds, acr.arity)
+            for perm in acr.perms
+                result = r(Term{T}(f, subargs(args, inds, perm)))
+                if !isnothing(result)
+                    return Term{T}(f, push!(args[index_diff(allinds, inds)], result))
+                end
             end
         end
         return nothing

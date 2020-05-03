@@ -105,9 +105,57 @@ end
 # 2. Dictionary
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
+# Calls the success callback if something at the beginning of the expression was
+# matched; returns nothing otherwise
 function matcher(val::Any)
     function literal_matcher(data, bindings, next)
         !isempty(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
+    end
+end
+
+struct ACMatcher{M<:Term}
+    matcher::M
+end
+
+function matcher(m::ACMatcher)
+    term = m.matcher
+    op_matcher = matcher(operation(term))
+    arg_matchers = (map(matcher, arguments(term))...,)
+    perms = collect(permutations(1:length(arg_matchers)))
+    function ac_matcher(data, bindings, success)
+        isempty(data) && return nothing
+        !(car(data) isa Term) && return nothing
+
+        function loop(term, bindings′, matchers′, i) # Get it to compile faster
+            if isempty(matchers′)
+                return success(bindings′, 1)
+            end
+
+            # pick the ith rule first
+            lead_with = matchers′[i]
+            rest = (matchers′[1:i-1]..., matchers′[i+1:end]...,)
+
+            res = lead_with(term,
+                            bindings′,
+                            (b, n) -> loop(drop_n(term, n), b, rest, 1))
+
+            if res === nothing
+                if i == length(matchers′)
+                    # no more matchers to try, so try the next subterm
+                    # with all the matchers.
+                    return loop(cdr(term), bindings′, matchers′, 1)
+                else
+                    # pick a different rule first and try again
+                    return loop(term, bindings′, matchers′, i+1)
+                end
+            end
+
+            return res
+        end
+
+        op_matcher(car(data), bindings,
+                   (b, n)->loop(cdr(car(data)), b, arg_matchers, 1))
+
     end
 end
 
@@ -197,8 +245,8 @@ function matcher(term::Term)
                 end
                 return nothing
             end
-            res = car(matchers′)(term, bindings′,
-                                 (b, n) -> loop(drop_n(term, n), b, cdr(matchers′)))
+            car(matchers′)(term, bindings′,
+                           (b, n) -> loop(drop_n(term, n), b, cdr(matchers′)))
         end
 
         loop(car(data), bindings, matchers) # Try to eat exactly one term

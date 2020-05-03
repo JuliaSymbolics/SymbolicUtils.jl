@@ -141,11 +141,12 @@ sin((a + c))
 
 Predicate function gets an array of values if attached to a segment variable (`~~x`).
 """
-macro rule(expr)
+macro rule(expr, ac=false)
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs,rhs = expr.args[2], expr.args[3]
     keys = Symbol[]
     lhs_term = makepattern(lhs, keys)
+    lhs_term = ac ? :(ACMatcher($lhs_term)) : lhs_term
     unique!(keys)
     quote
         lhs_pattern = $(lhs_term)
@@ -157,47 +158,11 @@ macro rule(expr)
     end
 end
 
-#-----------------------------
-#### Associative Commutative Rules
-
-struct ACRule{L, M, R} <: AbstractRule
-    rule::Rule{L, M, R}
-    arity::Int
-end
-
-Rule(acr::ACRule)   = acr.rule
-getdepth(r::ACRule) = getdepth(r.rule)
-
 macro acrule(expr)
-    arity = length(expr.args[2].args[2:end])
+    @assert expr.head == :call && expr.args[1] == :(=>)
+    lhs,rhs = expr.args[2], expr.args[3]
     quote
-        ACRule(@rule($expr), $arity)
-    end
-end
-
-Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
-
-function (acr::ACRule)(term)
-    r = Rule(acr)
-    if !(term isa Term)
-        r(term)
-    else
-        f =  operation(term)
-        # Assume that the matcher was formed by closing over a term
-        if f !== operation(r.lhs) # Maybe offer a fallback if m.term errors.
-            return nothing
-        end
-
-        T = symtype(term)
-        args = arguments(term)
-
-        for inds in permutations(eachindex(args), acr.arity)
-            result = r(Term{T}(f, @views args[inds]))
-            if !isnothing(result)
-                return Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
-            end
-        end
-        return nothing
+        @rule($lhs => $rhs, true)
     end
 end
 

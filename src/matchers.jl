@@ -151,17 +151,17 @@ function matcher(m::ACMatcher)
 
         args = cdr(car(data))
 
-        function init_check(args, bindings, matchers)
-            # cheap initial
-            if isempty(matchers)
-                return true
-            end
-            any(a->matchers[1]((a,), bindings, (b, n) -> true) === true, args) &&
-                init_check(args, bindings, Base.tail(matchers))
-        end
+       #function init_check(args, bindings, matchers)
+       #    # cheap initial
+       #    if isempty(matchers)
+       #        return true
+       #    end
+       #    any(a->matchers[1]((a,), bindings, (b, n) -> true) === true, args) &&
+       #        init_check(args, bindings, Base.tail(matchers))
+       #end
 
         function arg_matcher(b, n)
-            if length(args) >= min_arity && init_check(args, bindings, init_matchers)
+            if length(args) >= min_arity# && init_check(args, bindings, init_matchers)
                 return loop(args, b, arg_matchers)
             end
             return nothing

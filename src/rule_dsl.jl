@@ -141,13 +141,11 @@ sin((a + c))
 
 Predicate function gets an array of values if attached to a segment variable (`~~x`).
 """
-macro rule(expr, ac=false)
+macro rule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs,rhs = expr.args[2], expr.args[3]
     keys = Symbol[]
     lhs_term = makepattern(lhs, keys)
-    lhs_term = ac ? :(ACMatcher($lhs_term)) : lhs_term
-    unique!(keys)
     quote
         lhs_pattern = $(lhs_term)
         Rule($(QuoteNode(expr)),
@@ -161,8 +159,17 @@ end
 macro acrule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs,rhs = expr.args[2], expr.args[3]
+    keys = Symbol[]
+    lhs_op = lhs.args[1]
+    lhs_term = :(ACMatcher($(makepattern(lhs, keys))))
     quote
-        @rule($lhs => $rhs, true)
+        lhs_pattern = $(lhs_term)
+        Rule($(QuoteNode(expr)),
+             lhs_pattern,
+             matcher(lhs_pattern),
+             __MATCHES__ -> $lhs_op($(makeconsequent(rhs)),
+                                   Term{Number}($(lhs_op), [ __MATCHES__[:__REST__]...])),
+             rule_depth($lhs_term))
     end
 end
 

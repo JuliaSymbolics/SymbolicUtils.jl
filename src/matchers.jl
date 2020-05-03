@@ -117,14 +117,20 @@ struct ACMatcher{M<:Term}
     matcher::M
 end
 
-function add_pos(bindings, p)
+struct PosDict{D,M}
+    d::D
+    m::M
 end
+PosDict(p::PosDict, x) = PosDict(p.d, x)
+Base.get(p::PosDict, k, default) = get(p.d, k, p.m=>default)[2]
+Base.getindex(p::PosDict, k) = getindex(p.d, k)[2]
+assoc(p::PosDict, k, val) = PosDict(assoc(p.d, k, p.m => val), p.m)
+getpos_kvs(p::PosDict) = collect(p.d)
 
 function matcher(m::ACMatcher)
     term = m.matcher
     op_matcher = matcher(operation(term))
     arg_matchers = (map(matcher, arguments(term))...,)
-    perms = collect(permutations(1:length(arg_matchers)))
 
     function ac_matcher(data, bindings, success)
         isempty(data) && return nothing
@@ -132,7 +138,15 @@ function matcher(m::ACMatcher)
 
         function loop(term, bindings′, matchers′, i, pos) # Get it to compile faster
             if isempty(matchers′)
-                return success(bindings′, 1)
+                args = cdr(car(data))
+                ids = Set(1:length(args))
+                for x in values(bindings′.d)
+                    if x isa Pair
+                        delete!(ids, x[1])
+                    end
+                end
+                bindings2 = assoc(bindings′, :__REST__,[args[i] for i in ids])
+                return success(bindings2, 1)
             end
 
             # pick the ith rule first
@@ -141,17 +155,16 @@ function matcher(m::ACMatcher)
 
             res = lead_with(term,
                             bindings′,
-                            (b, n) -> loop(drop_n(term, n),
-                                           add_pos(b, pos), rest, 1, pos+n))
+                            (b, n) -> loop(drop_n(term, n), PosDict(b, pos), rest, 1, pos+n))
 
             if res === nothing
                 if i == length(matchers′)
                     # no more matchers to try, so try the next subterm
                     # with all the matchers.
-                    return loop(cdr(term), bindings′, matchers′, 1)
+                    return loop(cdr(term), PosDict(bindings′, pos+1), matchers′, 1, pos+1)
                 else
                     # pick a different rule first and try again
-                    return loop(term, bindings′, matchers′, i+1)
+                    return loop(term, PosDict(bindings′, pos), pos, matchers′, i+1, pos)
                 end
             end
 
@@ -159,7 +172,7 @@ function matcher(m::ACMatcher)
         end
 
         op_matcher(car(data), bindings,
-                   (b, n)->loop(cdr(car(data)), b, arg_matchers, 1))
+                   (b, n)->loop(cdr(car(data)), PosDict(b, 1), arg_matchers, 1, 1))
 
     end
 end

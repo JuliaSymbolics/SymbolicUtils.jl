@@ -23,7 +23,7 @@ Base.isempty(t::Term) = false
 @inline cdr(t::Term) = arguments(t)
 
 @inline car(v) = first(v)
-@inline cdr(v) = isempty(v) ? empty(l) : LL(v, 2)
+@inline cdr(v) = isempty(v) ? empty(v) : LL(v, 2)
 
 @inline take_n(ll::LL, n) = isempty(ll) || n == 0 ? empty(ll) : @views ll.v[ll.i:n+ll.i-1] # @views handles Tuple
 @inline take_n(ll, n) = @views ll[1:n]

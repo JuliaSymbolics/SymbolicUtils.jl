@@ -167,8 +167,9 @@ macro acrule(expr)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
-             __MATCHES__ -> $lhs_op($(makeconsequent(rhs)),
-                                   Term{Number}($(lhs_op), [ __MATCHES__[:__REST__]...])),
+             __MATCHES__ -> $(esc(lhs_op))($(makeconsequent(rhs)),
+                                           Term{Number}($(esc(lhs_op)),
+                                                        __MATCHES__[:__REST__])),
              rule_depth($lhs_term))
     end
 end

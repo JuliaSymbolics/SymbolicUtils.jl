@@ -117,63 +117,56 @@ struct ACMatcher{M<:Term}
     matcher::M
 end
 
-struct PosDict{D,M}
-    d::D
-    m::M
-end
-PosDict(p::PosDict, x) = PosDict(p.d, x)
-Base.get(p::PosDict, k, default) = get(p.d, k, p.m=>default)[2]
-Base.getindex(p::PosDict, k) = getindex(p.d, k)[2]
-assoc(p::PosDict, k, val) = PosDict(assoc(p.d, k, p.m => val), p.m)
-getpos_kvs(p::PosDict) = collect(p.d)
-
 function matcher(m::ACMatcher)
     term = m.matcher
     op_matcher = matcher(operation(term))
     arg_matchers = (map(matcher, arguments(term))...,)
+    init_matchers = ((matcher(a) for a in arguments(term) if !(a isa Slot) || a.predicate !== alwaystrue)...,)
+    min_arity = length(arguments(term))
 
     function ac_matcher(data, bindings, success)
         isempty(data) && return nothing
         !(car(data) isa Term) && return nothing
 
-        function loop(term, bindings′, matchers′, i, pos) # Get it to compile faster
+        function loop(args, bindings′, matchers′) # Get it to compile faster
+            # Assumption is that all the matchers are either slot matchers or
+            # literal matchers.
             if isempty(matchers′)
-                args = cdr(car(data))
-                ids = Set(1:length(args))
-                for x in values(bindings′.d)
-                    if x isa Pair
-                        delete!(ids, x[1])
-                    end
-                end
-                bindings2 = assoc(bindings′, :__REST__,[args[i] for i in ids])
-                return success(bindings2, 1)
+                return success(assoc(bindings′, :__REST__, args), 1)
             end
-
-            # pick the ith rule first
-            lead_with = matchers′[i]
-            rest = (matchers′[1:i-1]..., matchers′[i+1:end]...,)
-
-            res = lead_with(term,
-                            bindings′,
-                            (b, n) -> loop(drop_n(term, n), PosDict(b, pos), rest, 1, pos+n))
-
-            if res === nothing
-                if i == length(matchers′)
-                    # no more matchers to try, so try the next subterm
-                    # with all the matchers.
-                    return loop(cdr(term), PosDict(bindings′, pos+1), matchers′, 1, pos+1)
-                else
-                    # pick a different rule first and try again
-                    return loop(term, PosDict(bindings′, pos), pos, matchers′, i+1, pos)
+            matcher = first(matchers′)
+            for j=1:length(args)
+                m = matcher((args[j],), bindings′,
+                            (b, n) -> begin
+                                # matched one matcher, drop this term, and repeat
+                                args′ = vcat(@views(args[1:j-1]), @views(args[j+1:end]))
+                                return loop(args′, b, Base.tail(matchers′))
+                            end)
+                if m !== nothing
+                    return m
                 end
             end
-
-            return res
+            return nothing
         end
 
-        op_matcher(car(data), bindings,
-                   (b, n)->loop(cdr(car(data)), PosDict(b, 1), arg_matchers, 1, 1))
+        args = cdr(car(data))
 
+        function init_check(args, bindings, matchers)
+            # cheap initial
+            if isempty(matchers)
+                return true
+            end
+            any(a->matchers[1]((a,), bindings, (b, n) -> true) === true, args) &&
+                init_check(args, bindings, Base.tail(matchers))
+        end
+
+        function arg_matcher(b, n)
+            if length(args) >= min_arity && init_check(args, bindings, init_matchers)
+                return loop(args, b, arg_matchers)
+            end
+            return nothing
+        end
+        op_matcher(car(data), bindings, arg_matcher)
     end
 end
 

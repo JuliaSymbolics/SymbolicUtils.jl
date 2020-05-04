@@ -35,7 +35,7 @@ julia> using Pkg; Pkg.add("SymbolicUtils")
 julia> using SymbolicUtils
 
 julia> @syms x::Real y::Real z::Complex f(::Number)::Real
-(x, y, z)
+(x, y, z, f(::Number)::Real)
 
 julia> 2x^2 - y + x^2
 (3 * (x ^ 2)) + (-1 * y)

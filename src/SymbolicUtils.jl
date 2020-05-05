@@ -27,7 +27,6 @@ else
     end
 end
 
-
 export @syms, term, @fun, showraw
 include("types.jl")
 

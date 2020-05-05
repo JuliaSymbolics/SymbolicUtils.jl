@@ -233,7 +233,13 @@ struct RuleRewriteError
     expr
 end
 
-function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true)
+node_count(atom, count; cutoff) = count + 1
+node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
+
+function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true, threaded=false,
+                      thread_depth_cutoff=50)
+    kwargs = (;applyall=applyall, recurse=recurse, threaded=threaded,
+              thread_depth_cutoff=thread_depth_cutoff)
     rules = r.rules
     term = to_symbolic(term)
     # simplify the subexpressions
@@ -242,8 +248,19 @@ function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true)
     end
     if term isa Symbolic
         if term isa Term && recurse
-            expr = Term{symtype(term)}(operation(term),
-                                       map(t -> r(t, depth=depth-1), arguments(term)))
+            if threaded
+                _args = map(arguments(term)) do arg
+                    if node_count(term) > thread_depth_cutoff
+                        Threads.@spawn r(arg; depth=depth-1, kwargs...)
+                    else
+                        r(arg; depth=depth-1, kwargs..., threaded=false)
+                    end
+                end
+                args = map(t -> t isa Task ? fetch(t) : t, _args)
+            else
+                args = map(t -> r(t; depth=depth-1, kwargs...), arguments(term))
+            end
+            expr = Term{symtype(term)}(operation(term), args)
         else
             expr = term
         end

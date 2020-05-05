@@ -11,11 +11,11 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`.
 """
-function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true, applyall=true, recurse=true)
+function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true, applyall=true, threaded=true, kwargs...)
     if fixpoint
-        SymbolicUtils.fixpoint(rules; recurse=recurse, applyall=recurse)(x)
+        SymbolicUtils.fixpoint(rules; applyall=applyall, threaded=threaded, kwargs...)(x)
     else
-        rules(x; recurse=recurse, applyall=recurse)
+        rules(x; applyall=applyall, threaded=threaded, kwargs...)
     end
 end
 

@@ -237,7 +237,7 @@ node_count(atom, count; cutoff) = count + 1
 node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
 
 function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true, threaded=false,
-                      thread_depth_cutoff=50)
+                      thread_depth_cutoff=100)
     kwargs = (;applyall=applyall, recurse=recurse, threaded=threaded,
               thread_depth_cutoff=thread_depth_cutoff)
     rules = r.rules

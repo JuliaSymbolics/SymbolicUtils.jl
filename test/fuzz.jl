@@ -82,7 +82,7 @@ function fuzz_test(ntrials)
             @test typeof(simplified.err) == typeof(unsimplified.err)
         else
             try
-                @test unsimplified ≈ simplified
+                @test unsimplified ≈ simplified || (isnan(unsimplified) & isnan(simplified))
                 if !(unsimplified ≈ simplified)
                     error("Failed")
                 end
@@ -102,7 +102,6 @@ end
 using Random: seed!
 
 @testset "Fuzz test" begin
-
     seed!(6174)
     for i=1:2000
         fuzz_test(10)

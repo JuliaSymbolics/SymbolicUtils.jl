@@ -278,6 +278,10 @@ operation(x::Term) = x.f
 
 arguments(x::Term) = x.arguments
 
+function Base.hash(t::Term{T}, salt::UInt) where {T}
+    hash(arguments(t), hash(operation(t), hash(T, salt)))
+end
+
 function Base.isequal(t1::Term, t2::Term)
     a1 = arguments(t1)
     a2 = arguments(t2)

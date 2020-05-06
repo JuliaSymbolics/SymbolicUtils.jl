@@ -44,7 +44,7 @@ using Combinatorics: permutations
 export @rule, @acrule, RuleSet
 include("rule_dsl.jl")
 
-export simplify
+export simplify, substitute
 
 include("simplify.jl")
 

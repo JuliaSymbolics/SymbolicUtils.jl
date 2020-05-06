@@ -19,11 +19,18 @@ function simplify(x, ctx=EmptyCtx(); rules=SIMPLIFY_RULES, fixpoint=true, applya
     end
 end
 
-function substitute(x, dict)
-    RuleSet([@rule(~x::(x->haskey(dict, x)) => dict[~x])])(x)
-end
 
 Base.@deprecate simplify(x, rules::RuleSet; kwargs...)  simplify(x, rules=rules; kwargs...)
+
+"""
+    substitute(expr, dict)
+
+substitute any subexpression that matches a key in `dict` with
+the corresponding value.
+"""
+function substitute(expr, dict)
+    RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])(expr)
+end
 
 ### Predicates
 

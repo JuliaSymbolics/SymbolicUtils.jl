@@ -101,7 +101,14 @@ function makeconsequent(expr)
             end
         else
             if expr.head == :macrocall
-                return esc(expr)
+                if expr.args[1] === Symbol("@ctx")
+                    if length(filter(x->!(x isa LineNumberNode), expr.args)) != 1
+                        error("@ctx takes no arguments. try (@ctx)")
+                    end
+                    return :__CTX__
+                else
+                    return esc(expr)
+                end
             end
             return Expr(expr.head, map(makeconsequent, expr.args)...)
         end

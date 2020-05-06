@@ -41,13 +41,6 @@ function (r::Rule)(term, ctx=EmptyCtx())
 end
 
 """
-When used on the right hand side of a rule, it refers to the current context.
-"""
-macro CTX()
-    :__CTX__ |> esc
-end
-
-"""
     `@rule LHS => RHS`
 
 Creates a `Rule` object. A rule object is callable, and  takes an expression and rewrites
@@ -161,7 +154,7 @@ macro rule(expr)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
-             (__MATCHES__, $(esc(:__CTX__))) -> $(makeconsequent(rhs)),
+             (__MATCHES__, __CTX__) -> $(makeconsequent(rhs)),
              rule_depth($lhs_term))
     end
 end

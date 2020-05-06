@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, EmptyCtx, @CTX
+using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, EmptyCtx
 using SymbolicUtils
 using Test
 
@@ -57,8 +57,8 @@ end
     @test @rule(~x::Contextual((x, ctx) -> ctx==EmptyCtx()) => "yes")(1) == "yes"
     @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => true)(a, Dict(a=>1))
     @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => true)(b, Dict(a=>1)) === nothing
-    @test @rule(~x => __CTX__)(a, "test") == "test"
-    @test @rule(~x => @CTX)(a, "test") == "test"
-    @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => @CTX()[~x])(a, Dict(a=>1)) === 1
-    @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => @CTX()[~x])(b, Dict(a=>1)) === nothing
+    @test_throws UndefVarError @rule(~x => __CTX__)(a, "test")
+    @test @rule(~x => @ctx)(a, "test") == "test"
+    @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => (@ctx)[~x])(a, Dict(a=>1)) === 1
+    @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => (@ctx)[~x])(b, Dict(a=>1)) === nothing
 end

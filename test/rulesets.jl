@@ -71,6 +71,16 @@ end
     @test sprint(io->Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
 end
 
+@testset "Threading" begin
+    @syms a b c d
+    ex = (((0.6666666666666666 / (c / 1)) + ((1 * a) / (c / 1))) +
+          (1.0 / (((1 * d) / (1 + b)) * (1 / b)))) +
+          ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
+           ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
+    @test simplify(ex) == simplify(ex, threaded=true, thread_depth_cutoff=3)
+    @test SymbolicUtils.node_count(a + b * c / d) == 4
+end
+
 @testset "timerwrite" begin
     @syms a b c d
     expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))

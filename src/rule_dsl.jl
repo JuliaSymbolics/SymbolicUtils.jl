@@ -31,13 +31,12 @@ const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 struct EmptyCtx end
 
 function (r::Rule)(term, ctx=EmptyCtx())
-    match_function = r.matcher
     rhs = r.rhs
 
-    match_function((term,),
-                   EMPTY_DICT,
-                   ctx,
-                   (d, n) -> n === 1 ? (@timer "RHS" rhs(d, ctx)) : nothing)
+    r.matcher((term,), EMPTY_DICT, ctx) do bindings, n
+        # n == 1 means that exactly one term of the input (term,) was matched
+        n === 1 ? (@timer "RHS" rhs(bindings, ctx)) : nothing
+    end
 end
 
 """

@@ -28,14 +28,23 @@ function Base.show(io::IO, r::Rule)
 end
 
 const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
+struct EmptyCtx end
 
-function (r::Rule)(term)
+function (r::Rule)(term, ctx=EmptyCtx())
     match_function = r.matcher
     rhs = r.rhs
 
     match_function((term,),
                    EMPTY_DICT,
-                   (d, n) -> n === 1 ? (@timer "RHS" rhs(d)) : nothing)
+                   ctx,
+                   (d, n) -> n === 1 ? (@timer "RHS" rhs(d, ctx)) : nothing)
+end
+
+"""
+When used on the right hand side of a rule, it refers to the current context.
+"""
+macro CTX()
+    :__CTX__ |> esc
 end
 
 """
@@ -152,7 +161,7 @@ macro rule(expr)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
-             __MATCHES__ -> $(makeconsequent(rhs)),
+             (__MATCHES__, $(esc(:__CTX__))) -> $(makeconsequent(rhs)),
              rule_depth($lhs_term))
     end
 end
@@ -177,7 +186,7 @@ end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-function (acr::ACRule)(term)
+function (acr::ACRule)(term, ctx=EmptyCtx())
     r = Rule(acr)
     if !(term isa Term)
         r(term)
@@ -187,12 +196,12 @@ function (acr::ACRule)(term)
         if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
             return nothing
         end
-        
+
         T = symtype(term)
         args = arguments(term)
-        
+
         for inds in permutations(eachindex(args), acr.arity)
-            result = r(Term{T}(f, args[inds]))
+            result = r(Term{T}(f, args[inds]), ctx)
             if !isnothing(result)
                 return Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
             end
@@ -233,7 +242,7 @@ struct RuleRewriteError
     expr
 end
 
-function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true)
+function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=false, recurse=true)
     rules = r.rules
     term = to_symbolic(term)
     # simplify the subexpressions
@@ -243,7 +252,7 @@ function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true)
     if term isa Symbolic
         if term isa Term && recurse
             expr = Term{symtype(term)}(operation(term),
-                                       map(t -> r(t, depth=depth-1), arguments(term)))
+                                       map(t -> r(t, context, depth=depth-1), arguments(term)))
         else
             expr = term
         end
@@ -257,7 +266,7 @@ function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true)
                 # this rule doesn't apply
                 continue
             else
-                expr = r(expr′, depth=getdepth(rules[i]))# levels touched
+                expr = r(expr′, context, depth=getdepth(rules[i]))# levels touched
                 applyall || return expr
             end
         end
@@ -269,16 +278,14 @@ end
 
 getdepth(::RuleSet) = typemax(Int)
 
-function fixpoint(f, x; kwargs...)
-    x1 = f(x; kwargs...)
+function fixpoint(f, x, ctx; kwargs...)
+    x1 = f(x, ctx; kwargs...)
     while !isequal(x1, x)
         x = x1
-        x1 = f(x; kwargs...)
+        x1 = f(x, ctx; kwargs...)
     end
     return x1
 end
-
-fixpoint(f; kwargs...) = x -> fixpoint(f, x; kwargs...)
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
     msg = "Failed to apply rule $(err.rule) on expression "

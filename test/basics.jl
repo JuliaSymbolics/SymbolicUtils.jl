@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, symtype
+using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, EmptyCtx, @CTX
 using SymbolicUtils
 using Test
 
@@ -49,4 +49,16 @@ end
 @testset "err test" begin
     @syms t()
     @test_throws ErrorException t(2)
+end
+
+@testset "Contexts" begin
+    @syms a b c
+
+    @test @rule(~x::Contextual((x, ctx) -> ctx==EmptyCtx()) => "yes")(1) == "yes"
+    @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => true)(a, Dict(a=>1))
+    @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => true)(b, Dict(a=>1)) === nothing
+    @test @rule(~x => __CTX__)(a, "test") == "test"
+    @test @rule(~x => @CTX)(a, "test") == "test"
+    @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => @CTX()[~x])(a, Dict(a=>1)) === 1
+    @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => @CTX()[~x])(b, Dict(a=>1)) === nothing
 end

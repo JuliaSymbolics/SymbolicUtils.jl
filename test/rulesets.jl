@@ -15,7 +15,7 @@ using SymbolicUtils: fixpoint, getdepth
     @test rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
     @test rset(ex) == simplify(ex, rset; fixpoint=false, applyall=false) 
     
-    @test fixpoint(rset, ex) == ((2 * (2 * w)) + (2 * α)) + (2 * β)
+    @test fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
 end
 
 @testset "Numeric" begin

@@ -61,4 +61,5 @@ end
     @test @rule(~x => @ctx)(a, "test") == "test"
     @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => (@ctx)[~x])(a, Dict(a=>1)) === 1
     @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => (@ctx)[~x])(b, Dict(a=>1)) === nothing
+    @test simplify(a+a, "test", rules=RuleSet([@rule ~x => @ctx])) == "test"
 end

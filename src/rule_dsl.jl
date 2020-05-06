@@ -251,7 +251,7 @@ function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=fal
         end
         for i in 1:length(rules)
             expr′ = try
-                @timer(repr(rules[i]), rules[i](expr))
+                @timer(repr(rules[i]), rules[i](expr, context))
             catch err
                 throw(RuleRewriteError(rules[i], expr))
             end

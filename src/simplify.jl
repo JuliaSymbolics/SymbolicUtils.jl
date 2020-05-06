@@ -19,6 +19,16 @@ function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true, applyall=true, recurse
     end
 end
 
+"""
+    substitute(expr, dict)
+
+substitute any subexpression that matches a key in `dict` with
+the corresponding value.
+"""
+function substitute(expr, dict)
+    RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])(expr)
+end
+
 ### Predicates
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T

@@ -11,13 +11,16 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`.
 """
-function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true, applyall=true, recurse=true)
+function simplify(x, ctx=EmptyCtx(); rules=SIMPLIFY_RULES, fixpoint=true, applyall=true, recurse=true)
     if fixpoint
-        SymbolicUtils.fixpoint(rules; recurse=recurse, applyall=recurse)(x)
+        SymbolicUtils.fixpoint(rules, x, ctx; recurse=recurse, applyall=recurse)
     else
-        rules(x; recurse=recurse, applyall=recurse)
+        rules(x, ctx; recurse=recurse, applyall=recurse)
     end
 end
+
+
+Base.@deprecate simplify(x, rules::RuleSet; kwargs...)  simplify(x, rules=rules; kwargs...)
 
 """
     substitute(expr, dict)

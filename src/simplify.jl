@@ -1,5 +1,6 @@
 ##### Numeric simplification
 
+default_rules(::EmptyCtx) = SIMPLIFY_RULES
 """
     simplify(x, [rules=SIMPLIFY_RULES]; fixpoint=true, applyall=true, recurse=true)
 
@@ -11,7 +12,7 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`.
 """
-function simplify(x, ctx=EmptyCtx(); rules=SIMPLIFY_RULES, fixpoint=true, applyall=true, recurse=true)
+function simplify(x, ctx=EmptyCtx(); rules=default_rules(ctx), fixpoint=true, applyall=true, recurse=true)
     if fixpoint
         SymbolicUtils.fixpoint(rules, x, ctx; recurse=recurse, applyall=recurse)
     else

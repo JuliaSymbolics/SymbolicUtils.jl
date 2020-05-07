@@ -1,7 +1,7 @@
 
 const SIMPLIFY_RULES = RuleSet([
-    @rule ~t::sym_isa(Number) => NUMBER_RULES(~t, applyall=true, recurse=true)
     @rule ~t::sym_isa(Bool)   => BOOLEAN_RULES(~t, applyall=true, recurse=true)
+    @rule ~t::sym_isa(Number) => NUMBER_RULES(~t, applyall=true, recurse=true)
 ])
 
 const NUMBER_RULES = RuleSet([

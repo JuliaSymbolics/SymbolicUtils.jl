@@ -63,3 +63,13 @@ end
     @test a(t) <ₑ b(t)
     @test !(b(t) <ₑ a(t))
 end
+
+@testset "Sym vs Term" begin
+    @syms x
+
+    @test x <ₑ (3 + x) && !((3 + x) <ₑ x)
+    @test x^2 <ₑ y && !(y <ₑ x^2)
+
+    # a nice consequence
+    @test simplify(x/(x+3) + 3/(x+3)) == 1
+end

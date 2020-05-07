@@ -62,9 +62,9 @@ function <ₑ(a::Sym, b::Term)
             # both subterms are terms, so it's definitely firster
             return true
         elseif n1
-            return a <ₑ args[1]
+            return isequal(a, args[1]) || a <ₑ args[1]
         elseif n2
-            return a <ₑ args[2]
+            return isequal(a, args[2]) || a <ₑ args[2]
         else
             # both arguments are not numbers
             # This case when a <ₑ Term(^, [1,-1])

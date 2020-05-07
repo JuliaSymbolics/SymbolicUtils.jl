@@ -90,7 +90,7 @@ end
 @testset "substitute" begin
     @syms a b
     @test substitute(a, Dict(a=>1)) == 1
-    @test substitute(sin(a+b), Dict(a=>1)) == sin(1+b)
+    @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(1+b))
     @test substitute(a+b, Dict(a=>1, b=>3)) |> simplify == 4
 end
 

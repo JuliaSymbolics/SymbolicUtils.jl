@@ -1,6 +1,12 @@
 using Test
 using SymbolicUtils
 
+# == syntax is nice, but we can't use it because
+# it returns a Term{Bool}
+macro eqtest(expr)
+    @assert expr.hear == :call && expr.args[1] == :(==)
+    :(@test isequal($(expr.args[2]), $(expr.args[3]))) |> esc
+end
 SymbolicUtils.show_simplified[] = false
 
 #using SymbolicUtils: Rule

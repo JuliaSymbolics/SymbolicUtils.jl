@@ -4,11 +4,12 @@ const SIMPLIFY_RULES = RuleSet([
 ])
 
 const NUMBER_RULES = RuleSet([
-    @rule ~t               => ASSORTED_RULES(~t, recurse=false)
-    @rule ~t::is_operation(+) =>  PLUS_RULES(~t, recurse=false)
-    @rule ~t::is_operation(*) => TIMES_RULES(~t, recurse=false)
-    @rule ~t::is_operation(^) =>   POW_RULES(~t, recurse=false)
-    @rule ~t                  =>  TRIG_RULES(~t, recurse=false)
+    @rule ~t                => ASSORTED_RULES(~t, recurse=false)
+    @rule ~t::is_operation(+) =>   PLUS_RULES(~t, recurse=false)
+    @rule ~t::is_operation(*) =>  TIMES_RULES(~t, recurse=false)
+    @rule ~t::is_operation(^) =>    POW_RULES(~t, recurse=false)
+    @rule ~t::is_operation(+) => POWSUM_RULES(~t, recurse=false)
+    @rule ~t                  =>   TRIG_RULES(~t, recurse=false)
 ])
 
 const PLUS_RULES = RuleSet([
@@ -48,6 +49,28 @@ const POW_RULES = RuleSet([
     @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q)))
     @rule(^(~x, ~z::_iszero) => 1)
     @rule(^(~x, ~z::_isone) => ~x)
+])
+
+const POWSUM_RULES = RuleSet([
+    @acrule( (~x)^2 + 2*(~x)*(~y) + (~y)^2 => ((~x) + (~y))^2 )
+    @acrule( (~x)^2 - 2*(~x)*(~y) + (~y)^2 => ((~x) - (~y))^2 )
+
+    @acrule( (~x)^3 + 3*(~x)^2*(~y) + 3*(~x)*(~y)^2 + (~y)^3 => ((~x) + (~y))^3 )
+    @acrule( (~x)^3 - 3*(~x)^2*(~y) + 3*(~x)*(~y)^2 - (~y)^3 => ((~x) - (~y))^3 )
+
+    @acrule( (~x)^4 + 4*(~x)^3*(~y) + 6*(~x)^2*(~y)^2 + 4*(~x)*(~y)^3 + (~y)^4 => ((~x) + (~y))^4 )
+    @acrule( (~x)^4 - 4*(~x)^3*(~y) + 6*(~x)^2*(~y)^2 - 4*(~x)*(~y)^3 + (~y)^4 => ((~x) - (~y))^4 )
+
+    @acrule( (~x)^5 + 5*(~x)^4*(~y) + 10*(~x)^3*(~y)^2 + 10*(~x)^2*(~y)^3 + 5*(~x)*(~y)^4 + (~y)^5 => ((~x) + (~y))^5 )
+    @acrule( (~x)^5 - 5*(~x)^4*(~y) + 10*(~x)^3*(~y)^2 - 10*(~x)^2*(~y)^3 + 5*(~x)*(~y)^4 - (~y)^5 => ((~x) - (~y))^5 )
+
+    @acrule( (~x)^2 + 2*(~x)*(~y) + 2*(~x)*(~z) + (~y)^2 + 2*(~y)*(~z) + (~z)^2 => ((~x) + (~y) + (~z))^2 )
+    @acrule( (~x)^2 + 2*(~x)*(~y) - 2*(~x)*(~z) + (~y)^2 - 2*(~y)*(~z) + (~z)^2 => ((~x) + (~y) - (~z))^2 )
+    @acrule( (~x)^2 - 2*(~x)*(~y) - 2*(~x)*(~z) + (~y)^2 + 2*(~y)*(~z) + (~z)^2 => ((~x) - (~y) - (~z))^2 )
+
+    @acrule( (~x)^3 + 3*(~x)^2*(~y) + 3*(~x)^2*(~z) + 3*(~x)*(~y)^2 + 6*(~x)*(~y)*(~z) + 3*(~x)*(~z)^2 + (~y)^3 + 3*(~y)^2*(~z) + 3*(~y)*(~z)^2 + (~z)^3 => ((~x) + (~y) + (~z))^3 )
+    @acrule( (~x)^3 + 3*(~x)^2*(~y) - 3*(~x)^2*(~z) + 3*(~x)*(~y)^2 - 6*(~x)*(~y)*(~z) + 3*(~x)*(~z)^2 + (~y)^3 - 3*(~y)^2*(~z) + 3*(~y)*(~z)^2 - (~z)^3 => ((~x) + (~y) - (~z))^3 )
+    @acrule( (~x)^3 - 3*(~x)^2*(~y) - 3*(~x)^2*(~z) + 3*(~x)*(~y)^2 + 6*(~x)*(~y)*(~z) + 3*(~x)*(~z)^2 - (~y)^3 - 3*(~y)^2*(~z) - 3*(~y)*(~z)^2 - (~z)^3 => ((~x) - (~y) - (~z))^3 )
 ])
 
 const ASSORTED_RULES = RuleSet([

@@ -320,6 +320,7 @@ function Base.show(io::IO, t::Term)
         if binary
             get(io, :paren, false) && Base.printstyled(io, "(",color=color)
             for i = 1:length(args)
+                length(args) == 1 && Base.printstyled(io, fname, color=color)
                 Base.printstyled(IOContext(io, :paren => true),
                                  args[i], color=color)
                 i != length(args) && Base.printstyled(io, " $fname ", color=color)

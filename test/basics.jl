@@ -87,3 +87,10 @@ end
     @test substitute(sin(a+b), Dict(a=>1)) == sin(1+b)
     @test substitute(a+b, Dict(a=>1, b=>3)) |> simplify == 4
 end
+
+@testset "printing" begin
+    @syms a b
+    @test repr(a+b) == "a + b"
+    @test repr(-a) == "-a"
+    @test repr(-a + 3) == "3 + (-a)"
+end

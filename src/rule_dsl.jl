@@ -40,7 +40,7 @@ function (r::Rule)(term, ctx=EmptyCtx())
 end
 
 """
-    `@rule LHS => RHS`
+    @rule LHS => RHS
 
 Creates a `Rule` object. A rule object is callable, and  takes an expression and rewrites
 it if it matches the LHS pattern to the RHS pattern, returns `nothing` otherwise.
@@ -141,6 +141,19 @@ sin((a + c))
 ```
 
 Predicate function gets an array of values if attached to a segment variable (`~~x`).
+
+**Context**:
+
+_In predicates_: Contextual predicates are functions wrapped in the `Contextual` type.
+The function is called with 2 arguments: the expression and a context object
+passed during a call to the Rule object (maybe done by passing a context to `simplify` or
+a `RuleSet` object).
+
+The function can use the inputs however it wants, and must return a boolean indicating
+whether the predicate holds or not.
+
+_In the consequent pattern_: Use `(@ctx)` to access the context object on the right hand side
+of an expression.
 """
 macro rule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
@@ -206,11 +219,12 @@ end
 #### Rulesets
 
 """
-    RuleSet(rules::Vector{AbstractRules})(expr; depth=typemax(Int), applyall=false, recurse=true)
+    RuleSet(rules::Vector{AbstractRules}, context=EmptyCtx())(expr; depth=typemax(Int), applyall=false, recurse=true)
 
-`RuleSet` is an `AbstractRule` which applies the given `rules` throughout an `expr`. 
+`RuleSet` is an `AbstractRule` which applies the given `rules` throughout an `expr` with the
+context `context`.
 
-`RuleSet(rules)(expr)` Note that this only applies the rules in one pass, not until there are no
+Note that this only applies the rules in one pass, not until there are no
 changes to be applied. Use `SymbolicUtils.fixpoint(ruleset, expr)` to apply a RuleSet until there 
 are no changes.
 

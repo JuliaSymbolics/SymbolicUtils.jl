@@ -1,18 +1,19 @@
 ##### Numeric simplification
 
 """
-    default_rules(context::T)::RuleSet
+    default_rules(expr, context::T)::RuleSet
 
-The `RuleSet` to be used by default for a given context. Julia packages
-defining their own context types should define this method.
+The `RuleSet` to be used by default for a given expression and the context.
+Julia packages defining their own context types should define this method.
 
-By default, returns SIMPLIFY_RULES
+By default SymbolicUtils will try to apply appropriate rules for expressions
+of symtype Number.
 """
-default_rules(::Any) = SIMPLIFY_RULES
+default_rules(x, ctx) = SIMPLIFY_RULES
 
 """
     simplify(x, ctx=EmptyCtx();
-        rules=default_rules(ctx),
+        rules=default_rules(x, ctx),
         fixpoint=true,
         applyall=true,
         recurse=true)
@@ -32,7 +33,7 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=EmptyCtx(); rules=default_rules(ctx), fixpoint=true, applyall=true, recurse=true)
+function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, recurse=true)
     if fixpoint
         SymbolicUtils.fixpoint(rules, x, ctx; recurse=recurse, applyall=recurse)
     else

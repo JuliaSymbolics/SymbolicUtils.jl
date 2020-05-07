@@ -18,7 +18,7 @@ const PLUS_RULES = RuleSet([
 
     @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
     @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α +  ~β, (~~x)...))
-    @acrule(*(~~x, ~α) + *(~~x, ~β,) => *(~α +  ~β, (~~x)...))
+    @acrule(*(~~x, ~α) + *(~~x, ~β) => *(~α +  ~β, (~~x)...))
 
     @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
     @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
@@ -52,6 +52,7 @@ const POW_RULES = RuleSet([
 
 const ASSORTED_RULES = RuleSet([
     @rule(identity(~x) => ~x)
+    @rule(-(~x) => -1*~x)
     @rule(-(~x, ~y) => ~x + -1(~y))
     @rule(~x / ~y => ~x * pow(~y, -1))
 ])

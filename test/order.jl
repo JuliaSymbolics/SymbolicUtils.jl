@@ -22,7 +22,7 @@ end
 @test 2 <ₑ a
 @test a <ₑ b
 @test istotal(a, 2a)
-@test 2a <ₑ a
+@test a <ₑ 2a
 @test istotal(b*a, a)
 @test a <ₑ b*a 
 @test !(b*a <ₑ b+a)
@@ -44,7 +44,8 @@ end
         @test !(f(2, b) <ₑ f(1, b))
         @test istotal(f(1, b), f(2, b))
         @test istotal(f(2, b), f(1, b))
-        @test !(b <ₑ f(2,b))
+        @test b <ₑ f(2,b) && !(f(2,b) <ₑ b)
+
         for j in i+1:length(fs)
             g = fs[j]
             @test g(a, b) <ₑ f(a, b) && !(f(a, b) <ₑ g(a, b))
@@ -65,7 +66,7 @@ end
 end
 
 @testset "Sym vs Term" begin
-    @syms x
+    @syms x y
 
     @test x <ₑ (3 + x) && !((3 + x) <ₑ x)
     @test x^2 <ₑ y && !(y <ₑ x^2)

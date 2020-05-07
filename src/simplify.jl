@@ -228,6 +228,8 @@ end
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
+pow(x, y::Symbolic) = Base.:^(x,y)
+pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
 
 # Numbers to the back
 function flatten_term(⋆, args)

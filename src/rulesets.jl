@@ -56,6 +56,7 @@ const ASSORTED_RULES = RuleSet([
     @rule(-(~x) => -1*~x)
     @rule(-(~x, ~y) => ~x + -1(~y))
     @rule(~x / ~y => ~x * pow(~y, -1))
+    @rule(cond(~x::isnumber, ~y, ~z) => ~x ? ~y : ~z)
 ])
 
 const TRIG_RULES = RuleSet([
@@ -81,7 +82,6 @@ const BOOLEAN_RULES = RuleSet([
     @rule(((~x) & true) => ~x)
     @rule((false & (~x)) => false)
     @rule(((~x) & false) => false)
-    @rule(cond(~c::isnumber, ~x, ~y) => (~c) ? (~x) : (~y))
     @rule((~f)(~x::isnumber) => (~f)(~x)) # collapse
     @rule((~f)(~x::isnumber, ~y::isnumber) => (~f)(~x, ~y)) # collapse
 ])

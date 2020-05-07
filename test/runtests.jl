@@ -1,11 +1,14 @@
 using Test
 using SymbolicUtils
 
-# == syntax is nice, but we can't use it because
-# it returns a Term{Bool}
+# == / != syntax is nice, let's use it in tests
 macro eqtest(expr)
-    @assert expr.hear == :call && expr.args[1] == :(==)
-    :(@test isequal($(expr.args[2]), $(expr.args[3]))) |> esc
+    @assert expr.head == :call && expr.args[1] in [:(==), :(!=)]
+    if expr.args[1] == :(==)
+        :(@test isequal($(expr.args[2]), $(expr.args[3])))
+    else
+        :(@test !isequal($(expr.args[2]), $(expr.args[3])))
+    end |> esc
 end
 SymbolicUtils.show_simplified[] = false
 

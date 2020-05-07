@@ -46,7 +46,7 @@ end
     @test hash(sin(a+1)) == hash(sin(c+1))
 end
 
-@testset "methods test" begin
+@testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
     @test isequal(w + z, Term{Complex}(+, [w, z]))
@@ -62,9 +62,13 @@ end
 
     @test isequal(rem2pi(a, RoundNearest), Term{Real}(rem2pi, [a, RoundNearest]))
 
-    for f in [(==), (!=), (<=), (>=), (< ), (& ),   (| ), xor]
+    # bool
+    for f in [(==), (!=), (<=), (>=), (<), (>)]
         @test isequal(f(a, 0), Term{Bool}(f, [a, 0]))
     end
+
+    @test symtype(cond(true, 4, 5)) == Int
+    @test symtype(cond(a < 0, b, w)) == Union{Real, Complex}
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{Bool}(==, [w, 0]))
 end

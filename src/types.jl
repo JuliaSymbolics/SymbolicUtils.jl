@@ -58,6 +58,7 @@ symtype(::Symbolic{T}) where {T} = T
 
 Base.isequal(s::Symbolic, x) = false
 Base.isequal(x, s::Symbolic) = false
+Base.isequal(x::Symbolic, y::Symbolic) = false
 ### End of interface
 
 """

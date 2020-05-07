@@ -1,6 +1,7 @@
 
 const SIMPLIFY_RULES = RuleSet([
     @rule ~t::sym_isa(Number) => NUMBER_RULES(~t, applyall=true, recurse=true)
+    @rule ~t::sym_isa(Bool)   => BOOLEAN_RULES(~t, applyall=true, recurse=true)
 ])
 
 const NUMBER_RULES = RuleSet([
@@ -71,6 +72,19 @@ const TRIG_RULES = RuleSet([
     @acrule(csc(~x)^2 + -1 => cot(~x)^2)
 ])
 
+const BOOLEAN_RULES = RuleSet([
+    @rule((true | (~x)) => true)
+    @rule(((~x) | true) => true)
+    @rule((false | (~x)) => ~x)
+    @rule(((~x) | false) => ~x)
+    @rule((true & (~x)) => ~x)
+    @rule(((~x) & true) => ~x)
+    @rule((false & (~x)) => false)
+    @rule(((~x) & false) => false)
+    @rule(cond(~c::isnumber, ~x, ~y) => (~c) ? (~x) : (~y))
+    @rule((~f)(~x::isnumber) => (~f)(~x)) # collapse
+    @rule((~f)(~x::isnumber, ~y::isnumber) => (~f)(~x, ~y)) # collapse
+])
 
 
 OLD_BASIC_NUMBER_RULES = let # Keep these around for benchmarking purposes

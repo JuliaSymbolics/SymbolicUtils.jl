@@ -57,3 +57,27 @@ end
 for f in [identity, one, *, +]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
 end
+
+## Booleans
+
+# binary ops that return Bool
+for (f, Domain) in [(==) => Number, (!=) => Number,
+                    (<=) => Real,   (>=) => Real,
+                    (< ) => Real,   (> ) => Real,
+                    (& ) => Bool,   (| ) => Bool,
+                    xor => Bool]
+    @eval begin
+        promote_symtype(::$(typeof(f)), ::Type{<:$Domain}, ::Type{<:$Domain}) = Bool
+        (::$(typeof(f)))(a::Symbolic{<:$Domain}, b::$Domain) = term($f, a, b, type=Bool)
+        (::$(typeof(f)))(a::Symbolic{<:$Domain}, b::Symbolic{<:$Domain}) = term($f, a, b, type=Bool)
+        (::$(typeof(f)))(a::$Domain, b::Symbolic{<:$Domain}) = term($f, a, b, type=Bool)
+    end
+end
+
+Base.:!(s::Symbolic{Bool}) = Term{Bool}(!, [s])
+Base.:~(s::Symbolic{Bool}) = Term{Bool}(!, [s])
+
+# An ifelse node, ifelse is a built-in unfortunately
+function cond(_if, _then, _else)
+    Term{Union{symtype(_then), symtype(_else)}}(cond, Any[_if, _then, _else])
+end

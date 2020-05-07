@@ -1,18 +1,39 @@
 ##### Numeric simplification
 
-default_rules(::EmptyCtx) = SIMPLIFY_RULES
 """
-    simplify(x, [rules=SIMPLIFY_RULES]; fixpoint=true, applyall=true, recurse=true)
+    default_rules(expr, context::T)::RuleSet
 
-Apply a `RuleSet` of rules provided in `rules`. By default
-these rules are `SymbolicUtils.SIMPLIFY_RULES`. If `fixpoint=true`
-repeatedly applies the set of rules until there are no changes.
+The `RuleSet` to be used by default for a given expression and the context.
+Julia packages defining their own context types should define this method.
+
+By default SymbolicUtils will try to apply appropriate rules for expressions
+of symtype Number.
+"""
+default_rules(x, ctx) = SIMPLIFY_RULES
+
+"""
+    simplify(x, ctx=EmptyCtx();
+        rules=default_rules(x, ctx),
+        fixpoint=true,
+        applyall=true,
+        recurse=true)
+
+Simplify an expression by applying `rules` until there are no changes.
+The second argument, the context is passed to every [`Contextual`](#Contextual)
+predicate and can be accessed as `(@ctx)` in the right hand side of `@rule` expression.
+
+By default the context is an `EmptyCtx()` -- which means there is no contextual information.
+Any arbitrary type can be used as a context, and packages defining their own contexts
+should define `default_rules(ctx::TheContextType)` to return a `RuleSet` that will
+be used by default while simplifying under that context.
+
+If `fixpoint=true` this will repeatedly apply the set of rules until there are no changes.
 Applies them once if `fixpoint=false`.
 
 The `applyall` and `recurse` keywords are forwarded to the enclosed
-`RuleSet`.
+`RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=EmptyCtx(); rules=default_rules(ctx), fixpoint=true, applyall=true, recurse=true)
+function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, recurse=true)
     if fixpoint
         SymbolicUtils.fixpoint(rules, x, ctx; recurse=recurse, applyall=recurse)
     else

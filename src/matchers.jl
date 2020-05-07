@@ -29,8 +29,8 @@ Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
 
 """
-A wrapper for slot and segment predicates which allows them to
-take two arguments: the value and a Context
+A wrapper indicating that the function inside must be called with
+2 arguments. An expression, and the current context.
 """
 struct Contextual{F}
     f::F

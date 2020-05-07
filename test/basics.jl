@@ -92,5 +92,5 @@ end
     @syms a b
     @test repr(a+b) == "a + b"
     @test repr(-a) == "-a"
-    @test repr(-a + 3) == "3 + (-a)"
+    @test repr(-a + 3) == "(-a) + 3"
 end

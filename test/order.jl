@@ -47,15 +47,19 @@ end
         @test !(b <ₑ f(2,b))
         for j in i+1:length(fs)
             g = fs[j]
-            @test !(g(a, b) <ₑ f(a, b)) && !(f(a, b) <ₑ g(a, b))
+            @test g(a, b) <ₑ f(a, b) && !(f(a, b) <ₑ g(a, b))
             @test istotal(f(a, b), g(a, b))
         end
     end
 end
 
-@testset "0-arg variable calls ordering" begin
+@testset "callable variable order" begin
     @syms z() ρ()
 
     @test -1z() <ₑ ρ()
     @test !(ρ() <ₑ -1z())
+
+    @syms a(t) b(t) t
+    @test a(t) <ₑ b(t)
+    @test !(b(t) <ₑ a(t))
 end

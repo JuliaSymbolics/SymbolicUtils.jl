@@ -115,12 +115,14 @@ function <ₑ(a::Term, b::Term)
         return a <ₑ operation(b)
     end
 
+    na = nameof(operation(a))
+    nb = nameof(operation(b))
+
     if 0 < arglength(a) <= 2 && 0 < arglength(b) <= 2
         # e.g. a < sin(a) < b ^ 2 < b
         @goto compare_args
     end
-    na = nameof(operation(a))
-    nb = nameof(operation(b))
+
     if na !== nb
         return na <ₑ nb
     elseif arglength(a) != arglength(b)
@@ -144,9 +146,11 @@ function <ₑ(a::Term, b::Term)
             # compare the numbers
             nums = zip(Iterators.filter(isnumber, aa),
                        Iterators.filter(isnumber, ab))
-            return any(a <ₑ b for (a, b) in nums)
+            if any(a <ₑ b for (a, b) in nums)
+                return true
+            end
         end
-        return na <ₑ nb
+        return na <ₑ nb # all args are equal, compare the name
     end
 end
 

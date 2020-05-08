@@ -96,8 +96,11 @@ const BOOLEAN_RULES = RuleSet([
     @rule(~x > ~x => false)
 
     # simplify terms with no symbolic arguments
-    @rule(!(~x::isliteral(Bool)) => !(~x))
-    @rule((~f)(~x::isliteral(Bool), ~y::isliteral(Bool)) => (~f)(~x, ~y))
+    # e.g. this simplifies term(isodd, 3, type=Bool)
+    # or term(!, false)
+    @rule((~f)(~x::isnumber) => (~f)(~x))
+    # and this simplifies any binary comparison operator
+    @rule((~f)(~x::isnumber, ~y::isnumber) => (~f)(~x, ~y))
 ])
 
 

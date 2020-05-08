@@ -251,25 +251,21 @@ end
 node_count(atom, count; cutoff) = count + 1
 node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
 
-function _recurse_apply_ruleset(r::RuleSet, term, context; depth, recurse, applyall,
-                                threaded=false, thread_subtree_cutoff=100)
-    if threaded
-        _args = map(arguments(term)) do arg
-            if node_count(arg) > thread_subtree_cutoff
-                Threads.@spawn r(arg, context; depth=depth-1, recurse=recurse, applyall=applyall, threaded=threaded,
-                                 thread_subtree_cutoff=thread_subtree_cutoff)
-            else
-                r(arg, context; depth=depth-1, recurse=recurse, applyall=applyall, threaded=false)
-            end
+function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, applyall, thread_subtree_cutoff)
+    _args = map(arguments(term)) do arg
+        if node_count(arg) > thread_subtree_cutoff
+            Threads.@spawn r(arg, context; depth=depth-1, applyall=applyall, threaded=true,
+                             thread_subtree_cutoff=thread_subtree_cutoff)
+        else
+            r(arg, context; depth=depth-1, applyall=applyall, threaded=false)
         end
-        args = map(t -> t isa Task ? fetch(t) : t, _args)
-    else
-        args = map(t -> r(t, context; depth=depth-1, recurse=recurse, applyall=applyall, threaded=false), arguments(term))
     end
-    expr = Term{symtype(term)}(operation(term), args)
+    args = map(t -> t isa Task ? fetch(t) : t, _args)
+    Term{symtype(term)}(operation(term), args)
 end
 
-function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall=false, recurse=true, thread_kwargs...)
+function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::Bool=false, recurse::Bool=true,
+                      threaded::Bool=false, thread_subtree_cutoff::Int=100)
     rules = r.rules
     term = to_symbolic(term)
     # simplify the subexpressions
@@ -278,7 +274,13 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall=fa
     end
     if term isa Symbolic
         expr = if term isa Term && recurse
-            _recurse_apply_ruleset(r, term, context; depth=depth, applyall=applyall, recurse=recurse, thread_kwargs...)
+            if threaded
+                _recurse_apply_ruleset_threaded(r, term, context; depth=depth, applyall=applyall,
+                                                thread_subtree_cutoff=thread_subtree_cutoff)
+            else
+                expr = Term{symtype(term)}(operation(term),
+                                           map(t -> r(t, context, depth=depth-1, applyall=applyall), arguments(term)))
+            end
         else
             term
         end

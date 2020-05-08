@@ -1,5 +1,5 @@
 # A little trick for travis
-using PkgBenchmark
+using PkgBenchmark, SymbolicUtils
 
 pkgpath = dirname(dirname(pathof(SymbolicUtils)))
 # move it out of the repository so that you can check out different branches

@@ -12,8 +12,8 @@ using SymbolicUtils: fixpoint, getdepth
 
     ex = 2 * (w+w+α+β)
     
-    @test rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
-    @test rset(ex) == simplify(ex; rules=rset, fixpoint=false, applyall=false) 
+    @eqtest rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
+    @eqtest rset(ex) == simplify(ex; rules=rset, fixpoint=false, applyall=false) 
     @eqtest fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
 end
 
@@ -99,7 +99,7 @@ end
           (1.0 / (((1 * d) / (1 + b)) * (1 / b)))) +
           ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
            ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
-    @test simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
+    @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
     @test SymbolicUtils.node_count(a + b * c / d) == 4
 end
 

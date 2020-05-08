@@ -251,7 +251,7 @@ end
 node_count(atom, count; cutoff) = count + 1
 node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
 
-function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, applyall, thread_subtree_cutoff)
+function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, thread_subtree_cutoff)
     _args = map(arguments(term)) do arg
         if node_count(arg) > thread_subtree_cutoff
             Threads.@spawn r(arg, context; depth=depth-1, applyall=applyall, threaded=true,
@@ -275,11 +275,11 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
     if term isa Symbolic
         expr = if term isa Term && recurse
             if threaded
-                _recurse_apply_ruleset_threaded(r, term, context; depth=depth, applyall=applyall,
+                _recurse_apply_ruleset_threaded(r, term, context; depth=depth,
                                                 thread_subtree_cutoff=thread_subtree_cutoff)
             else
                 expr = Term{symtype(term)}(operation(term),
-                                           map(t -> r(t, context, depth=depth-1, applyall=applyall), arguments(term)))
+                                           map(t -> r(t, context, depth=depth-1), arguments(term)))
             end
         else
             term

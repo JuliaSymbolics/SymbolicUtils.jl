@@ -35,7 +35,7 @@ The `applyall` and `recurse` keywords are forwarded to the enclosed
 """
 function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, kwargs...)
     if fixpoint
-        SymbolicUtils.fixpoint(rules, x, ctx; recurse=recurse, applyall=applyall)
+        SymbolicUtils.fixpoint(rules, x, ctx; applyall=applyall)
     else
         rules(x, ctx; applyall=applyall, kwargs...)
     end

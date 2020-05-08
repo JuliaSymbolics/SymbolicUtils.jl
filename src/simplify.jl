@@ -33,7 +33,7 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, recurse=true)
+function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, recurse=true, kwargs...)
     if fixpoint
         SymbolicUtils.fixpoint(rules, x, ctx; recurse=recurse, applyall=recurse)
     else

@@ -56,6 +56,8 @@ const ASSORTED_RULES = RuleSet([
     @rule(-(~x) => -1*~x)
     @rule(-(~x, ~y) => ~x + -1(~y))
     @rule(~x / ~y => ~x * pow(~y, -1))
+    @rule(one(~x) => one(symtype(~x)))
+    @rule(zero(~x) => zero(symtype(~x)))
     @rule(cond(~x::isnumber, ~y, ~z) => ~x ? ~y : ~z)
 ])
 

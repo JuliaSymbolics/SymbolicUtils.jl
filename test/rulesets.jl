@@ -13,7 +13,7 @@ using SymbolicUtils: fixpoint, getdepth
     ex = 2 * (w+w+α+β)
     
     @test rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
-    @test rset(ex) == simplify(ex; rules=rset fixpoint=false, applyall=false) 
+    @test rset(ex) == simplify(ex; rules=rset, fixpoint=false, applyall=false) 
     
     @test fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
 end

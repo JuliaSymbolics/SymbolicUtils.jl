@@ -54,7 +54,7 @@ for f in [+, *]
     end
 end
 
-for f in [identity, one, *, +]
+for f in [identity, one, zero, *, +]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
 end
 

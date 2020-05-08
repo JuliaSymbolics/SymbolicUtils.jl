@@ -38,6 +38,15 @@ end
     @eqtest simplify(a + b + 0*c + d) == a + b + d
     @eqtest simplify(a * b * c^0 * d) == a * b * d
     @eqtest simplify(a * b * 1*c * d) == a * b * c * d
+
+    @test simplify(Term(one, [a])) == 1
+    @test simplify(Term(one, [b+1])) == 1
+    @test simplify(Term(one, [x+2])) == 1
+
+
+    @test simplify(Term(zero, [a])) == 0
+    @test simplify(Term(zero, [b+1])) == 0
+    @test simplify(Term(zero, [x+2])) == 0
 end
 
 @testset "boolean" begin

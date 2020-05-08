@@ -257,7 +257,7 @@ function _recurse_apply_ruleset(r::RuleSet, term, context; depth, recurse, apply
     kwargs = (;applyall=applyall, recurse=recurse, threaded=threaded,
               thread_subtree_cutoff=thread_subtree_cutoff)
     if threaded
-        _args = _recurse_apply_ruleset_threaded_args(r, arguments(term), context, kwargs...)
+        _args = _recurse_apply_ruleset_threaded_args(r, arguments(term), context, kwargs)
     else
         args = map(t -> r(t, context; depth=depth-1, kwargs...), arguments(term))
     end

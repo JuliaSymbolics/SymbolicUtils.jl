@@ -305,7 +305,8 @@ function Base.show(io::IO, t::Term)
         s = simplify(t)
         color = isequal(s, t) ? :white : :yellow
 
-        Base.show(IOContext(io, :simplify=>false, :withcolor=>color), s)
+        Base.printstyled(IOContext(io, :simplify=>false, :withcolor=>color),
+                         s, color=color)
     else
         f = operation(t)
         args = arguments(t)
@@ -316,8 +317,12 @@ function Base.show(io::IO, t::Term)
             get(io, :paren, false) && Base.printstyled(io, "(",color=color)
             for i = 1:length(args)
                 length(args) == 1 && Base.printstyled(io, fname, color=color)
+
+                args[i] isa Complex && Base.printstyled(io, "(",color=color)
                 Base.printstyled(IOContext(io, :paren => true),
                                  args[i], color=color)
+                args[i] isa Complex && Base.printstyled(io, ")",color=color)
+
                 i != length(args) && Base.printstyled(io, " $fname ", color=color)
             end
             get(io, :paren, false) && Base.printstyled(io, ")", color=color)

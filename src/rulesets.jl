@@ -88,7 +88,7 @@ const BOOLEAN_RULES = RuleSet([
     @rule(!(~x) | ~x => true)
     @rule(~x | !(~x) => true)
     @rule(xor(~x, !(~x)) => true)
-    @rule(xor(~x, ~x) => true)
+    @rule(xor(~x, ~x) => false)
 
     @rule(~x == ~x => true)
     @rule(~x != ~x => false)

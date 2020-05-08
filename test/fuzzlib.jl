@@ -85,7 +85,7 @@ function gen_rand_expr(inputs;
     try
         return f(args...)
     catch err
-        if err isa DomainError || err isa DivideError
+        if err isa DomainError || err isa DivideError || err isa MethodError
             return gen_rand_expr(inputs,
                                  spec=spec,
                                  leaf_prob=leaf_prob,

@@ -1,4 +1,6 @@
 
+include("fuzzlib.jl")
+
 using Random: seed!
 
 @testset "Fuzz test" begin

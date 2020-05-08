@@ -31,7 +31,7 @@ function irterm(ir::IR, v::IRTools.Variable, args)
   arg == nothing || return args[arg-1]
   ex = ir[v].expr
   if isexpr(ex, :call)
-    return ex.args[1](irterm.((ir,), ex.args[2:end], (args,))...)
+    return term(irterm.((ir,), ex.args, (args,))...)
   else
     return ex
   end

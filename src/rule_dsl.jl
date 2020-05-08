@@ -248,31 +248,25 @@ struct RuleRewriteError
     expr
 end
 
-
 node_count(atom, count; cutoff) = count + 1
 node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
 
 function _recurse_apply_ruleset(r::RuleSet, term, context; depth, recurse, applyall,
                                 threaded=false, thread_subtree_cutoff=100)
-    kwargs = (;depth=depth, applyall=applyall, recurse=recurse, threaded=threaded,
-              thread_subtree_cutoff=thread_subtree_cutoff)
     if threaded
-        args = _recurse_apply_ruleset_threaded_args(r, arguments(term), context, kwargs)
+        _args = map(arguments(term)) do arg
+            if node_count(arg) > thread_subtree_cutoff
+                Threads.@spawn r(arg, context; depth=depth-1, recurse=recurse, applyall=applyall, threaded=threaded,
+                                 thread_subtree_cutoff=thread_subtree_cutoff)
+            else
+                r(arg, context; depth=depth-1, recurse=recurse, applyall=applyall, threaded=false)
+            end
+        end
+        args = map(t -> t isa Task ? fetch(t) : t, _args)
     else
-        args = map(t -> r(t, context; depth=depth-1, kwargs...), arguments(term))
+        args = map(t -> r(t, context; depth=depth-1, recurse=recurse, applyall=applyall, threaded=false), arguments(term))
     end
     expr = Term{symtype(term)}(operation(term), args)
-end
-
-function _recurse_apply_ruleset_threaded_args(r::RuleSet, args, context, kwargs)
-    _args = map(args) do arg
-        if node_count(arg) > kwargs.thread_subtree_cutoff
-            Threads.@spawn r(arg, context; kwargs..., depth=kwargs.depth-1)
-        else
-            r(arg, context; kwargs..., threaded=false, depth=kwargs.depth-1, )
-        end
-    end
-    map(t -> t isa Task ? fetch(t) : t, _args)
 end
 
 function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall=false, recurse=true, thread_kwargs...)
@@ -307,6 +301,7 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall=fa
     end
     return expr # no rule applied
 end
+
 
 getdepth(::RuleSet) = typemax(Int)
 

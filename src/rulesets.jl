@@ -82,6 +82,19 @@ const BOOLEAN_RULES = RuleSet([
     @rule(((~x) & true) => ~x)
     @rule((false & (~x)) => false)
     @rule(((~x) & false) => false)
+
+    @rule(!(~x) & ~x => false)
+    @rule(~x & !(~x) => false)
+    @rule(!(~x) | ~x => true)
+    @rule(~x | !(~x) => true)
+    @rule(xor(~x, !(~x)) => true)
+    @rule(xor(~x, ~x) => true)
+
+    @rule(~x == ~x => true)
+    @rule(~x != ~x => false)
+    @rule(~x < ~x => false)
+    @rule(~x > ~x => false)
+
     @rule((~f)(~x::isnumber) => (~f)(~x)) # collapse
     @rule((~f)(~x::isnumber, ~y::isnumber) => (~f)(~x, ~y)) # collapse
 ])

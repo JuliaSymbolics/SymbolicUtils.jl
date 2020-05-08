@@ -58,8 +58,8 @@ end
     @eqtest simplify(cond(false, a,b)) == b
 
     # abs
-    @eqtest simplify(substitute(cond(a < 0, -a,a), Dict(a=>-1))) == 1
-    @eqtest simplify(substitute(cond(a < 0, -a,a), Dict(a=>1))) == 1
+    @eqtest simplify(substitute(cond(!(a < 0), a,-a), Dict(a=>-1))) == 1
+    @eqtest simplify(substitute(cond(!(a < 0), a,-a), Dict(a=>1))) == 1
 end
 
 @testset "Pythagorean Identities" begin

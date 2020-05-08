@@ -78,6 +78,8 @@ Base.:!(s::Symbolic{Bool}) = Term{Bool}(!, [s])
 Base.:~(s::Symbolic{Bool}) = Term{Bool}(!, [s])
 
 # An ifelse node, ifelse is a built-in unfortunately
-function cond(_if, _then, _else)
+#
+cond(_if::Bool, _then, _else) = ifelse(_if, _then, _else)
+function cond(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(cond, Any[_if, _then, _else])
 end

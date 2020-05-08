@@ -65,6 +65,8 @@ end
     # bool
     for f in [(==), (!=), (<=), (>=), (<), (>)]
         @test isequal(f(a, 0), Term{Bool}(f, [a, 0]))
+        @test isequal(f(0, a), Term{Bool}(f, [0, a]))
+        @test isequal(f(a, a), Term{Bool}(f, [a, a]))
     end
 
     @test symtype(cond(true, 4, 5)) == Int

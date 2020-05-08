@@ -1,7 +1,7 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "0.3.0"
+version = "0.3.1"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"

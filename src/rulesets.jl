@@ -1,5 +1,6 @@
 
 const SIMPLIFY_RULES = RuleSet([
+    @rule ~t::sym_isa(Bool)   => BOOLEAN_RULES(~t, applyall=true, recurse=true)
     @rule ~t::sym_isa(Number) => NUMBER_RULES(~t, applyall=true, recurse=true)
 ])
 
@@ -55,6 +56,7 @@ const ASSORTED_RULES = RuleSet([
     @rule(-(~x) => -1*~x)
     @rule(-(~x, ~y) => ~x + -1(~y))
     @rule(~x / ~y => ~x * pow(~y, -1))
+    @rule(cond(~x::isnumber, ~y, ~z) => ~x ? ~y : ~z)
 ])
 
 const TRIG_RULES = RuleSet([
@@ -71,6 +73,35 @@ const TRIG_RULES = RuleSet([
     @acrule(csc(~x)^2 + -1 => cot(~x)^2)
 ])
 
+const BOOLEAN_RULES = RuleSet([
+    @rule((true | (~x)) => true)
+    @rule(((~x) | true) => true)
+    @rule((false | (~x)) => ~x)
+    @rule(((~x) | false) => ~x)
+    @rule((true & (~x)) => ~x)
+    @rule(((~x) & true) => ~x)
+    @rule((false & (~x)) => false)
+    @rule(((~x) & false) => false)
+
+    @rule(!(~x) & ~x => false)
+    @rule(~x & !(~x) => false)
+    @rule(!(~x) | ~x => true)
+    @rule(~x | !(~x) => true)
+    @rule(xor(~x, !(~x)) => true)
+    @rule(xor(~x, ~x) => false)
+
+    @rule(~x == ~x => true)
+    @rule(~x != ~x => false)
+    @rule(~x < ~x => false)
+    @rule(~x > ~x => false)
+
+    # simplify terms with no symbolic arguments
+    # e.g. this simplifies term(isodd, 3, type=Bool)
+    # or term(!, false)
+    @rule((~f)(~x::isnumber) => (~f)(~x))
+    # and this simplifies any binary comparison operator
+    @rule((~f)(~x::isnumber, ~y::isnumber) => (~f)(~x, ~y))
+])
 
 
 OLD_BASIC_NUMBER_RULES = let # Keep these around for benchmarking purposes

@@ -56,6 +56,9 @@ symtype(x) = Any
 
 symtype(::Symbolic{T}) where {T} = T
 
+Base.isequal(s::Symbolic, x) = false
+Base.isequal(x, s::Symbolic) = false
+Base.isequal(x::Symbolic, y::Symbolic) = false
 ### End of interface
 
 """
@@ -109,9 +112,6 @@ When constructing [`Term`](#Term)s without an explicit symtype,
 promote_symtype(f, Ts...) = Any
 
 
-
-Base.:(==)(a::Symbolic, b::Symbolic) = a === b || isequal(a,b)
-
 #--------------------
 #--------------------
 #### Syms
@@ -132,13 +132,7 @@ Sym(x) = Sym{symtype(x)}(x)
 
 Base.nameof(v::Sym) = v.name
 
-Base.:(==)(a::Sym, b::Sym) = a === b
-
-Base.:(==)(::Sym, ::Symbolic) = false
-
-Base.:(==)(::Symbolic, ::Sym) = false
-
-Base.isequal(v1::Sym, v2::Sym) = isequal(v1.name, v2.name)
+Base.isequal(v1::Sym{T}, v2::Sym{T}) where {T} = v1 === v2
 
 Base.show(io::IO, v::Sym) = print(io, v.name)
 
@@ -283,6 +277,7 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
 end
 
 function Base.isequal(t1::Term, t2::Term)
+    t1 === t2 && return true
     a1 = arguments(t1)
     a2 = arguments(t2)
 
@@ -310,7 +305,8 @@ function Base.show(io::IO, t::Term)
         s = simplify(t)
         color = isequal(s, t) ? :white : :yellow
 
-        Base.show(IOContext(io, :simplify=>false, :withcolor=>color), s)
+        Base.printstyled(IOContext(io, :simplify=>false, :withcolor=>color),
+                         s, color=color)
     else
         f = operation(t)
         args = arguments(t)
@@ -321,8 +317,12 @@ function Base.show(io::IO, t::Term)
             get(io, :paren, false) && Base.printstyled(io, "(",color=color)
             for i = 1:length(args)
                 length(args) == 1 && Base.printstyled(io, fname, color=color)
+
+                args[i] isa Complex && Base.printstyled(io, "(",color=color)
                 Base.printstyled(IOContext(io, :paren => true),
                                  args[i], color=color)
+                args[i] isa Complex && Base.printstyled(io, ")",color=color)
+
                 i != length(args) && Base.printstyled(io, " $fname ", color=color)
             end
             get(io, :paren, false) && Base.printstyled(io, ")", color=color)

@@ -14,31 +14,53 @@ using SymbolicUtils: fixpoint, getdepth
     
     @test rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
     @test rset(ex) == simplify(ex; rules=rset, fixpoint=false, applyall=false) 
-    
-    @test fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
+    @eqtest fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
 end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number
-    @test simplify(x - y) == x + -1*y
-    @test simplify(x - sin(y)) == x + -1*sin(y)
-    @test simplify(-sin(x)) == -1*sin(x)
-    @test simplify(1 * x * 2) == 2 * x
-    @test simplify(1 + x + 2) == 3 + x
-    @test simplify(b*b) == b^2 # tests merge_repeats
-    @test simplify((a*b)^c) == a^c * b^c
+    @eqtest simplify(x - y) == x + -1*y
+    @eqtest simplify(x - sin(y)) == x + -1*sin(y)
+    @eqtest simplify(-sin(x)) == -1*sin(x)
+    @eqtest simplify(1 * x * 2) == 2 * x
+    @eqtest simplify(1 + x + 2) == 3 + x
+    @eqtest simplify(b*b) == b^2 # tests merge_repeats
+    @eqtest simplify((a*b)^c) == a^c * b^c
 
-    @test simplify(1x + 2x) == 3x
-    @test simplify(3x + 2x) == 5x
+    @eqtest simplify(1x + 2x) == 3x
+    @eqtest simplify(3x + 2x) == 5x
 
-    @test simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == (3 * x * y) + a + b + c + d
-    @test simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == (4 * x * y) + a + b + c + d
+    @eqtest simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == (3 * x * y) + a + b + c + d
+    @eqtest simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == (4 * x * y) + a + b + c + d
 
-    @test simplify(a * x^y * b * x^d) == (a * b * (x ^ (d + y)))
+    @eqtest simplify(a * x^y * b * x^d) == (a * b * (x ^ (d + y)))
 
-    @test simplify(a + b + 0*c + d) == a + b + d
-    @test simplify(a * b * c^0 * d) == a * b * d
-    @test simplify(a * b * 1*c * d) == a * b * c * d
+    @eqtest simplify(a + b + 0*c + d) == a + b + d
+    @eqtest simplify(a * b * c^0 * d) == a * b * d
+    @eqtest simplify(a * b * 1*c * d) == a * b * c * d
+end
+
+@testset "boolean" begin
+    @syms a::Real b c
+
+    @eqtest simplify(a < 0) == (a < 0)
+    @eqtest simplify(0 < a) == (0 < a)
+    @eqtest simplify((0 < a) | true) == true
+    @eqtest simplify(true | (0 < a)) == true
+    @eqtest simplify((0 < a) & true) == (0 < a)
+    @eqtest simplify(true & (0 < a)) == (0 < a)
+    @eqtest simplify(false & (0 < a)) == false
+    @eqtest simplify((0 < a) & false) == false
+    @eqtest simplify(Term{Bool}(!, [true])) == false
+    @eqtest simplify(Term{Bool}(|, [false, true])) == true
+    @eqtest simplify(cond(true, a,b)) == a
+    @eqtest simplify(cond(false, a,b)) == b
+
+    # abs
+    @test simplify(substitute(cond(!(a < 0), a,-a), Dict(a=>-1))) == 1
+    @test simplify(substitute(cond(!(a < 0), a,-a), Dict(a=>1))) == 1
+    @test simplify(substitute(cond(a < 0, -a, a), Dict(a=>-1))) == 1
+    @test simplify(substitute(cond(a < 0, -a, a), Dict(a=>1))) == 1
 end
 
 @testset "Pythagorean Identities" begin
@@ -48,16 +70,16 @@ end
     @test simplify(cos(y)^2 + 1 + sin(y)^2) == 2
     @test simplify(sin(y)^2 + cos(y)^2 + 1) == 2
 
-    @test simplify(1 + y + tan(x)^2) == sec(x)^2 + y
-    @test simplify(1 + y + cot(x)^2) == csc(x)^2 + y
+    @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
+    @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
 end
 
 @testset "Depth" begin
     @syms x
     R = RuleSet([@rule(sin(~x) => cos(~x)),
                  @rule( ~x + 1 => ~x - 1)])
-    @test R(sin(sin(sin(x + 1)))) == cos(cos(cos(x - 1)))
-    @test R(sin(sin(sin(x + 1))), depth=2) == cos(cos(sin(x + 1)))
+    @eqtest R(sin(sin(sin(x + 1)))) == cos(cos(cos(x - 1)))
+    @eqtest R(sin(sin(sin(x + 1))), depth=2) == cos(cos(sin(x + 1)))
 end
 
 @testset "RuleRewriteError" begin

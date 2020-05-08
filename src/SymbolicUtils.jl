@@ -32,6 +32,7 @@ include("types.jl")
 
 
 using SpecialFunctions, NaNMath
+export cond
 include("methods.jl")
 
 

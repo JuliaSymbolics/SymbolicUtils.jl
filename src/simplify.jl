@@ -59,7 +59,8 @@ end
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 is_operation(f) = @nospecialize(x) -> (x isa Term) && (operation(x) == f)
 
-isnumber(x) = x isa Number
+isliteral(::Type{T}) where {T} = x -> x isa T
+isnumber(x) = isliteral(Number)(x)
 
 _iszero(t) = false
 _iszero(x::Number) = iszero(x)

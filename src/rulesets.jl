@@ -95,8 +95,9 @@ const BOOLEAN_RULES = RuleSet([
     @rule(~x < ~x => false)
     @rule(~x > ~x => false)
 
-    @rule((~f)(~x::isnumber) => (~f)(~x)) # collapse
-    @rule((~f)(~x::isnumber, ~y::isnumber) => (~f)(~x, ~y)) # collapse
+    # simplify terms with no symbolic arguments
+    @rule(!(~x::isliteral(Bool)) => !(~x))
+    @rule((~f)(~x::isliteral(Bool), ~y::isliteral(Bool)) => (~f)(~x, ~y))
 ])
 
 

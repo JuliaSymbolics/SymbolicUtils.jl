@@ -253,12 +253,12 @@ node_count(atom, count; cutoff) = count + 1
 node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
 
 function _recurse_apply_ruleset(r::RuleSet, term, context; depth, recurse, applyall,
-                                threaded=false, thread_depth_cutoff=100)
+                                threaded=false, thread_subtree_cutoff=100)
     kwargs = (;applyall=applyall, recurse=recurse, threaded=threaded,
-              thread_depth_cutoff=thread_depth_cutoff)
+              thread_subtree_cutoff=thread_subtree_cutoff)
     if threaded
         _args = map(arguments(term)) do arg
-            if node_count(term) > thread_depth_cutoff
+            if node_count(term) > thread_subtree_cutoff
                 Threads.@spawn r(arg, context; depth=depth-1, kwargs...)
             else
                 r(arg, context; depth=depth-1, kwargs..., threaded=false)

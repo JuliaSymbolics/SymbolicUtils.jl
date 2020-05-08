@@ -8,7 +8,7 @@ using Random: seed!
     for i=1:1500
         fuzz_test(10, num_spec)
     end
-    for i=1:1500
-        fuzz_test(10, bool_spec)
+    for i=1:500
+        fuzz_test(8, bool_spec)
     end
 end

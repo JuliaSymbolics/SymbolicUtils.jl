@@ -9,7 +9,7 @@ function rand_input(T)
     elseif T <: Integer
         return rand(-100:100)
     elseif T == Rational
-        return Rational(rand_input(Int), rand_input(Int))
+        return Rational(rand_input(Int), rand(1:50)) # no 0 denominator tests yet!
     elseif T == Real
         return rand_input(rand([Int, Float64, Rational]))
     elseif T == Complex
@@ -34,8 +34,11 @@ const num_spec = let
                   ()->rand([a b c d e f]),
                   ()->rand([a b c d e f])]
 
+    binops = SymbolicUtils.diadic
+    nopow  = filter(x->x!==(^), binops)
+    twoargfns = vcat(nopow, (x,y)->x isa Union{Int, Rational, Complex{<:Rational}} ? x * y : x^y)
     fns = vcat(1 .=> SymbolicUtils.monadic,
-               2 .=> vcat(SymbolicUtils.diadic, fill(+, 5), [-,-], fill(*, 5)),
+               2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5)),
     3 .=> [+, *])
 
 

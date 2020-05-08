@@ -254,10 +254,10 @@ node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cut
 function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, thread_subtree_cutoff)
     _args = map(arguments(term)) do arg
         if node_count(arg) > thread_subtree_cutoff
-            Threads.@spawn r(arg, context; depth=depth-1, applyall=applyall, threaded=true,
+            Threads.@spawn r(arg, context; depth=depth-1, threaded=true,
                              thread_subtree_cutoff=thread_subtree_cutoff)
         else
-            r(arg, context; depth=depth-1, applyall=applyall, threaded=false)
+            r(arg, context; depth=depth-1, threaded=false)
         end
     end
     args = map(t -> t isa Task ? fetch(t) : t, _args)

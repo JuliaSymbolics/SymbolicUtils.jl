@@ -51,4 +51,6 @@ include("simplify.jl")
 
 include("rulesets.jl")
 
+include("trace.jl")
+
 end # module

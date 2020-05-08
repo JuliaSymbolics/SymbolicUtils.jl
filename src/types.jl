@@ -278,6 +278,10 @@ operation(x::Term) = x.f
 
 arguments(x::Term) = x.arguments
 
+function Base.hash(t::Term{T}, salt::UInt) where {T}
+    hash(arguments(t), hash(operation(t), hash(T, salt)))
+end
+
 function Base.isequal(t1::Term, t2::Term)
     a1 = arguments(t1)
     a2 = arguments(t2)
@@ -316,6 +320,7 @@ function Base.show(io::IO, t::Term)
         if binary
             get(io, :paren, false) && Base.printstyled(io, "(",color=color)
             for i = 1:length(args)
+                length(args) == 1 && Base.printstyled(io, fname, color=color)
                 Base.printstyled(IOContext(io, :paren => true),
                                  args[i], color=color)
                 i != length(args) && Base.printstyled(io, " $fname ", color=color)

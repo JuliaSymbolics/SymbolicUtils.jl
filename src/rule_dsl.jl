@@ -28,18 +28,19 @@ function Base.show(io::IO, r::Rule)
 end
 
 const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
+struct EmptyCtx end
 
-function (r::Rule)(term)
-    match_function = r.matcher
+function (r::Rule)(term, ctx=EmptyCtx())
     rhs = r.rhs
 
-    match_function((term,),
-                   EMPTY_DICT,
-                   (d, n) -> n === 1 ? (@timer "RHS" rhs(d)) : nothing)
+    r.matcher((term,), EMPTY_DICT, ctx) do bindings, n
+        # n == 1 means that exactly one term of the input (term,) was matched
+        n === 1 ? (@timer "RHS" rhs(bindings, ctx)) : nothing
+    end
 end
 
 """
-    `@rule LHS => RHS`
+    @rule LHS => RHS
 
 Creates a `Rule` object. A rule object is callable, and  takes an expression and rewrites
 it if it matches the LHS pattern to the RHS pattern, returns `nothing` otherwise.
@@ -140,6 +141,19 @@ sin((a + c))
 ```
 
 Predicate function gets an array of values if attached to a segment variable (`~~x`).
+
+**Context**:
+
+_In predicates_: Contextual predicates are functions wrapped in the `Contextual` type.
+The function is called with 2 arguments: the expression and a context object
+passed during a call to the Rule object (maybe done by passing a context to `simplify` or
+a `RuleSet` object).
+
+The function can use the inputs however it wants, and must return a boolean indicating
+whether the predicate holds or not.
+
+_In the consequent pattern_: Use `(@ctx)` to access the context object on the right hand side
+of an expression.
 """
 macro rule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
@@ -152,7 +166,7 @@ macro rule(expr)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
-             __MATCHES__ -> $(makeconsequent(rhs)),
+             (__MATCHES__, __CTX__) -> $(makeconsequent(rhs)),
              rule_depth($lhs_term))
     end
 end
@@ -177,7 +191,7 @@ end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-function (acr::ACRule)(term)
+function (acr::ACRule)(term, ctx=EmptyCtx())
     r = Rule(acr)
     if !(term isa Term)
         r(term)
@@ -187,12 +201,12 @@ function (acr::ACRule)(term)
         if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
             return nothing
         end
-        
+
         T = symtype(term)
         args = arguments(term)
-        
+
         for inds in permutations(eachindex(args), acr.arity)
-            result = r(Term{T}(f, args[inds]))
+            result = r(Term{T}(f, args[inds]), ctx)
             if !isnothing(result)
                 return Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
             end
@@ -205,11 +219,12 @@ end
 #### Rulesets
 
 """
-    RuleSet(rules::Vector{AbstractRules})(expr; depth=typemax(Int), applyall=false, recurse=true)
+    RuleSet(rules::Vector{AbstractRules}, context=EmptyCtx())(expr; depth=typemax(Int), applyall=false, recurse=true)
 
-`RuleSet` is an `AbstractRule` which applies the given `rules` throughout an `expr`. 
+`RuleSet` is an `AbstractRule` which applies the given `rules` throughout an `expr` with the
+context `context`.
 
-`RuleSet(rules)(expr)` Note that this only applies the rules in one pass, not until there are no
+Note that this only applies the rules in one pass, not until there are no
 changes to be applied. Use `SymbolicUtils.fixpoint(ruleset, expr)` to apply a RuleSet until there 
 are no changes.
 
@@ -233,28 +248,30 @@ struct RuleRewriteError
     expr
 end
 
+
 node_count(atom, count; cutoff) = count + 1
 node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
 
-function _recurse_apply_ruleset(r::RuleSet, term; depth, recurse, applyall, threaded=false, thread_depth_cutoff=100)
+function _recurse_apply_ruleset(r::RuleSet, term, context; depth, recurse, applyall,
+                                threaded=false, thread_depth_cutoff=100)
     kwargs = (;applyall=applyall, recurse=recurse, threaded=threaded,
               thread_depth_cutoff=thread_depth_cutoff)
     if threaded
         _args = map(arguments(term)) do arg
             if node_count(term) > thread_depth_cutoff
-                Threads.@spawn r(arg; depth=depth-1, kwargs...)
+                Threads.@spawn r(arg, context; depth=depth-1, kwargs...)
             else
-                r(arg; depth=depth-1, kwargs..., threaded=false)
+                r(arg, context; depth=depth-1, kwargs..., threaded=false)
             end
         end
         args = map(t -> t isa Task ? fetch(t) : t, _args)
     else
-        args = map(t -> r(t; depth=depth-1, kwargs...), arguments(term))
+        args = map(t -> r(t, context; depth=depth-1, kwargs...), arguments(term))
     end
     expr = Term{symtype(term)}(operation(term), args)
 end
 
-function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true, thread_kwargs...)
+function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall=false, recurse=true, thread_kwargs...)
     rules = r.rules
     term = to_symbolic(term)
     # simplify the subexpressions
@@ -263,13 +280,13 @@ function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true, th
     end
     if term isa Symbolic
         expr = if term isa Term && recurse
-            _recurse_apply_ruleset(r, term; depth=depth, applyall=applyall, recurse=recurse, thread_kwargs...)
+            _recurse_apply_ruleset(r, term, context; depth=depth, applyall=applyall, recurse=recurse, thread_kwargs...)
         else
             term
         end
         for i in 1:length(rules)
-             expr′ = try
-                @timer(repr(rules[i]), rules[i](expr))
+            expr′ = try
+                @timer(repr(rules[i]), rules[i](expr, context))
             catch err
                 throw(RuleRewriteError(rules[i], expr))
             end
@@ -277,7 +294,7 @@ function (r::RuleSet)(term; depth=typemax(Int), applyall=false, recurse=true, th
                 # this rule doesn't apply
                 continue
             else
-                expr = r(expr′, depth=getdepth(rules[i]))# levels touched
+                expr = r(expr′, context, depth=getdepth(rules[i]))# levels touched
                 applyall || return expr
             end
         end
@@ -289,16 +306,14 @@ end
 
 getdepth(::RuleSet) = typemax(Int)
 
-function fixpoint(f, x; kwargs...)
-    x1 = f(x; kwargs...)
+function fixpoint(f, x, ctx; kwargs...)
+    x1 = f(x, ctx; kwargs...)
     while !isequal(x1, x)
         x = x1
-        x1 = f(x; kwargs...)
+        x1 = f(x, ctx; kwargs...)
     end
     return x1
 end
-
-fixpoint(f; kwargs...) = x -> fixpoint(f, x; kwargs...)
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
     msg = "Failed to apply rule $(err.rule) on expression "

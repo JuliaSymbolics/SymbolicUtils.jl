@@ -22,13 +22,22 @@ struct Segment{F}
     predicate::F
 end
 
-ismatch(s::Segment, t) = s.predicate(t)
-
 Segment(s) = Segment(s, alwaystrue)
 
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
 
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
+
+"""
+A wrapper indicating that the function inside must be called with
+2 arguments. An expression, and the current context.
+"""
+struct Contextual{F}
+    f::F
+end
+(c::Contextual)(args...) = c.f(args...)
+
+ctxcall(f, x, ctx) = f isa Contextual ? f(x, ctx) : f(x)
 
 function makesegment(s::Expr, keys)
     if !(s.head == :(::))
@@ -91,6 +100,16 @@ function makeconsequent(expr)
                 return Expr(:call, map(makeconsequent, expr.args)...)
             end
         else
+            if expr.head == :macrocall
+                if expr.args[1] === Symbol("@ctx")
+                    if length(filter(x->!(x isa LineNumberNode), expr.args)) != 1
+                        error("@ctx takes no arguments. try (@ctx)")
+                    end
+                    return :__CTX__
+                else
+                    return esc(expr)
+                end
+            end
             return Expr(expr.head, map(makeconsequent, expr.args)...)
         end
     else
@@ -106,13 +125,13 @@ end
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 function matcher(val::Any)
-    function literal_matcher(data, bindings, next)
+    function literal_matcher(next, data, bindings, ctx)
         !isempty(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
     end
 end
 
 function matcher(slot::Slot)
-    function slot_matcher(data, bindings, next)
+    function slot_matcher(next, data, bindings, ctx)
         isempty(data) && return
         val = get(bindings, slot.name, nothing)
         if val !== nothing
@@ -120,7 +139,7 @@ function matcher(slot::Slot)
                 return next(bindings, 1)
             end
         else
-            if slot.predicate(car(data))
+            if ctxcall(slot.predicate, car(data), ctx)
                 next(assoc(bindings, slot.name, car(data)), 1)
             end
         end
@@ -156,7 +175,7 @@ function trymatchexpr(data, value, n)
 end
 
 function matcher(segment::Segment)
-    function segment_matcher(data, bindings, success)
+    function segment_matcher(success, data, bindings, ctx)
         val = get(bindings, segment.name, nothing)
 
         if val !== nothing
@@ -170,7 +189,7 @@ function matcher(segment::Segment)
             for i=length(data):-1:0
                 subexpr = take_n(data, i)
 
-                if segment.predicate(subexpr)
+                if ctxcall(segment.predicate, subexpr, ctx)
                     res = success(assoc(bindings, segment.name, subexpr), i)
                     if res !== nothing
                         break
@@ -185,7 +204,7 @@ end
 
 function matcher(term::Term)
     matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
-    function term_matcher(data, bindings, success)
+    function term_matcher(success, data, bindings, ctx)
 
         isempty(data) && return nothing
         !(car(data) isa Term) && return nothing
@@ -197,8 +216,9 @@ function matcher(term::Term)
                 end
                 return nothing
             end
-            res = car(matchers′)(term, bindings′,
-                                 (b, n) -> loop(drop_n(term, n), b, cdr(matchers′)))
+            car(matchers′)(term, bindings′, ctx) do b, n
+                loop(drop_n(term, n), b, cdr(matchers′))
+            end
         end
 
         loop(car(data), bindings, matchers) # Try to eat exactly one term

@@ -1,22 +1,57 @@
 ##### Numeric simplification
 
 """
-    simplify(x, [rules=SIMPLIFY_RULES]; fixpoint=true, applyall=true, recurse=true)
+    default_rules(expr, context::T)::RuleSet
 
-Apply a `RuleSet` of rules provided in `rules`. By default
-these rules are `SymbolicUtils.SIMPLIFY_RULES`. If `fixpoint=true`
-repeatedly applies the set of rules until there are no changes.
+The `RuleSet` to be used by default for a given expression and the context.
+Julia packages defining their own context types should define this method.
+
+By default SymbolicUtils will try to apply appropriate rules for expressions
+of symtype Number.
+"""
+default_rules(x, ctx) = SIMPLIFY_RULES
+
+"""
+    simplify(x, ctx=EmptyCtx();
+        rules=default_rules(x, ctx),
+        fixpoint=true,
+        applyall=true,
+        recurse=true)
+
+Simplify an expression by applying `rules` until there are no changes.
+The second argument, the context is passed to every [`Contextual`](#Contextual)
+predicate and can be accessed as `(@ctx)` in the right hand side of `@rule` expression.
+
+By default the context is an `EmptyCtx()` -- which means there is no contextual information.
+Any arbitrary type can be used as a context, and packages defining their own contexts
+should define `default_rules(ctx::TheContextType)` to return a `RuleSet` that will
+be used by default while simplifying under that context.
+
+If `fixpoint=true` this will repeatedly apply the set of rules until there are no changes.
 Applies them once if `fixpoint=false`.
 
 The `applyall` and `recurse` keywords are forwarded to the enclosed
-`RuleSet`.
+`RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, rules=SIMPLIFY_RULES; fixpoint=true, applyall=true, kwargs...)
+function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, kwargs...)
     if fixpoint
-        SymbolicUtils.fixpoint(rules; applyall=applyall, kwargs...)(x)
+        SymbolicUtils.fixpoint(rules, x, ctx; recurse=recurse, applyall=applyall)
     else
-        rules(x; applyall=applyall, kwargs...)
+        rules(x, ctx; applyall=applyall, kwargs...)
     end
+end
+
+
+Base.@deprecate simplify(x, rules::RuleSet; kwargs...)  simplify(x, rules=rules; kwargs...)
+
+"""
+    substitute(expr, dict)
+
+substitute any subexpression that matches a key in `dict` with
+the corresponding value.
+"""
+function substitute(expr, dict)
+    RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])(expr)
 end
 
 ### Predicates
@@ -49,9 +84,9 @@ function <ₑ(a::Sym, b::Term)
             # both subterms are terms, so it's definitely firster
             return true
         elseif n1
-            return a <ₑ args[1]
+            return isequal(a, args[1]) || a <ₑ args[1]
         elseif n2
-            return a <ₑ args[2]
+            return isequal(a, args[2]) || a <ₑ args[2]
         else
             # both arguments are not numbers
             # This case when a <ₑ Term(^, [1,-1])
@@ -102,12 +137,14 @@ function <ₑ(a::Term, b::Term)
         return a <ₑ operation(b)
     end
 
+    na = nameof(operation(a))
+    nb = nameof(operation(b))
+
     if 0 < arglength(a) <= 2 && 0 < arglength(b) <= 2
         # e.g. a < sin(a) < b ^ 2 < b
         @goto compare_args
     end
-    na = nameof(operation(a))
-    nb = nameof(operation(b))
+
     if na !== nb
         return na <ₑ nb
     elseif arglength(a) != arglength(b)
@@ -131,9 +168,11 @@ function <ₑ(a::Term, b::Term)
             # compare the numbers
             nums = zip(Iterators.filter(isnumber, aa),
                        Iterators.filter(isnumber, ab))
-            return any(a <ₑ b for (a, b) in nums)
+            if any(a <ₑ b for (a, b) in nums)
+                return true
+            end
         end
-        return na <ₑ nb
+        return na <ₑ nb # all args are equal, compare the name
     end
 end
 

@@ -265,8 +265,8 @@ function _recurse_apply_ruleset(r::RuleSet, term, context; depth, recurse, apply
 end
 
 function _recurse_apply_ruleset_threaded_args(r::RuleSet, args, context, kwargs)
-    _args = map(arguments(term)) do arg
-        if node_count(term) > thread_subtree_cutoff
+    _args = map(args) do arg
+        if node_count(arg) > thread_subtree_cutoff
             Threads.@spawn r(arg, context; depth=depth-1, kwargs...)
         else
             r(arg, context; depth=depth-1, kwargs..., threaded=false)

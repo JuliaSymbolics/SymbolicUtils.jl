@@ -46,21 +46,33 @@ end
     @test hash(sin(a+1)) == hash(sin(c+1))
 end
 
-@testset "methods test" begin
+@testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test w + z == Term{Complex}(+, [w, z])
-    @test z + a == Term{Number}(+, [z, a])
-    @test a + b == Term{Real}(+, [a, b])
-    @test a + x == Term{Number}(+, [a, x])
-    @test a + z == Term{Number}(+, [a, z])
+    @test isequal(w + z, Term{Complex}(+, [w, z]))
+    @test isequal(z + a, Term{Number}(+, [z, a]))
+    @test isequal(a + b, Term{Real}(+, [a, b]))
+    @test isequal(a + x, Term{Number}(+, [a, x]))
+    @test isequal(a + z, Term{Number}(+, [a, z]))
 
     # promote_symtype of identity
-    @test Term(identity, [w]) == Term{Complex}(identity, [w])
-    @test +(w) == w
-    @test +(a) == a
+    @test isequal(Term(identity, [w]), Term{Complex}(identity, [w]))
+    @test isequal(+(w), w)
+    @test isequal(+(a), a)
 
-    @test rem2pi(a, RoundNearest) == Term{Real}(rem2pi, [a, RoundNearest])
+    @test isequal(rem2pi(a, RoundNearest), Term{Real}(rem2pi, [a, RoundNearest]))
+
+    # bool
+    for f in [(==), (!=), (<=), (>=), (<), (>)]
+        @test isequal(f(a, 0), Term{Bool}(f, [a, 0]))
+        @test isequal(f(0, a), Term{Bool}(f, [0, a]))
+        @test isequal(f(a, a), Term{Bool}(f, [a, a]))
+    end
+
+    @test symtype(cond(true, 4, 5)) == Int
+    @test symtype(cond(a < 0, b, w)) == Union{Real, Complex}
+    @test_throws MethodError w < 0
+    @test isequal(w == 0, Term{Bool}(==, [w, 0]))
 end
 
 @testset "err test" begin
@@ -84,7 +96,7 @@ end
 @testset "substitute" begin
     @syms a b
     @test substitute(a, Dict(a=>1)) == 1
-    @test substitute(sin(a+b), Dict(a=>1)) == sin(1+b)
+    @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(1+b))
     @test substitute(a+b, Dict(a=>1, b=>3)) |> simplify == 4
 end
 

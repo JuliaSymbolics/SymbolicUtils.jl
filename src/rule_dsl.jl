@@ -248,8 +248,8 @@ struct RuleRewriteError
     expr
 end
 
-node_count(atom, count; cutoff) = count + 1
-node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
+node_count(atom, count=0) = count + 1
+node_count(t::Term, count=0) = sum(node_count(arg, count) for arg ∈ arguments(t))
 
 function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, thread_subtree_cutoff)
     _args = map(arguments(term)) do arg
@@ -261,7 +261,13 @@ function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, threa
         end
     end
     args = map(t -> t isa Task ? fetch(t) : t, _args)
-    Term{symtype(term)}(operation(term), args)
+    if all(isnothing, args)
+        return nothing
+    else
+        return Term{symtype(term)}(operation(term),
+                                   map((old, new)-> new === nothing ?
+                                       old : new, arguments(term), args))
+    end
 end
 
 function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::Bool=false, recurse::Bool=true,
@@ -270,7 +276,7 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
     term = to_symbolic(term)
     # simplify the subexpressions
     if depth == 0
-        return term
+        return nothing
     end
     if term isa Symbolic
         expr = if term isa Term && recurse
@@ -278,23 +284,36 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
                 _recurse_apply_ruleset_threaded(r, term, context; depth=depth,
                                                 thread_subtree_cutoff=thread_subtree_cutoff)
             else
-                expr = Term{symtype(term)}(operation(term),
-                                           map(t -> r(t, context, depth=depth-1), arguments(term)))
+                args = map(t -> r(t, context, depth=depth-1), arguments(term))
+                if all(isnothing, args)
+                    term
+                else
+                    Term{symtype(term)}(operation(term),
+                                        map((old, new)-> new === nothing ?
+                                            old : new,
+                                            arguments(term), args))
+                end
             end
         else
             term
         end
+
         for i in 1:length(rules)
+
             expr′ = try
                 @timer(repr(rules[i]), rules[i](expr, context))
             catch err
                 throw(RuleRewriteError(rules[i], expr))
             end
+
             if expr′ === nothing
                 # this rule doesn't apply
                 continue
             else
                 expr = r(expr′, context, depth=getdepth(rules[i]))# levels touched
+                if expr === nothing
+                    expr = expr′
+                end
                 applyall || return expr
             end
         end

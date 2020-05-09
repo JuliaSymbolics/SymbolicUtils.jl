@@ -33,11 +33,19 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, kwargs...)
-    if fixpoint
-        SymbolicUtils.fixpoint(rules, x, ctx; applyall=applyall)
-    else
-        rules(x, ctx; applyall=applyall, kwargs...)
+function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), kwargs...)
+    while true
+        x′ = rules(x, ctx; kwargs...)
+        if x′ === nothing
+            # no rule was applied
+            return x
+        elseif isequal(x, x′)
+            # rule is allowed to return
+            # its input.
+            return x′
+        else
+            x = x′
+        end
     end
 end
 
@@ -51,7 +59,8 @@ substitute any subexpression that matches a key in `dict` with
 the corresponding value.
 """
 function substitute(expr, dict)
-    RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])(expr)
+    rule = RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])
+    simplify(expr, rules=rule)
 end
 
 ### Predicates
@@ -169,9 +178,15 @@ function <ₑ(a::Term, b::Term)
             # compare the numbers
             nums = zip(Iterators.filter(isnumber, aa),
                        Iterators.filter(isnumber, ab))
-            if any(a <ₑ b for (a, b) in nums)
-                return true
+
+            for (x,y) in nums
+                if x <ₑ y
+                    return true
+                elseif y <ₑ x
+                    return false
+                end
             end
+
         end
         return na <ₑ nb # all args are equal, compare the name
     end

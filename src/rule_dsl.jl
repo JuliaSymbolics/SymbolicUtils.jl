@@ -261,7 +261,7 @@ function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applya
     term = to_symbolic(term)
     # simplify the subexpressions
     if depth == 0
-        return term
+        return nothing
     end
 
     # preorder application

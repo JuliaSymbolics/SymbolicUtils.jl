@@ -222,11 +222,7 @@ end
     RuleSet(rules::Vector{AbstractRules}, context=EmptyCtx())(expr; depth=typemax(Int), applyall=false, recurse=true)
 
 `RuleSet` is an `AbstractRule` which applies the given `rules` throughout an `expr` with the
-context `context`.
-
-Note that this only applies the rules in one pass, not until there are no
-changes to be applied. Use `SymbolicUtils.fixpoint(ruleset, expr)` to apply a RuleSet until there 
-are no changes.
+context `context`. It may return the simplified expression or `nothing` if no changes were applied.
 
 Keyword arguments:
 * `recurse=true` Set whether or not the rules in the `RuleSet` are applied recursively to
@@ -260,22 +256,24 @@ function set_new_args(old, idx, new...)
         end
     end
 end
-function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=false, recurse=true)
-    rules = r.rules
+function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=false, recurse=true)
+    rules = ruleset.rules
     term = to_symbolic(term)
     # simplify the subexpressions
     if depth == 0
         return term
     end
+
     # preorder application
-    if term isa Term && recurse
+    are_children_dirty = false
+    if term isa Term
 
         args = arguments(term)
         args′ = Any[]
         dirty = Int[]
 
         for i = 1:length(args)
-            subexpr = r(args[i], context, depth=depth-1)
+            subexpr = ruleset(args[i], context, depth=depth-1)
             if subexpr === nothing
                 continue
             else
@@ -285,7 +283,12 @@ function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=fal
         end
 
         if !isempty(dirty)
-            term = set_new_args(args, dirty, args′...)
+            # should we return from here?
+            # probably only useful optimization for rules
+            # of depth > 1
+            term = Term{symtype(term)}(operation(term),
+                                set_new_args(args, dirty, args′...))
+            are_children_dirty = true
         end
     end
 
@@ -299,22 +302,18 @@ function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=fal
             # this rule doesn't apply
             continue
         else
-            return term′
+            t =  ruleset(term′)
+            if t === nothing
+                return term′
+            else
+                return t
+            end
         end
     end
-    return nothing
+    return are_children_dirty ? term : nothing
 end
 
 getdepth(::RuleSet) = typemax(Int)
-
-function fixpoint(f, x, ctx; kwargs...)
-    x1 = f(x, ctx; kwargs...)
-    while !isequal(x1, x)
-        x = x1
-        x1 = f(x, ctx; kwargs...)
-    end
-    return x1
-end
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
     msg = "Failed to apply rule $(err.rule) on expression "

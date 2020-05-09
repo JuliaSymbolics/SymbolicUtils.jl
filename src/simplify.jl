@@ -59,7 +59,8 @@ substitute any subexpression that matches a key in `dict` with
 the corresponding value.
 """
 function substitute(expr, dict)
-    RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])(expr)
+    rule = RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])
+    simplify(expr, rules=rule)
 end
 
 ### Predicates

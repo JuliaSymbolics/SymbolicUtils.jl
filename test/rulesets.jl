@@ -1,5 +1,5 @@
 using Random: shuffle, seed!
-using SymbolicUtils: fixpoint, getdepth
+using SymbolicUtils: getdepth
 
 @testset "RuleSet" begin
     @syms w z α::Real β::Real
@@ -13,9 +13,8 @@ using SymbolicUtils: fixpoint, getdepth
     ex = 2 * (w+w+α+β)
     
     @eqtest rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
-    @eqtest rset(ex) == simplify(ex, rset; fixpoint=false, applyall=false) 
+    @eqtest rset(rset(ex)) == simplify(ex, rset)
     
-    @eqtest fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
 end
 
 @testset "Numeric" begin
@@ -104,6 +103,7 @@ end
 end
 
 @testset "timerwrite" begin
+    seed!(123)
     @syms a b c d
     expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))
     SymbolicUtils.@timerewrite simplify(expr1)

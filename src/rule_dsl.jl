@@ -248,6 +248,18 @@ struct RuleRewriteError
     expr
 end
 
+function set_new_args(old, idx, new...)
+    j = 1
+    map(1:length(old)) do i
+        j > length(idx) && return old[i]
+        if idx[j] == i
+            return new[j]
+            j += 1
+        else
+            return old[i]
+        end
+    end
+end
 function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=false, recurse=true)
     rules = r.rules
     term = to_symbolic(term)
@@ -255,31 +267,42 @@ function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=fal
     if depth == 0
         return term
     end
-    if term isa Symbolic
-        if term isa Term && recurse
-            expr = Term{symtype(term)}(operation(term),
-                                       map(t -> r(t, context, depth=depth-1), arguments(term)))
-        else
-            expr = term
-        end
-        for i in 1:length(rules)
-            expr′ = try
-                @timer(repr(rules[i]), rules[i](expr, context))
-            catch err
-                throw(RuleRewriteError(rules[i], expr))
-            end
-            if expr′ === nothing
-                # this rule doesn't apply
+    # preorder application
+    if term isa Term && recurse
+
+        args = arguments(term)
+        args′ = Any[]
+        dirty = Int[]
+
+        for i = 1:length(args)
+            subexpr = r(args[i], context, depth=depth-1)
+            if subexpr === nothing
                 continue
             else
-                expr = r(expr′, context, depth=getdepth(rules[i]))# levels touched
-                applyall || return expr
+                push!(args′, subexpr)
+                push!(dirty, i)
             end
         end
-    else
-        expr = term
+
+        if !isempty(dirty)
+            term = set_new_args(args, dirty, args′...)
+        end
     end
-    return expr # no rule applied
+
+    for i in 1:length(rules)
+        term′ = try
+            @timer(repr(rules[i]), rules[i](term, context))
+        catch err
+            throw(RuleRewriteError(rules[i], term))
+        end
+        if term′ === nothing
+            # this rule doesn't apply
+            continue
+        else
+            return term′
+        end
+    end
+    return nothing
 end
 
 getdepth(::RuleSet) = typemax(Int)

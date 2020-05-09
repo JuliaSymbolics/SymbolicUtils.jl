@@ -270,6 +270,21 @@ function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, threa
     end
 end
 
+function _recurse_apply_ruleset_serial(r::RuleSet, term, context; depth)
+    _args = map(arguments(term)) do arg
+        r(arg, context; depth=depth-1, threaded=false)
+    end
+
+    args = map(t -> t isa Task ? fetch(t) : t, _args)
+
+    if all(isnothing, args)
+        return term
+    else
+        return Term{symtype(term)}(operation(term),
+                                   map((old, new)-> new === nothing ?
+                                       old : new, arguments(term), args))
+    end
+end
 function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::Bool=false, recurse::Bool=true,
                       threaded::Bool=false, thread_subtree_cutoff::Int=100)
     rules = r.rules
@@ -284,15 +299,7 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
                 _recurse_apply_ruleset_threaded(r, term, context; depth=depth,
                                                 thread_subtree_cutoff=thread_subtree_cutoff)
             else
-                args = map(t -> r(t, context, depth=depth-1), arguments(term))
-                if all(isnothing, args)
-                    term
-                else
-                    Term{symtype(term)}(operation(term),
-                                        map((old, new)-> new === nothing ?
-                                            old : new,
-                                            arguments(term), args))
-                end
+                _recurse_apply_ruleset_serial(r, term, context; depth=depth)
             end
         else
             term

@@ -169,9 +169,15 @@ function <ₑ(a::Term, b::Term)
             # compare the numbers
             nums = zip(Iterators.filter(isnumber, aa),
                        Iterators.filter(isnumber, ab))
-            if any(a <ₑ b for (a, b) in nums)
-                return true
+
+            for (x,y) in nums
+                if x <ₑ y
+                    return true
+                elseif y <ₑ x
+                    return false
+                end
             end
+
         end
         return na <ₑ nb # all args are equal, compare the name
     end

@@ -251,6 +251,9 @@ end
 node_count(atom, count=0) = count + 1
 node_count(t::Term, count=0) = sum(node_count(arg, count) for arg ∈ arguments(t))
 
+pick(a, b) = a
+pick(a::Nothing, b) = b
+
 function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, thread_subtree_cutoff)
     _args = map(arguments(term)) do arg
         if node_count(arg) > thread_subtree_cutoff
@@ -262,27 +265,20 @@ function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, threa
     end
     args = map(t -> t isa Task ? fetch(t) : t, _args)
     if all(isnothing, args)
-        return term
+        return term, false
     else
-        return Term{symtype(term)}(operation(term),
-                                   map((old, new)-> new === nothing ?
-                                       old : new, arguments(term), args))
+        return Term{symtype(term)}(operation(term), map(pick, args, arguments(term))), true
     end
 end
 
 function _recurse_apply_ruleset_serial(r::RuleSet, term, context; depth)
-    _args = map(arguments(term)) do arg
+    args = map(arguments(term)) do arg
         r(arg, context; depth=depth-1, threaded=false)
     end
-
-    args = map(t -> t isa Task ? fetch(t) : t, _args)
-
     if all(isnothing, args)
-        return term
+        return term, false
     else
-        return Term{symtype(term)}(operation(term),
-                                   map((old, new)-> new === nothing ?
-                                       old : new, arguments(term), args))
+        return Term{symtype(term)}(operation(term), map(pick, args, arguments(term))), true
     end
 end
 function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::Bool=false, recurse::Bool=true,
@@ -293,8 +289,9 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
     if depth == 0
         return nothing
     end
+    dirty = false
     if term isa Symbolic
-        expr = if term isa Term && recurse
+        expr, dirty = if term isa Term && recurse
             if threaded
                 _recurse_apply_ruleset_threaded(r, term, context; depth=depth,
                                                 thread_subtree_cutoff=thread_subtree_cutoff)
@@ -302,7 +299,7 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
                 _recurse_apply_ruleset_serial(r, term, context; depth=depth)
             end
         else
-            term
+            term, false
         end
 
         for i in 1:length(rules)
@@ -327,7 +324,7 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
     else
         expr = term
     end
-    return expr # no rule applied
+    return !dirty ? nothing : expr # no rule applied
 end
 
 

@@ -302,7 +302,7 @@ function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applya
             # this rule doesn't apply
             continue
         else
-            t =  ruleset(term′)
+            t =  ruleset(term′, depth=getdepth(rules[i]))
             if t === nothing
                 return term′
             else

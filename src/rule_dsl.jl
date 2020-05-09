@@ -266,7 +266,7 @@ function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applya
 
     # preorder application
     are_children_dirty = false
-    if term isa Term
+    if term isa Term && recurse
 
         args = arguments(term)
         args′ = Any[]
@@ -288,6 +288,7 @@ function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applya
             # of depth > 1
             term = Term{symtype(term)}(operation(term),
                                 set_new_args(args, dirty, args′...))
+            return term
             are_children_dirty = true
         end
     end
@@ -306,7 +307,11 @@ function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applya
             if t === nothing
                 return term′
             else
-                return t
+                if applyall
+                    term = t
+                else
+                    return t
+                end
             end
         end
     end

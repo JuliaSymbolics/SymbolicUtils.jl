@@ -167,7 +167,7 @@ function (p::Walk{ord, C, true})(x) where {ord, C}
         end
         if istree(x)
             _args = map(arguments(x)) do arg
-                if node_count(arg) > p.thread_cutoff
+                if num_descendants(arg) > p.thread_cutoff
                     Threads.@spawn p(arg)
                 else
                     p(arg)

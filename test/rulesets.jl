@@ -109,7 +109,7 @@ end
           ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
            ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
     @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
-    @test SymbolicUtils.node_count(a + b * c / d) == 7
+    @test SymbolicUtils.num_descendants(a + b * c / d) == 7
 end
 
 @testset "timerwrite" begin

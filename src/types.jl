@@ -264,7 +264,11 @@ See [promote_symtype](#promote_symtype)
 struct Term{T} <: Symbolic{T}
     f::Any
     arguments::Any
+    descendants::Int
+    Term{T}(f, arguments) where {T} = new{T}(f, arguments, sum(num_descendants, arguments))
 end
+num_descendants(x) = 1
+num_descendants(t::Term) = t.descendants
 
 istree(t::Term) = true
 

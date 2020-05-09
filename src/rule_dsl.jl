@@ -322,7 +322,7 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
             end
         end
     else
-        expr = term
+        return nothing
     end
     return !dirty ? nothing : expr # no rule applied
 end

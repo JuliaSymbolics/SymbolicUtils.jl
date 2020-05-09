@@ -256,11 +256,16 @@ function set_new_args(old, idx, new...)
         end
     end
 end
+
 function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=false, recurse=true)
     rules = ruleset.rules
     term = to_symbolic(term)
     # simplify the subexpressions
     if depth == 0
+        return nothing
+    end
+
+    if !(term isa Symbolic)
         return nothing
     end
 
@@ -288,7 +293,6 @@ function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applya
             # of depth > 1
             term = Term{symtype(term)}(operation(term),
                                 set_new_args(args, dirty, args′...))
-            return term
             are_children_dirty = true
         end
     end
@@ -305,13 +309,15 @@ function (ruleset::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applya
         else
             t =  ruleset(term′, depth=getdepth(rules[i]))
             if t === nothing
-                return term′
+                t = term′
             else
-                if applyall
-                    term = t
-                else
-                    return t
-                end
+                term′ = t
+            end
+
+            if applyall
+                term = t
+            else
+                return t
             end
         end
     end

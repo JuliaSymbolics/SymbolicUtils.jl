@@ -262,7 +262,7 @@ function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, threa
     end
     args = map(t -> t isa Task ? fetch(t) : t, _args)
     if all(isnothing, args)
-        return nothing
+        return term
     else
         return Term{symtype(term)}(operation(term),
                                    map((old, new)-> new === nothing ?

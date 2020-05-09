@@ -1,5 +1,5 @@
 using Random: shuffle, seed!
-using SymbolicUtils: fixpoint, getdepth
+using SymbolicUtils: getdepth
 
 @testset "RuleSet" begin
     @syms w z α::Real β::Real
@@ -11,10 +11,10 @@ using SymbolicUtils: fixpoint, getdepth
     @test getdepth(rset) == typemax(Int)
 
     ex = 2 * (w+w+α+β)
-    
+
     @eqtest rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
-    @eqtest rset(ex) == simplify(ex; rules=rset, fixpoint=false, applyall=false) 
-    @eqtest fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
+    @eqtest rset(rset(ex)) == ((2 * (2 * w)) + (2 * α)) + (2 * β)
+    @eqtest rset(rset(ex)) == simplify(ex; rules=rset)
 end
 
 @testset "Numeric" begin

@@ -13,8 +13,7 @@ using SymbolicUtils: fixpoint, getdepth
     ex = 2 * (w+w+α+β)
     
     @eqtest rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
-    @eqtest rset(ex) == simplify(ex, rset; fixpoint=false, applyall=false) 
-    
+    @eqtest rset(ex) == simplify(ex; rules=rset, fixpoint=false, applyall=false) 
     @eqtest fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
 end
 
@@ -101,6 +100,16 @@ end
     @test_throws SymbolicUtils.RuleRewriteError rs(a+b)
     err = try rs(a+b) catch err; err; end
     @test sprint(io->Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
+end
+
+@testset "Threading" begin
+    @syms a b c d
+    ex = (((0.6666666666666666 / (c / 1)) + ((1 * a) / (c / 1))) +
+          (1.0 / (((1 * d) / (1 + b)) * (1 / b)))) +
+          ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
+           ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
+    @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
+    @test SymbolicUtils.node_count(a + b * c / d) == 4
 end
 
 @testset "timerwrite" begin

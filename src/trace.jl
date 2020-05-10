@@ -5,35 +5,17 @@ import IRTools: IR, func
 
 export @symbolic, IR, func
 
-collect_names(x, names) = return
-
-collect_names(x::Symbol, names) = push!(names, (x, :Float64))
-
-function collect_names(x::Expr, names)
-    if isexpr(x, :(::)) && x.args[1] isa Symbol
-        push!(names, (x.args[1], x.args[2]))
-    elseif isexpr(x, :call)
-        foreach(x -> collect_names(x, names), x.args[2:end])
-    else
-        foreach(x -> collect_names(x, names), x.args)
-    end
-end
-
-function collect_names(x)
-    names = []
-    collect_names(x, names)
-    return names
-end
+_symtype(s::Symbolic{T}) where {T} = T
+_symtype(s) = typeof(s)
 
 macro symbolic(ex)
-    names = collect_names(ex)
-    Ts = [T for (x, T) in names]
-    f = :(($(first.(names)...),) -> $ex)
+    f = ex.args[1]
+    args = ex.args[2:end]
+    Ts = map(x->:(_symtype($(esc(x)))), args)
     quote
         f = $(esc(f))
-        ir = trace(Mjolnir.Defaults(), Const(f), $(esc.(Ts)...))
-        syms = ($([:(Sym{$(esc(T))}($(QuoteNode(name)))) for (name, T) in names]...),)
-        irterm(ir, syms)
+        ir = trace(Mjolnir.Defaults(), Const(f), $(Ts...))
+        irterm(ir, $args)
     end
 end
 

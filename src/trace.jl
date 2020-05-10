@@ -1,8 +1,8 @@
 using Mjolnir, IRTools, Base.Meta
 using Mjolnir: Const, trace
-using IRTools: IR
+using IRTools: IR, xcall, func, argument!
 
-export @symbolic
+export @symbolic, to_mjolnir, func
 
 collect_names(x, names) = return
 
@@ -49,4 +49,25 @@ macro symbolic(ex)
     syms = ($([:(Sym{$(esc(T))}($(QuoteNode(name)))) for (name, T) in names]...),)
     irterm(ir, syms)
   end
+function to_mjolnir!(s::Sym, ir, mod, varmap)
+    haskey(varmap, s) ? varmap[s] : GlobalRef(mod, nameof(s))
 end
+
+function to_mjolnir!(t::Term, ir,  mod, varmap)
+    inps = [to_mjolnir!(x, ir, mod, varmap) for x in arguments(t)]
+    push!(ir, xcall(operation(t), inps...))
+end
+
+function IR(t::Term, args; mod=Main)
+    ir = IR()
+    varmap = Dict()
+    for v in args
+        mv = argument!(ir)
+        varmap[v] = mv
+    end
+
+    to_mjolnir!(t, ir, mod, varmap)
+    ir
+end
+
+func(t::Term, args) = func(IR(t,args))

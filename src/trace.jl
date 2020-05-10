@@ -1,6 +1,7 @@
 using Mjolnir, IRTools, Base.Meta
 using Mjolnir: Const, trace
-using IRTools: IR, xcall, func, argument!
+using IRTools: xcall, argument!
+import IRTools: IR, func
 
 export @symbolic, to_mjolnir, func
 

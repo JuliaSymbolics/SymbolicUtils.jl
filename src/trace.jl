@@ -15,7 +15,7 @@ macro symbolic(ex)
     quote
         f = $(esc(f))
         ir = trace(Mjolnir.Defaults(), Const(f), $(Ts...))
-        irterm(ir, $args)
+        irterm(ir, [$(esc.(args)...)])
     end
 end
 
@@ -23,10 +23,15 @@ irterm(ir::IR, v, args) = v
 
 function irterm(ir::IR, v::IRTools.Variable, args)
     arg = findfirst(==(v), IRTools.arguments(ir))
-    arg != nothing && return args[arg-1]
-    ex = ir[v].expr
+    arg != nothing && return args[arg-1] # given as an argument
+
+    ex = ir[v].expr # computed on this line
     if isexpr(ex, :call)
-        return term(irterm.((ir,), ex.args, (args,))...)
+        #TODO: use type info from mjolnir
+        #using Term here uses promote_symtype from Symutils to figure out output type
+        f = irterm(ir, ex.args[1], args)
+        args = irterm.((ir,), ex.args[2:end], (args,))
+        return Term(f, [args...])
     else
         return ex
     end

@@ -39,11 +39,14 @@ end
 
 irterm(ir::IR, args) = irterm(ir, IRTools.returnvalue(IRTools.blocks(ir)[end]), args)
 
+to_mjolnir!(s, ir, mod, varmap) = s
+
 function to_mjolnir!(s::Sym, ir, mod, varmap)
     haskey(varmap, s) ? varmap[s] : GlobalRef(mod, nameof(s))
 end
 
 function to_mjolnir!(t::Term, ir,  mod, varmap)
+    haskey(varmap, t) && return varmap[t]
     inps = [to_mjolnir!(x, ir, mod, varmap) for x in arguments(t)]
     push!(ir, xcall(operation(t), inps...))
 end

@@ -5,13 +5,13 @@ import IRTools: IR, func
 
 export @symbolic, IR, func
 
-_symtype(s::Symbolic{T}) where {T} = T
-_symtype(s) = typeof(s)
+tracetype(s::Symbolic{T}) where {T} = T
+tracetype(s) = Const(s)
 
 macro symbolic(ex)
     f = ex.args[1]
     args = ex.args[2:end]
-    Ts = map(x->:(_symtype($(esc(x)))), args)
+    Ts = map(x->:(tracetype($(esc(x)))), args)
     quote
         f = $(esc(f))
         ir = trace(Mjolnir.Defaults(), Const(f), $(Ts...))

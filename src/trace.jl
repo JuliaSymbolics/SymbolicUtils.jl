@@ -1,9 +1,9 @@
 using Mjolnir, IRTools, Base.Meta
 using Mjolnir: Const, trace
-using IRTools: xcall, argument!
+using IRTools: xcall, argument!, return!
 import IRTools: IR, func
 
-export @symbolic, to_mjolnir, func
+export @symbolic, IR, func
 
 collect_names(x, names) = return
 
@@ -69,8 +69,7 @@ function IR(t::Term, args; mod=Main)
         varmap[v] = mv
     end
 
-    to_mjolnir!(t, ir, mod, varmap)
+    res = to_mjolnir!(t, ir, mod, varmap)
+    return!(ir, res)
     ir
 end
-
-func(t::Term, args) = func(IR(t,args))

@@ -5,6 +5,9 @@ using Random: seed!
 
 @testset "Fuzz test" begin
     seed!(6174)
+    for i=1:500
+        fuzz_test(0, num_spec, mjolnir=true)
+    end
     for i=1:1500
         fuzz_test(10, num_spec)
     end

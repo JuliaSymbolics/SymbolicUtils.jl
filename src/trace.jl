@@ -9,11 +9,23 @@ tracetype(s::Symbolic{T}) where {T} = T
 tracetype(s) = Const(s)
 
 macro symbolic(ex)
+    @assert ex.head == :call
+
     f = ex.args[1]
     args = ex.args[2:end]
-    Ts = map(x->:(tracetype($(esc(x)))), args)
+    Ts = map(x->:(tracetype($(esc(x)))), args[1:end-1])
+    if !isempty(args) &&
+        args[end] isa Expr &&
+        args[end].head == :(...)
+
+        Ts = vcat(Ts, :(tracetype.($(esc(args[end].args[1])))...))
+    else
+        Ts = vcat(Ts, :(tracetype($(esc(args[end])))))
+    end
+
     quote
         f = $(esc(f))
+
         ir = trace(Mjolnir.Defaults(), Const(f), $(Ts...))
         irterm(ir, [$(esc.(args)...)])
     end
@@ -39,15 +51,15 @@ end
 
 irterm(ir::IR, args) = irterm(ir, IRTools.returnvalue(IRTools.blocks(ir)[end]), args)
 
-to_mjolnir!(s, ir, mod, varmap) = s
+to_ir!(s, ir, mod, varmap) = s
 
-function to_mjolnir!(s::Sym, ir, mod, varmap)
+function to_ir!(s::Sym, ir, mod, varmap)
     haskey(varmap, s) ? varmap[s] : GlobalRef(mod, nameof(s))
 end
 
-function to_mjolnir!(t::Term, ir,  mod, varmap)
+function to_ir!(t::Term, ir,  mod, varmap)
     haskey(varmap, t) && return varmap[t]
-    inps = [to_mjolnir!(x, ir, mod, varmap) for x in arguments(t)]
+    inps = [to_ir!(x, ir, mod, varmap) for x in arguments(t)]
     push!(ir, xcall(operation(t), inps...))
 end
 
@@ -59,7 +71,7 @@ function IR(t::Term, args; mod=Main)
         varmap[v] = mv
     end
 
-    res = to_mjolnir!(t, ir, mod, varmap)
+    res = to_ir!(t, ir, mod, varmap)
     return!(ir, res)
     ir
 end

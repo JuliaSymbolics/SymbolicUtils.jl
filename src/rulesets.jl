@@ -14,7 +14,7 @@ const NUMBER_RULES = RuleSet([
 
 const PLUS_RULES = RuleSet([
     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
-    @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
+    @rule(+(~~x::!(issortedₑ(true))) => sort_args(+, ~~x, true))
     @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
     @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
@@ -31,7 +31,7 @@ const PLUS_RULES = RuleSet([
 
 const TIMES_RULES = RuleSet([
     @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
-    @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x))
+    @rule(*(~~x::!(issortedₑ())) => sort_args(*, ~~x))
     
     @acrule(~a::isnumber * ~b::isnumber => ~a * ~b)
     @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))

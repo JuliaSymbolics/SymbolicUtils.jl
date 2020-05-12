@@ -67,7 +67,7 @@ _iszero(x::Number) = iszero(x)
 _isone(t) = false
 _isone(x::Number) = isone(x)
 
-issortedₑ(args) = issorted(args, lt=<ₑ)
+issortedₑ(rev=false) = args -> issorted(args, lt=<ₑ, rev=rev)
 
 # are there nested ⋆ terms?
 function isnotflat(⋆)
@@ -136,7 +136,7 @@ function flatten_term(⋆, args)
     Term(⋆, flattened_args)
 end
 
-function sort_args(f, args)
+function sort_args(f, args, rev=false)
     if length(args) < 2
         return Term(f, args)
     elseif length(args) == 2
@@ -144,5 +144,5 @@ function sort_args(f, args)
         return Term(f, x <ₑ y ? [x,y] : [y,x])
     end
     args = args isa Tuple ? [args...] : args
-    Term(f, sort(args, lt=<ₑ))
+    Term(f, sort(args, lt=<ₑ, rev=rev))
 end

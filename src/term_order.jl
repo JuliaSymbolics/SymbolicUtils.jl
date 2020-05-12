@@ -48,17 +48,7 @@ end
 function <ₑ(a::Symbol, b::Symbol)
     # Enforce the order [+,-,\,/,^,*]
     if b === :^
-        !(a == :^)
-    elseif b === :*
-        a in (:/, :\, :-, :+) && return true
-    elseif b === :/
-        a in (:\, :-, :+) && return true
-    elseif b === :\
-        a in (:-, :+) && return true
-    elseif b === :-
-        a === :+ && return true
-    elseif a in (:^, :*, :/, :-, :+)
-        return false # these operations will appear at the same level
+        return !(a == :^)
     end
     a < b
 end
@@ -73,7 +63,6 @@ function short_cmpargs(aa, bb, na, nb)
         aa[1] <ₑ bb[1] && return true
     elseif length(aa) == 1 && length(bb) == 2
         # check if the largest term in b is bigger than a
-        @show aa bb
         (aa[1] <ₑ bb[1] || aa[1] <ₑ bb[2]) && return true
     elseif length(aa) == 2 && length(bb) == 1
         # check if the largest term in a is smaller than b
@@ -83,10 +72,13 @@ function short_cmpargs(aa, bb, na, nb)
             # not all arguments are created equal
             aa[1] <ₑ bb[1] && return true
             !(bb[1] <ₑ aa[1]) && return aa[2] <ₑ bb[2] # equiv base
+            return false
         elseif aa[1] <ₑ aa[2]
-            short_cmpargs((aa[2],), bb, na, nb) && return true
-        else
-            short_cmpargs((aa[1],), bb, na, nb) && return true
+            aa[2] <ₑ bb[2] && return true
+            na == nb && !(bb[2] <ₑ aa[2]) && return aa[1] <ₑ bb[1]
+        elseif aa[2] <ₑ aa[1]
+            aa[1] <ₑ bb[2] && return true
+            na == nb && !(bb[2] <ₑ aa[1]) && return aa[1] <ₑ bb[1]
         end
     end
     return na <ₑ nb

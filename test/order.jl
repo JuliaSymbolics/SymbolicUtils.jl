@@ -5,16 +5,22 @@ SymbolicUtils.show_simplified[] = false
 @syms a b c
 
 function istotal(x,y)
-    #either
+    # either
     if x <ₑ y
         return !(y <ₑ x)
     elseif y <ₑ x
-        return !(x <ₑ y) # already tested
+        return !(x <ₑ y)
     else
-        # neither, equal
+        # "equal"
         return true
     end
 end
+
+@testset "term order" begin
+    @syms a b c x y z
+    @test a <ₑ x
+end
+
 
 @test istotal(a,a)
 @test istotal(a,b)

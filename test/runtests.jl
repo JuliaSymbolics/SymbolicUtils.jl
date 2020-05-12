@@ -15,7 +15,7 @@ SymbolicUtils.show_simplified[] = false
 #using SymbolicUtils: Rule
 
 include("basics.jl")
-include("order.jl")
+include("neworder.jl")
 include("rewrite.jl")
 include("rulesets.jl")
 include("interface.jl")

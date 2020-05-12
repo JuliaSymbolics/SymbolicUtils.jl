@@ -38,6 +38,9 @@ include("methods.jl")
 
 include("util.jl")
 
+export <ₑ
+include("term_order.jl")
+
 include("matchers.jl")
 
 using Combinatorics: permutations

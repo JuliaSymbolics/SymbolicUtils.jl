@@ -10,7 +10,7 @@
 <ₑ(a::Symbolic, b::Number) = false
 <ₑ(a::Number,   b::Symbolic) = true
 
-arglength(a) = length(arguments(a))
+# fails: (x*exp(x)*(x+1)^8*(x+y))*y^3
 
 # x <ₑ f(x)
 function <ₑ(a::Sym, b::Term)
@@ -21,9 +21,9 @@ function <ₑ(a::Sym, b::Term)
             # e.g. (x + y) goes to the right of x
             return true
         elseif n1
-            return isequal(a, args[1]) || a <ₑ args[1]
+            return  a <ₑ args[1] || isequal(a, args[1])
         elseif n2
-            return isequal(a, args[2]) || a <ₑ args[2]
+            return a <ₑ args[2] || isequal(a, args[2])
         else
             # both arguments are not numbers
             # This case when a <ₑ Term(^, [1,-1])
@@ -67,6 +67,7 @@ function short_cmpargs(aa, bb, na, nb)
     elseif length(aa) == 2 && length(bb) == 1
         # check if the largest term in a is smaller than b
         (aa[1] <ₑ bb[1] && aa[2] <ₑ bb[1]) && return true
+        return false
     elseif length(aa) == 2 && length(bb) == 2
         if na == nb && na == :^
             # not all arguments are created equal
@@ -127,26 +128,26 @@ function <ₑ(a::Term, b::Term)
     na = nameof(operation(a))
     nb = nameof(operation(b))
 
-    # fast path for big terms
-    if length(aa) > 2 || length(bb) > 2
+    if length(aa) <= 2 && length(bb) <= 2
+        if na !== nb
+            if nb == :^
+                #3x^2 < x^3
+                return all(x -> isnumber(x) || x <ₑ b, aa)
+            elseif na == :^
+                return !all(x -> isnumber(x) || x <ₑ a, bb)
+            elseif nb == :*
+                # sin(x) < sin(x)*x
+                return any(x -> !isnumber(x) && x <ₑ b, aa)
+            elseif na == :*
+                return !any(x -> !isnumber(x) && x <ₑ a, bb)
+            end
+        end
+        return short_cmpargs(aa, bb, na, nb)
+    else
         # order terms longer than 2 args by length or name for now -- it
         # should give priority to the term with the largest complexity
         length(aa) != length(bb) && return length(aa) < length(bb)
         na != nb && return na <ₑ nb
         return long_cmpargs(aa, bb, na, nb)
     end
-    if na != nb
-        if nb == :^
-            #3x^2 < x^3
-            return any(x -> !isnumber(x) && x <ₑ b, aa)
-        elseif na == :^
-            return !(b <ₑ a)
-        elseif nb == :*
-            # sin(x) < sin(x)*x
-            return any(x -> !isnumber(x) && x <ₑ b, aa)
-        elseif na == :*
-            return !(b <ₑ a)
-        end
-    end
-    return short_cmpargs(aa, bb, na, nb)
 end

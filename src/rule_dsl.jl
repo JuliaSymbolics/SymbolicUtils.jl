@@ -248,7 +248,24 @@ struct RuleRewriteError
     expr
 end
 
-function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=false, recurse=true)
+node_count(atom, count; cutoff) = count + 1
+node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
+
+function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, thread_subtree_cutoff)
+    _args = map(arguments(term)) do arg
+        if node_count(arg) > thread_subtree_cutoff
+            Threads.@spawn r(arg, context; depth=depth-1, threaded=true,
+                             thread_subtree_cutoff=thread_subtree_cutoff)
+        else
+            r(arg, context; depth=depth-1, threaded=false)
+        end
+    end
+    args = map(t -> t isa Task ? fetch(t) : t, _args)
+    Term{symtype(term)}(operation(term), args)
+end
+
+function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::Bool=false, recurse::Bool=true,
+                      threaded::Bool=false, thread_subtree_cutoff::Int=100)
     rules = r.rules
     term = to_symbolic(term)
     # simplify the subexpressions
@@ -256,11 +273,16 @@ function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=fal
         return term
     end
     if term isa Symbolic
-        if term isa Term && recurse
-            expr = Term{symtype(term)}(operation(term),
-                                       map(t -> r(t, context, depth=depth-1), arguments(term)))
+        expr = if term isa Term && recurse
+            if threaded
+                _recurse_apply_ruleset_threaded(r, term, context; depth=depth,
+                                                thread_subtree_cutoff=thread_subtree_cutoff)
+            else
+                expr = Term{symtype(term)}(operation(term),
+                                           map(t -> r(t, context, depth=depth-1), arguments(term)))
+            end
         else
-            expr = term
+            term
         end
         for i in 1:length(rules)
             expr′ = try
@@ -281,6 +303,7 @@ function (r::RuleSet)(term, context=EmptyCtx(); depth=typemax(Int), applyall=fal
     end
     return expr # no rule applied
 end
+
 
 getdepth(::RuleSet) = typemax(Int)
 

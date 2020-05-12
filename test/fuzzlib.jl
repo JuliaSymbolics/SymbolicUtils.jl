@@ -37,7 +37,7 @@ const num_spec = let
     binops = SymbolicUtils.diadic
     nopow  = filter(x->x!==(^), binops)
     twoargfns = vcat(nopow, (x,y)->x isa Union{Int, Rational, Complex{<:Rational}} ? x * y : x^y)
-    fns = vcat(1 .=> SymbolicUtils.monadic,
+    fns = vcat(1 .=> vcat(SymbolicUtils.monadic, [one, zero]),
                2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5)),
     3 .=> [+, *])
 
@@ -153,9 +153,16 @@ function fuzz_test(ntrials, spec; mjolnir=false)
             @test typeof(simplified.err) == typeof(unsimplified.err)
         else
             try
-                @test unsimplified ≈ simplified
-                if !(unsimplified ≈ simplified)
-                    error("Failed")
+                if isnan(unsimplified)
+                    @test isnan(simplified)
+                    if !isnan(simplified)
+                        error("Failed")
+                    end
+                else
+                    @test unsimplified ≈ simplified
+                    if !(unsimplified ≈ simplified)
+                        error("Failed")
+                    end
                 end
             catch err
                 println("""Test failed for expression

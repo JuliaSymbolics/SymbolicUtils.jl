@@ -74,3 +74,10 @@ end
     # a nice consequence
     @test simplify(x/(x+3) + 3/(x+3)) == 1
 end
+
+@testset "small terms" begin
+    # this failing was a cause of a nasty stackoverflow #82
+    @syms a
+    @test Term(^, [a, -1]) <ₑ (a + 2)
+    @test !((a + 2) <ₑ Term(^, [a, -1]))
+end

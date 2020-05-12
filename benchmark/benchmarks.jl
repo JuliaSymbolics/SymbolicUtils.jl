@@ -5,7 +5,8 @@ using Random
 
 SUITE = BenchmarkGroup()
 
-@syms a b c
+@syms a b c d; Random.seed!(123);
+
 let r = @rule(~x => ~x), rs = RuleSet([r]),
     acr = @rule(~x::isnumber + ~y => ~y)
 
@@ -37,4 +38,19 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
     overhead["simplify_no_fixp"]["noop:Int"]  = @benchmarkable simplify(1, fixpoint=false)
     overhead["simplify_no_fixp"]["noop:Sym"]  = @benchmarkable simplify($a, fixpoint=false)
     overhead["simplify_no_fixp"]["noop:Term"] = @benchmarkable simplify($(a+2), fixpoint=false)
+
+    function random_term(len; atoms, funs, fallback_atom=1)
+        xs = rand(atoms, len)
+        while length(xs) > 1
+            xs = map(Iterators.partition(xs, 2)) do xy
+                x = xy[1]; y = get(xy, 2, fallback_atom)
+                rand(funs)(x, y)
+            end
+        end
+        xs[]
+    end
+    ex = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[+, *])
+
+    overhead["simplify_no_fixp"]["randterm:serial"] = @benchmarkable simplify($ex, threaded=false, fixpoint=false)
+    overhead["simplify_no_fixp"]["randterm:thread"] = @benchmarkable simplify($ex, threaded=true,  fixpoint=false)    
 end

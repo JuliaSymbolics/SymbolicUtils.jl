@@ -33,11 +33,11 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, recurse=true)
+function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, kwargs...)
     if fixpoint
-        SymbolicUtils.fixpoint(rules, x, ctx; recurse=recurse, applyall=recurse)
+        SymbolicUtils.fixpoint(rules, x, ctx; applyall=applyall)
     else
-        rules(x, ctx; recurse=recurse, applyall=recurse)
+        rules(x, ctx; applyall=applyall, kwargs...)
     end
 end
 
@@ -169,9 +169,15 @@ function <ₑ(a::Term, b::Term)
             # compare the numbers
             nums = zip(Iterators.filter(isnumber, aa),
                        Iterators.filter(isnumber, ab))
-            if any(a <ₑ b for (a, b) in nums)
-                return true
+
+            for (x,y) in nums
+                if x <ₑ y
+                    return true
+                elseif y <ₑ x
+                    return false
+                end
             end
+
         end
         return na <ₑ nb # all args are equal, compare the name
     end

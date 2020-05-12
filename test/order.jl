@@ -20,6 +20,7 @@ end
     @testord 2*x <ₑ x^2
     @testord 4*x^2 <ₑ x^3
     @testord 2*x^2 <ₑ 3*x^3
+    @testord x^2 <ₑ z^2
 
     @testord x <ₑ sin(x)
     @testord sin(x) <ₑ x^2

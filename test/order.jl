@@ -2,6 +2,32 @@ using Test
 using SymbolicUtils: <ₑ
 SymbolicUtils.show_simplified[] = false
 
+macro testord(expr)
+    @assert expr.head == :call && expr.args[1] == :(<ₑ)
+
+    x, y = expr.args[2:end]
+
+    :(@test   $(esc(x)) <ₑ $(esc(y));
+      @test !($(esc(y)) <ₑ $(esc(x))))
+end
+
+@testset "term order" begin
+    @syms a b c x y z
+
+    @testord -1 <ₑ 1
+    @testord a <ₑ x
+    @testord x <ₑ x^2
+    @testord 2*x <ₑ x^2
+    @testord 4*x^2 <ₑ x^3
+    @testord 2*x^2 <ₑ 3*x^3
+
+    @testord x <ₑ sin(x)
+    @testord sin(x) <ₑ x^2
+    @testord sin(x) <ₑ sin(x)^2
+    @testord sin(x) <ₑ x*sin(x)
+    @testord x*sin(x) <ₑ x^2*sin(x)
+end
+
 @syms a b c
 
 function istotal(x,y)
@@ -36,7 +62,7 @@ end
 @test istotal(a, Term(^, [1,-1]))
 
 @testset "operator order" begin
-    fs = (*, ^, /, \, -, +)
+    fs = (^, *, /, \, -, +)
     for i in 1:length(fs)
         f = fs[i]
         @test f(a, b) <ₑ f(b, c)
@@ -54,8 +80,7 @@ end
 
         for j in i+1:length(fs)
             g = fs[j]
-            @test g(a, b) <ₑ f(a, b) && !(f(a, b) <ₑ g(a, b))
-            @test istotal(f(a, b), g(a, b))
+            @test xor(g(a, b) <ₑ f(a, b), f(a, b) <ₑ g(a, b))
         end
     end
 end
@@ -84,6 +109,6 @@ end
 @testset "small terms" begin
     # this failing was a cause of a nasty stackoverflow #82
     @syms a
-    @test Term(^, [a, -1]) <ₑ (a + 2)
-    @test !((a + 2) <ₑ Term(^, [a, -1]))
+    @test !(Term(^, [a, -1]) <ₑ (a + 2))
+    @test (a + 2) <ₑ Term(^, [a, -1])
 end

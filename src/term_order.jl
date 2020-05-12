@@ -58,32 +58,34 @@ function <ₑ(a::Symbol, b::Symbol)
     elseif b === :-
         a === :+ && return true
     elseif a in (:^, :*, :/, :-, :+)
-        false # these operations will appear at the same level
-    else
-        a < b
+        return false # these operations will appear at the same level
     end
+    a < b
 end
 
 <ₑ(a::Sym, b::Sym) = a.name < b.name
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 
-<ₑ(::Nothing, ::Any) = true
 # return number of symbols in a term and the highest symbol
 function short_cmpargs(aa, bb, na, nb)
     # <= 2 arguments
     if length(aa) == 1 && length(bb) == 1
-        aa[1] <ₑ bb[1]
+        aa[1] <ₑ bb[1] && return true
     elseif length(aa) == 1 && length(bb) == 2
-        bb[1] <ₑ bb[2] ? aa[1] <ₑ bb[1] : aa[1] <ₑ bb[2]
+        (bb[1] <ₑ bb[2] ? aa[1] <ₑ bb[1] : aa[1] <ₑ bb[2]) && return true
     elseif length(aa) == 2 && length(bb) == 1
-        aa[1] <ₑ aa[2] ? aa[1] <ₑ bb[1] : aa[2] <ₑ bb[1]
+        (aa[1] <ₑ aa[2] ? aa[1] <ₑ bb[1] : aa[2] <ₑ bb[1]) && return true
     elseif length(aa) == 2 && length(bb) == 2
-        aa[1] <ₑ aa[2] ? short_cmpargs((aa[1],), bb, na, nb) :
-                         short_cmpargs((aa[2],), bb, na, nb)
+        if aa[1] <ₑ aa[2]
+            short_cmpargs((aa[1],), bb, na, nb) && return true
+        else
+            short_cmpargs((aa[2],), bb, na, nb) && return true
+        end
     end
+    return na <ₑ nb
 end
 
-function long_cmpargs(aa, bb)
+function long_cmpargs(aa, bb, na, nb)
     # compare non-numbers
     terms = zip(Iterators.filter(!isnumber, aa),
                 Iterators.filter(!isnumber, bb))
@@ -107,6 +109,8 @@ function long_cmpargs(aa, bb)
             return false
         end
     end
+
+    return na <ₑ nb
 end
 
 equiv(a, b) = !(a <ₑ b) && !(b <ₑ a)
@@ -130,7 +134,7 @@ function <ₑ(a::Term, b::Term)
         # should give priority to the term with the largest complexity
         length(aa) != length(bb) && return length(aa) < length(bb)
         na != nb && return na <ₑ nb
-        return long_cmpargs(aa, ab)
+        return long_cmpargs(aa, bb, na, nb)
     end
     if na != nb
         if nb == :^
@@ -138,13 +142,12 @@ function <ₑ(a::Term, b::Term)
             return any(x -> !isnumber(x) && x <ₑ b, aa)
         elseif na == :^
             return !(b <ₑ a)
-        end
-        if nb == :*
+        elseif nb == :*
             # sin(x) < sin(x)*x
             return any(x -> !isnumber(x) && x <ₑ b, aa)
         elseif na == :*
             return !(b <ₑ a)
         end
     end
-    short_cmpargs(aa, bb, na, nb)
+    return short_cmpargs(aa, bb, na, nb)
 end

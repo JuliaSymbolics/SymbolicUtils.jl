@@ -1,4 +1,5 @@
-using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, EmptyCtx
+using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, EmptyCtx,
+                     metadata, ShapedArray
 using SymbolicUtils
 using Test
 
@@ -26,6 +27,12 @@ using Test
         @test_throws ErrorException g(b, a)
 
         @test symtype(g(b, f)) === Int
+
+        @syms X[2:4, 1:10] (Y::Real)[4:8, 2:6]
+        @test symtype(X) == AbstractArray{Number, 2}
+        @test symtype(Y) == AbstractArray{Real, 2}
+        @test metadata(X) == ShapedArray{Number, 2}((2:4, 1:10))
+        @test metadata(Y) == ShapedArray{Real, 2}((4:8, 2:6))
     end
 end
 

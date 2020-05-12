@@ -59,6 +59,9 @@ symtype(::Symbolic{T}) where {T} = T
 Base.isequal(s::Symbolic, x) = false
 Base.isequal(x, s::Symbolic) = false
 Base.isequal(x::Symbolic, y::Symbolic) = false
+
+function metadata end
+
 ### End of interface
 
 """
@@ -125,7 +128,10 @@ means the variable is a function with the type signature X -> Y where
 """
 struct Sym{T} <: Symbolic{T}
     name::Symbol
+    metadata::Any
 end
+
+metadata(s::Sym) = s.metadata
 
 const Variable = Sym # old name
 Sym(x) = Sym{symtype(x)}(x)
@@ -199,8 +205,10 @@ variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)
     defs = map(xs) do x
-        n, t = _name_type(x)
-        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
+        nt = _name_type(x)
+        n, t = nt.name, nt.type
+        m = get(nt, :metadata, nothing)
+        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n)), $m))
     end
 
     Expr(:block, defs...,
@@ -226,6 +234,12 @@ function _name_type(x)
         else
             return (name=lhs, type=rhs)
         end
+    elseif x isa Expr && x.head === :ref
+        ntype = _name_type(x.args[1]) # a::Number
+        N = length(x.args)-1
+        return (name=ntype.name,
+                type=:(AbstractArray{$(ntype.type), $N}),
+                metadata=:(ShapedArray{$(ntype.type), $N}(($(x.args[2:end]...),))))
     elseif x isa Expr && x.head === :call
         return _name_type(:($x::Number))
     else
@@ -263,14 +277,22 @@ See [promote_symtype](#promote_symtype)
 """
 struct Term{T} <: Symbolic{T}
     f::Any
+    metadata::Any
     arguments::Any
 end
 
-Term(f, args) = Term{rec_promote_symtype(f, map(symtype, args)...)}(f, args)
+function Term(f, metadata, args)
+    Term{rec_promote_symtype(f, map(symtype, args)...)}(f, metadata, args)
+end
+
+Term{T}(f, args) where T = Term{T}(f, nothing, args)
+Term(f, args) = Term(f, nothing, args)
 
 operation(x::Term) = x.f
 
 arguments(x::Term) = x.arguments
+
+metadata(x::Term) = x.metadata
 
 function Base.hash(t::Term{T}, salt::UInt) where {T}
     hash(arguments(t), hash(operation(t), hash(T, salt)))
@@ -285,13 +307,13 @@ function Base.isequal(t1::Term, t2::Term)
         all(isequal(l,r) for (l, r) in zip(a1,a2))
 end
 
-function term(f, args...; type = nothing)
+function term(f, args...; type = nothing, meta = nothing)
     if type === nothing
         T = rec_promote_symtype(f, symtype.(args)...)
     else
         T = type
     end
-    Term{T}(f, [args...])
+    Term{T}(f, meta, [args...])
 end
 
 #--------------------

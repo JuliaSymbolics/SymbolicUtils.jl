@@ -8,8 +8,8 @@ for f in diadic
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
 
-    for T in [Sym, Term]
-        for S in [Sym, Term]
+    for T in [Sym{<:Number}, Term{<:Number}]
+        for S in [Sym{<:Number}, Term{<:Number}]
             @eval (::$(typeof(f)))(a::$T, b::$S) = term($f, a, b)
         end
         @eval begin
@@ -39,16 +39,17 @@ for f in [+, *]
 
     @eval (::$(typeof(f)))(x::Symbolic) = x
 
+    SN = Symbolic{<:Number}
     # single arg
-    @eval function (::$(typeof(f)))(x::Symbolic, w...)
+    @eval function (::$(typeof(f)))(x::$SN, w...)
         term($f, x,w...,
              type=rec_promote_symtype($f, map(symtype, (x,w...))...))
     end
-    @eval function (::$(typeof(f)))(x, y::Symbolic, w...)
+    @eval function (::$(typeof(f)))(x, y::$SN, w...)
         term($f, x, y, w...,
              type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
     end
-    @eval function (::$(typeof(f)))(x::Symbolic, y::Symbolic, w...)
+    @eval function (::$(typeof(f)))(x::$SN, y::$SN, w...)
         term($f, x, y, w...,
              type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
     end

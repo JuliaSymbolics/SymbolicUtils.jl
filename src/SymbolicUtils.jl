@@ -8,6 +8,7 @@ using SpecialFunctions, NaNMath
 export cond
 include("methods.jl")
 
+include("arrays.jl")
 
 include("util.jl")
 

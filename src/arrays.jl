@@ -62,6 +62,40 @@ function Base.getindex(x::SymArray, idx...)
     Term(getindex, shp, [x, idx...])
 end
 
+# basic
+
+function eltype(A::SymArray)
+    @maybe T=elt(A) return T
+    error("eltype of $A not known")
+end
+
+function length(A::SymArray)
+    @maybe s=shape(A) return length(s)
+    error("length of $A not known")
+end
+
+function ndims(A::SymArray)
+    @maybe n=nd(A) return n
+    @maybe s=shape(A) return length(s.axes)
+    error("ndims of $A not known")
+end
+
+function size(A)
+    @maybe s=shape(A) return length.(s.axes)
+    error("size of $A not known")
+end
+
+function axes(A)
+    @maybe s=shape(A) return s.axes
+    error("axes of $A not known")
+end
+
+function eachindex(A)
+    @maybe s=shape(A) CartesianIndices(s.axes)
+    error("eachindex of $A not known")
+end
+
+# todo: stride?
 
 # ArrayShape
 # Note: implement this as if it's an array

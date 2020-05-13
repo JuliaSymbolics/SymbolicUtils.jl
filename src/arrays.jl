@@ -14,18 +14,19 @@ maybe(f, x) = x === nothing ? nothing : f(x)
 # allows promote_symtype to be called with the correct types
 symtype(x::Union{Colon, AbstractRange}) = typeof(x)
 
-function promote_symtype(::typeof(getindex), A, idx...)
+function promote_symtype(::typeof(getindex),
+                         A::Type{AbstractArray{T,M}},
+                         idx...) where {T,M}
     S = Core.Compiler.return_type(getindex,
                                   Tuple{A, idx...})
     if S != Union{} && (S <: AbstractArray || S <: eltype(A))
         return S
     end
     N = count(x->x <: Number, idx)
-    N == ndims(A) ? eltype(A) : AbstractArray{eltype(A), ndims(A)-N}
+    N == M ? eltype(A) : AbstractArray{eltype(A), M-N}
 end
 
-function Base.getindex(x::Symbolic{A}, idx...) where {A<:AbstractArray}
-
+function Base.getindex(x::Symbolic{<:AbstractArray}, idx...)
     shape = maybe(m -> m[idx...], metadata(x))
     Term(getindex, shape, [x, idx...])
 end

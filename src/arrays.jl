@@ -2,12 +2,6 @@ const SymArray{T,N} = Symbolic{<:AbstractArray{T,N}}
 
 # Array interface, assumes that s.metadata is an ArrayShape, see below
 # TODO: if shape is not known these should return Symbolic results
-#
-Base.axes(s::SymArray) = axes(s.metadata)
-
-Base.size(s::SymArray) = map(length, axes(s))
-
-Base.ndims(s::SymArray) = ndims(symtype(s))
 
 function Base.getindex(x::Symbolic{T}, idx::Int...) where {T<:AbstractArray}
     Term{eltype(T)}(getindex, idx...)
@@ -20,11 +14,11 @@ symtype(x::Union{Colon, AbstractRange}) = typeof(x)
 
 
 # Partial information
-elt(s::SymArray) = _eltype(symtype(s))
+elt(s::SymArray) = elt(symtype(s))
 elt(::Type{<:AbstractArray{T}}) where {T} = T
 elt(::Type{<:AbstractArray}) = nothing
 
-nd(s::SymArray) = _ndims(symtype(s))
+nd(s::SymArray) = nd(symtype(s))
 nd(::Type{<:AbstractArray{<:Any, N}}) where {N} = N
 nd(::Type{<:AbstractArray}) = nothing
 
@@ -46,13 +40,13 @@ end
 function promote_symtype(::typeof(getindex),
                          A::Type{<:AbstractArray},
                          idx...)
-    lessdims = count(x->x <: Number, idx)
+    D = count(x->x <: Number, idx)
     @maybe T=elt(A) begin
-        @maybe N=nd(A) return AbstractArray{T,N-lessdims}
+        @maybe N=nd(A) return N-D == 0 ? T : AbstractArray{T,N-D}
         return AbstractArray{T}
     end
 
-    @maybe N=nd(A) return AbstractArray{T, N-lessdims} where T
+    @maybe N=nd(A) return N-D == 0 ? T : AbstractArray{T, N-D} where T
 
     return AbstractArray
 end
@@ -62,7 +56,14 @@ function Base.getindex(x::SymArray, idx...)
     Term(getindex, shp, [x, idx...])
 end
 
+function Base.getindex(x::SymArray, idx::Int...)
+    shp = @maybe s=shape(x) s[idx...]
+    Term(getindex, shp, [x, idx...])
+end
 # basic
+
+# these methods are not symbolic but work if we know this info.
+import Base: eltype, length, ndims, size, axes, eachindex
 
 function eltype(A::SymArray)
     @maybe T=elt(A) return T
@@ -80,22 +81,36 @@ function ndims(A::SymArray)
     error("ndims of $A not known")
 end
 
-function size(A)
+function size(A::SymArray)
     @maybe s=shape(A) return length.(s.axes)
     error("size of $A not known")
 end
 
-function axes(A)
+function axes(A::SymArray)
     @maybe s=shape(A) return s.axes
     error("axes of $A not known")
 end
 
-function eachindex(A)
-    @maybe s=shape(A) CartesianIndices(s.axes)
+function eachindex(A::SymArray)
+    @maybe s=shape(A) return CartesianIndices(s.axes)
     error("eachindex of $A not known")
 end
 
 # todo: stride?
+
+# map, reduce
+# reshape
+# copy
+# deepcopy
+# similar
+# reinterpret -- ??
+# cat
+
+# Unary arithmetic – -, +
+# Binary arithmetic – -, +, *, /, \, ^
+# Comparison – ==, !=, ≈ (isapprox), ≉
+# Broadcast
+#
 
 # ArrayShape
 # Note: implement this as if it's an array

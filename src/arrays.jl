@@ -12,14 +12,16 @@ end
 
 function Base.getindex(x::Symbolic{A}, idx...) where {T,M,A<:AbstractArray{T,M}}
     axes = metadata(x).axes
-    idx = to_indices(CartesianIndices(axes), axes, idx)
-    newaxes = ([1:length(x) for x in idx if !(x isa Number)]...,)
+    idx1 = to_indices(CartesianIndices(axes), axes, idx)
+    newaxes = ([1:length(x) for x in idx1 if !(x isa Number)]...,)
     N = length(newaxes)
     newshape = ArrayShape{T, N}(newaxes)
 
-    S = Core.Compiler.return_type(getindex, Tuple{symtype(x), typeof.(idx)...})
+    S = Core.Compiler.return_type(getindex, Tuple{symtype(x), typeof.(idx1)...})
     if S == Any || S == Union{}
         S = AbstractArray{T, N}
     end
     Term{S}(getindex, newshape, [x, idx...])
 end
+
+

@@ -6,8 +6,8 @@ using Base: Slice
     @syms X[1:5, 2:6] (Y::Real)[1:5, 1:5] Z::Matrix{Float64}
     @test symtype(X) == AbstractArray{Number, 2}
     @test symtype(Y) == AbstractArray{Real, 2}
-    @test metadata(X) == ArrayShape{Number, 2}(Slice.((1:5, 2:6)))
-    @test metadata(Y) == ArrayShape{Real, 2}(Slice.((1:5, 1:5)))
+    @test metadata(X) == ArrayShape(Slice.((1:5, 2:6)))
+    @test metadata(Y) == ArrayShape(Slice.((1:5, 1:5)))
 
     A = Y[2, :]
     @test symtype(A) == AbstractArray{Real, 1}

@@ -67,16 +67,16 @@ end
 # Note: implement this as if it's an array
 # the idea is it needs to be usable both during construction
 # and simplification
-struct ArrayShape{T, N}
+
+struct ArrayShape
     axes::Tuple
 end
 
 Base.axes(a::ArrayShape) = a.axes
 
-function Base.getindex(a::ArrayShape{T}, idx...) where {T}
+function Base.getindex(a::ArrayShape, idx...)
     axes = a.axes
     idx1 = to_indices(CartesianIndices(axes), axes, idx)
     newaxes = ([1:length(x) for x in idx1 if !(x isa Number)]...,)
-    N = length(newaxes)
-    newshape = ArrayShape{T, N}(newaxes)
+    newshape = ArrayShape(newaxes)
 end

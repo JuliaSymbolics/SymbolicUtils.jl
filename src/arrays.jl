@@ -1,5 +1,9 @@
 const SymArray{T,N} = Symbolic{<:AbstractArray{T,N}}
 
+# AbstractArray deosn't work
+# indexing Matrix should give Array not AbstractArray
+# length does not work
+
 # Array interface, assumes that s.metadata is an ArrayShape, see below
 # TODO: if shape is not known these should return Symbolic results
 
@@ -91,6 +95,15 @@ function axes(A::SymArray)
     error("axes of $A not known")
 end
 
+
+function axes(A::SymArray, i)
+    @maybe s=shape(A) begin
+        @show s.axes
+        return i <= length(s.axes) ? s.axes[i] : Base.OneTo(1)
+    end
+    error("axes of $A not known")
+end
+
 function eachindex(A::SymArray)
     @maybe s=shape(A) return CartesianIndices(s.axes)
     error("eachindex of $A not known")
@@ -129,3 +142,5 @@ function Base.getindex(a::ArrayShape, idx...)
     newaxes = ([1:length(x) for x in idx1 if !(x isa Number)]...,)
     newshape = ArrayShape(newaxes)
 end
+
+Base.length(a::ArrayShape) = prod(map(length, axes(a)))

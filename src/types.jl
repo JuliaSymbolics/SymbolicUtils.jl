@@ -144,7 +144,7 @@ Base.show(io::IO, v::Sym) = print(io, v.name)
 # Maybe don't even need a new type, can just use Sym{FnType}
 struct FnType{X<:Tuple,Y} end
 
-(f::Sym{<:FnType})(args...) = term(f, args...)
+(f::Sym{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
 
 function (f::Sym)(args...)
     error("Sym $f is not callable. " *

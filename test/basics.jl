@@ -26,6 +26,10 @@ using Test
         @test_throws ErrorException g(b, a)
 
         @test symtype(g(b, f)) === Int
+
+        # issue #91
+        @syms h(a,b,c)
+        @test isequal(h(1,2,3), h(1,2,3))
     end
 end
 

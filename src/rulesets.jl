@@ -41,7 +41,7 @@ const TIMES_RULES = RuleSet([
     @acrule((~z::_isone  * ~x) => ~x)
     @acrule((~z::_iszero *  ~x) => ~z)
     @rule(*(~x) => ~x)
-    @acrule(*(~α, +(~~x)) => +(map(a-> a * ~α, ~~x)...))
+    @acrule(*(~α, +(~~x)) => +(map(a-> ~α * a , ~~x)...))
 ])
 
 const POW_RULES = RuleSet([

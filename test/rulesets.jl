@@ -49,8 +49,10 @@ end
     @test simplify(Term(zero, [x+2])) == 0
 
     # issue #94
-    @eqtest -1 * (1 + 2a) == -1 + (-2 * a)
-    @test -1 * (1 + 2a) + 2a == -1
+    @eqtest simplify(-1 * (1 + 2a)) == -1 + (-2 * a)
+    @test simplify(-1 * (1 + 2a) + 2a) == -1
+
+    @test_broken simplify(x/(x+3) + 3/(x+3)) == 1
 end
 
 @testset "boolean" begin

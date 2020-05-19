@@ -18,10 +18,9 @@ const PLUS_RULES = RuleSet([
     @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
     @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
-    @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α +  ~β, (~~x)...))
-    @acrule(*(~~x, ~α) + *(~~x, ~β) => *(~α +  ~β, (~~x)...))
+    @acrule(*(~α::isnumber, ~~x) + *(~β::isnumber, ~~x) => *(~α +  ~β, (~~x)...))
 
-    @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
+    @acrule(~x + *(~β::isnumber, ~x) => *(1 + ~β, ~x))
     @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
     @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...))
     
@@ -42,6 +41,7 @@ const TIMES_RULES = RuleSet([
     @acrule((~z::_isone  * ~x) => ~x)
     @acrule((~z::_iszero *  ~x) => ~z)
     @rule(*(~x) => ~x)
+    @acrule(*(~α, +(~~x)) => +(map(a-> a * ~α, ~~x)...))
 ])
 
 const POW_RULES = RuleSet([

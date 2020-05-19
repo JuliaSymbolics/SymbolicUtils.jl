@@ -47,6 +47,10 @@ end
     @test simplify(Term(zero, [a])) == 0
     @test simplify(Term(zero, [b+1])) == 0
     @test simplify(Term(zero, [x+2])) == 0
+
+    # issue #94
+    @eqtest -1 * (1 + 2a) == -1 + (-2 * a)
+    @test -1 * (1 + 2a) + 2a == -1
 end
 
 @testset "boolean" begin

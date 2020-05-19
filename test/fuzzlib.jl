@@ -143,9 +143,14 @@ function fuzz_test(ntrials, spec)
             try
                 if isnan(unsimplified)
                     @test isnan(simplified)
-                    if !isnan(simplified)
-                        error("Failed")
-                    end
+                    println("""NaN test:
+                            $(sprint(io->showraw(io, expr))) = $unsimplified
+                            Simplified to:
+                            $(sprint(io->showraw(io, simplify(expr)))) = $simplified
+                            On inputs:
+                            $inputs = $args
+                            """)
+                    @test_broken simplified == NaN
                 else
                     @test unsimplified ≈ simplified
                     if !(unsimplified ≈ simplified)

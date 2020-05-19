@@ -17,9 +17,8 @@ const PLUS_RULES = RuleSet([
     @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
     @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
-    @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
+    @acrule(*(~~x) + *(~β::isnumber, ~~x) => *(1 + ~β, (~~x)...))
     @acrule(*(~α::isnumber, ~~x) + *(~β::isnumber, ~~x) => *(~α +  ~β, (~~x)...))
-
     @acrule(~x + *(~β::isnumber, ~x) => *(1 + ~β, ~x))
     @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
     @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...))

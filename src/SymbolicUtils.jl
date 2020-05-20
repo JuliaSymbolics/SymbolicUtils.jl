@@ -50,4 +50,6 @@ include("simplify.jl")
 
 include("rulesets.jl")
 
+include("polyform.jl")
+
 end # module

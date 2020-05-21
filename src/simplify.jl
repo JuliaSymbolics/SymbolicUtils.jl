@@ -233,10 +233,11 @@ end
 
 ### Simplification rules
 
-pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
-pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
-pow(x, y::Symbolic) = Base.:^(x,y)
-pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
+pow(x,y) = y==0 ? 1 : x^y
+pow(x::Symbolic,y) = y==0 ? 1 : (term(^, x, y))
+pow(x, y::Symbolic) = term(^, x,y)
+pow(x::Symbolic,y::Symbolic) = term(^, x,y)
+Base.literal_pow(f::typeof(^), s::Symbolic, v::Val{V}) where {V} = term(^, s, V)
 
 # Numbers to the back
 function flatten_term(⋆, args)

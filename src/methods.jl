@@ -12,14 +12,17 @@ for f in diadic
         for S in [Sym, Term]
             @eval (::$(typeof(f)))(a::$T, b::$S) = term($f, a, b)
         end
+        expr(f) = f==(^) ? :(pow(a, b)) : :(term($f, a, b))
         @eval begin
-            (::$(typeof(f)))(a::$T, b::Real)   = term($f, a, b)
-            (::$(typeof(f)))(a::Real, b::$T)   = term($f, a, b)
-            (::$(typeof(f)))(a::$T, b::Number) = term($f, a, b)
-            (::$(typeof(f)))(a::Number, b::$T) = term($f, a, b)
+            (::$(typeof(f)))(a::$T, b::Real)   = $(expr(f))
+            (::$(typeof(f)))(a::Real, b::$T)   = $(expr(f))
+            (::$(typeof(f)))(a::$T, b::Number) = $(expr(f))
+            (::$(typeof(f)))(a::Number, b::$T) = $(expr(f))
         end
     end
+
 end
+
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)

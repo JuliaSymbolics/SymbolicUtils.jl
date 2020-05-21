@@ -32,7 +32,7 @@ end
 quicksimplify(x) = x
 function quicksimplify(t::Term)
     op = operation(t)
-    if op == (*)
+    if op == (*) || op == (/)
         α, term = mul_term(t)
         return lc_to_symbolic(Dict(term => α))
     elseif op == (+) || op == (-)
@@ -45,9 +45,27 @@ function quicksimplify(t::Term)
     end
 end
 
-function mul_term(t, dict=Dict())
+function distribute(f, x, tt)
+    f.(x,tt)
+end
+
+mapvalues(f, d) = Dict(zip(keys(d), f.(values(d))))
+
+function mul_term(t, dict=Dict(); lc=Dict(), distribute=true)
     α = 1
-    for a in arguments(t)
+    if t isa AbstractArray
+        tt = t
+    elseif t isa Term && operation(t) == (/)
+        α1, d = mul_term(arguments(t)[1:1], dict)
+        α2, d = mul_term(arguments(t)[2:2], Dict())
+        merge!(+, dict, mapvalues(-, d))
+        return α1/α2, dict
+    else
+        @assert t isa Term
+        tt = arguments(t)
+    end
+
+    for a in tt
         if a isa Number
             α *= a
         elseif !(a isa Term)
@@ -59,9 +77,9 @@ function mul_term(t, dict=Dict())
             else
                 dict[a] = get(dict, a, 0) + 1
             end
-        elseif operation(a) === (*)
+        elseif operation(a) === (*) || operation(a) === (/)
             # flatten
-            α1, _ = mul_term(a, dict)
+            α1, _ = mul_term(a, dict; lc=Dict())
             α *= α1
         else
             dict[a] = get(dict, a, 0) + 1
@@ -105,8 +123,8 @@ function pm_term(tr, dict=Dict{Dict, Number}(); sign=1)
             end
             coeff = get(dict, key, 0) + sign
             dict[key] = coeff
-        elseif operation(t) === *
-            α, inner_term = mul_term(t)
+        elseif operation(t) === (*) || operation(t) === (/)
+            α, inner_term = mul_term(t; lc=dict)
 
             if iszero(α)
                 continue

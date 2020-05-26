@@ -185,7 +185,7 @@ getdepth(r::ACRule) = getdepth(r.rule)
 macro acrule(expr)
     arity = length(expr.args[2].args[2:end])
     quote
-        SymbolicUtils.ACRule(SymbolicUtils.@rule($(expr)), $arity)
+        $(@__MODULE__).ACRule($(@__MODULE__).@rule($(expr)), $arity)
     end |> esc
 end
 

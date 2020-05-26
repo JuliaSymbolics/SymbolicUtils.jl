@@ -59,6 +59,9 @@ symtype(::Symbolic{T}) where {T} = T
 Base.isequal(s::Symbolic, x) = false
 Base.isequal(x, s::Symbolic) = false
 Base.isequal(x::Symbolic, y::Symbolic) = false
+
+function metadata end
+
 ### End of interface
 
 """
@@ -125,7 +128,10 @@ means the variable is a function with the type signature X -> Y where
 """
 struct Sym{T} <: Symbolic{T}
     name::Symbol
+    metadata::Any
 end
+
+metadata(s::Sym) = s.metadata
 
 const Variable = Sym # old name
 Sym(x) = Sym{symtype(x)}(x)
@@ -199,8 +205,10 @@ variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)
     defs = map(xs) do x
-        n, t = _name_type(x)
-        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
+        nt = _name_type(x)
+        n, t = nt.name, nt.type
+        m = get(nt, :metadata, nothing)
+        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n)), $m))
     end
 
     Expr(:block, defs...,
@@ -226,6 +234,12 @@ function _name_type(x)
         else
             return (name=lhs, type=rhs)
         end
+    elseif x isa Expr && x.head === :ref
+        ntype = _name_type(x.args[1]) # a::Number
+        N = length(x.args)-1
+        return (name=ntype.name,
+                type=:(AbstractArray{$(ntype.type), $N}),
+                metadata=:(ArrayShape(Base.Slice.(($(x.args[2:end]...),)))))
     elseif x isa Expr && x.head === :call
         return _name_type(:($x::Number))
     else
@@ -263,14 +277,22 @@ See [promote_symtype](#promote_symtype)
 """
 struct Term{T} <: Symbolic{T}
     f::Any
+    metadata::Any
     arguments::Any
 end
 
-Term(f, args) = Term{rec_promote_symtype(f, map(symtype, args)...)}(f, args)
+function Term(f, metadata, args)
+    Term{rec_promote_symtype(f, map(symtype, args)...)}(f, metadata, args)
+end
+
+Term{T}(f, args) where T = Term{T}(f, nothing, args)
+Term(f, args) = Term(f, nothing, args)
 
 operation(x::Term) = x.f
 
 arguments(x::Term) = x.arguments
+
+metadata(x::Term) = x.metadata
 
 function Base.hash(t::Term{T}, salt::UInt) where {T}
     hash(arguments(t), hash(operation(t), hash(T, salt)))
@@ -285,13 +307,13 @@ function Base.isequal(t1::Term, t2::Term)
         all(isequal(l,r) for (l, r) in zip(a1,a2))
 end
 
-function term(f, args...; type = nothing)
+function term(f, args...; type = nothing, meta = nothing)
     if type === nothing
         T = rec_promote_symtype(f, symtype.(args)...)
     else
         T = type
     end
-    Term{T}(f, [args...])
+    Term{T}(f, meta, [args...])
 end
 
 #--------------------
@@ -313,8 +335,16 @@ function Base.show(io::IO, t::Term)
         fname = nameof(f)
         binary = Base.isbinaryoperator(fname)
         color = get(io, :withcolor, :white)
+        openparen = "("
+        closeparen = "("
+        sep = " $fname "
+        if f === (^)
+            sep = "$fname"
+            closeparen = openparen = ""
+        end
+
         if binary
-            get(io, :paren, false) && Base.printstyled(io, "(",color=color)
+            get(io, :paren, false) && Base.printstyled(io, openparen,color=color)
             for i = 1:length(args)
                 length(args) == 1 && Base.printstyled(io, fname, color=color)
 
@@ -323,17 +353,34 @@ function Base.show(io::IO, t::Term)
                                  args[i], color=color)
                 args[i] isa Complex && Base.printstyled(io, ")",color=color)
 
-                i != length(args) && Base.printstyled(io, " $fname ", color=color)
+                i != length(args) && Base.printstyled(io, sep, color=color)
             end
-            get(io, :paren, false) && Base.printstyled(io, ")", color=color)
+            get(io, :paren, false) && Base.printstyled(io, closeparen, color=color)
         else
-            Base.printstyled(io, "$fname(", color=color)
-            for i=1:length(args)
-                Base.printstyled(IOContext(io, :paren => false),
-                                 args[i], color=color)
-                i != length(args) && Base.printstyled(io, ", ", color=color)
+            if f === getindex
+                Base.printstyled(io, "$(args[1])[", color=color)
+                for i=2:length(args)
+                    if args[i] isa Base.Slice
+                        val = args[i].indices
+                    elseif args[i] isa Base.Colon
+                        val = :(:)
+                    else
+                        val = args[i]
+                    end
+                    Base.printstyled(IOContext(io, :paren => false),
+                                     val, color=color)
+                    i != length(args) && Base.printstyled(io, ", ", color=color)
+                end
+                Base.printstyled(io, "]", color=color)
+            else
+                Base.printstyled(io, "$fname(", color=color)
+                for i=1:length(args)
+                    Base.printstyled(IOContext(io, :paren => false),
+                                     args[i], color=color)
+                    i != length(args) && Base.printstyled(io, ", ", color=color)
+                end
+                Base.printstyled(io, ")", color=color)
             end
-            Base.printstyled(io, ")", color=color)
         end
     end
     return nothing

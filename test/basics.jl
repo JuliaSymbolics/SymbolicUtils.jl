@@ -1,4 +1,5 @@
-using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, EmptyCtx
+using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, EmptyCtx,
+                     metadata, ShapedArray
 using SymbolicUtils
 using Test
 

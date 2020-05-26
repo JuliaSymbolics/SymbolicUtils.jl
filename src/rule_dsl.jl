@@ -264,6 +264,8 @@ function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, threa
     Term{symtype(term)}(operation(term), args)
 end
 
+const rule_repr = IdDict()
+
 function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::Bool=false, recurse::Bool=true,
                       threaded::Bool=false, thread_subtree_cutoff::Int=100)
     rules = r.rules
@@ -286,7 +288,7 @@ function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::B
         end
         for i in 1:length(rules)
             expr′ = try
-                @timer(repr(rules[i]), rules[i](expr, context))
+                @timer(Base.@get!(rule_repr, rules[i], repr(rules[i])), rules[i](expr, context))
             catch err
                 throw(RuleRewriteError(rules[i], expr))
             end

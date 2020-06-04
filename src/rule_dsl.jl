@@ -185,7 +185,7 @@ getdepth(r::ACRule) = getdepth(r.rule)
 macro acrule(expr)
     arity = length(expr.args[2].args[2:end])
     quote
-        ACRule(@rule($expr), $arity)
+        ACRule($(esc(:(@rule($(expr))))), $arity)
     end
 end
 

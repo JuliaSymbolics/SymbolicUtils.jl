@@ -162,11 +162,12 @@ macro rule(expr)
     lhs_term = makepattern(lhs, keys)
     unique!(keys)
     quote
+        $(__source__)
         lhs_pattern = $(lhs_term)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
-             (__MATCHES__, __CTX__) -> $(makeconsequent(rhs)),
+             (__MATCHES__, __CTX__) -> ($(__source__); $(makeconsequent(rhs))),
              rule_depth($lhs_term))
     end
 end

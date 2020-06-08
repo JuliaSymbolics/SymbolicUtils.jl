@@ -34,3 +34,14 @@ drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
 @inline drop_n(ll::AbstractArray, n) = drop_n(LL(ll, 1), n)
 @inline drop_n(ll::LL, n) = LL(ll.v, ll.i+n)
 
+has_trig(x) = false
+function has_trig(term::Term)
+    fns = (sin, cos, tan, cot, sec, csc)
+    op = operation(term)
+
+    if Base.@nany 6 i->fns[i] === op
+        return true
+    else
+        return any(has_trig, arguments(term))
+    end
+end

@@ -11,6 +11,12 @@ of symtype Number.
 """
 default_rules(x, ctx) = SIMPLIFY_RULES
 
+function default_rules(x, ctx::EmptyCtx)
+    has_trig(x) ?
+        SIMPLIFY_RULES_TRIG :
+        SIMPLIFY_RULES
+end
+
 """
     simplify(x, ctx=EmptyCtx();
         rules=default_rules(x, ctx),

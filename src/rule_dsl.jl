@@ -266,8 +266,12 @@ end
 
 const rule_repr = IdDict()
 
-function (r::RuleSet)(term, context=EmptyCtx();  depth=typemax(Int), applyall::Bool=false, recurse::Bool=true,
-                      threaded::Bool=false, thread_subtree_cutoff::Int=100)
+function (r::RuleSet)(term, context=EmptyCtx();
+                      depth=typemax(Int),
+                      applyall::Bool=false,
+                      recurse::Bool=true,
+                      threaded::Bool=false,
+                      thread_subtree_cutoff::Int=100)
     rules = r.rules
     term = to_symbolic(term)
     # simplify the subexpressions

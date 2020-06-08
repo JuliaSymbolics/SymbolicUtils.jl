@@ -101,7 +101,8 @@ end
     @syms a b
     @test substitute(a, Dict(a=>1)) == 1
     @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(1+b))
-    @test substitute(a+b, Dict(a=>1, b=>3)) |> simplify == 4
+    @test substitute(a+b, Dict(a=>1, b=>3)) == 4
+    @test substitute(exp(a), Dict(a=>2)) ≈ exp(2)
 end
 
 @testset "printing" begin

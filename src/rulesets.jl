@@ -50,8 +50,8 @@ const TIMES_RULES = RuleSet([
 ])
 
 const POW_RULES = RuleSet([
-    @rule(^(*(~~x), ~y) => *(map(a->pow(a, ~y), ~~x)...))
-    @rule((((~x)^(~p))^(~q)) => (~x)^((~p)*(~q)))
+    @rule(^(*(~~x), ~y::isliteral(Integer)) => *(map(a->pow(a, ~y), ~~x)...))
+    @rule((((~x)^(~p::isliteral(Integer)))^(~q::isliteral(Integer))) => (~x)^((~p)*(~q)))
     @rule(^(~x, ~z::_iszero) => 1)
     @rule(^(~x, ~z::_isone) => ~x)
 ])

@@ -57,7 +57,18 @@ substitute any subexpression that matches a key in `dict` with
 the corresponding value.
 """
 function substitute(expr, dict)
-    RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])(expr)
+    RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])(expr) |> fold
+end
+
+fold(x) = x
+function fold(t::Term)
+    tt = map(fold, arguments(t))
+    if !any(x->x isa Symbolic, tt)
+        # evaluate it
+        return operation(t)(tt...)
+    else
+        return Term{symtype(t)}(operation(t), tt)
+    end
 end
 
 ### Predicates

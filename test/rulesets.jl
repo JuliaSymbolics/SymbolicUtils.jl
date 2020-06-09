@@ -25,7 +25,8 @@ end
     @eqtest simplify(1 * x * 2) == 2 * x
     @eqtest simplify(1 + x + 2) == 3 + x
     @eqtest simplify(b*b) == b^2 # tests merge_repeats
-    @eqtest simplify((a*b)^c) == a^c * b^c
+    @eqtest simplify((a*b)^2) == a^2 * b^2
+    @eqtest simplify((a*b)^c) == (a*b)^c
 
     @eqtest simplify(1x + 2x) == 3x
     @eqtest simplify(3x + 2x) == 5x

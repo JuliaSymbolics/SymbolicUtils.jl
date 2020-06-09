@@ -5,6 +5,8 @@ version = "0.3.3"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+IRTools = "7869d1d1-7146-5819-86e3-90919afe41df"
+Mjolnir = "1154507a-7ac2-44fe-9f15-34617bca9db5"
 NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"

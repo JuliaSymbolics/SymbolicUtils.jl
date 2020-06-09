@@ -105,7 +105,7 @@ struct Errored
     err
 end
 
-function fuzz_test(ntrials, spec)
+function fuzz_test(ntrials, spec; mjolnir=false)
     inputs = Set()
     expr = gen_rand_expr(inputs; spec=spec)
     inputs = collect(inputs)
@@ -120,8 +120,20 @@ function fuzz_test(ntrials, spec)
         $(sprint(io->showraw(io, simplify(expr))))
     end
     """
-    f = include_string(Main, unsimplifiedstr)
-    g = include_string(Main, simplifiedstr)
+    f = include_string(@__MODULE__, unsimplifiedstr)
+
+    if mjolnir
+        try
+            expr = Base.invokelatest(()->@symbolic f(inputs...))
+        catch err
+            @show err
+            println(unsimplifiedstr)
+        end
+        @test isequal(Base.invokelatest(f, inputs...), expr)
+        return
+    end
+
+    g = include_string(@__MODULE__, simplifiedstr)
 
     for i=1:ntrials
         args = [spec.input(i) for i in inputs]

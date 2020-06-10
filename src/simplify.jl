@@ -66,7 +66,7 @@ the corresponding value.
 function substitute(expr, dict; fold=true)
     rs = RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])
     if fold
-        rs(expr) |> fold
+        rs(expr) |> SymbolicUtils.fold
     else
         rs(expr)
     end

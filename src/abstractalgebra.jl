@@ -69,7 +69,8 @@ function to_mpoly(t)
 
     t_poly_1 = substitute(t, term2sym, fold=false)
     t_poly_2 = substitute(t_poly_1, Dict(ks .=> vars), fold=false)
-    rs = RuleSet([@acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
+    rs = RuleSet([@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
+                  @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
                   @rule(+(~x) => ~x)
                   @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
                   @rule(*(~x) => ~x)
@@ -78,8 +79,8 @@ function to_mpoly(t)
 end
 
 function to_term(x::MPoly, syms)
-    function mul_coeffs(coeffs)
-        monics = [syms[i]^c for (i, c) in enumerate(coeffs) if !iszero(c)]
+    function mul_coeffs(exps)
+        monics = [e == 1 ? syms[i] : syms[i]^e for (i, e) in enumerate(exps) if !iszero(e)]
         if length(monics) == 1
             return monics[1]
         elseif length(monics) == 0
@@ -88,11 +89,11 @@ function to_term(x::MPoly, syms)
             return Term(*, monics)
         end
     end
-    monoms = vec(mapslices(mul_coeffs, x.exps[:, 1:x.length], dims=1))
+    monoms = [mul_coeffs(exponent_vector(x, i)) for i in 1:x.length]
     if length(monoms) == 1
-        monoms[1] * x.coeffs[1] # Term?
+        !isone(x.coeffs[1]) ?  monoms[1] * x.coeffs[1] : monoms[1]
     else
-        Term(+, map(*, monoms, x.coeffs[1:length(monoms)]))
+        Term(+, map((x,y)->isone(y) ? x : y*x, monoms, x.coeffs[1:length(monoms)]))
     end
 end
 

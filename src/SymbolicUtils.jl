@@ -44,8 +44,7 @@ using Combinatorics: permutations
 export @rule, @acrule, RuleSet
 include("rule_dsl.jl")
 
-using AbstractAlgebra
-import AbstractAlgebra.Generic: MPoly
+import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
 using AbstractAlgebra: ismonomial
 include("abstractalgebra.jl")
 

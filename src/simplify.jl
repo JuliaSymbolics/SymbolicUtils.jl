@@ -11,14 +11,18 @@ of symtype Number.
 """
 default_rules(x, ctx) = SIMPLIFY_RULES
 
-function default_rules(x, ctx::EmptyCtx)
+function default_rules(x, ctx::DefaultCtx)
     has_trig(x) ?
         SIMPLIFY_RULES_TRIG :
         SIMPLIFY_RULES
 end
 
+function default_rules(x, ctx::EmptyCtx)
+    identity
+end
+
 """
-    simplify(x, ctx=EmptyCtx();
+    simplify(x, ctx=DefaultCtx();
         rules=default_rules(x, ctx),
         fixpoint=true,
         applyall=true,
@@ -28,7 +32,7 @@ Simplify an expression by applying `rules` until there are no changes.
 The second argument, the context is passed to every [`Contextual`](#Contextual)
 predicate and can be accessed as `(@ctx)` in the right hand side of `@rule` expression.
 
-By default the context is an `EmptyCtx()` -- which means there is no contextual information.
+By default the context is an `DefaultCtx()` -- which means there is no contextual information.
 Any arbitrary type can be used as a context, and packages defining their own contexts
 should define `default_rules(ctx::TheContextType)` to return a `RuleSet` that will
 be used by default while simplifying under that context.
@@ -39,8 +43,8 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, kwargs...)
-    if ctx isa EmptyCtx
+function simplify(x, ctx=DefaultCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, kwargs...)
+    if ctx isa DefaultCtx
         x = to_term(to_mpoly(x)...)
     end
     if fixpoint

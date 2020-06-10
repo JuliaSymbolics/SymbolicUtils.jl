@@ -47,6 +47,10 @@ function to_mpoly(t)
     sym2term, term2sym = Dict(), Dict()
     ls = labels((sym2term, term2sym), t)
 
+    if isempty(sym2term)
+        return t, []
+    end
+
     ks = collect(keys(sym2term))
     R, vars = PolynomialRing(ZZ, String.(nameof.(ks)))
 
@@ -58,7 +62,7 @@ function to_mpoly(t)
                   @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
                   @rule(*(~x) => ~x)
                   @rule((~x::ismpoly)^(~a::isliteral(Integer)) => (~x)^(~a))])
-    simplify(t_poly_2, rules=rs), Dict(Pair.(1:length(vars), ks))
+    simplify(t_poly_2, EmptyCtx(), rules=rs), Dict(Pair.(1:length(vars), ks))
 end
 
 function to_term(x::MPoly, syms)
@@ -75,6 +79,8 @@ function to_term(x::MPoly, syms)
     monoms = [mul_coeffs(exponent_vector(x, i)) for i in 1:x.length]
     if length(monoms) == 1
         !isone(x.coeffs[1]) ?  monoms[1] * x.coeffs[1] : monoms[1]
+    elseif length(monoms) == 0
+        return 0
     else
         Term(+, map((x,y)->isone(y) ? x : y*x, monoms, x.coeffs[1:length(monoms)]))
     end

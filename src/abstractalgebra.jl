@@ -65,7 +65,7 @@ function to_mpoly(t)
     ls = labels((sym2term, term2sym), t)
 
     ks = collect(keys(sym2term))
-    R, vars = PolynomialRing(ZZ, @show String.(nameof.(ks)))
+    R, vars = PolynomialRing(ZZ, String.(nameof.(ks)))
 
     t_poly_1 = substitute(t, term2sym, fold=false)
     t_poly_2 = substitute(t_poly_1, Dict(ks .=> vars), fold=false)
@@ -74,9 +74,33 @@ function to_mpoly(t)
                   @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
                   @rule(*(~x) => ~x)
                   @rule((~x::ismpoly)^(~a::isliteral(Integer)) => (~x)^(~a))])
-    simplify(t_poly_2, rules=rs)
+    simplify(t_poly_2, rules=rs), Dict(Pair.(1:length(vars), ks))
 end
 
+function to_term(x::MPoly, syms)
+    function mul_coeffs(coeffs)
+        monics = [syms[i]^c for (i, c) in enumerate(coeffs) if !iszero(c)]
+        if length(monics) == 1
+            return monics[1]
+        elseif length(monics) == 0
+            return 1
+        else
+            return Term(*, monics)
+        end
+    end
+    monoms = vec(mapslices(mul_coeffs, x.exps[:, 1:x.length], dims=1))
+    if length(monoms) == 1
+        monoms[1] * x.coeffs[1] # Term?
+    else
+        Term(+, map(*, monoms, x.coeffs[1:length(monoms)]))
+    end
+end
+
+to_term(x, vars) = x
+
+function to_term(x::Term, vars)
+    Term{symtype(x)}(operation(x), to_term.(arguments(x), (vars,)))
+end
 #=
 
 julia> x=a * (b + -1 * c) + -1 * (b * a + -1 * c * a)

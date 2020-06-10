@@ -11,8 +11,8 @@ with a symbol, store the symbol => term mapping in `dict`.
 function labels end
 
 # Turn a Term into a multivariate polynomial
-labels(dicts, t) = t
-function labels(dicts, t::Sym)
+labels(dicts, t; label_terms=false) = t
+function labels(dicts, t::Sym; label_terms=false)
     sym2term, term2sym = dicts
     if !haskey(term2sym, t)
         sym2term[t] = t
@@ -21,21 +21,27 @@ function labels(dicts, t::Sym)
     return t
 end
 
-function labels(dicts, t::Term)
+function labels(dicts, t::Term; label_terms=false)
     tt = arguments(t)
     if operation(t) == (*) || operation(t) == (+)
-        return Term{symtype(t)}(operation(t), map(x->labels(dicts, x), tt))
+        return Term{symtype(t)}(operation(t), map(x->labels(dicts, x;
+                                                            label_terms=label_terms), tt))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
             return term2sym[t]
         end
+        if label_terms
+            sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
+            sym2term[sym] = Term{symtype(t)}(operation(t), map(x->labels(dicts, x;
+                                                                        label_terms=label_terms),
+                                                               tt))
+            x = term2sym[t] = sym
 
-        sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
-        sym2term[sym] = Term{symtype(t)}(operation(t), map(x->labels(dicts, x), tt))
-        x = term2sym[t] = sym
-
-        return x
+            return x
+        else
+            return Term{symtype(t)}(operation(t), map(x->labels(dicts, x; label_terms=label_terms), tt))
+        end
     end
 end
 

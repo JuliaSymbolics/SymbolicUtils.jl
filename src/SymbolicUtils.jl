@@ -44,8 +44,12 @@ using Combinatorics: permutations
 export @rule, @acrule, RuleSet
 include("rule_dsl.jl")
 
-export simplify, substitute
+using AbstractAlgebra
+import AbstractAlgebra.Generic: MPoly
+using AbstractAlgebra: ismonomial
+include("abstractalgebra.jl")
 
+export simplify, substitute
 include("simplify.jl")
 
 include("rulesets.jl")

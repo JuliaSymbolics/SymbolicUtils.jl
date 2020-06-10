@@ -1,7 +1,3 @@
-using AbstractAlgebra
-using SymbolicUtils
-using SymbolicUtils: Term, operation, arguments, symtype, Sym
-
 """
     labels(dict, t)
 
@@ -44,19 +40,6 @@ function labels(dicts, t::Term; label_terms=false)
         end
     end
 end
-
-import SymbolicUtils: istree, operation, arguments, Symbolic, isliteral
-import AbstractAlgebra.Generic: MPoly
-using AbstractAlgebra: ismonomial
-
-
-struct PolynomialTerm{T}
-    sym2term::Dict
-    term2sym::Dict
-    mpoly::MPoly
-end
-
-issym(x::MPoly) = ismonomial(x) && sum(x.exps) == 1
 
 ismpoly(x) = x isa MPoly || x isa Integer
 
@@ -102,11 +85,5 @@ to_term(x, vars) = x
 function to_term(x::Term, vars)
     Term{symtype(x)}(operation(x), to_term.(arguments(x), (vars,)))
 end
-#=
 
-julia> x=a * (b + -1 * c) + -1 * (b * a + -1 * c * a)
-(a * (b + (-1 * c))) + (-1 * ((a * b) + (-1 * a * c)))
-
-julia> to_mpoly(x)
-0
-=#
+<ₑ(a::MPoly, b::MPoly) = false

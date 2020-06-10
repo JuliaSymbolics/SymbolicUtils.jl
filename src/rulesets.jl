@@ -23,8 +23,8 @@ const PLUS_RULES = RuleSet([
     @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
     @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
-    @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α +  ~β, (~~x)...))
-    @acrule(*(~~x, ~α) + *(~~x, ~β) => *(~α +  ~β, (~~x)...))
+    @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α + ~β, (~~x)...))
+    @acrule(*(~~x, ~α) + *(~~x, ~β) => *(~α + ~β, (~~x)...))
 
     @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
     @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))

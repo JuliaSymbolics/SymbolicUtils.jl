@@ -40,6 +40,9 @@ The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
 function simplify(x, ctx=EmptyCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, kwargs...)
+    if ctx isa EmptyCtx
+        x = to_term(to_mpoly(x)...)
+    end
     if fixpoint
         SymbolicUtils.fixpoint(rules, x, ctx; applyall=applyall)
     else

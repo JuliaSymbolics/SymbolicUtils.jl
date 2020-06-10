@@ -56,8 +56,13 @@ Base.@deprecate simplify(x, rules::RuleSet; kwargs...)  simplify(x, rules=rules;
 substitute any subexpression that matches a key in `dict` with
 the corresponding value.
 """
-function substitute(expr, dict)
-    RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])(expr) |> fold
+function substitute(expr, dict; fold=true)
+    rs = RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])
+    if fold
+        rs(expr) |> fold
+    else
+        rs(expr)
+    end
 end
 
 fold(x) = x

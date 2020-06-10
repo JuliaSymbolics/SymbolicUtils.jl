@@ -42,6 +42,7 @@ function labels(dicts, t::Term; label_terms=false)
 end
 
 ismpoly(x) = x isa MPoly || x isa Integer
+isnonnegint(x) = x isa Integer && x >= 0
 
 function to_mpoly(t)
     sym2term, term2sym = Dict(), Dict()
@@ -61,7 +62,7 @@ function to_mpoly(t)
                   @rule(+(~x) => ~x)
                   @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
                   @rule(*(~x) => ~x)
-                  @rule((~x::ismpoly)^(~a::isliteral(Integer)) => (~x)^(~a))])
+                  @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))])
     simplify(t_poly_2, EmptyCtx(), rules=rs), Dict(Pair.(1:length(vars), ks))
 end
 

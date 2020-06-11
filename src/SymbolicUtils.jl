@@ -54,4 +54,6 @@ include("simplify.jl")
 
 include("rulesets.jl")
 
+include("context.jl")
+
 end # module

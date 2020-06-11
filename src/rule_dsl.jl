@@ -28,10 +28,8 @@ function Base.show(io::IO, r::Rule)
 end
 
 const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
-struct DefaultCtx end
-struct EmptyCtx end
 
-function (r::Rule)(term, ctx=DefaultCtx())
+function (r::Rule)(term, ctx=nothing)
     rhs = r.rhs
 
     r.matcher((term,), EMPTY_DICT, ctx) do bindings, n
@@ -193,7 +191,7 @@ end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-function (acr::ACRule)(term, ctx=DefaultCtx())
+function (acr::ACRule)(term, ctx=nothing)
     r = Rule(acr)
     if !(term isa Term)
         r(term)
@@ -268,7 +266,7 @@ end
 
 const rule_repr = IdDict()
 
-function (r::RuleSet)(term, context=DefaultCtx();
+function (r::RuleSet)(term, context=nothing;
                       depth=typemax(Int),
                       applyall::Bool=false,
                       recurse::Bool=true,

@@ -1,5 +1,7 @@
 using DataStructures
 
+# Polynomial Normal Form
+
 """
     labels!(dict, t)
 
@@ -19,11 +21,13 @@ function labels!(dicts, t::Sym)
 end
 
 function labels!(dicts, t)
-    if t isa Term && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
-        tt = arguments(t)
-        return Term{symtype(t)}(operation(t), map(x->labels!(dicts, x), tt))
-    elseif t isa Integer
+    if t isa Integer
         return t
+    elseif t isa Term && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
+        tt = arguments(t)
+        return Term{symtype(t)}(operation(t), map(x->labels!(dicts, x), arguments(t)))
+    elseif t isa Term && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
+        return Term{symtype(t)}(operation(t), map(x->labels!(dicts, x), arguments(t)))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
@@ -33,7 +37,7 @@ function labels!(dicts, t)
             tt = arguments(t)
             sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
             sym2term[sym] = Term{symtype(t)}(operation(t),
-                                             map(x->to_mpoly(x, dicts)[1], tt))
+                                             map(x->to_mpoly(x, dicts)[1], arguments(t)))
         else
             sym = Sym{symtype(t)}(gensym("literal"))
             sym2term[sym] = t
@@ -48,7 +52,13 @@ end
 ismpoly(x) = x isa MPoly || x isa Integer
 isnonnegint(x) = x isa Integer && x >= 0
 
-function to_mpoly(t, dicts=(OrderedDict(), OrderedDict()))
+const mpoly_rules = RuleSet([@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
+                             @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
+                             @rule(+(~x) => ~x)
+                             @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
+                             @rule(*(~x) => ~x)
+                             @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))])
+function to_mpoly(t, dicts=(OrderedDict{Sym, Any}(), OrderedDict{Any, Sym}()))
     # term2sym is only used to assign the same
     # symbol for the same term -- in other words,
     # it does common subexpression elimination
@@ -60,20 +70,17 @@ function to_mpoly(t, dicts=(OrderedDict(), OrderedDict()))
         return labeled, []
     end
 
-    ks = collect(keys(sym2term))
+    ks = sort(collect(keys(sym2term)), lt=<ₑ)
     R, vars = PolynomialRing(ZZ, String.(nameof.(ks)))
 
-    t_poly = substitute(labeled, Dict(ks .=> vars), fold=false)
-    rs = RuleSet([@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
-                  @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
-                  @rule(+(~x) => ~x)
-                  @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
-                  @rule(*(~x) => ~x)
-                  @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))])
-    simplify(t_poly, EmptyCtx(), rules=rs), sym2term, Dict(Pair.(1:length(vars), ks))
+    replace_with_poly = Dict{Sym,MPoly}(zip(ks, vars))
+    t_poly = substitute(labeled, replace_with_poly, fold=false)
+    simplify(t_poly, EmptyCtx(), rules=mpoly_rules),
+        sym2term,
+        Dict(Pair.(length(vars):-1:1, ks))
 end
 
-function to_term(x::MPoly, dict, syms)
+function to_term(x, dict, syms)
     dict = copy(dict)
     for (k, v) in dict
         dict[k] = _to_term(v, dict, syms)
@@ -84,7 +91,7 @@ end
 function _to_term(x::MPoly, dict, syms)
 
     function mul_coeffs(exps)
-        monics = [e == 1 ? syms[i] : syms[i]^e for (i, e) in enumerate(exps) if !iszero(e)]
+        monics = [e == 1 ? syms[i] : syms[i]^e for (i, e) in enumerate(reverse(exps)) if !iszero(e)]
         if length(monics) == 1
             return monics[1]
         elseif length(monics) == 0
@@ -107,7 +114,13 @@ function _to_term(x::MPoly, dict, syms)
     substitute(t, dict, fold=false)
 end
 
-_to_term(x, dict, vars) = x
+function _to_term(x, dict, vars)
+    if haskey(dict, x)
+        return dict[x]
+    else
+        return x
+    end
+end
 
 function _to_term(x::Term, dict, vars)
     t=Term{symtype(x)}(operation(x), _to_term.(arguments(x), (dict,), (vars,)))

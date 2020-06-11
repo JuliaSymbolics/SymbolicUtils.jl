@@ -43,8 +43,13 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=DefaultCtx(); rules=default_rules(x, ctx), fixpoint=true, applyall=true, kwargs...)
-    if ctx isa DefaultCtx
+function simplify(x, ctx=DefaultCtx();
+                  rules=default_rules(x, ctx),
+                  fixpoint=true,
+                  applyall=true,
+                  mpoly=false,
+                  kwargs...)
+    if mpoly
         x = to_term(to_mpoly(x)...)
     end
     if fixpoint

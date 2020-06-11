@@ -75,7 +75,7 @@ function to_mpoly(t, dicts=(OrderedDict{Sym, Any}(), OrderedDict{Any, Sym}()))
     t_poly = substitute(labeled, replace_with_poly, fold=false)
     simplify(t_poly, EmptyCtx(), rules=mpoly_rules),
         sym2term,
-        Dict(Pair.(length(vars):-1:1, ks))
+        reverse(ks)
 end
 
 function to_term(x, dict, syms)

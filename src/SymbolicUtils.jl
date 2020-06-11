@@ -46,6 +46,7 @@ include("rule_dsl.jl")
 
 import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
 using AbstractAlgebra: ismonomial
+using DataStructures
 include("abstractalgebra.jl")
 
 export simplify, substitute

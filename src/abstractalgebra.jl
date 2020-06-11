@@ -1,5 +1,3 @@
-using DataStructures
-
 # Polynomial Normal Form
 
 """

@@ -47,16 +47,16 @@ function simplify(x, ctx=DefaultCtx();
                   rules=default_rules(x, ctx),
                   fixpoint=true,
                   applyall=true,
-                  mpoly=false,
                   kwargs...)
-    if mpoly
-        x = to_term(to_mpoly(x)...)
-    end
     if fixpoint
         SymbolicUtils.fixpoint(rules, x, ctx; applyall=applyall)
     else
         rules(x, ctx; applyall=applyall, kwargs...)
     end
+end
+
+function polynormalize(x)
+    to_term(to_mpoly(x)...)
 end
 
 

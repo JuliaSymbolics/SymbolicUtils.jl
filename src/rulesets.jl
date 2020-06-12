@@ -7,7 +7,7 @@ const SIMPLIFY_RULES = RuleSet([
 const SIMPLIFY_RULES_TRIG = RuleSet([
     @rule ~t::sym_isa(Bool)   => BOOLEAN_RULES(~t, applyall=true, recurse=true)
     @rule ~t::sym_isa(Number) => NUMBER_RULES(~t, applyall=true, recurse=true)
-    @rule ~t::sym_isa(Number) => TRIG_RULES(~t, recurse=true)
+    @rule ~t::sym_isa(Number) => TRIG_RULES(~t, applyall=true, recurse=true)
 ])
 
 const NUMBER_RULES = RuleSet([

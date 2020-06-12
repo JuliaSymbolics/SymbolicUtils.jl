@@ -266,6 +266,8 @@ struct Term{T} <: Symbolic{T}
     arguments::Any
 end
 
+istree(t::Term) = true
+
 Term(f, args) = Term{rec_promote_symtype(f, map(symtype, args)...)}(f, args)
 
 operation(x::Term) = x.f

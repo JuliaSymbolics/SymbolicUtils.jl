@@ -11,14 +11,10 @@ of symtype Number.
 """
 default_rules(x, ctx) = SIMPLIFY_RULES
 
-function default_rules(x, ctx::DefaultCtx)
+function default_rules(x)
     has_trig(x) ?
         SIMPLIFY_RULES_TRIG :
         SIMPLIFY_RULES
-end
-
-function default_rules(x, ctx::EmptyCtx)
-    identity
 end
 
 """
@@ -43,8 +39,8 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=DefaultCtx();
-                  rules=default_rules(x, ctx),
+function simplify(x, ctx=nothing;
+                  rules=default_rules(x),
                   fixpoint=true,
                   applyall=true,
                   mpoly=false,

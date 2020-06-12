@@ -32,11 +32,11 @@ struct RestartedChain{Cs}
     ctxs::Cs
 end
 
-function (ctx::RestartedChain)(@nospecialize(x); kwargs...)
+function (ctx::RestartedChain)(x; kwargs...)
     for f in ctx.ctxs
         y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
         if y !== nothing && x !== y && !isequal(x, y)
-            return ctx(y; kwargs...)
+            return ChainCtx(ctx.ctxs)(y; kwargs...)
         end
     end
     return x
@@ -96,7 +96,7 @@ const NUMBER_RULES2 = [
     @rule ~t::is_operation(+) =>  PLUS_RULES2(~t)
     @rule ~t::is_operation(*) => TIMES_RULES2(~t)
     @rule ~t::is_operation(^) =>   POW_RULES2(~t)
-] |> ChainCtx |> PrewalkCtx
+] |> RestartedChain |> PrewalkCtx
 
 const PLUS_RULES2 = [
     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))

@@ -47,11 +47,12 @@ struct FixpointCtx{C}
 end
 
 function (ctx::FixpointCtx)(x; kwargs...)
-    y = ctx.ctx(x; kwargs...)
+    f = ctx.ctx
+    y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
     while x !== y && !isequal(x, y)
         isnothing(y) && return x
         x = y
-        y = ctx.ctx(y; kwargs...)
+        y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
     end
     return x
 end
@@ -70,8 +71,6 @@ function (p::PrewalkCtx)(x; kwargs...)
         return p.ctx(x)
     end
 end
-
-RuleSetCtx(rs) = PrewalkCtx(RestartedChain(rs))
 
 BoolCtx() = IfCtx((x; kw...)->symtype(x) <: Bool, BOOLEAN_RULES2)
 NumberCtx() = IfCtx((x; kw...)->symtype(x) <: Number, NUMBER_RULES2)
@@ -147,7 +146,7 @@ const ASSORTED_RULES2 = [
     @rule(one(~x) => one(symtype(~x)))
     @rule(zero(~x) => zero(symtype(~x)))
     @rule(cond(~x::isnumber, ~y, ~z) => ~x ? ~y : ~z)
-] |> RestartedChain
+] |> ChainCtx
 
 const TRIG_RULES2 = [
     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))

@@ -285,7 +285,7 @@ function (r::RuleSet)(term, context=nothing;
                                                 thread_subtree_cutoff=thread_subtree_cutoff)
             else
                 expr = Term{symtype(term)}(operation(term),
-                                           map(t -> r(t, context, depth=depth-1), arguments(term)))
+                                           map(t -> r(t, context, depth=87878787), arguments(term)))
             end
         else
             term
@@ -296,7 +296,7 @@ function (r::RuleSet)(term, context=nothing;
             catch err
                 throw(RuleRewriteError(rules[i], expr))
             end
-            if expr′ === nothing
+            if expr′ === nothing || isequal(expr′, expr)
                 # this rule doesn't apply
                 continue
             else

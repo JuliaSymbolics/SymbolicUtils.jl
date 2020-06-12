@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, EmptyCtx
+using SymbolicUtils: Sym, FnType, Term, symtype, Contextual, DefaultCtx
 using SymbolicUtils
 using Test
 
@@ -87,7 +87,7 @@ end
 @testset "Contexts" begin
     @syms a b c
 
-    @test @rule(~x::Contextual((x, ctx) -> ctx==EmptyCtx()) => "yes")(1) == "yes"
+    @test @rule(~x::Contextual((x, ctx) -> ctx==DefaultCtx()) => "yes")(1) == "yes"
     @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => true)(a, Dict(a=>1))
     @test @rule(~x::Contextual((x, ctx) -> haskey(ctx, x)) => true)(b, Dict(a=>1)) === nothing
     @test_throws UndefVarError @rule(~x => __CTX__)(a, "test")

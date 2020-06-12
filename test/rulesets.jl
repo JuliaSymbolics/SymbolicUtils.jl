@@ -1,9 +1,9 @@
 using Random: shuffle, seed!
-using SymbolicUtils: fixpoint, getdepth
+using SymbolicUtils: fixpoint, getdepth, EmptyCtx
 
 @testset "RuleSet" begin
     @syms w z α::Real β::Real
-    
+
     r1 = @rule ~x + ~x => 2 * (~x)
     r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
 
@@ -11,9 +11,9 @@ using SymbolicUtils: fixpoint, getdepth
     @test getdepth(rset) == typemax(Int)
 
     ex = 2 * (w+w+α+β)
-    
+
     @eqtest rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
-    @eqtest rset(ex) == simplify(ex; rules=rset, fixpoint=false, applyall=false) 
+    @eqtest rset(ex) == simplify(ex, EmptyCtx(); rules=rset, fixpoint=false, applyall=false)
     @eqtest fixpoint(rset, ex, "ctx") == ((2 * (2 * w)) + (2 * α)) + (2 * β)
 end
 

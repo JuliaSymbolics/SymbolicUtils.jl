@@ -7,7 +7,11 @@ function rand_input(T)
     if T == Bool
         return rand(Bool)
     elseif T <: Integer
-        return rand(-100:100)
+        x = rand(-100:100)
+        while iszero(x)
+            x = rand(-100:100)
+        end
+        return x
     elseif T == Rational
         return Rational(rand_input(Int), rand(1:50)) # no 0 denominator tests yet!
     elseif T == Real

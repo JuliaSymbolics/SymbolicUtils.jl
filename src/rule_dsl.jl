@@ -16,7 +16,7 @@ getdepth(r::Rule) = r.depth
 
 function rule_depth(rule, d=0, maxdepth=0)
     if rule isa Term
-        maxdepth = maximum(rule_depth(r, d+1, maxdepth) for r in arguments(rule))
+        maxdepth = reduce(max, (rule_depth(r, d+1, maxdepth) for r in arguments(rule)), init=1)
     elseif rule isa Slot || rule isa Segment
         maxdepth = max(d, maxdepth)
     end
@@ -28,9 +28,10 @@ function Base.show(io::IO, r::Rule)
 end
 
 const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
+struct DefaultCtx end
 struct EmptyCtx end
 
-function (r::Rule)(term, ctx=EmptyCtx())
+function (r::Rule)(term, ctx=DefaultCtx())
     rhs = r.rhs
 
     r.matcher((term,), EMPTY_DICT, ctx) do bindings, n
@@ -192,7 +193,7 @@ end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-function (acr::ACRule)(term, ctx=EmptyCtx())
+function (acr::ACRule)(term, ctx=DefaultCtx())
     r = Rule(acr)
     if !(term isa Term)
         r(term)
@@ -220,7 +221,7 @@ end
 #### Rulesets
 
 """
-    RuleSet(rules::Vector{AbstractRules}, context=EmptyCtx())(expr; depth=typemax(Int), applyall=false, recurse=true)
+    RuleSet(rules::Vector{AbstractRules}, context=DefaultCtx())(expr; depth=typemax(Int), applyall=false, recurse=true)
 
 `RuleSet` is an `AbstractRule` which applies the given `rules` throughout an `expr` with the
 context `context`.
@@ -267,7 +268,7 @@ end
 
 const rule_repr = IdDict()
 
-function (r::RuleSet)(term, context=EmptyCtx();
+function (r::RuleSet)(term, context=DefaultCtx();
                       depth=typemax(Int),
                       applyall::Bool=false,
                       recurse::Bool=true,

@@ -52,5 +52,5 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
     ex = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[+, *])
 
     overhead["simplify_no_fixp"]["randterm:serial"] = @benchmarkable simplify($ex, threaded=false, fixpoint=false)
-    overhead["simplify_no_fixp"]["randterm:thread"] = @benchmarkable simplify($ex, threaded=true,  fixpoint=false)    
+    overhead["simplify_no_fixp"]["randterm:thread"] = @benchmarkable simplify($ex, threaded=true,  fixpoint=false)
 end

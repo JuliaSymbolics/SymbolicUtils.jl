@@ -1,7 +1,7 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "0.3.3"
+version = "0.3.4"
 
 [deps]
 AbstractAlgebra = "c3fe647b-3220-5bb0-a1ea-a7954cac585d"
@@ -12,7 +12,9 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
+AbstractAlgebra = "0.9"
 Combinatorics = "1.0"
+DataStructures = "0.17"
 NaNMath = "0.3"
 SpecialFunctions = "0.10"
 TimerOutputs = "0.5"

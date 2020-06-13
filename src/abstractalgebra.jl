@@ -50,12 +50,13 @@ end
 ismpoly(x) = x isa MPoly || x isa Integer
 isnonnegint(x) = x isa Integer && x >= 0
 
-const mpoly_rules = RuleSet([@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
-                             @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
-                             @rule(+(~x) => ~x)
-                             @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
-                             @rule(*(~x) => ~x)
-                             @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))])
+const mpoly_rules = [@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
+                     @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
+                     @rule(+(~x) => ~x)
+                     @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
+                     @rule(*(~x) => ~x)
+                     @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))]
+
 function to_mpoly(t, dicts=(OrderedDict{Sym, Any}(), OrderedDict{Any, Sym}()))
     # term2sym is only used to assign the same
     # symbol for the same term -- in other words,
@@ -73,7 +74,7 @@ function to_mpoly(t, dicts=(OrderedDict{Sym, Any}(), OrderedDict{Any, Sym}()))
 
     replace_with_poly = Dict{Sym,MPoly}(zip(ks, vars))
     t_poly = substitute(labeled, replace_with_poly, fold=false)
-    simplify(t_poly, EmptyCtx(), rules=mpoly_rules),
+    Fixpoint(Prewalk(Chain(mpoly_rules)(t_poly))),
         sym2term,
         reverse(ks)
 end

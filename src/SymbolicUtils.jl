@@ -50,10 +50,11 @@ using DataStructures
 include("abstractalgebra.jl")
 
 export simplify, substitute
+
 include("simplify.jl")
 
-include("rulesets.jl")
+include("rewriters.jl")
 
-include("context.jl")
+include("rulesets.jl")
 
 end # module

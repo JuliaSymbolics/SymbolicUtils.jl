@@ -296,7 +296,7 @@ function (r::RuleSet)(term, context=nothing;
             catch err
                 throw(RuleRewriteError(rules[i], expr))
             end
-            if expr′ === nothing || isequal(expr′, expr)
+            if expr′ === nothing
                 # this rule doesn't apply
                 continue
             else

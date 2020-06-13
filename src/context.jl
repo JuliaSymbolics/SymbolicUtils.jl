@@ -1,6 +1,6 @@
 struct EmptyCtx end
 
-(ctx::EmptyCtx)(x; kwargs...) = x
+(ctx::EmptyCtx)(x) = x
 
 struct IfElseCtx{F, A, B}
     cond::F
@@ -8,8 +8,8 @@ struct IfElseCtx{F, A, B}
     no::B
 end
 
-function (ctx::IfElseCtx)(x; kwargs...)
-    ctx.cond(x; kwargs...) ?  ctx.yes(x; kwargs...) : ctx.no(x; kwargs...)
+function (ctx::IfElseCtx)(x)
+    ctx.cond(x) ?  ctx.yes(x) : ctx.no(x)
 end
 
 IfCtx(f, x) = IfElseCtx(f, x, EmptyCtx())
@@ -18,7 +18,7 @@ struct ChainCtx{Cs}
     ctxs::Cs
 end
 
-function (ctx::ChainCtx)(x; kwargs...)
+function (ctx::ChainCtx)(x)
     for f in ctx.ctxs
         y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
         if y !== nothing
@@ -32,11 +32,11 @@ struct RestartedChain{Cs}
     ctxs::Cs
 end
 
-function (ctx::RestartedChain)(x; kwargs...)
+function (ctx::RestartedChain)(x)
     for f in ctx.ctxs
         y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
-        if y !== nothing && x !== y && !isequal(x, y)
-            return ChainCtx(ctx.ctxs)(y; kwargs...)
+        if y !== nothing
+            return ChainCtx(ctx.ctxs)(y)
         end
     end
     return x
@@ -46,7 +46,7 @@ struct FixpointCtx{C}
     ctx::C
 end
 
-function (ctx::FixpointCtx)(x; kwargs...)
+function (ctx::FixpointCtx)(x)
     f = ctx.ctx
     y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
     while x !== y && !isequal(x, y)
@@ -61,10 +61,10 @@ struct PrewalkCtx{C}
     ctx::C
 end
 
-function (p::PrewalkCtx)(x; kwargs...)
+function (p::PrewalkCtx)(x)
     if istree(x)
         t = Term{symtype(x)}(operation(x),
-                             map(t->(a = p(t; kwargs...); isnothing(a) ? t : a),
+                             map(t->(a = p(t); isnothing(a) ? t : a),
                                  arguments(x)))
         return p.ctx(t)
     else
@@ -72,9 +72,9 @@ function (p::PrewalkCtx)(x; kwargs...)
     end
 end
 
-BoolCtx() = IfCtx((x; kw...)->symtype(x) <: Bool, BOOLEAN_RULES2)
-NumberCtx() = IfCtx((x; kw...)->symtype(x) <: Number, NUMBER_RULES2)
-TrigCtx() = IfCtx((x; kw...)->has_trig(x), TRIG_RULES2)
+BoolCtx() = IfCtx((x)->symtype(x) <: Bool, PrewalkCtx(ChainCtx(BOOLEAN_RULES2)))
+NumberCtx() = IfCtx((x)->symtype(x) <: Number, numrules())
+TrigCtx() = IfCtx((x)->has_trig(x), PrewalkCtx(ChainCtx(TRIG_RULES2)))
 
 # TODO: make Fixpoint efficient and use it for each.
 RulesCtx() = FixpointCtx(ChainCtx((NumberCtx(), TrigCtx(), BoolCtx())))
@@ -82,21 +82,32 @@ RulesCtx() = FixpointCtx(ChainCtx((NumberCtx(), TrigCtx(), BoolCtx())))
 
 struct PolyNFCtx end
 
-function (::PolyNFCtx)(x; kwargs...)
+function (::PolyNFCtx)(x)
     to_term(to_mpoly(x)...)
 end
 
 DefaultCtx() = ChainCtx((PolyNFCtx(), RulesCtx())) # TODO: Fixpoint?
 
 
-simplify2(x, ctx=RulesCtx(); kwargs...) = ctx(x; kwargs...)
+simplify2(x, ctx=RulesCtx()) = ctx(x)
+
+
+function numrules()
+    [ChainCtx(ASSORTED_RULES2),
+     IfCtx((x;kw...)->is_operation(+)(x),
+           ChainCtx(PLUS_RULES2)),
+     IfCtx((x;kw...)->is_operation(*)(x),
+           ChainCtx(TIMES_RULES2)),
+     IfCtx((x;kw...)->is_operation(^)(x),
+           ChainCtx(POW_RULES2))] |> RestartedChain |> PrewalkCtx
+end
 
 const NUMBER_RULES2 = [
     @rule ~t               => ASSORTED_RULES2(~t)
     @rule ~t::is_operation(+) =>  PLUS_RULES2(~t)
     @rule ~t::is_operation(*) => TIMES_RULES2(~t)
     @rule ~t::is_operation(^) =>   POW_RULES2(~t)
-] |> RestartedChain |> PrewalkCtx
+]
 
 const PLUS_RULES2 = [
     @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
@@ -113,7 +124,7 @@ const PLUS_RULES2 = [
     
     @acrule((~z::_iszero + ~x) => ~x)
     @rule(+(~x) => ~x)
-] |> RestartedChain
+]
 
 const TIMES_RULES2 = [
     @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
@@ -128,7 +139,7 @@ const TIMES_RULES2 = [
     @acrule((~z::_isone  * ~x) => ~x)
     @acrule((~z::_iszero *  ~x) => ~z)
     @rule(*(~x) => ~x)
-] |> RestartedChain
+]
 
 
 const POW_RULES2 = [
@@ -136,7 +147,7 @@ const POW_RULES2 = [
     @rule((((~x)^(~p::isliteral(Integer)))^(~q::isliteral(Integer))) => (~x)^((~p)*(~q)))
     @rule(^(~x, ~z::_iszero) => 1)
     @rule(^(~x, ~z::_isone) => ~x)
-] |> RestartedChain
+]
 
 const ASSORTED_RULES2 = [
     @rule(identity(~x) => ~x)
@@ -146,7 +157,7 @@ const ASSORTED_RULES2 = [
     @rule(one(~x) => one(symtype(~x)))
     @rule(zero(~x) => zero(symtype(~x)))
     @rule(cond(~x::isnumber, ~y, ~z) => ~x ? ~y : ~z)
-] |> ChainCtx
+]
 
 const TRIG_RULES2 = [
     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
@@ -160,7 +171,7 @@ const TRIG_RULES2 = [
     @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
     @acrule(cot(~x)^2 +  1 => csc(~x)^2)
     @acrule(csc(~x)^2 + -1 => cot(~x)^2)
-] |> ChainCtx |> PrewalkCtx
+]
 
 const BOOLEAN_RULES2 = [
     @rule((true | (~x)) => true)
@@ -190,8 +201,52 @@ const BOOLEAN_RULES2 = [
     @rule((~f)(~x::isnumber) => (~f)(~x))
     # and this simplifies any binary comparison operator
     @rule((~f)(~x::isnumber, ~y::isnumber) => (~f)(~x, ~y))
-] |> ChainCtx |> PrewalkCtx
+]
 
+NEW_RULES = [
+    @rule(identity(~x) => ~x)
+    @rule(-(~x) => -1*~x)
+    @rule(-(~x, ~y) => ~x + -1(~y))
+    @rule(~x / ~y => ~x * pow(~y, -1))
+    @rule(one(~x) => one(symtype(~x)))
+    @rule(zero(~x) => zero(symtype(~x)))
+
+    @rule(cond(~x::(x->x isa Bool), ~y, ~z) => ~x ? ~y : ~z)
+    #@rule(*(~~x, *(~~y), ~~z) => *((~~x)..., (~~y)..., (~~z)...)),
+    @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
+    @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x))
+    @rule(*(~a::isnumber, ~b::isnumber, ~~x) => *(~a * ~b, (~~x)...))
+
+    #@rule(+(~~x, +(~~y), ~~z) => +((~~x)..., (~~y)..., (~~z)...)),
+    @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
+    @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
+    @rule(+(~a::isnumber, ~b::isnumber, ~~x) => +((~~x)..., ~a + ~b))
+
+    @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
+    @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α + ~β, (~~x)...))
+    @acrule(*(~~x, ~α) + *(~~x, ~β) => *(~α + ~β, (~~x)...))
+
+    @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
+    @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
+
+    @acrule((~z::_iszero + ~x) => ~x)
+    @rule(+(~x) => ~x)
+
+    @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))
+    @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...))
+
+    @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
+    @acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
+
+    @acrule((~z::_isone  * ~x) => ~x)
+    @acrule((~z::_iszero *  ~x) => ~z)
+    @rule(*(~x) => ~x)
+
+    @rule(^(*(~~x), ~y::isliteral(Integer)) => *(map(a->pow(a, ~y), ~~x)...))
+    @rule((((~x)^(~p::isliteral(Integer)))^(~q::isliteral(Integer))) => (~x)^((~p)*(~q)))
+    @rule(^(~x, ~z::_iszero) => 1)
+    @rule(^(~x, ~z::_isone) => ~x)
+]
 
 OLD_BASIC_NUMBER_RULES2 = let # Keep these around for benchmarking purposes
     [

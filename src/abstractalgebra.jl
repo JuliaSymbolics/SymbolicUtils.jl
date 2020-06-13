@@ -50,33 +50,34 @@ end
 ismpoly(x) = x isa MPoly || x isa Integer
 isnonnegint(x) = x isa Integer && x >= 0
 
-const mpoly_rules = [@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
-                     @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
-                     @rule(+(~x) => ~x)
-                     @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
-                     @rule(*(~x) => ~x)
-                     @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))]
+let
+    mpoly_rules = [@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
+                   @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
+                   @rule(+(~x) => ~x)
+                   @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
+                   @rule(*(~x) => ~x)
+                   @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))]
 
-function to_mpoly(t, dicts=(OrderedDict{Sym, Any}(), OrderedDict{Any, Sym}()))
-    # term2sym is only used to assign the same
-    # symbol for the same term -- in other words,
-    # it does common subexpression elimination
+    global to_mpoly
+    function to_mpoly(t, dicts=(OrderedDict{Sym, Any}(), OrderedDict{Any, Sym}()))
+        # term2sym is only used to assign the same
+        # symbol for the same term -- in other words,
+        # it does common subexpression elimination
 
-    sym2term, term2sym = dicts
-    labeled = labels!((sym2term, term2sym), t)
+        sym2term, term2sym = dicts
+        labeled = labels!((sym2term, term2sym), t)
 
-    if isempty(sym2term)
-        return labeled, []
+        if isempty(sym2term)
+            return labeled, []
+        end
+
+        ks = sort(collect(keys(sym2term)), lt=<ₑ)
+        R, vars = PolynomialRing(ZZ, String.(nameof.(ks)))
+
+        replace_with_poly = Dict{Sym,MPoly}(zip(ks, vars))
+        t_poly = substitute(labeled, replace_with_poly, fold=false)
+        Fixpoint(Prewalk(RestartedChain(mpoly_rules)))(t_poly), sym2term, ks
     end
-
-    ks = sort(collect(keys(sym2term)), lt=<ₑ)
-    R, vars = PolynomialRing(ZZ, String.(nameof.(ks)))
-
-    replace_with_poly = Dict{Sym,MPoly}(zip(ks, vars))
-    t_poly = substitute(labeled, replace_with_poly, fold=false)
-    Fixpoint(Prewalk(Chain(mpoly_rules)(t_poly))),
-        sym2term,
-        reverse(ks)
 end
 
 function to_term(x, dict, syms)

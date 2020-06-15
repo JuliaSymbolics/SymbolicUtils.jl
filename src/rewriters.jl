@@ -257,6 +257,15 @@ let
 
     global simplify
 
+    # reduce overhead of simplify by defining these here.
+    serial_simplifier = If(istree, Fixpoint(default_simplifier()))
+
+    threaded_simplifier(cutoff) = Fixpoint(default_simplifier(threaded=true,
+                                                              thread_cutoff=cutoff))
+
+    serial_polynormal_simplifier = If(istree,
+                                      Fixpoint(Chain((polynormalize,
+                                                      Fixpoint(default_simplifier())))))
 
     """
     simplify(x; rewriter=default_simplifier(),
@@ -271,12 +280,15 @@ let
                       polynorm=false,
                       threaded=false,
                       thread_subtree_cutoff=100,
-                      rewriter=default_simplifier(threaded=threaded,
-                                                  thread_cutoff=thread_subtree_cutoff))
-
-        if polynorm
-            Fixpoint(Chain((polynormalize,
-                            Fixpoint(rewriter))))(to_symbolic(x))
+                      rewriter=nothing)
+        if rewriter === nothing
+            if threaded
+                threaded_simplifier(thread_subtree_cutoff)(to_symbolic(x))
+            elseif polynorm
+                serial_polynormal_simplifier(to_symbolic(x))
+            else
+                serial_simplifier(to_symbolic(x))
+            end
         else
             Fixpoint(rewriter)(to_symbolic(x))
         end

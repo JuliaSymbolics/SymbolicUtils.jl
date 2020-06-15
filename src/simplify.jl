@@ -39,7 +39,7 @@ Applies them once if `fixpoint=false`.
 The `applyall` and `recurse` keywords are forwarded to the enclosed
 `RuleSet`, they are mainly used for internal optimization.
 """
-function simplify(x, ctx=nothing;
+function simplify0(x, ctx=nothing;
                   rules=default_rules(x),
                   fixpoint=true,
                   applyall=true,
@@ -56,7 +56,7 @@ function polynormalize(x)
 end
 
 
-Base.@deprecate simplify(x, rules::RuleSet; kwargs...)  simplify(x, rules=rules; kwargs...)
+Base.@deprecate simplify0(x, rules::RuleSet; kwargs...)  simplify0(x, rules=rules; kwargs...)
 
 """
     substitute(expr, dict)

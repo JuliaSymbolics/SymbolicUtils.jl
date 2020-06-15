@@ -337,9 +337,9 @@ let
 
     polynorm_rewriter() = x->to_term(to_mpoly(x)...)
 
-    global simplify2
+    global simplify
 
-    function simplify2(x;
+    function simplify(x;
                        polynorm=false,
                        threaded=false,
                        thread_subtree_cutoff=100)

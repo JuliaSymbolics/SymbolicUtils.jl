@@ -56,6 +56,4 @@ include("simplify.jl")
 export Rewriters
 include("rewriters.jl")
 
-include("rulesets.jl")
-
 end # module

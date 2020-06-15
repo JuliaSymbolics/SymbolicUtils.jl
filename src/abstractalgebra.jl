@@ -127,3 +127,7 @@ function _to_term(x::Term, dict, vars)
 end
 
 <ₑ(a::MPoly, b::MPoly) = false
+
+function polynormalize(x)
+    to_term(to_mpoly(x)...)
+end

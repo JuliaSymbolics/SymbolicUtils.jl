@@ -219,34 +219,6 @@ function (acr::ACRule)(term)
 end
 
 
-#-----------------------------
-#### Rulesets
-
-"""
-    RuleSet(rules::Vector{AbstractRules}, context=DefaultCtx())(expr; depth=typemax(Int), applyall=false, recurse=true)
-
-`RuleSet` is an `AbstractRule` which applies the given `rules` throughout an `expr` with the
-context `context`.
-
-Note that this only applies the rules in one pass, not until there are no
-changes to be applied. Use `SymbolicUtils.fixpoint(ruleset, expr)` to apply a RuleSet until there 
-are no changes.
-
-Keyword arguments:
-* `recurse=true` Set whether or not the rules in the `RuleSet` are applied recursively to
-subexpressions
-
-* `depth=typemax(Int)` Set this argument to a positive integer to only recurse `depth` levels deep
-into the expression. 
-
-* `applyall=false` By default, `(::RuleSet)(ex)` will only apply rules to `ex` until one rule
-matches at each `depth` level. Set `applyall` to `true` to ensure each rule gets applied.
-"""
-struct RuleSet <: AbstractRule
-    rules::Vector{AbstractRule}
-end
-
-
 struct RuleRewriteError
     rule
     expr
@@ -254,78 +226,7 @@ end
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
-function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, thread_subtree_cutoff)
-    _args = map(arguments(term)) do arg
-        if node_count(arg) > thread_subtree_cutoff
-            Threads.@spawn r(arg, context; depth=depth-1, threaded=true,
-                             thread_subtree_cutoff=thread_subtree_cutoff)
-        else
-            r(arg, context; depth=depth-1, threaded=false)
-        end
-    end
-    args = map(t -> t isa Task ? fetch(t) : t, _args)
-    Term{symtype(term)}(operation(term), args)
-end
-
-const rule_repr = IdDict()
-
-function (r::RuleSet)(term, context=nothing;
-                      depth=typemax(Int),
-                      applyall::Bool=false,
-                      recurse::Bool=true,
-                      threaded::Bool=false,
-                      thread_subtree_cutoff::Int=100)
-    rules = r.rules
-    term = to_symbolic(term)
-    # simplify the subexpressions
-    if depth == 0
-        return term
-    end
-    if term isa Symbolic
-        expr = if term isa Term && recurse
-            if threaded
-                _recurse_apply_ruleset_threaded(r, term, context; depth=depth,
-                                                thread_subtree_cutoff=thread_subtree_cutoff)
-            else
-                expr = Term{symtype(term)}(operation(term),
-                                           map(t -> r(t, context, depth=87878787), arguments(term)))
-            end
-        else
-            term
-        end
-        for i in 1:length(rules)
-            expr′ = try
-                @timer(Base.@get!(rule_repr, rules[i], repr(rules[i])), rules[i](expr))
-            catch err
-                throw(RuleRewriteError(rules[i], expr))
-            end
-            if expr′ === nothing
-                # this rule doesn't apply
-                continue
-            else
-                expr = r(expr′, depth=getdepth(rules[i]))# levels touched
-                applyall || return expr
-            end
-        end
-    else
-        expr = term
-    end
-    return expr # no rule applied
-end
-
-
 getdepth(::Any) = typemax(Int)
-
-function fixpoint(f, x; kwargs...)
-    x1 = f(x; kwargs...)
-    while !isequal(x1, x)
-        x = x1
-        x1 = f(x; kwargs...)
-    end
-    return x1
-end
-
-fixpoint(f; kwargs...) = x -> fixpoint(f, x; kwargs...)
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
     msg = "Failed to apply rule $(err.rule) on expression "

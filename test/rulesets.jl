@@ -1,5 +1,5 @@
 using Random: shuffle, seed!
-using SymbolicUtils: fixpoint, getdepth, Rewriters
+using SymbolicUtils: getdepth, Rewriters
 
 @testset "Chain, Postwalk and Fixpoint" begin
     @syms w z α::Real β::Real

@@ -1,6 +1,5 @@
 ##### Numeric simplification
 Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)
-Base.@deprecate simplify(x, ctx=nothing; rules, kwargs...)  simplify(x; rewriter=rules,kwargs...)
 Base.@deprecate RuleSet(x) Postwalk(Chain(x))
 """
     substitute(expr, dict)

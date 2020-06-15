@@ -354,9 +354,9 @@ let
                                      thread_cutoff=thread_subtree_cutoff)
         if polynorm
             Fixpoint(Chain((polynorm_rewriter(),
-                            Fixpoint(default))))(x)
+                            Fixpoint(default))))(to_symbolic(x))
         else
-            Fixpoint(default)(x)
+            Fixpoint(default)(to_symbolic(x))
         end
     end
 end

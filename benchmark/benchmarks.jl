@@ -44,8 +44,9 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
         end
         xs[]
     end
-    ex = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[+, *])
+    ex1 = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[+, *])
+    ex2 = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[/, *])
 
-    overhead["simplify"]["randterm:serial"] = @benchmarkable simplify($ex, threaded=false)
-    overhead["simplify"]["randterm:thread"] = @benchmarkable simplify($ex, threaded=true)
+    overhead["simplify"]["randterm (+, *):serial"] = @benchmarkable simplify($ex1, threaded=false)
+    overhead["simplify"]["randterm (/, *):thread"] = @benchmarkable simplify($ex2, threaded=true)
 end

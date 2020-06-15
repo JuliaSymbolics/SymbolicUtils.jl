@@ -53,6 +53,7 @@ export simplify, substitute
 
 include("simplify.jl")
 
+export Rewriters
 include("rewriters.jl")
 
 include("rulesets.jl")

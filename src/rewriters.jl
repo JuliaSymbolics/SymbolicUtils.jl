@@ -52,6 +52,8 @@ struct Fixpoint{C}
     ctx::C
 end
 
+const rule_repr = IdDict()
+
 function (ctx::Fixpoint)(x)
     f = ctx.ctx
     y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)

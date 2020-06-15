@@ -32,9 +32,13 @@ const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 function (r::Rule)(term)
     rhs = r.rhs
 
-    r.matcher((term,), EMPTY_DICT) do bindings, n
-        # n == 1 means that exactly one term of the input (term,) was matched
-        n === 1 ? (@timer "RHS" rhs(bindings)) : nothing
+    try
+        return r.matcher((term,), EMPTY_DICT) do bindings, n
+            # n == 1 means that exactly one term of the input (term,) was matched
+            n === 1 ? (@timer "RHS" rhs(bindings)) : nothing
+        end
+    catch err
+        throw(RuleRewriteError(r, term))
     end
 end
 
@@ -291,7 +295,7 @@ function (r::RuleSet)(term, context=nothing;
         end
         for i in 1:length(rules)
             expr′ = try
-                @timer(Base.@get!(rule_repr, rules[i], repr(rules[i])), rules[i](expr, context))
+                @timer(Base.@get!(rule_repr, rules[i], repr(rules[i])), rules[i](expr))
             catch err
                 throw(RuleRewriteError(rules[i], expr))
             end
@@ -310,7 +314,7 @@ function (r::RuleSet)(term, context=nothing;
 end
 
 
-getdepth(::RuleSet) = typemax(Int)
+getdepth(::Any) = typemax(Int)
 
 function fixpoint(f, x; kwargs...)
     x1 = f(x; kwargs...)

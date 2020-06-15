@@ -248,8 +248,7 @@ struct RuleRewriteError
     expr
 end
 
-node_count(atom, count; cutoff) = count + 1
-node_count(t::Term, count=0; cutoff=100) = sum(node_count(arg, count; cutoff=cutoff) for arg ∈ arguments(t))
+node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
 function _recurse_apply_ruleset_threaded(r::RuleSet, term, context; depth, thread_subtree_cutoff)
     _args = map(arguments(term)) do arg

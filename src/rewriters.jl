@@ -1,7 +1,8 @@
 module Rewriters
-using SymbolicUtils: @timer, is_operation, istree, symtype, Term, operation, arguments
+using SymbolicUtils: @timer, is_operation, istree, symtype, Term, operation, arguments,
+                     node_count
 
-export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Prewalk
+export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk
 
 struct Empty end
 
@@ -62,22 +63,62 @@ function (ctx::Fixpoint)(x)
     return x
 end
 
-struct Prewalk{C}
+struct Walk{ord, C, threaded}
     ctx::C
+    thread_cutoff::Int
 end
 
-function (p::Prewalk)(x)
+using .Threads
+
+function Postwalk(ctx; threaded::Bool=false, thread_cutoff=100)
+    Walk{:post, typeof(ctx), threaded}(ctx, thread_cutoff)
+end
+
+function Prewalk(ctx; threaded::Bool=false, thread_cutoff=100)
+    Walk{:pre, typeof(ctx), threaded}(ctx, thread_cutoff)
+end
+
+passthrough(x, default) = isnothing(x) ? default : x
+
+function (p::Walk{ord, C, false})(x) where {ord, C}
     if istree(x)
-        t = Term{symtype(x)}(operation(x),
-                             map(t->(a = p(t); isnothing(a) ? t : a),
-                                 arguments(x)))
-        return p.ctx(t)
+        if ord === :pre
+            x = p.ctx(x)
+        end
+        if istree(x)
+            x = Term{symtype(x)}(operation(x),
+                                 map(t->passthrough(p(t), t),
+                                     arguments(x)))
+        end
+        return ord === :post ? p.ctx(x) : x
     else
         return p.ctx(x)
     end
 end
 
+function (p::Walk{ord, C, true})(x) where {ord, C}
+    if istree(x)
+        if ord === :pre
+            x = p.ctx(x)
+        end
+        if istree(x)
+            _args = map(arguments(x)) do arg
+                if node_count(arg) > p.thread_cutoff
+                    Threads.@spawn p(arg)
+                else
+                    p(arg)
+                end
+            end
+            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
+            t = Term{symtype(x)}(operation(x), args)
+        end
+        return ord === :post ? p.ctx(t) : t
+    else
+        return p.ctx(x)
+    end
 end
+
+end # end module
 
 using .Rewriters
 
@@ -269,7 +310,7 @@ let
     end
 
 
-    bool_simplifier() = If((x)->symtype(x) <: Bool, Prewalk(Chain(BOOLEAN_RULES2)))
+    bool_simplifier() = Chain(BOOLEAN_RULES2)
 
     function number_simplifier()
         rule_tree = [Chain(ASSORTED_RULES2),
@@ -278,28 +319,38 @@ let
                      If(is_operation(*),
                         Chain(TIMES_RULES2)),
                      If(is_operation(^),
-                        Chain(POW_RULES2))] |> RestartedChain |> Prewalk
+                        Chain(POW_RULES2))] |> RestartedChain
 
-        If((x)->symtype(x) <: Number, rule_tree)
+        rule_tree
     end
-    trig_simplifier() = If((x)->has_trig(x), Prewalk(Chain(TRIG_RULES2)))
+    trig_simplifier(;kw...) = Chain(TRIG_RULES2)
 
     # TODO: make Fixpoint efficient and use it for each.
-    default_simplifier() = Fixpoint(Chain((number_simplifier(),
-                                           trig_simplifier(),
-                                           bool_simplifier())))
+    function default_simplifier(; kw...)
+        IfElse(has_trig,
+               Postwalk(Chain((If(x->symtype(x) <: Number, number_simplifier()),
+                               trig_simplifier(),
+                               If(x->symtype(x) <: Bool, bool_simplifier()))); kw...),
+               Postwalk(Chain((If(x->symtype(x) <: Number, number_simplifier()),
+                               If(x->symtype(x) <: Bool, bool_simplifier()))); kw...))
+    end
 
     polynorm_rewriter() = x->to_term(to_mpoly(x)...)
 
-    polynorm_simplifier() = Chain((polynorm_rewriter(), default_simplifier()))
-
     global simplify2
 
-    function simplify2(x; polynorm=false, ctx=default_simplifier())
+    function simplify2(x;
+                       polynorm=false,
+                       threaded=false,
+                       thread_subtree_cutoff=100)
+
+        default = default_simplifier(threaded=threaded,
+                                     thread_cutoff=thread_subtree_cutoff)
         if polynorm
-            Fixpoint(polynorm_simplifier())(x)
+            Fixpoint(Chain((polynorm_rewriter(),
+                            Fixpoint(default))))(x)
         else
-            default_simplifier()(x)
+            Fixpoint(default)(x)
         end
     end
 end

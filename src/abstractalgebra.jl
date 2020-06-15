@@ -76,7 +76,7 @@ let
 
         replace_with_poly = Dict{Sym,MPoly}(zip(ks, vars))
         t_poly = substitute(labeled, replace_with_poly, fold=false)
-        Fixpoint(Prewalk(RestartedChain(mpoly_rules)))(t_poly), sym2term, ks
+        Fixpoint(Postwalk(RestartedChain(mpoly_rules)))(t_poly), sym2term, ks
     end
 end
 

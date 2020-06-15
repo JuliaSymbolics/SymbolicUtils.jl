@@ -29,12 +29,12 @@ end
 
 const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 
-function (r::Rule)(term, ctx=nothing)
+function (r::Rule)(term)
     rhs = r.rhs
 
-    r.matcher((term,), EMPTY_DICT, ctx) do bindings, n
+    r.matcher((term,), EMPTY_DICT) do bindings, n
         # n == 1 means that exactly one term of the input (term,) was matched
-        n === 1 ? (@timer "RHS" rhs(bindings, ctx)) : nothing
+        n === 1 ? (@timer "RHS" rhs(bindings)) : nothing
     end
 end
 
@@ -166,7 +166,7 @@ macro rule(expr)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
-             (__MATCHES__, __CTX__) -> ($(__source__); $(makeconsequent(rhs))),
+             __MATCHES__ -> $(makeconsequent(rhs)),
              rule_depth($lhs_term))
     end
 end
@@ -191,7 +191,7 @@ end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-function (acr::ACRule)(term, ctx=nothing)
+function (acr::ACRule)(term)
     r = Rule(acr)
     if !(term isa Term)
         r(term)
@@ -201,12 +201,12 @@ function (acr::ACRule)(term, ctx=nothing)
         if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
             return nothing
         end
-
+        
         T = symtype(term)
         args = arguments(term)
-
+        
         for inds in permutations(eachindex(args), acr.arity)
-            result = r(Term{T}(f, args[inds]), ctx)
+            result = r(Term{T}(f, args[inds]))
             if !isnothing(result)
                 return Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
             end
@@ -299,7 +299,7 @@ function (r::RuleSet)(term, context=nothing;
                 # this rule doesn't apply
                 continue
             else
-                expr = r(expr′, context, depth=getdepth(rules[i]))# levels touched
+                expr = r(expr′, depth=getdepth(rules[i]))# levels touched
                 applyall || return expr
             end
         end
@@ -312,14 +312,16 @@ end
 
 getdepth(::RuleSet) = typemax(Int)
 
-function fixpoint(f, x, ctx; kwargs...)
-    x1 = f(x, ctx; kwargs...)
+function fixpoint(f, x; kwargs...)
+    x1 = f(x; kwargs...)
     while !isequal(x1, x)
         x = x1
-        x1 = f(x, ctx; kwargs...)
+        x1 = f(x; kwargs...)
     end
     return x1
 end
+
+fixpoint(f; kwargs...) = x -> fixpoint(f, x; kwargs...)
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
     msg = "Failed to apply rule $(err.rule) on expression "

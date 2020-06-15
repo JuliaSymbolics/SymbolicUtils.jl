@@ -2,7 +2,7 @@ module Rewriters
 using SymbolicUtils: @timer, is_operation, istree, symtype, Term, operation, arguments,
                      node_count
 
-export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk
+export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 struct Empty end
 
@@ -78,8 +78,12 @@ function Prewalk(ctx; threaded::Bool=false, thread_cutoff=100)
     Walk{:pre, typeof(ctx), threaded}(ctx, thread_cutoff)
 end
 
-passthrough(x, default) = isnothing(x) ? default : x
+struct PassThrough{C}
+    ctx::C
+end
+(p::PassThrough)(x) = (y=p.ctx(x); isnothing(y) ? x : y)
 
+passthrough(x, default) = isnothing(x) ? default : x
 function (p::Walk{ord, C, false})(x) where {ord, C}
     if istree(x)
         if ord === :pre
@@ -87,7 +91,7 @@ function (p::Walk{ord, C, false})(x) where {ord, C}
         end
         if istree(x)
             x = Term{symtype(x)}(operation(x),
-                                 map(t->passthrough(p(t), t),
+                                 map(t->PassThrough(p)(t),
                                      arguments(x)))
         end
         return ord === :post ? p.ctx(x) : x

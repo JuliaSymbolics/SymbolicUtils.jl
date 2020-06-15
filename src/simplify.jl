@@ -65,7 +65,7 @@ substitute any subexpression that matches a key in `dict` with
 the corresponding value.
 """
 function substitute(expr, dict; fold=true)
-    rs = RuleSet([@rule ~x::(x->haskey(dict, x)) => dict[~x]])
+    rs = Prewalk(PassThrough(@rule ~x::(x->haskey(dict, x)) => dict[~x]))
     if fold
         rs(expr) |> SymbolicUtils.fold
     else

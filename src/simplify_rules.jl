@@ -1,13 +1,6 @@
 using .Rewriters
 
 let
-    NUMBER_RULES = [
-        @rule ~t               => ASSORTED_RULES(~t)
-        @rule ~t::is_operation(+) =>  PLUS_RULES(~t)
-        @rule ~t::is_operation(*) => TIMES_RULES(~t)
-        @rule ~t::is_operation(^) =>   POW_RULES(~t)
-    ]
-
     PLUS_RULES = [
         @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
         @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))

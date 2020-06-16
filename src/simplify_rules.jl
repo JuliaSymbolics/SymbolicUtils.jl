@@ -4,7 +4,7 @@ let
     PLUS_RULES = [
         @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
         @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
-        @acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
+        @ordered_acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
         @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
         @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α + ~β, (~~x)...))
@@ -14,7 +14,7 @@ let
         @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
         @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...))
 
-        @acrule((~z::_iszero + ~x) => ~x)
+        @ordered_acrule((~z::_iszero + ~x) => ~x)
         @rule(+(~x) => ~x)
     ]
 
@@ -22,14 +22,14 @@ let
         @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
         @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x))
 
-        @acrule(~a::isnumber * ~b::isnumber => ~a * ~b)
+        @ordered_acrule(~a::isnumber * ~b::isnumber => ~a * ~b)
         @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))
 
         @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
-        @acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
+        @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
 
-        @acrule((~z::_isone  * ~x) => ~x)
-        @acrule((~z::_iszero *  ~x) => ~z)
+        @ordered_acrule((~z::_isone  * ~x) => ~x)
+        @ordered_acrule((~z::_iszero *  ~x) => ~z)
         @rule(*(~x) => ~x)
     ]
 

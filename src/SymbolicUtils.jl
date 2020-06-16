@@ -20,8 +20,8 @@ include("rewriters.jl")
 
 using .Rewriters
 
-using Combinatorics: permutations
-export @rule, @acrule, RuleSet
+using Combinatorics: permutations, combinations
+export @rule, @acrule, @arule, RuleSet
 
 # Rule type and @rule macro
 include("rule.jl")

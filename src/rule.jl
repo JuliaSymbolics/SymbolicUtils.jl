@@ -279,8 +279,9 @@ end
 #-----------------------------
 #### Associative Commutative Rules
 
-struct ACRule{L, M, R} <: AbstractRule
-    rule::Rule{L, M, R}
+struct ACRule{F,R} <: AbstractRule
+    sets::F
+    rule::R
     arity::Int
 end
 
@@ -290,13 +291,20 @@ getdepth(r::ACRule) = getdepth(r.rule)
 macro acrule(expr)
     arity = length(expr.args[2].args[2:end])
     quote
-        ACRule($(esc(:(@rule($(expr))))), $arity)
+        ACRule(permutations, $(esc(:(@rule($(expr))))), $arity)
+    end
+end
+
+macro ordered_acrule(expr)
+    arity = length(expr.args[2].args[2:end])
+    quote
+        ACRule(combinations, $(esc(:(@rule($(expr))))), $arity)
     end
 end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-function (acr::ACRule)(term)
+function (acr::ACRule)(term) where {comm}
     r = Rule(acr)
     if !(term isa Term)
         r(term)
@@ -306,14 +314,16 @@ function (acr::ACRule)(term)
         if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
             return nothing
         end
-        
+
         T = symtype(term)
         args = arguments(term)
-        
-        for inds in permutations(eachindex(args), acr.arity)
-            result = r(Term{T}(f, args[inds]))
+
+        itr = acr.sets(eachindex(args), acr.arity)
+
+        for inds in itr
+            result = r(Term{T}(f, @views args[inds]))
             if !isnothing(result)
-                return Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
+                return @timer "acrule" Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
             end
         end
     end

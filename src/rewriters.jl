@@ -35,7 +35,7 @@ cached_repr(x) = Base.@get! repr_cache x repr(x)
 
 struct Empty end
 
-(ctx::Empty)(x) = nothing
+(rw::Empty)(x) = nothing
 
 struct IfElse{F, A, B}
     cond::F
@@ -43,18 +43,18 @@ struct IfElse{F, A, B}
     no::B
 end
 
-function (ctx::IfElse)(x)
-    ctx.cond(x) ?  ctx.yes(x) : ctx.no(x)
+function (rw::IfElse)(x)
+    rw.cond(x) ?  rw.yes(x) : rw.no(x)
 end
 
 If(f, x) = IfElse(f, x, Empty())
 
 struct Chain{Cs}
-    ctxs::Cs
+    rws::Cs
 end
 
-function (ctx::Chain)(x)
-    for f in ctx.ctxs
+function (rw::Chain)(x)
+    for f in rw.rws
         y = @timer cached_repr(f) f(x)
         if y !== nothing
             x = y
@@ -63,10 +63,10 @@ function (ctx::Chain)(x)
     return x
 end
 
-@generated function (ctx::Chain{<:NTuple{N,Any}})(x) where N
+@generated function (rw::Chain{<:NTuple{N,Any}})(x) where N
     quote
         Base.@nexprs $N i->begin
-            let f = ctx.ctxs[i]
+            let f = rw.rws[i]
                 y = @timer cached_repr(f) f(x)
                 if y !== nothing
                     x = y
@@ -78,26 +78,26 @@ end
 end
 
 struct RestartedChain{Cs}
-    ctxs::Cs
+    rws::Cs
 end
 
-function (ctx::RestartedChain)(x)
-    for f in ctx.ctxs
+function (rw::RestartedChain)(x)
+    for f in rw.rws
         y = @timer cached_repr(f) f(x)
         if y !== nothing
-            return Chain(ctx.ctxs)(y)
+            return Chain(rw.rws)(y)
         end
     end
     return x
 end
 
-@generated function (ctx::RestartedChain{<:NTuple{N,Any}})(x) where N
+@generated function (rw::RestartedChain{<:NTuple{N,Any}})(x) where N
     quote
         Base.@nexprs $N i->begin
-            let f = ctx.ctxs[i]
+            let f = rw.rws[i]
                 y = @timer cached_repr(repr(f)) f(x)
                 if y !== nothing
-                    return Chain(ctx.ctxs)(y)
+                    return Chain(rw.rws)(y)
                 end
             end
         end
@@ -105,11 +105,11 @@ end
     end
 end
 struct Fixpoint{C}
-    ctx::C
+    rw::C
 end
 
-function (ctx::Fixpoint)(x)
-    f = ctx.ctx
+function (rw::Fixpoint)(x)
+    f = rw.rw
     y = @timer cached_repr(f) f(x)
     while x !== y && !isequal(x, y)
         isnothing(y) && return x
@@ -120,40 +120,40 @@ function (ctx::Fixpoint)(x)
 end
 
 struct Walk{ord, C, threaded}
-    ctx::C
+    rw::C
     thread_cutoff::Int
 end
 
 using .Threads
 
-function Postwalk(ctx; threaded::Bool=false, thread_cutoff=100)
-    Walk{:post, typeof(ctx), threaded}(ctx, thread_cutoff)
+function Postwalk(rw; threaded::Bool=false, thread_cutoff=100)
+    Walk{:post, typeof(rw), threaded}(rw, thread_cutoff)
 end
 
-function Prewalk(ctx; threaded::Bool=false, thread_cutoff=100)
-    Walk{:pre, typeof(ctx), threaded}(ctx, thread_cutoff)
+function Prewalk(rw; threaded::Bool=false, thread_cutoff=100)
+    Walk{:pre, typeof(rw), threaded}(rw, thread_cutoff)
 end
 
 struct PassThrough{C}
-    ctx::C
+    rw::C
 end
-(p::PassThrough)(x) = (y=p.ctx(x); isnothing(y) ? x : y)
+(p::PassThrough)(x) = (y=p.rw(x); isnothing(y) ? x : y)
 
 passthrough(x, default) = isnothing(x) ? default : x
 function (p::Walk{ord, C, false})(x) where {ord, C}
     @assert ord === :pre || ord === :post
     if istree(x)
         if ord === :pre
-            x = p.ctx(x)
+            x = p.rw(x)
         end
         if istree(x)
             x = Term{symtype(x)}(operation(x),
                                  map(t->PassThrough(p)(t),
                                      arguments(x)))
         end
-        return ord === :post ? p.ctx(x) : x
+        return ord === :post ? p.rw(x) : x
     else
-        return p.ctx(x)
+        return p.rw(x)
     end
 end
 
@@ -161,7 +161,7 @@ function (p::Walk{ord, C, true})(x) where {ord, C}
     @assert ord === :pre || ord === :post
     if istree(x)
         if ord === :pre
-            x = p.ctx(x)
+            x = p.rw(x)
         end
         if istree(x)
             _args = map(arguments(x)) do arg
@@ -174,9 +174,9 @@ function (p::Walk{ord, C, true})(x) where {ord, C}
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
             t = Term{symtype(x)}(operation(x), args)
         end
-        return ord === :post ? p.ctx(t) : t
+        return ord === :post ? p.rw(t) : t
     else
-        return p.ctx(x)
+        return p.rw(x)
     end
 end
 

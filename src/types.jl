@@ -296,6 +296,8 @@ function term(f, args...; type = nothing)
     Term{T}(f, [args...])
 end
 
+node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
+
 #--------------------
 #--------------------
 ####  Pretty printing

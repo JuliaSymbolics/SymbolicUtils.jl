@@ -1,4 +1,105 @@
 
+@inline alwaystrue(x) = true
+
+# Matcher patterns with Slot and Segment
+
+# matches one term
+# syntax:  ~x
+struct Slot{P}
+    name::Symbol
+    predicate::P
+end
+
+Slot(s) = Slot(s, alwaystrue)
+
+Base.isequal(s1::Slot, s2::Slot) = s1.name == s2.name
+
+Base.show(io::IO, s::Slot) = (print(io, "~"); print(io, s.name))
+
+# matches zero or more terms
+# syntax: ~~x
+struct Segment{F}
+    name::Symbol
+    predicate::F
+end
+
+ismatch(s::Segment, t) = s.predicate(t)
+
+Segment(s) = Segment(s, alwaystrue)
+
+Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
+
+makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
+
+function makesegment(s::Expr, keys)
+    if !(s.head == :(::))
+        error("Syntax for specifying a segment is ~~x::\$predicate, where predicate is a boolean function")
+    end
+
+    name = s.args[1]
+
+    push!(keys, name)
+    :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
+end
+
+makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
+
+function makeslot(s::Expr, keys)
+    if !(s.head == :(::))
+        error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
+    end
+
+    name = s.args[1]
+
+    push!(keys, name)
+    :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
+end
+
+function makepattern(expr, keys)
+    if expr isa Expr
+        if expr.head === :call
+            if expr.args[1] === :(~)
+                if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
+                    # matches ~~x::predicate
+                    makesegment(expr.args[2].args[2], keys)
+                else
+                    # matches ~x::predicate
+                    makeslot(expr.args[2], keys)
+                end
+            else
+                :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
+            end
+        else
+            error("Unsupported Expr of type $(expr.head) found in pattern")
+        end
+    else
+        # treat as a literal
+        return esc(expr)
+    end
+end
+
+function makeconsequent(expr)
+    if expr isa Expr
+        if expr.head === :call
+            if expr.args[1] === :(~)
+                if expr.args[2] isa Symbol
+                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2]))))
+                elseif expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
+                    @assert expr.args[2].args[2] isa Symbol
+                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
+                end
+            else
+                return Expr(:call, map(makeconsequent, expr.args)...)
+            end
+        else
+            return Expr(expr.head, map(makeconsequent, expr.args)...)
+        end
+    else
+        # treat as a literal
+        return esc(expr)
+    end
+end
+
 abstract type AbstractRule end # Currently doesn't really do anything. Can be removed.
 
 #-----------------------------
@@ -224,8 +325,6 @@ struct RuleRewriteError
     expr
 end
 
-node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
-
 getdepth(::Any) = typemax(Int)
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
@@ -286,3 +385,5 @@ julia> @timerewrite simplify(expr)
 macro timerewrite(expr)
     :(timerewrite(()->$(esc(expr))))
 end
+
+Base.@deprecate RuleSet(x) Postwalk(Chain(x))

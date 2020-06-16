@@ -1,59 +1,48 @@
 module SymbolicUtils
 
-const TIMER_OUTPUTS = true
-const being_timed = Ref{Bool}(false)
-
-if TIMER_OUTPUTS
-    using TimerOutputs
-
-    macro timer(name, expr)
-        :(if being_timed[]
-              @timeit $(esc(name)) $(esc(expr))
-          else
-              $(esc(expr))
-          end)
-    end
-
-    macro iftimer(expr)
-        esc(expr)
-    end
-
-else
-    macro timer(name, expr)
-        esc(expr)
-    end
-
-    macro iftimer(expr)
-    end
-end
-
 export @syms, term, @fun, showraw
+
+# Sym, Term and other types
 include("types.jl")
 
-
+# Methods on symbolic objects
 using SpecialFunctions, NaNMath
 export cond
 include("methods.jl")
 
+# LinkedList, simplification utilities
+include("utils.jl")
 
-include("util.jl")
+export Rewriters
 
-include("matchers.jl")
+# A library for composing together expr -> expr functions
+include("rewriters.jl")
+
+using .Rewriters
 
 using Combinatorics: permutations
 export @rule, @acrule, RuleSet
-include("rule_dsl.jl")
 
+# Rule type and @rule macro
+include("rule.jl")
+
+# Matching a Rule
+include("matchers.jl")
+
+# Convert to an efficient multi-variate polynomial representation
 import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
 using AbstractAlgebra: ismonomial
 using DataStructures
 include("abstractalgebra.jl")
 
+# Term ordering
+include("ordering.jl")
+
+# Default rules for expression simplification
+include("simplify_rules.jl")
+
+# API = simplify + substitute
 export simplify, substitute
-
-include("simplify.jl")
-
-export Rewriters
-include("rewriters.jl")
+include("api.jl")
 
 end # module

@@ -3,6 +3,25 @@ A rewriter is any function which takes an expression and returns an expression
 or `nothing`. If `nothing` is returned that means there was no changes applicable
 to the input expression.
 
+The `SymbolicUtils.Rewriters` module contains some types which create and transform
+rewriters.
+
+- `Empty()` is a rewriter which always returns `nothing`
+- `Chain(itr)` chain an iterator of rewriters into a single rewriter which applies
+   each chained rewriter in the given order.
+   If a rewriter returns `nothing` this is treated as a no-change.
+- `RestartedChain(itr)` like `Chain(itr)` but restarts on the first successful application
+   of one of the chained rewriters.
+- `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
+   traversal of a given expression and applies the rewriter `rw`. `threaded=true` will
+   use multi threading for traversal. `thread_cutoff` is the minimum number of nodes
+   in a subtree which should be walked in a threaded spawn.
+- `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order traversal.
+- `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
+   returns true, `rw2` if it retuns false
+- `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
+- `PassThrough(rw)` returns a rewriter which if `rw(x)` returns `nothing` will instead
+   return `x` otherwise will return `rw(x)`.
 """
 module Rewriters
 using SymbolicUtils: @timer, is_operation, istree, symtype, Term, operation, arguments,
@@ -40,13 +59,6 @@ function (ctx::Chain)(x)
     return x
 end
 
-"""
-    RestartedChain(rewriters)
-
-Take an iterator of rewriters and chain them such that
-if one of the rewriters returns a non-nothing value, then
-restart the rule from the beginning.
-"""
 struct RestartedChain{Cs}
     ctxs::Cs
 end
@@ -100,6 +112,7 @@ end
 
 passthrough(x, default) = isnothing(x) ? default : x
 function (p::Walk{ord, C, false})(x) where {ord, C}
+    @assert ord === :pre || ord === :post
     if istree(x)
         if ord === :pre
             x = p.ctx(x)
@@ -116,6 +129,7 @@ function (p::Walk{ord, C, false})(x) where {ord, C}
 end
 
 function (p::Walk{ord, C, true})(x) where {ord, C}
+    @assert ord === :pre || ord === :post
     if istree(x)
         if ord === :pre
             x = p.ctx(x)

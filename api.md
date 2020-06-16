@@ -32,13 +32,17 @@ using SymbolicUtils # hide
 
 {{doc arguments arguments fn}}
 
-## Rules and RuleSets
+## Rewriters
 
 {{doc @rule @rule macro}}
 
-{{doc RuleSet RuleSet type}}
+{{doc Rewriters module}}
+
+## Simplify
 
 {{doc simplify simplify fn}}
+
+{{doc substitute substitute fn}}
 
 ## Utilities
 

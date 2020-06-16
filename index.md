@@ -7,15 +7,23 @@ where appropriate -->
 
 # User Manual
 
+[**SymbolicUtils**](https://github.com/JuliaSymbolics/SymbolicUtils.jl) is an practical symbolic programming utility written in Julia. It lets you [create](#symbolic_expressions), [rewrite](#rule-based_rewriting) and [simplify](#simplification) symbolic expressions.
+
+
+The main features are:
+
+- Symbols (`Sym`s) carry type information. ([read more](#symbolic_expressions))
+- Compound expressions composed of `Sym`s propagate type information. ([read more](#symbolic_expressions))
+- A flexible [rule-based rewriting language](#rule-based_rewriting) allowing liberal use of user defined matchers and rewriters.
+- A [combinator library](#composing-rewriters) for making rewriters.
+- Set of [simplification rules](#simplification). These can be remixed and extended for special purposes.
+
+
+## Table of contents
+
 \tableofcontents <!-- you can use \toc as well -->
 
-[**SymbolicUtils**](https://github.com/JuliaSymbolics/SymbolicUtils.jl) is an practical symbolic programming utility written in Julia. It lets you [create](#creating_symbolic_expressions), [rewrite](#rule-based_rewriting) and [simplify](#simplification) symbolic expressions.
-
-
-In SymbolicUtils, `Sym`, our equivalent of `Symbol`, can carry type information. Compound expressions composed of `Sym`s propagate this information. A [rule-based rewriting language](#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification rules](#simplification) for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
-
-
-## Creating symbolic expressions
+## Symbolic expressions
 
 First, let's use the `@syms` macro to create a few symbols.
 
@@ -25,6 +33,7 @@ using SymbolicUtils
 @syms w z α::Real β::Real
 
 (w, z, α, β) # hide
+
 ```
 \out{syms1}
 
@@ -120,6 +129,7 @@ r1(sin(1+z) + sin(1+w)) === nothing
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~xs` in the following example is a segment variable:
 
 ```julia:rewrite3
+@syms x y z
 @rule(+(~~xs) => ~~xs)(x + y + z)
 ```
 \out{rewrite3}
@@ -134,42 +144,6 @@ showraw(r2(2 * (w+w+α+β)))
 \out{rewrite4}
 
 Notice that there is a subexpression `(2 * w) + (2 * w)` that could be simplified by the previous rule `r1`. Can we chain `r2` and `r1`?
-
-
-```julia:rewrite5
-showraw(r1(r2(2 * (w+w+α+β))))
-```
-\out{rewrite5}
-
-Oops! It didn't work! That is because a rule object created by `@rule` matches the whole expression, and not subexpressions.
-
-There is a much better way of combining multiple rules and apply them to subexpressions recursively. That is the `RuleSet`.
-
-A ruleset is a series of rules that are applied to every subexpression of the tree.
-
-```julia:rewrite6
-rset = RuleSet([r1, r2])
-rset_result = rset(2 * (w+w+α+β))
-
-showraw(rset_result)
-```
-\out{rewrite6}
-
-It applied `r1`, but didn't get the opportunity to apply `r2`. So we need to apply the ruleset again on the result.
-
-```julia:rewrite7
-showraw(rset(rset_result))
-```
-\out{rewrite7}
-
-Right on. Since there is no way to know how many times one should apply an `rset`, the package exports a convenient `fixpoint` function that applies the `rset` as many times as there are no changes to the expression.
-
-```julia:rewrite8
-using SymbolicUtils: fixpoint
-
-fixpoint(rset, 2 * (w+w+α+β))
-```
-\out{rewrite8}
 
 
 ### Predicates for matching
@@ -204,6 +178,57 @@ acr(x^2 * y * x)
 ```
 \out{acr}
 
+
+## Composing rewriters
+
+A rewriter is any callable object which takes an expression and returns an expression
+or `nothing`. If `nothing` is returned that means there was no changes applicable
+to the input expression. The Rules we created above are rewriters.
+
+The `SymbolicUtils.Rewriters` module contains some types which create and transform
+rewriters.
+
+- `Empty()` is a rewriter which always returns `nothing`
+- `Chain(itr)` chain an iterator of rewriters into a single rewriter which applies
+   each chained rewriter in the given order.
+   If a rewriter returns `nothing` this is treated as a no-change.
+- `RestartedChain(itr)` like `Chain(itr)` but restarts from the first rewriter once on the
+   first successful application of one of the chained rewriters.
+- `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
+   traversal of a given expression and applies the rewriter `rw`. `threaded=true` will
+   use multi threading for traversal. `thread_cutoff` is the minimum number of nodes
+   in a subtree which should be walked in a threaded spawn.
+- `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order traversal.
+- `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
+   returns true, `rw2` if it retuns false
+- `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
+- `PassThrough(rw)` returns a rewriter which if `rw(x)` returns `nothing` will instead
+   return `x` otherwise will return `rw(x)`.
+
+
+Example using Postwalk, and Chain
+
+```julia:rewrite6
+
+using SymbolicUtils.Rewriters
+
+r1 = @rule ~x + ~x => 2 * (~x)
+r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+
+rset = Postwalk(Chain([r1, r2]))
+rset_result = rset(2 * (w+w+α+β))
+
+showraw(rset_result)
+```
+\out{rewrite6}
+
+It applied `r1`, but didn't get the opportunity to apply `r2`. So we need to apply the ruleset again on the result.
+
+```julia:rewrite7
+showraw(rset(rset_result))
+```
+\out{rewrite7}
+
 ## Simplification
 
 The `simplify` function applies a built-in set of rules to simplify expressions.
@@ -214,22 +239,6 @@ showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))
 \out{simplify1}
 
 If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/rulesets.jl) that are used by `simplify`.
-
-`simplify` optionally takes a `rules` argument, a vector of rules to apply instead of the default set. Let's try it with the `r1` and `r2` rules we defined in the previous section.
-
-
-```julia:simplify2
-showraw(simplify(2 * (w+w+α+β), RuleSet([r1,r2])))
-```
-\out{simplify2}
-
-`simplify` runs through the rules repeatedly until there are no changes to be had. To disable this, you can pass in a `fixpoint=false` keyword argument.
-
-```julia:simplify3
-showraw(simplify(2 * (w+w+α+β), RuleSet([r1,r2]), fixpoint=false))
-```
-
-\out{simplify3}
 
 ## Learn more
 

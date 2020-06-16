@@ -30,7 +30,6 @@ jobs:
               Pkg.activate(".");
               Pkg.resolve();
               using Franklin; optimize(clear=true, prerender=false, minify=false);
-              rm("__site", recursive=true);
               optimize(clear=true, prerender=false);'
       - name: Deploy (preview)
         if: github.event_name == 'pull_request'

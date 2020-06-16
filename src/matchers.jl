@@ -1,123 +1,4 @@
 #### Pattern matching
-
-@inline alwaystrue(x) = true
-
-# matches one term
-# syntax:  ~x
-struct Slot{P}
-    name::Symbol
-    predicate::P
-end
-
-Slot(s) = Slot(s, alwaystrue)
-
-Base.isequal(s1::Slot, s2::Slot) = s1.name == s2.name
-
-Base.show(io::IO, s::Slot) = (print(io, "~"); print(io, s.name))
-
-# matches zero or more terms
-# syntax: ~~x
-struct Segment{F}
-    name::Symbol
-    predicate::F
-end
-
-Segment(s) = Segment(s, alwaystrue)
-
-Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
-
-makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
-
-"""
-A wrapper indicating that the function inside must be called with
-2 arguments. An expression, and the current context.
-"""
-struct Contextual{F}
-    f::F
-end
-(c::Contextual)(args...) = c.f(args...)
-
-ctxcall(f, x, ctx) = f isa Contextual ? f(x, ctx) : f(x)
-
-function makesegment(s::Expr, keys)
-    if !(s.head == :(::))
-        error("Syntax for specifying a segment is ~~x::\$predicate, where predicate is a boolean function")
-    end
-
-    name = s.args[1]
-
-    push!(keys, name)
-    :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
-end
-
-makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
-
-function makeslot(s::Expr, keys)
-    if !(s.head == :(::))
-        error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
-    end
-
-    name = s.args[1]
-
-    push!(keys, name)
-    :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
-end
-
-function makepattern(expr, keys)
-    if expr isa Expr
-        if expr.head === :call
-            if expr.args[1] === :(~)
-                if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
-                    # matches ~~x::predicate
-                    makesegment(expr.args[2].args[2], keys)
-                else
-                    # matches ~x::predicate
-                    makeslot(expr.args[2], keys)
-                end
-            else
-                :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
-            end
-        else
-            error("Unsupported Expr of type $(expr.head) found in pattern")
-        end
-    else
-        # treat as a literal
-        return esc(expr)
-    end
-end
-
-function makeconsequent(expr)
-    if expr isa Expr
-        if expr.head === :call
-            if expr.args[1] === :(~)
-                if expr.args[2] isa Symbol
-                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2]))))
-                elseif expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
-                    @assert expr.args[2].args[2] isa Symbol
-                    return :(getindex(__MATCHES__, $(QuoteNode(expr.args[2].args[2]))))
-                end
-            else
-                return Expr(:call, map(makeconsequent, expr.args)...)
-            end
-        else
-            if expr.head == :macrocall
-                if expr.args[1] === Symbol("@ctx")
-                    if length(filter(x->!(x isa LineNumberNode), expr.args)) != 1
-                        error("@ctx takes no arguments. try (@ctx)")
-                    end
-                    return :__CTX__
-                else
-                    return esc(expr)
-                end
-            end
-            return Expr(expr.head, map(makeconsequent, expr.args)...)
-        end
-    else
-        # treat as a literal
-        return esc(expr)
-    end
-end
-
 ### Matching procedures
 # A matcher is a function which takes 3 arguments
 # 1. Expression
@@ -125,13 +6,13 @@ end
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 function matcher(val::Any)
-    function literal_matcher(next, data, bindings, ctx)
+    function literal_matcher(next, data, bindings)
         !isempty(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
     end
 end
 
 function matcher(slot::Slot)
-    function slot_matcher(next, data, bindings, ctx)
+    function slot_matcher(next, data, bindings)
         isempty(data) && return
         val = get(bindings, slot.name, nothing)
         if val !== nothing
@@ -139,7 +20,7 @@ function matcher(slot::Slot)
                 return next(bindings, 1)
             end
         else
-            if ctxcall(slot.predicate, car(data), ctx)
+            if slot.predicate(car(data))
                 next(assoc(bindings, slot.name, car(data)), 1)
             end
         end
@@ -175,7 +56,7 @@ function trymatchexpr(data, value, n)
 end
 
 function matcher(segment::Segment)
-    function segment_matcher(success, data, bindings, ctx)
+    function segment_matcher(success, data, bindings)
         val = get(bindings, segment.name, nothing)
 
         if val !== nothing
@@ -189,7 +70,7 @@ function matcher(segment::Segment)
             for i=length(data):-1:0
                 subexpr = take_n(data, i)
 
-                if ctxcall(segment.predicate, subexpr, ctx)
+                if segment.predicate(subexpr)
                     res = success(assoc(bindings, segment.name, subexpr), i)
                     if res !== nothing
                         break
@@ -204,7 +85,7 @@ end
 
 function matcher(term::Term)
     matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
-    function term_matcher(success, data, bindings, ctx)
+    function term_matcher(success, data, bindings)
 
         isempty(data) && return nothing
         !(car(data) isa Term) && return nothing
@@ -216,7 +97,7 @@ function matcher(term::Term)
                 end
                 return nothing
             end
-            car(matchers′)(term, bindings′, ctx) do b, n
+            car(matchers′)(term, bindings′) do b, n
                 loop(drop_n(term, n), b, cdr(matchers′))
             end
         end

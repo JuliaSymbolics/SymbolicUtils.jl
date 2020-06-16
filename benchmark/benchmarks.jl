@@ -34,11 +34,6 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
     overhead["simplify"]["noop:Sym"]  = @benchmarkable simplify($a)
     overhead["simplify"]["noop:Term"] = @benchmarkable simplify($(a+2))
 
-    overhead["simplify_no_fixp"]  = BenchmarkGroup()
-    overhead["simplify_no_fixp"]["noop:Int"]  = @benchmarkable simplify(1, fixpoint=false)
-    overhead["simplify_no_fixp"]["noop:Sym"]  = @benchmarkable simplify($a, fixpoint=false)
-    overhead["simplify_no_fixp"]["noop:Term"] = @benchmarkable simplify($(a+2), fixpoint=false)
-
     function random_term(len; atoms, funs, fallback_atom=1)
         xs = rand(atoms, len)
         while length(xs) > 1
@@ -49,8 +44,11 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
         end
         xs[]
     end
-    ex = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[+, *])
+    ex1 = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[+, *])
+    ex2 = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[/, *])
 
-    overhead["simplify_no_fixp"]["randterm:serial"] = @benchmarkable simplify($ex, threaded=false, fixpoint=false)
-    overhead["simplify_no_fixp"]["randterm:thread"] = @benchmarkable simplify($ex, threaded=true,  fixpoint=false)
+    overhead["simplify"]["randterm (+, *):serial"] = @benchmarkable simplify($ex1, threaded=false)
+    overhead["simplify"]["randterm (/, *):serial"] = @benchmarkable simplify($ex2, threaded=false)
+    overhead["simplify"]["randterm (+, *):thread"] = @benchmarkable simplify($ex1, threaded=true)
+    overhead["simplify"]["randterm (/, *):thread"] = @benchmarkable simplify($ex2, threaded=true)
 end

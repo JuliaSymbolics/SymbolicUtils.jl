@@ -266,6 +266,8 @@ struct Term{T} <: Symbolic{T}
     arguments::Any
 end
 
+istree(t::Term) = true
+
 Term(f, args) = Term{rec_promote_symtype(f, map(symtype, args)...)}(f, args)
 
 operation(x::Term) = x.f
@@ -293,6 +295,8 @@ function term(f, args...; type = nothing)
     end
     Term{T}(f, [args...])
 end
+
+node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
 #--------------------
 #--------------------

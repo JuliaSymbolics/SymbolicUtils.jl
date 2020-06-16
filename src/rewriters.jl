@@ -29,6 +29,10 @@ using SymbolicUtils: @timer, is_operation, istree, symtype, Term, operation, arg
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
+# Cache of printed rules to speed up @timer
+const repr_cache = IdDict()
+cached_repr(x) = Base.@get! repr_cache x repr(x)
+
 struct Empty end
 
 (ctx::Empty)(x) = nothing
@@ -51,12 +55,26 @@ end
 
 function (ctx::Chain)(x)
     for f in ctx.ctxs
-        y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
+        y = @timer cached_repr(f) f(x)
         if y !== nothing
             x = y
         end
     end
     return x
+end
+
+@generated function (ctx::Chain{<:NTuple{N,Any}})(x) where N
+    quote
+        Base.@nexprs $N i->begin
+            let f = ctx.ctxs[i]
+                y = @timer cached_repr(f) f(x)
+                if y !== nothing
+                    x = y
+                end
+            end
+        end
+        return x
+    end
 end
 
 struct RestartedChain{Cs}
@@ -65,7 +83,7 @@ end
 
 function (ctx::RestartedChain)(x)
     for f in ctx.ctxs
-        y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
+        y = @timer cached_repr(f) f(x)
         if y !== nothing
             return Chain(ctx.ctxs)(y)
         end
@@ -73,19 +91,30 @@ function (ctx::RestartedChain)(x)
     return x
 end
 
+@generated function (ctx::RestartedChain{<:NTuple{N,Any}})(x) where N
+    quote
+        Base.@nexprs $N i->begin
+            let f = ctx.ctxs[i]
+                y = @timer cached_repr(repr(f)) f(x)
+                if y !== nothing
+                    return Chain(ctx.ctxs)(y)
+                end
+            end
+        end
+        return x
+    end
+end
 struct Fixpoint{C}
     ctx::C
 end
 
-const rule_repr = IdDict()
-
 function (ctx::Fixpoint)(x)
     f = ctx.ctx
-    y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
+    y = @timer cached_repr(f) f(x)
     while x !== y && !isequal(x, y)
         isnothing(y) && return x
         x = y
-        y = @timer Base.@get!(rule_repr, f, repr(f)) f(x)
+        y = @timer cached_repr(f) f(x)
     end
     return x
 end

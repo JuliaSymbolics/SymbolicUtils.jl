@@ -14,17 +14,19 @@ function simplify(x;
                   threaded=false,
                   thread_subtree_cutoff=100,
                   rewriter=nothing)
-    if rewriter === nothing
+    f = if rewriter === nothing
         if threaded
-            threaded_simplifier(thread_subtree_cutoff)(to_symbolic(x))
+            threaded_simplifier(thread_subtree_cutoff)
         elseif polynorm
-            serial_polynormal_simplifier(to_symbolic(x))
+            serial_polynormal_simplifier
         else
-            serial_simplifier(to_symbolic(x))
+            serial_simplifier
         end
     else
-        Fixpoint(rewriter)(to_symbolic(x))
+        Fixpoint(rewriter)
     end
+
+    PassThrough(f)(to_symbolic(x))
 end
 
 Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)

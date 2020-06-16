@@ -31,7 +31,7 @@ export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, Pa
 
 # Cache of printed rules to speed up @timer
 const repr_cache = IdDict()
-cached_repr(x) = Base.@get! repr_cache x repr(x)
+cached_repr(x) = Base.get!(()->repr(x), repr_cache, x)
 
 struct Empty end
 

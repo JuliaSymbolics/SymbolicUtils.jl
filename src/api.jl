@@ -40,8 +40,8 @@ the corresponding value.
 function substitute(expr, dict; fold=true)
     rs = Prewalk(PassThrough(@rule ~x::(x->haskey(dict, x)) => dict[~x]))
     if fold
-        rs(expr) |> SymbolicUtils.fold
+        rs(to_symbolic(expr)) |> SymbolicUtils.fold
     else
-        rs(expr)
+        rs(to_symbolic(expr))
     end
 end

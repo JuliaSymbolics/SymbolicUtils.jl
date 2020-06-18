@@ -27,10 +27,10 @@ jobs:
       - name: Build site
         run: julia -e '
               using Pkg; Pkg.add(["Franklin"]);
-              Pkg.activate(".");
               run(`git checkout website`)
               run(`git checkout master -- docs/`)
-              run(`mv docs/*.* .`)
+              foreach(f->mv("docs/$f", f, force=true), readdir("docs"))
+              Pkg.activate(".");
               Pkg.resolve();
               using Franklin; optimize(clear=true, prerender=false, minify=false);
               rm("__site", recursive=true);

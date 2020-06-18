@@ -30,7 +30,7 @@ jobs:
               run(`git fetch origin`);
               run(`git checkout -b website origin/website`);
               run(`git reflog`);
-              run(`git checkout master -- docs`);
+              run(`git checkout HEAD@{0} -- docs`);
               foreach(f->mv("docs/$f", f, force=true), readdir("docs"));
               Pkg.activate(".");
               Pkg.resolve();

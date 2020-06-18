@@ -46,7 +46,7 @@ jobs:
           BRANCH: gh-preview
           FOLDER: __site
       - name: Deploy (main)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/website'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: JamesIves/github-pages-deploy-action@releases/v3
         with:
           ACCESS_TOKEN: ${{ secrets.FRANKLIN_SHASHI }}

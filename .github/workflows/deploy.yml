@@ -26,7 +26,7 @@ jobs:
       # specific arguments, see the documentation or ?optimize in the REPL.
       - name: Build site
         run: julia -e '
-              run(`git checkout website`);
+              run(`git checkout -b website origin/website`);
               run(`git checkout master -- docs`);
               foreach(f->mv("docs/$f", f, force=true), readdir("docs"));
               Pkg.activate(".");

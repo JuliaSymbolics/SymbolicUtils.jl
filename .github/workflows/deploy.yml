@@ -27,8 +27,8 @@ jobs:
       - name: Build site
         run: julia -e '
               using Pkg; Pkg.add(["Franklin"]);
-              run(`git checkout website`)
-              run(`git checkout master -- docs/`)
+              run(Cmd(split("git checkout website")))
+              run(Cmd(split("git checkout master -- docs")))
               foreach(f->mv("docs/$f", f, force=true), readdir("docs"))
               Pkg.activate(".");
               Pkg.resolve();

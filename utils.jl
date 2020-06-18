@@ -9,7 +9,7 @@ function hfun_doc(params)
     doc = eval(Meta.parse("using SymbolicUtils; @doc SymbolicUtils.$fname"))
     txt = Markdown.plain(doc)
     # possibly further processing here
-    body = Markdown.html(Markdown.parse(txt))
+    body = Franklin.fd2html(txt, internal=true)
     return """
       <div class="docstring">
           <h2 class="doc-header" id="$fname">

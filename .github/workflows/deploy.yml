@@ -32,6 +32,7 @@ jobs:
               run(`git reflog`);
               run(`git checkout HEAD@{1} -- docs`);
               foreach(f->mv("docs/$f", f, force=true), readdir("docs"));
+              using Pkg;
               Pkg.activate(".");
               Pkg.resolve();
               using Franklin; optimize(clear=true, prerender=false, minify=false);

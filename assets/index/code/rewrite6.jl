@@ -1,4 +1,5 @@
 # This file was generated, do not modify it. # hide
+using SymbolicUtils
 using SymbolicUtils.Rewriters
 
 r1 = @rule ~x + ~x => 2 * (~x)

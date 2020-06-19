@@ -6,6 +6,10 @@ import IRTools: IR, func
 export @symbolic, IR, func
 
 tracetype(s::Symbolic{T}) where {T} = T
+function tracetype(s::Symbolic{T}) where {T<:AbstractArray}
+    @maybe s = shape(s) return Mjolnir.Shape{T}(length.(s.axes))
+    return T
+end
 tracetype(s) = Const(s)
 
 macro symbolic(ex)
@@ -26,7 +30,7 @@ macro symbolic(ex)
     quote
         f = $(esc(f))
 
-        ir = trace(Mjolnir.Defaults(), Const(f), $(Ts...))
+        ir = trace(Mjolnir.Multi(SymArrayPrimitives(), Mjolnir.Defaults()), Const(f), $(Ts...))
         irterm(ir, [$(esc.(args)...)])
     end
 end

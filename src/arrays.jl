@@ -7,6 +7,12 @@ const SymArray{T,N} = Symbolic{<:AbstractArray{T,N}}
 # Array interface, assumes that s.metadata is an ArrayShape, see below
 # TODO: if shape is not known these should return Symbolic results
 
+using Mjolnir
+
+struct SymArrayPrimitives end
+
+Mjolnir.@pure SymArrayPrimitives getindex, lastindex
+
 function Base.getindex(x::Symbolic{T}, idx::Int...) where {T<:AbstractArray}
     Term{eltype(T)}(getindex, idx...)
 end

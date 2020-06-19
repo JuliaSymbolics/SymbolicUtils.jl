@@ -194,14 +194,15 @@ rewriters.
    If a rewriter returns `nothing` this is treated as a no-change.
 - `RestartedChain(itr)` like `Chain(itr)` but restarts from the first rewriter once on the
    first successful application of one of the chained rewriters.
+- `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
+   returns true, `rw2` if it retuns false
+- `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
 - `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
    traversal of a given expression and applies the rewriter `rw`. `threaded=true` will
    use multi threading for traversal. `thread_cutoff` is the minimum number of nodes
    in a subtree which should be walked in a threaded spawn.
 - `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order traversal.
-- `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
-   returns true, `rw2` if it retuns false
-- `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
+- `Fixpoint(rw)` returns a rewriter which applies `rw` repeatedly until there are no changes to be made.
 - `PassThrough(rw)` returns a rewriter which if `rw(x)` returns `nothing` will instead
    return `x` otherwise will return `rw(x)`.
 
@@ -229,14 +230,23 @@ It applied `r1`, but didn't get the opportunity to apply `r2`. So we need to app
 showraw(rset(rset_result))
 ```
 \out{rewrite7}
+
+You can also use `Fixpoint` to apply the rules until there are no changes.
+```julia:rewrite8
+showraw(Fixpoint(rset)(2 * (w+w+α+β)))
+```
+\out{rewrite8}
+
 ## Simplification
 
-The `simplify` function applies a built-in set of rules to simplify expressions.
+The `simplify` function applies a built-in set of rules to rewrite expressions in order to simplify it.
 
 ```julia:simplify1
 showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))
 ```
 \out{simplify1}
+
+The rules in the default simplify applies simple constant elemination, trigonometric identities.
 
 If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl) that are used by `simplify`.
 

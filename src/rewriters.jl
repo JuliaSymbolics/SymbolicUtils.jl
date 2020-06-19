@@ -10,18 +10,20 @@ rewriters.
 - `Chain(itr)` chain an iterator of rewriters into a single rewriter which applies
    each chained rewriter in the given order.
    If a rewriter returns `nothing` this is treated as a no-change.
-- `RestartedChain(itr)` like `Chain(itr)` but restarts on the first successful application
-   of one of the chained rewriters.
+- `RestartedChain(itr)` like `Chain(itr)` but restarts from the first rewriter once on the
+   first successful application of one of the chained rewriters.
+- `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
+   returns true, `rw2` if it retuns false
+- `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
 - `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
    traversal of a given expression and applies the rewriter `rw`. `threaded=true` will
    use multi threading for traversal. `thread_cutoff` is the minimum number of nodes
    in a subtree which should be walked in a threaded spawn.
 - `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order traversal.
-- `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
-   returns true, `rw2` if it retuns false
-- `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
+- `Fixpoint(rw)` returns a rewriter which applies `rw` repeatedly until there are no changes to be made.
 - `PassThrough(rw)` returns a rewriter which if `rw(x)` returns `nothing` will instead
    return `x` otherwise will return `rw(x)`.
+
 """
 module Rewriters
 using SymbolicUtils: @timer, is_operation, istree, symtype, Term, operation, arguments,

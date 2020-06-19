@@ -1,11 +1,13 @@
-name: Build and Deploy
+name: Build and Deploy Docs
 on:
   push:
     branches:
-      - master # only trigger deployment upon pushes to master branch
+      - master # content
+      - website # design
   pull_request:
     branches:
       - master
+      - website
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest

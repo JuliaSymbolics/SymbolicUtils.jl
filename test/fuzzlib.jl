@@ -109,9 +109,9 @@ struct Errored
     err
 end
 
-function fuzz_test(ntrials, spec)
+function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
-    expr = gen_rand_expr(inputs; spec=spec)
+    expr = gen_rand_expr(inputs; spec=spec, kwargs...)
     inputs = collect(inputs)
     unsimplifiedstr = """
     function $(tuple(inputs...))

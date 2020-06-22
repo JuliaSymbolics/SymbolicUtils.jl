@@ -188,15 +188,17 @@ sin((a + c))</code></pre>
 
 <li><p><code>Chain&#40;itr&#41;</code> chain an iterator of rewriters into a single rewriter which applies  each chained rewriter in the given order.  If a rewriter returns <code>nothing</code> this is treated as a no-change.</p>
 
-<li><p><code>RestartedChain&#40;itr&#41;</code> like <code>Chain&#40;itr&#41;</code> but restarts on the first successful application  of one of the chained rewriters.</p>
+<li><p><code>RestartedChain&#40;itr&#41;</code> like <code>Chain&#40;itr&#41;</code> but restarts from the first rewriter once on the  first successful application of one of the chained rewriters.</p>
+
+<li><p><code>IfElse&#40;cond, rw1, rw2&#41;</code> runs the <code>cond</code> function on the input, applies <code>rw1</code> if cond  returns true, <code>rw2</code> if it retuns false</p>
+
+<li><p><code>If&#40;cond, rw&#41;</code> is the same as <code>IfElse&#40;cond, rw, Empty&#40;&#41;&#41;</code></p>
 
 <li><p><code>Prewalk&#40;rw; threaded&#61;false, thread_cutoff&#61;100&#41;</code> returns a rewriter which does a pre-order  traversal of a given expression and applies the rewriter <code>rw</code>. <code>threaded&#61;true</code> will  use multi threading for traversal. <code>thread_cutoff</code> is the minimum number of nodes  in a subtree which should be walked in a threaded spawn.</p>
 
 <li><p><code>Postwalk&#40;rw; threaded&#61;false, thread_cutoff&#61;100&#41;</code> similarly does post-order traversal.</p>
 
-<li><p><code>IfElse&#40;cond, rw1, rw2&#41;</code> runs the <code>cond</code> function on the input, applies <code>rw1</code> if cond  returns true, <code>rw2</code> if it retuns false</p>
-
-<li><p><code>If&#40;cond, rw&#41;</code> is the same as <code>IfElse&#40;cond, rw, Empty&#40;&#41;&#41;</code></p>
+<li><p><code>Fixpoint&#40;rw&#41;</code> returns a rewriter which applies <code>rw</code> repeatedly until there are no changes to be made.</p>
 
 <li><p><code>PassThrough&#40;rw&#41;</code> returns a rewriter which if <code>rw&#40;x&#41;</code> returns <code>nothing</code> will instead  return <code>x</code> otherwise will return <code>rw&#40;x&#41;</code>.</p>
 
@@ -254,7 +256,7 @@ julia> @timerewrite simplify(expr)
   </div>
 <div class=page-foot >
   <div class=copyright >
-      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: June 20, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: June 22, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div>

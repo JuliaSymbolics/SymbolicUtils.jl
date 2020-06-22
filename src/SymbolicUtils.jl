@@ -31,7 +31,7 @@ include("matchers.jl")
 
 # Convert to an efficient multi-variate polynomial representation
 import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
-using AbstractAlgebra: ismonomial
+using AbstractAlgebra: ismonomial, symbols
 using DataStructures
 include("abstractalgebra.jl")
 

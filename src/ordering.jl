@@ -64,9 +64,14 @@ end
 <ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 
 function <ₑ(a::Term, b::Term)
-    if arglength(a) === 0
+    la = arglength(a)
+    lb = arglength(b)
+
+    if la == 0 && lb == 0
+        return nameof(operation(a)) <ₑ nameof(operation(b))
+    elseif la === 0
         return operation(a) <ₑ b
-    elseif arglength(b) === 0
+    elseif lb === 0
         return a <ₑ operation(b)
     end
 

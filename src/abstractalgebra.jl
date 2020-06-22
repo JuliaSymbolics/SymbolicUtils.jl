@@ -104,7 +104,7 @@ function _to_term(x::MPoly, dict, syms)
         elseif length(monics) == 0
             return 1
         else
-            T = reduce((x,y)->promote_symtype(*, x,y), monics)
+            T = reduce((x,y)->promote_symtype(*, x,y), symtype.(monics))
             return Term{T}(*, monics)
         end
     end
@@ -115,7 +115,7 @@ function _to_term(x::MPoly, dict, syms)
     elseif length(monoms) == 1
         t = !isone(x.coeffs[1]) ?  monoms[1] * x.coeffs[1] : monoms[1]
     else
-        T = reduce((x,y)->promote_symtype(+, x,y), monoms)
+        T = reduce((x,y)->promote_symtype(+, x,y), symtype.(monoms))
         t = Term{T}(+, map((x,y)->isone(y) ? x : y*x, monoms, x.coeffs[1:length(monoms)]))
     end
 

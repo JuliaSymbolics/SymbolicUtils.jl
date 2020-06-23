@@ -71,7 +71,7 @@ let
         labeled = labels!((sym2term, term2sym), t)
 
         if isempty(sym2term)
-            return labeled, []
+            return labeled, Dict{Sym,Any}()
         end
 
         ks = sort(collect(keys(sym2term)), lt=<ₑ)

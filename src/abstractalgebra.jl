@@ -34,6 +34,7 @@ function labels!(dicts, t)
         if t isa Term
             tt = arguments(t)
             sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
+            dicts2 = _dicts(dicts[2])
             sym2term[sym] = Term{symtype(t)}(operation(t),
                                              map(x->to_mpoly(x, dicts)[1], arguments(t)))
         else
@@ -50,6 +51,8 @@ end
 ismpoly(x) = x isa MPoly || x isa Integer
 isnonnegint(x) = x isa Integer && x >= 0
 
+_dicts(t2s=OrderedDict{Any, Sym}()) = (OrderedDict{Sym, Any}(), t2s)
+
 let
     mpoly_rules = [@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
                    @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
@@ -59,7 +62,7 @@ let
                    @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))]
 
     global to_mpoly
-    function to_mpoly(t, dicts=(OrderedDict{Sym, Any}(), OrderedDict{Any, Sym}()))
+    function to_mpoly(t, dicts=_dicts())
         # term2sym is only used to assign the same
         # symbol for the same term -- in other words,
         # it does common subexpression elimination
@@ -68,7 +71,7 @@ let
         labeled = labels!((sym2term, term2sym), t)
 
         if isempty(sym2term)
-            return labeled, []
+            return labeled, Dict{Sym,Any}()
         end
 
         ks = sort(collect(keys(sym2term)), lt=<ₑ)
@@ -76,11 +79,13 @@ let
 
         replace_with_poly = Dict{Sym,MPoly}(zip(ks, vars))
         t_poly = substitute(labeled, replace_with_poly, fold=false)
-        Fixpoint(Postwalk(RestartedChain(mpoly_rules)))(t_poly), sym2term, reverse(ks)
+        Fixpoint(Postwalk(RestartedChain(mpoly_rules)))(t_poly),
+            sym2term
     end
 end
 
-function to_term(x, dict, syms)
+function to_term(x, dict)
+    syms = Dict(zip(nameof.(keys(dict)), keys(dict)))
     dict = copy(dict)
     for (k, v) in dict
         dict[k] = _to_term(v, dict, syms)
@@ -90,25 +95,28 @@ end
 
 function _to_term(x::MPoly, dict, syms)
 
-    function mul_coeffs(exps)
-        monics = [e == 1 ? syms[i] : syms[i]^e for (i, e) in enumerate(reverse(exps)) if !iszero(e)]
+    function mul_coeffs(exps, ring)
+        l = length(syms)
+        ss = symbols(ring)
+        monics = [e == 1 ? syms[ss[i]] : syms[ss[i]]^e for (i, e) in enumerate(exps) if !iszero(e)]
         if length(monics) == 1
             return monics[1]
         elseif length(monics) == 0
             return 1
         else
-            return Term(*, monics)
+            T = reduce((x,y)->promote_symtype(*, x,y), symtype.(monics))
+            return Term{T}(*, monics)
         end
     end
 
-    monoms = [mul_coeffs(exponent_vector(x, i)) for i in 1:x.length]
+    monoms = [mul_coeffs(exponent_vector(x, i), x.parent) for i in 1:x.length]
     if length(monoms) == 0
         return 0
-    end
-    if length(monoms) == 1
+    elseif length(monoms) == 1
         t = !isone(x.coeffs[1]) ?  monoms[1] * x.coeffs[1] : monoms[1]
     else
-        t = Term(+, map((x,y)->isone(y) ? x : y*x, monoms, x.coeffs[1:length(monoms)]))
+        T = reduce((x,y)->promote_symtype(+, x,y), symtype.(monoms))
+        t = Term{T}(+, map((x,y)->isone(y) ? x : y*x, monoms, x.coeffs[1:length(monoms)]))
     end
 
     substitute(t, dict, fold=false)

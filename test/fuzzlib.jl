@@ -109,9 +109,9 @@ struct Errored
     err
 end
 
-function fuzz_test(ntrials, spec)
+function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
-    expr = gen_rand_expr(inputs; spec=spec)
+    expr = gen_rand_expr(inputs; spec=spec, kwargs...)
     inputs = collect(inputs)
     unsimplifiedstr = """
     function $(tuple(inputs...))
@@ -140,31 +140,28 @@ function fuzz_test(ntrials, spec)
         catch err
             Errored(err)
         end
-
-        if unsimplified isa Errored
-            @test typeof(simplified.err) == typeof(unsimplified.err)
-        else
-            try
-                if isnan(unsimplified)
-                    @test isnan(simplified)
-                    if !isnan(simplified)
-                        error("Failed")
-                    end
-                else
-                    @test unsimplified ≈ simplified
-                    if !(unsimplified ≈ simplified)
-                        error("Failed")
-                    end
+        try
+            if unsimplified isa Errored
+                @test simplified isa Errored
+            elseif isnan(unsimplified)
+                @test isnan(simplified)
+                if !isnan(simplified)
+                    error("Failed")
                 end
-            catch err
-                println("""Test failed for expression
-                               $(sprint(io->showraw(io, expr))) = $unsimplified
-                           Simplified to:
-                               $(sprint(io->showraw(io, simplify(expr)))) = $simplified
-                           On inputs:
-                               $inputs = $args
-                           """)
+            else
+                @test unsimplified ≈ simplified
+                if !(unsimplified ≈ simplified)
+                    error("Failed")
+                end
             end
+        catch err
+            println("""Test failed for expression
+                    $(sprint(io->showraw(io, expr))) = $unsimplified
+                    Simplified to:
+                    $(sprint(io->showraw(io, simplify(expr)))) = $simplified
+                    On inputs:
+                    $inputs = $args
+                    """)
         end
     end
 end

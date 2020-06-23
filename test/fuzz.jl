@@ -2,7 +2,7 @@ include("fuzzlib.jl")
 
 using Random: seed!
 
-seed!(6174)
+seed!(6175)
 @testset "Fuzz test" begin
     @testset "polynormalize fuzz" begin
         for i=1:500
@@ -14,9 +14,10 @@ seed!(6174)
             fuzz_test(5, num_spec)
         end
     end
-    @testset "bool fuzz" for i=1:500 begin
-        seed!(i)
-        fuzz_test(5, bool_spec)
+    @testset "bool fuzz" begin
+        for i=1:500
+            seed!(i)
+            fuzz_test(5, bool_spec)
+        end
     end
-end
 end

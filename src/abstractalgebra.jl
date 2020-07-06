@@ -54,24 +54,32 @@ isnonnegint(x) = x isa Integer && x >= 0
 _dicts(t2s=OrderedDict{Any, Sym}()) = (OrderedDict{Sym, Any}(), t2s)
 
 let
+    mpoly_preprocess = [@rule(identity(~x) => ~x)
+                        @rule(zero(~x) => 0)
+                        @rule(one(~x) => 1)]
+
     mpoly_rules = [@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
                    @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
                    @rule(+(~x) => ~x)
                    @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
                    @rule(*(~x) => ~x)
                    @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))]
+    MPOLY_CLEANUP = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_preprocess))))
+    MPOLY_MAKER = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_rules))))
+
+    global MPOLY_CLEANUP
 
     global to_mpoly
     function to_mpoly(t, dicts=_dicts())
         # term2sym is only used to assign the same
         # symbol for the same term -- in other words,
         # it does common subexpression elimination
-
+        t = MPOLY_CLEANUP(t)
         sym2term, term2sym = dicts
         labeled = labels!((sym2term, term2sym), t)
 
         if isempty(sym2term)
-            return labeled, Dict{Sym,Any}()
+            return MPOLY_MAKER(labeled), Dict{Sym,Any}()
         end
 
         ks = sort(collect(keys(sym2term)), lt=<ₑ)
@@ -79,8 +87,7 @@ let
 
         replace_with_poly = Dict{Sym,MPoly}(zip(ks, vars))
         t_poly = substitute(labeled, replace_with_poly, fold=false)
-        Fixpoint(Postwalk(RestartedChain(mpoly_rules)))(t_poly),
-            sym2term
+        MPOLY_MAKER(t_poly), sym2term
     end
 end
 

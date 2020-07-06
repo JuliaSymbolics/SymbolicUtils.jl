@@ -59,6 +59,7 @@ let
                         @rule(one(~x) => 1)]
 
     mpoly_rules = [@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
+                   @rule(-(~x) => -1 * ~x)
                    @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
                    @rule(+(~x) => ~x)
                    @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)

@@ -41,6 +41,7 @@ let
         @rule(^(~x, ~z::_isone) => ~x)
     ]
 
+    # Note: These rules are first applied in a pre-order walk
     ASSORTED_RULES = [
         @rule(identity(~x) => ~x)
         @rule(-(~x) => -1*~x)
@@ -96,8 +97,7 @@ let
     ]
 
     function number_simplifier()
-        rule_tree = [If(istree, Chain(ASSORTED_RULES)),
-                     If(is_operation(+),
+        rule_tree = [If(is_operation(+),
                         Chain(PLUS_RULES)),
                      If(is_operation(*),
                         Chain(TIMES_RULES)),
@@ -118,18 +118,21 @@ let
     global serial_polynormal_simplifier
 
     function default_simplifier(; kw...)
+        assorted_prewalk = Prewalk(If(istree, Chain(ASSORTED_RULES)); kw...)
         IfElse(has_trig,
-               Postwalk(IfElse(x->symtype(x) <: Number,
-                               Chain((number_simplifier(),
-                                      trig_simplifier())),
-                               If(x->symtype(x) <: Bool,
-                                  bool_simplifier()))
-                        ; kw...),
-               Postwalk(Chain((If(x->symtype(x) <: Number,
-                                  number_simplifier()),
-                               If(x->symtype(x) <: Bool,
-                                  bool_simplifier())))
-                        ; kw...))
+               Chain((assorted_prewalk,
+                      Postwalk(IfElse(x->symtype(x) <: Number,
+                                      Chain((number_simplifier(),
+                                             trig_simplifier())),
+                                      If(x->symtype(x) <: Bool,
+                                         bool_simplifier()))
+                               ; kw...))),
+               Chain((assorted_prewalk,
+                      Postwalk(Chain((If(x->symtype(x) <: Number,
+                                         number_simplifier()),
+                                      If(x->symtype(x) <: Bool,
+                                         bool_simplifier())))
+                               ; kw...))))
     end
 
     # reduce overhead of simplify by defining these as constant

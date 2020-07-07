@@ -17,7 +17,7 @@ end
 ex = 1 + (:x - 2)
 
 @eqtest to_symbolic(ex) == Term{Any}(+, [1, Term{Any}(-, [Sym{Any}(:x), 2])])
-@eqtest simplify(ex) == to_symbolic(ex) # Not simplified because symtype Any
+@eqtest simplify(ex) == simplify(to_symbolic(ex)) # Not simplified because symtype Any
 
 
 SymbolicUtils.symtype(::Symbol) = Real

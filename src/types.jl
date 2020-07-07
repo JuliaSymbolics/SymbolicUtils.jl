@@ -302,7 +302,7 @@ node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init
 #--------------------
 ####  Pretty printing
 #--------------------
-const show_simplified = Ref(true)
+const show_simplified = Ref(false)
 
 function Base.show(io::IO, t::Term)
     if get(io, :simplify, show_simplified[])

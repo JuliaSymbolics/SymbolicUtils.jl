@@ -14,6 +14,7 @@ function number_methods(T, rhs1, rhs2)
                   end)
         end
 
+        # TODO: modularize and make another macro?
         expr = quote
             (f::$(typeof(f)))(a::$T, b::$T) = $rhs2
             (f::$(typeof(f)))(a::$T, b::Real)   = $rhs2
@@ -32,9 +33,8 @@ function number_methods(T, rhs1, rhs2)
     Expr(:block, exprs...)
 end
 
-
 macro number_methods(T, rhs1, rhs2)
-    number_methods(T, rhs1, rhs2)
+    number_methods(T, rhs1, rhs2) |> esc
 end
 
 @number_methods(Sym, term(f, a), term(f, a, b))

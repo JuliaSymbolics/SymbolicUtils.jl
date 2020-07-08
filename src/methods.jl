@@ -4,7 +4,7 @@ const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^]
 
 const previously_declared_for = []
 # TODO: keep domains tighter than this
-function eval_number_methods(T, rhs1, rhs2)
+function number_methods(T, rhs1, rhs2)
     exprs = []
     for f in diadic
         for S in previously_declared_for
@@ -15,6 +15,7 @@ function eval_number_methods(T, rhs1, rhs2)
         end
 
         expr = quote
+            (f::$(typeof(f)))(a::$T, b::$T) = $rhs2
             (f::$(typeof(f)))(a::$T, b::Real)   = $rhs2
             (f::$(typeof(f)))(a::Real, b::$T)   = $rhs2
             (f::$(typeof(f)))(a::$T, b::Number) = $rhs2
@@ -32,12 +33,12 @@ function eval_number_methods(T, rhs1, rhs2)
 end
 
 
-macro eval_number_methods(T, rhs1, rhs2)
-    eval_number_methods(T, rhs1, rhs2)
+macro number_methods(T, rhs1, rhs2)
+    number_methods(T, rhs1, rhs2)
 end
 
-@eval_number_methods(Sym, term(f, a), term(f, a, b))
-@eval_number_methods(Term, term(f, a), term(f, a, b))
+@number_methods(Sym, term(f, a), term(f, a, b))
+@number_methods(Term, term(f, a), term(f, a, b))
 
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),

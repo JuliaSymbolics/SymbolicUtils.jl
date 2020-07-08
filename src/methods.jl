@@ -7,28 +7,25 @@ const previously_declared_for = []
 function eval_number_methods(T, rhs1, rhs2)
     exprs = []
     for f in diadic
-        @show previously_declared_for
-        for S in vcat(previously_declared_for, T)
-            @show T, S
+        for S in previously_declared_for
             push!(exprs, quote
-                      @eval (::$(typeof(f)))(a::$T, b::$S) = term($f, a, b)
+                      (f::$(typeof(f)))(a::$T, b::$S) = $rhs2
+                      (f::$(typeof(f)))(a::$S, b::$T) = $rhs2
                   end)
         end
 
         expr = quote
-            @eval begin
-                (f::$(typeof(f)))(a::$T, b::Real)   = $rhs2
-                (f::$(typeof(f)))(a::Real, b::$T)   = $rhs2
-                (f::$(typeof(f)))(a::$T, b::Number) = $rhs2
-                (f::$(typeof(f)))(a::Number, b::$T) = $rhs2
-            end
+            (f::$(typeof(f)))(a::$T, b::Real)   = $rhs2
+            (f::$(typeof(f)))(a::Real, b::$T)   = $rhs2
+            (f::$(typeof(f)))(a::$T, b::Number) = $rhs2
+            (f::$(typeof(f)))(a::Number, b::$T) = $rhs2
         end
 
         push!(exprs, expr)
     end
 
     for f in monadic
-        push!(exprs, :(@eval (f::$(typeof(f)))(a::$T)   = $rhs1))
+        push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
     end
     push!(previously_declared_for, T)
     Expr(:block, exprs...)
@@ -39,8 +36,8 @@ macro eval_number_methods(T, rhs1, rhs2)
     eval_number_methods(T, rhs1, rhs2)
 end
 
-@eval_number_methods(Sym{<:Number}, term(f, a), term(f, a, b))
-@eval_number_methods(Term{<:Number}, term(f, a), term(f, a, b))
+@eval_number_methods(Sym, term(f, a), term(f, a, b))
+@eval_number_methods(Term, term(f, a), term(f, a, b))
 
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),

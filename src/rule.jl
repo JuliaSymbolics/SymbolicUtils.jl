@@ -304,7 +304,7 @@ end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-function (acr::ACRule)(term) where {comm}
+function (acr::ACRule)(term)
     r = Rule(acr)
     if !(term isa Term)
         r(term)

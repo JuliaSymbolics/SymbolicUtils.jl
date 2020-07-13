@@ -2,7 +2,7 @@ const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch, acos
 
 const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^]
 
-const previously_declared_for = []
+const previously_declared_for = Set([])
 # TODO: keep domains tighter than this
 function number_methods(T, rhs1, rhs2)
     exprs = []
@@ -29,7 +29,7 @@ function number_methods(T, rhs1, rhs2)
     for f in monadic
         push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
     end
-    push!(previously_declared_for, T)
+    push!(exprs, :(push!($previously_declared_for, $T)))
     Expr(:block, exprs...)
 end
 

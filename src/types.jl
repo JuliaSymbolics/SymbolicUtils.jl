@@ -265,8 +265,9 @@ struct Term{T} <: Symbolic{T}
     f::Any
     arguments::Any
     descendants::Int
-    Term{T}(f, arguments) where {T} = new{T}(f, arguments, sum(num_descendants, arguments))
+    Term{T}(f, arguments) where {T} = new{T}(f, arguments, isempty(arguments) ? 0 : sum(num_descendants, arguments))
 end
+
 num_descendants(x) = 1
 num_descendants(t::Term) = t.descendants
 
@@ -299,8 +300,6 @@ function term(f, args...; type = nothing)
     end
     Term{T}(f, [args...])
 end
-
-node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
 #--------------------
 #--------------------

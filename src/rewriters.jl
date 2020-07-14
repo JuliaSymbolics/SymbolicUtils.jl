@@ -27,7 +27,7 @@ rewriters.
 """
 module Rewriters
 using SymbolicUtils: @timer, is_operation, istree, symtype, Term, operation, arguments,
-                     node_count
+                     num_descendants
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 

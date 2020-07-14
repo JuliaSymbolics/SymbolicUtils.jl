@@ -2,25 +2,49 @@ const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch, acos
 
 const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^]
 
+const previously_declared_for = Set([])
 # TODO: keep domains tighter than this
+function number_methods(T, rhs1, rhs2)
+    exprs = []
+    for f in diadic
+        for S in previously_declared_for
+            push!(exprs, quote
+                      (f::$(typeof(f)))(a::$T, b::$S) = $rhs2
+                      (f::$(typeof(f)))(a::$S, b::$T) = $rhs2
+                  end)
+        end
+
+        # TODO: modularize and make another macro?
+        expr = quote
+            (f::$(typeof(f)))(a::$T, b::$T) = $rhs2
+            (f::$(typeof(f)))(a::$T, b::Real)   = $rhs2
+            (f::$(typeof(f)))(a::Real, b::$T)   = $rhs2
+            (f::$(typeof(f)))(a::$T, b::Number) = $rhs2
+            (f::$(typeof(f)))(a::Number, b::$T) = $rhs2
+        end
+
+        push!(exprs, expr)
+    end
+
+    for f in monadic
+        push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
+    end
+    push!(exprs, :(push!($previously_declared_for, $T)))
+    Expr(:block, exprs...)
+end
+
+macro number_methods(T, rhs1, rhs2)
+    number_methods(T, rhs1, rhs2) |> esc
+end
+
+@number_methods(Sym, term(f, a), term(f, a, b))
+@number_methods(Term, term(f, a), term(f, a, b))
+
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
-
-    for T in [Sym, Term]
-        for S in [Sym, Term]
-            @eval (::$(typeof(f)))(a::$T, b::$S) = term($f, a, b)
-        end
-        @eval begin
-            (::$(typeof(f)))(a::$T, b::Real)   = term($f, a, b)
-            (::$(typeof(f)))(a::Real, b::$T)   = term($f, a, b)
-            (::$(typeof(f)))(a::$T, b::Number) = term($f, a, b)
-            (::$(typeof(f)))(a::Number, b::$T) = term($f, a, b)
-        end
-    end
 end
-
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 

@@ -82,6 +82,10 @@ for f in [identity, one, zero, *, +]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
 end
 
+promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
+Base.real(s::Symbolic{<:Real}) = s
+Base.real(s::Symbolic{<:Number}) = term(real, s)
+
 ## Booleans
 
 # binary ops that return Bool
@@ -101,9 +105,14 @@ end
 Base.:!(s::Symbolic{Bool}) = Term{Bool}(!, [s])
 Base.:~(s::Symbolic{Bool}) = Term{Bool}(!, [s])
 
+
 # An ifelse node, ifelse is a built-in unfortunately
 #
 cond(_if::Bool, _then, _else) = ifelse(_if, _then, _else)
 function cond(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(cond, Any[_if, _then, _else])
 end
+
+Base.copysign(x, y::Symbolic) = Term{symtype(x)}(copysign, [x, y])
+Base.copysign(x::Symbolic, y) = Term{symtype(x)}(copysign, [x, y])
+Base.copysign(x::Symbolic, y::Symbolic) = Term{symtype(x)}(copysign, [x, y])

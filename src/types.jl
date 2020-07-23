@@ -161,24 +161,27 @@ if the arguments are of the wrong type then this function will error.
 function promote_symtype(f::Sym{FnType{X,Y}}, args...) where {X, Y}
     if X === Tuple
         return Y
-    elseif X <: NTuple{N, Any} where N
+    elseif try fieldcount(X); true; catch err; false end
         # this should match any signature with a known length
         nrequired = fieldcount(X)
         ngiven    = nfields(args)
 
+        fn = nameof(f)
+
         if nrequired !== ngiven
-            error("$f takes $nrequired arguments; $ngiven arguments given")
+            error("$fn takes $nrequired arguments; $ngiven arguments given")
         end
 
         for i in 1:ngiven
             t = X.parameters[i]
             if !(args[i] <: t)
-                error("Argument to $f at position $i must be of symbolic type $t")
+                error("Argument to $fn at position $i must be of symbolic type $t")
             end
         end
         return Y
     elseif X <: Tuple
-        @assert args isa X " arguments to $f must be of type $X"
+        fn = nameof(f)
+        @assert Tuple{args...} <: X " arguments to $fn must be of type $X"
         return Y
     end
 end
@@ -222,6 +225,9 @@ end
 function _name_type(x)
     if x isa Symbol
         return (name=x, type=Number)
+    elseif x isa Expr && x.head === :(...)
+        nt = _name_type(x.args[1])
+        (name=nt.name, type=Vararg{nt.type})
     elseif x isa Expr && x.head === :(::)
         if length(x.args) == 1
             return (name=nothing, type=x.args[1])

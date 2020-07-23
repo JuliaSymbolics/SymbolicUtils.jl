@@ -61,10 +61,14 @@ end
 @inline take_n(ll::LL, n) = isempty(ll) || n == 0 ? empty(ll) : @views ll.v[ll.i:n+ll.i-1] # @views handles Tuple
 @inline take_n(ll, n) = @views ll[1:n]
 
-drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
-
-@inline drop_n(ll, n) = istree(ll) ? drop_n(arguments(ll), n-1) : error("Can't drop $n items from $ll")
-@inline drop_n(ll::AbstractArray, n) = drop_n(LL(ll, 1), n)
+@inline function drop_n(ll, n)
+    if n === 0
+        return ll
+    else
+        istree(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
+    end
+end
+@inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)
 @inline drop_n(ll::LL, n) = LL(ll.v, ll.i+n)
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y

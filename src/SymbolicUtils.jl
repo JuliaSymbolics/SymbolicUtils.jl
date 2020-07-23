@@ -1,6 +1,6 @@
 module SymbolicUtils
 
-export @syms, term, @fun, showraw
+export @syms, term, showraw
 
 # Sym, Term and other types
 include("types.jl")
@@ -21,7 +21,7 @@ include("rewriters.jl")
 using .Rewriters
 
 using Combinatorics: permutations, combinations
-export @rule, @acrule, @arule, RuleSet
+export @rule, @acrule, RuleSet
 
 # Rule type and @rule macro
 include("rule.jl")

@@ -26,7 +26,7 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer, is_operation, istree, operation, arguments, node_count
+using SymbolicUtils: @timer, is_operation, istree, operation, similarterm, arguments, node_count
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
@@ -148,7 +148,7 @@ function (p::Walk{ord, C, false})(x) where {ord, C}
             x = p.rw(x)
         end
         if istree(x)
-            x = operation(x)(map(t->PassThrough(p)(t), arguments(x))...)
+            x = similarterm(x, operation(x), map(PassThrough(p), arguments(x)))
         end
         return ord === :post ? p.rw(x) : x
     else
@@ -171,7 +171,7 @@ function (p::Walk{ord, C, true})(x) where {ord, C}
                 end
             end
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
-            t = operation(x)(args...)
+            t = similarterm(x, operation(x), args)
         end
         return ord === :post ? p.rw(t) : t
     else

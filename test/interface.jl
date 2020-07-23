@@ -15,9 +15,10 @@ end
 
 ex = 1 + (:x - 2)
 
-@test simplify(ex) == ex # Not simplified because symtype Any
+SymbolicUtils.to_symbolic(ex::Expr) = ex
+
+@test simplify(ex) == ex
 
 SymbolicUtils.symtype(::Expr) = Real
-
 @test simplify(ex) == -1 + :x
 @test simplify(:a * (:b + -1 * :c) + -1 * (:b * :a + -1 * :c * :a), polynorm=true) == 0

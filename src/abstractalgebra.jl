@@ -21,22 +21,22 @@ end
 function labels!(dicts, t)
     if t isa Integer
         return t
-    elseif t isa Term && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
+    elseif istree(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
         tt = arguments(t)
-        return Term{symtype(t)}(operation(t), map(x->labels!(dicts, x), arguments(t)))
-    elseif t isa Term && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
-        return Term{symtype(t)}(operation(t), map(x->labels!(dicts, x), arguments(t)))
+        return similarterm(t, operation(t), map(x->labels!(dicts, x), arguments(t)))
+    elseif istree(t) && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
+        return similarterm(t, operation(t), map(x->labels!(dicts, x), arguments(t)))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
             return term2sym[t]
         end
-        if t isa Term
+        if istree(t)
             tt = arguments(t)
             sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
             dicts2 = _dicts(dicts[2])
-            sym2term[sym] = Term{symtype(t)}(operation(t),
-                                             map(x->to_mpoly(x, dicts)[1], arguments(t)))
+            sym2term[sym] = similarterm(t, operation(t),
+                                        map(x->to_mpoly(x, dicts)[1], arguments(t)))
         else
             sym = Sym{symtype(t)}(gensym("literal"))
             sym2term[sym] = t
@@ -92,16 +92,16 @@ let
     end
 end
 
-function to_term(x, dict)
+function to_term(reference, x, dict)
     syms = Dict(zip(nameof.(keys(dict)), keys(dict)))
     dict = copy(dict)
     for (k, v) in dict
-        dict[k] = _to_term(v, dict, syms)
+        dict[k] = _to_term(reference, v, dict, syms)
     end
-    _to_term(x, dict, syms)
+    _to_term(reference, x, dict, syms)
 end
 
-function _to_term(x::MPoly, dict, syms)
+function _to_term(reference, x::MPoly, dict, syms)
 
     function mul_coeffs(exps, ring)
         l = length(syms)
@@ -112,8 +112,7 @@ function _to_term(x::MPoly, dict, syms)
         elseif length(monics) == 0
             return 1
         else
-            T = reduce((x,y)->promote_symtype(*, x,y), symtype.(monics))
-            return Term{T}(*, monics)
+            return similarterm(reference, *, monics)
         end
     end
 
@@ -123,27 +122,29 @@ function _to_term(x::MPoly, dict, syms)
     elseif length(monoms) == 1
         t = !isone(x.coeffs[1]) ?  monoms[1] * x.coeffs[1] : monoms[1]
     else
-        T = reduce((x,y)->promote_symtype(+, x,y), symtype.(monoms))
-        t = Term{T}(+, map((x,y)->isone(y) ? x : y*x, monoms, x.coeffs[1:length(monoms)]))
+        t = similarterm(reference,
+                        +,
+                        map((x,y)->isone(y) ? x : y*x,
+                            monoms, x.coeffs[1:length(monoms)]))
     end
 
     substitute(t, dict, fold=false)
 end
 
-function _to_term(x, dict, vars)
-    if haskey(dict, x)
-        return dict[x]
+function _to_term(reference, x, dict, vars)
+    if istree(x)
+        t=similarterm(x, operation(x), _to_term.((reference,), arguments(x), (dict,), (vars,)))
     else
-        return x
+        if haskey(dict, x)
+            return dict[x]
+        else
+            return x
+        end
     end
-end
-
-function _to_term(x::Term, dict, vars)
-    t=Term{symtype(x)}(operation(x), _to_term.(arguments(x), (dict,), (vars,)))
 end
 
 <ₑ(a::MPoly, b::MPoly) = false
 
 function polynormalize(x)
-    to_term(to_mpoly(x)...)
+    to_term(x, to_mpoly(x)...)
 end

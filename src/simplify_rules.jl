@@ -2,8 +2,8 @@ using .Rewriters
 
 let
     PLUS_RULES = [
-        @rule(+(~~x::isnotflat(+)) => flatten_term(+, ~~x))
-        @rule(+(~~x::!(issortedₑ)) => sort_args(+, ~~x))
+        @rule(~x::isnotflat(+) => flatten_term(+, ~x))
+        @rule(~x::needs_sorting(+) => sort_args(+, ~x))
         @ordered_acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
 
         @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
@@ -19,8 +19,8 @@ let
     ]
 
     TIMES_RULES = [
-        @rule(*(~~x::isnotflat(*)) => flatten_term(*, ~~x))
-        @rule(*(~~x::!(issortedₑ)) => sort_args(*, ~~x))
+        @rule(~x::isnotflat(*) => flatten_term(*, ~x))
+        @rule(~x::needs_sorting(*) => sort_args(*, ~x))
 
         @ordered_acrule(~a::isnumber * ~b::isnumber => ~a * ~b)
         @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))

@@ -35,8 +35,7 @@ struct LL{V}
     i::Int
 end
 
-islist(::Any) = false
-islist(l::Union{LL, Term, AbstractArray, Tuple}) = true
+islist(x) = istree(x) || !isempty(x)
 
 Base.empty(l::LL) = empty(l.v)
 Base.isempty(l::LL) = l.i > length(l.v)
@@ -50,16 +49,26 @@ Base.isempty(t::Term) = false
 @inline car(t::Term) = operation(t)
 @inline cdr(t::Term) = arguments(t)
 
-@inline car(v) = first(v)
-@inline cdr(v) = isempty(v) ? empty(l) : LL(v, 2)
+@inline car(v) = istree(v) ? operation(v) : first(v)
+@inline function cdr(v)
+    if istree(v)
+        arguments(v)
+    else
+        islist(v) ? LL(v, 2) : error("asked cdr of empty")
+    end
+end
 
 @inline take_n(ll::LL, n) = isempty(ll) || n == 0 ? empty(ll) : @views ll.v[ll.i:n+ll.i-1] # @views handles Tuple
 @inline take_n(ll, n) = @views ll[1:n]
 
-drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
-
-@inline drop_n(ll::Term, n) = drop_n(arguments(ll), n-1)
-@inline drop_n(ll::AbstractArray, n) = drop_n(LL(ll, 1), n)
+@inline function drop_n(ll, n)
+    if n === 0
+        return ll
+    else
+        istree(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
+    end
+end
+@inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)
 @inline drop_n(ll::LL, n) = LL(ll.v, ll.i+n)
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
@@ -68,8 +77,8 @@ pow(x, y::Symbolic) = Base.:^(x,y)
 pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
 
 # Simplification utilities
-has_trig(x) = false
-function has_trig(term::Term)
+function has_trig(term)
+    !istree(term) && return false
     fns = (sin, cos, tan, cot, sec, csc)
     op = operation(term)
 
@@ -80,21 +89,24 @@ function has_trig(term::Term)
     end
 end
 
-fold(x) = x
-function fold(t::Term)
-    tt = map(fold, arguments(t))
-    if !any(x->x isa Symbolic, tt)
-        # evaluate it
-        return operation(t)(tt...)
+function fold(t)
+    if istree(t)
+        tt = map(fold, arguments(t))
+        if !any(x->x isa Symbolic, tt)
+            # evaluate it
+            return operation(t)(tt...)
+        else
+            return similarterm(t, operation(t), tt)
+        end
     else
-        return Term{symtype(t)}(operation(t), tt)
+        return t
     end
 end
 
 ### Predicates
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
-is_operation(f) = @nospecialize(x) -> (x isa Term) && (operation(x) == f)
+is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
 
 isliteral(::Type{T}) where {T} = x -> x isa T
 isnumber(x) = isliteral(Number)(x)
@@ -105,12 +117,14 @@ _isone(t) = false
 _isone(x::Number) = isone(x)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
+needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
 
 # are there nested ⋆ terms?
 function isnotflat(⋆)
-    function (args)
+    function (x)
+        args = arguments(x)
         for t in args
-            if t isa Term && operation(t) === (⋆)
+            if istree(t) && operation(t) === (⋆)
                 return true
             end
         end
@@ -154,26 +168,28 @@ end
 
 
 # Numbers to the back
-function flatten_term(⋆, args)
+function flatten_term(⋆, x)
+    args = arguments(x)
     # flatten nested ⋆
     flattened_args = []
     for t in args
-        if t isa Term && operation(t) === (⋆)
+        if istree(t) && operation(t) === (⋆)
             append!(flattened_args, arguments(t))
         else
             push!(flattened_args, t)
         end
     end
-    Term(⋆, flattened_args)
+    similarterm(x, ⋆, flattened_args)
 end
 
-function sort_args(f, args)
+function sort_args(f, t)
+    args = arguments(t)
     if length(args) < 2
-        return Term(f, args)
+        return similarterm(t, f, args)
     elseif length(args) == 2
         x, y = args
-        return Term(f, x <ₑ y ? [x,y] : [y,x])
+        return similarterm(t, f, x <ₑ y ? [x,y] : [y,x])
     end
     args = args isa Tuple ? [args...] : args
-    Term(f, sort(args, lt=<ₑ))
+    similarterm(t, f, sort(args, lt=<ₑ))
 end

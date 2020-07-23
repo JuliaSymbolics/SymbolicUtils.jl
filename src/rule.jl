@@ -306,7 +306,7 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if !(term isa Term)
+    if !istree(term)
         r(term)
     else
         f =  operation(term)
@@ -321,9 +321,11 @@ function (acr::ACRule)(term)
         itr = acr.sets(eachindex(args), acr.arity)
 
         for inds in itr
-            result = r(Term{T}(f, @views args[inds]))
+            result = r(f((@views args[inds])...))
             if !isnothing(result)
-                return @timer "acrule" Term{T}(f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
+                # Assumption: inds are unique
+                length(args) == length(inds) && return result
+                return f(result, (args[i] for i in eachindex(args) if i ∉ inds)...)
             end
         end
     end

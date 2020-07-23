@@ -35,8 +35,7 @@ struct LL{V}
     i::Int
 end
 
-islist(::Any) = false
-islist(l::Union{LL, Term, AbstractArray, Tuple}) = true
+islist(x) = istree(x) || !isempty(x)
 
 Base.empty(l::LL) = empty(l.v)
 Base.isempty(l::LL) = l.i > length(l.v)
@@ -50,15 +49,21 @@ Base.isempty(t::Term) = false
 @inline car(t::Term) = operation(t)
 @inline cdr(t::Term) = arguments(t)
 
-@inline car(v) = first(v)
-@inline cdr(v) = isempty(v) ? empty(l) : LL(v, 2)
+@inline car(v) = istree(v) ? operation(v) : first(v)
+@inline function cdr(v)
+    if istree(v)
+        arguments(v)
+    else
+        islist(v) ? LL(v, 2) : error("asked cdr of empty")
+    end
+end
 
 @inline take_n(ll::LL, n) = isempty(ll) || n == 0 ? empty(ll) : @views ll.v[ll.i:n+ll.i-1] # @views handles Tuple
 @inline take_n(ll, n) = @views ll[1:n]
 
 drop_n(ll, n) = n === 0 ? ll : drop_n(cdr(ll), n-1)
 
-@inline drop_n(ll::Term, n) = drop_n(arguments(ll), n-1)
+@inline drop_n(ll, n) = istree(ll) ? drop_n(arguments(ll), n-1) : error("Can't drop $n items from $ll")
 @inline drop_n(ll::AbstractArray, n) = drop_n(LL(ll, 1), n)
 @inline drop_n(ll::LL, n) = LL(ll.v, ll.i+n)
 

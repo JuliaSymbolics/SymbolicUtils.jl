@@ -85,7 +85,7 @@ end
 ## Booleans
 
 # binary ops that return Bool
-for (f, Domain) in [(==) => Number, (!=) => Number,
+for (f, Domain) in [(==) => Any, (!=) => Any,
                     (<=) => Real,   (>=) => Real,
                     (< ) => Real,   (> ) => Real,
                     (& ) => Bool,   (| ) => Bool,

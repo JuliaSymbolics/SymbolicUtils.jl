@@ -26,7 +26,7 @@ function simplify(x;
         Fixpoint(rewriter)
     end
 
-    PassThrough(f)(to_symbolic(x))
+    PassThrough(f)(x)
 end
 
 Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)
@@ -40,8 +40,8 @@ the corresponding value.
 function substitute(expr, dict; fold=true)
     rs = Prewalk(PassThrough(@rule ~x::(x->haskey(dict, x)) => dict[~x]))
     if fold
-        rs(to_symbolic(expr)) |> SymbolicUtils.fold
+        rs(expr) |> SymbolicUtils.fold
     else
-        rs(to_symbolic(expr))
+        rs(expr)
     end
 end

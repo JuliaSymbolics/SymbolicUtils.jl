@@ -17,13 +17,7 @@ This may sound like a roundabout way of doing it, but it can be really fast. In 
 
 ## Defining the interface
 
-SymbolicUtils uses a function `to_symbolic` to convert aribtrarty types to it's own internal types. Our intention is for SymbolicUtils to be useful even for packages with their own custom symbolic types which
-differ from those offered by SymbolicUtils. To this end, SymbolicUtils provides an interface which if implemented, will enable automatic conversion of types to SymbolicUtils types.
-
-*  an `operation`, (i.e. function to apply)
-* `arguments` which the `operation` is applied to
-* `variable` types which are the atoms from which the expression tree is built 
-* optionally, a type which should `typeof(operation(arguments...))` should return if it were to be run.
+SymbolicUtils matchers can match any Julia object that implements an interface to traverse it as a tree.
 
 In particular, the following methods should be defined for an expression tree type `T` with symbol types `S` to  work
 with SymbolicUtils.jl
@@ -48,19 +42,15 @@ Returns the arguments (a `Vector`) for an expression tree.
 Called only if `istree(x)` is `true`. Part of the API required
 for `simplify` to work. Other required methods are `operation` and `istree`
 
-#### `to_symbolic(x::S)`
-Convert your variable type to a `SymbolicUtils.Sym`. Suppose you have
-```julia
-struct MySymbol
-   s::Symbol
-end
-```
-which could represent any type symbolically, then you would define 
-```julia
-SymbolicUtils.to_symbolic(s::MySymbol) = SymbolicUtils.Sym(s.s)
-```
+In addition, the methods for `Base.hash` and `Base.isequal` should also be implemented by the types for the purposes of substitution and equality matching respectively.
 
 ### Optional
+
+#### `similarterm(t::MyType, f, args)`
+
+Construct a new term with the operation `f` and arguments `args`, the term should be similar to `t` in type. if `t` is a `Term` object a new Term is created with the same symtype as `t`. If not, the result is computed as `f(args...)`. Defining this method for your term type will reduce any performance loss in performing `f(args...)` (esp. the splatting, and redundant type computation).
+
+The below two functions are internal to SymbolicUtils
 
 #### `symtype(x)`
 
@@ -102,38 +92,24 @@ How can we use SymbolicUtils.jl to convert `ex` to `(-)(:x, 1)`? We simply imple
 `operation`, `arguments` and `to_symbolic` and we'll be off to the races:
 ```julia:piracy2
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, istree, operation, arguments, to_symbolic
+using SymbolicUtils: istree, operation, arguments, similarterm
 
 SymbolicUtils.istree(ex::Expr) = ex.head == :call
 SymbolicUtils.operation(ex::Expr) = ex.args[1]
 SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
-SymbolicUtils.to_symbolic(s::Symbol) = Sym(s)
 
 @show simplify(ex)
 
 dump(simplify(ex))
 ```
-\out{piracy2}
 
-this thing returns a `Term{Any}`, but it's not hard to convert back to `Expr`:
+There was no simplification, because by default SymbolicUtils assumes that the expressoins are of type Any and no particular rules apply. Let's change this by saying that the symbolic type (symtype) of an Expr or Symbol object is actually Real.
 
-```julia:piracy3
-to_expr(t::Term) = Expr(:call, operation(t), to_expr.(arguments(t))...) 
-to_expr(x) = x
-
-@show expr = to_expr(simplify(ex))
-
-dump(expr)
-```
-\out{piracy3}
-
-
-Now suppose we actaully wanted all `Symbol`s to be treated as `Real` numbers. We can simply define
 ```julia:piracy4
-SymbolicUtils.symtype(s::Symbol) = Real
+SymbolicUtils.symtype(s::Expr) = Real
 
 dump(simplify(ex))
 ```
 \out{piracy4}
 
-and now all our analysis is able to figure out that the `Term`s are `Number`s.
+Now SymbolicUtils is able to apply the Number simplification rule to Expr.

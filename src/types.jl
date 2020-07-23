@@ -67,7 +67,8 @@ Base.isequal(x::Symbolic, y::Symbolic) = false
 Convert `x` to a `Symbolic` type, using the `istree`, `operation`, `arguments`,
 and optionally `symtype` if available.
 """
-to_symbolic(x) = x
+function to_symbolic end
+Base.@deprecate to_symbolic(x) x
 
 Base.one( s::Symbolic) = one( symtype(s))
 

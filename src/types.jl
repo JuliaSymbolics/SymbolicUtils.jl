@@ -144,7 +144,7 @@ Base.show(io::IO, v::Sym) = print(io, v.name)
 # Maybe don't even need a new type, can just use Sym{FnType}
 struct FnType{X<:Tuple,Y} end
 
-(f::Sym{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
+(f::Sym{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, Any[args...])
 
 function (f::Sym)(args...)
     error("Sym $f is not callable. " *
@@ -159,20 +159,27 @@ The output symtype of applying variable `f` to arugments of symtype `arg_symtype
 if the arguments are of the wrong type then this function will error.
 """
 function promote_symtype(f::Sym{FnType{X,Y}}, args...) where {X, Y}
-    nrequired = fieldcount(X)
-    ngiven    = nfields(args)
+    if X === Tuple
+        return Y
+    elseif X <: Tuple{Vararg{T}} where T
+        @assert args isa X "all arguments must be of type $T"
+        return Y
+    elseif X <: NTuple
+        nrequired = fieldcount(X)
+        ngiven    = nfields(args)
 
-    if nrequired !== ngiven
-        error("$f takes $nrequired arguments; $ngiven arguments given")
-    end
-
-    for i in 1:ngiven
-        t = X.parameters[i]
-        if !(args[i] <: t)
-            error("Argument to $f at position $i must be of symbolic type $t")
+        if nrequired !== ngiven
+            error("$f takes $nrequired arguments; $ngiven arguments given")
         end
+
+        for i in 1:ngiven
+            t = X.parameters[i]
+            if !(args[i] <: t)
+                error("Argument to $f at position $i must be of symbolic type $t")
+            end
+        end
+        return Y
     end
-    return Y
 end
 
 """

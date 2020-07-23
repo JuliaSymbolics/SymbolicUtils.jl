@@ -76,14 +76,6 @@ Complex</code></pre>
 
 <h2 id=interfacing ><a href="#interfacing">Interfacing</a></h2>
   <div class=docstring >
-      <h2 class=doc-header  id=to_symbolic >
-        <a href="#to_symbolic">to_symbolic</a>
-        <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >to_symbolic(x)</code></pre>
-<p>Convert <code>x</code> to a <code>Symbolic</code> type, using the <code>istree</code>, <code>operation</code>, <code>arguments</code>, and optionally <code>symtype</code> if available.</div>
-  </div>
-
-  <div class=docstring >
       <h2 class=doc-header  id=istree >
         <a href="#istree">istree</a>
         <div class=doc-type >fn</div></h2>
@@ -105,6 +97,15 @@ Complex</code></pre>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=language-julia >arguments(x::T)</code></pre>
 <p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code></div>
+  </div>
+
+  <div class=docstring >
+      <h2 class=doc-header  id=similarterm >
+        <a href="#similarterm">similarterm</a>
+        <div class=doc-type >fn</div></h2>
+      <div class=doc-content ><p>No documentation found.</p>
+<p>Binding <code>SymbolicUtils.similarterm</code> does not exist.</p>
+</div>
   </div>
 
 <h2 id=rewriters ><a href="#rewriters">Rewriters</a></h2>

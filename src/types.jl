@@ -310,6 +310,16 @@ function term(f, args...; type = nothing)
     Term{T}(f, [args...])
 end
 
+"""
+    similarterm(t, f, args)
+
+Create a term that is similar in type to `t`.
+If `t` is a `Term` will create a `Term` with the same `symtype`
+Otherwise simply calls `f(args...)` by default.
+"""
+similarterm(t, f, args) = f(args...)
+similarterm(t::Term, f, args) = Term{symtype(t)}(f, args)
+
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
 #--------------------

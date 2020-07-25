@@ -9,33 +9,43 @@
 <ₑ(a::Number,   b::Symbolic) = true
 
 arglength(a) = length(arguments(a))
-function <ₑ(a::Sym, b::Term)
-    args = arguments(b)
-    if length(args) === 2
-        n1, n2 = !isnumber(args[1]) , !isnumber(args[2])
-        if n1 && n2
-            # both subterms are terms, so it's definitely firster
-            return true
-        elseif n1
-            return isequal(a, args[1]) || a <ₑ args[1]
-        elseif n2
-            return isequal(a, args[2]) || a <ₑ args[2]
+function <ₑ(a, b)
+    if !istree(a) && !istree(b)
+        T = typeof(a)
+        S = typeof(b)
+        T===S ? isless(a, b) : nameof(T) < nameof(S)
+    elseif istree(b) && !istree(a)
+        args = arguments(b)
+        if length(args) === 2
+            n1, n2 = !isnumber(args[1]) , !isnumber(args[2])
+            if n1 && n2
+                # both subterms are terms, so it's definitely firster
+                return true
+            elseif n1
+                return isequal(a, args[1]) || a <ₑ args[1]
+            elseif n2
+                return isequal(a, args[2]) || a <ₑ args[2]
+            else
+                # both arguments are not numbers
+                # This case when a <ₑ Term(^, [1,-1])
+                # so this term should go to the left.
+                return false
+            end
+        elseif length(args) === 1
+            # make sure a < sin(a) < b^2 < b
+            if isequal(a, args[1])
+                return true # e.g sin(a)*a should become a*sin(a)
+            else
+                return a<ₑargs[1]
+            end
         else
-            # both arguments are not numbers
-            # This case when a <ₑ Term(^, [1,-1])
-            # so this term should go to the left.
+            # variables to the right
             return false
         end
-    elseif length(args) === 1
-        # make sure a < sin(a) < b^2 < b
-        if isequal(a, args[1])
-            return true # e.g sin(a)*a should become a*sin(a)
-        else
-            return a<ₑargs[1]
-        end
+    elseif istree(a) && istree(b)
+        cmp_term_term(a,b)
     else
-        # variables to the right
-        return false
+        !(b <ₑ a)
     end
 end
 
@@ -61,9 +71,8 @@ function <ₑ(a::Symbol, b::Symbol)
 end
 
 <ₑ(a::Sym, b::Sym) = a.name < b.name
-<ₑ(a::T, b::S) where {T, S} = T===S ? isless(a, b) : nameof(T) < nameof(S)
 
-function <ₑ(a::Term, b::Term)
+function cmp_term_term(a, b)
     la = arglength(a)
     lb = arglength(b)
 

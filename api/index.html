@@ -7,12 +7,13 @@
 <li><p><code>@syms foo bar::Real baz::Int</code> will create</p>
 
 </ul>
-<p>variable <code>foo</code> of symtype <code>Number</code> &#40;the default&#41;, <code>bar</code> of symtype <code>Real</code> and <code>baz</code> of symtype <code>Int</code>
+<p>variable <code>foo</code> of symtype <code>Number</code> &#40;the default&#41;, <code>bar</code> of symtype <code>Real</code> and <code>baz</code> of symtype <code>Int</code></p>
 <ul>
 <li><p><code>@syms f&#40;x&#41; g&#40;y::Real, x&#41;::Int h&#40;a::Int, f&#40;b&#41;&#41;</code> creates 1-arg <code>f</code> 2-arg <code>g</code></p>
 
 </ul>
-<p>and 2 arg <code>f</code>. The second argument to <code>h</code> must be a one argument function-like variable. So, <code>h&#40;1, g&#41;</code> will fail and <code>h&#40;1, f&#41;</code> will work.</div>
+<p>and 2 arg <code>f</code>. The second argument to <code>h</code> must be a one argument function-like variable. So, <code>h&#40;1, g&#41;</code> will fail and <code>h&#40;1, f&#41;</code> will work.</p>
+</div>
   </div>
 
   <div class=docstring >
@@ -20,7 +21,8 @@
         <a href="#Sym">Sym</a>
         <div class=doc-type >type</div></h2>
       <div class=doc-content ><pre><code class=language-julia >Sym{T}(name::Symbol)</code></pre>
-<p>A named variable of type <code>T</code>. Type <code>T</code> can be <code>FnType&#123;X,Y&#125;</code> which means the variable is a function with the type signature X -&gt; Y where <code>X</code> is a tuple type of arguments and <code>Y</code> is any type.</div>
+<p>A named variable of type <code>T</code>. Type <code>T</code> can be <code>FnType&#123;X,Y&#125;</code> which means the variable is a function with the type signature X -&gt; Y where <code>X</code> is a tuple type of arguments and <code>Y</code> is any type.</p>
+</div>
   </div>
 
   <div class=docstring >
@@ -30,7 +32,8 @@
       <div class=doc-content ><pre><code class=language-julia >symtype(x)</code></pre>
 <p>The supposed type of values in the domain of x. Tracing tools can use this type to pick the right method to run or analyse code.</p>
 <p>This defaults to <code>typeof&#40;x&#41;</code> if <code>x</code> is numeric, or <code>Any</code> otherwise. For the types defined in this package, namely <code>T&lt;:Symbolic&#123;S&#125;</code> it is <code>S</code>.</p>
-<p>Define this for your symbolic types if you want <code>simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</div>
+<p>Define this for your symbolic types if you want <code>simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
+</div>
   </div>
 
   <div class=docstring >
@@ -49,7 +52,8 @@
 
 </ul>
 <p>If <code>T</code> is not provided during construction, it is queried by calling <code>SymbolicUtils.promote_symtype&#40;f, map&#40;symtype, args&#41;...&#41;</code>.</p>
-<p>See <a href="#promote_symtype">promote_symtype</a></div>
+<p>See <a href="#promote_symtype">promote_symtype</a></p>
+</div>
   </div>
 
   <div class=docstring >
@@ -57,7 +61,7 @@
         <a href="#promote_symtype">promote_symtype</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=language-julia >promote_symtype(f, Ts...)</code></pre>
-<p>The result of applying <code>f</code> to arguments of <a href="#symtype"><code>symtype</code></a> <code>Ts...</code>
+<p>The result of applying <code>f</code> to arguments of <a href="#symtype"><code>symtype</code></a> <code>Ts...</code></p>
 <pre><code class=language-julia >julia> promote_symtype(+, Real, Real)
 Real
 
@@ -71,7 +75,8 @@ julia> promote_symtype(f, Number)
 Complex</code></pre>
 <p>When constructing <a href="#Term"><code>Term</code></a>s without an explicit symtype, <code>promote_symtype</code> is used to figure out the symtype of the Term.</p>
 <code>promote_symtype&#40;f::Sym&#123;FnType&#123;X,Y&#125;&#125;, arg_symtypes...&#41;</code>
-<p>The output symtype of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</div>
+<p>The output symtype of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</p>
+</div>
   </div>
 
 <h2 id=interfacing ><a href="#interfacing">Interfacing</a></h2>
@@ -80,7 +85,8 @@ Complex</code></pre>
         <a href="#istree">istree</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=language-julia >istree(x::T)</code></pre>
-<p>Check if <code>x</code> represents an expression tree. If returns true, it will be assumed that <code>operation&#40;::T&#41;</code> and <code>arguments&#40;::T&#41;</code> methods are defined. Definining these three should allow use of <code>simplify</code> on custom types. Optionally <code>symtype&#40;x&#41;</code> can be defined to return the expected type of the symbolic expression.</div>
+<p>Check if <code>x</code> represents an expression tree. If returns true, it will be assumed that <code>operation&#40;::T&#41;</code> and <code>arguments&#40;::T&#41;</code> methods are defined. Definining these three should allow use of <code>simplify</code> on custom types. Optionally <code>symtype&#40;x&#41;</code> can be defined to return the expected type of the symbolic expression.</p>
+</div>
   </div>
 
   <div class=docstring >
@@ -88,7 +94,8 @@ Complex</code></pre>
         <a href="#operation">operation</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=language-julia >operation(x::T)</code></pre>
-<p>Returns the operation &#40;a function object&#41; performed by an expression tree. Called only if <code>istree&#40;::T&#41;</code> is true. Part of the API required for <code>simplify</code> to work. Other required methods are <code>arguments</code> and <code>istree</code></div>
+<p>Returns the operation &#40;a function object&#41; performed by an expression tree. Called only if <code>istree&#40;::T&#41;</code> is true. Part of the API required for <code>simplify</code> to work. Other required methods are <code>arguments</code> and <code>istree</code></p>
+</div>
   </div>
 
   <div class=docstring >
@@ -96,7 +103,8 @@ Complex</code></pre>
         <a href="#arguments">arguments</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=language-julia >arguments(x::T)</code></pre>
-<p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code></div>
+<p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code></p>
+</div>
   </div>
 
   <div class=docstring >
@@ -175,7 +183,8 @@ sin((a + c))</code></pre>
 <p><strong>Context</strong>:</p>
 <p><em>In predicates</em>: Contextual predicates are functions wrapped in the <code>Contextual</code> type. The function is called with 2 arguments: the expression and a context object passed during a call to the Rule object &#40;maybe done by passing a context to <code>simplify</code> or a <code>RuleSet</code> object&#41;.</p>
 <p>The function can use the inputs however it wants, and must return a boolean indicating whether the predicate holds or not.</p>
-<p><em>In the consequent pattern</em>: Use <code>&#40;@ctx&#41;</code> to access the context object on the right hand side of an expression.</div>
+<p><em>In the consequent pattern</em>: Use <code>&#40;@ctx&#41;</code> to access the context object on the right hand side of an expression.</p>
+</div>
   </div>
 
   <div class=docstring >
@@ -222,7 +231,8 @@ sin((a + c))</code></pre>
         <a href="#substitute">substitute</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=language-julia >substitute(expr, dict)</code></pre>
-<p>substitute any subexpression that matches a key in <code>dict</code> with the corresponding value.</div>
+<p>substitute any subexpression that matches a key in <code>dict</code> with the corresponding value.</p>
+</div>
   </div>
 
 <h2 id=utilities ><a href="#utilities">Utilities</a></h2>
@@ -253,11 +263,13 @@ julia> @timerewrite simplify(expr)
    ...
    ...
  ────────────────────────────────────────────────────────────────────────────────────────────────
-(a ^ 26) * (b ^ 30) * (c ^ 16) * (d ^ 28)</code></pre></div>
+(a ^ 26) * (b ^ 30) * (c ^ 16) * (d ^ 28)</code></pre>
+</div>
   </div>
+
 <div class=page-foot >
   <div class=copyright >
-      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: July 23, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: August 12, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div>

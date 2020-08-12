@@ -50,8 +50,8 @@ end
 
 If(f, x) = IfElse(f, x, Empty())
 
-struct Chain{Cs}
-    rws::Cs
+struct Chain
+    rws
 end
 
 function (rw::Chain)(x)
@@ -64,19 +64,6 @@ function (rw::Chain)(x)
     return x
 end
 
-@generated function (rw::Chain{<:NTuple{N,Any}})(x) where N
-    quote
-        Base.@nexprs $N i->begin
-            let f = rw.rws[i]
-                y = @timer cached_repr(f) f(x)
-                if y !== nothing
-                    x = y
-                end
-            end
-        end
-        return x
-    end
-end
 
 struct RestartedChain{Cs}
     rws::Cs

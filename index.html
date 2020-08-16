@@ -18,7 +18,7 @@ symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre>
 expr2 = α*cos(z)^2 +  β*sin(w)^2
 
 expr1 + expr2</code></pre>
-<div class=code-output ><pre><code class=plaintext >((sin(w) ^ 2) + (cos(z) ^ 2)) * (α + β)</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >((α * (sin(w) ^ 2)) + (β * (cos(z) ^ 2))) + ((α * (cos(z) ^ 2)) + (β * (sin(w) ^ 2)))</code></pre></div>
 <h3 id=simplified_printing ><a href="#simplified_printing">Simplified printing</a></h3>
 <p>Tip: you can set <code>SymbolicUtils.show_simplified&#91;&#93; &#61; true</code> to disable simplification on printing, or call <code>SymbolicUtils.showraw&#40;expr&#41;</code> to display an expression without simplification.  In the REPL, if an expression was successfully simplified before printing, it will appear in yellow rather than white, as a visual cue that what you are looking at is not the exact datastructure. </p>
 <pre><code class=language-julia >using SymbolicUtils: showraw
@@ -31,7 +31,7 @@ showraw(expr1 + expr2)</code></pre>
 @syms f(x) g(x::Real, y::Real)::Real
 
 f(z) + g(1, α) + sin(w)</code></pre>
-<div class=code-output ><pre><code class=plaintext >sin(w) + f(z) + g(1, α)</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >f(z) + g(1, α) + sin(w)</code></pre></div>
 <pre><code class=language-julia >g(1, z)</code></pre>
 <div class=code-output ><pre><code class=plaintext >Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real
 </code></pre></div>
@@ -137,7 +137,7 @@ showraw(rset_result)</code></pre>
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <div class=page-foot >
   <div class=copyright >
-      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: August 12, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: August 16, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div>

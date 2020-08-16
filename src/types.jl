@@ -136,6 +136,8 @@ Base.nameof(v::Sym) = v.name
 
 Base.isequal(v1::Sym{T}, v2::Sym{T}) where {T} = v1 === v2
 
+Base.hash(s::Sym{T}, salt::UInt) where {T} = hash(T, hash(s.name, salt))
+
 Base.show(io::IO, v::Sym) = print(io, v.name)
 
 #---------------------------

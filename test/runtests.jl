@@ -21,7 +21,7 @@ include("rewrite.jl")
 include("rulesets.jl")
 include("nf.jl")
 include("interface.jl")
-include("fuzz.jl")
 if haskey(ENV, "TRAVIS")
     include("benchmark.jl")
 end
+include("fuzz.jl")

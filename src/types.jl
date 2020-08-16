@@ -125,9 +125,11 @@ means the variable is a function with the type signature X -> Y where
 """
 struct Sym{T} <: Symbolic{T}
     name::Symbol
+    metadata::Dict{Type, Any}
 end
 
 const Variable = Sym # old name
+Sym{T}(x) where {T} = Sym{T}(x, Dict{Type,Any}())
 Sym(x) = Sym{symtype(x)}(x)
 
 Base.nameof(v::Sym) = v.name
@@ -264,15 +266,19 @@ See [promote_symtype](#promote_symtype)
 struct Term{T} <: Symbolic{T}
     f::Any
     arguments::Any
+    metadata::Dict{Type, Any}
 end
 
 istree(t::Term) = true
 
+Term{T}(f, args) where {T} = Term{T}(f, args, Dict{Type,Any}())
 Term(f, args) = Term{rec_promote_symtype(f, map(symtype, args)...)}(f, args)
 
 operation(x::Term) = x.f
 
 arguments(x::Term) = x.arguments
+
+metadata(t::Symbolic, T::Type) = get(t.metadata, T, nothing)
 
 function Base.hash(t::Term{T}, salt::UInt) where {T}
     hash(arguments(t), hash(operation(t), hash(T, salt)))

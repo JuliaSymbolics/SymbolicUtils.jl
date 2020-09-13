@@ -1,6 +1,6 @@
-<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/custom.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <title>SymbolicUtils.jl — API</title> <h1><a href="/SymbolicUtils.jl/">SymbolicUtils.jl</a></h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> <li><a href="/SymbolicUtils.jl/api/">API</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=api_reference ><a href="#api_reference">API Reference</a></h1> <div class=franklin-toc ><ol><li><a href="#api_reference">API Reference</a><ol><li><a href="#symbols_and_terms">Symbols and Terms</a><li><a href="#interfacing">Interfacing</a><li><a href="#rewriters">Rewriters</a><li><a href="#simplify">Simplify</a><li><a href="#utilities">Utilities</a></ol></ol></div> <h2 id=symbols_and_terms ><a href="#symbols_and_terms">Symbols and Terms</a></h2> <div class=docstring > <h2 class=doc-header  id="@syms"> <a href="#@syms">@syms</a> <div class=doc-type >macro</div></h2> <div class=doc-content ><pre><code class=language-julia >@syms <lhs_expr>[::T1] <lhs_expr>[::T2]...</code></pre>
+<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/libs/highlight/github.min.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/custom.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <title>SymbolicUtils.jl — API</title> <h1><a href="/SymbolicUtils.jl/">SymbolicUtils.jl</a></h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> <li><a href="/SymbolicUtils.jl/api/">API</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=api_reference ><a href="#api_reference">API Reference</a></h1> <div class=franklin-toc ><ol><li><a href="#api_reference">API Reference</a><ol><li><a href="#symbols_and_terms">Symbols and Terms</a><li><a href="#interfacing">Interfacing</a><li><a href="#rewriters">Rewriters</a><li><a href="#simplify">Simplify</a><li><a href="#utilities">Utilities</a></ol></ol></div> <h2 id=symbols_and_terms ><a href="#symbols_and_terms">Symbols and Terms</a></h2> <div class=docstring > <h2 class=doc-header  id="@syms"> <a href="#@syms">@syms</a> <div class=doc-type >macro</div></h2> <div class=doc-content ><pre><code class=language-julia >@syms &lt;lhs_expr&gt;&#91;::T1&#93; &lt;lhs_expr&gt;&#91;::T2&#93;...</code></pre>
 <p>For instance:</p>
-<pre><code class=language-julia >@syms foo::Real bar baz(x, y::Real)::Complex</code></pre>
+<pre><code class=language-julia >@syms foo::Real bar baz&#40;x, y::Real&#41;::Complex</code></pre>
 <p>Create one or more variables. <code>&lt;lhs_expr&gt;</code> can be just a symbol in which case it will be the name of the variable, or a function call in which case a function-like variable which has the same name as the function being called. The Sym type, or in the case of a function-like Sym, the output type of calling the function can be set using the <code>::T</code> syntax.</p>
 <h1 id=examples ><a href="#examples">Examples:</a></h1>
 <ul>
@@ -20,7 +20,7 @@
       <h2 class=doc-header  id=Sym >
         <a href="#Sym">Sym</a>
         <div class=doc-type >type</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >Sym{T}(name::Symbol)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >Sym&#123;T&#125;&#40;name::Symbol&#41;</code></pre>
 <p>A named variable of type <code>T</code>. Type <code>T</code> can be <code>FnType&#123;X,Y&#125;</code> which means the variable is a function with the type signature X -&gt; Y where <code>X</code> is a tuple type of arguments and <code>Y</code> is any type.</p>
 </div>
   </div>
@@ -29,7 +29,7 @@
       <h2 class=doc-header  id=symtype >
         <a href="#symtype">symtype</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >symtype(x)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >symtype&#40;x&#41;</code></pre>
 <p>The supposed type of values in the domain of x. Tracing tools can use this type to pick the right method to run or analyse code.</p>
 <p>This defaults to <code>typeof&#40;x&#41;</code> if <code>x</code> is numeric, or <code>Any</code> otherwise. For the types defined in this package, namely <code>T&lt;:Symbolic&#123;S&#125;</code> it is <code>S</code>.</p>
 <p>Define this for your symbolic types if you want <code>simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
@@ -40,7 +40,7 @@
       <h2 class=doc-header  id=Term >
         <a href="#Term">Term</a>
         <div class=doc-type >type</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >Term{T}(f, args::AbstractArray)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >Term&#123;T&#125;&#40;f, args::AbstractArray&#41;</code></pre>
 <p>or     Term&#40;f, args::AbstractArray&#41;</p>
 <p>Symbolic expression representing the result of calling <code>f&#40;args...&#41;</code>.</p>
 <ul>
@@ -60,18 +60,18 @@
       <h2 class=doc-header  id=promote_symtype >
         <a href="#promote_symtype">promote_symtype</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >promote_symtype(f, Ts...)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >promote_symtype&#40;f, Ts...&#41;</code></pre>
 <p>The result of applying <code>f</code> to arguments of <a href="#symtype"><code>symtype</code></a> <code>Ts...</code></p>
-<pre><code class=language-julia >julia> promote_symtype(+, Real, Real)
+<pre><code class=language-julia >julia&gt; promote_symtype&#40;&#43;, Real, Real&#41;
 Real
 
-julia> promote_symtype(+, Complex, Real)
+julia&gt; promote_symtype&#40;&#43;, Complex, Real&#41;
 Number
 
-julia> @syms f(x)::Complex
-(f(::Number)::Complex,)
+julia&gt; @syms f&#40;x&#41;::Complex
+&#40;f&#40;::Number&#41;::Complex,&#41;
 
-julia> promote_symtype(f, Number)
+julia&gt; promote_symtype&#40;f, Number&#41;
 Complex</code></pre>
 <p>When constructing <a href="#Term"><code>Term</code></a>s without an explicit symtype, <code>promote_symtype</code> is used to figure out the symtype of the Term.</p>
 <code>promote_symtype&#40;f::Sym&#123;FnType&#123;X,Y&#125;&#125;, arg_symtypes...&#41;</code>
@@ -84,7 +84,7 @@ Complex</code></pre>
       <h2 class=doc-header  id=istree >
         <a href="#istree">istree</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >istree(x::T)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >istree&#40;x::T&#41;</code></pre>
 <p>Check if <code>x</code> represents an expression tree. If returns true, it will be assumed that <code>operation&#40;::T&#41;</code> and <code>arguments&#40;::T&#41;</code> methods are defined. Definining these three should allow use of <code>simplify</code> on custom types. Optionally <code>symtype&#40;x&#41;</code> can be defined to return the expected type of the symbolic expression.</p>
 </div>
   </div>
@@ -93,7 +93,7 @@ Complex</code></pre>
       <h2 class=doc-header  id=operation >
         <a href="#operation">operation</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >operation(x::T)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >operation&#40;x::T&#41;</code></pre>
 <p>Returns the operation &#40;a function object&#41; performed by an expression tree. Called only if <code>istree&#40;::T&#41;</code> is true. Part of the API required for <code>simplify</code> to work. Other required methods are <code>arguments</code> and <code>istree</code></p>
 </div>
   </div>
@@ -102,7 +102,7 @@ Complex</code></pre>
       <h2 class=doc-header  id=arguments >
         <a href="#arguments">arguments</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >arguments(x::T)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >arguments&#40;x::T&#41;</code></pre>
 <p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code></p>
 </div>
   </div>
@@ -111,7 +111,7 @@ Complex</code></pre>
       <h2 class=doc-header  id=similarterm >
         <a href="#similarterm">similarterm</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >similarterm(t, f, args)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >similarterm&#40;t, f, args&#41;</code></pre>
 <p>Create a term that is similar in type to <code>t</code>. If <code>t</code> is a <code>Term</code> will create a <code>Term</code> with the same <code>symtype</code> Otherwise simply calls <code>f&#40;args...&#41;</code> by default.</p>
 </div>
   </div>
@@ -121,7 +121,7 @@ Complex</code></pre>
       <h2 class=doc-header  id="@rule">
         <a href="#@rule">@rule</a>
         <div class=doc-type >macro</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >@rule LHS => RHS</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >@rule LHS &#61;&gt; RHS</code></pre>
 <p>Creates a <code>Rule</code> object. A rule object is callable, and  takes an expression and rewrites it if it matches the LHS pattern to the RHS pattern, returns <code>nothing</code> otherwise. The rule language is described below.</p>
 <p>LHS can be any possibly nested function call expression where any of the arugments can optionally be a Slot &#40;<code>~x</code>&#41; or a Segment &#40;<code>~~x</code>&#41; &#40;described below&#41;.</p>
 <p>If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS Segment &#40;<code>~x</code>&#41; and slot variables &#40;<code>~~x</code>&#41; on the RHS will substitute the result of the matches found for these variables in the LHS.</p>
@@ -129,56 +129,56 @@ Complex</code></pre>
 <p>A Slot variable is written as <code>~x</code> and matches a single expression. <code>x</code> is the name of the variable. If a slot appears more than once in an LHS expression then expression matched at every such location must be equal &#40;as shown by <code>isequal</code>&#41;.</p>
 <p><em>Example:</em></p>
 <p>Simple rule to turn any <code>sin</code> into <code>cos</code>:</p>
-<pre><code class=language-julia >julia> @syms a b c
-(a, b, c)
+<pre><code class=language-julia >julia&gt; @syms a b c
+&#40;a, b, c&#41;
 
-julia> r = @rule sin(~x) => cos(~x)
-sin(~x) => cos(~x)
+julia&gt; r &#61; @rule sin&#40;~x&#41; &#61;&gt; cos&#40;~x&#41;
+sin&#40;~x&#41; &#61;&gt; cos&#40;~x&#41;
 
-julia> r(sin(1+a))
-cos((1 + a))</code></pre>
+julia&gt; r&#40;sin&#40;1&#43;a&#41;&#41;
+cos&#40;&#40;1 &#43; a&#41;&#41;</code></pre>
 <p>A rule with 2 segment variables</p>
-<pre><code class=language-julia >julia> r = @rule ~x - ~y => ~x + (-(~y))
-~x - ~y => ~x + -(~y)
+<pre><code class=language-julia >julia&gt; r &#61; @rule ~x - ~y &#61;&gt; ~x &#43; &#40;-&#40;~y&#41;&#41;
+~x - ~y &#61;&gt; ~x &#43; -&#40;~y&#41;
 
-julia> r(a-2b)
-(a + (-(2 * b)))</code></pre>
+julia&gt; r&#40;a-2b&#41;
+&#40;a &#43; &#40;-&#40;2 * b&#41;&#41;&#41;</code></pre>
 <p>A rule that matches two of the same expressions:</p>
-<pre><code class=language-julia >julia> r = @rule sin(~x)^2 + cos(~x)^2 => 1
-sin(~x) ^ 2 + cos(~x) ^ 2 => 1
+<pre><code class=language-julia >julia&gt; r &#61; @rule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1
+sin&#40;~x&#41; ^ 2 &#43; cos&#40;~x&#41; ^ 2 &#61;&gt; 1
 
-julia> r(sin(2a)^2 + cos(2a)^2)
+julia&gt; r&#40;sin&#40;2a&#41;^2 &#43; cos&#40;2a&#41;^2&#41;
 1
 
-julia> r(sin(2a)^2 + cos(a)^2)
+julia&gt; r&#40;sin&#40;2a&#41;^2 &#43; cos&#40;a&#41;^2&#41;
 # nothing</code></pre>
 <p><strong>Segment</strong>:</p>
 <p>A Segment variable is written as <code>~~x</code> and matches zero or more expressions in the function call.</p>
 <p><em>Example:</em></p>
 <p>This implements the distributive property of multiplication: <code>&#43;&#40;~~ys&#41;</code> matches expressions like <code>a &#43; b</code>, <code>a&#43;b&#43;c</code> and so on. On the RHS <code>~~ys</code> presents as any old julia array.</p>
-<pre><code class=language-julia >julia> r = @rule ~x * +((~~ys)) => sum(map(y-> ~x * y, ~~ys));
+<pre><code class=language-julia >julia&gt; r &#61; @rule ~x * &#43;&#40;&#40;~~ys&#41;&#41; &#61;&gt; sum&#40;map&#40;y-&gt; ~x * y, ~~ys&#41;&#41;;
 
-julia> r(2 * (a+b+c))
-((2 * a) + (2 * b) + (2 * c))</code></pre>
+julia&gt; r&#40;2 * &#40;a&#43;b&#43;c&#41;&#41;
+&#40;&#40;2 * a&#41; &#43; &#40;2 * b&#41; &#43; &#40;2 * c&#41;&#41;</code></pre>
 <p><strong>Predicates</strong>:</p>
 <p>Predicates can be used on both <code>~x</code> and <code>~~x</code> by using the <code>~x::f</code> or <code>~~x::f</code>. Here <code>f</code> can be any julia function. In the case of a slot the function gets a single matched subexpression, in the case of segment, it gets an array of matched expressions.</p>
 <p>The predicate should return <code>true</code> if the current match is acceptable, and <code>false</code> otherwise.</p>
-<pre><code class=language-julia >julia> two_πs(x::Number) = abs(round(x/(2π)) - x/(2π)) < 10^-9
-two_πs (generic function with 1 method)
+<pre><code class=language-julia >julia&gt; two_πs&#40;x::Number&#41; &#61; abs&#40;round&#40;x/&#40;2π&#41;&#41; - x/&#40;2π&#41;&#41; &lt; 10^-9
+two_πs &#40;generic function with 1 method&#41;
 
-julia> two_πs(x) = false
-two_πs (generic function with 2 methods)
+julia&gt; two_πs&#40;x&#41; &#61; false
+two_πs &#40;generic function with 2 methods&#41;
 
-julia> r = @rule sin(~~x + ~y::two_πs + ~~z) => sin(+(~~x..., ~~z...))
-sin(~(~x) + ~(y::two_πs) + ~(~z)) => sin(+(~(~x)..., ~(~z)...))
+julia&gt; r &#61; @rule sin&#40;~~x &#43; ~y::two_πs &#43; ~~z&#41; &#61;&gt; sin&#40;&#43;&#40;~~x..., ~~z...&#41;&#41;
+sin&#40;~&#40;~x&#41; &#43; ~&#40;y::two_πs&#41; &#43; ~&#40;~z&#41;&#41; &#61;&gt; sin&#40;&#43;&#40;~&#40;~x&#41;..., ~&#40;~z&#41;...&#41;&#41;
 
-julia> r(sin(a+3π))
+julia&gt; r&#40;sin&#40;a&#43;3π&#41;&#41;
 
-julia> r(sin(a+6π))
-sin(a)
+julia&gt; r&#40;sin&#40;a&#43;6π&#41;&#41;
+sin&#40;a&#41;
 
-julia> r(sin(a+6π+c))
-sin((a + c))</code></pre>
+julia&gt; r&#40;sin&#40;a&#43;6π&#43;c&#41;&#41;
+sin&#40;&#40;a &#43; c&#41;&#41;</code></pre>
 <p>Predicate function gets an array of values if attached to a segment variable &#40;<code>~~x</code>&#41;.</p>
 <p><strong>Context</strong>:</p>
 <p><em>In predicates</em>: Contextual predicates are functions wrapped in the <code>Contextual</code> type. The function is called with 2 arguments: the expression and a context object passed during a call to the Rule object &#40;maybe done by passing a context to <code>simplify</code> or a <code>RuleSet</code> object&#41;.</p>
@@ -230,7 +230,7 @@ sin((a + c))</code></pre>
       <h2 class=doc-header  id=substitute >
         <a href="#substitute">substitute</a>
         <div class=doc-type >fn</div></h2>
-      <div class=doc-content ><pre><code class=language-julia >substitute(expr, dict)</code></pre>
+      <div class=doc-content ><pre><code class=language-julia >substitute&#40;expr, dict&#41;</code></pre>
 <p>substitute any subexpression that matches a key in <code>dict</code> with the corresponding value.</p>
 </div>
   </div>
@@ -244,32 +244,32 @@ sin((a + c))</code></pre>
 <p>If <code>expr</code> calls <code>simplify</code> or a <code>RuleSet</code> object, track the amount of time it spent on applying each rule and pretty print the timing.</p>
 <p>This uses <a href="https://github.com/KristofferC/TimerOutputs.jl">TimerOutputs.jl</a>.</p>
 <h2 id=example ><a href="#example">Example:</a></h2>
-<pre><code class=language-julia >julia> expr = foldr(*, rand([a,b,c,d], 100))
-(a ^ 26) * (b ^ 30) * (c ^ 16) * (d ^ 28)
+<pre><code class=language-julia >julia&gt; expr &#61; foldr&#40;*, rand&#40;&#91;a,b,c,d&#93;, 100&#41;&#41;
+&#40;a ^ 26&#41; * &#40;b ^ 30&#41; * &#40;c ^ 16&#41; * &#40;d ^ 28&#41;
 
-julia> @timerewrite simplify(expr)
+julia&gt; @timerewrite simplify&#40;expr&#41;
  ────────────────────────────────────────────────────────────────────────────────────────────────
                                                          Time                   Allocations
                                                  ──────────────────────   ───────────────────────
-                Tot / % measured:                     340ms / 15.3%           92.2MiB / 10.8%
+                Tot / &#37; measured:                     340ms / 15.3&#37;           92.2MiB / 10.8&#37;
 
- Section                                 ncalls     time   %tot     avg     alloc   %tot      avg
+ Section                                 ncalls     time   &#37;tot     avg     alloc   &#37;tot      avg
  ────────────────────────────────────────────────────────────────────────────────────────────────
- ACRule((~y) ^ ~n * ~y => (~y) ^ (~n ...    667   11.1ms  21.3%  16.7μs   2.66MiB  26.8%  4.08KiB
-   RHS                                       92    277μs  0.53%  3.01μs   14.4KiB  0.14%     160B
- ACRule((~x) ^ ~n * (~x) ^ ~m => (~x)...    575   7.63ms  14.6%  13.3μs   1.83MiB  18.4%  3.26KiB
- (*)(~(~(x::!issortedₑ))) => sort_arg...    831   6.31ms  12.1%  7.59μs    738KiB  7.26%     910B
-   RHS                                      164   3.03ms  5.81%  18.5μs    250KiB  2.46%  1.52KiB
+ ACRule&#40;&#40;~y&#41; ^ ~n * ~y &#61;&gt; &#40;~y&#41; ^ &#40;~n ...    667   11.1ms  21.3&#37;  16.7μs   2.66MiB  26.8&#37;  4.08KiB
+   RHS                                       92    277μs  0.53&#37;  3.01μs   14.4KiB  0.14&#37;     160B
+ ACRule&#40;&#40;~x&#41; ^ ~n * &#40;~x&#41; ^ ~m &#61;&gt; &#40;~x&#41;...    575   7.63ms  14.6&#37;  13.3μs   1.83MiB  18.4&#37;  3.26KiB
+ &#40;*&#41;&#40;~&#40;~&#40;x::&#33;issortedₑ&#41;&#41;&#41; &#61;&gt; sort_arg...    831   6.31ms  12.1&#37;  7.59μs    738KiB  7.26&#37;     910B
+   RHS                                      164   3.03ms  5.81&#37;  18.5μs    250KiB  2.46&#37;  1.52KiB
    ...
    ...
  ────────────────────────────────────────────────────────────────────────────────────────────────
-(a ^ 26) * (b ^ 30) * (c ^ 16) * (d ^ 28)</code></pre>
+&#40;a ^ 26&#41; * &#40;b ^ 30&#41; * &#40;c ^ 16&#41; * &#40;d ^ 28&#41;</code></pre>
 </div>
   </div>
 
 <div class=page-foot >
   <div class=copyright >
-      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: August 20, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: September 13, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div>

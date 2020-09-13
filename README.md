@@ -34,6 +34,8 @@ julia> using Pkg; Pkg.add("SymbolicUtils")
 ```julia
 julia> using SymbolicUtils
 
+julia> SymbolicUtils.show_simplified[] = true
+
 julia> @syms x::Real y::Real z::Complex f(::Number)::Real
 (x, y, z, f(::Number)::Real)
 

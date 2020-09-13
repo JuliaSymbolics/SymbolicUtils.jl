@@ -68,7 +68,7 @@ expr1 + expr2
 
 ### Simplified printing
 
-Tip: you can set `SymbolicUtils.show_simplified[] = true` to disable simplification on printing, or call `SymbolicUtils.showraw(expr)` to display an expression without simplification.
+Tip: you can set `SymbolicUtils.show_simplified[] = true` to enable simplification on printing, or call `SymbolicUtils.showraw(expr)` to display an expression without simplification.
  In the REPL, if an expression was successfully simplified before printing, it will appear in yellow rather than white, as a visual cue that what you are looking at is not the exact datastructure. 
 
 ```julia:showraw

@@ -1,11 +1,12 @@
-const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch, acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh, abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, inv, acotd, asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10, sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd, atand, sec, acscd, cot, exp2, expm1, atanh]
+const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch, acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh, abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, inv, acotd, asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10, sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd, atand, sec, acscd, cot, exp2, expm1, atanh, real]
 
-const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^]
+const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^, copysign]
 
 const previously_declared_for = Set([])
 # TODO: keep domains tighter than this
 function number_methods(T, rhs1, rhs2)
     exprs = []
+
     for f in diadic
         for S in previously_declared_for
             push!(exprs, quote
@@ -49,6 +50,9 @@ promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
 for f in monadic
+    if f in [real]
+        continue
+    end
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = Number
     @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a)
 end
@@ -113,6 +117,3 @@ function cond(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(cond, Any[_if, _then, _else])
 end
 
-Base.copysign(x, y::Symbolic) = Term{symtype(x)}(copysign, [x, y])
-Base.copysign(x::Symbolic, y) = Term{symtype(x)}(copysign, [x, y])
-Base.copysign(x::Symbolic, y::Symbolic) = Term{symtype(x)}(copysign, [x, y])

@@ -26,8 +26,7 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer, is_operation, istree, symtype, Term, operation, arguments,
-                     node_count
+using SymbolicUtils: @timer, is_operation, istree, operation, similarterm, arguments, node_count
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
@@ -51,8 +50,8 @@ end
 
 If(f, x) = IfElse(f, x, Empty())
 
-struct Chain{Cs}
-    rws::Cs
+struct Chain
+    rws
 end
 
 function (rw::Chain)(x)
@@ -65,19 +64,6 @@ function (rw::Chain)(x)
     return x
 end
 
-@generated function (rw::Chain{<:NTuple{N,Any}})(x) where N
-    quote
-        Base.@nexprs $N i->begin
-            let f = rw.rws[i]
-                y = @timer cached_repr(f) f(x)
-                if y !== nothing
-                    x = y
-                end
-            end
-        end
-        return x
-    end
-end
 
 struct RestartedChain{Cs}
     rws::Cs
@@ -149,9 +135,7 @@ function (p::Walk{ord, C, false})(x) where {ord, C}
             x = p.rw(x)
         end
         if istree(x)
-            x = Term{symtype(x)}(operation(x),
-                                 map(t->PassThrough(p)(t),
-                                     arguments(x)))
+            x = similarterm(x, operation(x), map(PassThrough(p), arguments(x)))
         end
         return ord === :post ? p.rw(x) : x
     else
@@ -174,7 +158,7 @@ function (p::Walk{ord, C, true})(x) where {ord, C}
                 end
             end
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
-            t = Term{symtype(x)}(operation(x), args)
+            t = similarterm(x, operation(x), args)
         end
         return ord === :post ? p.rw(t) : t
     else

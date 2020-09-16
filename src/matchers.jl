@@ -7,13 +7,13 @@
 #
 function matcher(val::Any)
     function literal_matcher(next, data, bindings)
-        !isempty(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
+        islist(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
     end
 end
 
 function matcher(slot::Slot)
     function slot_matcher(next, data, bindings)
-        isempty(data) && return
+        !islist(data) && return
         val = get(bindings, slot.name, nothing)
         if val !== nothing
             if isequal(val, car(data))
@@ -29,10 +29,10 @@ end
 
 # returns n == offset, 0 if failed
 function trymatchexpr(data, value, n)
-    if isempty(value)
+    if !islist(value)
         return n
     elseif islist(value) && islist(data)
-        if isempty(data)
+        if !islist(data)
             # didn't fully match
             return nothing
         end
@@ -42,14 +42,14 @@ function trymatchexpr(data, value, n)
             value = cdr(value)
             data = cdr(data)
 
-            if isempty(value)
+            if !islist(value)
                 return n
-            elseif isempty(data)
+            elseif !islist(data)
                 return nothing
             end
         end
 
-        return isempty(value) ? n : nothing
+        return !islist(value) ? n : nothing
     elseif isequal(value, data)
         return n + 1
     end
@@ -87,12 +87,12 @@ function matcher(term::Term)
     matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
     function term_matcher(success, data, bindings)
 
-        isempty(data) && return nothing
-        !(car(data) isa Term) && return nothing
+        !islist(data) && return nothing
+        !(istree(car(data))) && return nothing
 
         function loop(term, bindings′, matchers′) # Get it to compile faster
-            if isempty(matchers′)
-                if  isempty(term)
+            if !islist(matchers′)
+                if  !islist(term)
                     return success(bindings′, 1)
                 end
                 return nothing

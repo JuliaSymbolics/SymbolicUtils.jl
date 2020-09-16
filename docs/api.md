@@ -24,13 +24,13 @@ using SymbolicUtils # hide
 
 ## Interfacing
 
-{{doc to_symbolic to_symbolic fn}}
-
 {{doc istree istree fn}}
 
 {{doc operation operation fn}}
 
 {{doc arguments arguments fn}}
+
+{{doc similarterm similarterm fn}}
 
 ## Rewriters
 

@@ -4,7 +4,7 @@
 <p>Type annotations are optional when creating symbols. Here <code>α</code>, <code>β</code> behave like Real numbers. <code>w</code> and <code>z</code> behave like <code>Number</code>, which is the default. You can use the <code>symtype</code> function to find the type of a symbol.</p>
 <pre><code class=language-julia >using SymbolicUtils: symtype
 
-symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre>
+symtype&#40;w&#41;, symtype&#40;z&#41;,  symtype&#40;α&#41;, symtype&#40;β&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >(Number, Number, Real, Real)</code></pre></div>
 <p>Note however that they are not subtypes of these types&#33;</p>
 <pre><code class=language-julia >@show w isa Number
@@ -14,65 +14,65 @@ symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre>
 </code></pre></div>
 <p>&#40;see <a href="https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u&#61;shashi">this post</a> for why they are all not just subtypes of <code>Number</code>&#41;</p>
 <p>You can do basic arithmetic on symbols to get symbolic expressions:</p>
-<pre><code class=language-julia >expr1 = α*sin(w)^2 +  β*cos(z)^2
-expr2 = α*cos(z)^2 +  β*sin(w)^2
+<pre><code class=language-julia >expr1 &#61; α*sin&#40;w&#41;^2 &#43;  β*cos&#40;z&#41;^2
+expr2 &#61; α*cos&#40;z&#41;^2 &#43;  β*sin&#40;w&#41;^2
 
-expr1 + expr2</code></pre>
+expr1 &#43; expr2</code></pre>
 <div class=code-output ><pre><code class=plaintext >((α * (sin(w) ^ 2)) + (β * (cos(z) ^ 2))) + ((α * (cos(z) ^ 2)) + (β * (sin(w) ^ 2)))</code></pre></div>
 <h3 id=simplified_printing ><a href="#simplified_printing">Simplified printing</a></h3>
-<p>Tip: you can set <code>SymbolicUtils.show_simplified&#91;&#93; &#61; true</code> to disable simplification on printing, or call <code>SymbolicUtils.showraw&#40;expr&#41;</code> to display an expression without simplification.  In the REPL, if an expression was successfully simplified before printing, it will appear in yellow rather than white, as a visual cue that what you are looking at is not the exact datastructure. </p>
+<p>Tip: you can set <code>SymbolicUtils.show_simplified&#91;&#93; &#61; true</code> to enable simplification on printing, or call <code>SymbolicUtils.showraw&#40;expr&#41;</code> to display an expression without simplification.  In the REPL, if an expression was successfully simplified before printing, it will appear in yellow rather than white, as a visual cue that what you are looking at is not the exact datastructure. </p>
 <pre><code class=language-julia >using SymbolicUtils: showraw
 
-showraw(expr1 + expr2)</code></pre>
+showraw&#40;expr1 &#43; expr2&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >((α * (sin(w) ^ 2)) + (β * (cos(z) ^ 2))) + ((α * (cos(z) ^ 2)) + (β * (sin(w) ^ 2)))</code></pre></div>
 <p><strong>Function-like symbols</strong></p>
 <p>Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same <code>symtype</code>.</p>
 <pre><code class=language-julia >using SymbolicUtils
-@syms f(x) g(x::Real, y::Real)::Real
+@syms f&#40;x&#41; g&#40;x::Real, y::Real&#41;::Real
 
-f(z) + g(1, α) + sin(w)</code></pre>
+f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >f(z) + g(1, α) + sin(w)</code></pre></div>
-<pre><code class=language-julia >g(1, z)</code></pre>
+<pre><code class=language-julia >g&#40;1, z&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real
 </code></pre></div>
 <p>This does not work since <code>z</code> is a <code>Number</code>, not a <code>Real</code>.</p>
-<pre><code class=language-julia >g(2//5, g(1, β))</code></pre>
+<pre><code class=language-julia >g&#40;2//5, g&#40;1, β&#41;&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >g(2//5, g(1, β))</code></pre></div>
 <p>This works because <code>g</code> &quot;returns&quot; a <code>Real</code>.</p>
 <h2 id=rule-based_rewriting ><a href="#rule-based_rewriting">Rule-based rewriting</a></h2>
 <p>Rewrite rules match and transform an expression. A rule is written using either the <code>@rule</code> macro or the <code>@acrule</code> macro.</p>
 <p>Here is a simple rewrite rule:</p>
-<pre><code class=language-julia >r1 = @rule ~x + ~x => 2 * (~x)
+<pre><code class=language-julia >r1 &#61; @rule ~x &#43; ~x &#61;&gt; 2 * &#40;~x&#41;
 
-showraw(r1(sin(1+z) + sin(1+z)))</code></pre>
+showraw&#40;r1&#40;sin&#40;1&#43;z&#41; &#43; sin&#40;1&#43;z&#41;&#41;&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >2 * sin(1 + z)</code></pre></div>
 <p>The <code>@rule</code> macro takes a pair of patterns – the <em>matcher</em> and the <em>consequent</em> &#40;<code>@rule matcher &#61;&gt; consequent</code>&#41;. If an expression matches the matcher pattern, it is rewritten to the consequent pattern. <code>@rule</code> returns a callable object that applies the rule to an expression.</p>
 <p><code>~x</code> in the example is what is a <strong>slot variable</strong> named <code>x</code>. In a matcher pattern, slot variables are placeholders that match exactly one expression. When used on the consequent side, they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, all corresponding matches must be equal &#40;as tested by <code>Base.isequal</code> function&#41;. Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.</p>
 <p>If you try to apply this rule to an expression where the two summands are not equal, it will return <code>nothing</code> – this is the way a rule signifies failure to match.</p>
-<pre><code class=language-julia >r1(sin(1+z) + sin(1+w)) === nothing</code></pre>
+<pre><code class=language-julia >r1&#40;sin&#40;1&#43;z&#41; &#43; sin&#40;1&#43;w&#41;&#41; &#61;&#61;&#61; nothing</code></pre>
 <div class=code-output ><pre><code class=plaintext >true</code></pre></div>
 <p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~xs</code> in the following example is a segment variable:</p>
 <pre><code class=language-julia >@syms x y z
-@rule(+(~~xs) => ~~xs)(x + y + z)</code></pre>
+@rule&#40;&#43;&#40;~~xs&#41; &#61;&gt; ~~xs&#41;&#40;x &#43; y &#43; z&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >3-element view(::Array{SymbolicUtils.Sym{Number},1}, 1:3) with eltype SymbolicUtils.Sym{Number}:
  x
  y
  z</code></pre></div>
 <p><code>~~xs</code> is a vector of subexpressions matched. You can use it to construct something more useful:</p>
-<pre><code class=language-julia >r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+<pre><code class=language-julia >r2 &#61; @rule ~x * &#43;&#40;~~ys&#41; &#61;&gt; sum&#40;map&#40;y-&gt; ~x * y, ~~ys&#41;&#41;;
 
-showraw(r2(2 * (w+w+α+β)))</code></pre>
+showraw&#40;r2&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <p>Notice that there is a subexpression <code>&#40;2 * w&#41; &#43; &#40;2 * w&#41;</code> that could be simplified by the previous rule <code>r1</code>. Can we chain <code>r2</code> and <code>r1</code>?</p>
 <h3 id=predicates_for_matching ><a href="#predicates_for_matching">Predicates for matching</a></h3>
 <p>Matcher pattern may contain slot variables with attached predicates, written as <code>~x::f</code> where <code>f</code> is a function that takes a matched expression &#40;a <code>Term</code> object a <code>Sym</code> or any Julia value that is in the expression tree&#41; and returns a boolean value. Such a slot will be considered a match only if <code>f</code> returns true.</p>
 <p>Similarly <code>~~x::g</code> is a way of attaching a predicate <code>g</code> to a segment variable. In the case of segment variables <code>g</code> gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate.</p>
 <p>For example,</p>
-<pre><code class=language-julia >r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
+<pre><code class=language-julia >r &#61; @rule ~x &#43; ~~y::&#40;ys-&gt;iseven&#40;length&#40;ys&#41;&#41;&#41; &#61;&gt; &quot;odd terms&quot;
 
-@show r(w + z + z + w)
-@show r(w + z + z)
-@show r(w + z)</code></pre>
+@show r&#40;w &#43; z &#43; z &#43; w&#41;
+@show r&#40;w &#43; z &#43; z&#41;
+@show r&#40;w &#43; z&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >r(w + z + z + w) = nothing
 r(w + z + z) = "odd terms"
 r(w + z) = nothing
@@ -81,9 +81,9 @@ r(w + z) = nothing
 <p>Given an expression <code>f&#40;x, f&#40;y, z, u&#41;, v, w&#41;</code>, a <code>f</code> is said to be associative if the expression is equivalent to <code>f&#40;x, y, z, u, v, w&#41;</code> and commutative if the order of arguments does not matter.  SymbolicUtils has a special <code>@acrule</code> macro meant for rules on functions which are associate and commutative such as addition and multiplication of real and complex numbers.</p>
 <pre><code class=language-julia >@syms x y
 
-acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
+acr &#61; @acrule&#40;&#40;~y&#41;^&#40;~n&#41; * ~y &#61;&gt; &#40;~y&#41;^&#40;~n&#43;1&#41;&#41;
 
-acr(x^2 * y * x)</code></pre>
+acr&#40;x^2 * y * x&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >(x ^ 3) * y</code></pre></div>
 <h2 id=composing_rewriters ><a href="#composing_rewriters">Composing rewriters</a></h2>
 <p>A rewriter is any callable object which takes an expression and returns an expression or <code>nothing</code>. If <code>nothing</code> is returned that means there was no changes applicable to the input expression. The Rules we created above are rewriters.</p>
@@ -112,23 +112,23 @@ acr(x^2 * y * x)</code></pre>
 <pre><code class=language-julia >using SymbolicUtils
 using SymbolicUtils.Rewriters
 
-r1 = @rule ~x + ~x => 2 * (~x)
-r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+r1 &#61; @rule ~x &#43; ~x &#61;&gt; 2 * &#40;~x&#41;
+r2 &#61; @rule ~x * &#43;&#40;~~ys&#41; &#61;&gt; sum&#40;map&#40;y-&gt; ~x * y, ~~ys&#41;&#41;;
 
-rset = Postwalk(Chain([r1, r2]))
-rset_result = rset(2 * (w+w+α+β))
+rset &#61; Postwalk&#40;Chain&#40;&#91;r1, r2&#93;&#41;&#41;
+rset_result &#61; rset&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;
 
-showraw(rset_result)</code></pre>
+showraw&#40;rset_result&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <p>It applied <code>r1</code>, but didn&#39;t get the opportunity to apply <code>r2</code>. So we need to apply the ruleset again on the result.</p>
-<pre><code class=language-julia >showraw(rset(rset_result))</code></pre>
+<pre><code class=language-julia >showraw&#40;rset&#40;rset_result&#41;&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <p>You can also use <code>Fixpoint</code> to apply the rules until there are no changes.</p>
-<pre><code class=language-julia >showraw(Fixpoint(rset)(2 * (w+w+α+β)))</code></pre>
+<pre><code class=language-julia >showraw&#40;Fixpoint&#40;rset&#41;&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
 <h2 id=simplification ><a href="#simplification">Simplification</a></h2>
 <p>The <code>simplify</code> function applies a built-in set of rules to rewrite expressions in order to simplify it.</p>
-<pre><code class=language-julia >showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))</code></pre>
+<pre><code class=language-julia >showraw&#40;simplify&#40;2 * &#40;w&#43;w&#43;α&#43;β &#43; sin&#40;z&#41;^2 &#43; cos&#40;z&#41;^2 - 1&#41;&#41;&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >2 * ((2 * w) + α + β)</code></pre></div>
 <p>The rules in the default simplify applies simple constant elemination, trigonometric identities.</p>
 <p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl">rules</a> that are used by <code>simplify</code>.</p>
@@ -137,7 +137,7 @@ showraw(rset_result)</code></pre>
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <div class=page-foot >
   <div class=copyright >
-      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: August 31, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: September 16, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div>

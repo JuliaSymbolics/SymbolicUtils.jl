@@ -3,9 +3,20 @@ const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch, acos
 const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^, copysign]
 
 const previously_declared_for = Set([])
+
+# TODO: it's not possible to dispatch on the symtype! (only problem is Parameter{})
+function assert_number(a, b)
+    assert_number(a)
+    assert_number(b)
+end
+
+assert_number(a) = symtype(a) <: Number || error("Can't apply this to not a number")
 # TODO: keep domains tighter than this
 function number_methods(T, rhs1, rhs2)
     exprs = []
+
+    rhs2 = :($assert_number(a, b); $rhs2)
+    rhs1 = :($assert_number(a); $rhs1)
 
     for f in diadic
         for S in previously_declared_for
@@ -68,19 +79,22 @@ for f in [+, *]
     @eval (::$(typeof(f)))(x::Symbolic) = x
 
     # single arg
-    @eval function (::$(typeof(f)))(x::Symbolic, w...)
+    @eval function (::$(typeof(f)))(x::Symbolic, w::Number...)
         term($f, x,w...,
              type=rec_promote_symtype($f, map(symtype, (x,w...))...))
     end
-    @eval function (::$(typeof(f)))(x, y::Symbolic, w...)
+    @eval function (::$(typeof(f)))(x::Number, y::Symbolic, w::Number...)
         term($f, x, y, w...,
              type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
     end
-    @eval function (::$(typeof(f)))(x::Symbolic, y::Symbolic, w...)
+    @eval function (::$(typeof(f)))(x::Symbolic, y::Symbolic, w::Number...)
         term($f, x, y, w...,
              type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
     end
 end
+
+Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
+Base.:*(a::Symbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)
 
 for f in [identity, one, zero, *, +]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T

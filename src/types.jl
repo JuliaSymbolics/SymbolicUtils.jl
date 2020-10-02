@@ -159,6 +159,10 @@ The output symtype of applying variable `f` to arugments of symtype `arg_symtype
 if the arguments are of the wrong type then this function will error.
 """
 function promote_symtype(f::Sym{FnType{X,Y}}, args...) where {X, Y}
+    if X === Tuple
+        return Y
+    end
+
     nrequired = fieldcount(X)
     ngiven    = nfields(args)
 

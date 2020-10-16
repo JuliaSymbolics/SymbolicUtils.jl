@@ -109,7 +109,8 @@ Base.real(s::Symbolic{<:Number}) = term(real, s)
 # binary ops that return Bool
 for (f, Domain) in [(==) => Number, (!=) => Number,
                     (<=) => Real,   (>=) => Real,
-                    (isless) => Real,   (> ) => Real,
+                    (isless) => Real,
+                    (<) => Real,   (> ) => Real,
                     (& ) => Bool,   (| ) => Bool,
                     xor => Bool]
     @eval begin

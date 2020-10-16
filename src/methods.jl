@@ -115,9 +115,9 @@ for (f, Domain) in [(==) => Number, (!=) => Number,
                     xor => Bool]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:$Domain}, ::Type{<:$Domain}) = Bool
-        (::$(typeof(f)))(a::Symbolic, b::$Domain) = term($f, a, b, type=Bool)
-        (::$(typeof(f)))(a::Symbolic, b::Symbolic) = term($f, a, b, type=Bool)
-        (::$(typeof(f)))(a::$Domain, b::Symbolic) = term($f, a, b, type=Bool)
+        (::$(typeof(f)))(a::Symbolic{<:$Domain}, b::$Domain) = term($f, a, b, type=Bool)
+        (::$(typeof(f)))(a::Symbolic{<:$Domain}, b::Symbolic{<:$Domain}) = term($f, a, b, type=Bool)
+        (::$(typeof(f)))(a::$Domain, b::Symbolic{<:$Domain}) = term($f, a, b, type=Bool)
     end
 end
 

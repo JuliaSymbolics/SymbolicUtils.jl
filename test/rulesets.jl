@@ -10,7 +10,7 @@ using SymbolicUtils: getdepth, Rewriters
     rset = Rewriters.Postwalk(Rewriters.Chain([r1, r2]))
     @test getdepth(rset) == typemax(Int)
 
-    ex = 2 * (w+w+α+β)
+    ex = 2 * term(+, w, w, α, β)
 
     @eqtest rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
     @eqtest Rewriters.Fixpoint(rset)(ex) == ((2 * (2 * w)) + (2 * α)) + (2 * β)
@@ -30,14 +30,14 @@ end
     @eqtest simplify(1x + 2x) == 3x
     @eqtest simplify(3x + 2x) == 5x
 
-    @eqtest simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == (3 * x * y) + a + b + c + d
-    @eqtest simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == (4 * x * y) + a + b + c + d
+    @eqtest simplify(a + b + (x * y) + c + 2 * (x * y) + d)     == simplify((3 * x * y) + a + b + c + d)
+    @eqtest simplify(a + b + 2 * (x * y) + c + 2 * (x * y) + d) == simplify((4 * x * y) + a + b + c + d)
 
-    @eqtest simplify(a * x^y * b * x^d) == (a * b * (x ^ (d + y)))
+    @eqtest simplify(a * x^y * b * x^d) == simplify(a * b * (x ^ (d + y)))
 
-    @eqtest simplify(a + b + 0*c + d) == a + b + d
-    @eqtest simplify(a * b * c^0 * d) == a * b * d
-    @eqtest simplify(a * b * 1*c * d) == a * b * c * d
+    @eqtest simplify(a + b + 0*c + d) == simplify(a + b + d)
+    @eqtest simplify(a * b * c^0 * d) == simplify(a * b * d)
+    @eqtest simplify(a * b * 1*c * d) == simplify(a * b * c * d)
 
     @test simplify(Term(one, [a])) == 1
     @test simplify(Term(one, [b+1])) == 1

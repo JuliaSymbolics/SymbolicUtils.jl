@@ -140,28 +140,34 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
         catch err
             Errored(err)
         end
-        try
-            if unsimplified isa Errored
-                @test simplified isa Errored
-            elseif isnan(unsimplified)
-                @test isnan(simplified)
-                if !isnan(simplified)
-                    error("Failed")
-                end
-            else
-                @test unsimplified ≈ simplified
-                if !(unsimplified ≈ simplified)
-                    error("Failed")
-                end
+        if unsimplified isa Errored
+            if !(simplified isa Errored)
+                @test_skip false
+                @goto print_err
             end
-        catch err
-            println("""Test failed for expression
-                    $(sprint(io->showraw(io, expr))) = $unsimplified
-                    Simplified to:
-                    $(sprint(io->showraw(io, simplify(expr)))) = $simplified
-                    On inputs:
-                    $inputs = $args
-                    """)
+            @test true
+        elseif isnan(unsimplified)
+            if !isnan(simplified)
+                @test_skip false
+                @goto print_err
+            end
+            @test true
+        else
+            if !(unsimplified ≈ simplified)
+                @test_skip false
+                @goto print_err
+            end
+            @test true
         end
+        continue
+
+        @label print_err
+        println("""Test failed for expression
+                    $(sprint(io->showraw(io, expr))) = $unsimplified
+                Simplified:
+                    $(sprint(io->showraw(io, simplify(expr)))) = $simplified
+                Inputs:
+                    $inputs = $args
+                """)
     end
 end

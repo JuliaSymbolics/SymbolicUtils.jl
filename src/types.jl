@@ -278,8 +278,11 @@ operation(x::Term) = x.f
 
 arguments(x::Term) = x.arguments
 
+## This is much faster than hash of an array of Any
+hashvec(xs, z) = foldr(hash, xs, init=z)
+
 function Base.hash(t::Term{T}, salt::UInt) where {T}
-    hash(arguments(t), hash(operation(t), hash(T, salt)))
+    hashvec(arguments(t), hash(operation(t), hash(T, salt)))
 end
 
 function Base.isequal(t1::Term, t2::Term)

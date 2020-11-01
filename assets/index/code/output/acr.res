@@ -1,1 +1,1 @@
-(x ^ 3) * y
+nothing

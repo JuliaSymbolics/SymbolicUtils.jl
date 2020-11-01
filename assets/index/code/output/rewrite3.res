@@ -1,4 +1,3 @@
-3-element view(::Array{SymbolicUtils.Sym{Number},1}, 1:3) with eltype SymbolicUtils.Sym{Number}:
- x
- y
+2-element view(::Array{SymbolicUtils.Symbolic{Number},1}, 1:2) with eltype SymbolicUtils.Symbolic{Number}:
+ x + y
  z

@@ -31,7 +31,7 @@ showraw&#40;expr1 &#43; expr2&#41;</code></pre>
 @syms f&#40;x&#41; g&#40;x::Real, y::Real&#41;::Real
 
 f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >f(z) + g(1, α) + sin(w)</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >(f(z) + g(1, α)) + sin(w)</code></pre></div>
 <pre><code class=language-julia >g&#40;1, z&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real
 </code></pre></div>
@@ -54,15 +54,14 @@ showraw&#40;r1&#40;sin&#40;1&#43;z&#41; &#43; sin&#40;1&#43;z&#41;&#41;&#41;</co
 <p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~xs</code> in the following example is a segment variable:</p>
 <pre><code class=language-julia >@syms x y z
 @rule&#40;&#43;&#40;~~xs&#41; &#61;&gt; ~~xs&#41;&#40;x &#43; y &#43; z&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >3-element view(::Array{SymbolicUtils.Sym{Number},1}, 1:3) with eltype SymbolicUtils.Sym{Number}:
- x
- y
+<div class=code-output ><pre><code class=plaintext >2-element view(::Array{SymbolicUtils.Symbolic{Number},1}, 1:2) with eltype SymbolicUtils.Symbolic{Number}:
+ x + y
  z</code></pre></div>
 <p><code>~~xs</code> is a vector of subexpressions matched. You can use it to construct something more useful:</p>
 <pre><code class=language-julia >r2 &#61; @rule ~x * &#43;&#40;~~ys&#41; &#61;&gt; sum&#40;map&#40;y-&gt; ~x * y, ~~ys&#41;&#41;;
 
 showraw&#40;r2&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >(2 * ((w + w) + α)) + (2 * β)</code></pre></div>
 <p>Notice that there is a subexpression <code>&#40;2 * w&#41; &#43; &#40;2 * w&#41;</code> that could be simplified by the previous rule <code>r1</code>. Can we chain <code>r2</code> and <code>r1</code>?</p>
 <h3 id=predicates_for_matching ><a href="#predicates_for_matching">Predicates for matching</a></h3>
 <p>Matcher pattern may contain slot variables with attached predicates, written as <code>~x::f</code> where <code>f</code> is a function that takes a matched expression &#40;a <code>Term</code> object a <code>Sym</code> or any Julia value that is in the expression tree&#41; and returns a boolean value. Such a slot will be considered a match only if <code>f</code> returns true.</p>
@@ -74,7 +73,7 @@ showraw&#40;r2&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;&#41;</code></pre>
 @show r&#40;w &#43; z &#43; z&#41;
 @show r&#40;w &#43; z&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >r(w + z + z + w) = nothing
-r(w + z + z) = "odd terms"
+r(w + z + z) = nothing
 r(w + z) = nothing
 </code></pre></div>
 <h3 id=associative-commutative_rules ><a href="#associative-commutative_rules">Associative-Commutative Rules</a></h3>
@@ -84,7 +83,7 @@ r(w + z) = nothing
 acr &#61; @acrule&#40;&#40;~y&#41;^&#40;~n&#41; * ~y &#61;&gt; &#40;~y&#41;^&#40;~n&#43;1&#41;&#41;
 
 acr&#40;x^2 * y * x&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >(x ^ 3) * y</code></pre></div>
+<div class=code-output ></div>
 <h2 id=composing_rewriters ><a href="#composing_rewriters">Composing rewriters</a></h2>
 <p>A rewriter is any callable object which takes an expression and returns an expression or <code>nothing</code>. If <code>nothing</code> is returned that means there was no changes applicable to the input expression. The Rules we created above are rewriters.</p>
 <p>The <code>SymbolicUtils.Rewriters</code> module contains some types which create and transform rewriters.</p>
@@ -119,7 +118,7 @@ rset &#61; Postwalk&#40;Chain&#40;&#91;r1, r2&#93;&#41;&#41;
 rset_result &#61; rset&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;
 
 showraw&#40;rset_result&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >(((2 * w) + (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >(2 * ((2 * w) + α)) + (2 * β)</code></pre></div>
 <p>It applied <code>r1</code>, but didn&#39;t get the opportunity to apply <code>r2</code>. So we need to apply the ruleset again on the result.</p>
 <pre><code class=language-julia >showraw&#40;rset&#40;rset_result&#41;&#41;</code></pre>
 <div class=code-output ><pre><code class=plaintext >((2 * (2 * w)) + (2 * α)) + (2 * β)</code></pre></div>
@@ -137,7 +136,7 @@ showraw&#40;rset_result&#41;</code></pre>
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <div class=page-foot >
   <div class=copyright >
-      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: October 17, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: November 01, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div>

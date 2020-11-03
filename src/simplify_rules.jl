@@ -4,14 +4,14 @@ let
     PLUS_RULES = [
         @rule(~x::isnotflat(+) => flatten_term(+, ~x))
         @rule(~x::needs_sorting(+) => sort_args(+, ~x))
-        @ordered_acrule(~a::isnumber + ~b::isnumber => ~a + ~b)
+        @ordered_acrule(~a::is_literal_number + ~b::is_literal_number => ~a + ~b)
 
         @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
         @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α + ~β, (~~x)...))
         @acrule(*(~~x, ~α) + *(~~x, ~β) => *(~α + ~β, (~~x)...))
 
         @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
-        @acrule(*(~α::isnumber, ~x) + ~x => *(~α + 1, ~x))
+        @acrule(*(~α::is_literal_number, ~x) + ~x => *(~α + 1, ~x))
         @rule(+(~~x::hasrepeats) => +(merge_repeats(*, ~~x)...))
 
         @ordered_acrule((~z::_iszero + ~x) => ~x)
@@ -22,7 +22,7 @@ let
         @rule(~x::isnotflat(*) => flatten_term(*, ~x))
         @rule(~x::needs_sorting(*) => sort_args(*, ~x))
 
-        @ordered_acrule(~a::isnumber * ~b::isnumber => ~a * ~b)
+        @ordered_acrule(~a::is_literal_number * ~b::is_literal_number => ~a * ~b)
         @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))
 
         @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
@@ -50,7 +50,7 @@ let
         @rule(~x / ~y => ~x * pow(~y, -1))
         @rule(one(~x) => one(symtype(~x)))
         @rule(zero(~x) => zero(symtype(~x)))
-        @rule(cond(~x::isnumber, ~y, ~z) => ~x ? ~y : ~z)
+        @rule(cond(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
     ]
 
     TRIG_RULES = [
@@ -92,9 +92,9 @@ let
         # simplify terms with no symbolic arguments
         # e.g. this simplifies term(isodd, 3, type=Bool)
         # or term(!, false)
-        @rule((~f)(~x::isnumber) => (~f)(~x))
+        @rule((~f)(~x::is_literal_number) => (~f)(~x))
         # and this simplifies any binary comparison operator
-        @rule((~f)(~x::isnumber, ~y::isnumber) => (~f)(~x, ~y))
+        @rule((~f)(~x::is_literal_number, ~y::is_literal_number) => (~f)(~x, ~y))
     ]
 
     function number_simplifier()

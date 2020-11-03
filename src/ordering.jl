@@ -17,7 +17,7 @@ function <ₑ(a, b)
     elseif istree(b) && !istree(a)
         args = arguments(b)
         if length(args) === 2
-            n1, n2 = !isnumber(args[1]) , !isnumber(args[2])
+            n1, n2 = !is_literal_number(args[1]) , !is_literal_number(args[2])
             if n1 && n2
                 # both subterms are terms, so it's definitely firster
                 return true
@@ -102,7 +102,7 @@ function cmp_term_term(a, b)
         if length(aa) !== length(ab)
             return length(aa) < length(ab)
         else
-            terms = zip(Iterators.filter(!isnumber, aa), Iterators.filter(!isnumber, ab))
+            terms = zip(Iterators.filter(!is_literal_number, aa), Iterators.filter(!is_literal_number, ab))
 
             for (x,y) in terms
                 if x <ₑ y
@@ -113,8 +113,8 @@ function cmp_term_term(a, b)
             end
 
             # compare the numbers
-            nums = zip(Iterators.filter(isnumber, aa),
-                       Iterators.filter(isnumber, ab))
+            nums = zip(Iterators.filter(is_literal_number, aa),
+                       Iterators.filter(is_literal_number, ab))
 
             for (x,y) in nums
                 if x <ₑ y

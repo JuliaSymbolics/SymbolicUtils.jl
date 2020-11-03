@@ -1,5 +1,5 @@
 using BenchmarkTools, SymbolicUtils
-using SymbolicUtils: isnumber
+using SymbolicUtils: is_literal_number
 
 using Random
 
@@ -8,7 +8,7 @@ SUITE = BenchmarkGroup()
 @syms a b c d; Random.seed!(123);
 
 let r = @rule(~x => ~x), rs = RuleSet([r]),
-    acr = @rule(~x::isnumber + ~y => ~y)
+    acr = @rule(~x::is_literal_number + ~y => ~y)
 
     overhead = SUITE["overhead"]  = BenchmarkGroup()
     overhead["rule"]  = BenchmarkGroup()

@@ -109,7 +109,7 @@ sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
 
 isliteral(::Type{T}) where {T} = x -> x isa T
-isnumber(x) = isliteral(Number)(x)
+is_literal_number(x) = isliteral(Number)(x)
 
 _iszero(t) = false
 _iszero(x::Number) = iszero(x)

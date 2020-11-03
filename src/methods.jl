@@ -5,18 +5,22 @@ const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^, copysign]
 const previously_declared_for = Set([])
 
 # TODO: it's not possible to dispatch on the symtype! (only problem is Parameter{})
-function assert_number(a, b)
-    assert_number(a)
-    assert_number(b)
+
+assert_like(f, T) = nothing
+function assert_like(f, T, a, b...)
+    islike(a, T) || throw(ArgumentError("The function $f cannot be applied to $a which is not a $T-like object." *
+                                           "Define `isnumberlike(::$(typeof(a))) = true` to enable this."))
+    assert_like(f, T, b...)
 end
 
-assert_number(a) = symtype(a) <: Number || error("Can't apply this to not a number")
+islike(a, T) = symtype(a) <: T
+
 # TODO: keep domains tighter than this
 function number_methods(T, rhs1, rhs2)
     exprs = []
 
-    rhs2 = :($assert_number(a, b); $rhs2)
-    rhs1 = :($assert_number(a); $rhs1)
+    rhs2 = :($assert_like(f, Number, a, b); $rhs2)
+    rhs1 = :($assert_like(f, Number, a); $rhs1)
 
     for f in diadic
         for S in previously_declared_for
@@ -101,8 +105,7 @@ for f in [identity, one, zero, *, +]
 end
 
 promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
-Base.real(s::Symbolic{<:Real}) = s
-Base.real(s::Symbolic{<:Number}) = term(real, s)
+Base.real(s::Symbolic) = islike(s, Real) ? s : term(real, s)
 
 ## Booleans
 

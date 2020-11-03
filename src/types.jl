@@ -274,9 +274,9 @@ istree(t::Term) = true
 
 Term(f, args) = Term{rec_promote_symtype(f, map(symtype, args)...)}(f, args)
 
-operation(x::Term) = x.f
+operation(x::Term) = getfield(x, :f)
 
-arguments(x::Term) = x.arguments
+arguments(x::Term) = getfield(x, :arguments)
 
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)

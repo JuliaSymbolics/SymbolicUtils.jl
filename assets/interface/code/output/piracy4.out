@@ -1,0 +1,5 @@
+SymbolicUtils.Term{Real}
+  f: + (function of type typeof(+))
+  arguments: Array{Any}((2,))
+    1: Int64 -1
+    2: Symbol x

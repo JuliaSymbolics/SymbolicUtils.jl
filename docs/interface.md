@@ -89,27 +89,33 @@ ex = 1 + (:x - 2)
 \out{piracy1}
 
 How can we use SymbolicUtils.jl to convert `ex` to `(-)(:x, 1)`? We simply implement `istree`,
-`operation`, `arguments` and `to_symbolic` and we'll be off to the races:
+`operation`, `arguments` and we'll be able to do rule-based rewriting on `Expr`s:
 ```julia:piracy2
 using SymbolicUtils
-using SymbolicUtils: istree, operation, arguments, similarterm
 
 SymbolicUtils.istree(ex::Expr) = ex.head == :call
 SymbolicUtils.operation(ex::Expr) = ex.args[1]
 SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
 
-@show simplify(ex)
-
-dump(simplify(ex))
+@rule(~x => ~x - 1)(ex)
 ```
+\out{piracy2}
 
-There was no simplification, because by default SymbolicUtils assumes that the expressoins are of type Any and no particular rules apply. Let's change this by saying that the symbolic type (symtype) of an Expr or Symbol object is actually Real.
+However, this is not enough to get SymbolicUtils to use its own algebraic simplification system on `Expr`s:
+```julia:piracy3
+simplify(ex)
+```
+\out{piracy3}
+
+The reason that the expression was not simplified is that the expression tree is untyped, so SymbolicUtils 
+doesn't know what rules to apply to the expression. To mimic the behaviour of most computer algebra 
+systems, the simplest thing to do would be to assume that all `Expr`s are of type `Number`:
 
 ```julia:piracy4
-SymbolicUtils.symtype(s::Expr) = Real
+SymbolicUtils.symtype(s::Expr) = Number
 
-dump(simplify(ex))
+simplify(ex)
 ```
 \out{piracy4}
 
-Now SymbolicUtils is able to apply the Number simplification rule to Expr.
+Now SymbolicUtils is able to apply the `Number` simplification rule to `Expr`.

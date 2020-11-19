@@ -9,7 +9,7 @@ const previously_declared_for = Set([])
 assert_like(f, T) = nothing
 function assert_like(f, T, a, b...)
     islike(a, T) || throw(ArgumentError("The function $f cannot be applied to $a which is not a $T-like object." *
-                                           "Define `isnumberlike(::$(typeof(a))) = true` to enable this."))
+                                        "Define `islike(::$(typeof(a)), ::Type{$T}) = true` to enable this."))
     assert_like(f, T, b...)
 end
 

@@ -135,5 +135,6 @@ function cond(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(cond, Any[_if, _then, _else])
 end
 
-# Specially handle inv
+# Specially handle inv and literal pow
 Base.inv(x::Symbolic) = Base.:^(x, -1)
+Base.literal_pow(::typeof(^), x::Symbolic, ::Val{p}) where {p} = Base.:^(x, p)

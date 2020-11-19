@@ -65,10 +65,8 @@ let
                    @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
                    @rule(*(~x) => ~x)
                    @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))]
-    MPOLY_CLEANUP = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_preprocess))))
+    global const MPOLY_CLEANUP = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_preprocess))))
     MPOLY_MAKER = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_rules))))
-
-    global MPOLY_CLEANUP
 
     global to_mpoly
     function to_mpoly(t, dicts=_dicts())

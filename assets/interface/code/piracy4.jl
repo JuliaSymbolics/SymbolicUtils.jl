@@ -1,4 +1,4 @@
 # This file was generated, do not modify it. # hide
-SymbolicUtils.symtype(s::Expr) = Number
+SymbolicUtils.symtype(s::Expr) = Real
 
-simplify(ex)
+dump(simplify(ex))

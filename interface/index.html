@@ -8,27 +8,31 @@ end
 
 
 ex &#61; 1 &#43; &#40;:x - 2&#41;</code></pre> <div class=code-output ><pre><code class=plaintext >:((+)(1, (-)(x, 2)))</code></pre></div>
-<p>How can we use SymbolicUtils.jl to convert <code>ex</code> to <code>&#40;-&#41;&#40;:x, 1&#41;</code>? We simply implement <code>istree</code>, <code>operation</code>, <code>arguments</code> and we&#39;ll be able to do rule-based rewriting on <code>Expr</code>s:</p>
+<p>How can we use SymbolicUtils.jl to convert <code>ex</code> to <code>&#40;-&#41;&#40;:x, 1&#41;</code>? We simply implement <code>istree</code>, <code>operation</code>, <code>arguments</code> and <code>to_symbolic</code> and we&#39;ll be off to the races:</p>
 <pre><code class=language-julia >using SymbolicUtils
+using SymbolicUtils: istree, operation, arguments, similarterm
 
 SymbolicUtils.istree&#40;ex::Expr&#41; &#61; ex.head &#61;&#61; :call
 SymbolicUtils.operation&#40;ex::Expr&#41; &#61; ex.args&#91;1&#93;
 SymbolicUtils.arguments&#40;ex::Expr&#41; &#61; ex.args&#91;2:end&#93;
 
-@rule&#40;~x &#61;&gt; ~x - 1&#41;&#40;ex&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >:((-)((+)(1, (-)(x, 2)), 1))</code></pre></div>
-<p>However, this is not enough to get SymbolicUtils to use its own algebraic simplification system on <code>Expr</code>s:</p>
-<pre><code class=language-julia >simplify&#40;ex&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >-1 + x</code></pre></div>
-<p>The reason that the expression was not simplified is that the expression tree is untyped, so SymbolicUtils  doesn&#39;t know what rules to apply to the expression. To mimic the behaviour of most computer algebra  systems, the simplest thing to do would be to assume that all <code>Expr</code>s are of type <code>Number</code>:</p>
-<pre><code class=language-julia >SymbolicUtils.symtype&#40;s::Expr&#41; &#61; Number
+@show simplify&#40;ex&#41;
 
-simplify&#40;ex&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >-1 + x</code></pre></div>
-<p>Now SymbolicUtils is able to apply the <code>Number</code> simplification rule to <code>Expr</code>.</p>
+dump&#40;simplify&#40;ex&#41;&#41;</code></pre>
+<p>There was no simplification, because by default SymbolicUtils assumes that the expressoins are of type Any and no particular rules apply. Let&#39;s change this by saying that the symbolic type &#40;symtype&#41; of an Expr or Symbol object is actually Real.</p>
+<pre><code class=language-julia >SymbolicUtils.symtype&#40;s::Expr&#41; &#61; Real
+
+dump&#40;simplify&#40;ex&#41;&#41;</code></pre>
+<div class=code-output ><pre><code class=plaintext >SymbolicUtils.Term{Real}
+  f: + (function of type typeof(+))
+  arguments: Array{Any}((2,))
+    1: Int64 -1
+    2: Symbol x
+</code></pre></div>
+<p>Now SymbolicUtils is able to apply the Number simplification rule to Expr.</p>
 <div class=page-foot >
   <div class=copyright >
-      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: November 18, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: November 19, 2020. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div>

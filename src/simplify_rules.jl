@@ -39,6 +39,7 @@ let
         @rule((((~x)^(~p::isliteral(Integer)))^(~q::isliteral(Integer))) => (~x)^((~p)*(~q)))
         @rule(^(~x, ~z::_iszero) => 1)
         @rule(^(~x, ~z::_isone) => ~x)
+        @rule(inv(~x) => ~x ^ -1)
     ]
 
     ASSORTED_RULES = [

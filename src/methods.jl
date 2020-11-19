@@ -136,4 +136,4 @@ function cond(_if::Symbolic{Bool}, _then, _else)
 end
 
 # Specially handle inv
-Base.inv(x::Symbolic) = x ^ -1
+Base.inv(x::Symbolic) = Base.:^(x, -1)

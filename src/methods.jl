@@ -1,4 +1,4 @@
-const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch, acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh, abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, inv, acotd, asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10, sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd, atand, sec, acscd, cot, exp2, expm1, atanh, real]
+const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch, acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh, abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, acotd, asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10, sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd, atand, sec, acscd, cot, exp2, expm1, atanh, real]
 
 const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^, copysign]
 
@@ -135,3 +135,5 @@ function cond(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(cond, Any[_if, _then, _else])
 end
 
+# Specially handle inv
+Base.inv(x::Symbolic) = x ^ -1

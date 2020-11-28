@@ -118,11 +118,11 @@ function _to_term(reference, x::MPoly, dict, syms)
     if length(monoms) == 0
         return 0
     elseif length(monoms) == 1
-        t = !isone(x.coeffs[1]) ?  monoms[1] * x.coeffs[1] : monoms[1]
+        t = !isone(x.coeffs[1]) ?  monoms[1] * Int(x.coeffs[1]) : monoms[1]
     else
         t = similarterm(reference,
                         +,
-                        map((x,y)->isone(y) ? x : y*x,
+                        map((x,y)->isone(y) ? x : Int(y)*x,
                             monoms, x.coeffs[1:length(monoms)]))
     end
 

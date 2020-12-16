@@ -1,6 +1,22 @@
-const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch, acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh, abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, acotd, asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10, sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd, atand, sec, acscd, cot, exp2, expm1, atanh, real]
+import SpecialFunctions: gamma, loggamma, erf, erfc, erfcinv, erfi, erfcx,
+                         dawson, digamma, trigamma, invdigamma, polygamma,
+                         airyai, airyaiprime, airybi, airybiprime, besselj0,
+                         besselj1, bessely0, bessely1, besselj, bessely, besseli,
+                         besselk, hankelh1, hankelh2, polygamma, beta, logbeta
 
-const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^, copysign]
+const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch,
+                 acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh,
+                 abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, acotd,
+                 asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10,
+                 sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd,
+                 atand, sec, acscd, cot, exp2, expm1, atanh, real, gamma,
+                 loggamma, erf, erfc, erfcinv, erfi, erfcx, dawson, digamma,
+                 trigamma, invdigamma, polygamma, airyai, airyaiprime, airybi,
+                 airybiprime, besselj0, besselj1, bessely0, bessely1]
+
+const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^, copysign,
+                besselj, bessely, besseli, besselk, hankelh1, hankelh2,
+                polygamma, beta, logbeta]
 
 const previously_declared_for = Set([])
 

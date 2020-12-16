@@ -92,7 +92,8 @@ function gen_rand_expr(inputs;
     try
         return f(args...)
     catch err
-        if err isa DomainError || err isa DivideError || err isa MethodError
+        if err isa DomainError || err isa DivideError || err isa MethodError ||
+            err isa SymbolicUtils.SpecialFunctions.AmosException
             return gen_rand_expr(inputs,
                                  spec=spec,
                                  leaf_prob=leaf_prob,

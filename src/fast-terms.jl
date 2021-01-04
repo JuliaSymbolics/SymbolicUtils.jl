@@ -100,14 +100,38 @@ function Base.show(io::IO, a::Mul)
         end
     end
 end
-Mul(a,b) = Mul{Number, typeof(a), typeof(b)}(a,b)
+function Mul(a,b)
+    isempty(b) && return a
+    Mul{Number, typeof(a), typeof(b)}(a,b)
+end
 Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
 Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
-*(a::Symbolic, b::Symbolic) = Mul(1, Dict(a=>1, b=>1))
+"""
+make_mul_dict(xs...)
+"""
+function make_mul_coeff_dict(sign, coeff, xs...)
+    d = Dict{Any, Number}()
+    for x in xs
+        if x isa Mul
+            coeff *= x.coeff
+            d = _merge((m, n)->m+sign*n, d, x.dict, filter=iszero)
+        else
+            k = x
+            v = sign + get(d, x, 0)
+            if iszero(v)
+                delete!(d, k)
+            else
+                d[k] = v
+            end
+        end
+    end
+    coeff, d
+end
+*(a::Symbolic, b::Symbolic) = Mul(make_mul_coeff_dict(1, 1, a, b)...)
 *(a::Mul, b::Mul) = Mul(a.coeff * b.coeff, _merge(*, a.dict, b.dict, filter=iszero))
-*(a::Number, b::Symbolic) = iszero(a) ? a : isone(a) ? b : Mul(a, Dict(b=>1))
-*(b::Symbolic, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(a, Dict(b=>1))
+*(a::Number, b::Symbolic) = iszero(a) ? a : isone(a) ? b : Mul(make_mul_coeff_dict(1,a, b)...)
+*(b::Symbolic, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(make_mul_coeff_dict(1,a, b)...)
 
 """
     Pow(base, exp)
@@ -139,11 +163,11 @@ end
 
 ^(a::Symbolic, b) = Pow(a, b)
 function ^(a::Mul, b::Number)
-    Mul(a.coeff ^ b, mapvalues((_, v) -> v^b, a.dict))
+    Mul(a.coeff ^ b, mapvalues((k, v) -> b*v, a.dict))
 end
 
-function mapvalues(f, d::Dict)
-    d = copy(a.dict)
+function mapvalues(f, d1::Dict)
+    d = copy(d1)
     for (k, v) in d
         d[k] = f(k, v)
     end

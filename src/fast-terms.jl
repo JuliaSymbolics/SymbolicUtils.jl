@@ -50,7 +50,7 @@ function Base.show(io::IO, a::Add)
 end
 
 """
-make_add_dict(sign, xs...)
+    make_add_dict(sign, xs...)
 
 Any Muls inside an Add should always have a coeff of 1
 and the key (in Add) should instead be used to store the actual coefficient
@@ -75,8 +75,9 @@ function make_add_dict(sign, xs...)
 end
 
 +(a::Number, b::SN) = Add(a, make_add_dict(1, b))
-
 +(a::SN, b::Number) = Add(b, make_add_dict(1, a))
+-(a::Number, b::SN) = a + (-b)
+-(a::SN, b::Number) = a + (-b)
 
 function +(a::SN, b::SN)
     if a isa Add
@@ -89,9 +90,9 @@ end
 
 +(a::Add, b::Add) = Add(a.coeff + b.coeff, _merge(+, a.dict, b.dict, filter=iszero))
 
-+(a::Number, b::Add) = iszero(a) ? b : Add(a, make_add_dict(1, b))
++(a::Number, b::Add) = iszero(a) ? b : Add(a + b.coeff, b.dict)
 
-+(b::Add, a::Number) = iszero(a) ? b : Add(a, make_add_dict(1, b))
++(b::Add, a::Number) = iszero(a) ? b : Add(a + b.coeff, b.dict)
 
 -(a::Add) = Add(-a.coeff, mapvalues(-, a.dict))
 

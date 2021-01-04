@@ -1,4 +1,6 @@
 import Base: +, -, *, /, ^
+
+const SN = Symbolic{<:Number}
 """
     Add(coeff, dict)
 
@@ -28,7 +30,11 @@ function Base.show(io::IO, a::Add)
         if (i == 1 && print_coeff) || i != 1
             print(io, " + ")
         end
-        print(io, v, k)
+        if isone(v)
+            print(io, k)
+        else
+            print(io, v, k)
+        end
     end
 end
 
@@ -56,9 +62,9 @@ function make_add_dict(sign, xs...)
     end
     d
 end
-+(a::Number, b::Symbolic) = Add(a, make_add_dict(1, b))
-+(a::Symbolic, b::Number) = Add(b, make_add_dict(1, a))
-function +(a::Symbolic, b::Symbolic)
++(a::Number, b::SN) = Add(a, make_add_dict(1, b))
++(a::SN, b::Number) = Add(b, make_add_dict(1, a))
+function +(a::SN, b::SN)
     if a isa Add
         return a + Add(0, make_add_dict(1, b))
     elseif b isa Add
@@ -70,9 +76,9 @@ end
 +(a::Number, b::Add) = iszero(a) ? b : Add(a, make_add_dict(1, b))
 +(b::Add, a::Number) = iszero(a) ? b : Add(a, make_add_dict(1, b))
 -(a::Add) = Add(-a.coeff, mapvalues(-, a.dict))
--(a::Symbolic) = Add(0, make_add_dict(-1, a))
+-(a::SN) = Add(0, make_add_dict(-1, a))
 -(a::Add, b::Add) = Add(a.coeff - b.coeff, _merge(-, a.dict, b.dict, filter=iszero))
--(a::Symbolic, b::Symbolic) = a + (-b)
+-(a::SN, b::SN) = a + (-b)
 
 """
     Mul(coeff, dict)
@@ -85,6 +91,22 @@ struct Mul{X, T, D} <: Symbolic{X}
     coeff::T
     dict::D
 end
+function Mul(a,b)
+    isempty(b) && return a
+    if isone(a) && length(b) == 1
+        pair = first(b)
+        if isone(last(pair)) # first value
+            return first(pair)
+        else
+            return Pow(first(pair), last(pair))
+        end
+    else
+        Mul{Number, typeof(a), typeof(b)}(a,b)
+    end
+end
+Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
+Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
+
 function Base.show(io::IO, a::Mul)
     print_coeff = !isone(a.coeff)
     print_coeff && print(io, a.coeff)
@@ -94,28 +116,32 @@ function Base.show(io::IO, a::Mul)
             print(io, " * ")
         end
         if isone(v)
-            print(io, k)
+            if !(k isa Sym)
+                print(io, "(", k, ")")
+            else
+                print(io, k)
+            end
         else
-            print(io, k, "^", v)
+            if !(k isa Sym)
+                print(io, "(", k, ")^", v)
+            else
+                print(io, k, "^", v)
+            end
         end
     end
 end
-function Mul(a,b)
-    isempty(b) && return a
-    Mul{Number, typeof(a), typeof(b)}(a,b)
-end
-Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
-Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
 """
 make_mul_dict(xs...)
 """
-function make_mul_coeff_dict(sign, coeff, xs...)
-    d = Dict{Any, Number}()
+function make_mul_coeff_dict(sign, coeff, xs...; d=Dict{Any, Number}())
     for x in xs
-        if x isa Mul
+        if x isa Pow
+            d[x.base] = sign * x.exp + get(d, x.base, 0)
+        elseif x isa Mul
             coeff *= x.coeff
-            d = _merge((m, n)->m+sign*n, d, x.dict, filter=iszero)
+            dict = isone(sign) ? x.dict : mapvalues((_,v)->sign*v, x.dict)
+            d = _merge(+, d, dict, filter=iszero)
         else
             k = x
             v = sign + get(d, x, 0)
@@ -128,10 +154,20 @@ function make_mul_coeff_dict(sign, coeff, xs...)
     end
     coeff, d
 end
-*(a::Symbolic, b::Symbolic) = Mul(make_mul_coeff_dict(1, 1, a, b)...)
-*(a::Mul, b::Mul) = Mul(a.coeff * b.coeff, _merge(*, a.dict, b.dict, filter=iszero))
-*(a::Number, b::Symbolic) = iszero(a) ? a : isone(a) ? b : Mul(make_mul_coeff_dict(1,a, b)...)
-*(b::Symbolic, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(make_mul_coeff_dict(1,a, b)...)
+
+*(a::SN, b::SN) = Mul(make_mul_coeff_dict(1, 1, a, b)...)
+*(a::Mul, b::Mul) = Mul(a.coeff * b.coeff, _merge(+, a.dict, b.dict, filter=iszero))
+*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : Mul(make_mul_coeff_dict(1,a, b)...)
+*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(make_mul_coeff_dict(1,a, b)...)
+function *(a::Mul, b::Pow)
+    Mul(a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=iszero))
+end
+
+function /(a::Union{SN,Number}, b::SN)
+    a * Mul(make_mul_coeff_dict(-1, 1, b)...)
+end
+\(a::SN, b::SN) = b / a
+/(a::SN, b::Number) = inv(b) * a
 
 """
     Pow(base, exp)
@@ -142,7 +178,25 @@ struct Pow{X, B, E} <: Symbolic{X}
     base::B
     exp::E
 end
-Pow(a,b) = Pow{Number, typeof(a), typeof(b)}(a,b)
+function Base.show(io::IO, p::Pow)
+    k, v = p.base, p.exp
+    if !(k isa Sym)
+        print(io, "(", k, ")^", v)
+    else
+        print(io, k, "^", v)
+    end
+end
+
+function Pow(a,b)
+    iszero(b) && return 1
+    isone(b) && return a
+    Pow{Number, typeof(a), typeof(b)}(a,b)
+end
+
+^(a::SN, b) = Pow(a, b)
+function ^(a::Mul, b::Number)
+    Mul(a.coeff ^ b, mapvalues((k, v) -> b*v, a.dict))
+end
 
 function _merge(f, d, others...; filter=x->false)
     acc = copy(d)
@@ -159,11 +213,6 @@ function _merge(f, d, others...; filter=x->false)
         end
     end
     acc
-end
-
-^(a::Symbolic, b) = Pow(a, b)
-function ^(a::Mul, b::Number)
-    Mul(a.coeff ^ b, mapvalues((k, v) -> b*v, a.dict))
 end
 
 function mapvalues(f, d1::Dict)

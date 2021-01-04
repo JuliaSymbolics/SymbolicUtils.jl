@@ -14,7 +14,7 @@ const monadic = [deg2rad, rad2deg, transpose, conj, asind, log1p, acsch,
                  trigamma, invdigamma, polygamma, airyai, airyaiprime, airybi,
                  airybiprime, besselj0, besselj1, bessely0, bessely1]
 
-const diadic = [max, min,  /, \, hypot, atan, mod, rem, copysign,
+const diadic = [max, min, hypot, atan, mod, rem, copysign,
                 besselj, bessely, besseli, besselk, hankelh1, hankelh2,
                 polygamma, beta, logbeta]
 

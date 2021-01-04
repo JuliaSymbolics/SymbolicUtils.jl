@@ -84,7 +84,7 @@ for f in monadic
     if f in [real]
         continue
     end
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = Number
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
     @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a)
 end
 

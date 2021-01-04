@@ -5,6 +5,9 @@ export @syms, term, showraw
 # Sym, Term and other types
 include("types.jl")
 
+# Add, Mul and Pow
+include("fast-terms.jl")
+
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
 export cond

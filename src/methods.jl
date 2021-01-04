@@ -4,7 +4,7 @@ import SpecialFunctions: gamma, loggamma, erf, erfc, erfcinv, erfi, erfcx,
                          besselj1, bessely0, bessely1, besselj, bessely, besseli,
                          besselk, hankelh1, hankelh2, polygamma, beta, logbeta
 
-const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch,
+const monadic = [deg2rad, rad2deg, transpose, conj, asind, log1p, acsch,
                  acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh,
                  abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, acotd,
                  asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10,
@@ -14,7 +14,7 @@ const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch,
                  trigamma, invdigamma, polygamma, airyai, airyaiprime, airybi,
                  airybiprime, besselj0, besselj1, bessely0, bessely1]
 
-const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^, copysign,
+const diadic = [max, min,  /, \, hypot, atan, mod, rem, copysign,
                 besselj, bessely, besseli, besselk, hankelh1, hankelh2,
                 polygamma, beta, logbeta]
 
@@ -93,25 +93,6 @@ rec_promote_symtype(f, x) = promote_symtype(f, x)
 rec_promote_symtype(f, x,y) = promote_symtype(f, x,y)
 rec_promote_symtype(f, x,y,z...) = rec_promote_symtype(f, promote_symtype(f, x,y), z...)
 
-# Variadic methods
-for f in [+, *]
-
-    @eval (::$(typeof(f)))(x::Symbolic) = x
-
-    # single arg
-    @eval function (::$(typeof(f)))(x::Symbolic, w::Number...)
-        term($f, x,w...,
-             type=rec_promote_symtype($f, map(symtype, (x,w...))...))
-    end
-    @eval function (::$(typeof(f)))(x::Number, y::Symbolic, w::Number...)
-        term($f, x, y, w...,
-             type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
-    end
-    @eval function (::$(typeof(f)))(x::Symbolic, y::Symbolic, w::Number...)
-        term($f, x, y, w...,
-             type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
-    end
-end
 
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
 Base.:*(a::Symbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)

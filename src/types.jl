@@ -340,15 +340,17 @@ function show_term(io::IO, t)
             for i = 1:length(args)
                 length(args) == 1 && Base.print(io, fname)
 
-                args[i] isa Complex && Base.print(io, "(")
+                paren_scalar = args[i] isa Complex || args[i] isa Rational
+
+                paren_scalar && Base.print(io, "(")
                 # Do not put parenthesis if it's a multiplication
                 paren = !(istree(args[i]) && operation(args[i]) == (*))
                 Base.print(IOContext(io, :paren => paren), args[i])
-                args[i] isa Complex && Base.print(io, ")")
+                paren_scalar && Base.print(io, ")")
 
                 if i != length(args)
                     if fname == :*
-                        if i == 1 && args[1] isa Number
+                        if i == 1 && args[1] isa Number && !paren_scalar
                             # skip
                             # do not show * if it's a scalar times something
                         else

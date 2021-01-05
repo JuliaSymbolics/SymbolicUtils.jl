@@ -21,6 +21,14 @@ function Add(coeff, dict)
     Add{Number, typeof(coeff), typeof(dict)}(coeff,dict)
 end
 
+symtype(a::Add{X}) where {X} = X
+
+istree(a::Add) = true
+
+operation(a::Add) = +
+
+arguments(a::Add) = vcat(a.coeff, [v*k for (k,v) in a.dict])
+
 Base.hash(a::Add, u::UInt64) = hash(a.coeff, hash(a.dict, u))
 
 Base.isequal(a::Add, b::Add) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
@@ -119,6 +127,14 @@ function Mul(a,b)
     end
 end
 
+symtype(a::Mul{X}) where {X} = X
+
+istree(a::Mul) = true
+
+operation(a::Mul) = *
+
+arguments(a::Mul) = vcat(a.coeff, [k^v for (k,v) in a.dict])
+
 Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
 
 Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
@@ -202,6 +218,14 @@ function Pow(a,b)
     isone(b) && return a
     Pow{Number, typeof(a), typeof(b)}(a,b)
 end
+
+symtype(a::Pow{X}) where {X} = X
+
+istree(a::Pow) = true
+
+operation(a::Pow) = ^
+
+arguments(a::Pow) = [a.base, a.exp]
 
 Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 

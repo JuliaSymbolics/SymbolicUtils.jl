@@ -103,9 +103,9 @@ end
 
 +(a::Add, b::Add) = Add(a.coeff + b.coeff, _merge(+, a.dict, b.dict, filter=_iszero))
 
-+(a::Number, b::Add) = iszero(a) ? b : makeadd(1, a, b)
++(a::Number, b::Add) = iszero(a) ? b : Add(a + b.coeff, b.dict)
 
-+(b::Add, a::Number) = iszero(a) ? b : makeadd(1, a, b)
++(b::Add, a::Number) = iszero(a) ? b : Add(a + b.coeff, b.dict)
 
 -(a::Add) = Add(-a.coeff, mapvalues(-, a.dict))
 

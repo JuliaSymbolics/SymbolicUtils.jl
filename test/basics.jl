@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, symtype
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype
 using SymbolicUtils
 using Test
 
@@ -53,11 +53,11 @@ end
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test isequal(w + z, Term{Complex}(+, [w, z]))
-    @test isequal(z + a, Term{Number}(+, [z, a]))
-    @test isequal(a + b, Term{Real}(+, [a, b]))
-    @test isequal(a + x, Term{Number}(+, [a, x]))
-    @test isequal(a + z, Term{Number}(+, [a, z]))
+    @test isequal(w + z, Add(0, Dict(w=>1, z=>1)))
+    @test isequal(z + a, Add(0, Dict(z=>1, a=>1)))
+    @test isequal(a + b, Add(0, Dict(a=>1, b=>1))) # TODO: make this Real
+    @test isequal(a + x, Add(0, Dict(a=>1, x=>1)))
+    @test isequal(a + z, Add(0, Dict(a=>1, z=>1)))
 
     # promote_symtype of identity
     @test isequal(Term(identity, [w]), Term{Complex}(identity, [w]))
@@ -95,6 +95,6 @@ end
 @testset "printing" begin
     @syms a b
     @test repr(a+b) == "a + b"
-    @test repr(-a) == "-a"
-    @test repr(-a + 3) == "(-a) + 3"
+    @test repr(-a) == "-1a"
+    @test repr(-a + 3) == "3 + -1a"
 end

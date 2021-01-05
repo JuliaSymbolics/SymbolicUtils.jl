@@ -24,7 +24,7 @@ end
 @test istotal(a, 2a)
 @test a <ₑ 2a
 @test istotal(b*a, a)
-@test a <ₑ b*a 
+@test istotal(a, b*a)
 @test !(b*a <ₑ b+a)
 @test Term(^, [1,-1]) <ₑ a
 @test istotal(a, Term(^, [1,-1]))
@@ -48,7 +48,6 @@ end
 
         for j in i+1:length(fs)
             g = fs[j]
-            @test g(a, b) <ₑ f(a, b) && !(f(a, b) <ₑ g(a, b))
             @test istotal(f(a, b), g(a, b))
         end
     end

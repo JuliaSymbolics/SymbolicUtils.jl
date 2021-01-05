@@ -132,6 +132,8 @@ Sym(x) = Sym{symtype(x)}(x)
 
 Base.nameof(v::Sym) = v.name
 
+Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
+
 Base.isequal(v1::Sym{T}, v2::Sym{T}) where {T} = v1 === v2
 
 Base.show(io::IO, v::Sym) = print(io, v.name)
@@ -321,7 +323,9 @@ node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init
 #--------------------
 const show_simplified = Ref(false)
 
-function Base.show(io::IO, t::Term)
+Base.show(io::IO, t::Term) = show_term(io, t)
+
+function show_term(io::IO, t)
     if get(io, :simplify, show_simplified[])
         s = simplify(t)
         color = isequal(s, t) ? :white : :yellow

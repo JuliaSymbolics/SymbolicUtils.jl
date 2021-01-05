@@ -71,12 +71,20 @@ end
 
 @number_methods(Sym, term(f, a), term(f, a, b))
 @number_methods(Term, term(f, a), term(f, a, b))
+@number_methods(Symbolic{<:Number}, term(f, a), term(f, a, b))
 
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
 end
+
+for f in [+, *, \, /, ^]
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{<:Number},
+                   S::Type{<:Number}) = promote_type(T, S)
+end
+
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 

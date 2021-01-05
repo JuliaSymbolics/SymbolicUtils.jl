@@ -17,11 +17,15 @@ end
 function Add(coeff, dict)
     if isempty(dict)
         return coeff
+    elseif _iszero(coeff) && length(dict) == 1
+        k,v = first(dict)
+        return _isone(v) ? k : makemul(1, v, k)
     end
     Add{Number, typeof(coeff), typeof(dict)}(coeff,dict)
 end
 
 symtype(a::Add{X}) where {X} = X
+
 
 istree(a::Add) = true
 
@@ -53,14 +57,18 @@ function Base.show(io::IO, a::Add)
 end
 
 """
-make_add_dict(sign, xs...)
+    makeadd(sign, coeff::Number, xs...)
 
 Any Muls inside an Add should always have a coeff of 1
 and the key (in Add) should instead be used to store the actual coefficient
 """
-function make_add_dict(sign, xs...)
+function makeadd(sign, coeff, xs...)
     d = Dict{Any, Number}()
     for x in xs
+        if x isa Number
+            coeff += x
+            continue
+        end
         if x isa Mul
             k = Mul(1, x.dict)
             v = sign * x.coeff + get(d, k, 0)
@@ -74,33 +82,34 @@ function make_add_dict(sign, xs...)
             d[k] = v
         end
     end
-    d
+    Add(coeff, d)
 end
 
 function +(a::SN, b::SN)
     if a isa Add
-        return a + Add(0, make_add_dict(1, b))
+        c = makeadd(1, 0, b)
+        return c isa Add ? a + c : Add(a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1)))
     elseif b isa Add
         return b + a
     end
-    Add(0, make_add_dict(1, a, b))
+    makeadd(1, 0, a, b)
 end
 
-+(a::Number, b::SN) = Add(a, make_add_dict(1, b))
++(a::Number, b::SN) = makeadd(1, a, b)
 
-+(a::SN, b::Number) = Add(b, make_add_dict(1, a))
++(a::SN, b::Number) = makeadd(1, b, a)
 
 +(a::SN) = a
 
 +(a::Add, b::Add) = Add(a.coeff + b.coeff, _merge(+, a.dict, b.dict, filter=_iszero))
 
-+(a::Number, b::Add) = iszero(a) ? b : Add(a, make_add_dict(1, b))
++(a::Number, b::Add) = iszero(a) ? b : makeadd(1, a, b)
 
-+(b::Add, a::Number) = iszero(a) ? b : Add(a, make_add_dict(1, b))
++(b::Add, a::Number) = iszero(a) ? b : makeadd(1, a, b)
 
 -(a::Add) = Add(-a.coeff, mapvalues(-, a.dict))
 
--(a::SN) = Add(0, make_add_dict(-1, a))
+-(a::SN) = makeadd(-1, 0, a)
 
 -(a::Add, b::Add) = Add(a.coeff - b.coeff, _merge(-, a.dict, b.dict, filter=_iszero))
 
@@ -151,25 +160,21 @@ Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
 
 Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
-
-Base.show(io::IO, a::Mul) = show_term(io, a)
-
 function Base.show(io::IO, a::Mul)
     print_coeff = !isone(a.coeff)
     print_coeff && print(io, a.coeff)
 
     for (i, v) in enumerate(arguments(a))
-        if (i == 1 && print_coeff) || i != 1
-            print(io, "*")
-        end
+        i == 1 && continue
+        i > 2 && print(io, "*")
         print(io, v)
     end
 end
 
 """
-make_mul_dict(xs...)
+makemul(xs...)
 """
-function make_mul_coeff_dict(sign, coeff, xs...; d=Dict{Any, Number}())
+function makemul(sign, coeff, xs...; d=Dict{Any, Number}())
     for x in xs
         if x isa Pow && x.exp isa Number
             d[x.base] = sign * x.exp + get(d, x.base, 0)
@@ -187,19 +192,19 @@ function make_mul_coeff_dict(sign, coeff, xs...; d=Dict{Any, Number}())
             end
         end
     end
-    coeff, d
+    Mul(coeff, d)
 end
 
-*(a::SN, b::SN) = Mul(make_mul_coeff_dict(1, 1, a, b)...)
+*(a::SN, b::SN) = makemul(1, 1, a, b)
 
 *(a::Mul, b::Mul) = Mul(a.coeff * b.coeff, _merge(+, a.dict, b.dict, filter=_iszero))
 
-*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : Mul(make_mul_coeff_dict(1,a, b)...)
+*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : makemul(1,a, b)
 
-*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(make_mul_coeff_dict(1,a, b)...)
+*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : makemul(1,a, b)
 
 function /(a::Union{SN,Number}, b::SN)
-    a * Mul(make_mul_coeff_dict(-1, 1, b)...)
+    a * makemul(-1, 1, b)
 end
 
 \(a::SN, b::Union{Number, SN}) = b / a
@@ -259,7 +264,7 @@ function *(a::Mul, b::Pow)
     if b.exp isa Number
         Mul(a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
     else
-        Mul(a, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
+        Mul(a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
     end
 end
 
@@ -288,4 +293,16 @@ function mapvalues(f, d1::Dict)
         d[k] = f(k, v)
     end
     d
+end
+
+function similarterm(p::Union{Mul, Add, Pow}, f, args)
+    if f === (+)
+        makeadd(1, 0, args...)
+    elseif f == (*)
+        makemul(1, 1, args...)
+    elseif f == (^)
+        Pow(args...)
+    else
+        f(args...)
+    end
 end

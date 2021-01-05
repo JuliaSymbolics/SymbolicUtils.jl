@@ -325,16 +325,6 @@ const show_simplified = Ref(false)
 
 Base.show(io::IO, t::Term) = show_term(io, t)
 
-function show_coeff(io, α::Number)
-    if α isa Complex
-        print(io, '(', α, ')', '*')
-    elseif isone(α)
-        # print nothing
-    else
-        print(io, α)
-    end
-end
-
 function show_term(io::IO, t)
     if get(io, :simplify, show_simplified[])
         s = simplify(t)
@@ -365,7 +355,7 @@ function show_term(io::IO, t)
                             Base.print(io, "*")
                         end
                     else
-                        Base.print(io, " $fname ")
+                        Base.print(io, fname == :^ ? '^' : " $fname ")
                     end
                 end
             end

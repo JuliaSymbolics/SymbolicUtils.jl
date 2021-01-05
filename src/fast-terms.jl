@@ -221,14 +221,7 @@ Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 
 Base.isequal(p::Pow, b::Pow) = isequal(p.base, b.base) && isequal(p.exp, b.exp)
 
-function Base.show(io::IO, p::Pow)
-    k, v = p.base, p.exp
-    if !(k isa Sym)
-        print(io, "(", k, ")^", v)
-    else
-        print(io, k, "^", v)
-    end
-end
+Base.show(io::IO, p::Pow) = show_term(io, p)
 
 ^(a::SN, b) = Pow(a, b)
 

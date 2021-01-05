@@ -36,7 +36,21 @@ Base.hash(a::Add, u::UInt64) = hash(a.coeff, hash(a.dict, u))
 
 Base.isequal(a::Add, b::Add) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
-Base.show(io::IO, a::Add) = show_term(io, a)
+function Base.show(io::IO, a::Add)
+    print_coeff = !iszero(a.coeff)
+    print_coeff && print(io, a.coeff)
+
+    for (i, (k, v)) in enumerate(a.dict)
+        if (i == 1 && print_coeff) || i != 1
+            print(io, " + ")
+        end
+        if isone(v)
+            print(io, k)
+        else
+            print(io, v, k)
+        end
+    end
+end
 
 """
 make_add_dict(sign, xs...)
@@ -137,7 +151,20 @@ Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
 
 Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
+
 Base.show(io::IO, a::Mul) = show_term(io, a)
+
+function Base.show(io::IO, a::Mul)
+    print_coeff = !isone(a.coeff)
+    print_coeff && print(io, a.coeff)
+
+    for (i, v) in enumerate(arguments(a))
+        if (i == 1 && print_coeff) || i != 1
+            print(io, "*")
+        end
+        print(io, v)
+    end
+end
 
 """
 make_mul_dict(xs...)
@@ -209,7 +236,14 @@ Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 
 Base.isequal(p::Pow, b::Pow) = isequal(p.base, b.base) && isequal(p.exp, b.exp)
 
-Base.show(io::IO, p::Pow) = show_term(io, p)
+function Base.show(io::IO, p::Pow)
+    k, v = p.base, p.exp
+    if !(k isa Sym)
+        print(io, "(", k, ")^", v)
+    else
+        print(io, k, "^", v)
+    end
+end
 
 ^(a::SN, b) = Pow(a, b)
 

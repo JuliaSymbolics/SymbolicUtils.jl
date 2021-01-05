@@ -328,37 +328,34 @@ Base.show(io::IO, t::Term) = show_term(io, t)
 function show_term(io::IO, t)
     if get(io, :simplify, show_simplified[])
         s = simplify(t)
-        color = isequal(s, t) ? :white : :yellow
 
-        Base.printstyled(IOContext(io, :simplify=>false, :withcolor=>color),
-                         s, color=color)
+        Base.print(IOContext(io, :simplify=>false), s)
     else
         f = operation(t)
         args = arguments(t)
         fname = nameof(f)
         binary = Base.isbinaryoperator(fname)
-        color = get(io, :withcolor, :white)
         if binary
-            get(io, :paren, false) && Base.printstyled(io, "(",color=color)
+            get(io, :paren, false) && Base.print(io, "(")
             for i = 1:length(args)
-                length(args) == 1 && Base.printstyled(io, fname, color=color)
+                length(args) == 1 && Base.print(io, fname)
 
-                args[i] isa Complex && Base.printstyled(io, "(",color=color)
-                Base.printstyled(IOContext(io, :paren => true),
-                                 args[i], color=color)
-                args[i] isa Complex && Base.printstyled(io, ")",color=color)
+                args[i] isa Complex && Base.print(io, "(")
+                Base.print(IOContext(io, :paren => true), args[i])
+                args[i] isa Complex && Base.print(io, ")")
 
-                i != length(args) && Base.printstyled(io, " $fname ", color=color)
+                if i != length(args)
+                    Base.print(io, fname == :* ? "*" : " $fname ")
+                end
             end
-            get(io, :paren, false) && Base.printstyled(io, ")", color=color)
+            get(io, :paren, false) && Base.print(io, ")")
         else
-            Base.printstyled(io, "$fname(", color=color)
+            Base.print(io, "$fname(")
             for i=1:length(args)
-                Base.printstyled(IOContext(io, :paren => false),
-                                 args[i], color=color)
-                i != length(args) && Base.printstyled(io, ", ", color=color)
+                Base.print(IOContext(io, :paren => false), args[i])
+                i != length(args) && Base.print(io, ", ")
             end
-            Base.printstyled(io, ")", color=color)
+            Base.print(io, ")")
         end
     end
     return nothing

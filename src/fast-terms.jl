@@ -40,21 +40,7 @@ Base.hash(a::Add, u::UInt64) = hash(a.coeff, hash(a.dict, u))
 
 Base.isequal(a::Add, b::Add) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
-function Base.show(io::IO, a::Add)
-    print_coeff = !iszero(a.coeff)
-    print_coeff && print(io, a.coeff)
-
-    for (i, (k, v)) in enumerate(a.dict)
-        if (i == 1 && print_coeff) || i != 1
-            print(io, " + ")
-        end
-        if isone(v)
-            print(io, k)
-        else
-            print(io, v, k)
-        end
-    end
-end
+Base.show(io::IO, a::Add) = show_term(io, a)
 
 """
     makeadd(sign, coeff::Number, xs...)
@@ -82,22 +68,22 @@ function makeadd(sign, coeff, xs...)
             d[k] = v
         end
     end
-    Add(coeff, d)
+    coeff, d
 end
 
 function +(a::SN, b::SN)
     if a isa Add
-        c = makeadd(1, 0, b)
-        return c isa Add ? a + c : Add(a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1)))
+        coeff, dict = makeadd(1, 0, b)
+        return Add(a.coeff + coeff, _merge(+, a.dict, dict))
     elseif b isa Add
         return b + a
     end
-    makeadd(1, 0, a, b)
+    Add(makeadd(1, 0, a, b)...)
 end
 
-+(a::Number, b::SN) = makeadd(1, a, b)
++(a::Number, b::SN) = Add(makeadd(1, a, b)...)
 
-+(a::SN, b::Number) = makeadd(1, b, a)
++(a::SN, b::Number) = Add(makeadd(1, b, a)...)
 
 +(a::SN) = a
 
@@ -109,7 +95,7 @@ end
 
 -(a::Add) = Add(-a.coeff, mapvalues(-, a.dict))
 
--(a::SN) = makeadd(-1, 0, a)
+-(a::SN) = Add(makeadd(-1, 0, a)...)
 
 -(a::Add, b::Add) = Add(a.coeff - b.coeff, _merge(-, a.dict, b.dict, filter=_iszero))
 
@@ -160,16 +146,8 @@ Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
 
 Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
-function Base.show(io::IO, a::Mul)
-    print_coeff = !isone(a.coeff)
-    print_coeff && print(io, a.coeff)
 
-    for (i, v) in enumerate(arguments(a))
-        i == 1 && continue
-        i > 2 && print(io, "*")
-        print(io, v)
-    end
-end
+Base.show(io::IO, a::Mul) = show_term(io, a)
 
 """
 makemul(xs...)
@@ -178,6 +156,8 @@ function makemul(sign, coeff, xs...; d=Dict{Any, Number}())
     for x in xs
         if x isa Pow && x.exp isa Number
             d[x.base] = sign * x.exp + get(d, x.base, 0)
+        elseif x isa Number
+            coeff *= x
         elseif x isa Mul
             coeff *= x.coeff
             dict = isone(sign) ? x.dict : mapvalues((_,v)->sign*v, x.dict)
@@ -297,7 +277,7 @@ end
 
 function similarterm(p::Union{Mul, Add, Pow}, f, args)
     if f === (+)
-        makeadd(1, 0, args...)
+        Add(makeadd(1, 0, args...)...)
     elseif f == (*)
         makemul(1, 1, args...)
     elseif f == (^)

@@ -325,6 +325,16 @@ const show_simplified = Ref(false)
 
 Base.show(io::IO, t::Term) = show_term(io, t)
 
+function show_coeff(io, α::Number)
+    if α isa Complex
+        print(io, '(', α, ')', '*')
+    elseif isone(α)
+        # print nothing
+    else
+        print(io, α)
+    end
+end
+
 function show_term(io::IO, t)
     if get(io, :simplify, show_simplified[])
         s = simplify(t)
@@ -341,11 +351,22 @@ function show_term(io::IO, t)
                 length(args) == 1 && Base.print(io, fname)
 
                 args[i] isa Complex && Base.print(io, "(")
-                Base.print(IOContext(io, :paren => true), args[i])
+                # Do not put parenthesis if it's a multiplication
+                paren = !(istree(args[i]) && operation(args[i]) == (*))
+                Base.print(IOContext(io, :paren => paren), args[i])
                 args[i] isa Complex && Base.print(io, ")")
 
                 if i != length(args)
-                    Base.print(io, fname == :* ? "*" : " $fname ")
+                    if fname == :*
+                        if i == 1 && args[1] isa Number
+                            # skip
+                            # do not show * if it's a scalar times something
+                        else
+                            Base.print(io, "*")
+                        end
+                    else
+                        Base.print(io, " $fname ")
+                    end
                 end
             end
             get(io, :paren, false) && Base.print(io, ")")

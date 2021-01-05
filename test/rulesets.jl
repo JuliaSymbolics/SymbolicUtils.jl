@@ -5,9 +5,9 @@ using SymbolicUtils: getdepth, Rewriters
     @syms w z α::Real β::Real
 
     r1 = @rule ~x + ~x => 2 * (~x)
-    r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+    r2 = @acrule ~x * +(~~ys) => sum(map(y-> ~x * y,  ~~ys));
 
-    rset = Rewriters.Postwalk(Rewriters.Chain([r1, r2]))
+    rset = Rewriters.Postwalk(Rewriters.Chain([r2]))
     @test getdepth(rset) == typemax(Int)
 
     ex = 2 * (w + w + α + β)

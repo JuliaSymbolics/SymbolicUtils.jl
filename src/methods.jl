@@ -74,7 +74,9 @@ end
 
 @number_methods(Sym, term(f, a), term(f, a, b), skipbasics)
 @number_methods(Term, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Symbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Add, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Mul, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Pow, term(f, a), term(f, a, b), skipbasics)
 
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),

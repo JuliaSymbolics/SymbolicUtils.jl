@@ -31,13 +31,17 @@ end
 islike(a, T) = symtype(a) <: T
 
 # TODO: keep domains tighter than this
-function number_methods(T, rhs1, rhs2)
+function number_methods(T, rhs1, rhs2, options=nothing)
     exprs = []
+
+    skip_basics = !isnothing(options) ? options == :skipbasics : false
+    basic_monadic = [-, +]
+    basic_diadic = [+, -, *, /, \, ^]
 
     rhs2 = :($assert_like(f, Number, a, b); $rhs2)
     rhs1 = :($assert_like(f, Number, a); $rhs1)
 
-    for f in diadic
+    for f in (skip_basics ? diadic : vcat(basic_diadic, diadic))
         for S in previously_declared_for
             push!(exprs, quote
                       (f::$(typeof(f)))(a::$T, b::$S) = $rhs2
@@ -57,20 +61,20 @@ function number_methods(T, rhs1, rhs2)
         push!(exprs, expr)
     end
 
-    for f in monadic
+    for f in (skip_basics ? monadic : vcat(basic_monadic, monadic))
         push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
     end
     push!(exprs, :(push!($previously_declared_for, $T)))
     Expr(:block, exprs...)
 end
 
-macro number_methods(T, rhs1, rhs2)
-    number_methods(T, rhs1, rhs2) |> esc
+macro number_methods(T, rhs1, rhs2, options=nothing)
+    number_methods(T, rhs1, rhs2, options) |> esc
 end
 
-@number_methods(Sym, term(f, a), term(f, a, b))
-@number_methods(Term, term(f, a), term(f, a, b))
-@number_methods(Symbolic{<:Number}, term(f, a), term(f, a, b))
+@number_methods(Sym, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Term, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Symbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
 
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),

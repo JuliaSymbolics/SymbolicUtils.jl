@@ -2,7 +2,8 @@ import Base: +, -, *, /, \, ^
 
 sdict(kv...) = Dict{Any, Number}(kv...)
 
-const SN = Symbolic{<:Number}
+# this cannot be Symbolic{<:Number} to make MTK Parameters work. See #155
+const SN = Symbolic
 """
     Add(coeff, dict)
 

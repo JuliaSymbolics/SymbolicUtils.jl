@@ -98,7 +98,7 @@ end
 
 +(b::Add, a::Number) = iszero(a) ? b : Add(a + b.coeff, b.dict)
 
--(a::Add) = Add(-a.coeff, mapvalues(-, a.dict))
+-(a::Add) = Add(-a.coeff, mapvalues((_,v) -> -v, a.dict))
 
 -(a::SN) = Add(makeadd(-1, 0, a)...)
 

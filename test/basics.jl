@@ -97,4 +97,5 @@ end
     @test repr(a+b) == "a + b"
     @test repr(-a) == "-1a"
     @test repr(-a + 3) == "3 + -1a"
+    @test repr(-(a + b)) == "-1a + -1b"
 end

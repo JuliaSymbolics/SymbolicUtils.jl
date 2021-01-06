@@ -363,7 +363,8 @@ function show_term(io::IO, t)
             end
             get(io, :paren, false) && Base.print(io, ")")
         else
-            Base.print(io, "$fname(")
+            Base.show(io, f)
+            Base.print(io, "(")
             for i=1:length(args)
                 Base.print(IOContext(io, :paren => false), args[i])
                 i != length(args) && Base.print(io, ", ")

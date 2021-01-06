@@ -6,6 +6,7 @@ export @syms, term, showraw
 include("types.jl")
 
 # Add, Mul and Pow
+using DataStructures
 include("fast-terms.jl")
 
 # Methods on symbolic objects
@@ -35,7 +36,6 @@ include("matchers.jl")
 # Convert to an efficient multi-variate polynomial representation
 import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
 using AbstractAlgebra: ismonomial, symbols
-using DataStructures
 include("abstractalgebra.jl")
 
 # Term ordering

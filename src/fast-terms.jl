@@ -1,5 +1,7 @@
 import Base: +, -, *, /, \, ^
 
+sdict(kv...) = Dict{Any, Number}(kv...)
+
 const SN = Symbolic{<:Number}
 """
     Add(coeff, dict)
@@ -12,6 +14,7 @@ where coeff and the vals are non-symbolic numbers.
 struct Add{X, T<:Number, D} <: Symbolic{X}
     coeff::T
     dict::D
+    sorted_args_cache::Ref{Any}
 end
 
 function Add(coeff, dict)
@@ -21,7 +24,7 @@ function Add(coeff, dict)
         k,v = first(dict)
         return _isone(v) ? k : makemul(1, v, k)
     end
-    Add{Number, typeof(coeff), typeof(dict)}(coeff,dict)
+    Add{Number, typeof(coeff), typeof(dict)}(coeff,dict, Ref{Any}(nothing))
 end
 
 symtype(a::Add{X}) where {X} = X
@@ -32,8 +35,9 @@ istree(a::Add) = true
 operation(a::Add) = +
 
 function arguments(a::Add)
+    a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
-    iszero(a.coeff) ? args : vcat(a.coeff, args)
+    a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
 Base.hash(a::Add, u::UInt64) = hash(a.coeff, hash(a.dict, u))
@@ -49,7 +53,7 @@ Any Muls inside an Add should always have a coeff of 1
 and the key (in Add) should instead be used to store the actual coefficient
 """
 function makeadd(sign, coeff, xs...)
-    d = Dict{Any, Number}()
+    d = sdict()
     for x in xs
         if x isa Number
             coeff += x
@@ -115,6 +119,7 @@ where coeff is a non-symbolic number.
 struct Mul{X, T<:Number, D} <: Symbolic{X}
     coeff::T
     dict::D
+    sorted_args_cache::Ref{Any}
 end
 
 function Mul(a,b)
@@ -127,7 +132,7 @@ function Mul(a,b)
             return Pow(first(pair), last(pair))
         end
     else
-        Mul{Number, typeof(a), typeof(b)}(a,b)
+        Mul{Number, typeof(a), typeof(b)}(a,b, Ref{Any}(nothing))
     end
 end
 
@@ -138,8 +143,9 @@ istree(a::Mul) = true
 operation(a::Mul) = *
 
 function arguments(a::Mul)
+    a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([k^v for (k,v) in a.dict], lt=<ₑ)
-    isone(a.coeff) ? args : vcat(a.coeff, args)
+    a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
 Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
@@ -152,7 +158,7 @@ Base.show(io::IO, a::Mul) = show_term(io, a)
 """
 makemul(xs...)
 """
-function makemul(sign, coeff, xs...; d=Dict{Any, Number}())
+function makemul(sign, coeff, xs...; d=sdict())
     for x in xs
         if x isa Pow && x.exp isa Number
             d[x.base] = sign * x.exp + get(d, x.base, 0)
@@ -260,7 +266,7 @@ function _merge(f, d, others...; filter=x->false)
     acc
 end
 
-function mapvalues(f, d1::Dict)
+function mapvalues(f, d1::AbstractDict)
     d = copy(d1)
     for (k, v) in d
         d[k] = f(k, v)

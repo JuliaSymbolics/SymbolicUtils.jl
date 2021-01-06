@@ -78,7 +78,7 @@ end
 function +(a::SN, b::SN)
     if a isa Add
         coeff, dict = makeadd(1, 0, b)
-        return Add(a.coeff + coeff, _merge(+, a.dict, dict))
+        return Add(a.coeff + coeff, _merge(+, a.dict, dict, filter=_iszero))
     elseif b isa Add
         return b + a
     end

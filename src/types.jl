@@ -363,7 +363,11 @@ function show_term(io::IO, t)
             end
             get(io, :paren, false) && Base.print(io, ")")
         else
-            Base.show(io, f)
+            if f isa Sym
+                Base.print(io, nameof(f))
+            else
+                Base.show(io, f)
+            end
             Base.print(io, "(")
             for i=1:length(args)
                 Base.print(IOContext(io, :paren => false), args[i])

@@ -182,6 +182,8 @@ function makemul(sign, coeff, xs...; d=sdict())
     Mul(coeff, d)
 end
 
+*(a::SN) = a
+
 *(a::SN, b::SN) = makemul(1, 1, a, b)
 
 *(a::Mul, b::Mul) = Mul(a.coeff * b.coeff, _merge(+, a.dict, b.dict, filter=_iszero))

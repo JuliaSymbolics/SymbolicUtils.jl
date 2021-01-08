@@ -111,10 +111,10 @@ is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
 isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(x)
 
-_iszero(t) = false
-_iszero(x::Number) = iszero(x)
-_isone(t) = false
-_isone(x::Number) = isone(x)
+# checking the type directly is faster than dynamic dispatch in type unstable code
+_iszero(x) = x isa Number && iszero(x)
+_isone(x) = x isa Number && isone(x)
+_isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) <: Integer)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
 needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))

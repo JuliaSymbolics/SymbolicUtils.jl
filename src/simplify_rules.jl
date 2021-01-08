@@ -35,8 +35,8 @@ let
 
 
     POW_RULES = [
-        @rule(^(*(~~x), ~y::isliteral(Integer)) => *(map(a->pow(a, ~y), ~~x)...))
-        @rule((((~x)^(~p::isliteral(Integer)))^(~q::isliteral(Integer))) => (~x)^((~p)*(~q)))
+        @rule(^(*(~~x), ~y::_isinteger) => *(map(a->pow(a, ~y), ~~x)...))
+        @rule((((~x)^(~p::_isinteger))^(~q::_isinteger)) => (~x)^((~p)*(~q)))
         @rule(^(~x, ~z::_iszero) => 1)
         @rule(^(~x, ~z::_isone) => ~x)
         @rule(inv(~x) => ~x ^ -1)

@@ -107,19 +107,20 @@ function (rw::Fixpoint)(x)
     return x
 end
 
-struct Walk{ord, C, threaded}
+struct Walk{ord, C, F, threaded}
     rw::C
     thread_cutoff::Int
+    similarterm::F
 end
 
 using .Threads
 
-function Postwalk(rw; threaded::Bool=false, thread_cutoff=100)
-    Walk{:post, typeof(rw), threaded}(rw, thread_cutoff)
+function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
+    Walk{:post, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
 end
 
-function Prewalk(rw; threaded::Bool=false, thread_cutoff=100)
-    Walk{:pre, typeof(rw), threaded}(rw, thread_cutoff)
+function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
+    Walk{:pre, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
 end
 
 struct PassThrough{C}
@@ -128,14 +129,14 @@ end
 (p::PassThrough)(x) = (y=p.rw(x); isnothing(y) ? x : y)
 
 passthrough(x, default) = isnothing(x) ? default : x
-function (p::Walk{ord, C, false})(x) where {ord, C}
+function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
     if istree(x)
         if ord === :pre
             x = p.rw(x)
         end
         if istree(x)
-            x = similarterm(x, operation(x), map(PassThrough(p), arguments(x)))
+            x = p.similarterm(x, operation(x), map(PassThrough(p), arguments(x)))
         end
         return ord === :post ? p.rw(x) : x
     else
@@ -143,7 +144,7 @@ function (p::Walk{ord, C, false})(x) where {ord, C}
     end
 end
 
-function (p::Walk{ord, C, true})(x) where {ord, C}
+function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
     if istree(x)
         if ord === :pre
@@ -158,7 +159,7 @@ function (p::Walk{ord, C, true})(x) where {ord, C}
                 end
             end
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
-            t = similarterm(x, operation(x), args)
+            t = p.similarterm(x, operation(x), args)
         end
         return ord === :post ? p.rw(t) : t
     else

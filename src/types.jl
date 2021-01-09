@@ -391,12 +391,17 @@ sdict(kv...) = Dict{Any, Number}(kv...)
 # this cannot be Symbolic{<:Number} to make MTK Parameters work. See #155
 const SN = Symbolic
 """
-    Add(coeff, dict)
+    Add(T, coeff, dict::Dict)
 
-Represents coeff + (key1 * val1) + (key2 * val2) + ...
+Represents `coeff + (key1 * val1) + (key2 * val2) + ...`
 
-where coeff and the vals are non-symbolic numbers.
+where keys and values come from the dictionary (`dict`).
+where `coeff` and the vals are `<:Number` and keys are symbolic.
 
+- `operation(::Add)` -- returns `+`.
+- `symtype(::Add)` -- returns `T`.
+- `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
+  `[coeff, keyM*valM, keyN*valN...]`
 """
 struct Add{X, T<:Number, D} <: Symbolic{X}
     coeff::T
@@ -507,11 +512,17 @@ end
 -(a::SN, b::Number) = a + (-b)
 
 """
-    Mul(coeff, dict)
+    Mul(T, coeff, dict)
 
 Represents coeff * (key1 ^ val1) * (key2 ^ val2) * ....
 
-where coeff is a non-symbolic number.
+where coeff is a <:Number and keys and values come from the dictionary (`dict`).
+where `coeff` and the vals are `<:Number` and keys are symbolic.
+
+- `symtype(::Add)` -- returns `T`.
+- `operation(::Add)` -- returns `*`.
+- `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
+  `[coeff, keyM^valM, keyN^valN...]`
 """
 struct Mul{X, T<:Number, D} <: Symbolic{X}
     coeff::T
@@ -552,9 +563,6 @@ Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.di
 
 Base.show(io::IO, a::Mul) = show_term(io, a)
 
-"""
-makemul(xs...)
-"""
 function makemul(sign, coeff, xs...; d=sdict())
     for x in xs
         if x isa Pow && x.exp isa Number
@@ -606,7 +614,7 @@ end
 """
     Pow(base, exp)
 
-Represents base^exp, a lighter version of Mul(1, Dict(base=>exp))
+Represents `base^exp`, a lighter version of `Mul(1, Dict(base=>exp))`
 """
 struct Pow{X, B, E} <: Symbolic{X}
     base::B

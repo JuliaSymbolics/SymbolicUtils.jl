@@ -20,6 +20,12 @@ using SymbolicUtils # hide
 
 {{doc Term Term type}}
 
+{{doc Add Add type}}
+
+{{doc Mul Mul type}}
+
+{{doc Pow Pow type}}
+
 {{doc promote_symtype promote_symtype fn}}
 
 ## Interfacing

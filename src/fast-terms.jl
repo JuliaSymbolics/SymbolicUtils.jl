@@ -62,7 +62,7 @@ function makeadd(sign, coeff, xs...)
             continue
         end
         if x isa Mul
-            k = Mul(1, x.dict)
+            k = Mul(symtype(x), 1, x.dict)
             v = sign * x.coeff + get(d, k, 0)
         else
             k = x
@@ -133,7 +133,7 @@ struct Mul{X, T<:Number, D} <: Symbolic{X}
     sorted_args_cache::Ref{Any}
 end
 
-function Mul(a,b)
+function Mul(T, a,b)
     isempty(b) && return a
     if _isone(a) && length(b) == 1
         pair = first(b)
@@ -143,7 +143,7 @@ function Mul(a,b)
             return Pow(first(pair), last(pair))
         end
     else
-        Mul{Number, typeof(a), typeof(b)}(a,b, Ref{Any}(nothing))
+        Mul{T, typeof(a), typeof(b)}(a,b, Ref{Any}(nothing))
     end
 end
 
@@ -189,7 +189,7 @@ function makemul(sign, coeff, xs...; d=sdict())
             end
         end
     end
-    Mul(coeff, d)
+    (coeff, d)
 end
 
 mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
@@ -197,16 +197,18 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 
-*(a::SN, b::SN) = makemul(1, 1, a, b)
+*(a::SN, b::SN) = Mul(mul_t(a,b), makemul(1, 1, a, b)...)
 
-*(a::Mul, b::Mul) = Mul(a.coeff * b.coeff, _merge(+, a.dict, b.dict, filter=_iszero))
+*(a::Mul, b::Mul) = Mul(mul_t(a, b),
+                        a.coeff * b.coeff,
+                        _merge(+, a.dict, b.dict, filter=_iszero))
 
-*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : makemul(1,a, b)
+*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(1,a, b)...)
 
-*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : makemul(1,a, b)
+*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(1,a, b)...)
 
 function /(a::Union{SN,Number}, b::SN)
-    a * makemul(-1, 1, b)
+    a * Mul(promote_symtype(/, 1, symtype(b)), makemul(-1, 1, b)...)
 end
 
 \(a::SN, b::Union{Number, SN}) = b / a
@@ -228,7 +230,7 @@ end
 function Pow(a,b)
     _iszero(b) && return 1
     _isone(b) && return a
-    Pow{Number, typeof(a), typeof(b)}(a,b)
+    Pow{promote_symtype(^, symtype(a), symtype(b)), typeof(a), typeof(b)}(a,b)
 end
 
 symtype(a::Pow{X}) where {X} = X
@@ -252,14 +254,17 @@ Base.show(io::IO, p::Pow) = show_term(io, p)
 ^(a::Number, b::SN) = Pow(a, b)
 
 function ^(a::Mul, b::Number)
-    Mul(a.coeff ^ b, mapvalues((k, v) -> b*v, a.dict))
+    Mul(promote_symtype(^, symtype(a), symtype(b)),
+        a.coeff ^ b, mapvalues((k, v) -> b*v, a.dict))
 end
 
 function *(a::Mul, b::Pow)
     if b.exp isa Number
-        Mul(a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
+        Mul(mul_t(a, b),
+            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
     else
-        Mul(a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
+        Mul(mul_t(a, b),
+            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
     end
 end
 
@@ -292,9 +297,9 @@ end
 
 function similarterm(p::Union{Mul, Add, Pow}, f, args)
     if f === (+)
-        Add(makeadd(1, 0, args...)...)
+        Add(symtype(p), makeadd(1, 0, args...)...)
     elseif f == (*)
-        makemul(1, 1, args...)
+        Mul(symtype(p), makemul(1, 1, args...)...)
     elseif f == (^)
         Pow(args...)
     else

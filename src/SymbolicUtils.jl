@@ -2,12 +2,11 @@ module SymbolicUtils
 
 export @syms, term, showraw
 
-# Sym, Term and other types
-include("types.jl")
-
+# Sym, Term,
 # Add, Mul and Pow
 using DataStructures
-include("fast-terms.jl")
+import Base: +, -, *, /, \, ^
+include("types.jl")
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath

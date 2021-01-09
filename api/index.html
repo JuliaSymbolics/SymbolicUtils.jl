@@ -60,8 +60,17 @@
       <h2 class=doc-header  id=Add >
         <a href="#Add">Add</a>
         <div class=doc-type >type</div></h2>
-      <div class=doc-content ><p>No documentation found.</p>
-<p>Binding <code>SymbolicUtils.Add</code> does not exist.</p>
+      <div class=doc-content ><pre><code class=language-julia >Add&#40;T, coeff, dict::Dict&#41;</code></pre>
+<p>Represents <code>coeff &#43; &#40;key1 * val1&#41; &#43; &#40;key2 * val2&#41; &#43; ...</code></p>
+<p>where keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
+<ul>
+<li><p><code>operation&#40;::Add&#41;</code> – returns <code>&#43;</code>.</p>
+
+<li><p><code>symtype&#40;::Add&#41;</code> – returns <code>T</code>.</p>
+
+<li><p><code>arguments&#40;::Add&#41;</code> – returns a totally ordered vector of arguments. i.e. <code>&#91;coeff, keyM*valM, keyN*valN...&#93;</code></p>
+
+</ul>
 </div>
   </div>
 
@@ -69,8 +78,17 @@
       <h2 class=doc-header  id=Mul >
         <a href="#Mul">Mul</a>
         <div class=doc-type >type</div></h2>
-      <div class=doc-content ><p>No documentation found.</p>
-<p>Binding <code>SymbolicUtils.Mul</code> does not exist.</p>
+      <div class=doc-content ><pre><code class=language-julia >Mul&#40;T, coeff, dict&#41;</code></pre>
+<p>Represents coeff * &#40;key1 ^ val1&#41; * &#40;key2 ^ val2&#41; * ....</p>
+<p>where coeff is a &lt;:Number and keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
+<ul>
+<li><p><code>symtype&#40;::Add&#41;</code> – returns <code>T</code>.</p>
+
+<li><p><code>operation&#40;::Add&#41;</code> – returns <code>*</code>.</p>
+
+<li><p><code>arguments&#40;::Add&#41;</code> – returns a totally ordered vector of arguments. i.e. <code>&#91;coeff, keyM^valM, keyN^valN...&#93;</code></p>
+
+</ul>
 </div>
   </div>
 
@@ -78,8 +96,8 @@
       <h2 class=doc-header  id=Pow >
         <a href="#Pow">Pow</a>
         <div class=doc-type >type</div></h2>
-      <div class=doc-content ><p>No documentation found.</p>
-<p>Binding <code>SymbolicUtils.Pow</code> does not exist.</p>
+      <div class=doc-content ><pre><code class=language-julia >Pow&#40;base, exp&#41;</code></pre>
+<p>Represents <code>base^exp</code>, a lighter version of <code>Mul&#40;1, Dict&#40;base&#61;&gt;exp&#41;&#41;</code></p>
 </div>
   </div>
 

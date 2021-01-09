@@ -4,7 +4,7 @@ import SpecialFunctions: gamma, loggamma, erf, erfc, erfcinv, erfi, erfcx,
                          besselj1, bessely0, bessely1, besselj, bessely, besseli,
                          besselk, hankelh1, hankelh2, polygamma, beta, logbeta
 
-const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch,
+const monadic = [deg2rad, rad2deg, transpose, conj, asind, log1p, acsch,
                  acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh,
                  abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, acotd,
                  asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10,
@@ -14,10 +14,9 @@ const monadic = [deg2rad, rad2deg, transpose, -, conj, asind, log1p, acsch,
                  trigamma, invdigamma, polygamma, airyai, airyaiprime, airybi,
                  airybiprime, besselj0, besselj1, bessely0, bessely1]
 
-const diadic = [+, -, max, min, *, /, \, hypot, atan, mod, rem, ^, copysign,
+const diadic = [max, min, hypot, atan, mod, rem, copysign,
                 besselj, bessely, besseli, besselk, hankelh1, hankelh2,
                 polygamma, beta, logbeta]
-
 const previously_declared_for = Set([])
 
 # TODO: it's not possible to dispatch on the symtype! (only problem is Parameter{})
@@ -32,13 +31,17 @@ end
 islike(a, T) = symtype(a) <: T
 
 # TODO: keep domains tighter than this
-function number_methods(T, rhs1, rhs2)
+function number_methods(T, rhs1, rhs2, options=nothing)
     exprs = []
+
+    skip_basics = !isnothing(options) ? options == :skipbasics : false
+    basic_monadic = [-, +]
+    basic_diadic = [+, -, *, /, \, ^]
 
     rhs2 = :($assert_like(f, Number, a, b); $rhs2)
     rhs1 = :($assert_like(f, Number, a); $rhs1)
 
-    for f in diadic
+    for f in (skip_basics ? diadic : vcat(basic_diadic, diadic))
         for S in previously_declared_for
             push!(exprs, quote
                       (f::$(typeof(f)))(a::$T, b::$S) = $rhs2
@@ -58,25 +61,38 @@ function number_methods(T, rhs1, rhs2)
         push!(exprs, expr)
     end
 
-    for f in monadic
+    for f in (skip_basics ? monadic : vcat(basic_monadic, monadic))
         push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
     end
     push!(exprs, :(push!($previously_declared_for, $T)))
     Expr(:block, exprs...)
 end
 
-macro number_methods(T, rhs1, rhs2)
-    number_methods(T, rhs1, rhs2) |> esc
+macro number_methods(T, rhs1, rhs2, options=nothing)
+    number_methods(T, rhs1, rhs2, options) |> esc
 end
 
-@number_methods(Sym, term(f, a), term(f, a, b))
-@number_methods(Term, term(f, a), term(f, a, b))
+@number_methods(Sym, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Term, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Add, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Mul, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Pow, term(f, a), term(f, a, b), skipbasics)
 
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
 end
+
+for f in [+, -, *, \, /, ^]
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{<:Number},
+                   S::Type{<:Number}) = promote_type(T, S)
+end
+for f in [+, -, *]
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
+end
+
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
@@ -93,25 +109,6 @@ rec_promote_symtype(f, x) = promote_symtype(f, x)
 rec_promote_symtype(f, x,y) = promote_symtype(f, x,y)
 rec_promote_symtype(f, x,y,z...) = rec_promote_symtype(f, promote_symtype(f, x,y), z...)
 
-# Variadic methods
-for f in [+, *]
-
-    @eval (::$(typeof(f)))(x::Symbolic) = x
-
-    # single arg
-    @eval function (::$(typeof(f)))(x::Symbolic, w::Number...)
-        term($f, x,w...,
-             type=rec_promote_symtype($f, map(symtype, (x,w...))...))
-    end
-    @eval function (::$(typeof(f)))(x::Number, y::Symbolic, w::Number...)
-        term($f, x, y, w...,
-             type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
-    end
-    @eval function (::$(typeof(f)))(x::Symbolic, y::Symbolic, w::Number...)
-        term($f, x, y, w...,
-             type=rec_promote_symtype($f, map(symtype, (x, y, w...))...))
-    end
-end
 
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
 Base.:*(a::Symbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)

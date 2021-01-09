@@ -5,12 +5,12 @@ using SymbolicUtils: getdepth, Rewriters
     @syms w z α::Real β::Real
 
     r1 = @rule ~x + ~x => 2 * (~x)
-    r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+    r2 = @acrule ~x * +(~~ys) => sum(map(y-> ~x * y,  ~~ys));
 
-    rset = Rewriters.Postwalk(Rewriters.Chain([r1, r2]))
+    rset = Rewriters.Postwalk(Rewriters.Chain([r2]))
     @test getdepth(rset) == typemax(Int)
 
-    ex = 2 * term(+, w, w, α, β)
+    ex = 2 * (w + w + α + β)
 
     @eqtest rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
     @eqtest Rewriters.Fixpoint(rset)(ex) == ((2 * (2 * w)) + (2 * α)) + (2 * β)
@@ -87,7 +87,7 @@ end
 @testset "Depth" begin
     @syms x
     R = Rewriters.Postwalk(Rewriters.Chain([@rule(sin(~x) => cos(~x)),
-                                            @rule( ~x + 1 => ~x - 1)]))
+                                            @rule(1 + ~x => ~x - 1)]))
     @eqtest R(sin(sin(sin(x + 1)))) == cos(cos(cos(x - 1)))
     #@eqtest R(sin(sin(sin(x + 1))), depth=2) == cos(cos(sin(x + 1)))
 end
@@ -110,7 +110,7 @@ end
           ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
            ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
     @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
-    @test SymbolicUtils.node_count(a + b * c / d) == 7
+    @test SymbolicUtils.node_count(a + b * c / d) == 8
 end
 
 @testset "timerwrite" begin

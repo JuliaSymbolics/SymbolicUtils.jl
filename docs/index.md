@@ -12,10 +12,12 @@ where appropriate -->
 
 The main features are:
 
-- Symbols (`Sym`s) carry type information. ([read more](#symbolic_expressions))
-- Compound expressions composed of `Sym`s propagate type information. ([read more](#symbolic_expressions))
-- A flexible [rule-based rewriting language](#rule-based_rewriting) allowing liberal use of user defined matchers and rewriters.
+- Fast expressions
 - A [combinator library](#composing-rewriters) for making rewriters.
+- A [rule-based rewriting language](#rule-based_rewriting).
+- Type promotion:
+  - Symbols (`Sym`s) carry type information. ([read more](#symbolic_expressions))
+  - Compound expressions composed of `Sym`s propagate type information. ([read more](#symbolic_expressions))
 - Set of [simplification rules](#simplification). These can be remixed and extended for special purposes.
 
 
@@ -23,7 +25,7 @@ The main features are:
 
 \tableofcontents <!-- you can use \toc as well -->
 
-## Symbolic expressions
+## `Sym`s
 
 First, let's use the `@syms` macro to create a few symbols.
 
@@ -66,17 +68,6 @@ expr1 + expr2
 ```
 \out{expr}
 
-### Simplified printing
-
-Tip: you can set `SymbolicUtils.show_simplified[] = true` to enable simplification on printing, or call `SymbolicUtils.showraw(expr)` to display an expression without simplification.
- In the REPL, if an expression was successfully simplified before printing, it will appear in yellow rather than white, as a visual cue that what you are looking at is not the exact datastructure. 
-
-```julia:showraw
-using SymbolicUtils: showraw
-
-showraw(expr1 + expr2)
-```
-\out{showraw}
 
 **Function-like symbols**
 
@@ -105,6 +96,20 @@ g(2//5, g(1, β))
 \out{sym4}
 
 This works because `g` "returns" a `Real`.
+
+
+## Expression interface
+
+Symbolic expressions are of type `Term{T}`, `Add{T}`, `Mul{T}` or `Pow{T}` and denote some function call where one or more arguments are themselves such expressions or `Sym`s.
+
+All the expression types support the following:
+
+- `istree(x)` -- always returns `true` denoting, `x` is not a leaf node like Sym or a literal.
+- `operation(x)` -- the function being called
+- `arguments(x)` -- a vector of arguments
+- `symtype(x)` -- the "inferred" type (`T`)
+
+See more on the interface [here](/interface)
 
 ## Rule-based rewriting
 
@@ -151,7 +156,7 @@ Notice that there is a subexpression `(2 * w) + (2 * w)` that could be simplifie
 
 ### Predicates for matching
 
-Matcher pattern may contain slot variables with attached predicates, written as `~x::f` where `f` is a function that takes a matched expression (a `Term` object a `Sym` or any Julia value that is in the expression tree) and returns a boolean value. Such a slot will be considered a match only if `f` returns true.
+Matcher pattern may contain slot variables with attached predicates, written as `~x::f` where `f` is a function that takes a matched expression and returns a boolean value. Such a slot will be considered a match only if `f` returns true.
 
 Similarly `~~x::g` is a way of attaching a predicate `g` to a segment variable. In the case of segment variables `g` gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate.
 

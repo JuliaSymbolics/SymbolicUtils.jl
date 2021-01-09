@@ -147,8 +147,20 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
                 @goto print_err
             end
             @test true
+        elseif simplified isa Errored
+            if !(unsimplified isa Errored)
+                @test_skip false
+                @goto print_err
+            end
+            @test true
         elseif isnan(unsimplified)
             if !isnan(simplified)
+                @test_skip false
+                @goto print_err
+            end
+            @test true
+        elseif isnan(simplified)
+            if !isnan(unsimplified)
                 @test_skip false
                 @goto print_err
             end

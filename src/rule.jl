@@ -321,7 +321,7 @@ function (acr::ACRule)(term)
         itr = acr.sets(eachindex(args), acr.arity)
 
         for inds in itr
-            result = r(similarterm(term, f, @views args[inds]))
+            result = r(Term{T}(f, @views args[inds]))
             if !isnothing(result)
                 # Assumption: inds are unique
                 length(args) == length(inds) && return result

@@ -2,7 +2,10 @@ module SymbolicUtils
 
 export @syms, term, showraw
 
-# Sym, Term and other types
+# Sym, Term,
+# Add, Mul and Pow
+using DataStructures
+import Base: +, -, *, /, \, ^
 include("types.jl")
 
 # Methods on symbolic objects
@@ -32,7 +35,6 @@ include("matchers.jl")
 # Convert to an efficient multi-variate polynomial representation
 import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
 using AbstractAlgebra: ismonomial, symbols
-using DataStructures
 include("abstractalgebra.jl")
 
 # Term ordering

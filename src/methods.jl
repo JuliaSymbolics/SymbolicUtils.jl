@@ -84,10 +84,13 @@ for f in diadic
                    S::Type{<:Number}) = promote_type(T, S)
 end
 
-for f in [+, *, \, /, ^]
+for f in [+, -, *, \, /, ^]
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
+end
+for f in [+, -, *]
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T

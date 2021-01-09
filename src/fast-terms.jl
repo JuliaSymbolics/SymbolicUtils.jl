@@ -23,7 +23,7 @@ function Add(T, coeff, dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
         k,v = first(dict)
-        return _isone(v) ? k : makemul(1, v, k)
+        return _isone(v) ? k : Mul(T, makemul(1, v, k)...)
     end
 
     Add{T, typeof(coeff), typeof(dict)}(coeff, dict, Ref{Any}(nothing))

@@ -53,11 +53,11 @@ end
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test isequal(w + z, Add(0, Dict(w=>1, z=>1)))
-    @test isequal(z + a, Add(0, Dict(z=>1, a=>1)))
-    @test isequal(a + b, Add(0, Dict(a=>1, b=>1))) # TODO: make this Real
-    @test isequal(a + x, Add(0, Dict(a=>1, x=>1)))
-    @test isequal(a + z, Add(0, Dict(a=>1, z=>1)))
+    @test isequal(w + z, Add(Number, 0, Dict(w=>1, z=>1)))
+    @test isequal(z + a, Add(Number, 0, Dict(z=>1, a=>1)))
+    @test isequal(a + b, Add(Real, 0, Dict(a=>1, b=>1)))
+    @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
+    @test isequal(a + z, Add(Number, 0, Dict(a=>1, z=>1)))
 
     # promote_symtype of identity
     @test isequal(Term(identity, [w]), Term{Complex}(identity, [w]))

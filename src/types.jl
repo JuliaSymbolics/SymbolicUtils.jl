@@ -602,7 +602,7 @@ mul_t(a) = promote_symtype(*, symtype(a))
 *(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(1,a, b)...)
 
 function /(a::Union{SN,Number}, b::SN)
-    a * Mul(promote_symtype(/, 1, symtype(b)), makemul(-1, 1, b)...)
+    a * Mul(promote_symtype(/, Int, symtype(b)), makemul(-1, 1, b)...)
 end
 
 \(a::SN, b::Union{Number, SN}) = b / a

@@ -18,14 +18,15 @@ struct Add{X, T<:Number, D} <: Symbolic{X}
     sorted_args_cache::Ref{Any}
 end
 
-function Add(coeff, dict)
+function Add(T, coeff, dict)
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
         k,v = first(dict)
         return _isone(v) ? k : makemul(1, v, k)
     end
-    Add{Number, typeof(coeff), typeof(dict)}(coeff,dict, Ref{Any}(nothing))
+
+    Add{T, typeof(coeff), typeof(dict)}(coeff, dict, Ref{Any}(nothing))
 end
 
 symtype(a::Add{X}) where {X} = X
@@ -76,33 +77,42 @@ function makeadd(sign, coeff, xs...)
     coeff, d
 end
 
+add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
+sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
+sub_t(a) = promote_symtype(-, symtype(a))
+
 function +(a::SN, b::SN)
     if a isa Add
         coeff, dict = makeadd(1, 0, b)
-        return Add(a.coeff + coeff, _merge(+, a.dict, dict, filter=_iszero))
+        T = promote_symtype(+, symtype(a), symtype(b))
+        return Add(add_t(a,b), a.coeff + coeff, _merge(+, a.dict, dict, filter=_iszero))
     elseif b isa Add
         return b + a
     end
-    Add(makeadd(1, 0, a, b)...)
+    Add(add_t(a,b), makeadd(1, 0, a, b)...)
 end
 
-+(a::Number, b::SN) = Add(makeadd(1, a, b)...)
++(a::Number, b::SN) = Add(add_t(a,b), makeadd(1, a, b)...)
 
-+(a::SN, b::Number) = Add(makeadd(1, b, a)...)
++(a::SN, b::Number) = Add(add_t(a,b), makeadd(1, b, a)...)
 
 +(a::SN) = a
 
-+(a::Add, b::Add) = Add(a.coeff + b.coeff, _merge(+, a.dict, b.dict, filter=_iszero))
++(a::Add, b::Add) = Add(add_t(a,b),
+                        a.coeff + b.coeff,
+                        _merge(+, a.dict, b.dict, filter=_iszero))
 
-+(a::Number, b::Add) = iszero(a) ? b : Add(a + b.coeff, b.dict)
++(a::Number, b::Add) = iszero(a) ? b : Add(add_t(a,b), a + b.coeff, b.dict)
 
-+(b::Add, a::Number) = iszero(a) ? b : Add(a + b.coeff, b.dict)
++(b::Add, a::Number) = iszero(a) ? b : Add(add_t(a,b), a + b.coeff, b.dict)
 
--(a::Add) = Add(-a.coeff, mapvalues((_,v) -> -v, a.dict))
+-(a::Add) = Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict))
 
--(a::SN) = Add(makeadd(-1, 0, a)...)
+-(a::SN) = Add(sub_t(a), makeadd(-1, 0, a)...)
 
--(a::Add, b::Add) = Add(a.coeff - b.coeff, _merge(-, a.dict, b.dict, filter=_iszero))
+-(a::Add, b::Add) = Add(sub_t(a,b),
+                        a.coeff - b.coeff,
+                        _merge(-, a.dict, b.dict, filter=_iszero))
 
 -(a::SN, b::SN) = a + (-b)
 
@@ -181,6 +191,9 @@ function makemul(sign, coeff, xs...; d=sdict())
     end
     Mul(coeff, d)
 end
+
+mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
+mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 

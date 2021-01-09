@@ -89,9 +89,6 @@ for f in [+, -, *, \, /, ^]
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
 end
-for f in [+, -, *]
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
-end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)
@@ -113,7 +110,7 @@ rec_promote_symtype(f, x,y,z...) = rec_promote_symtype(f, promote_symtype(f, x,y
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
 Base.:*(a::Symbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)
 
-for f in [identity, one, zero, *, +]
+for f in [identity, one, zero, *, +, -]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
 end
 

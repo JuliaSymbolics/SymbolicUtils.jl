@@ -351,7 +351,7 @@ function show_term(io::IO, t)
 
                 if i != length(args)
                     if fname == :*
-                        if i == 1 && args[1] isa Number && !paren_scalar
+                        if i == 1 && args[1] isa Number && !(args[2] isa Number) && !paren_scalar
                             # skip
                             # do not show * if it's a scalar times something
                         else

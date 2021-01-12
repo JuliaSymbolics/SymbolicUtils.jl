@@ -101,4 +101,5 @@ end
     @test repr((2a)^(-2a)) == "(2a)^(-2a)"
     @test repr(1/2a) == "(1//2)*(a^-1)"
     @test repr(2/(2*a)) == "a^-1"
+    @test repr(Term(*, [1, 1])) == "1*1"
 end

@@ -1,5 +1,6 @@
 using Test
-using SymbolicUtils: <ₑ
+using Combinatorics
+using SymbolicUtils: <ₑ, arguments
 SymbolicUtils.show_simplified[] = false
 
 @syms a b c
@@ -26,7 +27,7 @@ end
 @test istotal(b*a, a)
 @test istotal(a, b*a)
 @test !(b*a <ₑ b+a)
-@test Term(^, [1,-1]) <ₑ a
+@test a <ₑ Term(^, [1,-1])
 @test istotal(a, Term(^, [1,-1]))
 
 @testset "operator order" begin
@@ -56,8 +57,7 @@ end
 @testset "callable variable order" begin
     @syms z() ρ()
 
-    @test -1z() <ₑ ρ()
-    @test !(ρ() <ₑ -1z())
+    @test istotal(ρ(), -1z())
 
     @syms a(t) b(t) t
     @test a(t) <ₑ b(t)
@@ -72,7 +72,7 @@ end
     @syms x y
 
     @test x <ₑ (3 + x) && !((3 + x) <ₑ x)
-    @test x^2 <ₑ y && !(y <ₑ x^2)
+    @test istotal(y, x^2)
 
     # a nice consequence
     @test simplify(x/(x+3) + 3/(x+3)) == 1
@@ -83,4 +83,12 @@ end
     @syms a
     @test Term(^, [a, -1]) <ₑ (a + 2)
     @test !((a + 2) <ₑ Term(^, [a, -1]))
+end
+
+@testset "transitivity" begin
+    # issue #160
+    @syms σ x y z
+    expr = σ*sin(x + -1y)*(sin(z)^(-1))*(-1x + y)
+    args = arguments(expr)
+    @test all(((a, b), )->a <ₑ b,  combinations(args, 2))
 end

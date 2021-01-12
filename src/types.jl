@@ -343,14 +343,15 @@ function show_term(io::IO, t)
                 paren_scalar = args[i] isa Complex || args[i] isa Rational
 
                 paren_scalar && Base.print(io, "(")
-                # Do not put parenthesis if it's a multiplication
-                paren = !(istree(args[i]) && operation(args[i]) == (*))
+                # Do not put parenthesis if it's a multiplication and not args
+                # of power
+                paren = !(istree(args[i]) && operation(args[i]) == (*)) || fname === :^
                 Base.print(IOContext(io, :paren => paren), args[i])
                 paren_scalar && Base.print(io, ")")
 
                 if i != length(args)
                     if fname == :*
-                        if i == 1 && args[1] isa Number && !paren_scalar
+                        if i == 1 && args[1] isa Number && !(args[2] isa Number) && !paren_scalar
                             # skip
                             # do not show * if it's a scalar times something
                         else
@@ -414,7 +415,7 @@ function Add(T, coeff, dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
         k,v = first(dict)
-        return _isone(v) ? k : Mul(T, makemul(1, v, k)...)
+        return _isone(v) ? k : Mul(T, makemul(v, k)...)
     end
 
     Add{T, typeof(coeff), typeof(dict)}(coeff, dict, Ref{Any}(nothing))
@@ -563,23 +564,21 @@ Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.di
 
 Base.show(io::IO, a::Mul) = show_term(io, a)
 
-function makemul(sign, coeff, xs...; d=sdict())
+function makemul(coeff, xs...; d=sdict())
     for x in xs
         if x isa Pow && x.exp isa Number
-            d[x.base] = sign * x.exp + get(d, x.base, 0)
+            d[x.base] = x.exp + get(d, x.base, 0)
         elseif x isa Number
             coeff *= x
         elseif x isa Mul
             coeff *= x.coeff
-            dict = isone(sign) ? x.dict : mapvalues((_,v)->sign*v, x.dict)
-            d = _merge(+, d, dict, filter=_iszero)
+            d = _merge(+, d, x.dict, filter=_iszero)
         else
-            k = x
-            v = sign + get(d, x, 0)
+            v = 1 + get(d, x, 0)
             if _iszero(v)
-                delete!(d, k)
+                delete!(d, x)
             else
-                d[k] = v
+                d[x] = v
             end
         end
     end
@@ -591,19 +590,17 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 
-*(a::SN, b::SN) = Mul(mul_t(a,b), makemul(1, 1, a, b)...)
+*(a::SN, b::SN) = Mul(mul_t(a,b), makemul(1, a, b)...)
 
 *(a::Mul, b::Mul) = Mul(mul_t(a, b),
                         a.coeff * b.coeff,
                         _merge(+, a.dict, b.dict, filter=_iszero))
 
-*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(1,a, b)...)
+*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(a, b)...)
 
-*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(1,a, b)...)
+*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(a, b)...)
 
-function /(a::Union{SN,Number}, b::SN)
-    a * Mul(promote_symtype(/, Int, symtype(b)), makemul(-1, 1, b)...)
-end
+/(a::Union{SN,Number}, b::SN) = a * b^(-1)
 
 \(a::SN, b::Union{Number, SN}) = b / a
 
@@ -648,8 +645,9 @@ Base.show(io::IO, p::Pow) = show_term(io, p)
 ^(a::Number, b::SN) = Pow(a, b)
 
 function ^(a::Mul, b::Number)
+    coeff = a.coeff isa Integer && b isa Integer ? (a.coeff//1) ^ b : a.coeff ^ b
     Mul(promote_symtype(^, symtype(a), symtype(b)),
-        a.coeff ^ b, mapvalues((k, v) -> b*v, a.dict))
+        coeff, mapvalues((k, v) -> b*v, a.dict))
 end
 
 function *(a::Mul, b::Pow)
@@ -693,7 +691,7 @@ function similarterm(p::Union{Mul, Add, Pow}, f, args)
     if f === (+)
         Add(symtype(p), makeadd(1, 0, args...)...)
     elseif f == (*)
-        Mul(symtype(p), makemul(1, 1, args...)...)
+        Mul(symtype(p), makemul(1, args...)...)
     elseif f == (^)
         Pow(args...)
     else

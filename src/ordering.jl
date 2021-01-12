@@ -32,6 +32,9 @@ function <ₑ(a, b)
                 return false
             end
         elseif length(args) === 1
+            if operation(b) isa Sym
+                return true
+            end
             # make sure a < sin(a) < b^2 < b
             if isequal(a, args[1])
                 return true # e.g sin(a)*a should become a*sin(a)

@@ -98,4 +98,7 @@ end
     @test repr(-a) == "-1a"
     @test repr(-a + 3) == "3 + -1a"
     @test repr(-(a + b)) == "-1a + -1b"
+    @test repr((2a)^(-2a)) == "(2a)^(-2a)"
+    @test repr(1/2a) == "(1//2)*(a^-1)"
+    @test repr(2/(2*a)) == "a^-1"
 end

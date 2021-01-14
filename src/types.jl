@@ -299,7 +299,7 @@ end
 
 function term(f, args...; type = nothing)
     if type === nothing
-        T = rec_promote_symtype(f, symtype.(args)...)
+        T = rec_promote_symtype(f, map(symtype, args)...)
     else
         T = type
     end
@@ -313,7 +313,7 @@ Create a term that is similar in type to `t` such that `symtype(similarterm(f,
 args...)) === symtype(f(args...))`.
 """
 similarterm(t, f, args) = f(args...)
-similarterm(::Term, f, args) = Term(f, args)
+similarterm(::Term, f, args) = term(f, args...)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 

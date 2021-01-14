@@ -134,8 +134,12 @@ for (f, Domain) in [(==) => Number, (!=) => Number,
     end
 end
 
-Base.:!(s::Symbolic{Bool}) = Term{Bool}(!, [s])
-Base.:~(s::Symbolic{Bool}) = Term{Bool}(!, [s])
+for f in [!, ~]
+    @eval begin
+        promote_symtype(::$(typeof(f)), ::Type{<:Bool}) = Bool
+        (::$(typeof(f)))(s::Symbolic{Bool}) = Term{Bool}(!, [s])
+    end
+end
 
 
 # An ifelse node, ifelse is a built-in unfortunately

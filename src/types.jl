@@ -58,7 +58,17 @@ symtype(::Symbolic{T}) where {T} = T
 
 Base.isequal(s::Symbolic, x) = false
 Base.isequal(x, s::Symbolic) = false
-Base.isequal(x::Symbolic, y::Symbolic) = false
+
+function Base.isequal(t1::Symbolic, t2::Symbolic)
+    t1 === t2 && return true
+    (istree(t1) && istree(t2)) || return false
+    a1 = arguments(t1)
+    a2 = arguments(t2)
+
+    isequal(operation(t1), operation(t2)) &&
+        length(a1) == length(a2) &&
+        all(isequal(l,r) for (l, r) in zip(a1,a2))
+end
 ### End of interface
 
 """
@@ -155,7 +165,7 @@ function (f::Sym)(args...)
 end
 
 """
-`promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)`
+    promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)
 
 The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
@@ -285,15 +295,6 @@ hashvec(xs, z) = foldr(hash, xs, init=z)
 
 function Base.hash(t::Term{T}, salt::UInt) where {T}
     hashvec(arguments(t), hash(operation(t), hash(T, salt)))
-end
-
-function Base.isequal(t1::Term, t2::Term)
-    t1 === t2 && return true
-    a1 = arguments(t1)
-    a2 = arguments(t2)
-
-    isequal(operation(t1), operation(t2)) && length(a1) == length(a2) &&
-        all(isequal(l,r) for (l, r) in zip(a1,a2))
 end
 
 function term(f, args...; type = nothing)
@@ -618,7 +619,7 @@ struct Pow{X, B, E} <: Symbolic{X}
     exp::E
 end
 
-function Pow(a,b)
+function Pow(a, b)
     _iszero(b) && return 1
     _isone(b) && return a
     Pow{promote_symtype(^, symtype(a), symtype(b)), typeof(a), typeof(b)}(a,b)

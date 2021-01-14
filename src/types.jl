@@ -309,12 +309,11 @@ end
 """
     similarterm(t, f, args)
 
-Create a term that is similar in type to `t`.
-If `t` is a `Term` will create a `Term` with the same `symtype`
-Otherwise simply calls `f(args...)` by default.
+Create a term that is similar in type to `t` such that `symtype(similarterm(f,
+args...)) === symtype(f(args...))`.
 """
 similarterm(t, f, args) = f(args...)
-similarterm(t::Term, f, args) = Term{symtype(t)}(f, args)
+similarterm(::Term, f, args) = Term(f, args)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -690,10 +689,12 @@ end
 
 function similarterm(p::Union{Mul, Add, Pow}, f, args)
     if f === (+)
-        Add(symtype(p), makeadd(1, 0, args...)...)
+        T = rec_promote_symtype(f, map(symtype, args)...)
+        Add(T, makeadd(1, 0, args...)...)
     elseif f == (*)
-        Mul(symtype(p), makemul(1, args...)...)
-    elseif f == (^)
+        T = rec_promote_symtype(f, map(symtype, args)...)
+        Mul(T, makemul(1, args...)...)
+    elseif f == (^) && length(args) == 2
         Pow(args...)
     else
         f(args...)

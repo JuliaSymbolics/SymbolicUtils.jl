@@ -58,7 +58,17 @@ symtype(::Symbolic{T}) where {T} = T
 
 Base.isequal(s::Symbolic, x) = false
 Base.isequal(x, s::Symbolic) = false
-Base.isequal(x::Symbolic, y::Symbolic) = false
+
+function Base.isequal(t1::Symbolic, t2::Symbolic)
+    t1 === t2 && return true
+    (istree(t1) && istree(t2)) || return false
+    a1 = arguments(t1)
+    a2 = arguments(t2)
+
+    isequal(operation(t1), operation(t2)) &&
+        length(a1) == length(a2) &&
+        all(isequal(l,r) for (l, r) in zip(a1,a2))
+end
 ### End of interface
 
 """
@@ -155,7 +165,7 @@ function (f::Sym)(args...)
 end
 
 """
-`promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)`
+    promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)
 
 The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
@@ -287,18 +297,9 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
     hashvec(arguments(t), hash(operation(t), hash(T, salt)))
 end
 
-function Base.isequal(t1::Term, t2::Term)
-    t1 === t2 && return true
-    a1 = arguments(t1)
-    a2 = arguments(t2)
-
-    isequal(operation(t1), operation(t2)) && length(a1) == length(a2) &&
-        all(isequal(l,r) for (l, r) in zip(a1,a2))
-end
-
 function term(f, args...; type = nothing)
     if type === nothing
-        T = rec_promote_symtype(f, symtype.(args)...)
+        T = rec_promote_symtype(f, map(symtype, args)...)
     else
         T = type
     end
@@ -308,12 +309,11 @@ end
 """
     similarterm(t, f, args)
 
-Create a term that is similar in type to `t`.
-If `t` is a `Term` will create a `Term` with the same `symtype`
-Otherwise simply calls `f(args...)` by default.
+Create a term that is similar in type to `t` such that `symtype(similarterm(f,
+args...)) === symtype(f(args...))`.
 """
 similarterm(t, f, args) = f(args...)
-similarterm(t::Term, f, args) = Term{symtype(t)}(f, args)
+similarterm(::Term, f, args) = term(f, args...)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -618,7 +618,7 @@ struct Pow{X, B, E} <: Symbolic{X}
     exp::E
 end
 
-function Pow(a,b)
+function Pow(a, b)
     _iszero(b) && return 1
     _isone(b) && return a
     Pow{promote_symtype(^, symtype(a), symtype(b)), typeof(a), typeof(b)}(a,b)
@@ -689,10 +689,12 @@ end
 
 function similarterm(p::Union{Mul, Add, Pow}, f, args)
     if f === (+)
-        Add(symtype(p), makeadd(1, 0, args...)...)
+        T = rec_promote_symtype(f, map(symtype, args)...)
+        Add(T, makeadd(1, 0, args...)...)
     elseif f == (*)
-        Mul(symtype(p), makemul(1, args...)...)
-    elseif f == (^)
+        T = rec_promote_symtype(f, map(symtype, args)...)
+        Mul(T, makemul(1, args...)...)
+    elseif f == (^) && length(args) == 2
         Pow(args...)
     else
         f(args...)

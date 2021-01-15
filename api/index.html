@@ -119,7 +119,7 @@ julia&gt; @syms f&#40;x&#41;::Complex
 julia&gt; promote_symtype&#40;f, Number&#41;
 Complex</code></pre>
 <p>When constructing <a href="#Term"><code>Term</code></a>s without an explicit symtype, <code>promote_symtype</code> is used to figure out the symtype of the Term.</p>
-<code>promote_symtype&#40;f::Sym&#123;FnType&#123;X,Y&#125;&#125;, arg_symtypes...&#41;</code>
+<pre><code class=language-julia >promote_symtype&#40;f::Sym&#123;FnType&#123;X,Y&#125;&#125;, arg_symtypes...&#41;</code></pre>
 <p>The output symtype of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</p>
 </div>
   </div>
@@ -157,7 +157,7 @@ Complex</code></pre>
         <a href="#similarterm">similarterm</a>
         <div class=doc-type >fn</div></h2>
       <div class=doc-content ><pre><code class=language-julia >similarterm&#40;t, f, args&#41;</code></pre>
-<p>Create a term that is similar in type to <code>t</code>. If <code>t</code> is a <code>Term</code> will create a <code>Term</code> with the same <code>symtype</code> Otherwise simply calls <code>f&#40;args...&#41;</code> by default.</p>
+<p>Create a term that is similar in type to <code>t</code> such that <code>symtype&#40;similarterm&#40;f, args...&#41;&#41; &#61;&#61;&#61; symtype&#40;f&#40;args...&#41;&#41;</code>.</p>
 </div>
   </div>
 
@@ -314,7 +314,7 @@ julia&gt; @timerewrite simplify&#40;expr&#41;
 
 <div class=page-foot >
   <div class=copyright >
-      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: January 14, 2021. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+      &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: January 15, 2021. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div>

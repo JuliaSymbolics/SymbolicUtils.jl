@@ -280,6 +280,8 @@ See [promote_symtype](#promote_symtype)
 struct Term{T} <: Symbolic{T}
     f::Any
     arguments::Any
+    hash::Ref{UInt} # hash cache
+    Term{T}(f, xs) where {T} = new{T}(f, xs, Ref{UInt}(0))
 end
 
 istree(t::Term) = true
@@ -294,7 +296,9 @@ arguments(x::Term) = getfield(x, :arguments)
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
 function Base.hash(t::Term{T}, salt::UInt) where {T}
-    hashvec(arguments(t), hash(operation(t), hash(T, salt)))
+    h = t.hash[]
+    !iszero(h) && return h
+    t.hash[] = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
 end
 
 function term(f, args...; type = nothing)
@@ -408,6 +412,7 @@ struct Add{X, T<:Number, D} <: Symbolic{X}
     coeff::T
     dict::D
     sorted_args_cache::Ref{Any}
+    hash::Ref{UInt}
 end
 
 function Add(T, coeff, dict)
@@ -418,7 +423,7 @@ function Add(T, coeff, dict)
         return _isone(v) ? k : Mul(T, makemul(v, k)...)
     end
 
-    Add{T, typeof(coeff), typeof(dict)}(coeff, dict, Ref{Any}(nothing))
+    Add{T, typeof(coeff), typeof(dict)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0))
 end
 
 symtype(a::Add{X}) where {X} = X
@@ -434,7 +439,11 @@ function arguments(a::Add)
     a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-Base.hash(a::Add, u::UInt64) = hash(a.coeff, hash(a.dict, u))
+function Base.hash(a::Add, u::UInt64)
+    h = a.hash[]
+    !iszero(h) && return h
+    a.hash[] = hash(0xaddaddaddaddadda, hash(a.coeff, hash(a.dict, u)))
+end
 
 Base.isequal(a::Add, b::Add) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
@@ -529,6 +538,7 @@ struct Mul{X, T<:Number, D} <: Symbolic{X}
     coeff::T
     dict::D
     sorted_args_cache::Ref{Any}
+    hash::Ref{UInt}
 end
 
 function Mul(T, a,b)
@@ -541,7 +551,7 @@ function Mul(T, a,b)
             return Pow(first(pair), last(pair))
         end
     else
-        Mul{T, typeof(a), typeof(b)}(a,b, Ref{Any}(nothing))
+        Mul{T, typeof(a), typeof(b)}(a,b, Ref{Any}(nothing), Ref{UInt}(0))
     end
 end
 
@@ -557,7 +567,11 @@ function arguments(a::Mul)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-Base.hash(m::Mul, u::UInt64) = hash(m.coeff, hash(m.dict, u))
+function Base.hash(m::Mul, u::UInt64)
+    h = m.hash[]
+    !iszero(h) && return h
+    m.hash[] = hash(0xaaaaaaaaaaaaaaa, hash(m.coeff, hash(m.dict, u)))
+end
 
 Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 

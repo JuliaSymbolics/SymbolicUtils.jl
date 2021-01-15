@@ -103,3 +103,12 @@ end
     @test repr(2/(2*a)) == "a^-1"
     @test repr(Term(*, [1, 1])) == "1*1"
 end
+
+@testset "similarterm" begin
+    # issue #167
+    @syms x i::Int Sum(t::Number, i::Int, a::Int, b::Int)::Number
+    s = Sum(x^i, i, 1, 5)
+    args = [sin(x), 2i, 2, 4]
+    newterm = SymbolicUtils.similarterm(x+1, Sum, args)
+    @test isequal(newterm, Term{Number}(Sum, args))
+end

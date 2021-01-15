@@ -19,12 +19,12 @@ SymbolicUtils.arguments&#40;ex::Expr&#41; &#61; ex.args&#91;2:end&#93;
 <div class=code-output ><pre><code class=plaintext >:((-)((+)(1, (-)(x, 2)), 1))</code></pre></div>
 <p>However, this is not enough to get SymbolicUtils to use its own algebraic simplification system on <code>Expr</code>s:</p>
 <pre><code class=language-julia >simplify&#40;ex&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >-1 + x</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >1 + (x - 2)</code></pre></div>
 <p>The reason that the expression was not simplified is that the expression tree is untyped, so SymbolicUtils  doesn&#39;t know what rules to apply to the expression. To mimic the behaviour of most computer algebra  systems, the simplest thing to do would be to assume that all <code>Expr</code>s are of type <code>Number</code>:</p>
 <pre><code class=language-julia >SymbolicUtils.symtype&#40;s::Expr&#41; &#61; Number
 
 simplify&#40;ex&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >-1 + x</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >1 + (x - 2)</code></pre></div>
 <p>Now SymbolicUtils is able to apply the <code>Number</code> simplification rule to <code>Expr</code>.</p>
 <div class=page-foot >
   <div class=copyright >

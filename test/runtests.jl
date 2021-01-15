@@ -19,6 +19,7 @@ include("rulesets.jl")
 include("nf.jl")
 include("interface.jl")
 include("fuzz.jl")
-if haskey(ENV, "TRAVIS")
+
+if haskey(ENV, "CI")
     include("benchmark.jl")
 end

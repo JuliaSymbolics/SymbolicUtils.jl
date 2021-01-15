@@ -53,15 +53,15 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
     overhead["simplify"]["randterm (/, *):thread"] = @benchmarkable simplify($ex2, threaded=true)
 
 
-    overhead["substitute"]["a"] = @benchmarkable substitute(subs_expr, a=>1) setup=begin
+    overhead["substitute"]["a"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1))) setup=begin
         subs_expr = (sin(a+b) + cos(b+c)) * (sin(b+c) + cos(c+a)) * (sin(c+a) + cos(a+b))
     end
 
-    overhead["substitute"]["a,b"] = @benchmarkable substitute(subs_expr, a=>1, b=>2) setup=begin
+    overhead["substitute"]["a,b"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1, b=>2))) setup=begin
         subs_expr = (sin(a+b) + cos(b+c)) * (sin(b+c) + cos(c+a)) * (sin(c+a) + cos(a+b))
     end
 
-    overhead["substitute"]["a,b,c"] = @benchmarkable substitute(subs_expr, a=>1, b=>2, c=>3) setup=begin
+    overhead["substitute"]["a,b,c"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1, b=>2, c=>3))) setup=begin
         subs_expr = (sin(a+b) + cos(b+c)) * (sin(b+c) + cos(c+a)) * (sin(c+a) + cos(a+b))
     end
 end

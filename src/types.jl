@@ -286,7 +286,7 @@ end
 
 istree(t::Term) = true
 
-Term(f, args) = Term{rec_promote_symtype(f, map(symtype, args)...)}(f, args)
+Term(f, args) = Term{_promote_symtype(f, args)}(f, args)
 
 operation(x::Term) = getfield(x, :f)
 
@@ -301,9 +301,24 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
     t.hash[] = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
 end
 
+_promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
+function _promote_symtype(f, args)
+    if length(args) == 0
+        promote_symtype(f)
+    elseif length(args) == 1
+        promote_symtype(f, symtype(args[1]))
+    elseif length(args) == 2
+        promote_symtype(f, symtype(args[1]), symtype(args[2]))
+    else
+        # TODO: maybe restrict it only to functions that are Associative
+        mapfoldl(symtype, (x,y) -> promote_symtype(f, x, y), args)
+    end
+end
+
+
 function term(f, args...; type = nothing)
     if type === nothing
-        T = rec_promote_symtype(f, map(symtype, args)...)
+        T = _promote_symtype(f, args)
     else
         T = type
     end
@@ -703,10 +718,10 @@ end
 
 function similarterm(p::Union{Mul, Add, Pow}, f, args)
     if f === (+)
-        T = rec_promote_symtype(f, map(symtype, args)...)
+        T = _promote_symtype(f, args)
         Add(T, makeadd(1, 0, args...)...)
     elseif f == (*)
-        T = rec_promote_symtype(f, map(symtype, args)...)
+        T = _promote_symtype(f, args)
         Mul(T, makemul(1, args...)...)
     elseif f == (^) && length(args) == 2
         Pow(args...)

@@ -103,3 +103,9 @@ end
     @test repr(2/(2*a)) == "a^-1"
     @test repr(Term(*, [1, 1])) == "1*1"
 end
+
+@testset "hash" begin
+    @syms a b
+    @test hash(a + b, UInt(0)) === hash(a + b) === hash(a + b, UInt(0)) # test caching
+    @test hash(a + b, UInt(2)) !== hash(a + b)
+end

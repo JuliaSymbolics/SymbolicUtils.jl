@@ -297,8 +297,10 @@ hashvec(xs, z) = foldr(hash, xs, init=z)
 
 function Base.hash(t::Term{T}, salt::UInt) where {T}
     h = t.hash[]
-    !iszero(h) && return h
-    t.hash[] = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
+    (iszero(salt) && !iszero(h)) && return h
+    h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
+    iszero(salt) && (t.hash[] = h′)
+    return h′
 end
 
 _promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
@@ -454,12 +456,6 @@ function arguments(a::Add)
     a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-function Base.hash(a::Add, u::UInt64)
-    h = a.hash[]
-    !iszero(h) && return h
-    a.hash[] = hash(0xaddaddaddaddadda, hash(a.coeff, hash(a.dict, u)))
-end
-
 Base.isequal(a::Add, b::Add) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
 
 Base.show(io::IO, a::Add) = show_term(io, a)
@@ -582,14 +578,7 @@ function arguments(a::Mul)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-function Base.hash(m::Mul, u::UInt64)
-    h = m.hash[]
-    !iszero(h) && return h
-    m.hash[] = hash(0xaaaaaaaaaaaaaaa, hash(m.coeff, hash(m.dict, u)))
-end
-
 Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
-
 
 Base.show(io::IO, a::Mul) = show_term(io, a)
 
@@ -728,4 +717,13 @@ function similarterm(p::Union{Mul, Add, Pow}, f, args)
     else
         f(args...)
     end
+end
+
+function Base.hash(t::Union{Add,Mul}, u::UInt64)
+    h = t.hash[]
+    (iszero(u) && !iszero(h)) && return h
+    hashoffset = t isa Add ? 0xaddaddaddaddadda : 0xaddaddaddaddadda
+    h′= hash(hashoffset, hash(t.coeff, hash(t.dict, u)))
+    iszero(u) && (t.hash[] = h′)
+    return h′
 end

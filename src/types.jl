@@ -299,7 +299,9 @@ end
 
 _promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
 function _promote_symtype(f, args)
-    if length(args) == 1
+    if length(args) == 0
+        promote_symtype(f)
+    elseif length(args) == 1
         promote_symtype(f, symtype(args[1]))
     elseif length(args) == 2
         promote_symtype(f, symtype(args[1]), symtype(args[2]))

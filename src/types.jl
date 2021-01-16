@@ -296,10 +296,11 @@ arguments(x::Term) = getfield(x, :arguments)
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
 function Base.hash(t::Term{T}, salt::UInt) where {T}
+    !iszero(salt) && hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
-    (iszero(salt) && !iszero(h)) && return h
+    !iszero(h) && return h
     h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
-    iszero(salt) && (t.hash[] = h′)
+    (t.hash[] = h′)
     return h′
 end
 
@@ -720,10 +721,11 @@ function similarterm(p::Union{Mul, Add, Pow}, f, args)
 end
 
 function Base.hash(t::Union{Add,Mul}, u::UInt64)
+    !iszero(u) && return hash(hash(t, zero(UInt64)), u)
     h = t.hash[]
-    (iszero(u) && !iszero(h)) && return h
-    hashoffset = t isa Add ? 0xaddaddaddaddadda : 0xaddaddaddaddadda
+    !iszero(h) && return h
+    hashoffset = t isa Add ? 0xaddaddaddaddadda : 0xaaaaaaaaaaaaaaaa
     h′= hash(hashoffset, hash(t.coeff, hash(t.dict, u)))
-    iszero(u) && (t.hash[] = h′)
+    t.hash[] = h′
     return h′
 end

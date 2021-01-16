@@ -48,6 +48,13 @@ end
     @test hash(g(a, b)) == hash(f(a,b))
     @test hash(f(a, b)) == hash(f(c,b))
     @test hash(sin(a+1)) == hash(sin(c+1))
+
+    ex = sin(a+1)
+    h = hash(ex, UInt(0))
+    @test ex.hash[] == h
+    ex1 = sin(a+1)
+    hash(asin(ex1), UInt(0))
+    @test ex1.hash[] == h
 end
 
 @testset "Base methods" begin

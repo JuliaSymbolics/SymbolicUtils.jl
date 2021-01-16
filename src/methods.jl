@@ -101,12 +101,6 @@ for f in monadic
     @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a)
 end
 
-rec_promote_symtype(f) = promote_symtype(f)
-rec_promote_symtype(f, x) = promote_symtype(f, x)
-rec_promote_symtype(f, x,y) = promote_symtype(f, x,y)
-rec_promote_symtype(f, x,y,z...) = rec_promote_symtype(f, promote_symtype(f, x,y), z...)
-
-
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
 Base.:*(a::Symbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)
 

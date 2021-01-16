@@ -296,7 +296,7 @@ arguments(x::Term) = getfield(x, :arguments)
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
 function Base.hash(t::Term{T}, salt::UInt) where {T}
-    !iszero(salt) && hash(hash(t, zero(UInt)), salt)
+    !iszero(salt) && return hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
     !iszero(h) && return h
     h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))

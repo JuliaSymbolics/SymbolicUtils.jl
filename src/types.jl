@@ -300,7 +300,7 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
     h = t.hash[]
     !iszero(h) && return h
     h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
-    (t.hash[] = h′)
+    t.hash[] = h′
     return h′
 end
 

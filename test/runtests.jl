@@ -22,4 +22,7 @@ include("fuzz.jl")
 
 if haskey(ENV, "CI")
     include("benchmark.jl")
+    using Pkg
+    Pkg.dev("ModelingToolkit")
+    Pkg.test("ModelingToolkit")
 end

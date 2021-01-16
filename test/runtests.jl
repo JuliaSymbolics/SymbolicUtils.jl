@@ -23,6 +23,6 @@ include("fuzz.jl")
 if haskey(ENV, "CI")
     include("benchmark.jl")
     using Pkg
-    Pkg.develop("ModelingToolkit")
+    Pkg.add(url="https://github.com/SciML/ModelingToolkit.jl.git", rev="master")
     Pkg.test("ModelingToolkit")
 end

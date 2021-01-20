@@ -685,8 +685,9 @@ function _merge(f, d, others...; filter=x->false)
     acc = copy(d)
     for other in others
         for (k, v) in other
+            v = f(v)
             if haskey(acc, k)
-                v = f(acc[k], v)
+                v = acc[k] + v
             end
             if filter(v)
                 delete!(acc, k)

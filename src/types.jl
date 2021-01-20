@@ -525,7 +525,7 @@ end
 
 -(a::Add, b::Add) = Add(sub_t(a,b),
                         a.coeff - b.coeff,
-                        _merge(+, a.dict, (k=>-v for (k, v) in b.dict), filter=_iszero))
+                        _merge(-, a.dict, b.dict, filter=_iszero))
 
 -(a::SN, b::SN) = a + (-b)
 
@@ -685,8 +685,9 @@ function _merge(f, d, others...; filter=x->false)
     acc = copy(d)
     for other in others
         for (k, v) in other
+            v = f(v)
             if haskey(acc, k)
-                v = f(acc[k], v)
+                v = acc[k] + v
             end
             if filter(v)
                 delete!(acc, k)

@@ -6,9 +6,8 @@
          alt="CI">
   </a>
   </a>
-  <a href="https://coveralls.io/github/JuliaSymbolics/SymbolicUtils.jl?branch=master">
-    <img src="https://coveralls.io/repos/github/JuliaSymbolics/SymbolicUtils.jl/badge.svg?branch=master"
-         alt="Coverage">
+  <a href="https://codecov.io/gh/JuliaSymbolics/SymbolicUtils.jl">
+    <img src="https://codecov.io/gh/JuliaSymbolics/SymbolicUtils.jl/branch/master/graph/badge.svg?token=UL72EBCQRW"/>
   </a>
 </p>
 

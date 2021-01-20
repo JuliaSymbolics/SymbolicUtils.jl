@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments
 using SymbolicUtils
 using Test
 
@@ -109,6 +109,15 @@ end
     @test repr(1/2a) == "(1//2)*(a^-1)"
     @test repr(2/(2*a)) == "a^-1"
     @test repr(Term(*, [1, 1])) == "1*1"
+end
+
+toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
+
+@testset "diffs" begin
+    @syms a b c
+    @test isequal(toterm(-1c), Term{Number}(*, [-1, c]))
+    @test isequal(toterm(-1(a+b)), Term{Number}(*, [-1, a+b]))
+    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [a, -1c]))
 end
 
 @testset "hash" begin

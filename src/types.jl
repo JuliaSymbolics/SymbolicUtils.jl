@@ -525,7 +525,7 @@ end
 
 -(a::Add, b::Add) = Add(sub_t(a,b),
                         a.coeff - b.coeff,
-                        _merge(-, a.dict, b.dict, filter=_iszero))
+                        _merge(+, a.dict, (k=>-v for (k, v) in b.dict), filter=_iszero))
 
 -(a::SN, b::SN) = a + (-b)
 

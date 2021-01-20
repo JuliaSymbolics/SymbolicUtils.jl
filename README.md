@@ -1,9 +1,9 @@
 <h1 align="center"><a href="https://juliasymbolics.github.io/SymbolicUtils.jl/">SymbolicUtils.jl</a></h1>
 
 <p align="center">
-  <a href="https://travis-ci.com/github/JuliaSymbolics/SymbolicUtils.jl">
-    <img src="https://travis-ci.org/JuliaSymbolics/SymbolicUtils.jl.svg?branch=master"
-         alt="Build Status (Linux)">
+  <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/actions">
+    <img src="https://github.com/JuliaSymbolics/SymbolicUtils.jl/workflows/CI/badge.svg"
+         alt="CI">
   </a>
   </a>
   <a href="https://coveralls.io/github/JuliaSymbolics/SymbolicUtils.jl?branch=master">

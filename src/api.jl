@@ -26,7 +26,7 @@ function simplify(x;
         Fixpoint(rewriter)
     end
 
-    PassThrough(f)(to_symbolic(x))
+    PassThrough(f)(x)
 end
 
 Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)

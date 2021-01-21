@@ -185,7 +185,7 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     end
 end
 
-leaves = [(@syms a b c d e g)..., 3//5, 0//2, -1//2, 1//2, 1//2+2im]
+leaves = [(@syms a b c d e g)..., big.((3//5, 0//2, -1//2, 1//2, 1//2+2im))...]
 function gen_expr(lvl=5)
     if lvl == 0
         x = rand(leaves)
@@ -209,7 +209,7 @@ function gen_expr(lvl=5)
     end
 end
 
-test_dict = Dict(a=>1//1,b=>-1//1,c=>2//1,d=>-2//1,e=>5//3,g=>-2//3)
+test_dict = Dict{Any, Rational{BigInt}}(a=>1,b=>-1,c=>2,d=>-2,e=>5//3,g=>-2//3)
 function fuzz_addmulpow(lvl, d=test_dict)
     l, r = gen_expr()
     rl = try
@@ -233,7 +233,7 @@ function fuzz_addmulpow(lvl, d=test_dict)
             println("Weird bug here:")
             @show r l
             @show rl rr
-            @test_skip false
+            @test false
         end
     end
 end

@@ -185,7 +185,7 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     end
 end
 
-leaves = [(@syms a b c d e g)..., big.((3//5, 0//2, -1//2, 1//2, 1//2+2im))...]
+leaves = [(@syms a b c d e g)..., a^3, a^-2, b^2, b^(-1), big.((3//5, 0//2, -1//2, 1//2, 1//2+2im))...]
 function gen_expr(lvl=5)
     if lvl == 0
         x = rand(leaves)

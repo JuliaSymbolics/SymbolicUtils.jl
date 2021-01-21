@@ -20,4 +20,18 @@ seed!(6174)
             fuzz_test(5, bool_spec)
         end
     end
+    @testset "fuzz addmulpow" begin
+        for i=1:100;
+            fuzz_addmulpow(1)
+        end
+        for i=1:50;
+            fuzz_addmulpow(2)
+        end
+        for i=1:25;
+            fuzz_addmulpow(3)
+        end
+        for i=1:12;
+            fuzz_addmulpow(4)
+        end
+    end
 end

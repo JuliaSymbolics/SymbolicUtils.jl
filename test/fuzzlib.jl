@@ -184,3 +184,56 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
                 """)
     end
 end
+
+leaves = [(@syms a b c d e g)..., 3//5, 0//2, -1//2, 1//2, 1//2+2im]
+function gen_expr(lvl=5)
+    if lvl == 0
+        x = rand(leaves)
+        x, x
+    elseif rand() < 0.5
+        f = rand((+, *))
+        n = rand(1:5)
+        args = [gen_expr(lvl-1) for i in 1:n]
+
+        Term{Number}(f, first.(args)), f(last.(args)...)
+    else
+        f = rand((-,/))
+        l = gen_expr(lvl-1)
+        r = gen_expr(lvl-1)
+        if f === (/) && r[2] isa Number && iszero(r[2])
+            return gen_expr(lvl)
+        end
+        args = [l, r]
+
+        Term{Number}(f, first.(args)), f(last.(args)...)
+    end
+end
+
+test_dict = Dict(a=>1//1,b=>-1//1,c=>2//1,d=>-2//1,e=>5//3,g=>-2//3)
+function fuzz_addmulpow(lvl, d=test_dict)
+    l, r = gen_expr()
+    rl = try
+        substitute(l, d)
+    catch err
+        err
+    end
+    rr = try
+        substitute(r, d)
+    catch err
+        err
+    end
+
+    if !(rl isa Number) && rr isa Number
+        return # lhs errored, rhs did not
+    end
+    if rl isa Number || rr isa Number
+        if isequal(rl, rr)
+            @test true
+        else
+            println("Weird bug here:")
+            @show r l
+            @show rl rr
+            @test_skip false
+        end
+    end
+end

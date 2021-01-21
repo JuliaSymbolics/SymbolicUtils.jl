@@ -8,11 +8,6 @@ using DataStructures
 import Base: +, -, *, /, \, ^
 include("types.jl")
 
-# Methods on symbolic objects
-using SpecialFunctions, NaNMath
-export cond
-include("methods.jl")
-
 # LinkedList, simplification utilities
 include("utils.jl")
 

@@ -32,19 +32,9 @@ include("rule.jl")
 # Matching a Rule
 include("matchers.jl")
 
-# Convert to an efficient multi-variate polynomial representation
-import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
-using AbstractAlgebra: ismonomial, symbols
-include("abstractalgebra.jl")
 
 # Term ordering
 include("ordering.jl")
 
-# Default rules for expression simplification
-include("simplify_rules.jl")
-
-# API = simplify + substitute
-export simplify, substitute
-include("api.jl")
 
 end # module

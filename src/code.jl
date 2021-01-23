@@ -1,14 +1,26 @@
 # Take a struct definition and make it be able to match in `@rule`
 macro matchable(expr)
+    @assert expr.head == :struct
+    name = expr.args[2]
+    fields = expr.args[3].args  # Todo: get names
+    quote
+        $expr
+        SymbolicUtils.istree(::$name) = true
+        SymbolicUtils.operation(::$name) = $name
+        SymbolicUtils.arguments(::$name) = ($fields...,)
+    end |> esc
 end
 
 toexpr(s::Sym) = nameof(s)
 
-struct Assignment
-    pair::Pair
+@matchable struct Assignment
+    lhs
+    rhs
 end
-Base.iterate(a::Assignment, i...) = iterate(a,i...)
-Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair)
+
+const (←) = Assignment
+
+Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 
 toexpr(a::Assignment) = :($(toexpr(a.lhs)) = $(toexpr(b.lhs)))
 
@@ -36,7 +48,7 @@ function toexpr(O)
     return Expr(:call, op, toexpr(args)...)
 end
 
-struct Let
+@matchable struct Let
     pairs::Vector{Assignment} # an iterator of pairs, ordered
     body
 end
@@ -49,7 +61,7 @@ function toexpr(l::Let)
 end
 
 ### Experimental
-struct BasicBlock
+@matchable struct BasicBlock
     pairs::Vector{Assignment} # Iterator of ordered pairs
     # TODO: check uniqueness of LHS on construction
 end
@@ -58,13 +70,6 @@ function toexpr(l::BasicBlock)
     stmts = [:($k = $v) for (k, v) in l.pairs]
     Expr(:block, stmts)
 end
-
-struct Comprehension
-    body
-    iter::Vector{Assignment} # vector of pairs
-end
-
-toexpr(c::Comprehension) = :([$(toexpr(c.body)) for $(toexpr.(c)...)])
 
 # Requirements
 #
@@ -78,7 +83,7 @@ toexpr(c::Comprehension) = :([$(toexpr(c.body)) for $(toexpr.(c)...)])
 # Array types: Dense, Sparse, Static
 #
 #
-struct Func
+@matchable struct Func
     args
     kwargs
     body

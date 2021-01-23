@@ -96,3 +96,23 @@ function toexpr(f::Func)
         end
     end
 end
+
+
+@matchable struct SetArray
+    arr::Sym
+    elems  # Either iterator of Pairs or just an iterator
+end
+
+@matchable struct MakeArray{A<:AbstractArray} # Could be StaticArray
+    elems::A
+end
+
+@matchable struct MakeSparseArray
+    I
+    J
+    V
+end
+
+@matchable struct MakeTuple
+    elems
+end

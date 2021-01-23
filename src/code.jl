@@ -7,7 +7,7 @@ macro matchable(expr)
         $expr
         SymbolicUtils.istree(::$name) = true
         SymbolicUtils.operation(::$name) = $name
-        SymbolicUtils.arguments(::$name) = ($fields...,)
+        SymbolicUtils.arguments(::$name) = ($(fields...),)
     end |> esc
 end
 

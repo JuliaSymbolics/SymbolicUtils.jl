@@ -146,7 +146,7 @@ Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
 
 Base.isequal(v1::Sym{T}, v2::Sym{T}) where {T} = v1 === v2
 
-Base.show(io::IO, v::Sym) = print(io, v.name)
+Base.show(io::IO, v::Sym) = Base.show_unquoted(io, v.name)
 
 #---------------------------
 #---------------------------

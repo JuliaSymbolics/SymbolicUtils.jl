@@ -103,10 +103,33 @@ end
     elems  # Either iterator of Pairs or just an iterator
 end
 
+@matchable struct AtIndex
+    i::Int
+    elem
+end
+
+function toexpr(a::AtIndex)
+    toexpr(a.elem)
+end
+
+function toexpr(s::SetArray)
+    quote
+        $([:($(toexpr(s.arr))[$(ex isa AtIndex ? ex.i : i)]) = $(toexpr(ex))
+           for (i, ex) in enumerate(s.elems)]...)
+        nothing
+    end
+end
+
 @matchable struct MakeArray{A<:AbstractArray} # Could be StaticArray
     elems::A
 end
 
+function toexpr(a::MakeArray)
+    :([$(toexpr.(a.elems)...)])
+end
+
+## We use a separate type for Sparse Arrays to sidestep the need for
+## iszero to be defined on the expression type
 @matchable struct MakeSparseArray
     I
     J
@@ -115,4 +138,8 @@ end
 
 @matchable struct MakeTuple
     elems
+end
+
+function toexpr(a::MakeTuple)
+    :(($(toexpr.(a.elems)...),))
 end

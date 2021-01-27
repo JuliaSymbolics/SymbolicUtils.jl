@@ -347,58 +347,112 @@ const show_simplified = Ref(false)
 
 Base.show(io::IO, t::Term) = show_term(io, t)
 
-function show_term(io::IO, t)
-    if get(io, :simplify, show_simplified[])
-        s = simplify(t)
+isnegative(t::Real) = t < 0
+function isnegative(t)
+    if istree(t) && operation(t) === (*)
+        coeff = first(arguments(t))
+        return isnegative(coeff)
+    end
+    return false
+end
 
-        Base.print(IOContext(io, :simplify=>false), s)
+setargs(t, args) = Term{symtype(t)}(operation(t), args)
+cdrargs(args) = setargs(t, cdr(args))
+
+print_arg(io, x::Union{Complex, Rational}) = print(io, "(", x, ")")
+print_arg(io, x) = print(io, x)
+print_arg(io, f::typeof(^), x) = print_arg(IOContext(io, :paren=>true), x)
+function print_arg(io, f, x)
+    f !== (*) && return print_arg(io, x)
+    if istree(x) && Base.isbinaryoperator(nameof(operation(x)))
+        print_arg(IOContext(io, :paren=>true), x)
     else
-        f = operation(t)
-        args = arguments(t)
-        fname = nameof(f)
-        binary = Base.isbinaryoperator(fname)
-        if binary
-            get(io, :paren, false) && Base.print(io, "(")
-            for i = 1:length(args)
-                length(args) == 1 && Base.print(io, fname)
+        print_arg(io, x)
+    end
+end
 
-                paren_scalar = args[i] isa Complex || args[i] isa Rational
+function show_add(io, args)
+    negs = filter(isnegative, args)
+    nnegs = filter(!isnegative, args)
+    for (i, t) in enumerate(nnegs)
+        i != 1 && print(io, " + ")
+        print_arg(io, +,  t)
+    end
 
-                paren_scalar && Base.print(io, "(")
-                # Do not put parenthesis if it's a multiplication and not args
-                # of power
-                paren = !(istree(args[i]) && operation(args[i]) == (*)) || fname === :^
-                Base.print(IOContext(io, :paren => paren), args[i])
-                paren_scalar && Base.print(io, ")")
-
-                if i != length(args)
-                    if fname == :*
-                        if i == 1 && args[1] isa Number && !(args[2] isa Number) && !paren_scalar
-                            # skip
-                            # do not show * if it's a scalar times something
-                        else
-                            Base.print(io, "*")
-                        end
-                    else
-                        Base.print(io, fname == :^ ? '^' : " $fname ")
-                    end
-                end
-            end
-            get(io, :paren, false) && Base.print(io, ")")
+    for (i, t) in enumerate(negs)
+        if i==1 && isempty(nnegs)
+            print_arg(io, -, t)
         else
-            if f isa Sym
-                Base.print(io, nameof(f))
-            else
-                Base.show(io, f)
-            end
-            Base.print(io, "(")
-            for i=1:length(args)
-                Base.print(IOContext(io, :paren => false), args[i])
-                i != length(args) && Base.print(io, ", ")
-            end
-            Base.print(io, ")")
+            print(io, " - ")
+            print_arg(io, +, -t)
         end
     end
+end
+
+function show_mul(io, args)
+    length(args) == 1 && return print_arg(io, *, args[1])
+
+    paren_scalar = args[1] isa Complex || args[1] isa Rational
+    minus = args[1] isa Number && args[1] == -1
+    unit = args[1] isa Number && args[1] == 1
+    nostar = !paren_scalar && args[1] isa Number && !(args[2] isa Number)
+    for (i, t) in enumerate(args)
+        if i != 1
+            if i==2 && nostar
+            else
+                print(io, "*")
+            end
+        end
+        if i == 1 && minus
+            print(io, "-")
+        elseif i == 1 && unit
+        else
+            print_arg(io, *, t)
+        end
+    end
+end
+
+function show_call(io, f, args)
+    fname = nameof(f)
+    binary = Base.isbinaryoperator(fname)
+    if binary
+        for (i, t) in enumerate(args)
+            i != 1 && print(io, fname == :^ ? fname : " $fname ")
+            print_arg(io, (^), t)
+        end
+    else
+        if f isa Sym
+            Base.show_unquoted(io, nameof(f))
+        else
+            Base.show(io, f)
+        end
+        print(io, "(")
+        for i=1:length(args)
+            print(IOContext(io, :paren => false), args[i])
+            i != length(args) && print(io, ", ")
+        end
+        print(io, ")")
+    end
+end
+
+function show_term(io::IO, t)
+    if get(io, :simplify, show_simplified[])
+        return print(IOContext(io, :simplify=>false), simplify(t))
+    end
+
+    f = operation(t)
+    args = arguments(t)
+
+    get(io, :paren, false) && print(io, "(")
+    if f === (+)
+        show_add(io, args)
+    elseif f === (*)
+        show_mul(io, args)
+    else
+        show_call(io, f, args)
+    end
+    get(io, :paren, false) && print(io, ")")
+
     return nothing
 end
 

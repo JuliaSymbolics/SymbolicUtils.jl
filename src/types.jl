@@ -359,14 +359,15 @@ end
 setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
-print_arg(io, f, n::Union{Complex, Rational}) = print(io, "(", n, ")")
-print_arg(io, f::typeof(^), n) = print(IOContext(io, :paren=>true), n)
-function print_arg(io, f, n)
-    f !== (*) && return print(io, n)
-    if istree(n) && Base.isbinaryoperator(nameof(operation(n)))
-        print(IOContext(io, :paren=>true), n)
+print_arg(io, x::Union{Complex, Rational}) = print(io, "(", x, ")")
+print_arg(io, x) = print(io, x)
+print_arg(io, f::typeof(^), x) = print_arg(IOContext(io, :paren=>true), x)
+function print_arg(io, f, x)
+    f !== (*) && return print_arg(io, x)
+    if istree(x) && Base.isbinaryoperator(nameof(operation(x)))
+        print_arg(IOContext(io, :paren=>true), x)
     else
-        print(io, n)
+        print_arg(io, x)
     end
 end
 

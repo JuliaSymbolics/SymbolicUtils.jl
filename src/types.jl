@@ -347,7 +347,7 @@ const show_simplified = Ref(false)
 
 Base.show(io::IO, t::Term) = show_term(io, t)
 
-isnegative(t::Number) = t < 0
+isnegative(t::Real) = t < 0
 function isnegative(t)
     if istree(t) && operation(t) === (*)
         coeff = first(arguments(t))

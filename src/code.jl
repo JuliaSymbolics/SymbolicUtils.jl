@@ -25,12 +25,26 @@ const (←) = Assignment
 
 Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 
-toexpr(a::Assignment, st) = :($(toexpr(a.lhs)) = $(toexpr(b.lhs)))
+toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(b.lhs, st)))
 
 struct NameState
     tosym::Dict
     sym_count::Dict
+    destructed_args::Dict
 end
+NameState() = NameState(Dict{Any, Sym}(), Dict{Sym, Int}(), IdDict())
+
+struct LazyState
+    ref::Ref{Any}
+end
+LazyState() = LazyState(Ref{Any}(nothing))
+
+function Base.get(st::LazyState)
+    s = getfield(st, :ref)[]
+    s === nothing ? getfield(st, :ref)[] = NameState() : s
+end
+
+@inline Base.getproperty(st::LazyState, f::Symbol) = getproperty(get(st), f)
 
 function toexpr(O, st)
     !istree(O) && return O
@@ -68,11 +82,11 @@ end
     body
 end
 
-function toexpr(l::Let)
+function toexpr(l::Let, st)
     assignments = Expr(:block,
                        [:($k = $v) for (k, v) in l.pairs]...)
 
-    Expr(:let, assignments, toexpr(l.expr))
+    Expr(:let, assignments, toexpr(l.expr, st))
 end
 
 ### Experimental
@@ -81,33 +95,30 @@ end
     # TODO: check uniqueness of LHS on construction
 end
 
-function toexpr(l::BasicBlock)
-    stmts = [:($k = $v) for (k, v) in l.pairs]
+function toexpr(l::BasicBlock, st)
+    stmts = [:($(toexpr(k, st)) = $(toexpr(v, st))) for (k, v) in l.pairs]
     Expr(:block, stmts)
 end
 
-# Requirements
-#
-#                   Scalar inputs     Vector inputs
-#
-# Scalar output
-# Vector outputs
-# multiple outputs
-#
-#
-# Array types: Dense, Sparse, Static
-#
-#
+# Call elements of vector arguments by their name.
+@matchable struct DeStructArgs
+    elems
+end
+
+function toexpr(args::DeStructArgs, st)
+    st.destructed_args[args] = gensym("arg")
+end
+
 @matchable struct Func
     args
     kwargs
     body
 end
 
-function toexpr(f::Func)
+function toexpr(f::Func, st)
     quote
-        function ($(map(toexpr, f.args)...),; $(map(toexpr, f.kwargs)...))
-            $(toexpr(f.body))
+        function ($(map(x->toexpr(x, st), f.args)...),; $(map(x->toexpr(x, st), f.kwargs)...))
+            $(toexpr(f.body, st))
         end
     end
 end
@@ -124,13 +135,13 @@ end
     elem
 end
 
-function toexpr(a::AtIndex)
-    toexpr(a.elem)
+function toexpr(a::AtIndex, st)
+    toexpr(a.elem, st)
 end
 
-function toexpr(s::SetArray)
+function toexpr(s::SetArray, st)
     ex = quote
-        $([:($(toexpr(s.arr))[$(ex isa AtIndex ? ex.i : i)] = $(toexpr(ex)))
+        $([:($(toexpr(s.arr, st))[$(ex isa AtIndex ? ex.i : i)] = $(toexpr(ex, st)))
            for (i, ex) in enumerate(s.elems)]...)
         nothing
     end
@@ -141,8 +152,8 @@ end
     elems::A
 end
 
-function toexpr(a::MakeArray)
-    :([$(toexpr.(a.elems)...)])
+function toexpr(a::MakeArray, st)
+    :([$(toexpr.(a.elems, (st,))...)])
 end
 
 using SparseArrays
@@ -157,15 +168,15 @@ end
 function MakeSparseArray(I, J, V)
 end
 
-function toexpr(a::MakeArray)
+function toexpr(a::MakeArray, st)
     sp = a.sparsity
-    :(SparseMatrixCSC(sp.m, sp.n, sp.colptr, sp.rowval, [$(toexpr.(a.elems)...)]))
+    :(SparseMatrixCSC(sp.m, sp.n, sp.colptr, sp.rowval, [$(toexpr.(a.elems, (st,))...)]))
 end
 
 @matchable struct MakeTuple
     elems
 end
 
-function toexpr(a::MakeTuple)
-    :(($(toexpr.(a.elems)...),))
+function toexpr(a::MakeTuple, st)
+    :(($(toexpr.(a.elems, (st,))...),))
 end

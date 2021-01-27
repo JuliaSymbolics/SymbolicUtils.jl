@@ -102,14 +102,15 @@ end
 @testset "printing" begin
     @syms a b c
     @test repr(a+b) == "a + b"
-    @test repr(-a) == "-1a"
-    @test repr(-a + 3) == "3 + -1a"
-    @test repr(-(a + b)) == "-1a + -1b"
+    @test repr(-a) == "-a"
+    @test repr(-a + 3) == "3 - a"
+    @test repr(-(a + b)) == "-a - b"
     @test repr((2a)^(-2a)) == "(2a)^(-2a)"
     @test repr(1/2a) == "(1//2)*(a^-1)"
     @test repr(2/(2*a)) == "a^-1"
-    @test repr(Term(*, [1, 1])) == "1*1"
-    @test repr((a + b) - (b + c)) == "a + -1c"
+    @test repr(Term(*, [1, 1])) == "*1"
+    @test repr(Term(*, [2, 1])) == "2*1"
+    @test repr((a + b) - (b + c)) == "a - c"
 end
 
 toterm(t) = Term{symtype(t)}(operation(t), arguments(t))

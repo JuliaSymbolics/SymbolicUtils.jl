@@ -23,7 +23,7 @@ function labels!(dicts, t)
         return t
     elseif istree(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
         tt = arguments(t)
-        return similarterm(t, operation(t), map(x->labels!(dicts, x), arguments(t)))
+        return similarterm(t, operation(t), map(x->labels!(dicts, x), tt))
     elseif istree(t) && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
         return similarterm(t, operation(t), map(x->labels!(dicts, x), arguments(t)))
     else

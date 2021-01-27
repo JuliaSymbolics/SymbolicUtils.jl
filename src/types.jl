@@ -359,25 +359,37 @@ end
 setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
-print_arg(io, n::Union{Complex, Rational}) = print(io, "(", n, ")")
-print_arg(io, n) = print(io, n)
+print_arg(io, f, n::Union{Complex, Rational}) = print(io, "(", n, ")")
+print_arg(io, f::typeof(^), n) = print(IOContext(io, :paren=>true), n)
+function print_arg(io, f, n)
+    f !== (*) && return print(io, n)
+    if istree(n) && Base.isbinaryoperator(nameof(operation(n)))
+        print(IOContext(io, :paren=>true), n)
+    else
+        print(io, n)
+    end
+end
 
 function show_add(io, args)
     negs = filter(isnegative, args)
     nnegs = filter(!isnegative, args)
     for (i, t) in enumerate(nnegs)
         i != 1 && print(io, " + ")
-        print_arg(io, t)
+        print_arg(io, +,  t)
     end
 
     for (i, t) in enumerate(negs)
-        print(io, " - ")
-        print_arg(io, -t)
+        if i==1 && isempty(nnegs)
+            print_arg(io, -, t)
+        else
+            print(io, " - ")
+            print_arg(io, +, -t)
+        end
     end
 end
 
 function show_mul(io, args)
-    length(args) == 1 && return print_arg(io, args[1])
+    length(args) == 1 && return print_arg(io, *, args[1])
 
     paren_scalar = args[1] isa Complex || args[1] isa Rational
     minus = args[1] isa Number && args[1] == -1
@@ -394,7 +406,7 @@ function show_mul(io, args)
             print(io, "-")
         elseif i == 1 && unit
         else
-            print_arg(io, t)
+            print_arg(io, *, t)
         end
     end
 end
@@ -403,12 +415,10 @@ function show_call(io, f, args)
     fname = nameof(f)
     binary = Base.isbinaryoperator(fname)
     if binary
-        get(io, :paren, false) && print(io, "(")
         for (i, t) in enumerate(args)
-            i != 1 && print(io, " $fname ")
-            print_arg(io, t)
+            i != 1 && print(io, fname == :^ ? fname : " $fname ")
+            print_arg(io, (^), t)
         end
-        get(io, :paren, false) && print(io, ")")
     else
         if f isa Sym
             Base.show_unquoted(io, nameof(f))
@@ -432,6 +442,7 @@ function show_term(io::IO, t)
     f = operation(t)
     args = arguments(t)
 
+    get(io, :paren, false) && print(io, "(")
     if f === (+)
         show_add(io, args)
     elseif f === (*)
@@ -439,6 +450,7 @@ function show_term(io::IO, t)
     else
         show_call(io, f, args)
     end
+    get(io, :paren, false) && print(io, ")")
 
     return nothing
 end

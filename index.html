@@ -18,7 +18,7 @@ symtype&#40;w&#41;, symtype&#40;z&#41;,  symtype&#40;α&#41;, symtype&#40;β&#41
 expr2 &#61; α*cos&#40;z&#41;^2 &#43;  β*sin&#40;w&#41;^2
 
 expr1 &#43; expr2</code></pre>
-<div class=code-output ><pre><code class=plaintext >α*(sin(w)^2) + α*(cos(z)^2) + β*(sin(w)^2) + β*(cos(z)^2)</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >α*((sin(w))^2) + α*((cos(z))^2) + β*((sin(w))^2) + β*((cos(z))^2)</code></pre></div>
 <p><strong>Function-like symbols</strong></p>
 <p>Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same <code>symtype</code>.</p>
 <pre><code class=language-julia >using SymbolicUtils
@@ -137,7 +137,7 @@ showraw&#40;rset_result&#41;</code></pre>
 <h2 id=simplification ><a href="#simplification">Simplification</a></h2>
 <p>The <code>simplify</code> function applies a built-in set of rules to rewrite expressions in order to simplify it.</p>
 <pre><code class=language-julia >showraw&#40;simplify&#40;2 * &#40;w&#43;w&#43;α&#43;β &#43; sin&#40;z&#41;^2 &#43; cos&#40;z&#41;^2 - 1&#41;&#41;&#41;</code></pre>
-<div class=code-output ><pre><code class=plaintext >2(α + β + 2w)</code></pre></div>
+<div class=code-output ><pre><code class=plaintext >2(α + β + (2w))</code></pre></div>
 <p>The rules in the default simplify applies simple constant elemination, trigonometric identities.</p>
 <p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl">rules</a> that are used by <code>simplify</code>.</p>
 <h2 id=learn_more ><a href="#learn_more">Learn more</a></h2>

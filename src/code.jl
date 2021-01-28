@@ -1,7 +1,7 @@
 module Code
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs,
-       SetArray, MakeArray, MakeSparseArray, MakeTuple
+       SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex
 
 import ..SymbolicUtils
 import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
@@ -110,10 +110,16 @@ function toexpr(f::Func, st)
     else
         body = f.body
     end
-    :(function ($(map(x->toexpr(x, st), f.args)...),;
-                $(map(x->toexpr_kw(x, st), f.kwargs)...))
-          $(toexpr(body, st))
-      end)
+    if isempty(f.kwargs)
+        :(function ($(map(x->toexpr(x, st), f.args)...),)
+              $(toexpr(body, st))
+          end)
+    else
+        :(function ($(map(x->toexpr(x, st), f.args)...),;
+                    $(map(x->toexpr_kw(x, st), f.kwargs)...))
+              $(toexpr(body, st))
+          end)
+    end
 end
 
 
@@ -124,7 +130,7 @@ end
 end
 
 @matchable struct AtIndex
-    i::Int
+    i
     elem
 end
 
@@ -138,7 +144,7 @@ function toexpr(s::SetArray, st)
            for (i, ex) in enumerate(s.elems)]...)
         nothing
     end
-    s.inbounds ? :(@inbounds begin $ex end) : ex
+    s.inbounds ? :(@inbounds $ex) : ex
 end
 
 @matchable struct MakeArray{A<:AbstractArray} # Could be StaticArray
@@ -161,7 +167,7 @@ end
 function MakeSparseArray(I, J, V)
 end
 
-function toexpr(a::MakeArray, st)
+function toexpr(a::MakeSparseArray, st)
     sp = a.sparsity
     :(SparseMatrixCSC(sp.m, sp.n, sp.colptr, sp.rowval, [$(toexpr.(a.elems, (st,))...)]))
 end

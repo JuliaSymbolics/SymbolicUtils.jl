@@ -26,7 +26,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     test_repr(toexpr(Let([a ← 3, b ← 1+a], a + b)), ex)
 
-    test_repr(toexpr(Func([],[], a+b)) |>Base.remove_linenums!, :(function (;)
+    test_repr(toexpr(Func([],[], a+b)) |>Base.remove_linenums!, :(function ()
             $(+)(a, b)
         end))
 
@@ -37,11 +37,18 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     test_repr(toexpr(Func([DestructuredArgs([x, x(t)], :state),
                            DestructuredArgs((a, b), :params)], [],
                           x(t+1) + x(t) + a  + b)),
-              :(function (state, params;)
+              :(function (state, params)
                     let x = state[1], var"x(t)" = state[2], a = params[1], b = params[2]
                         $(+)(a, b, var"x(t)", x($(+)(1, t)))
                     end
                 end))
-
+    test_repr(toexpr(SetArray(false, a, [x(t), AtIndex(9, b), c])),
+              quote
+                  a[1] = x(t)
+                  a[9] = b
+                  a[3] = c
+                  nothing
+              end)
+    @test toexpr(SetArray(true, a, [x(t), AtIndex(9, b), c])).head == :macrocall
 #end
 #

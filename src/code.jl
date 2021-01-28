@@ -1,6 +1,6 @@
 module Code
 
-export toexpr, Assignment, (←), Let, Func, DestructuredArgs,
+export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex
 
 import ..SymbolicUtils
@@ -80,6 +80,21 @@ end
     body
 end
 
+"""
+Interpolated Code types will be rendered with the given state
+when the LiteralExpr is rendered.
+"""
+struct LiteralExpr
+    ex
+end
+
+recurse_expr(ex::Expr, st) = Expr(ex.head, recurse_expr.(ex.args, (st,))...)
+recurse_expr(ex, st) = toexpr(ex, st)
+
+function toexpr(exp::LiteralExpr, st)
+    recurse_expr(exp.ex, st)
+end
+
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 # Call elements of vector arguments by their name.
@@ -147,12 +162,14 @@ function toexpr(s::SetArray, st)
     s.inbounds ? :(@inbounds $ex) : ex
 end
 
-@matchable struct MakeArray{A<:AbstractArray} # Could be StaticArray
-    elems::A
+@matchable struct MakeArray
+    elems
 end
 
 function toexpr(a::MakeArray, st)
-    :([$(toexpr.(a.elems, (st,))...)])
+    quote
+        elems = ($(toexpr.(a.elems, (st,))...),)
+    end
 end
 
 using SparseArrays

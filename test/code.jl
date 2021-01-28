@@ -50,5 +50,14 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                   nothing
               end)
     @test toexpr(SetArray(true, a, [x(t), AtIndex(9, b), c])).head == :macrocall
+
+
+
+    test_repr(toexpr(LiteralExpr(:(let x=1, y=2
+                                       $(sin(a+b))
+                                   end))),
+              :(let x = 1, y = 2
+                    $(sin)($(+)(a, b))
+                end))
 #end
 #

@@ -4,7 +4,7 @@ using SymbolicUtils.Code: LazyState
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 
-@testset "toexpr level 1" begin
+#@testset "toexpr level 1" begin
     @syms a b c d e t x(t) y(t) z(t)
     @test toexpr(Assignment(a, b)) == :(a = b)
     @test toexpr(a ← b) == :(a = b)
@@ -34,4 +34,14 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
               :(function (var"x(t)", x; b = $(+)(2, a), var"y(t)" = b)
                     $(+)(b, var"x(t)", var"y(t)", x($(+)(1, t)))
                 end))
-end
+    test_repr(toexpr(Func([DestructuredArgs([x, x(t)], :state),
+                           DestructuredArgs((a, b), :params)], [],
+                          x(t+1) + x(t) + a  + b)),
+              :(function (state, params;)
+                    let x = state[1], var"x(t)" = state[2], a = params[1], b = params[2]
+                        $(+)(a, b, var"x(t)", x($(+)(1, t)))
+                    end
+                end))
+
+#end
+#

@@ -4,16 +4,15 @@ export toexpr, Assignment, (←), Let, Func, DeStructArgs,
        SetArray, MakeArray, MakeSparseArray, MakeTuple
 
 import ..SymbolicUtils
-import SymbolicUtils: @matchable, Sym, istree, operation, arguments
+import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
 
 ##== state management ==##
 
 struct NameState
-    tosym::Dict
-    sym_count::Dict
+    symbolify::Set
     destructed_args::Dict
 end
-NameState() = NameState(Dict{Any, Symbol}(), Dict{Symbol, Int}(), IdDict())
+NameState() = NameState(Set{Any}(), IdDict())
 
 struct LazyState
     ref::Ref{Any}
@@ -31,6 +30,7 @@ end
 
 toexpr(x) = toexpr(x, LazyState())
 toexpr(s::Sym, st) = nameof(s)
+toexpr(x, st) = x
 
 @matchable struct Assignment
     lhs
@@ -48,15 +48,15 @@ function toexpr(O, st)
     op = operation(O)
     args = arguments(O)
     if op === (^) && length(args) == 2 && args[2] isa Number && args[2] < 0
-        ex = toexpr(args[1], st)
+        ex = args[1]
         if args[2] == -1
-            return toexpr(Term{Any}(inv, ex), st)
+            return toexpr(Term{Any}(inv, [ex]), st)
         else
-            return toexpr(Term{Any}(^, [Term{Any}(inv, ex), -args[2]]), st)
+            return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
         end
     elseif op === (SymbolicUtils.cond)
         return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
-    elseif op isa Sym # We can just use it as a variable
+    elseif op isa Sym && O in st.symbolify
         return Symbol(string(O))
     end
     return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)

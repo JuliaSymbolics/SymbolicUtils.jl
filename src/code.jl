@@ -36,6 +36,8 @@ toexpr(x, st) = x
     lhs
     rhs
 end
+lhs(a::Assignment) = a.lhs
+rhs(a::Assignment) = a.rhs
 
 const (←) = Assignment
 
@@ -88,12 +90,13 @@ end
     body
 end
 
+toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 function toexpr(f::Func, st)
-    quote
-        function ($(map(x->toexpr(x, st), f.args)...),; $(map(x->toexpr(x, st), f.kwargs)...))
-            $(toexpr(f.body, st))
-        end
-    end
+    funkyargs = vcat(filter(istree, f.args), filter(istree, map(lhs, f.kwargs)))
+    union!(st.symbolify, funkyargs)
+    :(function ($(map(x->toexpr(x, st), f.args)...),; $(map(x->toexpr_kw(x, st), f.kwargs)...))
+          $(toexpr(f.body, st))
+      end)
 end
 
 

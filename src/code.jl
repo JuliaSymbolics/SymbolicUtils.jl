@@ -68,21 +68,9 @@ end
 end
 
 function toexpr(l::Let, st)
-    assignments = Expr(:block,
-                       [:($k = $v) for (k, v) in l.pairs]...)
-
-    Expr(:let, assignments, toexpr(l.expr, st))
-end
-
-### Experimental
-@matchable struct BasicBlock
-    pairs::Vector{Assignment} # Iterator of ordered pairs
-    # TODO: check uniqueness of LHS on construction
-end
-
-function toexpr(l::BasicBlock, st)
-    stmts = [:($(toexpr(k, st)) = $(toexpr(v, st))) for (k, v) in l.pairs]
-    Expr(:block, stmts)
+    Expr(:let,
+         Expr(:block, map(p->toexpr(p, st), l.pairs)...),
+         toexpr(l.body, st))
 end
 
 # Call elements of vector arguments by their name.

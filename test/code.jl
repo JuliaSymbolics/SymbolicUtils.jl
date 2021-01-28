@@ -15,4 +15,9 @@ using SymbolicUtils.Code: LazyState
     push!(s.symbolify, x(t))
     push!(s.symbolify, y(t))
     @test toexpr(x(t)+y(t)+x(t+1), s) == :($(+)(var"x(t)", var"y(t)", x($(+)(1, t))))
+
+    ex = :(let a = 3, b = $(+)(1,a)
+               $(+)(a, b)
+           end) |> Base.remove_linenums!
+    @test repr(toexpr(Let([a ← 3, b ← 1+a], a + b))) == repr(ex)
 end

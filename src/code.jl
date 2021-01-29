@@ -180,18 +180,49 @@ function toexpr(a::MakeArray, st)
     quote
         create_array($T,
                      Val{$(size(a.elems))}(),
-                     $(eltype(T) == Any ? Unknown : T),
+                     $(eltype(T)),
                      $(toexpr.(a.elems, (st,))...),)
     end
+end
+
+## Array
+@inline function _create_array(::Type{<:Array}, T, ::Val{dims}, elems...) where dims
+    arr = Array{T}(undef, dims)
+    @assert dims == nfields(elems)
+    @inbounds for i=1:prod(dims)
+        arr[i] = elems[i]
+    end
+    arr
+end
+
+@inline function create_array(A::Type{<:Array}, T, d::Val, elems...)
+    _create_array(A, T, d, elems...)
+end
+
+@inline function create_array(A::Type{<:Array}, ::Type{Any}, d::Val{dims}, elems...) where dims
+    T = promote_type(map(typeof, elems)...)
+    _create_array(A, T, d, elems...)
+end
+
+## Matrix
+
+@inline function create_array(::Type{<:Matrix}, ::Type{Any}, ::Val{dims}, elems...) where dims
+    Base.hvcat(dims, elems...)
+end
+
+@inline function create_array(::Type{<:Matrix}, T, ::Val{dims}, elems...) where dims
+    Base.typed_hvcat(T, dims, elems...)
+end
+
+## SArray
+@inline function create_array(::Type{<:SArray}, ::Type{Any}, ::Val{dims}, elems...) where dims
+    SArray{Tuple{dims...}}(elems...)
 end
 
 @inline function create_array(::Type{<:SArray}, T, ::Val{dims}, elems...) where dims
     SArray{Tuple{dims...}, T}(elems...)
 end
 
-@inline function create_array(::Type{<:Array}, ::Type{Unknown}, ::Val{dims}, elems...) where dims
-    SArray{Tuple{dims...}}(elems...)
-end
 using SparseArrays
 
 ## We use a separate type for Sparse Arrays to sidestep the need for

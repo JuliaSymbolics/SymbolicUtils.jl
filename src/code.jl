@@ -162,8 +162,6 @@ function toexpr(s::SetArray, st)
     s.inbounds ? :(@inbounds $ex) : ex
 end
 
-using StaticArrays, LabelledArrays
-
 @matchable struct MakeArray
     elems
     similarto # Must be either a reference to an array or a concrete type
@@ -221,6 +219,15 @@ end
 
 @inline function create_array(::Type{<:SArray}, T, ::Val{dims}, elems...) where dims
     SArray{Tuple{dims...}, T}(elems...)
+end
+
+## LabelledArrays
+@inline function create_array(A::Type{<:SLArray}, ::Type{Any}, d::Val, elems...)
+    A(create_array(SArray, Any, d, elems...))
+end
+
+@inline function create_array(A::Type{<:SLArray}, T, d::Val, elems...)
+    A(create_array(SArray, T, d, elems...))
 end
 
 using SparseArrays

@@ -1,5 +1,7 @@
 module Code
 
+using StaticArrays, LabelledArrays, SparseArrays
+
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex
 
@@ -165,15 +167,18 @@ end
 @matchable struct MakeArray
     elems
     similarto # Must be either a reference to an array or a concrete type
+    output_eltype
 end
+MakeArray(elems, similarto) = MakeArray(elems, similarto, nothing)
 
 function toexpr(a::MakeArray, st)
     similarto = toexpr(a.similarto, st)
     T = similarto isa Type ? similarto : :(typeof($similarto))
+    elT = a.output_eltype
     quote
-        create_array($T,
+        $create_array($T,
+                     $elT,
                      Val{$(size(a.elems))}(),
-                     $(eltype(T)),
                      $(toexpr.(a.elems, (st,))...),)
     end
 end
@@ -181,7 +186,7 @@ end
 ## Array
 @inline function _create_array(::Type{<:Array}, T, ::Val{dims}, elems...) where dims
     arr = Array{T}(undef, dims)
-    @assert dims == nfields(elems)
+    #@assert prod(dims) == nfields(elems)
     @inbounds for i=1:prod(dims)
         arr[i] = elems[i]
     end
@@ -192,14 +197,14 @@ end
     _create_array(A, T, d, elems...)
 end
 
-@inline function create_array(A::Type{<:Array}, ::Type{Any}, d::Val{dims}, elems...) where dims
+@inline function create_array(A::Type{<:Array}, ::Nothing, d::Val{dims}, elems...) where dims
     T = promote_type(map(typeof, elems)...)
     _create_array(A, T, d, elems...)
 end
 
 ## Matrix
 
-@inline function create_array(::Type{<:Matrix}, ::Type{Any}, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:Matrix}, ::Nothing, ::Val{dims}, elems...) where dims
     Base.hvcat(dims, elems...)
 end
 
@@ -208,7 +213,7 @@ end
 end
 
 ## SArray
-@inline function create_array(::Type{<:SArray}, ::Type{Any}, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:SArray}, ::Nothing, ::Val{dims}, elems...) where dims
     SArray{Tuple{dims...}}(elems...)
 end
 
@@ -217,12 +222,13 @@ end
 end
 
 ## LabelledArrays
-@inline function create_array(A::Type{<:SLArray}, ::Type{Any}, d::Val, elems...)
-    A(create_array(SArray, Any, d, elems...))
+@inline function create_array(A::Type{<:SLArray}, ::Nothing, d::Val{dims}, elems...) where {dims}
+    a = create_array(SArray, nothing, d, elems...)
+    similar_type(A, eltype(a), Size(dims))(a)
 end
 
-@inline function create_array(A::Type{<:SLArray}, T, d::Val, elems...)
-    A(create_array(SArray, T, d, elems...))
+@inline function create_array(A::Type{<:SLArray}, T, d::Val{dims}, elems...) where {dims}
+    similar_type(A, T, Size(dims))(create_array(SArray, T, d, elems...))
 end
 
 using SparseArrays

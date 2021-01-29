@@ -7,8 +7,11 @@ version = "0.7.7"
 AbstractAlgebra = "c3fe647b-3220-5bb0-a1ea-a7954cac585d"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]

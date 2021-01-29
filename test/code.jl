@@ -1,6 +1,8 @@
 using Test, SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Code: LazyState
+using StaticArrays
+using LabelledArrays
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 
@@ -51,13 +53,36 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
               end)
     @test toexpr(SetArray(true, a, [x(t), AtIndex(9, b), c])).head == :macrocall
 
-
-
     test_repr(toexpr(LiteralExpr(:(let x=1, y=2
                                        $(sin(a+b))
                                    end))),
               :(let x = 1, y = 2
                     $(sin)($(+)(a, b))
                 end))
+
+    test_repr(toexpr(MakeArray([a,b,a+b], :arr)),
+              quote
+                  $(SymbolicUtils.Code.create_array)(typeof(arr), nothing, Val{(3,)}(), a, b, $(+)(a, b))
+              end)
+
+    toexpr(Let([a ← 1, b ← 2, :arr ← [1,2]],
+               MakeArray([a,b,a+b,a/b], :arr)))
+
+    @syms arr
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray([a,b,a+b,a/b], arr)))) == [1, 2, 3, 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray([a b;a+b a/b], arr)))) == [1 2; 3 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SVector([1,2])],
+                          MakeArray([a,b,a+b,a/b], arr)))) === @SVector [1, 2, 3, 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SVector([1,2])],
+                          MakeArray([a b;a+b a/b], arr)))) === @SMatrix [1 2; 3 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SLVector((:a, :b))(@SVector[1,2])],
+                          MakeArray([a+b,a/b], arr)))) === @SLVector((:a, :b))(@SVector [3, 1/2])
 #end
 #

@@ -162,16 +162,36 @@ function toexpr(s::SetArray, st)
     s.inbounds ? :(@inbounds $ex) : ex
 end
 
+using StaticArrays, LabelledArrays
+
 @matchable struct MakeArray
     elems
+    similarto # Must be either a reference to an array or a concrete type
 end
 
+@inline function toarrayexpr(::Type{<:SArray}, dims, args...)
+end
+
+struct Unknown end
+
 function toexpr(a::MakeArray, st)
+    similarto = toexpr(a.similarto, st)
+    T = similarto isa Type ? similarto : :(typeof($similarto))
     quote
-        elems = ($(toexpr.(a.elems, (st,))...),)
+        create_array($T,
+                     Val{$(size(a.elems))}(),
+                     $(eltype(T) == Any ? Unknown : T),
+                     $(toexpr.(a.elems, (st,))...),)
     end
 end
 
+@inline function create_array(::Type{<:SArray}, T, ::Val{dims}, elems...) where dims
+    SArray{Tuple{dims...}, T}(elems...)
+end
+
+@inline function create_array(::Type{<:Array}, ::Type{Unknown}, ::Val{dims}, elems...) where dims
+    SArray{Tuple{dims...}}(elems...)
+end
 using SparseArrays
 
 ## We use a separate type for Sparse Arrays to sidestep the need for

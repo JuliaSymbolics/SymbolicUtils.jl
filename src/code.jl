@@ -167,11 +167,6 @@ end
     similarto # Must be either a reference to an array or a concrete type
 end
 
-@inline function toarrayexpr(::Type{<:SArray}, dims, args...)
-end
-
-struct Unknown end
-
 function toexpr(a::MakeArray, st)
     similarto = toexpr(a.similarto, st)
     T = similarto isa Type ? similarto : :(typeof($similarto))

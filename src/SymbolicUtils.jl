@@ -10,7 +10,7 @@ include("types.jl")
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
-export cond
+import IfElse: ifelse  # need to not bring IfElse name in or it will clash
 include("methods.jl")
 
 # LinkedList, simplification utilities

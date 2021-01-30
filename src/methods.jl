@@ -137,11 +137,11 @@ end
 
 
 # An ifelse node, ifelse is a built-in unfortunately
-#
-cond(_if::Bool, _then, _else) = ifelse(_if, _then, _else)
-function cond(_if::Symbolic{Bool}, _then, _else)
+# So this uses IfElse.jl's ifelse that we imported
+function ifelse(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(cond, Any[_if, _then, _else])
 end
+Base.@deprecate cond(_if, _then, _else) ifelse(_if, _then, _else)
 
 # Specially handle inv and literal pow
 Base.inv(x::Symbolic) = Base.:^(x, -1)

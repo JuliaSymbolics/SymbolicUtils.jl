@@ -11,10 +11,6 @@ where appropriate -->
 
 This section is for Julia package developers who may want to use the `simplify` and rule rewriting system on their own expression types.
 
-If not directly using `@syms` and methods defined on symbols, **the easiest way to interface with SymbolicUtils  is to convert your symbolic types into SymbolicUtils' types, perform the desired rewrites, and convert back to the original types.**
-
-This may sound like a roundabout way of doing it, but it can be really fast. In our experements with using this package to impliment simplification for [ModelingToolkit.jl](https://mtk.sciml.ai/dev/) the conversion accounted for about 3% of the total time taken for `simplify`. This approach also means that you don't ahve to take for face value the assumptions and reservations of SymbolicUtils.
-
 ## Defining the interface
 
 SymbolicUtils matchers can match any Julia object that implements an interface to traverse it as a tree.
@@ -86,7 +82,6 @@ end
 ex = 1 + (:x - 2)
 ```
 
-\out{piracy1}
 
 How can we use SymbolicUtils.jl to convert `ex` to `(-)(:x, 1)`? We simply implement `istree`,
 `operation`, `arguments` and we'll be able to do rule-based rewriting on `Expr`s:
@@ -99,13 +94,11 @@ SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
 
 @rule(~x => ~x - 1)(ex)
 ```
-\out{piracy2}
 
 However, this is not enough to get SymbolicUtils to use its own algebraic simplification system on `Expr`s:
 ```julia:piracy3
 simplify(ex)
 ```
-\out{piracy3}
 
 The reason that the expression was not simplified is that the expression tree is untyped, so SymbolicUtils 
 doesn't know what rules to apply to the expression. To mimic the behaviour of most computer algebra 
@@ -116,6 +109,5 @@ SymbolicUtils.symtype(s::Expr) = Number
 
 simplify(ex)
 ```
-\out{piracy4}
 
 Now SymbolicUtils is able to apply the `Number` simplification rule to `Expr`.

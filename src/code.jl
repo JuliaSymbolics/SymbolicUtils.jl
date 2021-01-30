@@ -30,7 +30,7 @@ end
 ##========================##
 
 """
-    toexpr(x)
+    toexpr(ex, [st,])
 
 Convert a symbolic expression into an `Expr`, suitable to be passed into `eval`.
 
@@ -77,7 +77,7 @@ end
 """
     Assignment(lhs, rhs)
 
-An assignment expression. Shorthand `lhs ← rhs` (\\leftarrow)
+An assignment expression. Shorthand `lhs ← rhs` (`\\leftarrow`)
 """
 Assignment
 
@@ -184,7 +184,6 @@ julia> exec(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
 "11.98074069840786"
 ```
 """
-
 Func
 
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
@@ -419,6 +418,7 @@ end
 
 Make a Tuple from a tuple of expressions.
 """
+MakeTuple
 
 function toexpr(a::MakeTuple, st)
     :(($(toexpr.(a.elems, (st,))...),))

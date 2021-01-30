@@ -3,6 +3,7 @@ using SymbolicUtils.Code
 using SymbolicUtils.Code: LazyState
 using StaticArrays
 using LabelledArrays
+using SparseArrays
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 
@@ -84,5 +85,20 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SLVector((:a, :b))(@SVector[1,2])],
                           MakeArray([a+b,a/b], arr)))) === @SLVector((:a, :b))(@SVector [3, 1/2])
+
+    mksp = MakeSparseArray([1,2,31,32,2],
+                              [1,2,31,32,2],
+                              [a, b, a+b, a/b, a-b+e])
+    reference = sparse([1,2,31,32],
+                     [1,2,31,32],
+                     [a, a+e, a+b, a/b])
+
+    test_repr(mksp.array, reference)
+
+    test_repr(toexpr(mksp),
+              :(SparseMatrixCSC(32, 32,
+                                $(reference.colptr),
+                                $(reference.rowval),
+                                [$(map(toexpr, reference.nzval)...)])))
 #end
 #

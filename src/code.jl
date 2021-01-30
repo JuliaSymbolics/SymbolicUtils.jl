@@ -12,9 +12,8 @@ import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
 
 struct NameState
     symbolify::Set
-    destructed_args::Dict
 end
-NameState() = NameState(Set{Any}(), IdDict())
+NameState() = NameState(Set{Any}())
 
 struct LazyState
     ref::Ref{Any}
@@ -186,7 +185,7 @@ end
 ## Array
 @inline function _create_array(::Type{<:Array}, T, ::Val{dims}, elems...) where dims
     arr = Array{T}(undef, dims)
-    #@assert prod(dims) == nfields(elems)
+    @assert prod(dims) == nfields(elems)
     @inbounds for i=1:prod(dims)
         arr[i] = elems[i]
     end
@@ -236,16 +235,19 @@ using SparseArrays
 ## We use a separate type for Sparse Arrays to sidestep the need for
 ## iszero to be defined on the expression type
 @matchable struct MakeSparseArray
-    sparsity::SparseMatrixCSC
-    V
+    array::SparseMatrixCSC
 end
 
-function MakeSparseArray(I, J, V)
+function MakeSparseArray(I, J, V, args...; kwargs...)
+    sp = sparse(I,J,V,args...; kwargs...)
+    MakeSparseArray(sp)
 end
 
 function toexpr(a::MakeSparseArray, st)
-    sp = a.sparsity
-    :(SparseMatrixCSC(sp.m, sp.n, sp.colptr, sp.rowval, [$(toexpr.(a.elems, (st,))...)]))
+    sp = a.array
+    :(SparseMatrixCSC($(sp.m), $(sp.n),
+                      $(copy(sp.colptr)), $(copy(sp.rowval)),
+                      [$(toexpr.(sp.nzval, (st,))...)]))
 end
 
 @matchable struct MakeTuple

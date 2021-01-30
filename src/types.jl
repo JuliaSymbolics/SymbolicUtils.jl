@@ -71,26 +71,12 @@ function Base.isequal(t1::Symbolic, t2::Symbolic)
 end
 ### End of interface
 
-"""
-    to_symbolic(x)
-
-Convert `x` to a `Symbolic` type, using the `istree`, `operation`, `arguments`,
-and optionally `symtype` if available.
-"""
-to_symbolic(x::Symbolic) = x
-
 function to_symbolic(x)
-    if !istree(x)
-        return x
-    end
+    Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
+                 "symbolic structure using `istree(x)`, `operation(x)`, `arguments(x)` " *
+                 "and `similarterm(::YourType, f, args)`", :to_symbolic, force=true)
 
-    op = to_symbolic(operation(x))
-
-    if symtype(x) === Any
-        Term(op, map(to_symbolic, arguments(x)))
-    else
-        Term{symtype(x)}(op, map(to_symbolic, arguments(x)))
-    end
+    x
 end
 
 Base.one( s::Symbolic) = one( symtype(s))

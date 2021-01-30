@@ -15,8 +15,6 @@ end
 
 ex = 1 + (:x - 2)
 
-SymbolicUtils.to_symbolic(ex::Expr) = ex
-
 @test simplify(ex) == ex
 
 SymbolicUtils.symtype(::Expr) = Real

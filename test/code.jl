@@ -100,5 +100,8 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                                 $(reference.colptr),
                                 $(reference.rowval),
                                 [$(map(toexpr, reference.nzval)...)])))
+
+    test_repr(toexpr(MakeTuple((a, b, a+b))),
+              :((a,b,$(+)(a,b))))
 #end
 #

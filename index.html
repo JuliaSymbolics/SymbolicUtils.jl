@@ -111,42 +111,32 @@
 <p>First, let&#39;s use the <code>@syms</code> macro to create a few symbols.</p>
 <pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
 
-<span class="hljs-meta">@syms</span> w z α::<span class="hljs-built_in">Real</span> β::<span class="hljs-built_in">Real</span></code></pre><pre><code class="plaintext hljs">ArgumentError: Package SymbolicUtils [d1185830-fcd6-423d-90d6-eec64667417b] is required but does not seem to be installed:
- - Run `Pkg.instantiate()` to install all recorded dependencies.
-
-</code></pre>
+<span class="hljs-meta">@syms</span> w z α::<span class="hljs-built_in">Real</span> β::<span class="hljs-built_in">Real</span></code></pre><pre><code class="plaintext hljs">(w, z, α, β)</code></pre>
 <p>Type annotations are optional when creating symbols. Here <code>α</code>, <code>β</code> behave like Real numbers. <code>w</code> and <code>z</code> behave like <code>Number</code>, which is the default. You can use the <code>symtype</code> function to find the type of a symbol.</p>
 <pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils: symtype
 
-symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre><pre><code class="plaintext hljs">ArgumentError: Package SymbolicUtils [d1185830-fcd6-423d-90d6-eec64667417b] is required but does not seem to be installed:
- - Run `Pkg.instantiate()` to install all recorded dependencies.
-
-</code></pre>
+symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre><pre><code class="plaintext hljs">(Number, Number, Real, Real)</code></pre>
 <p>Note however that they are not subtypes of these types&#33;</p>
 <pre><code class="julia hljs"><span class="hljs-meta">@show</span> w <span class="hljs-keyword">isa</span> <span class="hljs-built_in">Number</span>
-<span class="hljs-meta">@show</span> α <span class="hljs-keyword">isa</span> <span class="hljs-built_in">Real</span></code></pre><pre><code class="plaintext hljs">UndefVarError: w not defined
+<span class="hljs-meta">@show</span> α <span class="hljs-keyword">isa</span> <span class="hljs-built_in">Real</span></code></pre><pre><code class="plaintext hljs">w isa Number = false
+α isa Real = false
 </code></pre>
 <p>&#40;see <a href="https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u&#61;shashi">this post</a> for why they are all not just subtypes of <code>Number</code>&#41;</p>
 <p>You can do basic arithmetic on symbols to get symbolic expressions:</p>
 <pre><code class="julia hljs">expr1 = α*sin(w)^<span class="hljs-number">2</span> +  β*cos(z)^<span class="hljs-number">2</span>
 expr2 = α*cos(z)^<span class="hljs-number">2</span> +  β*sin(w)^<span class="hljs-number">2</span>
 
-expr1 + expr2</code></pre><pre><code class="plaintext hljs">UndefVarError: w not defined
-</code></pre>
+expr1 + expr2</code></pre><pre><code class="plaintext hljs">α*((sin(w))^2) + α*((cos(z))^2) + β*((sin(w))^2) + β*((cos(z))^2)</code></pre>
 <p><strong>Function-like symbols</strong></p>
 <p>Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same <code>symtype</code>.</p>
 <pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
 <span class="hljs-meta">@syms</span> f(x) g(x::<span class="hljs-built_in">Real</span>, y::<span class="hljs-built_in">Real</span>)::<span class="hljs-built_in">Real</span>
 
-f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code class="plaintext hljs">ArgumentError: Package SymbolicUtils [d1185830-fcd6-423d-90d6-eec64667417b] is required but does not seem to be installed:
- - Run `Pkg.instantiate()` to install all recorded dependencies.
-
-</code></pre>
-<pre><code class="julia hljs">g(<span class="hljs-number">1</span>, z)</code></pre><pre><code class="plaintext hljs">UndefVarError: g not defined
+f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code class="plaintext hljs">sin(w) + f(z) + g(1, α)</code></pre>
+<pre><code class="julia hljs">g(<span class="hljs-number">1</span>, z)</code></pre><pre><code class="plaintext hljs">Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real
 </code></pre>
 <p>This does not work since <code>z</code> is a <code>Number</code>, not a <code>Real</code>.</p>
-<pre><code class="julia hljs">g(<span class="hljs-number">2</span>//<span class="hljs-number">5</span>, g(<span class="hljs-number">1</span>, β))</code></pre><pre><code class="plaintext hljs">UndefVarError: g not defined
-</code></pre>
+<pre><code class="julia hljs">g(<span class="hljs-number">2</span>//<span class="hljs-number">5</span>, g(<span class="hljs-number">1</span>, β))</code></pre><pre><code class="plaintext hljs">g(2//5, g(1, β))</code></pre>
 <p>This works because <code>g</code> &quot;returns&quot; a <code>Real</code>.</p>
 <h2 id="expression_interface"><a href="#expression_interface">Expression interface</a></h2>
 <p>Symbolic expressions are of type <code>Term&#123;T&#125;</code>, <code>Add&#123;T&#125;</code>, <code>Mul&#123;T&#125;</code> or <code>Pow&#123;T&#125;</code> and denote some function call where one or more arguments are themselves such expressions or <code>Sym</code>s.</p>
@@ -167,8 +157,7 @@ f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code
 <h2 id="simplification"><a href="#simplification">Simplification</a></h2>
 <p>By default <code>*</code> and <code>&#43;</code> operations apply the most basic simplification upon construction.</p>
 <p>The <code>simplify</code> function applies a built-in set of rules to rewrite expressions in order to simplify it.</p>
-<pre><code class="julia hljs">simplify(<span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>))</code></pre><pre><code class="plaintext hljs">UndefVarError: z not defined
-</code></pre>
+<pre><code class="julia hljs">simplify(<span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>))</code></pre><pre><code class="plaintext hljs">2(α + β + (2w))</code></pre>
 <p>The rules in the default simplify applies simple constant elemination, trigonometric identities.</p>
 <p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl">rules</a> that are used by <code>simplify</code>.</p>
 <h2 id="code_generation"><a href="#code_generation">Code generation</a></h2>

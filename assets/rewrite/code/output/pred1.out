@@ -1,2 +1,3 @@
-LoadError: UndefVarError: @rule not defined
-in expression starting at none:1
+r(w + z + z + w) = nothing
+r(w + z + z) = nothing
+r(w + z) = nothing

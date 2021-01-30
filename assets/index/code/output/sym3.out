@@ -1,1 +1,1 @@
-UndefVarError: g not defined
+Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real

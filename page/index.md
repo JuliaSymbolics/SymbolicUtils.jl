@@ -5,11 +5,13 @@
 the config file by setting hasmath = false for instance and just setting it to true
 where appropriate -->
 
-# SymbolicUtils.jl
+~~~
+<h1>SymbolicUtils.jl &mdash; home</h1>
+~~~
 
 ~~~
-<p style="font-size: 1.2em; line-height: 1.67em; text-align: center; margin: 2em 0; color: #111;">
-<a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">SymbolicUtils</a> is an practical symbolic programming utility in Julia. It lets you <a href="#symbolic_expressions">create</a>, <a href="#rule-based_rewriting">rewrite</a> and <a href="#simplification">simplify</a> symbolic expressions. You can also <a href="/codegen/">generate Julia code</a> from them.
+<p style="font-size: 1.25em; line-height: 1.67em; text-align: center; margin: 1em 0; color: #111;">
+<a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">SymbolicUtils</a> is an practical symbolic programming utility in Julia. It lets you <a href="#symbolic_expressions">create</a>, <a href="#rule-based_rewriting">rewrite</a> and <a href="#simplification">simplify</a> symbolic expressions, and <a href="/codegen/">generate Julia code</a> from them.
 </p>
 ~~~
 
@@ -21,19 +23,21 @@ where appropriate -->
 - Type promotion:
   - Symbols (`Sym`s) carry type information. ([read more](#symbolic_expressions))
   - Compound expressions composed of `Sym`s propagate type information. ([read more](#symbolic_expressions))
-- Set of [simplification rules](#simplification). These can be remixed and extended for special purposes.
+- Set of extendable [simplification rules](#simplification).
 
 
 ~~~
 <br>
+<h1>
+ Getting Started
+</h1>
 ~~~
-# User Manual
 
 **Table of contents**
 
 \tableofcontents <!-- you can use \toc as well -->
 
-## `Sym`s
+## Creating symbolic expressions
 
 First, let's use the `@syms` macro to create a few symbols.
 

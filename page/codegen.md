@@ -2,7 +2,7 @@
 @def hasmath = false
 @def hascode = true
 
-# Generating executable code from Symbolics
+# Code generation
 
 **Note: this feature is experimental and the API might change frequently**
 

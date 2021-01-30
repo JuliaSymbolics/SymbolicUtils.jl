@@ -1,1 +1,96 @@
-<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/franklin.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/tufte.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/custom.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/latex.css"> <link rel=stylesheet  href="/SymbolicUtils.jl/css/adjust.css"> <title>FAQs</title> <h1><a href="/SymbolicUtils.jl/">SymbolicUtils.jl</a></h1> <div id=layout > <div id=menu > <ul> <li><a href="/SymbolicUtils.jl/">Manual</a> <li><a href="/SymbolicUtils.jl/interface/">Interfacing</a> <li><a href="/SymbolicUtils.jl/api/">API</a> </ul> </div> <div id=main > <div class=franklin-content ><h1 id=faqs ><a href="#faqs">FAQs</a></h1> <h2 id=how_do_i_differentiate_expressions ><a href="#how_do_i_differentiate_expressions">How do I differentiate expressions?</a></h2> <div class=page-foot > <div class=copyright > &copy; Shashi Gowda, Yingbo Ma and Mason Protter. Last modified: January 30, 2021. <br> Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>. </div> </div> </div> </div> </div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  
+  <link rel="stylesheet" href="/SymbolicUtils.jl/css/franklin.css">
+<link rel="stylesheet" href="/SymbolicUtils.jl/css/poole_hyde.css">
+<link rel="stylesheet" href="/SymbolicUtils.jl/css/custom.css">
+<!-- style adjustments -->
+<style>
+  html {font-size: 17px;}
+  .franklin-content {position: relative; padding-left: 8%; padding-right: 5%;}
+  @media (min-width: 940px) {
+    .franklin-content {width: 100%; margin-left: auto; margin-right: auto;}
+  }
+  @media (max-width: 768px) {
+    .franklin-content {padding-left: 6%; padding-right: 6%;}
+  }
+</style>
+<link rel="icon" href="/SymbolicUtils.jl/assets/favicon.png">
+
+   <title>SymbolicUtils.jl</title>  
+</head>
+<body>
+<div class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <h1 class="sidebar-title"><a href="/SymbolicUtils.jl/">SymbolicUtils<span style="opacity:0.4">.jl</span></a></h1>
+      <br>
+    </div>
+    <style>
+@media (min-width: 768px) {
+    .sidebar-nav {
+    }
+}
+    .sidebar .container.sidebar-sticky {
+        top: 4rem;
+    }
+    .sidebar-nav .sidebar-nav-item.active {
+        box-sizing: border-box;
+        border-bottom: 1px #f1f1f1 solid;
+        margin-right: -1em;
+        margin-left: -0.5em;
+        padding-left: 0.5em;
+        color: white;
+        font-weight: normal !important;
+    }
+    .sidebar-nav .sidebar-nav-item {
+        color: #cccccc;
+        margin: 0.25em 0;
+    }
+    </style>
+    <nav class="sidebar-nav" style="opacity: 0.9">
+      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/">Getting Started</a>
+      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/rewrite/">Term Rewriting</a>
+      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/interface/">Interfacing</a>
+      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/codegen/">Code generation</a>
+      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/api/">API documentation</a>
+    </nav>
+
+  </div>
+  <div style="font-size: 0.85em; bottom: 3em; position: fixed">
+      <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">Go to GitHub repository &rarr;</a> <br>  <br>
+
+      <a href="https://julialang.org/"><img src="https://raw.githubusercontent.com/JuliaLang/julia-logo-graphics/master/images/julia-logo-dark.svg" height="32" style="display: inline-block; margin-bottom: -8px; opacity: 0.7">
+          powered.</a>
+  </div>
+</div>
+<div class="content container">
+
+<!-- Content appended here -->
+<div class="franklin-content"><h1 id="faqs"><a href="#faqs">FAQs</a></h1>
+<h2 id="how_do_i_differentiate_expressions"><a href="#how_do_i_differentiate_expressions">How do I differentiate expressions?</a></h2>
+<div class="page-foot">
+  <div class="copyright">
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: January 30, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+  </div>
+</div>
+</div><!-- CONTENT ENDS HERE -->
+    </div>  <!-- div: content container -->
+    
+    <script>
+        var els =  document.querySelectorAll(".language-julia")
+        for (var i=0, l = els.length; i < l; i++) {
+            var el = els[i]
+            var out = el.parentNode.nextSibling
+            if (out.tagName === "PRE") {
+                out.className = out.className + " code-output"
+            }
+        }
+    </script>
+    
+  </body>
+</html>

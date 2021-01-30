@@ -1,2 +1,1 @@
-w isa Number = false
-α isa Real = false
+UndefVarError: w not defined

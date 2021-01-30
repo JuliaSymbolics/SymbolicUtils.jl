@@ -29,13 +29,58 @@ end
 
 ##========================##
 
+"""
+    toexpr(x)
+
+Convert a symbolic expression into an `Expr`, suitable to be passed into `eval`.
+
+For example,
+
+```julia
+julia> @syms a b
+(a, b)
+
+julia> toexpr(a+b)
+:((+)(a, b))
+
+julia> toexpr(a+b) |> dump
+Expr
+  head: Symbol call
+  args: Array{Any}((3,))
+    1: + (function of type typeof(+))
+    2: Symbol a
+    3: Symbol b
+```
+
+Note that the function is an actual function object.
+
+For more complex expressions, see other code-related combinators,
+
+Namely `Assignment`, `Let`, `Func`, `SetArray`, `MakeArray`, `MakeSparseArray` and
+`MakeTuple`.
+
+To make your own type convertible to Expr using `toexpr` define `toexpr(x, st)` and
+forward the state `st` in internal calls to `toexpr`. `st` is state used to know
+when to leave something like `y(t)` as it is or when to make it `var"y(t)"`. E.g.
+when `y(t)` is itself the argument of a function rather than `y`.
+
+"""
 toexpr(x) = toexpr(x, LazyState())
 toexpr(s::Sym, st) = nameof(s)
+
 
 @matchable struct Assignment
     lhs
     rhs
 end
+
+"""
+    Assignment(lhs, rhs)
+
+An assignment expression. Shorthand `lhs ← rhs` (\\leftarrow)
+"""
+Assignment
+
 lhs(a::Assignment) = a.lhs
 rhs(a::Assignment) = a.rhs
 
@@ -69,6 +114,16 @@ end
     body
 end
 
+"""
+    Let(assignments, body)
+
+A Let block.
+
+- `assignments` is a vector of `Assignment`s
+- `body` is the body of the let block
+"""
+Let
+
 function toexpr(l::Let, st)
     Expr(:let,
          Expr(:block, map(p->toexpr(p, st), l.pairs)...),
@@ -82,8 +137,61 @@ end
 end
 
 """
-Interpolated Code types will be rendered with the given state
-when the LiteralExpr is rendered.
+    Func(args, kwargs, body)
+
+A function.
+
+- `args` is a vector of expressions
+- `kwargs` is a vector of `Assignment`s
+- `body` is the body of the function
+
+**Special features in `args`**:
+
+- args can contain `DestructuredArgs`
+- call expressions
+
+For example,
+
+```julia
+
+julia> @syms a b c t f(d) x(t) y(t) z(t)
+(a, b, c, t, f(::Number)::Number, x(::Number)::Number, y(::Number)::Number, z(::Number)::Number)
+
+julia> func = Func([a,x(t), DestructuredArgs([b, y(t)]), f], # args
+                   [c ← 2, z(t) ← 42], # kwargs
+                   f((a + b + c) / x(t) + y(t) + z(t)));
+
+julia> toexpr(func)
+:(function (a, var"x(t)", var"##arg#255", f; c = 2, var"z(t)" = 42)
+      let b = var"##arg#255"[1], var"y(t)" = var"##arg#255"[2]
+          f((+)(var"y(t)", var"z(t)", (*)((+)(a, b, c), (inv)(var"x(t)"))))
+      end
+  end)
+```
+
+- the second argument is a `DestructuredArgs`, in the `Expr` form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of `c` and `y(t)`. The let block that is automatically generated "destructures" these arguments.
+- `x(t)` and `y(t)` have been replaced with `var"x(t)"` and `var"y(t)"` symbols throughout
+the generated Expr. This makes sure that we are not actually calling the expressions `x(t)` or `y(t)` but instead passing the right values in place of the whole expression.
+- `f` is also a function-like symbol, same as `x` and `y`, but since the `args` array contains `f` as itself rather than as say, `f(t)`, it does not become a `var"f(t)"`. The generated function expects a function of one argument to be passed in the position of `f`.
+
+An example invocation of this function is:
+
+```julia
+julia> executable = eval(toexpr(func))
+#10 (generic function with 1 method)
+
+julia> exec(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
+"11.98074069840786"
+```
+"""
+
+Func
+
+"""
+    LiteralExpr(ex)
+
+Literally `ex`, an `Expr`. `toexpr` on `LiteralExpr` recursively calls
+`toexpr` on any interpolated symbolic expressions.
 """
 struct LiteralExpr
     ex
@@ -103,7 +211,19 @@ toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
     elems
     name
 end
+
 DestructuredArgs(elems) = DestructuredArgs(elems, gensym("arg"))
+
+"""
+    DestructuredArgs(elems, [name=gensym("arg")])
+
+`elems` is a vector of symbols or call expressions.  When it appears as an argument in
+`Func`, it expects a vector of the same length and de-structures the vector into its named
+components. See example in `Func` for more information.
+
+`name` is the name to be used for the argument in the generated function Expr.
+"""
+DestructuredArgs
 
 toexpr(x::DestructuredArgs, st) = x.name
 get_symbolify(args::DestructuredArgs) = get_symbolify(args.elems)
@@ -138,12 +258,26 @@ function toexpr(f::Func, st)
     end
 end
 
-
 @matchable struct SetArray
     inbounds::Bool
     arr::Sym
     elems  # Either iterator of Pairs or just an iterator
 end
+
+"""
+    SetArray(inbounds, arr, elems)
+
+An expression representing setting of elements of `arr`.
+
+By default, every element of `elems` is copied over to `arr`,
+
+but if `elems` contains `AtIndex(i, val)` objects, then `arr[i] = val`
+is performed in its place.
+
+`inbounds` is a boolean flag, `true` surrounds the resulting expression
+in an `@inbounds`.
+"""
+SetArray
 
 @matchable struct AtIndex
     i
@@ -168,6 +302,36 @@ end
     similarto # Must be either a reference to an array or a concrete type
     output_eltype
 end
+
+"""
+    MakeArray(elems, similarto, [output_eltype=nothing])
+
+An expression which constructs an array.
+
+- `elems` is the output array
+- `similarto` can either be a type, or some symbol that is an array whose type needs to
+   be emulated. If `similarto` is a StaticArrays.SArray, then the output array is also
+   created as an `SArray`, similarly, an `Array` will result in an `Array`, and a
+   `LabelledArrays.SLArray` will result in a labelled static array.
+- `output_eltype`: if set, then forces the element type of the output array to be this.
+   by default, the output type is inferred automatically.
+
+You can define:
+```
+@inline function create_array(A::Type{<:MyArray},a
+                              ::Nothing, d::Val{dims}, elems...) where dims
+
+# and
+
+@inlline function create_array(::Type{<:MyArray}, T, ::Val{dims}, elems...) where dims
+```
+
+which creates an array of size `dims` using the elements `elems` and eltype `T`, to allow
+`MakeArray` to create arrays similarto `MyArray`s.
+
+"""
+MakeArray
+
 MakeArray(elems, similarto) = MakeArray(elems, similarto, nothing)
 
 function toexpr(a::MakeArray, st)
@@ -234,25 +398,44 @@ using SparseArrays
 
 ## We use a separate type for Sparse Arrays to sidestep the need for
 ## iszero to be defined on the expression type
-@matchable struct MakeSparseArray
-    array::SparseMatrixCSC
+@matchable struct MakeSparseArray{S<:AbstractSparseArray}
+    array::S
 end
 
-function MakeSparseArray(I, J, V, args...; kwargs...)
-    sp = sparse(I,J,V,args...; kwargs...)
-    MakeSparseArray(sp)
-end
+"""
+    MakeSpaseArray(array)
 
-function toexpr(a::MakeSparseArray, st)
+An expression which creates a `SparseMatrixCSC` or a `SparseVector`.
+
+The generated expression contains the sparsity information of `array`,
+
+it only creates the `nzval` field at run time.
+"""
+MakeSparseArray
+
+function toexpr(a::MakeSparseArray{<:SparseMatrixCSC}, st)
     sp = a.array
     :(SparseMatrixCSC($(sp.m), $(sp.n),
                       $(copy(sp.colptr)), $(copy(sp.rowval)),
                       [$(toexpr.(sp.nzval, (st,))...)]))
 end
 
+function toexpr(a::MakeSparseArray{<:SparseVector}, st)
+    sp = a.array
+    :(SparseVector($(sp.n),
+                   $(copy(sp.nzind)),
+                   [$(toexpr.(sp.nzval, (st,))...)]))
+end
+
 @matchable struct MakeTuple
     elems
 end
+
+"""
+    MakeTuple(tup)
+
+Make a Tuple from a tuple of expressions.
+"""
 
 function toexpr(a::MakeTuple, st)
     :(($(toexpr.(a.elems, (st,))...),))

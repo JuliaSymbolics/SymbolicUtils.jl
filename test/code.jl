@@ -86,9 +86,9 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SLVector((:a, :b))(@SVector[1,2])],
                           MakeArray([a+b,a/b], arr)))) === @SLVector((:a, :b))(@SVector [3, 1/2])
 
-    mksp = MakeSparseArray([1,2,31,32,2],
-                              [1,2,31,32,2],
-                              [a, b, a+b, a/b, a-b+e])
+    mksp = MakeSparseArray(sparse([1,2,31,32,2],
+                                  [1,2,31,32,2],
+                                  [a, b, a+b, a/b, a-b+e]))
     reference = sparse([1,2,31,32],
                      [1,2,31,32],
                      [a, a+e, a+b, a/b])
@@ -100,6 +100,12 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                                 $(reference.colptr),
                                 $(reference.rowval),
                                 [$(map(toexpr, reference.nzval)...)])))
+
+
+    spvec = sparsevec([5], [a], 10)
+
+    test_repr(toexpr(MakeSparseArray(spvec)),
+              :(SparseVector(10, $(spvec.nzind), [a])))
 
     test_repr(toexpr(MakeTuple((a, b, a+b))),
               :((a,b,$(+)(a,b))))

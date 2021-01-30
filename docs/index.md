@@ -258,6 +258,14 @@ The rules in the default simplify applies simple constant elemination, trigonome
 
 If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl) that are used by `simplify`.
 
+## Code generation
+
+**Experimental feature**
+
+It is common to want to generate executable code from symbolic expressions and blocks of them. We are working on experimental support for turning Symbolic expressions into executable functions with specific focus on array input and output and performance which is critical to the Differential Equations ecosystem which is making heavy use of this package.
+
+See [Code generation](/codegen/) for more about this.
+
 ## Learn more
 
 If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the [Interfacing](/interface/) section to find out how you can do that without any fundamental changes to your package. Look at the [API documentation](/api/) for docstrings about specific functions or macros.

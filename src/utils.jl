@@ -193,3 +193,19 @@ function sort_args(f, t)
     args = args isa Tuple ? [args...] : args
     similarterm(t, f, sort(args, lt=<ₑ))
 end
+
+# Take a struct definition and make it be able to match in `@rule`
+macro matchable(expr)
+    @assert expr.head == :struct
+    name = expr.args[2]
+    if name isa Expr && name.head === :curly
+        name = name.args[1]
+    end
+    fields = expr.args[3].args  # Todo: get names
+    quote
+        $expr
+        SymbolicUtils.istree(::$name) = true
+        SymbolicUtils.operation(::$name) = $name
+        SymbolicUtils.arguments(::$name) = ($(fields...),)
+    end |> esc
+end

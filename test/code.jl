@@ -7,7 +7,7 @@ using SparseArrays
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 
-#@testset "toexpr level 1" begin
+@testset "Code" begin
     @syms a b c d e t x(t) y(t) z(t)
     @test toexpr(Assignment(a, b)) == :(a = b)
     @test toexpr(a ← b) == :(a = b)
@@ -109,5 +109,5 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     test_repr(toexpr(MakeTuple((a, b, a+b))),
               :((a,b,$(+)(a,b))))
-#end
-#
+end
+

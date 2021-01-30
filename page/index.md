@@ -7,13 +7,13 @@ where appropriate -->
 
 # User Manual
 
-[**SymbolicUtils**](https://github.com/JuliaSymbolics/SymbolicUtils.jl) is an practical symbolic programming utility written in Julia. It lets you [create](#symbolic_expressions), [rewrite](#rule-based_rewriting) and [simplify](#simplification) symbolic expressions.
+[**SymbolicUtils**](https://github.com/JuliaSymbolics/SymbolicUtils.jl) is an practical symbolic programming utility written in Julia. It lets you [create](#symbolic_expressions), [rewrite](#rule-based_rewriting) and [simplify](#simplification) symbolic expressions. You can also [generate Julia code](/codegen/) from them.
 
 
 The main features are:
 
 - Fast expressions
-- A [combinator library](#composing-rewriters) for making rewriters.
+- A [combinator library](#composing_rewriters) for making rewriters.
 - A [rule-based rewriting language](#rule-based_rewriting).
 - Type promotion:
   - Symbols (`Sym`s) carry type information. ([read more](#symbolic_expressions))
@@ -37,7 +37,6 @@ using SymbolicUtils
 (w, z, α, β) # hide
 
 ```
-\out{syms1}
 
 Type annotations are optional when creating symbols. Here `α`, `β` behave like Real numbers. `w` and `z` behave like `Number`, which is the default. You can use the `symtype` function to find the type of a symbol.
 
@@ -46,7 +45,6 @@ using SymbolicUtils: symtype
 
 symtype(w), symtype(z),  symtype(α), symtype(β)
 ```
-\out{symtype}
 
 Note however that they are not subtypes of these types!
 
@@ -54,7 +52,6 @@ Note however that they are not subtypes of these types!
 @show w isa Number
 @show α isa Real
 ```
-\out{symtype2}
 
 (see [this post](https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u=shashi) for why they are all not just subtypes of `Number`)
 
@@ -66,7 +63,6 @@ expr2 = α*cos(z)^2 +  β*sin(w)^2
 
 expr1 + expr2
 ```
-\out{expr}
 
 
 **Function-like symbols**
@@ -79,21 +75,18 @@ using SymbolicUtils
 
 f(z) + g(1, α) + sin(w)
 ```
-\out{syms2}
 
 
 ```julia:sym3
 g(1, z)
 ```
 
-\out{sym3}
 
 This does not work since `z` is a `Number`, not a `Real`.
 
 ```julia:sym4
 g(2//5, g(1, β))
 ```
-\out{sym4}
 
 This works because `g` "returns" a `Real`.
 
@@ -120,9 +113,8 @@ Here is a simple rewrite rule:
 ```julia:rewrite1
 r1 = @rule ~x + ~x => 2 * (~x)
 
-showraw(r1(sin(1+z) + sin(1+z)))
+r1(sin(1+z) + sin(1+z))
 ```
-\out{rewrite1}
 
 The `@rule` macro takes a pair of patterns -- the _matcher_ and the _consequent_ (`@rule matcher => consequent`). If an expression matches the matcher pattern, it is rewritten to the consequent pattern. `@rule` returns a callable object that applies the rule to an expression.
 
@@ -132,7 +124,6 @@ If you try to apply this rule to an expression where the two summands are not eq
 ```julia:rewrite2
 r1(sin(1+z) + sin(1+w)) === nothing
 ```
-\out{rewrite2}
 
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~xs` in the following example is a segment variable:
 
@@ -140,16 +131,14 @@ If you want to match a variable number of subexpressions at once, you will need 
 @syms x y z
 @rule(+(~~xs) => ~~xs)(x + y + z)
 ```
-\out{rewrite3}
 
 `~~xs` is a vector of subexpressions matched. You can use it to construct something more useful:
 
 ```julia:rewrite4
 r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
 
-showraw(r2(2 * (w+w+α+β)))
+r2(2 * (w+w+α+β))
 ```
-\out{rewrite4}
 
 Notice that there is a subexpression `(2 * w) + (2 * w)` that could be simplified by the previous rule `r1`. Can we chain `r2` and `r1`?
 
@@ -171,7 +160,6 @@ r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
 @show r(w + z)
 ```
 
-\out{pred1}
 
 ### Associative-Commutative Rules
 
@@ -184,7 +172,6 @@ acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
 
 acr(x^2 * y * x)
 ```
-\out{acr}
 
 
 ## Composing rewriters
@@ -228,31 +215,29 @@ r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
 rset = Postwalk(Chain([r1, r2]))
 rset_result = rset(2 * (w+w+α+β))
 
-showraw(rset_result)
+rset_result
 ```
-\out{rewrite6}
 
 It applied `r1`, but didn't get the opportunity to apply `r2`. So we need to apply the ruleset again on the result.
 
 ```julia:rewrite7
-showraw(rset(rset_result))
+rset(rset_result)
 ```
-\out{rewrite7}
 
 You can also use `Fixpoint` to apply the rules until there are no changes.
 ```julia:rewrite8
-showraw(Fixpoint(rset)(2 * (w+w+α+β)))
+Fixpoint(rset)(2 * (w+w+α+β))
 ```
-\out{rewrite8}
 
 ## Simplification
+
+By default `*` and `+` operations apply the most basic simplification upon construction.
 
 The `simplify` function applies a built-in set of rules to rewrite expressions in order to simplify it.
 
 ```julia:simplify1
-showraw(simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)))
+simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1))
 ```
-\out{simplify1}
 
 The rules in the default simplify applies simple constant elemination, trigonometric identities.
 

@@ -58,6 +58,7 @@ html {
 
 .franklin-content {
     position: relative;
+    margin-top: 4em;
     padding-left: 12.5%;
     padding-right: 12.5%;
     line-height: 1.35em; }
@@ -91,7 +92,6 @@ html {
 .franklin-content h1 {
     padding-bottom: 0.5em;
     border-bottom: 3px double lightgrey;
-    margin-top: 1.5em;
     margin-bottom: 1em; }
 
 .franklin-content h2 {

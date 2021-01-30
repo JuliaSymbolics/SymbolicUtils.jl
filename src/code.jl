@@ -187,23 +187,6 @@ julia> exec(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
 
 Func
 
-"""
-    LiteralExpr(ex)
-
-Literally `ex`, an `Expr`. `toexpr` on `LiteralExpr` recursively calls
-`toexpr` on any interpolated symbolic expressions.
-"""
-struct LiteralExpr
-    ex
-end
-
-recurse_expr(ex::Expr, st) = Expr(ex.head, recurse_expr.(ex.args, (st,))...)
-recurse_expr(ex, st) = toexpr(ex, st)
-
-function toexpr(exp::LiteralExpr, st)
-    recurse_expr(exp.ex, st)
-end
-
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 # Call elements of vector arguments by their name.
@@ -439,6 +422,24 @@ Make a Tuple from a tuple of expressions.
 
 function toexpr(a::MakeTuple, st)
     :(($(toexpr.(a.elems, (st,))...),))
+end
+
+
+"""
+    LiteralExpr(ex)
+
+Literally `ex`, an `Expr`. `toexpr` on `LiteralExpr` recursively calls
+`toexpr` on any interpolated symbolic expressions.
+"""
+struct LiteralExpr
+    ex
+end
+
+recurse_expr(ex::Expr, st) = Expr(ex.head, recurse_expr.(ex.args, (st,))...)
+recurse_expr(ex, st) = toexpr(ex, st)
+
+function toexpr(exp::LiteralExpr, st)
+    recurse_expr(exp.ex, st)
 end
 
 end

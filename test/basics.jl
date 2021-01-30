@@ -80,8 +80,8 @@ end
         @test isequal(f(a, a), Term{Bool}(f, [a, a]))
     end
 
-    @test symtype(cond(true, 4, 5)) == Int
-    @test symtype(cond(a < 0, b, w)) == Union{Real, Complex}
+    @test symtype(ifelse(true, 4, 5)) == Int
+    @test symtype(ifelse(a < 0, b, w)) == Union{Real, Complex}
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{Bool}(==, [w, 0]))
 end

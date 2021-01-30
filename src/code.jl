@@ -101,7 +101,7 @@ function toexpr(O, st)
         else
             return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
         end
-    elseif op === (SymbolicUtils.cond)
+    elseif op === (SymbolicUtils.ifelse)
         return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
     elseif op isa Sym && O in st.symbolify
         return Symbol(string(O))

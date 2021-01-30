@@ -1,5 +1,6 @@
 using Test
 using SymbolicUtils
+import IfElse: ifelse
 
 # == / != syntax is nice, let's use it in tests
 macro eqtest(expr)

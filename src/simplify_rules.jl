@@ -51,7 +51,7 @@ let
         @rule(~x / ~y => ~x * pow(~y, -1))
         @rule(one(~x) => one(symtype(~x)))
         @rule(zero(~x) => zero(symtype(~x)))
-        @rule(cond(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
+        @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
     ]
 
     TRIG_RULES = [

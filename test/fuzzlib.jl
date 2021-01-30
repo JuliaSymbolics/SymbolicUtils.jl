@@ -57,7 +57,7 @@ const bool_spec = let
 
     fns = vcat(1 .=> [(!), (~)],
                2 .=> [(|), (&), xor],
-               3 .=> [cond]) # cond will still stay in bool by condtruction
+               3 .=> [ifelse]) # cond will still stay in bool by condtruction
 
     (leaves=bool_leaf_funcs,
      funcs=fns,

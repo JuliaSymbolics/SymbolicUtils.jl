@@ -63,14 +63,14 @@ end
     @eqtest simplify((0 < a) & false) == false
     @eqtest simplify(Term{Bool}(!, [true])) == false
     @eqtest simplify(Term{Bool}(|, [false, true])) == true
-    @eqtest simplify(cond(true, a,b)) == a
-    @eqtest simplify(cond(false, a,b)) == b
+    @eqtest simplify(ifelse(true, a,b)) == a
+    @eqtest simplify(ifelse(false, a,b)) == b
 
     # abs
-    @test simplify(substitute(cond(!(a < 0), a,-a), Dict(a=>-1))) == 1
-    @test simplify(substitute(cond(!(a < 0), a,-a), Dict(a=>1))) == 1
-    @test simplify(substitute(cond(a < 0, -a, a), Dict(a=>-1))) == 1
-    @test simplify(substitute(cond(a < 0, -a, a), Dict(a=>1))) == 1
+    @test simplify(substitute(ifelse(!(a < 0), a,-a), Dict(a=>-1))) == 1
+    @test simplify(substitute(ifelse(!(a < 0), a,-a), Dict(a=>1))) == 1
+    @test simplify(substitute(ifelse(a < 0, -a, a), Dict(a=>-1))) == 1
+    @test simplify(substitute(ifelse(a < 0, -a, a), Dict(a=>1))) == 1
 end
 
 @testset "Pythagorean Identities" begin

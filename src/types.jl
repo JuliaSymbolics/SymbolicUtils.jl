@@ -370,7 +370,7 @@ function show_add(io, args)
             print_arg(io, -, t)
         else
             print(io, " - ")
-            print_arg(io, +, -t)
+            print_arg(IOContext(io, :paren=>true), +, -t)
         end
     end
 end

@@ -510,6 +510,11 @@ and the key (in Add) should instead be used to store the actual coefficient
 function makeadd(sign, coeff, xs...)
     d = sdict()
     for x in xs
+        if x isa Add
+            coeff += x.coeff
+            _merge!(+, d, x.dict, filter=_iszero)
+            continue
+        end
         if x isa Number
             coeff += x
             continue
@@ -631,7 +636,7 @@ function makemul(coeff, xs...; d=sdict())
             coeff *= x
         elseif x isa Mul
             coeff *= x.coeff
-            d = _merge(+, d, x.dict, filter=_iszero)
+            _merge!(+, d, x.dict, filter=_iszero)
         else
             v = 1 + get(d, x, 0)
             if _iszero(v)
@@ -721,8 +726,9 @@ end
 
 *(a::Pow, b::Mul) = b * a
 
-function _merge(f, d, others...; filter=x->false)
-    acc = copy(d)
+_merge(f, d, others...; filter=x->false) = _merge!(f, copy(d), others...; filter=filter)
+function _merge!(f, d, others...; filter=x->false)
+    acc = d
     for other in others
         for (k, v) in other
             v = f(v)
@@ -781,8 +787,10 @@ AbstractTrees.children(x::Term) = arguments(x)
 AbstractTrees.children(x::Union{Add, Mul}) = map(y->TreePrint(x isa Add ? (:*) : (:^), y), collect(pairs(x.dict)))
 AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
-function print_tree(x::Union{Term, Add, Mul, Pow})
-    AbstractTrees.print_tree(stdout, x, withinds=true) do io, y, inds
+
+print_tree(x; maxdepth=Inf, kw...) = print_tree(stdout, x; maxdepth=maxdepth, kw...)
+function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; kw...)
+    AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
         if istree(y)
             print(io, operation(y))
         elseif y isa TreePrint

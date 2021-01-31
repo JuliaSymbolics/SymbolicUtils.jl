@@ -139,7 +139,7 @@ end
 # An ifelse node, ifelse is a built-in unfortunately
 # So this uses IfElse.jl's ifelse that we imported
 function ifelse(_if::Symbolic{Bool}, _then, _else)
-    Term{Union{symtype(_then), symtype(_else)}}(cond, Any[_if, _then, _else])
+    Term{Union{symtype(_then), symtype(_else)}}(ifelse, Any[_if, _then, _else])
 end
 Base.@deprecate cond(_if, _then, _else) ifelse(_if, _then, _else)
 

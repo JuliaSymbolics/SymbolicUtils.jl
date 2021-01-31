@@ -770,3 +770,25 @@ function Base.hash(t::Union{Add,Mul}, u::UInt64)
     t.hash[] = h′
     return h′
 end
+
+import AbstractTrees
+
+struct TreePrint
+    op
+    x
+end
+AbstractTrees.children(x::Term) = arguments(x)
+AbstractTrees.children(x::Union{Add, Mul}) = map(y->TreePrint(x isa Add ? (:*) : (:^), y), collect(pairs(x.dict)))
+AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
+AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
+function print_tree(x::Union{Term, Add, Mul, Pow})
+    AbstractTrees.print_tree(stdout, x, withinds=true) do io, y, inds
+        if istree(y)
+            print(io, operation(y))
+        elseif y isa TreePrint
+            print(io, "(", y.op, ")")
+        else
+            print(io, y)
+        end
+    end
+end

@@ -111,6 +111,13 @@ end
     @test repr(Term(*, [1, 1])) == "*1"
     @test repr(Term(*, [2, 1])) == "2*1"
     @test repr((a + b) - (b + c)) == "a - c"
+    @test repr(a + -1*(b + c)) == "a - (b + c)"
+    @test repr(a + -1*b) == "a - b"
+end
+
+@testset "similarterm with Add" begin
+    @syms a b c
+    @test isequal(SymbolicUtils.similarterm((b + c), +, [a,  (b+c)]).dict, Dict(a=>1,b=>1,c=>1))
 end
 
 toterm(t) = Term{symtype(t)}(operation(t), arguments(t))

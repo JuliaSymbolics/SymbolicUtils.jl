@@ -1,10 +1,11 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "0.8.0"
+version = "0.8.1"
 
 [deps]
 AbstractAlgebra = "c3fe647b-3220-5bb0-a1ea-a7954cac585d"
+AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
@@ -17,6 +18,7 @@ TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
 AbstractAlgebra = "0.9, 0.10, 0.11, 0.12"
+AbstractTrees = "0.3"
 Combinatorics = "1.0"
 DataStructures = "0.18"
 IfElse = "0.1"

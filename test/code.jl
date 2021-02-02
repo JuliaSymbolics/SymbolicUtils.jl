@@ -77,6 +77,14 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                     p = c[1], q = c[2]
                     $(+)(a, b, c, var"x(t)")
                 end))
+
+    test_repr(toexpr(Func([DestructuredArgs([a,b],c,inds=[:a, :b])], [],
+                          a + b)),
+              :(function (c,)
+                    let a = c.a, b = c.b
+                        $(+)(a, b)
+                    end
+                end))
     @syms arr
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],

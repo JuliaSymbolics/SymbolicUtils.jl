@@ -107,10 +107,13 @@ end
 # Call elements of vector arguments by their name.
 @matchable struct DestructuredArgs
     elems
+    inds
     name
 end
 
-DestructuredArgs(elems) = DestructuredArgs(elems, gensym("arg"))
+function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems))
+    DestructuredArgs(elems, inds, name)
+end
 
 """
     DestructuredArgs(elems, [name=gensym("arg")])
@@ -132,7 +135,10 @@ get_symbolify(x) = istree(x) ? (x,) : ()
 cflatten(x) = Iterators.flatten(x) |> collect
 
 function get_assignments(d::DestructuredArgs, st)
-    [a ← Expr(:ref, toexpr(d, st), i) for (i, a) in enumerate(d.elems)]
+    name = toexpr(d, st)
+    map(d.inds, d.elems) do i, a
+        a ← (i isa Symbol ? :($name.$i) : :($name[$i]))
+    end
 end
 
 @matchable struct Let
@@ -151,15 +157,21 @@ A Let block.
 Let
 
 function toexpr(l::Let, st)
-    dargs = map(l.pairs) do x
-        if x isa DestructuredArgs
-            get_assignments(x, st)
-        elseif x isa Assignment && x.lhs isa DestructuredArgs
-            [x, get_assignments(x.lhs, st)...]
-        else
-            (x,)
-        end
-    end |> cflatten
+    if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
+        dargs = l.pairs
+    else
+        dargs = map(l.pairs) do x
+            if x isa DestructuredArgs
+                get_assignments(x, st)
+            elseif x isa Assignment && x.lhs isa DestructuredArgs
+                [x.lhs.name ← x.rhs, get_assignments(x.lhs, st)...]
+            else
+                (x,)
+            end
+        end |> cflatten
+        # expand and come back
+        return toexpr(Let(dargs, l.body), st)
+    end
 
     funkyargs = get_symbolify(map(lhs, dargs))
     union!(st.symbolify, funkyargs)
@@ -170,7 +182,7 @@ function toexpr(l::Let, st)
 end
 
 @matchable struct Func
-    args
+    args::Vector
     kwargs
     body
 end

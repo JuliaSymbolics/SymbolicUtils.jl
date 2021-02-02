@@ -367,17 +367,8 @@ end
 end
 
 ## LabelledArrays
-@inline function create_array(A::Type{<:SLArray}, ::Nothing, d::Val{dims}, elems...) where {dims}
-    a = create_array(SArray, nothing, d, elems...)
-    similar_type(A, eltype(a), Size(dims))(a)
-end
-
 @inline function create_array(A::Type{<:SLArray}, T, d::Val{dims}, elems...) where {dims}
-    similar_type(A, T, Size(dims))(create_array(SArray, T, d, elems...))
-end
-
-@inline function create_array(A::Type{<:SLArray}, ::Nothing, d::Val{dims}, elems...) where {dims}
-    a = create_array(SArray, nothing, d, elems...)
+    a = create_array(SArray, T, d, elems...)
     if nfields(dims) === ndims(A)
         similar_type(A, eltype(a), Size(dims))(a)
     else
@@ -394,10 +385,6 @@ end
     end
 end
 
-@inline function create_array(A::Type{<:SLArray}, ::Nothing, d::Val{dims}, elems...) where {dims}
-    a = create_array(SArray, nothing, d, elems...)
-    similar_type(A, eltype(a), Size(dims))(a)
-end
 ## We use a separate type for Sparse Arrays to sidestep the need for
 ## iszero to be defined on the expression type
 @matchable struct MakeSparseArray{S<:AbstractSparseArray}

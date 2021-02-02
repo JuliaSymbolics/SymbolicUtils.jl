@@ -290,6 +290,9 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
     return h′
 end
 
+isassociative(::Any) = false
+isassociative(::Union{typeof(+),typeof(*)}) = true
+
 _promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
 function _promote_symtype(f, args)
     if length(args) == 0
@@ -298,9 +301,11 @@ function _promote_symtype(f, args)
         promote_symtype(f, symtype(args[1]))
     elseif length(args) == 2
         promote_symtype(f, symtype(args[1]), symtype(args[2]))
-    else
+    elseif isassociative(f)
         # TODO: maybe restrict it only to functions that are Associative
         mapfoldl(symtype, (x,y) -> promote_symtype(f, x, y), args)
+    else
+        promote_symtype(f, map(symtype, args)...)
     end
 end
 

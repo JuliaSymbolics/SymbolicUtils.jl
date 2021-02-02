@@ -100,12 +100,7 @@ function toexpr(O, st)
             return toexpr(Term{Any}(inv, [ex]), st)
         else
             return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
-        end
-    elseif op === (SymbolicUtils.ifelse)
-        return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
-    elseif op isa Sym && O in st.symbolify
-        return Symbol(string(O))
-    end
+        end elseif op === (SymbolicUtils.ifelse) return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st))) elseif op isa Sym && O in st.symbolify return Symbol(string(O)) end
     return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
 end
 
@@ -128,7 +123,7 @@ components. See example in `Func` for more information.
 """
 DestructuredArgs
 
-toexpr(x::DestructuredArgs, st) = x.name
+toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
 get_symbolify(args::DestructuredArgs) = ()
 function get_symbolify(args::Union{AbstractArray, Tuple})
     cflatten(map(get_symbolify, args))
@@ -159,6 +154,8 @@ function toexpr(l::Let, st)
     dargs = map(l.pairs) do x
         if x isa DestructuredArgs
             get_assignments(x, st)
+        elseif x isa Assignment && x.lhs isa DestructuredArgs
+            [x, get_assignments(x.lhs, st)...]
         else
             (x,)
         end

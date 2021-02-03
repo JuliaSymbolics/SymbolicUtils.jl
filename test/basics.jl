@@ -66,6 +66,10 @@ end
     @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
     @test isequal(a + z, Add(Number, 0, Dict(a=>1, z=>1)))
 
+    foo(w, z, a, b) = 1.0
+    SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
+    @test SymbolicUtils._promote_symtype(foo, (w, z, a, b,)) === Real
+
     # promote_symtype of identity
     @test isequal(Term(identity, [w]), Term{Complex}(identity, [w]))
     @test isequal(+(w), w)

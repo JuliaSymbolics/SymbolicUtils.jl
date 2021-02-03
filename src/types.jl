@@ -74,7 +74,7 @@ end
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
                  "symbolic structure using `istree(x)`, `operation(x)`, `arguments(x)` " *
-                 "and `similarterm(::YourType, f, args)`", :to_symbolic, force=true)
+                 "and `similarterm(::YourType, f, args, symtype)`", :to_symbolic, force=true)
 
     x
 end
@@ -319,13 +319,26 @@ function term(f, args...; type = nothing)
 end
 
 """
-    similarterm(t, f, args)
+    similarterm(t, f, args[, symtype])
 
-Create a term that is similar in type to `t` such that `symtype(similarterm(f,
-args...)) === symtype(f(args...))`.
+Create a term that is similar in type to `t`. Extending this function allows packages
+using their own expression types with SymbolicUtils to define how new terms should
+be created.
+
+## Arguments
+
+- `t` the reference term to use to create similar terms
+- `f` is the operation of the term
+- `args` is the arguments
+- The `symtype` of the resulting term. Best effort will be made to set the symtype of the
+  resulting similar term to this type. If omitted, the proper type is to be
+  inferred by the author of the similarterm method.
+  If `symtype` is `nothing` and `t` is `Term`, `Add`, `Mul` or `Pow`,
+  `promote_symtype(f, symtype.(args)...)`. is used to determine the output type.
 """
-similarterm(t, f, args) = f(args...)
-similarterm(::Term, f, args) = term(f, args...)
+similarterm(t, f, args, symtype) = f(args...)
+similarterm(t, f, args) = similarterm(t, f, args, _promote_symtype(f, args))
+similarterm(::Term, f, args, symtype=nothing) = term(f, args...; type=symtype)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -757,15 +770,16 @@ function mapvalues(f, d1::AbstractDict)
     d
 end
 
-function similarterm(p::Union{Mul, Add, Pow}, f, args)
-    if f === (+)
+function similarterm(p::Union{Mul, Add, Pow}, f, args, T=nothing)
+    if T === nothing
         T = _promote_symtype(f, args)
+    end
+    if f === (+)
         Add(T, makeadd(1, 0, args...)...)
     elseif f == (*)
-        T = _promote_symtype(f, args)
         Mul(T, makemul(1, args...)...)
     elseif f == (^) && length(args) == 2
-        Pow(args...)
+        Pow{T, typeof.(args)...}(args...)
     else
         f(args...)
     end

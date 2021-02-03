@@ -42,7 +42,7 @@ In addition, the methods for `Base.hash` and `Base.isequal` should also be imple
 
 #### `similarterm(t::MyType, f, args[, T])`
 
-Construct a new term with the operation `f` and arguments `args`, the term should be similar to `t` in type. if `t` is a `Term` object a new Term is created with the same symtype as `t`. If not, the result is computed as `f(args...)`. Defining this method for your term type will reduce any performance loss in performing `f(args...)` (esp. the splatting, and redundant type computation). T is the symtype of the output term, if `T` is not passed, then it is to be inferred for the specific `f` and `args`.
+Construct a new term with the operation `f` and arguments `args`, the term should be similar to `t` in type. if `t` is a `Term` object a new Term is created with the same symtype as `t`. If not, the result is computed as `f(args...)`. Defining this method for your term type will reduce any performance loss in performing `f(args...)` (esp. the splatting, and redundant type computation). T is the symtype of the output term. You can use `promote_symtype` to infer this type.
 
 The below two functions are internal to SymbolicUtils
 

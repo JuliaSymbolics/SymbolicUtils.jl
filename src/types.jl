@@ -319,7 +319,7 @@ function term(f, args...; type = nothing)
 end
 
 """
-    similarterm(t, f, args[, symtype])
+    similarterm(t, f, args, symtype)
 
 Create a term that is similar in type to `t`. Extending this function allows packages
 using their own expression types with SymbolicUtils to define how new terms should
@@ -331,10 +331,7 @@ be created.
 - `f` is the operation of the term
 - `args` is the arguments
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
-  resulting similar term to this type. If omitted, the proper type is to be
-  inferred by the author of the similarterm method.
-  If `symtype` is `nothing` and `t` is `Term`, `Add`, `Mul` or `Pow`,
-  `promote_symtype(f, symtype.(args)...)`. is used to determine the output type.
+  resulting similar term to this type.
 """
 similarterm(t, f, args, symtype) = f(args...)
 similarterm(t, f, args) = similarterm(t, f, args, _promote_symtype(f, args))

@@ -52,7 +52,7 @@ function symtype end
 
 symtype(x::Number) = typeof(x)
 
-symtype(x) = Any
+symtype(x) = typeof(x)
 
 symtype(::Symbolic{T}) where {T} = T
 

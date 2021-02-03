@@ -238,8 +238,19 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
       <h2 class="doc-header" id="similarterm">
         <a href="#similarterm">similarterm</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">similarterm(t, f, args)</code></pre>
-<p>Create a term that is similar in type to <code>t</code> such that <code>symtype&#40;similarterm&#40;f, args...&#41;&#41; &#61;&#61;&#61; symtype&#40;f&#40;args...&#41;&#41;</code>.</p>
+      <div class="doc-content"><pre><code class="julia hljs">similarterm(t, f, args, symtype)</code></pre>
+<p>Create a term that is similar in type to <code>t</code>. Extending this function allows packages using their own expression types with SymbolicUtils to define how new terms should be created.</p>
+<h2 id="arguments"><a href="#arguments">Arguments</a></h2>
+<ul>
+<li><p><code>t</code> the reference term to use to create similar terms</p>
+</li>
+<li><p><code>f</code> is the operation of the term</p>
+</li>
+<li><p><code>args</code> is the arguments</p>
+</li>
+<li><p>The <code>symtype</code> of the resulting term. Best effort will be made to set the symtype of the resulting similar term to this type.</p>
+</li>
+</ul>
 </div>
   </div>
 

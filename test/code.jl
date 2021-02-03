@@ -8,7 +8,7 @@ using SparseArrays
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 
 @testset "Code" begin
-    @syms a b c d e t x(t) y(t) z(t)
+    @syms a b c d e p q t x(t) y(t) z(t)
     @test toexpr(Assignment(a, b)) == :(a = b)
     @test toexpr(a ← b) == :(a = b)
     @test toexpr(a+b) == :($(+)(a, b))
@@ -69,6 +69,22 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     toexpr(Let([a ← 1, b ← 2, :arr ← [1,2]],
                MakeArray([a,b,a+b,a/b], :arr)))
 
+    test_repr(toexpr(Let([DestructuredArgs([x(t),b,c], :foo) ← [3,3,[1,4]],
+                          DestructuredArgs([p,q], c)],
+                         x(t)+a+b+c)),
+              :(let foo = Any[3, 3, [1, 4]],
+                    var"x(t)" = foo[1], b = foo[2], c = foo[3],
+                    p = c[1], q = c[2]
+                    $(+)(a, b, c, var"x(t)")
+                end))
+
+    test_repr(toexpr(Func([DestructuredArgs([a,b],c,inds=[:a, :b])], [],
+                          a + b)),
+              :(function (c,)
+                    let a = c.a, b = c.b
+                        $(+)(a, b)
+                    end
+                end))
     @syms arr
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],

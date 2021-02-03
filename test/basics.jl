@@ -1,5 +1,6 @@
 using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments
 using SymbolicUtils
+using IfElse: ifelse
 using Test
 
 @testset "@syms" begin
@@ -86,6 +87,7 @@ end
 
     @test symtype(ifelse(true, 4, 5)) == Int
     @test symtype(ifelse(a < 0, b, w)) == Union{Real, Complex}
+    @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{Bool}(==, [w, 0]))
 end

@@ -100,17 +100,49 @@ function toexpr(O, st)
             return toexpr(Term{Any}(inv, [ex]), st)
         else
             return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
-        end
-    elseif op === (SymbolicUtils.ifelse)
-        return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
-    elseif op isa Sym && O in st.symbolify
-        return Symbol(string(O))
-    end
+        end elseif op === (SymbolicUtils.ifelse) return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st))) elseif op isa Sym && O in st.symbolify return Symbol(string(O)) end
     return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
 end
 
+# Call elements of vector arguments by their name.
+@matchable struct DestructuredArgs
+    elems
+    inds
+    name
+end
+
+function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems))
+    DestructuredArgs(elems, inds, name)
+end
+
+"""
+    DestructuredArgs(elems, [name=gensym("arg")])
+
+`elems` is a vector of symbols or call expressions.  When it appears as an argument in
+`Func`, it expects a vector of the same length and de-structures the vector into its named
+components. See example in `Func` for more information.
+
+`name` is the name to be used for the argument in the generated function Expr.
+"""
+DestructuredArgs
+
+toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
+get_symbolify(args::DestructuredArgs) = ()
+function get_symbolify(args::Union{AbstractArray, Tuple})
+    cflatten(map(get_symbolify, args))
+end
+get_symbolify(x) = istree(x) ? (x,) : ()
+cflatten(x) = Iterators.flatten(x) |> collect
+
+function get_assignments(d::DestructuredArgs, st)
+    name = toexpr(d, st)
+    map(d.inds, d.elems) do i, a
+        a ← (i isa Symbol ? :($name.$i) : :($name[$i]))
+    end
+end
+
 @matchable struct Let
-    pairs::Vector{Assignment} # an iterator of pairs, ordered
+    pairs::Vector{Union{Assignment,DestructuredArgs}} # an iterator of pairs, ordered
     body
 end
 
@@ -125,13 +157,32 @@ A Let block.
 Let
 
 function toexpr(l::Let, st)
+    if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
+        dargs = l.pairs
+    else
+        dargs = map(l.pairs) do x
+            if x isa DestructuredArgs
+                get_assignments(x, st)
+            elseif x isa Assignment && x.lhs isa DestructuredArgs
+                [x.lhs.name ← x.rhs, get_assignments(x.lhs, st)...]
+            else
+                (x,)
+            end
+        end |> cflatten
+        # expand and come back
+        return toexpr(Let(dargs, l.body), st)
+    end
+
+    funkyargs = get_symbolify(map(lhs, dargs))
+    union!(st.symbolify, funkyargs)
+
     Expr(:let,
-         Expr(:block, map(p->toexpr(p, st), l.pairs)...),
+         Expr(:block, map(p->toexpr(p, st), dargs)...),
          toexpr(l.body, st))
 end
 
 @matchable struct Func
-    args
+    args::Vector
     kwargs
     body
 end
@@ -188,43 +239,12 @@ Func
 
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
-# Call elements of vector arguments by their name.
-@matchable struct DestructuredArgs
-    elems
-    name
-end
-
-DestructuredArgs(elems) = DestructuredArgs(elems, gensym("arg"))
-
-"""
-    DestructuredArgs(elems, [name=gensym("arg")])
-
-`elems` is a vector of symbols or call expressions.  When it appears as an argument in
-`Func`, it expects a vector of the same length and de-structures the vector into its named
-components. See example in `Func` for more information.
-
-`name` is the name to be used for the argument in the generated function Expr.
-"""
-DestructuredArgs
-
-toexpr(x::DestructuredArgs, st) = x.name
-get_symbolify(args::DestructuredArgs) = get_symbolify(args.elems)
-function get_symbolify(args::Union{AbstractArray, Tuple})
-    cflatten(map(get_symbolify, args))
-end
-get_symbolify(x) = istree(x) ? (x,) : ()
-cflatten(x) = Iterators.flatten(x) |> collect
-
-function get_assignments(d::DestructuredArgs, st)
-    [a ← Expr(:ref, toexpr(d, st), i) for (i, a) in enumerate(d.elems)]
-end
-
 function toexpr(f::Func, st)
     funkyargs = get_symbolify(vcat(f.args, map(lhs, f.kwargs)))
-    dargs = filter(x->x isa DestructuredArgs, f.args)
     union!(st.symbolify, funkyargs)
+    dargs = filter(x->x isa DestructuredArgs, f.args)
     if !isempty(dargs)
-        body = Let(cflatten(map(x->get_assignments(x, st), dargs)), f.body)
+        body = Let(dargs, f.body)
     else
         body = f.body
     end
@@ -324,7 +344,7 @@ function toexpr(a::MakeArray, st)
         $create_array($T,
                      $elT,
                      Val{$(size(a.elems))}(),
-                     $(toexpr.(a.elems, (st,))...),)
+                     $(map(x->toexpr(x, st), a.elems)...),)
     end
 end
 
@@ -367,16 +387,23 @@ end
 end
 
 ## LabelledArrays
-@inline function create_array(A::Type{<:SLArray}, ::Nothing, d::Val{dims}, elems...) where {dims}
-    a = create_array(SArray, nothing, d, elems...)
-    similar_type(A, eltype(a), Size(dims))(a)
-end
-
 @inline function create_array(A::Type{<:SLArray}, T, d::Val{dims}, elems...) where {dims}
-    similar_type(A, T, Size(dims))(create_array(SArray, T, d, elems...))
+    a = create_array(SArray, T, d, elems...)
+    if nfields(dims) === ndims(A)
+        similar_type(A, eltype(a), Size(dims))(a)
+    else
+        a
+    end
 end
 
-using SparseArrays
+@inline function create_array(A::Type{<:LArray}, T, d::Val{dims}, elems...) where {dims}
+    data = create_array(Array, T, d, elems...)
+    if nfields(dims) === ndims(A)
+        LArray{eltype(data),nfields(dims),typeof(data),LabelledArrays.symnames(A)}(data)
+    else
+        data
+    end
+end
 
 ## We use a separate type for Sparse Arrays to sidestep the need for
 ## iszero to be defined on the expression type

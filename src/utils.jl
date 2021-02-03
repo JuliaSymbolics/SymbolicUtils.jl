@@ -201,11 +201,15 @@ macro matchable(expr)
     if name isa Expr && name.head === :curly
         name = name.args[1]
     end
-    fields = expr.args[3].args  # Todo: get names
+    fields = filter(x-> !(x isa LineNumberNode), expr.args[3].args)
+    get_name(s::Symbol) = s
+    get_name(e::Expr) = (@assert(e.head == :(::)); e.args[1])
+    fields = map(get_name, fields)
     quote
         $expr
         SymbolicUtils.istree(::$name) = true
         SymbolicUtils.operation(::$name) = $name
-        SymbolicUtils.arguments(::$name) = ($(fields...),)
+        SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
+        Base.length(x::$name) = $(length(fields) + 1)
     end |> esc
 end

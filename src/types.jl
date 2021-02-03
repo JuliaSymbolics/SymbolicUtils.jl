@@ -302,7 +302,6 @@ function _promote_symtype(f, args)
     elseif length(args) == 2
         promote_symtype(f, symtype(args[1]), symtype(args[2]))
     elseif isassociative(f)
-        # TODO: maybe restrict it only to functions that are Associative
         mapfoldl(symtype, (x,y) -> promote_symtype(f, x, y), args)
     else
         promote_symtype(f, map(symtype, args)...)

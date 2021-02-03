@@ -141,6 +141,7 @@ end
 function ifelse(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(ifelse, Any[_if, _then, _else])
 end
+promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
 Base.@deprecate cond(_if, _then, _else) ifelse(_if, _then, _else)
 
 # Specially handle inv and literal pow

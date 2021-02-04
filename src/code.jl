@@ -262,7 +262,7 @@ end
 
 @matchable struct SetArray
     inbounds::Bool
-    arr::Sym
+    arr
     elems  # Either iterator of Pairs or just an iterator
 end
 

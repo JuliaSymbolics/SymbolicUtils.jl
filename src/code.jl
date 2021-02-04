@@ -469,4 +469,58 @@ function toexpr(exp::LiteralExpr, st)
     recurse_expr(exp.ex, st)
 end
 
+
+### Code-related utilities
+
+using SymbolicUtils
+
+using SymbolicUtils: Sym, Term
+
+using SymbolicUtils.Rewriters
+
+using DataStructures
+
+### Common subexprssion evaluation
+
+newsym() = Sym{Number}(gensym("cse"))
+
+function _cse(expr, dict=OrderedDict())
+    r = @rule ~x::istree => haskey(dict, ~x) ? dict[~x] : dict[~x] = newsym()
+    final = Postwalk(Chain([r]))(expr)
+end
+
+function cse(expr)
+    !istree(expr) && return expr
+    dict=OrderedDict()
+    final = _cse(expr, dict)
+    Let([var ← ex for (ex, var) in pairs(dict)], final)
+end
+
+function _cse(exprs::AbstractArray)
+    dict = OrderedDict()
+    final = map(ex->_cse(ex, dict), exprs)
+    ([var ← ex for (ex, var) in pairs(dict)], final)
+end
+
+function cse(x::MakeArray)
+    assigns, expr = _cse(x.elems)
+    Let(assigns, MakeArray(expr, x.similarto, x.output_eltype))
+end
+
+function cse(x::SetArray)
+    assigns, expr = _cse(x.elems)
+    Let(assigns, SetArray(x.inbounds, x.arr, expr))
+end
+
+function cse(x::MakeSparseArray)
+    sp = x.array
+    assigns, expr = _cse(sp.nzval)
+    if sp isa SparseMatrixCSC
+        Let(assigns, MakeSparseArray(SparseMatrixCSC(sp.m, sp.n,
+                                                     sp.colptr, sp.rowval, exprs)))
+    else
+        Let(assigns, MakeSparseArray(SparseVector(sp.n, sp.nzinds, exprs)))
+    end
+end
+
 end

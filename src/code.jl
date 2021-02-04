@@ -100,7 +100,12 @@ function toexpr(O, st)
             return toexpr(Term{Any}(inv, [ex]), st)
         else
             return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
-        end elseif op === (SymbolicUtils.ifelse) return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st))) elseif op isa Sym && O in st.symbolify return Symbol(string(O)) end
+        end
+    elseif op === (SymbolicUtils.ifelse)
+        return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
+    elseif op isa Sym && O in st.symbolify
+        return Symbol(string(O))
+    end
     return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
 end
 
@@ -412,7 +417,7 @@ end
 end
 
 """
-    MakeSpaseArray(array)
+    MakeSparseArray(array)
 
 An expression which creates a `SparseMatrixCSC` or a `SparseVector`.
 

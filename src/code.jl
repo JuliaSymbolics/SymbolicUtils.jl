@@ -278,8 +278,8 @@ An expression representing setting of elements of `arr`.
 
 By default, every element of `elems` is copied over to `arr`,
 
-but if `elems` contains `AtIndex(i, val)` objects, then `arr[i] = val`
-is performed in its place.
+but if `elems` contains `AtIndex(((i, j), k), val)` objects, then
+`arr[i, j][k] = val` is performed in its place.
 
 `inbounds` is a boolean flag, `true` surrounds the resulting expression
 in an `@inbounds`.
@@ -296,12 +296,16 @@ function toexpr(a::AtIndex, st)
 end
 
 function toexpr(s::SetArray, st)
-    ex = quote
-        $([:($(toexpr(s.arr, st))[$(ex isa AtIndex ? ex.i : i)] = $(toexpr(ex, st)))
-           for (i, ex) in enumerate(s.elems)]...)
-        nothing
+    body = quote end
+    dst = toexpr(s.arr, st)
+    for (i, ex) in enumerate(s.elems)
+        didx = ex isa AtIndex ? ex.i : i
+        lhs = foldl((d, ii)->:($d[$(ii...)]), didx, init=dst)
+        rhs = toexpr(ex, st)
+        push!(body.args, :($lhs = $rhs))
     end
-    s.inbounds ? :(@inbounds $ex) : ex
+    push!(body.args, nothing)
+    s.inbounds ? :(@inbounds $body) : body
 end
 
 @matchable struct MakeArray

@@ -45,11 +45,21 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                         $(+)(a, b, var"x(t)", x($(+)(1, t)))
                     end
                 end))
-    test_repr(toexpr(SetArray(false, a, [x(t), AtIndex(9, b), c])),
+    test_repr(toexpr(SetArray(false, a, [
+                                         x(t)
+                                         AtIndex(9, b)
+                                         AtIndex((2, 3), b)
+                                         AtIndex(((2, 3), 1), b)
+                                         AtIndex((((2, 3),),), b)
+                                         c
+                                        ])),
               quote
                   a[1] = x(t)
                   a[9] = b
-                  a[3] = c
+                  (a[2])[3] = b
+                  (a[2, 3])[1] = b
+                  a[(2, 3)] = b
+                  a[6] = c
                   nothing
               end)
     @test toexpr(SetArray(true, a, [x(t), AtIndex(9, b), c])).head == :macrocall

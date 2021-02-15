@@ -19,8 +19,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     @test toexpr(x(t)+y(t)) == :($(+)(x(t), y(t)))
     @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)(x(t), y(t), x($(+)(1, t))))
     s = LazyState()
-    push!(s.symbolify, x(t))
-    push!(s.symbolify, y(t))
+    Code.union_symbolify!(s.symbolify, [x(t), y(t)])
     @test toexpr(x(t)+y(t)+x(t+1), s) == :($(+)(var"x(t)", var"y(t)", x($(+)(1, t))))
 
     ex = :(let a = 3, b = $(+)(1,a)

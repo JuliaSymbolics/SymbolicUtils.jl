@@ -11,9 +11,14 @@ import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
 ##== state management ==##
 
 struct NameState
-    symbolify::Set
+    symbolify::Dict{Any, Symbol}
 end
-NameState() = NameState(Set{Any}())
+NameState() = NameState(Dict{Any, Symbol}())
+function union_symbolify!(n, ts)
+    for t in ts
+        n[t] = Symbol(string(t))
+    end
+end
 
 struct LazyState
     ref::Ref{Any}
@@ -100,7 +105,12 @@ function toexpr(O, st)
             return toexpr(Term{Any}(inv, [ex]), st)
         else
             return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
-        end elseif op === (SymbolicUtils.ifelse) return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st))) elseif op isa Sym && O in st.symbolify return Symbol(string(O)) end
+        end
+    elseif op === (SymbolicUtils.ifelse)
+        return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
+    elseif op isa Sym && haskey(st.symbolify, O)
+        return st.symbolify[O]
+    end
     return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
 end
 
@@ -174,7 +184,7 @@ function toexpr(l::Let, st)
     end
 
     funkyargs = get_symbolify(map(lhs, dargs))
-    union!(st.symbolify, funkyargs)
+    union_symbolify!(st.symbolify, funkyargs)
 
     Expr(:let,
          Expr(:block, map(p->toexpr(p, st), dargs)...),
@@ -241,7 +251,7 @@ toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 function toexpr(f::Func, st)
     funkyargs = get_symbolify(vcat(f.args, map(lhs, f.kwargs)))
-    union!(st.symbolify, funkyargs)
+    union_symbolify!(st.symbolify, funkyargs)
     dargs = filter(x->x isa DestructuredArgs, f.args)
     if !isempty(dargs)
         body = Let(dargs, f.body)

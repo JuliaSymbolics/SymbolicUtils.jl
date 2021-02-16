@@ -202,6 +202,16 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
   </div>
 
   <div class="docstring">
+      <h2 class="doc-header" id="SpawnFetch">
+        <a href="#SpawnFetch">SpawnFetch</a>
+        <div class="doc-type"></div></h2>
+      <div class="doc-content"><pre><code class="julia hljs">SpawnFetch{ParallelType}(exprs, reduce)</code></pre>
+<p>Run every expr in <code>exprs</code> in its own task, and use the <code>reduce</code> function to combine the results of executing <code>exprs</code>.</p>
+<p><code>ParallelType</code> can be used to define more parallelism types SymbolicUtils supports <code>Multithreaded</code> type. Which spawns threaded tasks.</p>
+</div>
+  </div>
+
+  <div class="docstring">
       <h2 class="doc-header" id="SetArray">
         <a href="#SetArray">SetArray</a>
         <div class="doc-type"></div></h2>

@@ -3,7 +3,8 @@ module Code
 using StaticArrays, LabelledArrays, SparseArrays
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
-       SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex
+       SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
+       Par, Multithreaded
 
 import ..SymbolicUtils
 import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
@@ -461,6 +462,24 @@ function toexpr(a::MakeTuple, st)
     :(($(toexpr.(a.elems, (st,))...),))
 end
 
+struct Multithreaded end
+"""
+    Par(exprs, reduce)
+
+"""
+struct Par{Typ}
+    exprs::Vector
+    combine
+end
+
+function toexpr(p::Par{Multithreaded}, st)
+    spawns = map(p.exprs) do thunk
+        :(Base.Threads.@spawn $(toexpr(thunk, st)))
+    end
+    quote
+        $(toexpr(p.combine, st))(map(fetch, ($(spawns...),))...)
+    end
+end
 
 """
     LiteralExpr(ex)

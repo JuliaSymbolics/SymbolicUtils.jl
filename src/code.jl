@@ -4,7 +4,7 @@ using StaticArrays, LabelledArrays, SparseArrays
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       Par, Multithreaded
+       SpawnFetch, Multithreaded
 
 import ..SymbolicUtils
 import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
@@ -464,15 +464,21 @@ end
 
 struct Multithreaded end
 """
-    Par(exprs, reduce)
+    SpawnFetch{ParallelType}(exprs, reduce)
 
+Run every expr in `exprs` in its own task, and use the `reduce`
+function to combine the results of executing `exprs`.
+
+`ParallelType` can be used to define more parallelism types
+SymbolicUtils supports `Multithreaded` type. Which spawns
+threaded tasks.
 """
-struct Par{Typ}
+struct SpawnFetch{Typ}
     exprs::Vector
     combine
 end
 
-function toexpr(p::Par{Multithreaded}, st)
+function toexpr(p::SpawnFetch{Multithreaded}, st)
     spawns = map(p.exprs) do thunk
         :(Base.Threads.@spawn $(toexpr(thunk, st)))
     end

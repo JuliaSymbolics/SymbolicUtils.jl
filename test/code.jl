@@ -124,7 +124,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     test_repr(toexpr(MakeTuple((a, b, a+b))),
               :((a,b,$(+)(a,b))))
 
-    @test Par{Multithreaded}([1,2],vcat)|>toexpr|>eval == [1,2]
-    @test @elapsed(Par{Multithreaded}([:(sleep(.3)),:(sleep(.6))],vcat)|>toexpr|>eval) < 0.8
+    @test SpawnFetch{Multithreaded}([1,2],vcat)|>toexpr|>eval == [1,2]
+    @test @elapsed(SpawnFetch{Multithreaded}([:(sleep(.3)),:(sleep(.6))],vcat)|>toexpr|>eval) < 0.8
 end
 

@@ -56,6 +56,25 @@ symtype(x) = typeof(x)
 
 symtype(::Symbolic{T}) where {T} = T
 
+function hasmetadata(s::Symbolic, ctx)
+    s.metadata isa Ref && haskey(s.metadata[], ctx)
+end
+
+function getmetadata(s::Symbolic, ctx)
+    if s.metadata isa Ref
+        s.metadata[][ctx]
+    else
+        throw(ArgumentError("$s does not have metadata for $ctx"))
+    end
+end
+
+function getmetadata(s::Symbolic, ctx, default)
+    s.metadata isa Ref ? get(s.metadata[], ctx, default) : default
+end
+
+function setmetadata(s::Sym, ctx, val)
+end
+
 Base.isequal(s::Symbolic, x) = false
 Base.isequal(x, s::Symbolic) = false
 
@@ -107,6 +126,7 @@ When constructing [`Term`](#Term)s without an explicit symtype,
 """
 promote_symtype(f, Ts...) = Any
 
+const NO_METADATA = nothing
 
 #--------------------
 #--------------------
@@ -119,8 +139,12 @@ A named variable of type `T`. Type `T` can be `FnType{X,Y}` which
 means the variable is a function with the type signature X -> Y where
 `X` is a tuple type of arguments and `Y` is any type.
 """
-struct Sym{T} <: Symbolic{T}
+struct Sym{T, M} <: Symbolic{T}
     name::Symbol
+    metadata::M
+    function Sym{T}(name; metadata=NO_METADATA) where {T}
+        new{T, typeof(metadata)}(name, metadata)
+    end
 end
 
 const Variable = Sym # old name
@@ -480,14 +504,44 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 - `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM*valM, keyN*valN...]`
 """
-struct Add{X, T<:Number, D} <: Symbolic{X}
+struct Add{X, T<:Number, D, M} <: Symbolic{X}
     coeff::T
     dict::D
     sorted_args_cache::Ref{Any}
     hash::Ref{UInt}
+    metadata::M
 end
 
-function Add(T, coeff, dict)
+#=
+promote_metadata(f, x) = 
+
+AbstractConnection
+
+Flow()
+
+function connect(ps..., ::Val{:flow})
+    sum(ps) ~ 0
+end
+function connect(ps..., ::Val{:voltage})
+    map(1:length(ps)-1) do i
+        ps[i] ~ ps[i+1]
+    end
+end
+getconnecttype(x) = x.metadata[][ConnectCtx]
+function connect(ps...)
+    promote_connection([Val{x.metadata[][ConnectCtx]}() for x in ps]...)
+    ctyp = getconnecttype(first(ps))
+    for i in 2:length(ps)
+        @assert iscompatiable(ctyp, getconnecttype(ps[i]))
+    end
+    connect(ps..., Val(promote_connection_properties(ps...)))
+
+connect(vars...) = equation that connects vars
+
+=#
+
+
+function Add(T, coeff, dict; metadata=NO_METADATA)
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
@@ -495,7 +549,7 @@ function Add(T, coeff, dict)
         return _isone(v) ? k : Mul(T, makemul(v, k)...)
     end
 
-    Add{T, typeof(coeff), typeof(dict)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0))
+    Add{T, typeof(coeff), typeof(dict)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0), metadata)
 end
 
 symtype(a::Add{X}) where {X} = X
@@ -610,6 +664,7 @@ struct Mul{X, T<:Number, D} <: Symbolic{X}
     dict::D
     sorted_args_cache::Ref{Any}
     hash::Ref{UInt}
+    metadata::Ref{Any}
 end
 
 function Mul(T, a,b)
@@ -694,6 +749,7 @@ Represents `base^exp`, a lighter version of `Mul(1, Dict(base=>exp))`
 struct Pow{X, B, E} <: Symbolic{X}
     base::B
     exp::E
+    metadata::Ref{Any}
 end
 
 function Pow(a, b)

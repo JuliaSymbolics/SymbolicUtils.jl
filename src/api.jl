@@ -1,10 +1,12 @@
 ##### Numeric simplification
 
 """
+```julia
 simplify(x; rewriter=default_simplifier(),
             threaded=false,
             polynorm=true,
             thread_subtree_cutoff=100)
+```
 
 Simplify an expression (`x`) by applying `rewriter` until there are no changes.
 `polynorm=true` applies `polynormalize` in the beginning of each fixpoint iteration.

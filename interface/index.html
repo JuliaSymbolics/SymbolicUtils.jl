@@ -72,30 +72,30 @@
 <div class="content container">
 
 <!-- Content appended here -->
-<div class="franklin-content"><h1 id="interfacing_with_symbolicutilsjl"><a href="#interfacing_with_symbolicutilsjl">Interfacing with SymbolicUtils.jl</a></h1>
+<div class="franklin-content"><h1 id="interfacing_with_symbolicutilsjl"><a href="#interfacing_with_symbolicutilsjl" class="header-anchor">Interfacing with SymbolicUtils.jl</a></h1>
 <p><div class="franklin-toc"><ol><li><a href="#interfacing_with_symbolicutilsjl">Interfacing with SymbolicUtils.jl</a><ol><li><a href="#defining_the_interface">Defining the interface</a><ol><li><ol><li><a href="#istreext"><code>istree&#40;x::T&#41;</code></a></li><li><a href="#operationxt"><code>operation&#40;x::T&#41;</code></a></li><li><a href="#argumentsxt"><code>arguments&#40;x::T&#41;</code></a></li><li><a href="#similartermtmytype_f_args_t"><code>similarterm&#40;t::MyType, f, args&#91;, T&#93;&#41;</code></a></li></ol></li><li><a href="#optional">Optional</a><ol><li><a href="#symtypex"><code>symtype&#40;x&#41;</code></a></li><li><a href="#promote_symtypef_arg_symtypes"><code>promote_symtype&#40;f, arg_symtypes...&#41;</code></a></li></ol></li></ol></li><li><a href="#example">Example</a></li></ol></li></ol></div> </p>
 <p>This section is for Julia package developers who may want to use the <code>simplify</code> and rule rewriting system on their own expression types.</p>
-<h2 id="defining_the_interface"><a href="#defining_the_interface">Defining the interface</a></h2>
+<h2 id="defining_the_interface"><a href="#defining_the_interface" class="header-anchor">Defining the interface</a></h2>
 <p>SymbolicUtils matchers can match any Julia object that implements an interface to traverse it as a tree.</p>
 <p>In particular, the following methods should be defined for an expression tree type <code>T</code> with symbol types <code>S</code> to  work with SymbolicUtils.jl</p>
-<h4 id="istreext"><a href="#istreext"><code>istree&#40;x::T&#41;</code></a></h4>
+<h4 id="istreext"><a href="#istreext" class="header-anchor"><code>istree&#40;x::T&#41;</code></a></h4>
 <p>Check if <code>x</code> represents an expression tree. If returns true, it will be assumed that <code>operation&#40;::T&#41;</code> and <code>arguments&#40;::T&#41;</code> methods are defined. Definining these three should allow use of <code>simplify</code> on custom types. Optionally <code>symtype&#40;x&#41;</code> can be defined to return the expected type of the symbolic expression.</p>
-<h4 id="operationxt"><a href="#operationxt"><code>operation&#40;x::T&#41;</code></a></h4>
+<h4 id="operationxt"><a href="#operationxt" class="header-anchor"><code>operation&#40;x::T&#41;</code></a></h4>
 <p>Returns the operation &#40;a function object&#41; performed by an expression tree. Called only if <code>istree&#40;::T&#41;</code> is true. Part of the API required for <code>simplify</code> to work. Other required methods are <code>arguments</code> and <code>istree</code></p>
-<h4 id="argumentsxt"><a href="#argumentsxt"><code>arguments&#40;x::T&#41;</code></a></h4>
+<h4 id="argumentsxt"><a href="#argumentsxt" class="header-anchor"><code>arguments&#40;x::T&#41;</code></a></h4>
 <p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code></p>
 <p>In addition, the methods for <code>Base.hash</code> and <code>Base.isequal</code> should also be implemented by the types for the purposes of substitution and equality matching respectively.</p>
-<h4 id="similartermtmytype_f_args_t"><a href="#similartermtmytype_f_args_t"><code>similarterm&#40;t::MyType, f, args&#91;, T&#93;&#41;</code></a></h4>
+<h4 id="similartermtmytype_f_args_t"><a href="#similartermtmytype_f_args_t" class="header-anchor"><code>similarterm&#40;t::MyType, f, args&#91;, T&#93;&#41;</code></a></h4>
 <p>Construct a new term with the operation <code>f</code> and arguments <code>args</code>, the term should be similar to <code>t</code> in type. if <code>t</code> is a <code>Term</code> object a new Term is created with the same symtype as <code>t</code>. If not, the result is computed as <code>f&#40;args...&#41;</code>. Defining this method for your term type will reduce any performance loss in performing <code>f&#40;args...&#41;</code> &#40;esp. the splatting, and redundant type computation&#41;. T is the symtype of the output term. You can use <code>promote_symtype</code> to infer this type.</p>
 <p>The below two functions are internal to SymbolicUtils</p>
-<h3 id="optional"><a href="#optional">Optional</a></h3>
-<h4 id="symtypex"><a href="#symtypex"><code>symtype&#40;x&#41;</code></a></h4>
+<h3 id="optional"><a href="#optional" class="header-anchor">Optional</a></h3>
+<h4 id="symtypex"><a href="#symtypex" class="header-anchor"><code>symtype&#40;x&#41;</code></a></h4>
 <p>The supposed type of values in the domain of x. Tracing tools can use this type to pick the right method to run or analyse code.</p>
 <p>This defaults to <code>typeof&#40;x&#41;</code> if <code>x</code> is numeric, or <code>Any</code> otherwise. For the types defined in this package, namely <code>T&lt;:Symbolic&#123;S&#125;</code> it is <code>S</code>.</p>
 <p>Define this for your symbolic types if you want <code>simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
-<h4 id="promote_symtypef_arg_symtypes"><a href="#promote_symtypef_arg_symtypes"><code>promote_symtype&#40;f, arg_symtypes...&#41;</code></a></h4>
+<h4 id="promote_symtypef_arg_symtypes"><a href="#promote_symtypef_arg_symtypes" class="header-anchor"><code>promote_symtype&#40;f, arg_symtypes...&#41;</code></a></h4>
 <p>Returns the appropriate output type of applying <code>f</code> on arguments of type <code>arg_symtypes</code>.</p>
-<h2 id="example"><a href="#example">Example</a></h2>
+<h2 id="example"><a href="#example" class="header-anchor">Example</a></h2>
 <p>Suppose you were feeling the temptations of type piracy and wanted to make a quick and dirty symbolic library built on top of Julia&#39;s <code>Expr</code> type, e.g.</p>
 <pre><code class="julia hljs"><span class="hljs-keyword">for</span> f ∈ [:+, :-, :*, :/, :^] <span class="hljs-comment">#Note, this is type piracy!</span>
     <span class="hljs-meta">@eval</span> <span class="hljs-keyword">begin</span>
@@ -124,7 +124,7 @@ simplify(ex)</code></pre><pre><code class="plaintext hljs">:((+)(-1, x))</code><
 <p>Now SymbolicUtils is able to apply the <code>Number</code> simplification rule to <code>Expr</code>.</p>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: February 16, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: February 27, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

@@ -72,9 +72,9 @@
 <div class="content container">
 
 <!-- Content appended here -->
-<div class="franklin-content"><h1 id="api_reference"><a href="#api_reference">API Reference</a></h1>
+<div class="franklin-content"><h1 id="api_reference"><a href="#api_reference" class="header-anchor">API Reference</a></h1>
 <div class="franklin-toc"><ol><li><a href="#api_reference">API Reference</a><ol><li><a href="#symbols_and_terms">Symbols and Terms</a></li><li><a href="#interfacing">Interfacing</a></li><li><a href="#rewriters">Rewriters</a></li><li><a href="#simplify">Simplify</a></li><li><a href="#utilities">Utilities</a></li></ol></li></ol></div>
-<h2 id="symbols_and_terms"><a href="#symbols_and_terms">Symbols and Terms</a></h2>
+<h2 id="symbols_and_terms"><a href="#symbols_and_terms" class="header-anchor">Symbols and Terms</a></h2>
 
   <div class="docstring">
       <h2 class="doc-header" id="@syms">
@@ -84,7 +84,7 @@
 <p>For instance:</p>
 <pre><code class="julia hljs"><span class="hljs-meta">@syms</span> foo::<span class="hljs-built_in">Real</span> bar baz(x, y::<span class="hljs-built_in">Real</span>)::<span class="hljs-built_in">Complex</span></code></pre>
 <p>Create one or more variables. <code>&lt;lhs_expr&gt;</code> can be just a symbol in which case it will be the name of the variable, or a function call in which case a function-like variable which has the same name as the function being called. The Sym type, or in the case of a function-like Sym, the output type of calling the function can be set using the <code>::T</code> syntax.</p>
-<h1 id="examples"><a href="#examples">Examples:</a></h1>
+<h1 id="examples"><a href="#examples" class="header-anchor">Examples:</a></h1>
 <ul>
 <li><p><code>@syms foo bar::Real baz::Int</code> will create</p>
 </li>
@@ -206,7 +206,7 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
 </div>
   </div>
 
-<h2 id="interfacing"><a href="#interfacing">Interfacing</a></h2>
+<h2 id="interfacing"><a href="#interfacing" class="header-anchor">Interfacing</a></h2>
   <div class="docstring">
       <h2 class="doc-header" id="istree">
         <a href="#istree">istree</a>
@@ -240,7 +240,7 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
         <div class="doc-type">fn</div></h2>
       <div class="doc-content"><pre><code class="julia hljs">similarterm(t, f, args, symtype)</code></pre>
 <p>Create a term that is similar in type to <code>t</code>. Extending this function allows packages using their own expression types with SymbolicUtils to define how new terms should be created.</p>
-<h2 id="arguments"><a href="#arguments">Arguments</a></h2>
+<h2 id="arguments"><a href="#arguments" class="header-anchor">Arguments</a></h2>
 <ul>
 <li><p><code>t</code> the reference term to use to create similar terms</p>
 </li>
@@ -254,7 +254,7 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
 </div>
   </div>
 
-<h2 id="rewriters"><a href="#rewriters">Rewriters</a></h2>
+<h2 id="rewriters"><a href="#rewriters" class="header-anchor">Rewriters</a></h2>
   <div class="docstring">
       <h2 class="doc-header" id="@rule">
         <a href="#@rule">@rule</a>
@@ -354,12 +354,15 @@ sin((a + c))</code></pre>
 </div>
   </div>
 
-<h2 id="simplify"><a href="#simplify">Simplify</a></h2>
+<h2 id="simplify"><a href="#simplify" class="header-anchor">Simplify</a></h2>
   <div class="docstring">
       <h2 class="doc-header" id="simplify">
         <a href="#simplify">simplify</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><p>simplify&#40;x; rewriter&#61;default<em>simplifier&#40;&#41;,             threaded&#61;false,             polynorm&#61;true,             thread</em>subtree_cutoff&#61;100&#41;</p>
+      <div class="doc-content"><pre><code class="julia hljs">simplify(x; rewriter=default_simplifier(),
+            threaded=<span class="hljs-literal">false</span>,
+            polynorm=<span class="hljs-literal">true</span>,
+            thread_subtree_cutoff=<span class="hljs-number">100</span>)</code></pre>
 <p>Simplify an expression &#40;<code>x</code>&#41; by applying <code>rewriter</code> until there are no changes. <code>polynorm&#61;true</code> applies <code>polynormalize</code> in the beginning of each fixpoint iteration.</p>
 </div>
   </div>
@@ -373,7 +376,7 @@ sin((a + c))</code></pre>
 </div>
   </div>
 
-<h2 id="utilities"><a href="#utilities">Utilities</a></h2>
+<h2 id="utilities"><a href="#utilities" class="header-anchor">Utilities</a></h2>
   <div class="docstring">
       <h2 class="doc-header" id="@timerewrite">
         <a href="#@timerewrite">@timerewrite</a>
@@ -381,7 +384,7 @@ sin((a + c))</code></pre>
       <div class="doc-content"><pre><code class="julia hljs"><span class="hljs-meta">@timerewrite</span> expr</code></pre>
 <p>If <code>expr</code> calls <code>simplify</code> or a <code>RuleSet</code> object, track the amount of time it spent on applying each rule and pretty print the timing.</p>
 <p>This uses <a href="https://github.com/KristofferC/TimerOutputs.jl">TimerOutputs.jl</a>.</p>
-<h2 id="example"><a href="#example">Example:</a></h2>
+<h2 id="example"><a href="#example" class="header-anchor">Example:</a></h2>
 <pre><code class="julia hljs">julia&gt; expr = foldr(*, rand([a,b,c,d], <span class="hljs-number">100</span>))
 (a ^ <span class="hljs-number">26</span>) * (b ^ <span class="hljs-number">30</span>) * (c ^ <span class="hljs-number">16</span>) * (d ^ <span class="hljs-number">28</span>)
 
@@ -407,7 +410,7 @@ julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: February 16, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: February 27, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

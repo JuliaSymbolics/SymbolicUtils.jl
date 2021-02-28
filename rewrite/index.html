@@ -90,7 +90,7 @@ r1(sin(<span class="hljs-number">1</span>+z) + sin(<span class="hljs-number">1</
 <pre><code class="julia hljs">r1(sin(<span class="hljs-number">1</span>+z) + sin(<span class="hljs-number">1</span>+w)) === <span class="hljs-literal">nothing</span></code></pre><pre><code class="plaintext hljs">true</code></pre>
 <p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~xs</code> in the following example is a segment variable:</p>
 <pre><code class="julia hljs"><span class="hljs-meta">@syms</span> x y z
-<span class="hljs-meta">@rule</span>(+(~~xs) =&gt; ~~xs)(x + y + z)</code></pre><pre><code class="plaintext hljs">3-element view(::Array{SymbolicUtils.Sym{Number},1}, 1:3) with eltype SymbolicUtils.Sym{Number}:
+<span class="hljs-meta">@rule</span>(+(~~xs) =&gt; ~~xs)(x + y + z)</code></pre><pre><code class="plaintext hljs">3-element view(::Array{SymbolicUtils.Sym{Number,Nothing},1}, 1:3) with eltype SymbolicUtils.Sym{Number,Nothing}:
  x
  y
  z</code></pre>

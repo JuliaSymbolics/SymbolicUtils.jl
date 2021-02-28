@@ -1,11 +1,14 @@
 module SymbolicUtils
 
-export @syms, term, showraw
+export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 # Sym, Term,
 # Add, Mul and Pow
 using DataStructures
-import Base: +, -, *, /, \, ^
+using Setfield
+import Setfield: PropertyLens
+import Base: +, -, *, /, \, ^, ImmutableDict
+using ConstructionBase
 include("types.jl")
 
 # Methods on symbolic objects

@@ -58,6 +58,28 @@ end
     @test ex1.hash[] == h
 end
 
+struct Ctx1 end
+struct Ctx2 end
+
+@testset "metadata" begin
+    @syms a b c
+    for a = [a, sin(a), a+b, a*b, a^3]
+
+        a′ = setmetadata(a, Ctx1, "meta_1")
+
+        @test hasmetadata(a′, Ctx1)
+        @test !hasmetadata(a′, Ctx2)
+
+        a′ = setmetadata(a′, Ctx2, "meta_2")
+
+        @test hasmetadata(a′, Ctx1)
+        @test hasmetadata(a′, Ctx2)
+
+        @test getmetadata(a′, Ctx1) == "meta_1"
+        @test getmetadata(a′, Ctx2) == "meta_2"
+    end
+end
+
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 

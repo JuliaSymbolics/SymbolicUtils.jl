@@ -5,6 +5,7 @@ export @syms, term, showraw
 # Sym, Term,
 # Add, Mul and Pow
 using DataStructures
+using Setfield
 import Base: +, -, *, /, \, ^
 include("types.jl")
 

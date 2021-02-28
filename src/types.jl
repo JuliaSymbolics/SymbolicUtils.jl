@@ -72,7 +72,37 @@ function getmetadata(s::Symbolic, ctx, default)
     s.metadata isa Ref ? get(s.metadata[], ctx, default) : default
 end
 
-function setmetadata(s::Sym, ctx, val)
+import Base: ImmutableDict
+import Setfield: PropertyLens
+
+# pirated for Setfield purposes:
+Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
+
+assoc(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
+function assoc(d::Base.ImmutableDict, ctx, val)::ImmutableDict{DataType,Any}
+    # optimizations
+    # If using upto 3 contexts, things stay compact
+    if isdefined(d, :parent)
+        d.key === ctx && return @set d.value = val
+        d1 = d.parent
+    end
+    if isdefined(d1, :parent)
+        d1.key === ctx && return @set d.parent.value = val
+        d2 = d1.parent
+    end
+    if isdefined(d2, :parent)
+        d2.key === ctx && return @set d.parent.parent.value = val
+    end
+    Base.ImmutableDict{DataType, Any}(d, ctx, val)
+end
+
+function setmetadata(s::Symbolic, ctx::DataType, val)
+    if s.metadata isa Ref
+        @set s.metadata = Ref{Any}(assoc(s.metadata[], ctx, val))
+    else
+        # fresh Dict
+        @set s.metadata = Ref{Any}(Base.ImmutableDict{DataType, Any}(ctx, val))
+    end
 end
 
 Base.isequal(s::Symbolic, x) = false
@@ -142,15 +172,11 @@ means the variable is a function with the type signature X -> Y where
 struct Sym{T, M} <: Symbolic{T}
     name::Symbol
     metadata::M
-    function Sym{T}(name; metadata=NO_METADATA) where {T}
-        new{T, typeof(metadata)}(name, metadata)
-    end
 end
 
-const Variable = Sym # old name
-Sym(x) = Sym{symtype(x)}(x)
-
-Base.nameof(v::Sym) = v.name
+function (::Type{Sym{T}})(name, metadata=NO_METADATA) where {T}
+    Sym{T, typeof(metadata)}(name, metadata)
+end
 
 Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
 
@@ -287,16 +313,22 @@ If `T` is not provided during construction, it is queried by calling
 
 See [promote_symtype](#promote_symtype)
 """
-struct Term{T} <: Symbolic{T}
+struct Term{T, M} <: Symbolic{T}
     f::Any
     arguments::Any
+    metadata::M
     hash::Ref{UInt} # hash cache
-    Term{T}(f, xs) where {T} = new{T}(f, xs, Ref{UInt}(0))
+end
+
+function (::Type{Term{T}})(f, args, metadata=NO_METADATA) where {T}
+    Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
 istree(t::Term) = true
 
-Term(f, args) = Term{_promote_symtype(f, args)}(f, args)
+function Term(f, args, metadata=NO_METADATA)
+    Term{_promote_symtype(f, args)}(f, args, metadata)
+end
 
 operation(x::Term) = getfield(x, :f)
 
@@ -511,35 +543,6 @@ struct Add{X, T<:Number, D, M} <: Symbolic{X}
     hash::Ref{UInt}
     metadata::M
 end
-
-#=
-promote_metadata(f, x) = 
-
-AbstractConnection
-
-Flow()
-
-function connect(ps..., ::Val{:flow})
-    sum(ps) ~ 0
-end
-function connect(ps..., ::Val{:voltage})
-    map(1:length(ps)-1) do i
-        ps[i] ~ ps[i+1]
-    end
-end
-getconnecttype(x) = x.metadata[][ConnectCtx]
-function connect(ps...)
-    promote_connection([Val{x.metadata[][ConnectCtx]}() for x in ps]...)
-    ctyp = getconnecttype(first(ps))
-    for i in 2:length(ps)
-        @assert iscompatiable(ctyp, getconnecttype(ps[i]))
-    end
-    connect(ps..., Val(promote_connection_properties(ps...)))
-
-connect(vars...) = equation that connects vars
-
-=#
-
 
 function Add(T, coeff, dict; metadata=NO_METADATA)
     if isempty(dict)

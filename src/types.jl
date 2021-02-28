@@ -75,8 +75,8 @@ end
 # pirated for Setfield purposes:
 Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
 
-assoc(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
-function assoc(d::Base.ImmutableDict, ctx, val)::ImmutableDict{DataType,Any}
+assocmeta(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
+function assocmeta(d::Base.ImmutableDict, ctx, val)::ImmutableDict{DataType,Any}
     # optimizations
     # If using upto 3 contexts, things stay compact
     if isdefined(d, :parent)
@@ -95,7 +95,7 @@ end
 
 function setmetadata(s::Symbolic, ctx::DataType, val)
     if s.metadata isa AbstractDict
-        @set s.metadata = assoc(s.metadata, ctx, val)
+        @set s.metadata = assocmeta(s.metadata, ctx, val)
     else
         # fresh Dict
         @set s.metadata = Base.ImmutableDict{DataType, Any}(ctx, val)
@@ -170,6 +170,8 @@ struct Sym{T, M} <: Symbolic{T}
     name::Symbol
     metadata::M
 end
+
+Base.nameof(s::Sym) = s.name
 
 ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = Sym{T}
 
@@ -780,12 +782,14 @@ function ConstructionBase.constructorof(::Type{<:Pow{X}}) where {X}
     Pow{promote_symtype(^, symtype(base), symtype(exp)), typeof(base), typeof(exp), typeof(m)}(base,exp,m)
 end
 
-function Pow(a, b; metadata=NO_METADATA)
+function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
-    Pow{promote_symtype(^, symtype(a), symtype(b)), typeof(a), typeof(b), typeof(metadata)}(a,b,metadata)
+    Pow{T, typeof(a), typeof(b), typeof(metadata)}(a,b,metadata)
 end
-
+function Pow(a, b; metadata=NO_METADATA)
+    Pow{promote_symtype(^, symtype(a), symtype(b))}(a, b, metadata=metadata)
+end
 symtype(a::Pow{X}) where {X} = X
 
 istree(a::Pow) = true

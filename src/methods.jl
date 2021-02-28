@@ -34,7 +34,8 @@ islike(a, T) = symtype(a) <: T
 function number_methods(T, rhs1, rhs2, options=nothing)
     exprs = []
 
-    skip_basics = !isnothing(options) ? options == :skipbasics : false
+    skip_basics = options !== nothing ? options == :skipbasics : false
+    skips = Meta.isexpr(options, [:vcat, :hcat, :vect]) ? Set(options.args) : []
     basic_monadic = [-, +]
     basic_diadic = [+, -, *, /, \, ^]
 
@@ -42,6 +43,7 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     rhs1 = :($assert_like(f, Number, a); $rhs1)
 
     for f in (skip_basics ? diadic : vcat(basic_diadic, diadic))
+        nameof(f) in skips && continue
         for S in previously_declared_for
             push!(exprs, quote
                       (f::$(typeof(f)))(a::$T, b::$S) = $rhs2
@@ -62,6 +64,7 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     end
 
     for f in (skip_basics ? monadic : vcat(basic_monadic, monadic))
+        nameof(f) in skips && continue
         push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
     end
     push!(exprs, :(push!($previously_declared_for, $T)))

@@ -28,8 +28,6 @@ end
 using Base: ImmutableDict
 
 # Linked List interface
-@inline assoc(d::ImmutableDict, k, v) = ImmutableDict(d, k=>v)
-
 struct LL{V}
     v::V
     i::Int

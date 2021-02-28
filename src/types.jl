@@ -57,12 +57,12 @@ symtype(x) = typeof(x)
 symtype(::Symbolic{T}) where {T} = T
 
 function hasmetadata(s::Symbolic, ctx)
-    s.metadata isa Ref && haskey(s.metadata[], ctx)
+    s.metadata isa AbstractDict && haskey(s.metadata, ctx)
 end
 
 function getmetadata(s::Symbolic, ctx)
-    if s.metadata isa Ref
-        s.metadata[][ctx]
+    if s.metadata isa AbstractDict
+        s.metadata[ctx]
     else
         throw(ArgumentError("$s does not have metadata for $ctx"))
     end
@@ -71,9 +71,6 @@ end
 function getmetadata(s::Symbolic, ctx, default)
     s.metadata isa Ref ? get(s.metadata[], ctx, default) : default
 end
-
-import Base: ImmutableDict
-import Setfield: PropertyLens
 
 # pirated for Setfield purposes:
 Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
@@ -85,23 +82,23 @@ function assoc(d::Base.ImmutableDict, ctx, val)::ImmutableDict{DataType,Any}
     if isdefined(d, :parent)
         d.key === ctx && return @set d.value = val
         d1 = d.parent
-    end
-    if isdefined(d1, :parent)
-        d1.key === ctx && return @set d.parent.value = val
-        d2 = d1.parent
-    end
-    if isdefined(d2, :parent)
-        d2.key === ctx && return @set d.parent.parent.value = val
+        if isdefined(d1, :parent)
+            d1.key === ctx && return @set d.parent.value = val
+            d2 = d1.parent
+            if isdefined(d2, :parent)
+                d2.key === ctx && return @set d.parent.parent.value = val
+            end
+        end
     end
     Base.ImmutableDict{DataType, Any}(d, ctx, val)
 end
 
 function setmetadata(s::Symbolic, ctx::DataType, val)
-    if s.metadata isa Ref
-        @set s.metadata = Ref{Any}(assoc(s.metadata[], ctx, val))
+    if s.metadata isa AbstractDict
+        @set s.metadata = assoc(s.metadata, ctx, val)
     else
         # fresh Dict
-        @set s.metadata = Ref{Any}(Base.ImmutableDict{DataType, Any}(ctx, val))
+        @set s.metadata = Base.ImmutableDict{DataType, Any}(ctx, val)
     end
 end
 
@@ -173,6 +170,8 @@ struct Sym{T, M} <: Symbolic{T}
     name::Symbol
     metadata::M
 end
+
+ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = Sym{T}
 
 function (::Type{Sym{T}})(name, metadata=NO_METADATA) where {T}
     Sym{T, typeof(metadata)}(name, metadata)
@@ -318,6 +317,12 @@ struct Term{T, M} <: Symbolic{T}
     arguments::Any
     metadata::M
     hash::Ref{UInt} # hash cache
+end
+
+function ConstructionBase.constructorof(s::Type{<:Term{T}}) where {T}
+    function (f, args, meta, hash)
+        Term{T, typeof(meta)}(f, args, meta, hash)
+    end
 end
 
 function (::Type{Term{T}})(f, args, metadata=NO_METADATA) where {T}
@@ -552,7 +557,7 @@ function Add(T, coeff, dict; metadata=NO_METADATA)
         return _isone(v) ? k : Mul(T, makemul(v, k)...)
     end
 
-    Add{T, typeof(coeff), typeof(dict)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0), metadata)
+    Add{T, typeof(coeff), typeof(dict), typeof(metadata)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0), metadata)
 end
 
 symtype(a::Add{X}) where {X} = X
@@ -662,15 +667,30 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 - `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
-struct Mul{X, T<:Number, D} <: Symbolic{X}
+struct Mul{X, T<:Number, D, M} <: Symbolic{X}
     coeff::T
     dict::D
     sorted_args_cache::Ref{Any}
     hash::Ref{UInt}
-    metadata::Ref{Any}
+    metadata::M
 end
 
-function Mul(T, a,b)
+for S in [Add, Mul]
+    @eval function ConstructionBase.constructorof(s::Type{<:$S{T}}) where {T}
+        function (coeff, dict, argscache, hash, m)
+            $S{T,
+                typeof(coeff),
+                typeof(dict),
+                typeof(m)}(coeff,
+            dict,
+            argscache,
+            hash,
+            m)
+        end
+    end
+end
+
+function Mul(T, a,b; metadata=NO_METADATA)
     isempty(b) && return a
     if _isone(a) && length(b) == 1
         pair = first(b)
@@ -680,7 +700,7 @@ function Mul(T, a,b)
             return Pow(first(pair), last(pair))
         end
     else
-        Mul{T, typeof(a), typeof(b)}(a,b, Ref{Any}(nothing), Ref{UInt}(0))
+        Mul{T, typeof(a), typeof(b), typeof(metadata)}(a,b, Ref{Any}(nothing), Ref{UInt}(0), metadata)
     end
 end
 
@@ -749,16 +769,21 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 Represents `base^exp`, a lighter version of `Mul(1, Dict(base=>exp))`
 """
-struct Pow{X, B, E} <: Symbolic{X}
+struct Pow{X, B, E, M} <: Symbolic{X}
     base::B
     exp::E
-    metadata::Ref{Any}
+    metadata::M
 end
 
-function Pow(a, b)
+function ConstructionBase.constructorof(::Type{<:Pow{X}}) where {X}
+    (base, exp, m) ->
+    Pow{promote_symtype(^, symtype(base), symtype(exp)), typeof(base), typeof(exp), typeof(m)}(base,exp,m)
+end
+
+function Pow(a, b; metadata=NO_METADATA)
     _iszero(b) && return 1
     _isone(b) && return a
-    Pow{promote_symtype(^, symtype(a), symtype(b)), typeof(a), typeof(b)}(a,b)
+    Pow{promote_symtype(^, symtype(a), symtype(b)), typeof(a), typeof(b), typeof(metadata)}(a,b,metadata)
 end
 
 symtype(a::Pow{X}) where {X} = X

@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-   <link rel="stylesheet" href="/SymbolicUtils.jl/libs/highlight/github.min.css">
+   <link rel="stylesheet" href="/libs/highlight/github.min.css">
    
-  <link rel="stylesheet" href="/SymbolicUtils.jl/css/franklin.css">
-<link rel="stylesheet" href="/SymbolicUtils.jl/css/poole_hyde.css">
-<link rel="stylesheet" href="/SymbolicUtils.jl/css/custom.css">
+  <link rel="stylesheet" href="/css/franklin.css">
+<link rel="stylesheet" href="/css/poole_hyde.css">
+<link rel="stylesheet" href="/css/custom.css">
 <!-- style adjustments -->
 <style>
   html {font-size: 17px;}
@@ -20,7 +20,7 @@
     .franklin-content {padding-left: 6%; padding-right: 6%;}
   }
 </style>
-<link rel="icon" href="/SymbolicUtils.jl/assets/favicon.png">
+<link rel="icon" href="/assets/favicon.png">
 
    <title>SymbolicUtils.jl — Symbolic programming in Julia</title>  
 </head>
@@ -28,7 +28,7 @@
 <div class="sidebar">
   <div class="container sidebar-sticky">
     <div class="sidebar-about">
-      <h1 class="sidebar-title"><a href="/SymbolicUtils.jl/">SymbolicUtils<span style="opacity:0.4">.jl</span></a></h1>
+      <h1 class="sidebar-title"><a href="/">SymbolicUtils<span style="opacity:0.4">.jl</span></a></h1>
       <br>
     </div>
     <style>
@@ -54,11 +54,11 @@
     }
     </style>
     <nav class="sidebar-nav" style="opacity: 0.9">
-      <a class="sidebar-nav-item active" href="/SymbolicUtils.jl/">Getting Started</a>
-      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/rewrite/">Term Rewriting</a>
-      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/interface/">Interfacing</a>
-      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/codegen/">Code generation</a>
-      <a class="sidebar-nav-item " href="/SymbolicUtils.jl/api/">API documentation</a>
+      <a class="sidebar-nav-item active" href="/">Getting Started</a>
+      <a class="sidebar-nav-item " href="/rewrite/">Term Rewriting</a>
+      <a class="sidebar-nav-item " href="/interface/">Interfacing</a>
+      <a class="sidebar-nav-item " href="/codegen/">Code generation</a>
+      <a class="sidebar-nav-item " href="/api/">API documentation</a>
     </nav>
 
   </div>
@@ -77,7 +77,7 @@
 
 
 <p style="font-size: 1.25em; line-height: 1.67em; text-align: center; margin: 1em 0; color: #111;">
-<a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">SymbolicUtils</a> is an practical symbolic programming utility in Julia. It lets you <a href="#symbolic_expressions">create</a>, <a href="#rule-based_rewriting">rewrite</a> and <a href="#simplification">simplify</a> symbolic expressions, and <a href="/SymbolicUtils.jl/codegen/">generate Julia code</a> from them.
+<a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">SymbolicUtils</a> is an practical symbolic programming utility in Julia. It lets you <a href="#symbolic_expressions">create</a>, <a href="#rule-based_rewriting">rewrite</a> and <a href="#simplification">simplify</a> symbolic expressions, and <a href="/codegen/">generate Julia code</a> from them.
 </p>
 
 <p><strong>Features:</strong></p>
@@ -151,9 +151,9 @@ f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code
 <li><p><code>symtype&#40;x&#41;</code> – the &quot;inferred&quot; type &#40;<code>T</code>&#41;</p>
 </li>
 </ul>
-<p>See more on the interface <a href="/SymbolicUtils.jl/interface">here</a></p>
+<p>See more on the interface <a href="/interface">here</a></p>
 <h2 id="term_rewriting"><a href="#term_rewriting" class="header-anchor">Term rewriting</a></h2>
-<p>SymbolicUtils contains <a href="/SymbolicUtils.jl/rewrite/#rule-based_rewriting">a rule-based rewriting language</a> for easy pattern matching and rewriting of expression. There is also a <a href="/SymbolicUtils.jl/rewrite/#composing_rewriters">combinator library</a> to combine rules to chain, branch and loop over rules.</p>
+<p>SymbolicUtils contains <a href="/rewrite/#rule-based_rewriting">a rule-based rewriting language</a> for easy pattern matching and rewriting of expression. There is also a <a href="/rewrite/#composing_rewriters">combinator library</a> to combine rules to chain, branch and loop over rules.</p>
 <h2 id="simplification"><a href="#simplification" class="header-anchor">Simplification</a></h2>
 <p>By default <code>*</code> and <code>&#43;</code> operations apply the most basic simplification upon construction.</p>
 <p>The <code>simplify</code> function applies a built-in set of rules to rewrite expressions in order to simplify it.</p>
@@ -163,13 +163,13 @@ f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code
 <h2 id="code_generation"><a href="#code_generation" class="header-anchor">Code generation</a></h2>
 <p><strong>Experimental feature</strong></p>
 <p>It is common to want to generate executable code from symbolic expressions and blocks of them. We are working on experimental support for turning Symbolic expressions into executable functions with specific focus on array input and output and performance which is critical to the Differential Equations ecosystem which is making heavy use of this package.</p>
-<p>See <a href="/SymbolicUtils.jl/codegen/">Code generation</a> for more about this.</p>
+<p>See <a href="/codegen/">Code generation</a> for more about this.</p>
 <h2 id="learn_more"><a href="#learn_more" class="header-anchor">Learn more</a></h2>
-<p>If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the <a href="/SymbolicUtils.jl/interface/">Interfacing</a> section to find out how you can do that without any fundamental changes to your package. Look at the <a href="/SymbolicUtils.jl/api/">API documentation</a> for docstrings about specific functions or macros.</p>
+<p>If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the <a href="/interface/">Interfacing</a> section to find out how you can do that without any fundamental changes to your package. Look at the <a href="/api/">API documentation</a> for docstrings about specific functions or macros.</p>
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: February 28, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 01, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

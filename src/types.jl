@@ -175,7 +175,7 @@ Base.nameof(s::Sym) = s.name
 
 ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = Sym{T}
 
-function (::Type{Sym{T}})(name, metadata=NO_METADATA) where {T}
+function (::Type{Sym{T}})(name; metadata=NO_METADATA) where {T}
     Sym{T, typeof(metadata)}(name, metadata)
 end
 

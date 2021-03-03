@@ -205,8 +205,10 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
       <h2 class="doc-header" id="SpawnFetch">
         <a href="#SpawnFetch">SpawnFetch</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">SpawnFetch{ParallelType}(exprs, reduce)</code></pre>
-<p>Run every expr in <code>exprs</code> in its own task, and use the <code>reduce</code> function to combine the results of executing <code>exprs</code>.</p>
+      <div class="doc-content"><pre><code class="julia hljs">SpawnFetch{ParallelType}(funcs [, args], reduce)</code></pre>
+<p>Run every expression in <code>funcs</code> in its own task, the expression should be a <code>Func</code> object and is passed to <code>Threads.Task&#40;f&#41;</code>. If <code>Func</code> takes arguments, then the arguments must be passed in as <code>args</code>–a vector of vector of arguments to each function in <code>funcs</code>. We don&#39;t use <code>@spawn</code> in order to support RuntimeGeneratedFunctions which disallow closures, instead we interpolate these functions or closures as smaller RuntimeGeneratedFunctions.</p>
+<p><code>reduce</code> function is used to combine the results of executing <code>exprs</code>. A SpawnFetch expression returns the reduced result.</p>
+<p>Use <code>Symbolics.MultithreadedForm</code> ParallelType from the Symbolics.jl package to get the RuntimeGeneratedFunction version SpawnFetch.</p>
 <p><code>ParallelType</code> can be used to define more parallelism types SymbolicUtils supports <code>Multithreaded</code> type. Which spawns threaded tasks.</p>
 </div>
   </div>

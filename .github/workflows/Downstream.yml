@@ -22,7 +22,7 @@ jobs:
           - {user: SciML, repo: Catalyst.jl, group: All}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Standard}
-          - {user: Symbolics, repo: Symbolics.jl, group: All}
+          - {user: JuliaSymbolics, repo: Symbolics.jl, group: All}
           
     steps:
       - uses: actions/checkout@v2

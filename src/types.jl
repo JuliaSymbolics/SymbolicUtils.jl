@@ -173,9 +173,9 @@ end
 
 Base.nameof(s::Sym) = s.name
 
-ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = Sym{T}
+ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = (n,m) -> Sym{T}(n, metadata=m)
 
-function (::Type{Sym{T}})(name, metadata=NO_METADATA) where {T}
+function (::Type{Sym{T}})(name; metadata=NO_METADATA) where {T}
     Sym{T, typeof(metadata)}(name, metadata)
 end
 
@@ -327,14 +327,14 @@ function ConstructionBase.constructorof(s::Type{<:Term{T}}) where {T}
     end
 end
 
-function (::Type{Term{T}})(f, args, metadata=NO_METADATA) where {T}
+function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
     Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
 istree(t::Term) = true
 
-function Term(f, args, metadata=NO_METADATA)
-    Term{_promote_symtype(f, args)}(f, args, metadata)
+function Term(f, args; metadata=NO_METADATA)
+    Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
 operation(x::Term) = getfield(x, :f)

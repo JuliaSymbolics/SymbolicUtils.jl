@@ -464,10 +464,16 @@ end
 
 struct Multithreaded end
 """
-    SpawnFetch{ParallelType}(exprs, reduce)
+    SpawnFetch{ParallelType}(funcs [, args], reduce)
 
-Run every expr in `exprs` in its own task, and use the `reduce`
-function to combine the results of executing `exprs`.
+Run every expression in `funcs` in its own task, the expression
+should be a `Func` object and is passed to `Threads.Task(f)`.
+If `Func` takes arguments, then the arguments must be passed in as `args`--a vector of vector of arguments to each function in `funcs`. We don't use `@spawn` in order to support RuntimeGeneratedFunctions which disallow closures, instead we interpolate these functions or closures as smaller RuntimeGeneratedFunctions.
+
+`reduce` function is used to combine the results of executing `exprs`. A SpawnFetch expression returns the reduced result.
+
+
+Use `Symbolics.MultithreadedForm` ParallelType from the Symbolics.jl package to get the RuntimeGeneratedFunction version SpawnFetch.
 
 `ParallelType` can be used to define more parallelism types
 SymbolicUtils supports `Multithreaded` type. Which spawns
@@ -475,12 +481,16 @@ threaded tasks.
 """
 struct SpawnFetch{Typ}
     exprs::Vector
+    args::Union{Nothing, Vector}
     combine
 end
 
+(::Type{SpawnFetch{T}})(exprs, combine) where {T} = SpawnFetch{T}(exprs, nothing, combine)
+
 function toexpr(p::SpawnFetch{Multithreaded}, st)
-    spawns = map(p.exprs) do thunk
-        :(Base.Threads.@spawn $(toexpr(thunk, st)))
+    args = isnothing(p.args) ? Iterators.repeated((), length(p.exprs)) : p.args
+    spawns = map(p.exprs, args) do thunk, xs
+        :(Base.Threads.@spawn $(toexpr(thunk, st))($(toexpr.(xs, (st,))...)))
     end
     quote
         $(toexpr(p.combine, st))(map(fetch, ($(spawns...),))...)

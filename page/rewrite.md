@@ -2,9 +2,9 @@
 
 ## Rule-based rewriting
 
-Rewrite rules match and transform an expression. A rule is written using either the `@rule` macro or the `@acrule` macro.
+Rewrite rules match and transform an expression. A rule is written using either the `@rule` macro or the `@acrule` macro. It creates callable `Rule` object.
 
-Here is a simple rewrite rule:
+Here is a simple rewrite rule, that uses formula for the double angle of the sine function:
 
 ```julia:rewrite1
 using SymbolicUtils
@@ -13,36 +13,61 @@ using SymbolicUtils
 
 (w, z, α, β) # hide
 
-r1 = @rule ~x + ~x => 2 * (~x)
+r1 = @rule sin(2(~x)) => 2sin(~x)*cos(~x)
 
-r1(sin(1+z) + sin(1+z))
+r1(sin(2z))
 ```
 
 The `@rule` macro takes a pair of patterns -- the _matcher_ and the _consequent_ (`@rule matcher => consequent`). If an expression matches the matcher pattern, it is rewritten to the consequent pattern. `@rule` returns a callable object that applies the rule to an expression.
 
 `~x` in the example is what is a **slot variable** named `x`. In a matcher pattern, slot variables are placeholders that match exactly one expression. When used on the consequent side, they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, all corresponding matches must be equal (as tested by `Base.isequal` function). Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.
 
-If you try to apply this rule to an expression where the two summands are not equal, it will return `nothing` -- this is the way a rule signifies failure to match.
+If you try to apply this rule to an expression with triple angle, it will return `nothing` -- this is the way a rule signifies failure to match.
 ```julia:rewrite2
-r1(sin(1+z) + sin(1+w)) === nothing
+r1(sin(3z)) === nothing
+```
+
+Slot variable (matcher) is not necessary a single variable
+
+```julia:rewrite3
+r1(sin(2*(w-z)))
+```
+
+but it must be a single expression
+
+```julia:rewrite4
+r1(sin(2*(w+z)*(α+β))) === nothing
+```
+
+Rules are of course not limited to single slot variable
+
+```julia:rewrite5
+r2 = @rule sin(~x + ~y) => sin(~x)*cos(~y) + cos(~x)*sin(~y);
+
+r2(sin(a + b))
 ```
 
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~xs` in the following example is a segment variable:
 
-```julia:rewrite3
+```julia:rewrite6
 @syms x y z
 @rule(+(~~xs) => ~~xs)(x + y + z)
 ```
 
 `~~xs` is a vector of subexpressions matched. You can use it to construct something more useful:
 
-```julia:rewrite4
-r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+```julia:rewrite7
+r3 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
 
-r2(2 * (w+w+α+β))
+r3(2 * (w+w+α+β))
 ```
 
-Notice that there is a subexpression `(2 * w) + (2 * w)` that could be simplified by the previous rule `r1`. Can we chain `r2` and `r1`?
+Notice that the expression was autosimplified before application of the rule.
+
+```julia:rewrite8
+2 * (w+w+α+β)
+```
+
 
 
 ### Predicates for matching
@@ -54,12 +79,14 @@ Similarly `~~x::g` is a way of attaching a predicate `g` to a segment variable. 
 For example,
 
 ```julia:pred1
+@syms a b c d
 
-r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
+r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms";
 
-@show r(w + z + z + w)
-@show r(w + z + z)
-@show r(w + z)
+@show r(a + b + c + d)
+@show r(b + c + d)
+@show r(b + c + b)
+@show r(a + b)
 ```
 
 
@@ -68,13 +95,14 @@ r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms"
 Given an expression `f(x, f(y, z, u), v, w)`, a `f` is said to be associative if the expression is equivalent to `f(x, y, z, u, v, w)` and commutative if the order of arguments does not matter.  SymbolicUtils has a special `@acrule` macro meant for rules on functions which are associate and commutative such as addition and multiplication of real and complex numbers.
 
 ```julia:acr
-@syms x y
+@syms x y z
 
-acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
+acr = @acrule((~a)^(~x) * (~a)^(~y) => (~a)^(~x + ~y))
 
-acr(x^2 * y * x)
+acr(x^y * x^z)
 ```
 
+although in case of `Number` it also works with regular `@rule` since autosimplification orders and applies associativity and commutativity to the expression.
 
 ## Composing rewriters
 
@@ -106,7 +134,7 @@ rewriters.
 
 Example using Postwalk, and Chain
 
-```julia:rewrite6
+```julia:rewrite9
 
 using SymbolicUtils
 using SymbolicUtils.Rewriters
@@ -122,11 +150,11 @@ rset_result
 
 It applied `r1`, but didn't get the opportunity to apply `r2`. So we need to apply the ruleset again on the result.
 
-```julia:rewrite7
+```julia:rewrite10
 rset(rset_result)
 ```
 
 You can also use `Fixpoint` to apply the rules until there are no changes.
-```julia:rewrite8
+```julia:rewrite11
 Fixpoint(rset)(2 * (w+w+α+β))
 ```

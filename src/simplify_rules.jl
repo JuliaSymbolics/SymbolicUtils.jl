@@ -77,7 +77,7 @@ let
         @acrule(sin(~x)cos(~y) + cos(~x)sin(~y) => sin(~x + ~y))
         @acrule(sin(~x)cos(~y) + -1*cos(~x)*sin(~y) => sin(~x - ~y))
         @acrule(cos(~x)cos(~y) + sin(~x)sin(~y) => cos(~x - ~y))
-        @acrule(cos(~x)cos(~y) - sin(~x)sin(~y) => cos(~x + ~y))
+        @acrule(cos(~x)cos(~y) + -1*sin(~x)*sin(~y) => cos(~x + ~y))
         
         @acrule(sinh(~x)cosh(~y) + cosh(~x)sinh(~y) => sinh(~x + ~y))
         @acrule(cosh(~x)cosh(~y) + sinh(~x)sinh(~y) => cosh(~x + ~y))

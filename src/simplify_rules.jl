@@ -69,7 +69,7 @@ let
 
         # double-angle rules
         @acrule(cos(~x)^2 + -1*sin(~x)^2   => cos(2 * ~x))
-        @acrule(2*sin(~x)cos(~x)        => sin(2 * ~x))
+        @acrule(2*sin(~x)*cos(~x)        => sin(2 * ~x))
         @acrule(cosh(~x)^2 + sinh(~x)^2 => cosh(2 * ~x))
         @acrule(2*sinh(~x)cosh(~x)      => sinh(2 * ~x))
 

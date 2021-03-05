@@ -82,7 +82,7 @@ let
         @acrule(sinh(~x)cosh(~y) + cosh(~x)sinh(~y) => sinh(~x + ~y))
         @acrule(cosh(~x)cosh(~y) + sinh(~x)sinh(~y) => cosh(~x + ~y))
         @acrule(sinh(~x)cosh(~y) + -1*cosh(~x)*sinh(~y) => sinh(~x - ~y))
-        @acrule(cosh(~x)cosh(~y) - sinh(~x)sinh(~y) => cosh(~x - ~y))
+        @acrule(cosh(~x)cosh(~y) + -1*sinh(~x)*sinh(~y) => cosh(~x - ~y))
         ]
 
     BOOLEAN_RULES = [

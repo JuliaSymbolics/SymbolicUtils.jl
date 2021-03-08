@@ -12,7 +12,7 @@ Simplify an expression (`x`) by applying `rewriter` until there are no changes.
 `polynorm=true` applies `polynormalize` in the beginning of each fixpoint iteration.
 """
 function simplify(x;
-                  polynorm=false,
+                  polynorm=true,
                   threaded=false,
                   thread_subtree_cutoff=100,
                   rewriter=nothing)

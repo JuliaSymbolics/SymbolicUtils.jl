@@ -491,7 +491,8 @@ function show_mul(io, args)
 end
 
 function show_call(io, f, args)
-    binary = Base.isbinaryoperator(nameof(f))
+    fname = nameof(f)
+    binary = Base.isbinaryoperator(fname)
     if binary
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")

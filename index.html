@@ -126,7 +126,7 @@ symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre><pre><code class="
 <pre><code class="julia hljs">expr1 = α*sin(w)^<span class="hljs-number">2</span> +  β*cos(z)^<span class="hljs-number">2</span>
 expr2 = α*cos(z)^<span class="hljs-number">2</span> +  β*sin(w)^<span class="hljs-number">2</span>
 
-expr1 + expr2</code></pre><pre><code class="plaintext hljs">α*((sin(w))^2) + α*((cos(z))^2) + β*((sin(w))^2) + β*((cos(z))^2)</code></pre>
+expr1 + expr2</code></pre><pre><code class="plaintext hljs">α*(sin(w)^2) + α*(cos(z)^2) + β*(sin(w)^2) + β*(cos(z)^2)</code></pre>
 <p><strong>Function-like symbols</strong></p>
 <p>Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same <code>symtype</code>.</p>
 <pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
@@ -157,7 +157,7 @@ f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code
 <h2 id="simplification"><a href="#simplification" class="header-anchor">Simplification</a></h2>
 <p>By default <code>*</code> and <code>&#43;</code> operations apply the most basic simplification upon construction.</p>
 <p>The <code>simplify</code> function applies a built-in set of rules to rewrite expressions in order to simplify it.</p>
-<pre><code class="julia hljs">simplify(<span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>))</code></pre><pre><code class="plaintext hljs">2(α + β + (2w))</code></pre>
+<pre><code class="julia hljs">simplify(<span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>))</code></pre><pre><code class="plaintext hljs">2(α + β + 2w)</code></pre>
 <p>The rules in the default simplify applies simple constant elemination, trigonometric identities.</p>
 <p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl">rules</a> that are used by <code>simplify</code>.</p>
 <h2 id="code_generation"><a href="#code_generation" class="header-anchor">Code generation</a></h2>
@@ -169,7 +169,7 @@ f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 07, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 13, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

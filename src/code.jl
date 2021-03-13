@@ -378,6 +378,17 @@ end
     _create_array(A, T, d, elems...)
 end
 
+## Vector
+#
+@inline function create_array(::Type{<:Matrix}, ::Nothing, ::Val{dims}, elems...) where dims
+    [elems...]
+end
+
+@inline function create_array(::Type{<:Matrix}, T, ::Val{dims}, elems...) where dims
+    T[elems...]
+end
+
+
 ## Matrix
 
 @inline function create_array(::Type{<:Matrix}, ::Nothing, ::Val{dims}, elems...) where dims

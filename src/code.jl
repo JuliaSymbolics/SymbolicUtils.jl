@@ -380,11 +380,11 @@ end
 
 ## Vector
 #
-@inline function create_array(::Type{<:Matrix}, ::Nothing, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:Vector}, ::Nothing, ::Val{dims}, elems...) where dims
     [elems...]
 end
 
-@inline function create_array(::Type{<:Matrix}, T, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:Vector}, T, ::Val{dims}, elems...) where dims
     T[elems...]
 end
 

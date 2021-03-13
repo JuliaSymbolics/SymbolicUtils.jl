@@ -423,6 +423,7 @@ setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}) = print(io, "(", x, ")")
+isbinop(f) = istree(f) && Base.isbinaryoperator(nameof(operation(f)))
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")
@@ -433,7 +434,7 @@ end
 print_arg(io, s::String) = show(io, s)
 function print_arg(io, f, x)
     f !== (*) && return print_arg(io, x)
-    if Base.isbinaryoperator(nameof(f)) && isbinop(x)
+    if Base.isbinaryoperator(nameof(f))
         print_arg(io, x, paren=true)
     else
         print_arg(io, x)
@@ -458,13 +459,12 @@ function show_add(io, args)
     end
 end
 
-isbinop(f) = istree(f) && Base.isbinaryoperator(nameof(operation(f)))
 function show_pow(io, args)
     base, ex = args
 
-    print_arg(io, base, paren=isbinop(base))
+    print_arg(io, base, paren=true)
     print(io, "^")
-    print_arg(io, ex, paren=isbinop(base))
+    print_arg(io, ex, paren=true)
 end
 
 function show_mul(io, args)

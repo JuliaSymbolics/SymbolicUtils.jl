@@ -69,7 +69,7 @@ function getmetadata(s::Symbolic, ctx)
 end
 
 function getmetadata(s::Symbolic, ctx, default)
-    s.metadata isa Ref ? get(s.metadata[], ctx, default) : default
+    s.metadata isa AbstractDict ? get(s.metadata, ctx, default) : default
 end
 
 # pirated for Setfield purposes:

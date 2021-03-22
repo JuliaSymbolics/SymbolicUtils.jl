@@ -97,9 +97,15 @@
       <h2 class="doc-header" id="toexpr">
         <a href="#toexpr">toexpr</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">toexpr(ex, [st,])</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">toexpr(ex, [st,])</code></pre>
 <p>Convert a symbolic expression into an <code>Expr</code>, suitable to be passed into <code>eval</code>.</p>
 <p>For example,</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; <span class="hljs-meta">@syms</span> a b
 (a, b)
 
@@ -126,7 +132,10 @@ julia&gt; toexpr(a+b) |&gt; dump
       <h2 class="doc-header" id="Assignment">
         <a href="#Assignment">Assignment</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Assignment(lhs, rhs)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">Assignment(lhs, rhs)</code></pre>
 <p>An assignment expression. Shorthand <code>lhs ← rhs</code> &#40;<code>\leftarrow</code>&#41;</p>
 </div>
   </div>
@@ -135,7 +144,10 @@ julia&gt; toexpr(a+b) |&gt; dump
       <h2 class="doc-header" id="Let">
         <a href="#Let">Let</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Let(assignments, body)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">Let(assignments, body)</code></pre>
 <p>A Let block.</p>
 <ul>
 <li><p><code>assignments</code> is a vector of <code>Assignment</code>s</p>
@@ -150,7 +162,10 @@ julia&gt; toexpr(a+b) |&gt; dump
       <h2 class="doc-header" id="Func">
         <a href="#Func">Func</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Func(args, kwargs, body)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">Func(args, kwargs, body)</code></pre>
 <p>A function.</p>
 <ul>
 <li><p><code>args</code> is a vector of expressions</p>
@@ -168,6 +183,9 @@ julia&gt; toexpr(a+b) |&gt; dump
 </li>
 </ul>
 <p>For example,</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; <span class="hljs-meta">@syms</span> a b c t f(d) x(t) y(t) z(t)
 (a, b, c, t, f(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Number</span>, x(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Number</span>, y(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Number</span>, z(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Number</span>)
 
@@ -193,6 +211,9 @@ julia&gt; toexpr(func)
 </li>
 </ul>
 <p>An example invocation of this function is:</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; executable = eval(toexpr(func))
 <span class="hljs-comment">#10 (generic function with 1 method)</span>
 
@@ -205,7 +226,10 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
       <h2 class="doc-header" id="SpawnFetch">
         <a href="#SpawnFetch">SpawnFetch</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">SpawnFetch{ParallelType}(funcs [, args], reduce)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">SpawnFetch{ParallelType}(funcs [, args], reduce)</code></pre>
 <p>Run every expression in <code>funcs</code> in its own task, the expression should be a <code>Func</code> object and is passed to <code>Threads.Task&#40;f&#41;</code>. If <code>Func</code> takes arguments, then the arguments must be passed in as <code>args</code>–a vector of vector of arguments to each function in <code>funcs</code>. We don&#39;t use <code>@spawn</code> in order to support RuntimeGeneratedFunctions which disallow closures, instead we interpolate these functions or closures as smaller RuntimeGeneratedFunctions.</p>
 <p><code>reduce</code> function is used to combine the results of executing <code>exprs</code>. A SpawnFetch expression returns the reduced result.</p>
 <p>Use <code>Symbolics.MultithreadedForm</code> ParallelType from the Symbolics.jl package to get the RuntimeGeneratedFunction version SpawnFetch.</p>
@@ -217,7 +241,10 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
       <h2 class="doc-header" id="SetArray">
         <a href="#SetArray">SetArray</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">SetArray(inbounds, arr, elems)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">SetArray(inbounds, arr, elems)</code></pre>
 <p>An expression representing setting of elements of <code>arr</code>.</p>
 <p>By default, every element of <code>elems</code> is copied over to <code>arr</code>,</p>
 <p>but if <code>elems</code> contains <code>AtIndex&#40;i, val&#41;</code> objects, then <code>arr&#91;i&#93; &#61; val</code> is performed in its place.</p>
@@ -229,7 +256,10 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
       <h2 class="doc-header" id="MakeArray">
         <a href="#MakeArray">MakeArray</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">MakeArray(elems, similarto, [output_eltype=<span class="hljs-literal">nothing</span>])</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">MakeArray(elems, similarto, [output_eltype=<span class="hljs-literal">nothing</span>])</code></pre>
 <p>An expression which constructs an array.</p>
 <ul>
 <li><p><code>elems</code> is the output array</p>
@@ -240,6 +270,9 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
 </li>
 </ul>
 <p>You can define:</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs"><span class="hljs-meta">@inline</span> <span class="hljs-keyword">function</span> create_array(A::<span class="hljs-built_in">Type</span>{&lt;:MyArray},a
                               ::<span class="hljs-built_in">Nothing</span>, d::<span class="hljs-built_in">Val</span>{dims}, elems...) <span class="hljs-keyword">where</span> dims
 
@@ -254,7 +287,10 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
       <h2 class="doc-header" id="MakeSparseArray">
         <a href="#MakeSparseArray">MakeSparseArray</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">MakeSpaseArray(array)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">MakeSpaseArray(array)</code></pre>
 <p>An expression which creates a <code>SparseMatrixCSC</code> or a <code>SparseVector</code>.</p>
 <p>The generated expression contains the sparsity information of <code>array</code>,</p>
 <p>it only creates the <code>nzval</code> field at run time.</p>
@@ -265,7 +301,10 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
       <h2 class="doc-header" id="MakeTuple">
         <a href="#MakeTuple">MakeTuple</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">MakeTuple(tup)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">MakeTuple(tup)</code></pre>
 <p>Make a Tuple from a tuple of expressions.</p>
 </div>
   </div>
@@ -274,14 +313,17 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
       <h2 class="doc-header" id="LiteralExpr">
         <a href="#LiteralExpr">LiteralExpr</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">LiteralExpr(ex)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">LiteralExpr(ex)</code></pre>
 <p>Literally <code>ex</code>, an <code>Expr</code>. <code>toexpr</code> on <code>LiteralExpr</code> recursively calls <code>toexpr</code> on any interpolated symbolic expressions.</p>
 </div>
   </div>
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 19, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 22, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

@@ -80,8 +80,14 @@
       <h2 class="doc-header" id="@syms">
         <a href="#@syms">@syms</a>
         <div class="doc-type">macro</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs"><span class="hljs-meta">@syms</span> &lt;lhs_expr&gt;[::T1] &lt;lhs_expr&gt;[::T2]...</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs"><span class="hljs-meta">@syms</span> &lt;lhs_expr&gt;[::T1] &lt;lhs_expr&gt;[::T2]...</code></pre>
 <p>For instance:</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs"><span class="hljs-meta">@syms</span> foo::<span class="hljs-built_in">Real</span> bar baz(x, y::<span class="hljs-built_in">Real</span>)::<span class="hljs-built_in">Complex</span></code></pre>
 <p>Create one or more variables. <code>&lt;lhs_expr&gt;</code> can be just a symbol in which case it will be the name of the variable, or a function call in which case a function-like variable which has the same name as the function being called. The Sym type, or in the case of a function-like Sym, the output type of calling the function can be set using the <code>::T</code> syntax.</p>
 <h1 id="examples"><a href="#examples" class="header-anchor">Examples:</a></h1>
@@ -102,7 +108,10 @@
       <h2 class="doc-header" id="Sym">
         <a href="#Sym">Sym</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Sym{T}(name::<span class="hljs-built_in">Symbol</span>)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">Sym{T}(name::<span class="hljs-built_in">Symbol</span>)</code></pre>
 <p>A named variable of type <code>T</code>. Type <code>T</code> can be <code>FnType&#123;X,Y&#125;</code> which means the variable is a function with the type signature X -&gt; Y where <code>X</code> is a tuple type of arguments and <code>Y</code> is any type.</p>
 </div>
   </div>
@@ -111,7 +120,10 @@
       <h2 class="doc-header" id="symtype">
         <a href="#symtype">symtype</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">symtype(x)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">symtype(x)</code></pre>
 <p>The supposed type of values in the domain of x. Tracing tools can use this type to pick the right method to run or analyse code.</p>
 <p>This defaults to <code>typeof&#40;x&#41;</code> if <code>x</code> is numeric, or <code>Any</code> otherwise. For the types defined in this package, namely <code>T&lt;:Symbolic&#123;S&#125;</code> it is <code>S</code>.</p>
 <p>Define this for your symbolic types if you want <code>simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
@@ -122,7 +134,10 @@
       <h2 class="doc-header" id="Term">
         <a href="#Term">Term</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Term{T}(f, args::<span class="hljs-built_in">AbstractArray</span>)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">Term{T}(f, args::<span class="hljs-built_in">AbstractArray</span>)</code></pre>
 <p>or     Term&#40;f, args::AbstractArray&#41;</p>
 <p>Symbolic expression representing the result of calling <code>f&#40;args...&#41;</code>.</p>
 <ul>
@@ -142,7 +157,10 @@
       <h2 class="doc-header" id="Add">
         <a href="#Add">Add</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Add(T, coeff, dict::<span class="hljs-built_in">Dict</span>)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">Add(T, coeff, dict::<span class="hljs-built_in">Dict</span>)</code></pre>
 <p>Represents <code>coeff &#43; &#40;key1 * val1&#41; &#43; &#40;key2 * val2&#41; &#43; ...</code></p>
 <p>where keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
 <ul>
@@ -160,7 +178,10 @@
       <h2 class="doc-header" id="Mul">
         <a href="#Mul">Mul</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Mul(T, coeff, dict)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">Mul(T, coeff, dict)</code></pre>
 <p>Represents coeff * &#40;key1 ^ val1&#41; * &#40;key2 ^ val2&#41; * ....</p>
 <p>where coeff is a &lt;:Number and keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
 <ul>
@@ -178,7 +199,10 @@
       <h2 class="doc-header" id="Pow">
         <a href="#Pow">Pow</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Pow(base, exp)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">Pow(base, exp)</code></pre>
 <p>Represents <code>base^exp</code>, a lighter version of <code>Mul&#40;1, Dict&#40;base&#61;&gt;exp&#41;&#41;</code></p>
 </div>
   </div>
@@ -187,8 +211,14 @@
       <h2 class="doc-header" id="promote_symtype">
         <a href="#promote_symtype">promote_symtype</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">promote_symtype(f, Ts...)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">promote_symtype(f, Ts...)</code></pre>
 <p>The result of applying <code>f</code> to arguments of <a href="#symtype"><code>symtype</code></a> <code>Ts...</code></p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; promote_symtype(+, <span class="hljs-built_in">Real</span>, <span class="hljs-built_in">Real</span>)
 <span class="hljs-built_in">Real</span>
 
@@ -201,6 +231,9 @@ julia&gt; <span class="hljs-meta">@syms</span> f(x)::<span class="hljs-built_in"
 julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
 <span class="hljs-built_in">Complex</span></code></pre>
 <p>When constructing <a href="#Term"><code>Term</code></a>s without an explicit symtype, <code>promote_symtype</code> is used to figure out the symtype of the Term.</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)</code></pre>
 <p>The output symtype of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</p>
 </div>
@@ -211,7 +244,10 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
       <h2 class="doc-header" id="istree">
         <a href="#istree">istree</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">istree(x::T)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">istree(x::T)</code></pre>
 <p>Check if <code>x</code> represents an expression tree. If returns true, it will be assumed that <code>operation&#40;::T&#41;</code> and <code>arguments&#40;::T&#41;</code> methods are defined. Definining these three should allow use of <code>simplify</code> on custom types. Optionally <code>symtype&#40;x&#41;</code> can be defined to return the expected type of the symbolic expression.</p>
 </div>
   </div>
@@ -220,7 +256,10 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
       <h2 class="doc-header" id="operation">
         <a href="#operation">operation</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">operation(x::T)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">operation(x::T)</code></pre>
 <p>Returns the operation &#40;a function object&#41; performed by an expression tree. Called only if <code>istree&#40;::T&#41;</code> is true. Part of the API required for <code>simplify</code> to work. Other required methods are <code>arguments</code> and <code>istree</code></p>
 </div>
   </div>
@@ -229,7 +268,10 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
       <h2 class="doc-header" id="arguments">
         <a href="#arguments">arguments</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">arguments(x::T)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">arguments(x::T)</code></pre>
 <p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code></p>
 </div>
   </div>
@@ -238,7 +280,10 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
       <h2 class="doc-header" id="similarterm">
         <a href="#similarterm">similarterm</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">similarterm(t, f, args, symtype)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">similarterm(t, f, args, symtype)</code></pre>
 <p>Create a term that is similar in type to <code>t</code>. Extending this function allows packages using their own expression types with SymbolicUtils to define how new terms should be created.</p>
 <h2 id="arguments"><a href="#arguments" class="header-anchor">Arguments</a></h2>
 <ul>
@@ -259,7 +304,10 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
       <h2 class="doc-header" id="@rule">
         <a href="#@rule">@rule</a>
         <div class="doc-type">macro</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs"><span class="hljs-meta">@rule</span> LHS =&gt; RHS</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs"><span class="hljs-meta">@rule</span> LHS =&gt; RHS</code></pre>
 <p>Creates a <code>Rule</code> object. A rule object is callable, and  takes an expression and rewrites it if it matches the LHS pattern to the RHS pattern, returns <code>nothing</code> otherwise. The rule language is described below.</p>
 <p>LHS can be any possibly nested function call expression where any of the arugments can optionally be a Slot &#40;<code>~x</code>&#41; or a Segment &#40;<code>~~x</code>&#41; &#40;described below&#41;.</p>
 <p>If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS Segment &#40;<code>~x</code>&#41; and slot variables &#40;<code>~~x</code>&#41; on the RHS will substitute the result of the matches found for these variables in the LHS.</p>
@@ -267,6 +315,9 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
 <p>A Slot variable is written as <code>~x</code> and matches a single expression. <code>x</code> is the name of the variable. If a slot appears more than once in an LHS expression then expression matched at every such location must be equal &#40;as shown by <code>isequal</code>&#41;.</p>
 <p><em>Example:</em></p>
 <p>Simple rule to turn any <code>sin</code> into <code>cos</code>:</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; <span class="hljs-meta">@syms</span> a b c
 (a, b, c)
 
@@ -276,12 +327,18 @@ sin(~x) =&gt; cos(~x)
 julia&gt; r(sin(<span class="hljs-number">1</span>+a))
 cos((<span class="hljs-number">1</span> + a))</code></pre>
 <p>A rule with 2 segment variables</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> ~x - ~y =&gt; ~x + (-(~y))
 ~x - ~y =&gt; ~x + -(~y)
 
 julia&gt; r(a-<span class="hljs-number">2</span>b)
 (a + (-(<span class="hljs-number">2</span> * b)))</code></pre>
 <p>A rule that matches two of the same expressions:</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> sin(~x)^<span class="hljs-number">2</span> + cos(~x)^<span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>
 sin(~x) ^ <span class="hljs-number">2</span> + cos(~x) ^ <span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>
 
@@ -294,6 +351,9 @@ julia&gt; r(sin(<span class="hljs-number">2</span>a)^<span class="hljs-number">2
 <p>A Segment variable is written as <code>~~x</code> and matches zero or more expressions in the function call.</p>
 <p><em>Example:</em></p>
 <p>This implements the distributive property of multiplication: <code>&#43;&#40;~~ys&#41;</code> matches expressions like <code>a &#43; b</code>, <code>a&#43;b&#43;c</code> and so on. On the RHS <code>~~ys</code> presents as any old julia array.</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> ~x * +((~~ys)) =&gt; sum(map(y-&gt; ~x * y, ~~ys));
 
 julia&gt; r(<span class="hljs-number">2</span> * (a+b+c))
@@ -301,6 +361,9 @@ julia&gt; r(<span class="hljs-number">2</span> * (a+b+c))
 <p><strong>Predicates</strong>:</p>
 <p>Predicates can be used on both <code>~x</code> and <code>~~x</code> by using the <code>~x::f</code> or <code>~~x::f</code>. Here <code>f</code> can be any julia function. In the case of a slot the function gets a single matched subexpression, in the case of segment, it gets an array of matched expressions.</p>
 <p>The predicate should return <code>true</code> if the current match is acceptable, and <code>false</code> otherwise.</p>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; two_πs(x::<span class="hljs-built_in">Number</span>) = abs(round(x/(<span class="hljs-number">2</span><span class="hljs-literal">π</span>)) - x/(<span class="hljs-number">2</span><span class="hljs-literal">π</span>)) &lt; <span class="hljs-number">10</span>^-<span class="hljs-number">9</span>
 two_πs (generic <span class="hljs-keyword">function</span> with <span class="hljs-number">1</span> method)
 
@@ -359,7 +422,10 @@ sin((a + c))</code></pre>
       <h2 class="doc-header" id="simplify">
         <a href="#simplify">simplify</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">simplify(x; rewriter=default_simplifier(),
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">simplify(x; rewriter=default_simplifier(),
             threaded=<span class="hljs-literal">false</span>,
             polynorm=<span class="hljs-literal">true</span>,
             thread_subtree_cutoff=<span class="hljs-number">100</span>)</code></pre>
@@ -371,7 +437,10 @@ sin((a + c))</code></pre>
       <h2 class="doc-header" id="substitute">
         <a href="#substitute">substitute</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">substitute(expr, dict)</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs">substitute(expr, dict)</code></pre>
 <p>substitute any subexpression that matches a key in <code>dict</code> with the corresponding value.</p>
 </div>
   </div>
@@ -381,10 +450,16 @@ sin((a + c))</code></pre>
       <h2 class="doc-header" id="@timerewrite">
         <a href="#@timerewrite">@timerewrite</a>
         <div class="doc-type">macro</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs"><span class="hljs-meta">@timerewrite</span> expr</code></pre>
+      <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
+<pre><code class="julia hljs"><span class="hljs-meta">@timerewrite</span> expr</code></pre>
 <p>If <code>expr</code> calls <code>simplify</code> or a <code>RuleSet</code> object, track the amount of time it spent on applying each rule and pretty print the timing.</p>
 <p>This uses <a href="https://github.com/KristofferC/TimerOutputs.jl">TimerOutputs.jl</a>.</p>
 <h2 id="example"><a href="#example" class="header-anchor">Example:</a></h2>
+Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
+Deprecated as of 10.7.0. Please use highlight(code, options) instead.
+https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">julia&gt; expr = foldr(*, rand([a,b,c,d], <span class="hljs-number">100</span>))
 (a ^ <span class="hljs-number">26</span>) * (b ^ <span class="hljs-number">30</span>) * (c ^ <span class="hljs-number">16</span>) * (d ^ <span class="hljs-number">28</span>)
 
@@ -410,7 +485,7 @@ julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 19, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 22, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

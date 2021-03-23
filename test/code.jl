@@ -132,5 +132,13 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                                              [(),
                                               (0.6,)],
                                              vcat)|>toexpr|>eval) < 1.1
+
+    let
+        @syms a b
+
+        f = eval(toexpr(Func([a+b], [], a+b)))
+        @test f(1) == 1
+        @test f(2) == 2
+    end
 end
 

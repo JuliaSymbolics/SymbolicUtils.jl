@@ -125,6 +125,7 @@ function toexpr(O, st)
     if expr′ !== nothing
         return expr′
     else
+        haskey(st.symbolify, O) && return st.symbolify[O]
         args = arguments(O)
         return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
     end

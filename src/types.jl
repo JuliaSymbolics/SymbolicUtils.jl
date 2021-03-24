@@ -902,7 +902,17 @@ struct TreePrint
     x
 end
 AbstractTrees.children(x::Term) = arguments(x)
-AbstractTrees.children(x::Union{Add, Mul}) = map(y->TreePrint(x isa Add ? (:*) : (:^), y), collect(pairs(x.dict)))
+function AbstractTrees.children(x::Union{Add, Mul})
+    children = Any[x.coeff]
+    for (key, coeff) in pairs(x.dict)
+        if coeff == 1
+            push!(children, key)
+        else
+            push!(children, TreePrint(x isa Add ? (:*) : (:^), (key, coeff)))
+        end
+    end
+    return children
+end
 AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 

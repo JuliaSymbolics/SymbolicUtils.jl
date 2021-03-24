@@ -375,7 +375,7 @@ function toexpr(a::MakeArray, st)
 end
 
 ## Array
-@inline function _create_array(::Type{<:Array}, T, ::Val{dims}, elems...) where dims
+@inline function _create_array(::Union{Type{<:Array},Type{<:SubArray}}, T, ::Val{dims}, elems...) where dims
     arr = Array{T}(undef, dims)
     @assert prod(dims) == nfields(elems)
     @inbounds for i=1:prod(dims)
@@ -384,11 +384,11 @@ end
     arr
 end
 
-@inline function create_array(A::Type{<:Array}, T, d::Val, elems...)
+@inline function create_array(A::Union{Type{<:Array},Type{<:SubArray}}, T, d::Val, elems...)
     _create_array(A, T, d, elems...)
 end
 
-@inline function create_array(A::Type{<:Array}, ::Nothing, d::Val{dims}, elems...) where dims
+@inline function create_array(A::Union{Type{<:Array},Type{<:SubArray}}, ::Nothing, d::Val{dims}, elems...) where dims
     T = promote_type(map(typeof, elems)...)
     _create_array(A, T, d, elems...)
 end

@@ -90,6 +90,9 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                           MakeArray([a,b,a+b,a/b], arr)))) == [1, 2, 3, 1/2]
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(view([a,b,a+b,a/b], :), arr)))) == [1, 2, 3, 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray([a b;a+b a/b], arr)))) == [1 2; 3 1/2]
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SVector([1,2])],

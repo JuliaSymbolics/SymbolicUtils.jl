@@ -425,10 +425,10 @@ sin((a + c))</code></pre>
       <div class="doc-content">Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
 Deprecated as of 10.7.0. Please use highlight(code, options) instead.
 https://github.com/highlightjs/highlight.js/issues/2277
-<pre><code class="julia hljs">simplify(x; rewriter=default_simplifier(),
+<pre><code class="julia hljs">simplify(x; polynorm=<span class="hljs-literal">false</span>,
             threaded=<span class="hljs-literal">false</span>,
-            polynorm=<span class="hljs-literal">true</span>,
-            thread_subtree_cutoff=<span class="hljs-number">100</span>)</code></pre>
+            thread_subtree_cutoff=<span class="hljs-number">100</span>,
+            rewriter=<span class="hljs-literal">nothing</span>)</code></pre>
 <p>Simplify an expression &#40;<code>x</code>&#41; by applying <code>rewriter</code> until there are no changes. <code>polynorm&#61;true</code> applies <code>polynormalize</code> in the beginning of each fixpoint iteration.</p>
 </div>
   </div>
@@ -485,7 +485,7 @@ julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 24, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 25, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

@@ -2,10 +2,10 @@
 
 """
 ```julia
-simplify(x; rewriter=default_simplifier(),
+simplify(x; polynorm=false,
             threaded=false,
-            polynorm=true,
-            thread_subtree_cutoff=100)
+            thread_subtree_cutoff=100,
+            rewriter=nothing)
 ```
 
 Simplify an expression (`x`) by applying `rewriter` until there are no changes.

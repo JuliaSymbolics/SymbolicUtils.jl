@@ -781,6 +781,10 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 /(a::SN, b::Number) = inv(b) * a
 
+//(a::Union{SN, Number}, b::SN) = a / b
+
+//(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
+
 """
     Pow(base, exp)
 

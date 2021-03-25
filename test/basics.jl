@@ -112,6 +112,11 @@ end
     @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{Bool}(==, [w, 0]))
+
+    @eqtest x // 5 == (1 // 5) * x
+    @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
+    @eqtest 5 // x == 5 / x
+    @eqtest x // a == x / a
 end
 
 @testset "err test" begin

@@ -97,9 +97,6 @@
 <p>Returns the appropriate output type of applying <code>f</code> on arguments of type <code>arg_symtypes</code>.</p>
 <h2 id="example"><a href="#example" class="header-anchor">Example</a></h2>
 <p>Suppose you were feeling the temptations of type piracy and wanted to make a quick and dirty symbolic library built on top of Julia&#39;s <code>Expr</code> type, e.g.</p>
-Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
-Deprecated as of 10.7.0. Please use highlight(code, options) instead.
-https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs"><span class="hljs-keyword">for</span> f ∈ [:+, :-, :*, :/, :^] <span class="hljs-comment">#Note, this is type piracy!</span>
     <span class="hljs-meta">@eval</span> <span class="hljs-keyword">begin</span>
         Base.$f(x::<span class="hljs-built_in">Union</span>{<span class="hljs-built_in">Expr</span>, <span class="hljs-built_in">Symbol</span>}, y::<span class="hljs-built_in">Number</span>) = <span class="hljs-built_in">Expr</span>(:call, $f, x, y)
@@ -109,46 +106,25 @@ https://github.com/highlightjs/highlight.js/issues/2277
 <span class="hljs-keyword">end</span>
 
 
-ex = <span class="hljs-number">1</span> + (:x - <span class="hljs-number">2</span>)</code></pre>Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
-Deprecated as of 10.7.0. Please use highlight(code, options) instead.
-https://github.com/highlightjs/highlight.js/issues/2277
-<pre><code class="plaintext hljs">:((+)(1, (-)(x, 2)))</code></pre>
+ex = <span class="hljs-number">1</span> + (:x - <span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">:((+)(1, (-)(x, 2)))</code></pre>
 <p>How can we use SymbolicUtils.jl to convert <code>ex</code> to <code>&#40;-&#41;&#40;:x, 1&#41;</code>? We simply implement <code>istree</code>, <code>operation</code>, <code>arguments</code> and we&#39;ll be able to do rule-based rewriting on <code>Expr</code>s:</p>
-Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
-Deprecated as of 10.7.0. Please use highlight(code, options) instead.
-https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
 
 SymbolicUtils.istree(ex::<span class="hljs-built_in">Expr</span>) = ex.head == :call
 SymbolicUtils.operation(ex::<span class="hljs-built_in">Expr</span>) = ex.args[<span class="hljs-number">1</span>]
 SymbolicUtils.arguments(ex::<span class="hljs-built_in">Expr</span>) = ex.args[<span class="hljs-number">2</span>:<span class="hljs-keyword">end</span>]
 
-<span class="hljs-meta">@rule</span>(~x =&gt; ~x - <span class="hljs-number">1</span>)(ex)</code></pre>Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
-Deprecated as of 10.7.0. Please use highlight(code, options) instead.
-https://github.com/highlightjs/highlight.js/issues/2277
-<pre><code class="plaintext hljs">:((-)((+)(1, (-)(x, 2)), 1))</code></pre>
+<span class="hljs-meta">@rule</span>(~x =&gt; ~x - <span class="hljs-number">1</span>)(ex)</code></pre><pre><code class="plaintext hljs">:((-)((+)(1, (-)(x, 2)), 1))</code></pre>
 <p>However, this is not enough to get SymbolicUtils to use its own algebraic simplification system on <code>Expr</code>s:</p>
-Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
-Deprecated as of 10.7.0. Please use highlight(code, options) instead.
-https://github.com/highlightjs/highlight.js/issues/2277
-<pre><code class="julia hljs">simplify(ex)</code></pre>Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
-Deprecated as of 10.7.0. Please use highlight(code, options) instead.
-https://github.com/highlightjs/highlight.js/issues/2277
-<pre><code class="plaintext hljs">:((+)(1, (-)(x, 2)))</code></pre>
+<pre><code class="julia hljs">simplify(ex)</code></pre><pre><code class="plaintext hljs">:((+)(1, (-)(x, 2)))</code></pre>
 <p>The reason that the expression was not simplified is that the expression tree is untyped, so SymbolicUtils  doesn&#39;t know what rules to apply to the expression. To mimic the behaviour of most computer algebra  systems, the simplest thing to do would be to assume that all <code>Expr</code>s are of type <code>Number</code>:</p>
-Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
-Deprecated as of 10.7.0. Please use highlight(code, options) instead.
-https://github.com/highlightjs/highlight.js/issues/2277
 <pre><code class="julia hljs">SymbolicUtils.symtype(s::<span class="hljs-built_in">Expr</span>) = <span class="hljs-built_in">Number</span>
 
-simplify(ex)</code></pre>Deprecated as of 10.7.0. highlight(lang, code, ...args) has been deprecated.
-Deprecated as of 10.7.0. Please use highlight(code, options) instead.
-https://github.com/highlightjs/highlight.js/issues/2277
-<pre><code class="plaintext hljs">:((+)(-1, x))</code></pre>
+simplify(ex)</code></pre><pre><code class="plaintext hljs">:((+)(-1, x))</code></pre>
 <p>Now SymbolicUtils is able to apply the <code>Number</code> simplification rule to <code>Expr</code>.</p>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 26, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 28, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

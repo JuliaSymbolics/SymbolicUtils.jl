@@ -112,6 +112,11 @@ end
     @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{Bool}(==, [w, 0]))
+
+    @eqtest x // 5 == (1 // 5) * x
+    @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
+    @eqtest 5 // x == 5 / x
+    @eqtest x // a == x / a
 end
 
 @testset "err test" begin
@@ -125,6 +130,13 @@ end
     @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(b+1))
     @test substitute(a+b, Dict(a=>1, b=>3)) == 4
     @test substitute(exp(a), Dict(a=>2)) ≈ exp(2)
+end
+
+@testset "occursin" begin
+    @syms a b c
+    @test occursin(a, a + b)
+    @test !occursin(sin(a), a + b + c)
+    @test occursin(sin(a),  a * b + c + sin(a^2 * sin(a)))
 end
 
 @testset "printing" begin

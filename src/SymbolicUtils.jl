@@ -7,7 +7,7 @@ export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 using DataStructures
 using Setfield
 import Setfield: PropertyLens
-import Base: +, -, *, /, \, ^, ImmutableDict
+import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 include("types.jl")
 

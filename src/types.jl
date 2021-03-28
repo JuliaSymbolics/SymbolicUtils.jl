@@ -69,7 +69,7 @@ function getmetadata(s::Symbolic, ctx)
 end
 
 function getmetadata(s::Symbolic, ctx, default)
-    s.metadata isa Ref ? get(s.metadata[], ctx, default) : default
+    s.metadata isa AbstractDict ? get(s.metadata, ctx, default) : default
 end
 
 # pirated for Setfield purposes:
@@ -173,9 +173,9 @@ end
 
 Base.nameof(s::Sym) = s.name
 
-ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = Sym{T}
+ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = (n,m) -> Sym{T}(n, metadata=m)
 
-function (::Type{Sym{T}})(name, metadata=NO_METADATA) where {T}
+function (::Type{Sym{T}})(name; metadata=NO_METADATA) where {T}
     Sym{T, typeof(metadata)}(name, metadata)
 end
 
@@ -327,14 +327,14 @@ function ConstructionBase.constructorof(s::Type{<:Term{T}}) where {T}
     end
 end
 
-function (::Type{Term{T}})(f, args, metadata=NO_METADATA) where {T}
+function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
     Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
 istree(t::Term) = true
 
-function Term(f, args, metadata=NO_METADATA)
-    Term{_promote_symtype(f, args)}(f, args, metadata)
+function Term(f, args; metadata=NO_METADATA)
+    Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
 operation(x::Term) = getfield(x, :f)
@@ -422,13 +422,20 @@ end
 setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
-print_arg(io, x::Union{Complex, Rational}) = print(io, "(", x, ")")
-print_arg(io, x) = print(io, x)
-print_arg(io, f::typeof(^), x) = print_arg(IOContext(io, :paren=>true), x)
+print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
+isbinop(f) = istree(f) && Base.isbinaryoperator(nameof(operation(f)))
+function print_arg(io, x; paren=false)
+    if paren && isbinop(x)
+        print(io, "(", x, ")")
+    else
+        print(io, x)
+    end
+end
+print_arg(io, s::String; paren=true) = show(io, s)
 function print_arg(io, f, x)
     f !== (*) && return print_arg(io, x)
-    if istree(x) && Base.isbinaryoperator(nameof(operation(x)))
-        print_arg(IOContext(io, :paren=>true), x)
+    if Base.isbinaryoperator(nameof(f))
+        print_arg(io, x, paren=true)
     else
         print_arg(io, x)
     end
@@ -447,9 +454,17 @@ function show_add(io, args)
             print_arg(io, -, t)
         else
             print(io, " - ")
-            print_arg(IOContext(io, :paren=>true), +, -t)
+            print_arg(io, -t, paren=true)
         end
     end
+end
+
+function show_pow(io, args)
+    base, ex = args
+
+    print_arg(io, base, paren=true)
+    print(io, "^")
+    print_arg(io, ex, paren=true)
 end
 
 function show_mul(io, args)
@@ -480,8 +495,8 @@ function show_call(io, f, args)
     binary = Base.isbinaryoperator(fname)
     if binary
         for (i, t) in enumerate(args)
-            i != 1 && print(io, fname == :^ ? fname : " $fname ")
-            print_arg(io, (^), t)
+            i != 1 && print(io, " $fname ")
+            print_arg(io, t)
         end
     else
         if f isa Sym
@@ -506,15 +521,15 @@ function show_term(io::IO, t)
     f = operation(t)
     args = arguments(t)
 
-    get(io, :paren, false) && print(io, "(")
     if f === (+)
         show_add(io, args)
     elseif f === (*)
         show_mul(io, args)
+    elseif f === (^)
+        show_pow(io, args)
     else
         show_call(io, f, args)
     end
-    get(io, :paren, false) && print(io, ")")
 
     return nothing
 end
@@ -714,7 +729,7 @@ operation(a::Mul) = *
 
 function arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([k^v for (k,v) in a.dict], lt=<ₑ)
+    args = sort!([Pow(k, v) for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
@@ -765,6 +780,10 @@ mul_t(a) = promote_symtype(*, symtype(a))
 \(a::Number, b::SN) = b / a
 
 /(a::SN, b::Number) = inv(b) * a
+
+//(a::Union{SN, Number}, b::SN) = a / b
+
+//(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
 
 """
     Pow(base, exp)
@@ -887,7 +906,17 @@ struct TreePrint
     x
 end
 AbstractTrees.children(x::Term) = arguments(x)
-AbstractTrees.children(x::Union{Add, Mul}) = map(y->TreePrint(x isa Add ? (:*) : (:^), y), collect(pairs(x.dict)))
+function AbstractTrees.children(x::Union{Add, Mul})
+    children = Any[x.coeff]
+    for (key, coeff) in pairs(x.dict)
+        if coeff == 1
+            push!(children, key)
+        else
+            push!(children, TreePrint(x isa Add ? (:*) : (:^), (key, coeff)))
+        end
+    end
+    return children
+end
 AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 

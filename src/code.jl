@@ -96,23 +96,39 @@ Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 
 toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 
-function toexpr(O, st)
-    !istree(O) && return O
-    op = operation(O)
+function_to_expr(op, args, st) = nothing
+
+function function_to_expr(::typeof(^), O, st)
     args = arguments(O)
-    if op === (^) && length(args) == 2 && args[2] isa Number && args[2] < 0
+    if length(args) == 2 && args[2] isa Number && args[2] < 0
         ex = args[1]
         if args[2] == -1
             return toexpr(Term{Any}(inv, [ex]), st)
         else
             return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
         end
-    elseif op === (SymbolicUtils.ifelse)
-        return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
-    elseif op isa Sym && haskey(st.symbolify, O)
-        return st.symbolify[O]
     end
-    return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
+    return nothing
+end
+
+function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
+    args = arguments(O)
+    :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
+end
+
+function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
+
+function toexpr(O, st)
+    !istree(O) && return O
+    op = operation(O)
+    expr′ = function_to_expr(op, O, st)
+    if expr′ !== nothing
+        return expr′
+    else
+        haskey(st.symbolify, O) && return st.symbolify[O]
+        args = arguments(O)
+        return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
+    end
 end
 
 # Call elements of vector arguments by their name.
@@ -464,10 +480,16 @@ end
 
 struct Multithreaded end
 """
-    SpawnFetch{ParallelType}(exprs, reduce)
+    SpawnFetch{ParallelType}(funcs [, args], reduce)
 
-Run every expr in `exprs` in its own task, and use the `reduce`
-function to combine the results of executing `exprs`.
+Run every expression in `funcs` in its own task, the expression
+should be a `Func` object and is passed to `Threads.Task(f)`.
+If `Func` takes arguments, then the arguments must be passed in as `args`--a vector of vector of arguments to each function in `funcs`. We don't use `@spawn` in order to support RuntimeGeneratedFunctions which disallow closures, instead we interpolate these functions or closures as smaller RuntimeGeneratedFunctions.
+
+`reduce` function is used to combine the results of executing `exprs`. A SpawnFetch expression returns the reduced result.
+
+
+Use `Symbolics.MultithreadedForm` ParallelType from the Symbolics.jl package to get the RuntimeGeneratedFunction version SpawnFetch.
 
 `ParallelType` can be used to define more parallelism types
 SymbolicUtils supports `Multithreaded` type. Which spawns
@@ -475,12 +497,16 @@ threaded tasks.
 """
 struct SpawnFetch{Typ}
     exprs::Vector
+    args::Union{Nothing, Vector}
     combine
 end
 
+(::Type{SpawnFetch{T}})(exprs, combine) where {T} = SpawnFetch{T}(exprs, nothing, combine)
+
 function toexpr(p::SpawnFetch{Multithreaded}, st)
-    spawns = map(p.exprs) do thunk
-        :(Base.Threads.@spawn $(toexpr(thunk, st)))
+    args = isnothing(p.args) ? Iterators.repeated((), length(p.exprs)) : p.args
+    spawns = map(p.exprs, args) do thunk, xs
+        :(Base.Threads.@spawn $(toexpr(thunk, st))($(toexpr.(xs, (st,))...)))
     end
     quote
         $(toexpr(p.combine, st))(map(fetch, ($(spawns...),))...)

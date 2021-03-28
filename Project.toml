@@ -1,7 +1,7 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "0.8.4"
+version = "0.9.3"
 
 [deps]
 AbstractAlgebra = "c3fe647b-3220-5bb0-a1ea-a7954cac585d"
@@ -19,7 +19,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
-AbstractAlgebra = "0.9, 0.10, 0.11, 0.12, 0.13"
+AbstractAlgebra = "0.9, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15"
 AbstractTrees = "0.3"
 Combinatorics = "1.0"
 ConstructionBase = "1.1"

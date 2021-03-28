@@ -60,3 +60,24 @@ function substitute(expr, dict; fold=true)
         expr
     end
 end
+
+"""
+    occursin(needle::Symbolic, haystack::Symbolic)
+
+Determine whether the second argument contains the first argument. Note that
+this function doesn't handle associativity, commutativity, or distributivity.
+"""
+Base.occursin(needle::Symbolic, haystack::Symbolic) = _occursin(needle, haystack)
+Base.occursin(needle, haystack::Symbolic) = _occursin(needle, haystack)
+Base.occursin(needle::Symbolic, haystack) = _occursin(needle, haystack)
+function _occursin(needle, haystack)
+    isequal(needle, haystack) && return true
+
+    if istree(haystack)
+        args = arguments(haystack)
+        for arg in args
+            occursin(needle, arg) && return true
+        end
+    end
+    return false
+end

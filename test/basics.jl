@@ -132,6 +132,13 @@ end
     @test substitute(exp(a), Dict(a=>2)) ≈ exp(2)
 end
 
+@testset "occursin" begin
+    @syms a b c
+    @test occursin(a, a + b)
+    @test !occursin(sin(a), a + b + c)
+    @test occursin(sin(a),  a * b + c + sin(a^2 * sin(a)))
+end
+
 @testset "printing" begin
     @syms a b c
     @test repr(a+b) == "a + b"

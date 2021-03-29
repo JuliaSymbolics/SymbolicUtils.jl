@@ -247,7 +247,7 @@ can be set using the `::T` syntax.
 variable `foo` of symtype `Number` (the default), `bar` of symtype `Real`
 and `baz` of symtype `Int`
 - `@syms f(x) g(y::Real, x)::Int h(a::Int, f(b))` creates 1-arg `f` 2-arg `g`
-and 2 arg `f`. The second argument to `h` must be a one argument function-like
+and 2 arg `h`. The second argument to `h` must be a one argument function-like
 variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)

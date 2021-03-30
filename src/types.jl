@@ -768,9 +768,21 @@ mul_t(a) = promote_symtype(*, symtype(a))
                         a.coeff * b.coeff,
                         _merge(+, a.dict, b.dict, filter=_iszero))
 
-*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(a, b)...)
+function *(a::Number, b::SN)
+    if iszero(a)
+        a
+    elseif isone(a)
+        b
+    elseif b isa Add
+        # 2(a+b) -> 2a + 2b
+        T = promote_symtype(+, typeof(a), symtype(b))
+        Add(T, b.coeff * a, Dict(k=>v*a for (k, v) in b.dict))
+    else
+        Mul(mul_t(a, b), makemul(a, b)...)
+    end
+end
 
-*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(a, b)...)
+*(a::SN, b::Number) = b * a
 
 /(a::Union{SN,Number}, b::SN) = a * b^(-1)
 

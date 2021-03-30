@@ -181,3 +181,17 @@ end
     @test_throws MethodError a * b
     @test_throws MethodError a + b
 end
+
+@testset "canonical form" begin
+    @syms a b c
+    for x in [a, a*b, a+b, a-b, a^2, sin(a)]
+        @test isequal(x * 1, x)
+        @test x * 0 === 0
+        @test isequal(x + 0, x)
+        @test isequal(x + x, 2x)
+        @test isequal(x + 2x, 3x)
+        @test x - x === 0
+        @test isequal(-x, -1x)
+        @test isequal(x^1, x)
+    end
+end

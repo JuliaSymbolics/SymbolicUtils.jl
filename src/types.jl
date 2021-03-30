@@ -102,19 +102,11 @@ function setmetadata(s::Symbolic, ctx::DataType, val)
     end
 end
 
-Base.isequal(s::Symbolic, x) = false
-Base.isequal(x, s::Symbolic) = false
+Base.isequal(::Symbolic, x) = false
+Base.isequal(x, ::Symbolic) = false
+Base.isequal(::Symbolic, ::Symbolic) = false
 
-function Base.isequal(t1::Symbolic, t2::Symbolic)
-    t1 === t2 && return true
-    (istree(t1) && istree(t2)) || return false
-    a1 = arguments(t1)
-    a2 = arguments(t2)
 
-    isequal(operation(t1), operation(t2)) &&
-        length(a1) == length(a2) &&
-        all(isequal(l,r) for (l, r) in zip(a1,a2))
-end
 ### End of interface
 
 function to_symbolic(x)
@@ -181,7 +173,10 @@ end
 
 Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
 
-Base.isequal(v1::Sym{T}, v2::Sym{T}) where {T} = v1 === v2
+function Base.isequal(a::Sym, b::Sym)
+    symtype(a) !== symtype(b) && return false
+    isequal(nameof(a), nameof(b))
+end
 
 Base.show(io::IO, v::Sym) = Base.show_unquoted(io, v.name)
 
@@ -341,6 +336,18 @@ operation(x::Term) = getfield(x, :f)
 
 arguments(x::Term) = getfield(x, :arguments)
 
+function Base.isequal(t1::Term, t2::Term)
+    t1 === t2 && return true
+    symtype(t1) !== symtype(t2) && return false
+
+    a1 = arguments(t1)
+    a2 = arguments(t2)
+
+    isequal(operation(t1), operation(t2)) &&
+        length(a1) == length(a2) &&
+        all(isequal(l,r) for (l, r) in zip(a1,a2))
+end
+
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
@@ -371,7 +378,6 @@ function _promote_symtype(f, args)
     end
 end
 
-
 function term(f, args...; type = nothing)
     if type === nothing
         T = _promote_symtype(f, args)
@@ -386,7 +392,8 @@ end
 
 Create a term that is similar in type to `t`. Extending this function allows packages
 using their own expression types with SymbolicUtils to define how new terms should
-be created.
+be created. Note that `similarterm` may return an object that has a
+different type than `t`, because `f` also influences the result.
 
 ## Arguments
 
@@ -398,7 +405,7 @@ be created.
 """
 similarterm(t, f, args, symtype) = f(args...)
 similarterm(t, f, args) = similarterm(t, f, args, _promote_symtype(f, args))
-similarterm(::Term, f, args, symtype=nothing) = term(f, args...; type=symtype)
+similarterm(t::Term, f, args) = Term{_promote_symtype(f, args)}(f, args)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -873,7 +880,10 @@ function mapvalues(f, d1::AbstractDict)
     d
 end
 
-function similarterm(p::Union{Mul, Add, Pow}, f, args, T=nothing)
+const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
+                          Add{<:Number}, Pow{<:Number}}
+
+function similarterm(p::NumericTerm, f, args, T=nothing)
     if T === nothing
         T = _promote_symtype(f, args)
     end
@@ -884,7 +894,7 @@ function similarterm(p::Union{Mul, Add, Pow}, f, args, T=nothing)
     elseif f == (^) && length(args) == 2
         Pow{T, typeof.(args)...}(args...)
     else
-        f(args...)
+        Term{T}(f, args)
     end
 end
 

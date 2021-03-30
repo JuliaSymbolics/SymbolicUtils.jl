@@ -2,7 +2,7 @@
 
 ## Rule-based rewriting
 
-Rewrite rules match and transform an expression. A rule is written using either the `@rule` macro or the `@acrule` macro. It creates callable `Rule` object.
+Rewrite rules match and transform an expression. A rule is written using either the `@rule` macro or the `@acrule` macro. It creates a callable `Rule` object.
 
 ### Basics of rule-based term rewriting in SymbolicUtils
 
@@ -207,7 +207,7 @@ rcas = RestartedChain([acpyid, sqexpand])
 rcas((cos(x) + sin(x))^2)
 ```
 
-It restarts the chain after each successful application of the rule, so after `sqexpand` is hit it (re)starts again and successfully applies `acpyid` to resulting expression.
+It restarts the chain after each successful application of a rule, so after `sqexpand` is hit it (re)starts again and successfully applies `acpyid` to resulting expression.
 
 You can also use `Fixpoint` to apply the rules until there are no changes.
 

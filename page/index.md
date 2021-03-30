@@ -74,6 +74,15 @@ As their types are different:
 
 (see [this post](https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u=shashi) for why they are all not just subtypes of `Number`)
 
+You can do basic arithmetic on symbols to get symbolic expressions:
+
+```julia:expr
+expr1 = α*sin(w)^2 + β*cos(z)^2
+expr2 = α*cos(z)^2 + β*sin(w)^2
+
+expr1 + expr2
+```
+
 SymbolicUtils automatically simplifies
 
 ```julia:creating1
@@ -86,22 +95,13 @@ and reorders
 (z + w)*(α + β)
 ```
 
-expressions of `Symbolic{<:Number}` (which includes `Sym{Real}`) when they are created. It also does constant elimination (including rational numbers)
+expressions of type `Symbolic{<:Number}` (which includes `Sym{Real}`) when they are created. It also does constant elimination (including rational numbers)
 
 ```julia:creating3
 5 + 2w - 3z + α - (β + 5//3) + 3w - 2 + 3//2 * β
 ```
 
 It's worth remembering that the expression may be transformed with respect to the input when it's created.
-
-You can do basic arithmetic on symbols to get symbolic expressions:
-
-```julia:expr
-expr1 = α*sin(w)^2 + β*cos(z)^2
-expr2 = α*cos(z)^2 + β*sin(w)^2
-
-expr1 + expr2
-```
 
 
 **Function-like symbols**

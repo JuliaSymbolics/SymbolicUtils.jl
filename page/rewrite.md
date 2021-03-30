@@ -4,6 +4,8 @@
 
 Rewrite rules match and transform an expression. A rule is written using either the `@rule` macro or the `@acrule` macro. It creates callable `Rule` object.
 
+### Basics of rule-based term rewriting in SymbolicUtils
+
 Here is a simple rewrite rule, that uses formula for the double angle of the sine function:
 
 ```julia:rewrite1
@@ -44,7 +46,7 @@ Rules are of course not limited to single slot variable
 ```julia:rewrite5
 r2 = @rule sin(~x + ~y) => sin(~x)*cos(~y) + cos(~x)*sin(~y);
 
-r2(sin(a + b))
+r2(sin(α+β))
 ```
 
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~xs` in the following example is a segment variable:
@@ -67,8 +69,6 @@ Notice that the expression was autosimplified before application of the rule.
 ```julia:rewrite8
 2 * (w+w+α+β)
 ```
-
-
 
 ### Predicates for matching
 
@@ -102,7 +102,39 @@ acr = @acrule((~a)^(~x) * (~a)^(~y) => (~a)^(~x + ~y))
 acr(x^y * x^z)
 ```
 
-although in case of `Number` it also works with regular `@rule` since autosimplification orders and applies associativity and commutativity to the expression.
+although in case of `Number` it also works the same way with regular `@rule` since autosimplification orders and applies associativity and commutativity to the expression.
+
+### Example of applying the rules to simplify expression
+
+Consider expression `(cos(x) + sin(x))^2` that we would like simplify by applying some trigonometric rules. First, we need rule to expand square of `cos(x) + sin(x)`. First we try the simplest rule to expand square of the sum and try it on simple expression
+```julia:rewrite9
+using SymbolicUtils
+
+@syms x::Real y::Real
+
+sqexpand = @rule (~x + ~y)^2 => (~x)^2 + (~y)^2 + 2 * ~x * ~y
+
+sqexpand((cos(x) + sin(x))^2)
+```
+
+It works. This can be further simplified using Pythagorean identity and check it
+
+```julia:rewrite10
+pyid = @rule sin(~x)^2 + cos(~x)^2 => 1
+
+pyid(cos(x)^2 + sin(x)^2) === nothing
+```
+
+Why does it return `nothing`? If we look at the rule, we see that the order of `sin(x)` and `cos(x)` is different. Therefore, in order to work, the rule needs to be associative-commutative.
+
+```julia:rewrite11
+acpyid = @acrule sin(~x)^2 + cos(~x)^2 => 1
+
+acpyid(cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x))
+```
+
+It has been some work. Fortunately rules may be [chained together](#chaining rewriters) into more sophisticated rewirters to avoid manual application of the rules.
+
 
 ## Composing rewriters
 
@@ -122,39 +154,63 @@ rewriters.
 - `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
    returns true, `rw2` if it retuns false
 - `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
-- `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
-   traversal of a given expression and applies the rewriter `rw`. `threaded=true` will
-   use multi threading for traversal. `thread_cutoff` is the minimum number of nodes
-   in a subtree which should be walked in a threaded spawn.
-- `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order traversal.
+- `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order 
+   (*from top to bottom and from left to right*) traversal of a given expression and applies 
+   the rewriter `rw`. `threaded=true` will use multi threading for traversal. `thread_cutoff` 
+   is the minimum number of nodes in a subtree which should be walked in a threaded spawn.
+- `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order 
+   (*from left to right and from bottom to top*) traversal.
 - `Fixpoint(rw)` returns a rewriter which applies `rw` repeatedly until there are no changes to be made.
 - `PassThrough(rw)` returns a rewriter which if `rw(x)` returns `nothing` will instead
    return `x` otherwise will return `rw(x)`.
 
+### Chaining rewriters
 
-Example using Postwalk, and Chain
+Several rules may be chained to give chain of rules. Chain is an array of rules which are subsequently applied to the expression.
 
-```julia:rewrite9
+To check that, we will combine rules from [previous example](#example of applying the rules to simplify expression) into a chain
 
+```julia:composing1
 using SymbolicUtils
 using SymbolicUtils.Rewriters
 
-r1 = @rule ~x + ~x => 2 * (~x)
-r2 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+sqexpand = @rule (~x + ~y)^2 => (~x)^2 + (~y)^2 + 2 * ~x * ~y
+acpyid = @acrule sin(~x)^2 + cos(~x)^2 => 1
 
-rset = Postwalk(Chain([r1, r2]))
-rset_result = rset(2 * (w+w+α+β))
+csa = Chain([sqexpand, acpyid])
 
-rset_result
+csa((cos(x) + sin(x))^2)
 ```
 
-It applied `r1`, but didn't get the opportunity to apply `r2`. So we need to apply the ruleset again on the result.
+Important feature of `Chain` is that it returns the expressiona instead of `nothing` if it doesn't change the expression
 
-```julia:rewrite10
-rset(rset_result)
+```julia:composing2
+Chain([@acrule sin(~x)^2 + cos(~x)^2 => 1])((cos(x) + sin(x))^2)
 ```
+
+its important to notice, that chain is ordered, so if rules are in different order it wouldn't work the same as in earlier example
+
+```julia:composing3
+cas = Chain([acpyid, sqexpand])
+
+cas((cos(x) + sin(x))^2)
+```
+since Pythagorean identity is applied before square expansion, so it is unable to match squares of sine and cosine.
+
+One way to circumvent the problem of order of applying rules in chain is to use `RestartedChain`
+
+```julia:composing4
+using SymbolicUtils.Rewriters: RestartedChain
+
+rcas = RestartedChain([acpyid, sqexpand])
+
+rcas((cos(x) + sin(x))^2)
+```
+
+It restarts the chain after each successful application of the rule, so after `sqexpand` is hit it (re)starts again and successfully applies `acpyid` to resulting expression.
 
 You can also use `Fixpoint` to apply the rules until there are no changes.
-```julia:rewrite11
-Fixpoint(rset)(2 * (w+w+α+β))
+
+```julia:composing5
+Fixpoint(cas)((cos(x) + sin(x))^2)
 ```

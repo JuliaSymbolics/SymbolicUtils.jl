@@ -18,8 +18,8 @@ where appropriate -->
 **Features:**
 
 - Fast expressions
-- A [combinator library](/rewrite/#composing_rewriters) for making rewriters.
 - A [rule-based rewriting language](/rewrite/#rule-based_rewriting).
+- A [combinator library](/rewrite/#composing_rewriters) for making rewriters.
 - Type promotion:
   - Symbols (`Sym`s) carry type information. ([read more](#creating_symbolic_expressions))
   - Compound expressions composed of `Sym`s propagate type information. ([read more](#expression_interface))

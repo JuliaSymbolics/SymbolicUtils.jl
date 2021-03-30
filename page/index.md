@@ -74,7 +74,7 @@ As their types are different:
 
 (see [this post](https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u=shashi) for why they are all not just subtypes of `Number`)
 
-Julia automatically simplifies
+SymbolicUtils automatically simplifies
 
 ```julia:creating1
 2w + 3w - 3z + α
@@ -86,7 +86,7 @@ and reorders
 (z + w)*(α + β)
 ```
 
-expressions of `Symbolic{<:Any}` (which include `Sym{Number}` and `Sym{Real}`) when they are created. It also does constant elimination (including rational numbers)
+expressions of `Symbolic{<:Number}` (which includes `Sym{Real}`) when they are created. It also does constant elimination (including rational numbers)
 
 ```julia:creating3
 5 + 2w - 3z + α - (β + 5//3) + 3w - 2 + 3//2 * β
@@ -151,7 +151,7 @@ SymbolicUtils contains [a rule-based rewriting language](/rewrite/#rule-based_re
 
 By default `*` and `+` operations apply the most basic simplification upon construction of the expression.
 
-Commutativity and associativity are assumed over `+` and `*` operations on `Symbolic{<:Any}` at the moment.
+Commutativity and associativity are assumed over `+` and `*` operations on `Symbolic{<:Number}`.
 
 ```julia:simplify1
 2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)

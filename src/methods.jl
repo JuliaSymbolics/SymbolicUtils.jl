@@ -94,14 +94,14 @@ for f in [+, -, *, \, /, ^]
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
-Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)
+Base.rem2pi(x::Symbolic{<:Number}, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
 for f in monadic
     if f in [real]
         continue
     end
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
-    @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a)
+    @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
@@ -112,7 +112,7 @@ for f in [identity, one, zero, *, +, -]
 end
 
 promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
-Base.real(s::Symbolic) = islike(s, Real) ? s : term(real, s)
+Base.real(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(real, s)
 
 ## Booleans
 
@@ -148,5 +148,5 @@ promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T
 Base.@deprecate cond(_if, _then, _else) ifelse(_if, _then, _else)
 
 # Specially handle inv and literal pow
-Base.inv(x::Symbolic) = Base.:^(x, -1)
-Base.literal_pow(::typeof(^), x::Symbolic, ::Val{p}) where {p} = Base.:^(x, p)
+Base.inv(x::Symbolic{<:Number}) = Base.:^(x, -1)
+Base.literal_pow(::typeof(^), x::Symbolic{<:Number}, ::Val{p}) where {p} = Base.:^(x, p)

@@ -543,8 +543,7 @@ showraw(t) = showraw(stdout, t)
 
 sdict(kv...) = Dict{Any, Number}(kv...)
 
-# this cannot be Symbolic{<:Number} to make MTK Parameters work. See #155
-const SN = Symbolic
+const SN = Symbolic{<:Number}
 """
     Add(T, coeff, dict::Dict)
 

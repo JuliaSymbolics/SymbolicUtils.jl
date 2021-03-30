@@ -174,3 +174,10 @@ end
     @test hash(a + b, UInt(0)) === hash(a + b) === hash(a + b, UInt(0)) # test caching
     @test hash(a + b, UInt(2)) !== hash(a + b)
 end
+
+@testset "methoderror" begin
+    @syms a::Any b::Any
+
+    @test_throws MethodError a * b
+    @test_throws MethodError a + b
+end

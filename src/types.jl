@@ -106,22 +106,6 @@ Base.isequal(::Symbolic, x) = false
 Base.isequal(x, ::Symbolic) = false
 Base.isequal(::Symbolic, ::Symbolic) = false
 
-function Base.isequal(a::Sym, b::Sym)
-    symtype(a) !== symtype(b) && return false
-    isequal(nameof(a), nameof(b))
-end
-
-function Base.isequal(t1::Term, t2::Term)
-    t1 === t2 && return true
-    symtype(t1) !== symtype(t2) && return false
-
-    a1 = arguments(t1)
-    a2 = arguments(t2)
-
-    isequal(operation(t1), operation(t2)) &&
-        length(a1) == length(a2) &&
-        all(isequal(l,r) for (l, r) in zip(a1,a2))
-end
 
 ### End of interface
 
@@ -189,7 +173,10 @@ end
 
 Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
 
-Base.isequal(v1::Sym{T}, v2::Sym{T}) where {T} = v1 === v2
+function Base.isequal(a::Sym, b::Sym)
+    symtype(a) !== symtype(b) && return false
+    isequal(nameof(a), nameof(b))
+end
 
 Base.show(io::IO, v::Sym) = Base.show_unquoted(io, v.name)
 
@@ -349,6 +336,18 @@ operation(x::Term) = getfield(x, :f)
 
 arguments(x::Term) = getfield(x, :arguments)
 
+function Base.isequal(t1::Term, t2::Term)
+    t1 === t2 && return true
+    symtype(t1) !== symtype(t2) && return false
+
+    a1 = arguments(t1)
+    a2 = arguments(t2)
+
+    isequal(operation(t1), operation(t2)) &&
+        length(a1) == length(a2) &&
+        all(isequal(l,r) for (l, r) in zip(a1,a2))
+end
+
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
@@ -378,7 +377,6 @@ function _promote_symtype(f, args)
         promote_symtype(f, map(symtype, args)...)
     end
 end
-
 
 function term(f, args...; type = nothing)
     if type === nothing

@@ -12,7 +12,7 @@ Simplify an expression (`x`) by applying `rewriter` until there are no changes.
 `expand=true` applies [`expand`](/api/#expand) in the beginning of each fixpoint iteration.
 """
 function simplify(x;
-                  expand=false
+                  expand=false,
                   polynorm=nothing,
                   threaded=false,
                   thread_subtree_cutoff=100,

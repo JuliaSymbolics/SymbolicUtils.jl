@@ -100,7 +100,7 @@ function_to_expr(op, args, st) = nothing
 
 function function_to_expr(::typeof(^), O, st)
     args = arguments(O)
-    if length(args) == 2 && args[2] isa Number && args[2] < 0
+    if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
             return toexpr(Term{Any}(inv, [ex]), st)

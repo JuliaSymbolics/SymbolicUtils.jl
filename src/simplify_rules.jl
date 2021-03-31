@@ -51,6 +51,8 @@ let
         @rule(~x / ~y => ~x * pow(~y, -1))
         @rule(one(~x) => one(symtype(~x)))
         @rule(zero(~x) => zero(symtype(~x)))
+        @rule(conj(~x::_isreal) => ~x)
+        @rule(real(~x::_isreal) => ~x)
         @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
     ]
 

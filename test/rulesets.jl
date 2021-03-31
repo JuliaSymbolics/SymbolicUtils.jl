@@ -18,6 +18,8 @@ end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number
+    @eqtest simplify(conj(x)) == x
+    @eqtest simplify(real(x)) == x
     @eqtest simplify(x - y) == x + -1*y
     @eqtest simplify(x - sin(y)) == x + -1*sin(y)
     @eqtest simplify(-sin(x)) == -1*sin(x)

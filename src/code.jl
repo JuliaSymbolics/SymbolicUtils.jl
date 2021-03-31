@@ -1,6 +1,6 @@
 module Code
 
-using StaticArrays, LabelledArrays, SparseArrays
+using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -394,6 +394,14 @@ end
     _create_array(A, T, d, elems...)
 end
 
+@inline function create_array(A::Type{<:SubArray{T,N,P,I,L}}, S, d::Val, elems...) where {T,N,P,I,L}
+    create_array(P, S, d, elems...)
+end
+
+@inline function create_array(A::Type{<:PermutedDimsArray{T,N,perm,iperm,P}}, S, d::Val, elems...) where {T,N,perm,iperm,P}
+    create_array(P, S, d, elems...)
+end
+
 ## Matrix
 
 @inline function create_array(::Type{<:Matrix}, ::Nothing, ::Val{dims}, elems...) where dims
@@ -402,6 +410,14 @@ end
 
 @inline function create_array(::Type{<:Matrix}, T, ::Val{dims}, elems...) where dims
     Base.typed_hvcat(T, dims, elems...)
+end
+
+@inline function create_array(A::Type{<:Transpose{T,P}}, S, d::Val, elems...) where {T,P}
+    create_array(P, S, d, elems...)
+end
+
+@inline function create_array(A::Type{<:UpperTriangular{T,P}}, S, d::Val, elems...) where {T,P}
+    create_array(P, S, d, elems...)
 end
 
 ## SArray

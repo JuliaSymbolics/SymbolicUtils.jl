@@ -4,6 +4,7 @@ using SymbolicUtils.Code: LazyState
 using StaticArrays
 using LabelledArrays
 using SparseArrays
+using LinearAlgebra
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 
@@ -88,6 +89,18 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray([a,b,a+b,a/b], arr)))) == [1, 2, 3, 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(view([a,b,a+b,a/b], :), arr)))) == [1, 2, 3, 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(PermutedDimsArray([a b;a+b a/b], (1,2)), arr)))) == [1 2 ; 3  1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(transpose([a b;a+b a/b]), arr)))) == [1 3;2 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(UpperTriangular([a b;a+b a/b]), arr)))) == [1 2;0 1/2]
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray([a b;a+b a/b], arr)))) == [1 2; 3 1/2]

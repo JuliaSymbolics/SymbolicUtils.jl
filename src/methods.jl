@@ -9,7 +9,7 @@ const monadic = [deg2rad, rad2deg, transpose, conj, asind, log1p, acsch,
                  abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, acotd,
                  asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10,
                  sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd,
-                 atand, sec, acscd, cot, exp2, expm1, atanh, real, gamma,
+                 atand, sec, acscd, cot, exp2, expm1, atanh, real, imag, gamma,
                  loggamma, erf, erfc, erfcinv, erfi, erfcx, dawson, digamma,
                  trigamma, invdigamma, polygamma, airyai, airyaiprime, airybi,
                  airybiprime, besselj0, besselj1, bessely0, bessely1]
@@ -97,7 +97,7 @@ promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 Base.rem2pi(x::Symbolic{<:Number}, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
 for f in monadic
-    if f in [real]
+    if f in [real, imag, conj]
         continue
     end
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
@@ -111,8 +111,15 @@ for f in [identity, one, zero, *, +, -]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
 end
 
+# All of these need to be `Sym` to overwrite the function definitions of
+# the L78, that are made with the type `Sym <: Symbolic`
+#   @number_methods(Sym, term(f, a), term(f, a, b), skipbasics)
 promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
-Base.real(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(real, s)
+Base.real(s::Sym{<:Real}) = s
+promote_symtype(::typeof(Base.conj), T::Type{<:Number}) = T
+Base.conj(s::Sym{<:Real}) = s
+promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real
+Base.imag(s::Sym{<:Real}) = zero(symtype(s))
 
 ## Booleans
 

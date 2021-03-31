@@ -2,25 +2,30 @@
 
 """
 ```julia
-simplify(x; polynorm=false,
+simplify(x; expand=false,
             threaded=false,
             thread_subtree_cutoff=100,
             rewriter=nothing)
 ```
 
 Simplify an expression (`x`) by applying `rewriter` until there are no changes.
-`polynorm=true` applies `polynormalize` in the beginning of each fixpoint iteration.
+`expand=true` applies [`expand`](/api/#expand) in the beginning of each fixpoint iteration.
 """
 function simplify(x;
-                  polynorm=false,
+                  expand=false
+                  polynorm=nothing,
                   threaded=false,
                   thread_subtree_cutoff=100,
                   rewriter=nothing)
+    if polynorm !== nothing
+        Base.@depwarn "simplify(.. ;polynorm=$polynorm) is deprecated, use simplify(..; expand=$polynorm) instead"
+    end
+
     f = if rewriter === nothing
         if threaded
             threaded_simplifier(thread_subtree_cutoff)
-        elseif polynorm
-            serial_polynormal_simplifier
+        elseif expand
+            serial_expand_simplifier
         else
             serial_simplifier
         end

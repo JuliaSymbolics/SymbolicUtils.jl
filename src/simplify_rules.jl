@@ -118,7 +118,7 @@ let
     global serial_simplifier
     global threaded_simplifier
     global serial_simplifier
-    global serial_polynormal_simplifier
+    global serial_expand_simplifier
 
     function default_simplifier(; kw...)
         IfElse(has_trig,
@@ -141,8 +141,8 @@ let
     threaded_simplifier(cutoff) = Fixpoint(default_simplifier(threaded=true,
                                                               thread_cutoff=cutoff))
 
-    serial_polynormal_simplifier = If(istree,
-                                      Fixpoint(Chain((polynormalize,
-                                                      Fixpoint(default_simplifier())))))
+    serial_expand_simplifier = If(istree,
+                                  Fixpoint(Chain((expand,
+                                                  Fixpoint(default_simplifier())))))
 
 end

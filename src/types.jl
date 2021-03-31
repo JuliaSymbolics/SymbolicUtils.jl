@@ -469,7 +469,13 @@ end
 function show_pow(io, args)
     base, ex = args
 
-    print_arg(io, base, paren=true)
+    if base isa Real && base < 0
+        print(io, "(")
+        print_arg(io, base)
+        print(io, ")")
+    else
+        print_arg(io, base, paren=true)
+    end
     print(io, "^")
     print_arg(io, ex, paren=true)
 end

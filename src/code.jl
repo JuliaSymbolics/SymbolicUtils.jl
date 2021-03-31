@@ -1,6 +1,6 @@
 module Code
 
-using StaticArrays, LabelledArrays, SparseArrays
+using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -375,7 +375,7 @@ function toexpr(a::MakeArray, st)
 end
 
 ## Array
-@inline function _create_array(::Union{Type{<:Array},Type{<:SubArray}}, T, ::Val{dims}, elems...) where dims
+@inline function _create_array(::Type{<:Array}, T, ::Val{dims}, elems...) where dims
     arr = Array{T}(undef, dims)
     @assert prod(dims) == nfields(elems)
     @inbounds for i=1:prod(dims)
@@ -384,13 +384,21 @@ end
     arr
 end
 
-@inline function create_array(A::Union{Type{<:Array},Type{<:SubArray}}, T, d::Val, elems...)
+@inline function create_array(A::Type{<:Array}, T, d::Val, elems...)
     _create_array(A, T, d, elems...)
 end
 
-@inline function create_array(A::Union{Type{<:Array},Type{<:SubArray}}, ::Nothing, d::Val{dims}, elems...) where dims
+@inline function create_array(A::Type{<:Array}, ::Nothing, d::Val{dims}, elems...) where dims
     T = promote_type(map(typeof, elems)...)
     _create_array(A, T, d, elems...)
+end
+
+@inline function create_array(A::Type{<:SubArray{T,N,P,I,L}}, S, d::Val, elems...) where {T,N,P,I,L}
+    create_array(P, S, d, elems...)
+end
+
+@inline function create_array(A::Type{<:PermutedDimsArray{T,N,perm,iperm,P}}, S, d::Val, elems...) where {T,N,perm,iperm,P}
+    create_array(P, S, d, elems...)
 end
 
 ## Matrix
@@ -401,6 +409,14 @@ end
 
 @inline function create_array(::Type{<:Matrix}, T, ::Val{dims}, elems...) where dims
     Base.typed_hvcat(T, dims, elems...)
+end
+
+@inline function create_array(A::Type{<:Transpose{T,P}}, S, d::Val, elems...) where {T,P}
+    create_array(P, S, d, elems...)
+end
+
+@inline function create_array(A::Type{<:UpperTriangular{T,P}}, S, d::Val, elems...) where {T,P}
+    create_array(P, S, d, elems...)
 end
 
 ## SArray

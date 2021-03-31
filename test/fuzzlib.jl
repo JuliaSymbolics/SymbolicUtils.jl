@@ -1,6 +1,9 @@
 using SymbolicUtils
+using SymbolicUtils: Term
+using SpecialFunctions
 using Test
-using IfElse
+import IfElse: ifelse
+import IfElse
 
 using SymbolicUtils: showraw, Symbolic
 
@@ -102,6 +105,9 @@ function gen_rand_expr(inputs;
                                  min_depth=min_depth,
                                  max_depth=max_depth)
         else
+            @show f
+            @show arity
+            @show args
             rethrow(err)
         end
     end
@@ -115,9 +121,15 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
     expr = gen_rand_expr(inputs; spec=spec, kwargs...)
     inputs = collect(inputs)
+    code = try
+        SymbolicUtils.Code.toexpr(expr)
+    catch err
+        @show expr
+        rethrow(err)
+    end
     unsimplifiedstr = """
     function $(tuple(inputs...))
-        $(sprint(io->showraw(io, expr)))
+        $(sprint(io->print(io, code)))
     end
     """
 

@@ -858,7 +858,13 @@ end
 
 *(a::Pow, b::Mul) = b * a
 
-_merge(f, d, others...; filter=x->false) = _merge!(f, copy(d), others...; filter=filter)
+function copy_similar(d, others)
+    K = promote_type(keytype(d), keytype.(others)...)
+    V = promote_type(valtype(d), valtype.(others)...)
+    Dict{K, V}(d)
+end
+
+_merge(f, d, others...; filter=x->false) = _merge!(f, copy_similar(d, others), others...; filter=filter)
 function _merge!(f, d, others...; filter=x->false)
     acc = d
     for other in others

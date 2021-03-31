@@ -496,7 +496,7 @@ function show_call(io, f, args)
     if binary
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")
-            print_arg(io, t)
+            print_arg(io, t, paren=true)
         end
     else
         if f isa Sym
@@ -506,7 +506,7 @@ function show_call(io, f, args)
         end
         print(io, "(")
         for i=1:length(args)
-            print(IOContext(io, :paren => false), args[i])
+            print(io, args[i])
             i != length(args) && print(io, ", ")
         end
         print(io, ")")

@@ -1,5 +1,6 @@
 using SymbolicUtils
 using Test
+using IfElse
 
 using SymbolicUtils: showraw, Symbolic
 

@@ -153,6 +153,8 @@ end
     @test repr((a + b) - (b + c)) == "a - c"
     @test repr(a + -1*(b + c)) == "a - b - c"
     @test repr(a + -1*b) == "a - b"
+    @test repr(-1^a) == "-(1^a)"
+    @test repr((-1)^a) == "(-1)^a"
 end
 
 @testset "similarterm with Add" begin

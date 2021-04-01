@@ -359,11 +359,21 @@ sin((a + c))</code></pre>
       <h2 class="doc-header" id="simplify">
         <a href="#simplify">simplify</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">simplify(x; polynorm=<span class="hljs-literal">false</span>,
+      <div class="doc-content"><pre><code class="julia hljs">simplify(x; expand=<span class="hljs-literal">false</span>,
             threaded=<span class="hljs-literal">false</span>,
             thread_subtree_cutoff=<span class="hljs-number">100</span>,
             rewriter=<span class="hljs-literal">nothing</span>)</code></pre>
-<p>Simplify an expression &#40;<code>x</code>&#41; by applying <code>rewriter</code> until there are no changes. <code>polynorm&#61;true</code> applies <code>polynormalize</code> in the beginning of each fixpoint iteration.</p>
+<p>Simplify an expression &#40;<code>x</code>&#41; by applying <code>rewriter</code> until there are no changes. <code>expand&#61;true</code> applies <a href="/api/#expand"><code>expand</code></a> in the beginning of each fixpoint iteration.</p>
+</div>
+  </div>
+
+  <div class="docstring">
+      <h2 class="doc-header" id="expand">
+        <a href="#expand">expand</a>
+        <div class="doc-type">fn</div></h2>
+      <div class="doc-content"><pre><code class="julia hljs">expand(expr)</code></pre>
+<p>Expand expressions by distributing multiplication over addition.</p>
+<p><code>a*&#40;b&#43;c&#41;</code> becomes <code>ab&#43;ac</code>. <code>expand</code> uses <a href="https://nemocas.github.io/AbstractAlgebra.jl/latest/">AbstractAlgebra.jl</a> to construct dense Multi-variate polynomial to do this very fast.</p>
 </div>
   </div>
 

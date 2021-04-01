@@ -503,7 +503,7 @@ function show_call(io, f, args)
     if binary
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")
-            print_arg(io, t)
+            print_arg(io, t, paren=true)
         end
     else
         if f isa Sym
@@ -513,7 +513,7 @@ function show_call(io, f, args)
         end
         print(io, "(")
         for i=1:length(args)
-            print(IOContext(io, :paren => false), args[i])
+            print(io, args[i])
             i != length(args) && print(io, ", ")
         end
         print(io, ")")
@@ -775,9 +775,21 @@ mul_t(a) = promote_symtype(*, symtype(a))
                         a.coeff * b.coeff,
                         _merge(+, a.dict, b.dict, filter=_iszero))
 
-*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(a, b)...)
+function *(a::Number, b::SN)
+    if iszero(a)
+        a
+    elseif isone(a)
+        b
+    elseif b isa Add
+        # 2(a+b) -> 2a + 2b
+        T = promote_symtype(+, typeof(a), symtype(b))
+        Add(T, b.coeff * a, Dict(k=>v*a for (k, v) in b.dict))
+    else
+        Mul(mul_t(a, b), makemul(a, b)...)
+    end
+end
 
-*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(a, b)...)
+*(a::SN, b::Number) = b * a
 
 /(a::Union{SN,Number}, b::SN) = a * b^(-1)
 
@@ -853,7 +865,13 @@ end
 
 *(a::Pow, b::Mul) = b * a
 
-_merge(f, d, others...; filter=x->false) = _merge!(f, copy(d), others...; filter=filter)
+function copy_similar(d, others)
+    K = promote_type(keytype(d), keytype.(others)...)
+    V = promote_type(valtype(d), valtype.(others)...)
+    Dict{K, V}(d)
+end
+
+_merge(f, d, others...; filter=x->false) = _merge!(f, copy_similar(d, others), others...; filter=filter)
 function _merge!(f, d, others...; filter=x->false)
     acc = d
     for other in others

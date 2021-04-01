@@ -13,7 +13,7 @@ include("types.jl")
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
-import IfElse: ifelse  # need to not bring IfElse name in or it will clash
+import IfElse: ifelse  # need to not bring IfElse name in or it will clash with Rewriters.IfElse
 include("methods.jl")
 
 # LinkedList, simplification utilities

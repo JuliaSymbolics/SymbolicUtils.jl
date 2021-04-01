@@ -1,1 +1,1 @@
-x^(y + z)
+nothing

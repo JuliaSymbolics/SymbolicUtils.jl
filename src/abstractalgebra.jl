@@ -145,6 +145,16 @@ end
 
 <ₑ(a::MPoly, b::MPoly) = false
 
-function polynormalize(x)
+"""
+    expand(expr)
+
+Expand expressions by distributing multiplication over addition.
+
+`a*(b+c)` becomes `ab+ac`. `expand` uses [AbstractAlgebra.jl](https://nemocas.github.io/AbstractAlgebra.jl/latest/) to construct
+dense Multi-variate polynomial to do this very fast.
+"""
+function expand(x)
     to_term(x, to_mpoly(x)...)
 end
+
+Base.@deprecate polynormalize(x) expand(x)

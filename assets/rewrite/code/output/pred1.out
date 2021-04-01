@@ -1,2 +1,4 @@
-LoadError: UndefVarError: @syms not defined
-in expression starting at none:1
+r(a + b + c + d) = nothing
+r(b + c + d) = "odd terms"
+r(b + c + b) = nothing
+r(a + b) = nothing

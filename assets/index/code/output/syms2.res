@@ -1,1 +1,1 @@
-nothing
+sin(w) + f(z) + g(1, α)

@@ -1,1 +1,1 @@
-nothing
+(cos(x) + sin(x))^2

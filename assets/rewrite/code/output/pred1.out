@@ -1,3 +1,4 @@
-r(w + z + z + w) = nothing
-r(w + z + z) = nothing
-r(w + z) = nothing
+r(a + b + c + d) = nothing
+r(b + c + d) = "odd terms"
+r(b + c + b) = nothing
+r(a + b) = nothing

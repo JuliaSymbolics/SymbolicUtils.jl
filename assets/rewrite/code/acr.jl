@@ -1,6 +1,6 @@
 # This file was generated, do not modify it. # hide
-@syms x y
+@syms x y z
 
-acr = @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
+acr = @acrule((~a)^(~x) * (~a)^(~y) => (~a)^(~x + ~y))
 
-acr(x^2 * y * x)
+acr(x^y * x^z)

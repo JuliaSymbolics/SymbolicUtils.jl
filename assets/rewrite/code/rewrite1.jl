@@ -5,6 +5,6 @@ using SymbolicUtils
 
 (w, z, α, β) # hide
 
-r1 = @rule ~x + ~x => 2 * (~x)
+r1 = @rule sin(2(~x)) => 2sin(~x)*cos(~x)
 
-r1(sin(1+z) + sin(1+z))
+r1(sin(2z))

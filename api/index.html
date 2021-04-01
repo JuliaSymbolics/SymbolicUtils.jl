@@ -276,11 +276,11 @@ sin(~x) =&gt; cos(~x)
 julia&gt; r(sin(<span class="hljs-number">1</span>+a))
 cos((<span class="hljs-number">1</span> + a))</code></pre>
 <p>A rule with 2 segment variables</p>
-<pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> ~x - ~y =&gt; ~x + (-(~y))
-~x - ~y =&gt; ~x + -(~y)
+<pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> sin(~x + ~y) =&gt; sin(~x)*cos(~y) + cos(~x)*sin(~y)
+sin(~x + ~y) =&gt; sin(~x) * cos(~y) + cos(~x) * sin(~y)
 
-julia&gt; r(a-<span class="hljs-number">2</span>b)
-(a + (-(<span class="hljs-number">2</span> * b)))</code></pre>
+julia&gt; r(sin(a + b))
+cos(a)*sin(b) + sin(a)*cos(b)</code></pre>
 <p>A rule that matches two of the same expressions:</p>
 <pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> sin(~x)^<span class="hljs-number">2</span> + cos(~x)^<span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>
 sin(~x) ^ <span class="hljs-number">2</span> + cos(~x) ^ <span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>
@@ -410,7 +410,7 @@ julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 31, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: April 01, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

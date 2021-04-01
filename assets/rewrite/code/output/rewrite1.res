@@ -1,1 +1,1 @@
-nothing
+2cos(z)*sin(z)

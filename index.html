@@ -169,9 +169,9 @@ f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code
 <h2 id="simplification"><a href="#simplification" class="header-anchor">Simplification</a></h2>
 <p>By default <code>*</code> and <code>&#43;</code> operations apply the most basic simplification upon construction of the expression.</p>
 <p>Commutativity and associativity are assumed over <code>&#43;</code> and <code>*</code> operations on <code>Symbolic&#123;&lt;:Number&#125;</code>.</p>
-<pre><code class="julia hljs"><span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>)</code></pre><pre><code class="plaintext hljs">2(α + β + 2w + cos(z)^2 + sin(z)^2 - 1)</code></pre>
+<pre><code class="julia hljs"><span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>)</code></pre><pre><code class="plaintext hljs">4w + 2α + 2β + 2(cos(z)^2) + 2(sin(z)^2) - 2</code></pre>
 <p>The <code>simplify</code> function applies a built-in set of rules to rewrite expressions in order to simplify it.</p>
-<pre><code class="julia hljs">simplify(<span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>))</code></pre><pre><code class="plaintext hljs">2(α + β + 2w)</code></pre>
+<pre><code class="julia hljs">simplify(<span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>))</code></pre><pre><code class="plaintext hljs">4w + 2α + 2β + 2(cos(z)^2) + 2(sin(z)^2) - 2</code></pre>
 <p>The rules in the default simplify applies simple constant elimination and trigonometric identities.</p>
 <p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl">rules</a> that are used by <code>simplify</code>.</p>
 <h2 id="code_generation"><a href="#code_generation" class="header-anchor">Code generation</a></h2>

@@ -1,5 +1,5 @@
 using Random: shuffle, seed!
-using SymbolicUtils: getdepth, Rewriters
+using SymbolicUtils: getdepth, Rewriters, Term
 
 @testset "Chain, Postwalk and Fixpoint" begin
     @syms w z α::Real β::Real
@@ -18,9 +18,9 @@ end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number
-    @eqtest simplify(conj(x)) == x
-    @eqtest simplify(real(x)) == x
-    @eqtest simplify(imag(x)) == 0
+    @eqtest simplify(Term{Real}(conj, [x])) == x
+    @eqtest simplify(Term{Real}(real, [x])) == x
+    @eqtest simplify(Term{Real}(imag, [x])) == 0
     @eqtest simplify(x - y) == x + -1*y
     @eqtest simplify(x - sin(y)) == x + -1*sin(y)
     @eqtest simplify(-sin(x)) == -1*sin(x)

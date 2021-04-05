@@ -45,6 +45,12 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                         $(+)(a, b, var"x(t)", x($(+)(1, t)))
                     end
                 end))
+
+    ex = toexpr(Func([DestructuredArgs([x, x(t)], :state, inbounds=true)], [], x(t+1) + x(t)))
+    for e ∈ ex.args[2].args[3].args[1].args
+        @test e.args[2].head == :macrocall
+    end
+
     test_repr(toexpr(SetArray(false, a, [x(t), AtIndex(9, b), c])),
               quote
                   a[1] = x(t)

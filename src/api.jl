@@ -18,7 +18,8 @@ function simplify(x;
                   thread_subtree_cutoff=100,
                   rewriter=nothing)
     if polynorm !== nothing
-        Base.depwarn("simplify(..; polynorm=$polynorm) is deprecated, use simplify(..; expand=$polynorm) instead")
+        Base.depwarn("simplify(..; polynorm=$polynorm) is deprecated, use simplify(..; expand=$polynorm) instead",
+                        :simplify)
     end
 
     f = if rewriter === nothing

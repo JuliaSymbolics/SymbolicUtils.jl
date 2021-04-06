@@ -136,10 +136,11 @@ end
     elems
     inds
     name
+    inbounds::Bool
 end
 
-function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems))
-    DestructuredArgs(elems, inds, name)
+function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems), inbounds=false)
+    DestructuredArgs(elems, inds, name, inbounds)
 end
 
 """
@@ -164,8 +165,10 @@ cflatten(x) = Iterators.flatten(x) |> collect
 function get_assignments(d::DestructuredArgs, st)
     name = toexpr(d, st)
     map(d.inds, d.elems) do i, a
-        a ← (i isa Symbol ? :($name.$i) : :($name[$i]))
-    end
+        ex = (i isa Symbol ? :($name.$i) : :($name[$i]))
+        ex = d.inbounds ? :(@inbounds($ex)) : ex
+        a ← ex
+    end   
 end
 
 @matchable struct Let

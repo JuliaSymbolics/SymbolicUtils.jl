@@ -151,7 +151,20 @@ SymbolicUtils contains [a rule-based rewriting language](/rewrite/#rule-based_re
 
 By default `*` and `+` operations apply the most basic simplification upon construction of the expression.
 
-Commutativity and associativity are assumed over `+` and `*` operations on `Symbolic{<:Number}`.
+The rules with which the canonical form of `Symbolic{<:Number}` terms are constructed are the next (where `x isa Symbolic` and `c isa Number`)
+
+ -  `0 + x` and `1 * x` always gives `x`
+ -  `0 * x` always gives `0`,
+ -  commutativity and associativity over `+` and `*` are assumed. Re-ordering of terms will be done under a [total order](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/ordering.jl)
+ -  sum of `Add`'s are fused
+ -  product of `Mul`'s are fused
+ -  `x + ... + x` will be fused into `n*x` with type `Mul`
+ -  `x * ... * x` will be fused into `x^n` with type `Pow`
+ -  `c * (c₁x₁ + ... + cₙxₙ)` will be converted into `c*c₁*x₁ + ... + c*cₙ*xₙ`
+ -  `(x₁^c₁ + ... + xₙ^cₙ)^c` will be converted into `x₁^(c*c₁) + ... + xₙ^(c*cₙ)`
+ -  any other combinations of expressions will be left the same
+
+Here is an example of this
 
 ```julia:simplify1
 2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)

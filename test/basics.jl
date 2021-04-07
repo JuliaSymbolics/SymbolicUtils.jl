@@ -197,3 +197,8 @@ end
         @test isequal(x^1, x)
     end
 end
+
+@testset "isequal" begin
+    @syms a b c
+    @test isequal(a + b, a + b + 0.01 - 0.01)
+end

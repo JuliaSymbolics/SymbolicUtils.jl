@@ -51,6 +51,9 @@ let
         @rule(~x / ~y => ~x * pow(~y, -1))
         @rule(one(~x) => one(symtype(~x)))
         @rule(zero(~x) => zero(symtype(~x)))
+        @rule(conj(~x::_isreal) => ~x)
+        @rule(real(~x::_isreal) => ~x)
+        @rule(imag(~x::_isreal) => zero(symtype(~x)))
         @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
     ]
 
@@ -118,7 +121,7 @@ let
     global serial_simplifier
     global threaded_simplifier
     global serial_simplifier
-    global serial_polynormal_simplifier
+    global serial_expand_simplifier
 
     function default_simplifier(; kw...)
         IfElse(has_trig,
@@ -141,8 +144,8 @@ let
     threaded_simplifier(cutoff) = Fixpoint(default_simplifier(threaded=true,
                                                               thread_cutoff=cutoff))
 
-    serial_polynormal_simplifier = If(istree,
-                                      Fixpoint(Chain((polynormalize,
-                                                      Fixpoint(default_simplifier())))))
+    serial_expand_simplifier = If(istree,
+                                  Fixpoint(Chain((expand,
+                                                  Fixpoint(default_simplifier())))))
 
 end

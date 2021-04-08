@@ -69,7 +69,7 @@ function getmetadata(s::Symbolic, ctx)
 end
 
 function getmetadata(s::Symbolic, ctx, default)
-    s.metadata isa Ref ? get(s.metadata[], ctx, default) : default
+    s.metadata isa AbstractDict ? get(s.metadata, ctx, default) : default
 end
 
 # pirated for Setfield purposes:
@@ -102,19 +102,11 @@ function setmetadata(s::Symbolic, ctx::DataType, val)
     end
 end
 
-Base.isequal(s::Symbolic, x) = false
-Base.isequal(x, s::Symbolic) = false
+Base.isequal(::Symbolic, x) = false
+Base.isequal(x, ::Symbolic) = false
+Base.isequal(::Symbolic, ::Symbolic) = false
 
-function Base.isequal(t1::Symbolic, t2::Symbolic)
-    t1 === t2 && return true
-    (istree(t1) && istree(t2)) || return false
-    a1 = arguments(t1)
-    a2 = arguments(t2)
 
-    isequal(operation(t1), operation(t2)) &&
-        length(a1) == length(a2) &&
-        all(isequal(l,r) for (l, r) in zip(a1,a2))
-end
 ### End of interface
 
 function to_symbolic(x)
@@ -181,7 +173,10 @@ end
 
 Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
 
-Base.isequal(v1::Sym{T}, v2::Sym{T}) where {T} = v1 === v2
+function Base.isequal(a::Sym, b::Sym)
+    symtype(a) !== symtype(b) && return false
+    isequal(nameof(a), nameof(b))
+end
 
 Base.show(io::IO, v::Sym) = Base.show_unquoted(io, v.name)
 
@@ -247,7 +242,7 @@ can be set using the `::T` syntax.
 variable `foo` of symtype `Number` (the default), `bar` of symtype `Real`
 and `baz` of symtype `Int`
 - `@syms f(x) g(y::Real, x)::Int h(a::Int, f(b))` creates 1-arg `f` 2-arg `g`
-and 2 arg `f`. The second argument to `h` must be a one argument function-like
+and 2 arg `h`. The second argument to `h` must be a one argument function-like
 variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)
@@ -341,6 +336,18 @@ operation(x::Term) = getfield(x, :f)
 
 arguments(x::Term) = getfield(x, :arguments)
 
+function Base.isequal(t1::Term, t2::Term)
+    t1 === t2 && return true
+    symtype(t1) !== symtype(t2) && return false
+
+    a1 = arguments(t1)
+    a2 = arguments(t2)
+
+    isequal(operation(t1), operation(t2)) &&
+        length(a1) == length(a2) &&
+        all(isequal(l,r) for (l, r) in zip(a1,a2))
+end
+
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
@@ -371,7 +378,6 @@ function _promote_symtype(f, args)
     end
 end
 
-
 function term(f, args...; type = nothing)
     if type === nothing
         T = _promote_symtype(f, args)
@@ -386,7 +392,8 @@ end
 
 Create a term that is similar in type to `t`. Extending this function allows packages
 using their own expression types with SymbolicUtils to define how new terms should
-be created.
+be created. Note that `similarterm` may return an object that has a
+different type than `t`, because `f` also influences the result.
 
 ## Arguments
 
@@ -398,7 +405,7 @@ be created.
 """
 similarterm(t, f, args, symtype) = f(args...)
 similarterm(t, f, args) = similarterm(t, f, args, _promote_symtype(f, args))
-similarterm(::Term, f, args, symtype=nothing) = term(f, args...; type=symtype)
+similarterm(t::Term, f, args) = Term{_promote_symtype(f, args)}(f, args)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -462,7 +469,13 @@ end
 function show_pow(io, args)
     base, ex = args
 
-    print_arg(io, base, paren=true)
+    if base isa Real && base < 0
+        print(io, "(")
+        print_arg(io, base)
+        print(io, ")")
+    else
+        print_arg(io, base, paren=true)
+    end
     print(io, "^")
     print_arg(io, ex, paren=true)
 end
@@ -496,7 +509,7 @@ function show_call(io, f, args)
     if binary
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")
-            print_arg(io, t)
+            print_arg(io, t, paren=true)
         end
     else
         if f isa Sym
@@ -506,7 +519,7 @@ function show_call(io, f, args)
         end
         print(io, "(")
         for i=1:length(args)
-            print(IOContext(io, :paren => false), args[i])
+            print(io, args[i])
             i != length(args) && print(io, ", ")
         end
         print(io, ")")
@@ -543,8 +556,7 @@ showraw(t) = showraw(stdout, t)
 
 sdict(kv...) = Dict{Any, Number}(kv...)
 
-# this cannot be Symbolic{<:Number} to make MTK Parameters work. See #155
-const SN = Symbolic
+const SN = Symbolic{<:Number}
 """
     Add(T, coeff, dict::Dict)
 
@@ -590,7 +602,7 @@ function arguments(a::Add)
     a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-Base.isequal(a::Add, b::Add) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
+Base.isequal(a::Add, b::Add) = a.coeff == b.coeff && isequal(a.dict, b.dict)
 
 Base.show(io::IO, a::Add) = show_term(io, a)
 
@@ -729,11 +741,11 @@ operation(a::Mul) = *
 
 function arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([k^v for (k,v) in a.dict], lt=<ₑ)
+    args = sort!([Pow(k, v) for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-Base.isequal(a::Mul, b::Mul) = isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
+Base.isequal(a::Mul, b::Mul) = a.coeff == b.coeff && isequal(a.dict, b.dict)
 
 Base.show(io::IO, a::Mul) = show_term(io, a)
 
@@ -769,9 +781,21 @@ mul_t(a) = promote_symtype(*, symtype(a))
                         a.coeff * b.coeff,
                         _merge(+, a.dict, b.dict, filter=_iszero))
 
-*(a::Number, b::SN) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(a, b)...)
+function *(a::Number, b::SN)
+    if iszero(a)
+        a
+    elseif isone(a)
+        b
+    elseif b isa Add
+        # 2(a+b) -> 2a + 2b
+        T = promote_symtype(+, typeof(a), symtype(b))
+        Add(T, b.coeff * a, Dict(k=>v*a for (k, v) in b.dict))
+    else
+        Mul(mul_t(a, b), makemul(a, b)...)
+    end
+end
 
-*(b::SN, a::Number) = iszero(a) ? a : isone(a) ? b : Mul(mul_t(a, b), makemul(a, b)...)
+*(a::SN, b::Number) = b * a
 
 /(a::Union{SN,Number}, b::SN) = a * b^(-1)
 
@@ -780,6 +804,10 @@ mul_t(a) = promote_symtype(*, symtype(a))
 \(a::Number, b::SN) = b / a
 
 /(a::SN, b::Number) = inv(b) * a
+
+//(a::Union{SN, Number}, b::SN) = a / b
+
+//(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
 
 """
     Pow(base, exp)
@@ -843,7 +871,13 @@ end
 
 *(a::Pow, b::Mul) = b * a
 
-_merge(f, d, others...; filter=x->false) = _merge!(f, copy(d), others...; filter=filter)
+function copy_similar(d, others)
+    K = promote_type(keytype(d), keytype.(others)...)
+    V = promote_type(valtype(d), valtype.(others)...)
+    Dict{K, V}(d)
+end
+
+_merge(f, d, others...; filter=x->false) = _merge!(f, copy_similar(d, others), others...; filter=filter)
 function _merge!(f, d, others...; filter=x->false)
     acc = d
     for other in others
@@ -870,7 +904,10 @@ function mapvalues(f, d1::AbstractDict)
     d
 end
 
-function similarterm(p::Union{Mul, Add, Pow}, f, args, T=nothing)
+const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
+                          Add{<:Number}, Pow{<:Number}}
+
+function similarterm(p::NumericTerm, f, args, T=nothing)
     if T === nothing
         T = _promote_symtype(f, args)
     end
@@ -881,7 +918,7 @@ function similarterm(p::Union{Mul, Add, Pow}, f, args, T=nothing)
     elseif f == (^) && length(args) == 2
         Pow{T, typeof.(args)...}(args...)
     else
-        f(args...)
+        Term{T}(f, args)
     end
 end
 
@@ -902,7 +939,17 @@ struct TreePrint
     x
 end
 AbstractTrees.children(x::Term) = arguments(x)
-AbstractTrees.children(x::Union{Add, Mul}) = map(y->TreePrint(x isa Add ? (:*) : (:^), y), collect(pairs(x.dict)))
+function AbstractTrees.children(x::Union{Add, Mul})
+    children = Any[x.coeff]
+    for (key, coeff) in pairs(x.dict)
+        if coeff == 1
+            push!(children, key)
+        else
+            push!(children, TreePrint(x isa Add ? (:*) : (:^), (key, coeff)))
+        end
+    end
+    return children
+end
 AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 

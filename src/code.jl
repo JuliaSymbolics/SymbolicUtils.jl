@@ -1,6 +1,6 @@
 module Code
 
-using StaticArrays, LabelledArrays, SparseArrays
+using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -96,23 +96,39 @@ Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 
 toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 
-function toexpr(O, st)
-    !istree(O) && return O
-    op = operation(O)
+function_to_expr(op, args, st) = nothing
+
+function function_to_expr(::typeof(^), O, st)
     args = arguments(O)
-    if op === (^) && length(args) == 2 && args[2] isa Number && args[2] < 0
+    if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
             return toexpr(Term{Any}(inv, [ex]), st)
         else
             return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
         end
-    elseif op === (SymbolicUtils.ifelse)
-        return :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
-    elseif op isa Sym && haskey(st.symbolify, O)
-        return st.symbolify[O]
     end
-    return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
+    return nothing
+end
+
+function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
+    args = arguments(O)
+    :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
+end
+
+function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
+
+function toexpr(O, st)
+    !istree(O) && return O
+    op = operation(O)
+    expr′ = function_to_expr(op, O, st)
+    if expr′ !== nothing
+        return expr′
+    else
+        haskey(st.symbolify, O) && return st.symbolify[O]
+        args = arguments(O)
+        return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
+    end
 end
 
 # Call elements of vector arguments by their name.
@@ -120,10 +136,11 @@ end
     elems
     inds
     name
+    inbounds::Bool
 end
 
-function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems))
-    DestructuredArgs(elems, inds, name)
+function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems), inbounds=false)
+    DestructuredArgs(elems, inds, name, inbounds)
 end
 
 """
@@ -148,8 +165,10 @@ cflatten(x) = Iterators.flatten(x) |> collect
 function get_assignments(d::DestructuredArgs, st)
     name = toexpr(d, st)
     map(d.inds, d.elems) do i, a
-        a ← (i isa Symbol ? :($name.$i) : :($name[$i]))
-    end
+        ex = (i isa Symbol ? :($name.$i) : :($name[$i]))
+        ex = d.inbounds ? :(@inbounds($ex)) : ex
+        a ← ex
+    end   
 end
 
 @matchable struct Let
@@ -350,10 +369,12 @@ MakeArray(elems, similarto) = MakeArray(elems, similarto, nothing)
 function toexpr(a::MakeArray, st)
     similarto = toexpr(a.similarto, st)
     T = similarto isa Type ? similarto : :(typeof($similarto))
+    ndim = ndims(a.elems)
     elT = a.output_eltype
     quote
         $create_array($T,
                      $elT,
+                     Val{$ndim}(),
                      Val{$(size(a.elems))}(),
                      $(map(x->toexpr(x, st), a.elems)...),)
     end
@@ -369,48 +390,83 @@ end
     arr
 end
 
-@inline function create_array(A::Type{<:Array}, T, d::Val, elems...)
+@inline function create_array(A::Type{<:Array}, T, ::Val, d::Val, elems...)
     _create_array(A, T, d, elems...)
 end
 
-@inline function create_array(A::Type{<:Array}, ::Nothing, d::Val{dims}, elems...) where dims
+@inline function create_array(A::Type{<:Array}, ::Nothing, ::Val, d::Val{dims}, elems...) where dims
     T = promote_type(map(typeof, elems)...)
     _create_array(A, T, d, elems...)
 end
 
 ## Vector
 #
-@inline function create_array(::Type{<:Vector}, ::Nothing, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:Array}, ::Nothing, ::Val{1}, ::Val{dims}, elems...) where dims
     [elems...]
 end
 
-@inline function create_array(::Type{<:Vector}, T, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:Array}, T, ::Val{1}, ::Val{dims}, elems...) where dims
     T[elems...]
 end
 
-
 ## Matrix
 
-@inline function create_array(::Type{<:Matrix}, ::Nothing, ::Val{dims}, elems...) where dims
-    Base.hvcat(dims, elems...)
+@inline function create_array(::Type{<:Array}, ::Nothing, ::Val{2}, ::Val{dims}, elems...) where dims
+    vhcat(dims, elems...)
 end
 
-@inline function create_array(::Type{<:Matrix}, T, ::Val{dims}, elems...) where dims
-    Base.typed_hvcat(T, dims, elems...)
+@inline function create_array(::Type{<:Array}, T, ::Val{2}, ::Val{dims}, elems...) where dims
+    typed_vhcat(T, dims, elems...)
+end
+
+
+vhcat(sz::Tuple{Int,Int}, xs::T...) where {T} = typed_vhcat(T, sz, xs...)
+vhcat(sz::Tuple{Int,Int}, xs::Number...) = typed_vhcat(Base.promote_typeof(xs...), sz, xs...)
+vhcat(sz::Tuple{Int,Int}, xs...) = typed_vhcat(Base.promote_eltypeof(xs...), sz, xs...)
+
+function typed_vhcat(::Type{T}, sz::Tuple{Int, Int}, xs...) where T
+    nr,nc = sz
+    a = Matrix{T}(undef, nr, nc)
+    k = 1
+    for j=1:nc
+        @inbounds for i=1:nr
+            a[i, j] = xs[k]
+            k += 1
+        end
+    end
+    a
+end
+
+## Arrays of the special kind
+@inline function create_array(A::Type{<:SubArray{T,N,P,I,L}}, S, nd::Val, d::Val, elems...) where {T,N,P,I,L}
+    create_array(P, S, nd, d, elems...)
+end
+
+@inline function create_array(A::Type{<:PermutedDimsArray{T,N,perm,iperm,P}}, S, nd::Val, d::Val, elems...) where {T,N,perm,iperm,P}
+    create_array(P, S, nd, d, elems...)
+end
+
+
+@inline function create_array(A::Type{<:Transpose{T,P}}, S, nd::Val, d::Val, elems...) where {T,P}
+    create_array(P, S, nd, d, elems...)
+end
+
+@inline function create_array(A::Type{<:UpperTriangular{T,P}}, S, nd::Val, d::Val, elems...) where {T,P}
+    create_array(P, S, nd, d, elems...)
 end
 
 ## SArray
-@inline function create_array(::Type{<:SArray}, ::Nothing, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:SArray}, ::Nothing, nd::Val, ::Val{dims}, elems...) where dims
     SArray{Tuple{dims...}}(elems...)
 end
 
-@inline function create_array(::Type{<:SArray}, T, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:SArray}, T, nd::Val, ::Val{dims}, elems...) where dims
     SArray{Tuple{dims...}, T}(elems...)
 end
 
 ## LabelledArrays
-@inline function create_array(A::Type{<:SLArray}, T, d::Val{dims}, elems...) where {dims}
-    a = create_array(SArray, T, d, elems...)
+@inline function create_array(A::Type{<:SLArray}, T, nd::Val, d::Val{dims}, elems...) where {dims}
+    a = create_array(SArray, T, nd, d, elems...)
     if nfields(dims) === ndims(A)
         similar_type(A, eltype(a), Size(dims))(a)
     else
@@ -418,8 +474,8 @@ end
     end
 end
 
-@inline function create_array(A::Type{<:LArray}, T, d::Val{dims}, elems...) where {dims}
-    data = create_array(Array, T, d, elems...)
+@inline function create_array(A::Type{<:LArray}, T, nd::Val, d::Val{dims}, elems...) where {dims}
+    data = create_array(Array, T, nd, d, elems...)
     if nfields(dims) === ndims(A)
         LArray{eltype(data),nfields(dims),typeof(data),LabelledArrays.symnames(A)}(data)
     else

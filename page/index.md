@@ -18,8 +18,8 @@ where appropriate -->
 **Features:**
 
 - Fast expressions
-- A [combinator library](/rewrite/#composing_rewriters) for making rewriters.
 - A [rule-based rewriting language](/rewrite/#rule-based_rewriting).
+- A [combinator library](/rewrite/#composing_rewriters) for making rewriters.
 - Type promotion:
   - Symbols (`Sym`s) carry type information. ([read more](#creating_symbolic_expressions))
   - Compound expressions composed of `Sym`s propagate type information. ([read more](#expression_interface))
@@ -65,16 +65,43 @@ Note however that they are not subtypes of these types!
 @show α isa Real
 ```
 
+As their types are different:
+
+```julia:symtype3
+@show typeof(w)
+@show typeof(α)
+```
+
 (see [this post](https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u=shashi) for why they are all not just subtypes of `Number`)
 
 You can do basic arithmetic on symbols to get symbolic expressions:
 
 ```julia:expr
-expr1 = α*sin(w)^2 +  β*cos(z)^2
-expr2 = α*cos(z)^2 +  β*sin(w)^2
+expr1 = α*sin(w)^2 + β*cos(z)^2
+expr2 = α*cos(z)^2 + β*sin(w)^2
 
 expr1 + expr2
 ```
+
+SymbolicUtils automatically simplifies
+
+```julia:creating1
+2w + 3w - 3z + α
+```
+
+and reorders
+
+```julia:creating2
+(z + w)*(α + β)
+```
+
+expressions of type `Symbolic{<:Number}` (which includes `Sym{Real}`) when they are created. It also does constant elimination (including rational numbers)
+
+```julia:creating3
+5 + 2w - 3z + α - (β + 5//3) + 3w - 2 + 3//2 * β
+```
+
+It's worth remembering that the expression may be transformed with respect to the input when it's created.
 
 
 **Function-like symbols**
@@ -88,19 +115,18 @@ using SymbolicUtils
 f(z) + g(1, α) + sin(w)
 ```
 
+This does not work since `z` is a `Number`, not a `Real`.
 
 ```julia:sym3
 g(1, z)
 ```
 
-
-This does not work since `z` is a `Number`, not a `Real`.
+This works because `g` "returns" a `Real`.
 
 ```julia:sym4
 g(2//5, g(1, β))
 ```
 
-This works because `g` "returns" a `Real`.
 
 
 ## Expression interface
@@ -123,15 +149,21 @@ SymbolicUtils contains [a rule-based rewriting language](/rewrite/#rule-based_re
 
 ## Simplification
 
-By default `*` and `+` operations apply the most basic simplification upon construction.
+By default `*` and `+` operations apply the most basic simplification upon construction of the expression.
+
+Commutativity and associativity are assumed over `+` and `*` operations on `Symbolic{<:Number}`.
+
+```julia:simplify1
+2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1)
+```
 
 The `simplify` function applies a built-in set of rules to rewrite expressions in order to simplify it.
 
-```julia:simplify1
+```julia:simplify2
 simplify(2 * (w+w+α+β + sin(z)^2 + cos(z)^2 - 1))
 ```
 
-The rules in the default simplify applies simple constant elemination, trigonometric identities.
+The rules in the default simplify applies simple constant elimination and trigonometric identities.
 
 If you read the previous section on the rules DSL, you should be able to read and understand the [rules](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl) that are used by `simplify`.
 

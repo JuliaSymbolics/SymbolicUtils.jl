@@ -48,6 +48,8 @@ using SymbolicUtils # hide
 
 {{doc simplify simplify fn}}
 
+{{doc expand expand fn}}
+
 {{doc substitute substitute fn}}
 
 ## Utilities

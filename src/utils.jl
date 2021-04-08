@@ -115,6 +115,7 @@ is_literal_number(x) = isliteral(Number)(x)
 _iszero(x) = x isa Number && iszero(x)
 _isone(x) = x isa Number && isone(x)
 _isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) <: Integer)
+_isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
 needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))

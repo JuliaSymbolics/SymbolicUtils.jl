@@ -4,6 +4,7 @@ using SymbolicUtils.Code: LazyState
 using StaticArrays
 using LabelledArrays
 using SparseArrays
+using LinearAlgebra
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 
@@ -44,6 +45,12 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                         $(+)(a, b, var"x(t)", x($(+)(1, t)))
                     end
                 end))
+
+    ex = toexpr(Func([DestructuredArgs([x, x(t)], :state, inbounds=true)], [], x(t+1) + x(t)))
+    for e ∈ ex.args[2].args[3].args[1].args
+        @test e.args[2].head == :macrocall
+    end
+
     test_repr(toexpr(SetArray(false, a, [x(t), AtIndex(9, b), c])),
               quote
                   a[1] = x(t)
@@ -62,7 +69,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     test_repr(toexpr(MakeArray([a,b,a+b], :arr)),
               quote
-                  $(SymbolicUtils.Code.create_array)(typeof(arr), nothing, Val{(3,)}(), a, b, $(+)(a, b))
+                  $(SymbolicUtils.Code.create_array)(typeof(arr), nothing, Val{1}(), Val{(3,)}(), a, b, $(+)(a, b))
               end)
 
     toexpr(Let([a ← 1, b ← 2, :arr ← [1,2]],
@@ -88,6 +95,18 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray([a,b,a+b,a/b], arr)))) == [1, 2, 3, 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(view([a,b,a+b,a/b], :), arr)))) == [1, 2, 3, 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(PermutedDimsArray([a b;a+b a/b], (1,2)), arr)))) == [1 2 ; 3  1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(transpose([a b;a+b a/b]), arr)))) == [1 3;2 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(UpperTriangular([a b;a+b a/b]), arr)))) == [1 2;0 1/2]
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray([a b;a+b a/b], arr)))) == [1 2; 3 1/2]
@@ -132,5 +151,13 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                                              [(),
                                               (0.6,)],
                                              vcat)|>toexpr|>eval) < 1.1
+
+    let
+        @syms a b
+
+        f = eval(toexpr(Func([a+b], [], a+b)))
+        @test f(1) == 1
+        @test f(2) == 2
+    end
 end
 

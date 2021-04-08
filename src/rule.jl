@@ -179,11 +179,11 @@ cos((1 + a))
 A rule with 2 segment variables
 
 ```julia
-julia> r = @rule ~x - ~y => ~x + (-(~y))
-~x - ~y => ~x + -(~y)
+julia> r = @rule sin(~x + ~y) => sin(~x)*cos(~y) + cos(~x)*sin(~y)
+sin(~x + ~y) => sin(~x) * cos(~y) + cos(~x) * sin(~y)
 
-julia> r(a-2b)
-(a + (-(2 * b)))
+julia> r(sin(a + b))
+cos(a)*sin(b) + sin(a)*cos(b)
 ```
 
 A rule that matches two of the same expressions:

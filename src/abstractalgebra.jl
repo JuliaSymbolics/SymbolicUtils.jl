@@ -9,7 +9,7 @@ with a symbol, store the symbol => term mapping in `dict`.
 function labels! end
 
 # Turn a Term into a multivariate polynomial
-function labels!(dicts, t::Sym)
+function labels!(dicts, t::Sym,  variable_type::Type)
     sym2term, term2sym = dicts
     if !haskey(term2sym, t)
         sym2term[t] = t
@@ -18,14 +18,14 @@ function labels!(dicts, t::Sym)
     return t
 end
 
-function labels!(dicts, t)
+function labels!(dicts, t, variable_type::Type)
     if t isa Integer
         return t
     elseif istree(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
         tt = arguments(t)
-        return similarterm(t, operation(t), map(x->labels!(dicts, x), tt), symtype(t))
+        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), tt), symtype(t))
     elseif istree(t) && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
-        return similarterm(t, operation(t), map(x->labels!(dicts, x), arguments(t)), symtype(t))
+        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), arguments(t)), symtype(t))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
@@ -36,7 +36,7 @@ function labels!(dicts, t)
             sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
             dicts2 = _dicts(dicts[2])
             sym2term[sym] = similarterm(t, operation(t),
-                                        map(x->to_mpoly(x, dicts)[1], arguments(t)),
+                                        map(x->to_mpoly(x, variable_type, dicts)[1], arguments(t)),
                                         symtype(t))
         else
             sym = Sym{symtype(t)}(gensym("literal"))
@@ -49,7 +49,7 @@ function labels!(dicts, t)
     end
 end
 
-ismpoly(x) = x isa MPoly || x isa Integer
+ismpoly(x) = x isa MP.AbstractPolynomialLike || x isa Integer
 isnonnegint(x) = x isa Integer && x >= 0
 
 _dicts(t2s=OrderedDict{Any, Sym}()) = (OrderedDict{Sym, Any}(), t2s)
@@ -71,70 +71,82 @@ let
     MPOLY_MAKER = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_rules)), similarterm=simterm))
 
     global to_mpoly
-    function to_mpoly(t, dicts=_dicts())
+    function to_mpoly(t, variable_type::Type, dicts=_dicts())
         # term2sym is only used to assign the same
         # symbol for the same term -- in other words,
         # it does common subexpression elimination
         t = MPOLY_CLEANUP(t)
         sym2term, term2sym = dicts
-        labeled = labels!((sym2term, term2sym), t)
+        labeled = labels!((sym2term, term2sym), t, variable_type)
 
         if isempty(sym2term)
             return MPOLY_MAKER(labeled), Dict{Sym,Any}()
         end
 
         ks = sort(collect(keys(sym2term)), lt=<ₑ)
-        R, vars = PolynomialRing(ZZ, String.(nameof.(ks)))
+        vars = MP.similarvariable.(variable_type, nameof.(ks))
 
-        replace_with_poly = Dict{Sym,MPoly}(zip(ks, vars))
+        replace_with_poly = Dict{Sym,eltype(vars)}(zip(ks, vars))
         t_poly = substitute(labeled, replace_with_poly, fold=false)
         MPOLY_MAKER(t_poly), sym2term
     end
 end
 
 function to_term(reference, x, dict)
-    syms = Dict(zip(nameof.(keys(dict)), keys(dict)))
+    syms = Dict(zip(string.(nameof.(keys(dict))), keys(dict)))
     dict = copy(dict)
     for (k, v) in dict
         dict[k] = _to_term(reference, v, dict, syms)
     end
-    _to_term(reference, x, dict, syms)
+    return _to_term(reference, x, dict, syms)
+    #return substitute(t, dict, fold=false)
 end
 
-function _to_term(reference, x::MPoly, dict, syms)
-
-    function mul_coeffs(exps, ring)
-        l = length(syms)
-        ss = symbols(ring)
-        monics = [e == 1 ? syms[ss[i]] : syms[ss[i]]^e for (i, e) in enumerate(exps) if !iszero(e)]
-        if length(monics) == 1
-            return monics[1]
-        elseif length(monics) == 0
-            return 1
-        else
-            return similarterm(reference, *, monics, symtype(reference))
+_to_term(reference, x::Number, dict, syms) = x
+_to_term(reference, var::MP.AbstractVariable, dict, syms) = substitute(syms[MP.name(var)], dict, fold=false)
+function _to_term(reference, mono::MP.AbstractMonomialLike, dict, syms)
+    monics = [
+        begin
+            t = _to_term(reference, var, dict, syms)
+            exp == 1 ? t : t^exp
         end
-    end
-
-    monoms = [mul_coeffs(exponent_vector(x, i), x.parent) for i in 1:x.length]
-    if length(monoms) == 0
-        return 0
-    elseif length(monoms) == 1
-        t = !isone(x.coeffs[1]) ?  monoms[1] * Int(x.coeffs[1]) : monoms[1]
+        for (var, exp) in MP.powers(mono) if !iszero(exp)
+    ]
+    if length(monics) == 1
+        return monics[1]
+    elseif isempty(monics)
+        return 1
     else
-        t = similarterm(reference,
-                        +,
-                        map((x,y)->isone(y) ? x : Int(y)*x,
-                            monoms, x.coeffs[1:length(monoms)]),
-                        symtype(reference))
+        return similarterm(reference, *, monics, symtype(reference))
     end
+end
 
-    substitute(t, dict, fold=false)
+function _to_term(reference, term::MP.AbstractTermLike, dict, syms)
+    coef = MP.coefficient(term)
+    mono = _to_term(reference, MP.monomial(term), dict, syms)
+    if isone(coef)
+        return mono
+    else
+        return Int(MP.coefficient(term)) * mono
+    end
+end
+
+function _to_term(reference, x::MP.AbstractPolynomialLike, dict, syms)
+    if MP.nterms(x) == 0
+        return 0
+    elseif MP.nterms(x) == 1
+        return _to_term(reference, first(MP.terms(x)), dict, syms)
+    else
+        terms = map(MP.terms(x)) do term
+            _to_term(reference, term, dict, syms)
+        end
+        return similarterm(reference, +, terms, symtype(reference))
+    end
 end
 
 function _to_term(reference, x, dict, vars)
     if istree(x)
-        t=similarterm(x, operation(x), _to_term.((reference,), arguments(x), (dict,), (vars,)), symtype(x))
+        t = similarterm(x, operation(x), _to_term.((reference,), arguments(x), (dict,), (vars,)), symtype(x))
     else
         if haskey(dict, x)
             return dict[x]
@@ -144,18 +156,21 @@ function _to_term(reference, x, dict, vars)
     end
 end
 
-<ₑ(a::MPoly, b::MPoly) = false
+<ₑ(a::MP.AbstractPolynomialLike, b::MP.AbstractPolynomialLike) = false
 
 """
-    expand(expr)
+    expand(expr, variable_type::Type=DynamicPolynomials.PolyVar{true})
 
-Expand expressions by distributing multiplication over addition.
+Expand expressions by distributing multiplication over addition, e.g.,
+`a*(b+c)` becomes `ab+ac`.
 
-`a*(b+c)` becomes `ab+ac`. `expand` uses [AbstractAlgebra.jl](https://nemocas.github.io/AbstractAlgebra.jl/latest/) to construct
-dense Multi-variate polynomial to do this very fast.
+`expand` uses replace symbols and non-algebraic expressions by variables of type
+`variable_type` to compute the distribution using a specialized sparse
+multivariate polynomials implementation.
+`variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
 """
-function expand(x)
-    to_term(x, to_mpoly(x)...)
+function expand(expr, variable_type::Type=DynamicPolynomials.PolyVar{true})
+    to_term(expr, to_mpoly(expr, variable_type)...)
 end
 
 Base.@deprecate polynormalize(x) expand(x)

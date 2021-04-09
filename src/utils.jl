@@ -227,11 +227,11 @@ function coefficients(expr,syms::AbstractArray{SymbolicUtils.Sym})
 end
 
 function has_nonlinear(expr,sym,above)
-    if istree(expr)
+    if SymbolicUtils.istree(expr)
         if !above
             is_nonlinear(expr) && above=true
         end
-        for e in arguments(expr)
+        for e in SymbolicUtils.arguments(expr)
             if has_nonlinear(e,sym,above)
                 return true
             end
@@ -244,7 +244,7 @@ function has_nonlinear(expr,sym,above)
 end
 
 function is_nonlinear(expr)
-    op = operation(expr)
+    op = SymbolicUtils.operation(expr)
     if isa(op,Add)
         # need clarifications on this
     elseif isa(op,Mul)

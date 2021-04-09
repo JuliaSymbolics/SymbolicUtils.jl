@@ -121,3 +121,12 @@ end
     expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))
     SymbolicUtils.@timerewrite simplify(expr1)
 end
+
+
+@testset "interpolation" begin
+    f(y) = sin
+    @syms a
+
+    @test isnothing(@rule(f(1)(a) => 2)(sin(a)))
+    @test @rule($(f(1))(a) => 2)(sin(a)) == 2
+end

@@ -69,6 +69,8 @@ function makepattern(expr, keys)
             else
                 :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
             end
+        elseif expr.head === :$
+            return esc(expr.args[1])
         else
             error("Unsupported Expr of type $(expr.head) found in pattern")
         end

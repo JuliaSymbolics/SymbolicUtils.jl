@@ -149,20 +149,22 @@ SymbolicUtils contains [a rule-based rewriting language](/rewrite/#rule-based_re
 
 ## Simplification
 
-By default `*` and `+` operations apply the most basic simplification upon construction of the expression.
+By default `+`, `*` and `^` operations apply the most basic simplification upon construction of the expression.
 
 The rules with which the canonical form of `Symbolic{<:Number}` terms are constructed are the next (where `x isa Symbolic` and `c isa Number`)
 
- -  `0 + x` and `1 * x` always gives `x`
- -  `0 * x` always gives `0`,
+ -  `0 + x`, `1 * x` and `x^1` always gives `x`
+ -  `0 * x` always gives `0` and `x ^ 0` gives `1`
+ -  `-x`, `1/x` and `x\1` get transformed into `(-1)*x`, `x^(-1)` and `x^(-1)`.
  -  commutativity and associativity over `+` and `*` are assumed. Re-ordering of terms will be done under a [total order](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/ordering.jl)
- -  sum of `Add`'s are fused
- -  product of `Mul`'s are fused
  -  `x + ... + x` will be fused into `n*x` with type `Mul`
  -  `x * ... * x` will be fused into `x^n` with type `Pow`
+ -  sum of `Add`'s are fused
+ -  product of `Mul`'s are fused
  -  `c * (c₁x₁ + ... + cₙxₙ)` will be converted into `c*c₁*x₁ + ... + c*cₙ*xₙ`
- -  `(x₁^c₁ + ... + xₙ^cₙ)^c` will be converted into `x₁^(c*c₁) + ... + xₙ^(c*cₙ)`
- -  any other combinations of expressions will be left the same
+ -  `(x₁^c₁ * ... * xₙ^cₙ)^c` will be converted into `x₁^(c*c₁) * ... * xₙ^(c*cₙ)`
+ -  there are come other simplifications on construction that you can check [here](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/methods.jl)
+
 
 Here is an example of this
 

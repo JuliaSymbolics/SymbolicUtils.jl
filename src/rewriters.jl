@@ -133,12 +133,12 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
     if istree(x)
         if ord === :pre
-            x = p.rw(x)
+            x = PassThrough(p.rw)(x)
         end
         if istree(x)
             x = p.similarterm(x, operation(x), map(PassThrough(p), arguments(x)))
         end
-        return ord === :post ? p.rw(x) : x
+        return ord === :post ? PassThrough(p.rw)(x) : x
     else
         return p.rw(x)
     end
@@ -148,7 +148,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
     if istree(x)
         if ord === :pre
-            x = p.rw(x)
+            x = PassThrough(p.rw)(x)
         end
         if istree(x)
             _args = map(arguments(x)) do arg
@@ -161,7 +161,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
             t = p.similarterm(x, operation(x), args)
         end
-        return ord === :post ? p.rw(t) : t
+        return ord === :post ? PassThrough(p.rw)(t) : t
     else
         return p.rw(x)
     end

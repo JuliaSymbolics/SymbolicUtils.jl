@@ -14,6 +14,10 @@ using SymbolicUtils: getdepth, Rewriters, Term
 
     @eqtest rset(ex) == (((2 * w) + (2 * w)) + (2 * α)) + (2 * β)
     @eqtest Rewriters.Fixpoint(rset)(ex) == ((2 * (2 * w)) + (2 * α)) + (2 * β)
+
+    r3 = @rule(sqrt(~x) => (~x)^(1/2))
+    @eqtest Rewriters.Prewalk(r3)(z*sqrt(z)) == z^(3/2)
+    @eqtest Rewriters.Postwalk(r3)(z*sqrt(z)) == z^(3/2)
 end
 
 @testset "Numeric" begin

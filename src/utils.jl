@@ -214,3 +214,40 @@ macro matchable(expr)
         Base.length(x::$name) = $(length(fields) + 1)
     end |> esc
 end
+
+# Check for linear coefficients
+coefficients(expr,sym::SymbolicUtils.Sym) coefficients(expr,[sym])
+function coefficients(expr,syms::AbstractArray{SymbolicUtils.Sym})
+    res = Dict{SymbolicUtils.Sym,Bool}
+    for s in syms
+        cur = Dict(s,has_nonlinear(expr,s,false))
+        merge(res,Dict)
+    end
+    return res
+end
+
+function has_nonlinear(expr,sym,above)
+    if istree(expr)
+        if !above
+            is_nonlinear(expr) && above=true
+        end
+        for e in arguments(expr)
+            if has_nonlinear(e,sym,above)
+                return true
+            end
+        end
+    elseif expr == sym
+            return above
+    else
+        return false
+    end
+end
+
+function is_nonlinear(expr)
+    op = operation(expr)
+    if isa(op,Add)
+        # need clarifications on this
+    elseif isa(op,Mul)
+    elseif isa(op,Term)
+    return
+end

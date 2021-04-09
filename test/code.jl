@@ -69,7 +69,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     test_repr(toexpr(MakeArray([a,b,a+b], :arr)),
               quote
-                  $(SymbolicUtils.Code.create_array)(typeof(arr), nothing, Val{(3,)}(), a, b, $(+)(a, b))
+                  $(SymbolicUtils.Code.create_array)(typeof(arr), nothing, Val{1}(), Val{(3,)}(), a, b, $(+)(a, b))
               end)
 
     toexpr(Let([a ← 1, b ← 2, :arr ← [1,2]],

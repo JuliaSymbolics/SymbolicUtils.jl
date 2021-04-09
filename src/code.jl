@@ -369,10 +369,12 @@ MakeArray(elems, similarto) = MakeArray(elems, similarto, nothing)
 function toexpr(a::MakeArray, st)
     similarto = toexpr(a.similarto, st)
     T = similarto isa Type ? similarto : :(typeof($similarto))
+    ndim = ndims(a.elems)
     elT = a.output_eltype
     quote
         $create_array($T,
                      $elT,
+                     Val{$ndim}(),
                      Val{$(size(a.elems))}(),
                      $(map(x->toexpr(x, st), a.elems)...),)
     end
@@ -388,53 +390,83 @@ end
     arr
 end
 
-@inline function create_array(A::Type{<:Array}, T, d::Val, elems...)
+@inline function create_array(A::Type{<:Array}, T, ::Val, d::Val, elems...)
     _create_array(A, T, d, elems...)
 end
 
-@inline function create_array(A::Type{<:Array}, ::Nothing, d::Val{dims}, elems...) where dims
+@inline function create_array(A::Type{<:Array}, ::Nothing, ::Val, d::Val{dims}, elems...) where dims
     T = promote_type(map(typeof, elems)...)
     _create_array(A, T, d, elems...)
 end
 
-@inline function create_array(A::Type{<:SubArray{T,N,P,I,L}}, S, d::Val, elems...) where {T,N,P,I,L}
-    create_array(P, S, d, elems...)
+## Vector
+#
+@inline function create_array(::Type{<:Array}, ::Nothing, ::Val{1}, ::Val{dims}, elems...) where dims
+    [elems...]
 end
 
-@inline function create_array(A::Type{<:PermutedDimsArray{T,N,perm,iperm,P}}, S, d::Val, elems...) where {T,N,perm,iperm,P}
-    create_array(P, S, d, elems...)
+@inline function create_array(::Type{<:Array}, T, ::Val{1}, ::Val{dims}, elems...) where dims
+    T[elems...]
 end
 
 ## Matrix
 
-@inline function create_array(::Type{<:Matrix}, ::Nothing, ::Val{dims}, elems...) where dims
-    Base.hvcat(dims, elems...)
+@inline function create_array(::Type{<:Array}, ::Nothing, ::Val{2}, ::Val{dims}, elems...) where dims
+    vhcat(dims, elems...)
 end
 
-@inline function create_array(::Type{<:Matrix}, T, ::Val{dims}, elems...) where dims
-    Base.typed_hvcat(T, dims, elems...)
+@inline function create_array(::Type{<:Array}, T, ::Val{2}, ::Val{dims}, elems...) where dims
+    typed_vhcat(T, dims, elems...)
 end
 
-@inline function create_array(A::Type{<:Transpose{T,P}}, S, d::Val, elems...) where {T,P}
-    create_array(P, S, d, elems...)
+
+vhcat(sz::Tuple{Int,Int}, xs::T...) where {T} = typed_vhcat(T, sz, xs...)
+vhcat(sz::Tuple{Int,Int}, xs::Number...) = typed_vhcat(Base.promote_typeof(xs...), sz, xs...)
+vhcat(sz::Tuple{Int,Int}, xs...) = typed_vhcat(Base.promote_eltypeof(xs...), sz, xs...)
+
+function typed_vhcat(::Type{T}, sz::Tuple{Int, Int}, xs...) where T
+    nr,nc = sz
+    a = Matrix{T}(undef, nr, nc)
+    k = 1
+    for j=1:nc
+        @inbounds for i=1:nr
+            a[i, j] = xs[k]
+            k += 1
+        end
+    end
+    a
 end
 
-@inline function create_array(A::Type{<:UpperTriangular{T,P}}, S, d::Val, elems...) where {T,P}
-    create_array(P, S, d, elems...)
+## Arrays of the special kind
+@inline function create_array(A::Type{<:SubArray{T,N,P,I,L}}, S, nd::Val, d::Val, elems...) where {T,N,P,I,L}
+    create_array(P, S, nd, d, elems...)
+end
+
+@inline function create_array(A::Type{<:PermutedDimsArray{T,N,perm,iperm,P}}, S, nd::Val, d::Val, elems...) where {T,N,perm,iperm,P}
+    create_array(P, S, nd, d, elems...)
+end
+
+
+@inline function create_array(A::Type{<:Transpose{T,P}}, S, nd::Val, d::Val, elems...) where {T,P}
+    create_array(P, S, nd, d, elems...)
+end
+
+@inline function create_array(A::Type{<:UpperTriangular{T,P}}, S, nd::Val, d::Val, elems...) where {T,P}
+    create_array(P, S, nd, d, elems...)
 end
 
 ## SArray
-@inline function create_array(::Type{<:SArray}, ::Nothing, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:SArray}, ::Nothing, nd::Val, ::Val{dims}, elems...) where dims
     SArray{Tuple{dims...}}(elems...)
 end
 
-@inline function create_array(::Type{<:SArray}, T, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:SArray}, T, nd::Val, ::Val{dims}, elems...) where dims
     SArray{Tuple{dims...}, T}(elems...)
 end
 
 ## LabelledArrays
-@inline function create_array(A::Type{<:SLArray}, T, d::Val{dims}, elems...) where {dims}
-    a = create_array(SArray, T, d, elems...)
+@inline function create_array(A::Type{<:SLArray}, T, nd::Val, d::Val{dims}, elems...) where {dims}
+    a = create_array(SArray, T, nd, d, elems...)
     if nfields(dims) === ndims(A)
         similar_type(A, eltype(a), Size(dims))(a)
     else
@@ -442,8 +474,8 @@ end
     end
 end
 
-@inline function create_array(A::Type{<:LArray}, T, d::Val{dims}, elems...) where {dims}
-    data = create_array(Array, T, d, elems...)
+@inline function create_array(A::Type{<:LArray}, T, nd::Val, d::Val{dims}, elems...) where {dims}
+    data = create_array(Array, T, nd, d, elems...)
     if nfields(dims) === ndims(A)
         LArray{eltype(data),nfields(dims),typeof(data),LabelledArrays.symnames(A)}(data)
     else

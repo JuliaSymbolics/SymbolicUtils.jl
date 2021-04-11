@@ -233,7 +233,7 @@ end
 function has_nonlinear(expr, t, above)
     if SymbolicUtils.istree(expr)
         if !above
-            is_nonlinear(expr) && above=true
+            is_nonlinear(expr) && (above = true)
         end
         for e in SymbolicUtils.arguments(expr)
             if has_nonlinear(e, t, above)

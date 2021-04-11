@@ -249,9 +249,9 @@ end
 
 function is_nonlinear(expr)
     op = SymbolicUtils.operation(expr)
-    if isa(op,Add)
-        # need clarifications on this
-    elseif isa(op,Mul)
-    elseif isa(op,Term)
-    return
+    if op in monadic_linear return true
+    return false
+    # add case of multiplication in variables, 
+    # will require differentiation between variables in f and not in f.
+    # possibly also exp
 end

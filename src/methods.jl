@@ -150,3 +150,8 @@ promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T
 # Specially handle inv and literal pow
 Base.inv(x::Symbolic{<:Number}) = Base.:^(x, -1)
 Base.literal_pow(::typeof(^), x::Symbolic{<:Number}, ::Val{p}) where {p} = Base.:^(x, p)
+
+# Array-like operations
+Base.size(x::Symbolic{<:Number}) = ()
+Base.length(x::Symbolic{<:Number}) = 1
+Base.ndims(x::Symbolic{<:Number}) = 0

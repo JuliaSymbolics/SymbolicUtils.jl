@@ -503,6 +503,21 @@ function show_mul(io, args)
     end
 end
 
+function show_ref(io, f, args)
+    x = args[1]
+    idx = args[2:end]
+
+    print(io, x)
+    print(io, "[")
+    for i=1:length(idx)
+        print_arg(io, idx[i])
+        if i!=length(idx)
+            print(io, ", ")
+        end
+    end
+    print(io, "]")
+end
+
 function show_call(io, f, args)
     fname = nameof(f)
     binary = Base.isbinaryoperator(fname)
@@ -540,6 +555,8 @@ function show_term(io::IO, t)
         show_mul(io, args)
     elseif f === (^)
         show_pow(io, args)
+    elseif f === (getindex)
+        show_ref(io, f, args)
     else
         show_call(io, f, args)
     end

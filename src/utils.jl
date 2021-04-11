@@ -215,24 +215,28 @@ macro matchable(expr)
     end |> esc
 end
 
+const monadic_linear = [deg2rad, +, rad2deg, transpose, -, conj]
+
+const monadic_nonlinear = [asind, log1p, acsch, erfc, digamma, acos, asec, acosh, airybiprime, acsc, cscd, log, tand, log10, csch, asinh, airyai, abs2, gamma, lgamma, erfcx, bessely0, cosh, sin, cos, atan, cospi, cbrt, acosd, bessely1, acoth, erfcinv, erf, dawson, inv, acotd, airyaiprime, erfinv, trigamma, asecd, besselj1, exp, acot, sqrt, sind, sinpi, asech, log2, tan, invdigamma, airybi, exp10, sech, erfi, coth, asin, cotd, cosd, sinh, abs, besselj0, csc, tanh, secd, atand, sec, acscd, cot, exp2, expm1, atanh]
+
 # Check for linear coefficients
-coefficients(expr,sym::SymbolicUtils.Sym) coefficients(expr,[sym])
-function coefficients(expr,syms::AbstractArray{SymbolicUtils.Sym})
-    res = Dict{SymbolicUtils.Sym,Bool}
+function coefficients(f,expr)
+    res = Dict{Any, Bool}
+    has_nonlinear(f,expr)
     for s in syms
-        cur = Dict(s,has_nonlinear(expr,s,false))
-        merge(res,Dict)
+        cur = Dict(s, has_nonlinear(expr, s, false))
+        merge(res, Dict)
     end
     return res
 end
 
-function has_nonlinear(expr,sym,above)
+function has_nonlinear(expr, sym, above)
     if SymbolicUtils.istree(expr)
         if !above
-            is_nonlinear(expr) && above=true
+            is_nonlinear(expr) && (above=true)
         end
         for e in SymbolicUtils.arguments(expr)
-            if has_nonlinear(e,sym,above)
+            if has_nonlinear(e, sym, above)
                 return true
             end
         end

@@ -19,9 +19,9 @@ using Zygote
     y = SymbolicUtils.Code.create_array(A, T, Val(u), Val(dim), elems...)
     @test y == ŷ
 
-    gs = pb(ŷ)
+    gs = pb(ones(T, length(elems)))
     @test length(gs[1]) == length(elems)
-    for i = 1:prod(dim)
+    for i = 1:(prod(dim)-1)
       @test gs[1][i] == one(eltype(ŷ))
     end
   end

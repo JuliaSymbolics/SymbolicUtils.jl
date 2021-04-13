@@ -156,7 +156,12 @@ rewriters.
 - `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
 - `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order 
    (*from top to bottom and from left to right*) traversal of a given expression and applies 
-   the rewriter `rw`. `threaded=true` will use multi threading for traversal. `thread_cutoff` 
+   the rewriter `rw`. `threaded=true` will use multi threading for traversal.
+   Note that if `rw` returns `nothing` when a match is not found, then `Prewalk(rw)` will
+   also return nothing unless a match is found at every level of the walk. If you are
+   applying multiple rules, then `Chain` already has the appropriate passthrough behavior.
+   If you only want to apply one rule, then consider using `PassThrough`.
+   `thread_cutoff` 
    is the minimum number of nodes in a subtree which should be walked in a threaded spawn.
 - `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order 
    (*from left to right and from bottom to top*) traversal.

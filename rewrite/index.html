@@ -165,7 +165,7 @@ acpyid(cos(x)^<span class="hljs-number">2</span> + sin(x)^<span class="hljs-numb
 </li>
 <li><p><code>If&#40;cond, rw&#41;</code> is the same as <code>IfElse&#40;cond, rw, Empty&#40;&#41;&#41;</code></p>
 </li>
-<li><p><code>Prewalk&#40;rw; threaded&#61;false, thread_cutoff&#61;100&#41;</code> returns a rewriter which does a pre-order   &#40;<em>from top to bottom and from left to right</em>&#41; traversal of a given expression and applies   the rewriter <code>rw</code>. <code>threaded&#61;true</code> will use multi threading for traversal. <code>thread_cutoff</code>   is the minimum number of nodes in a subtree which should be walked in a threaded spawn.</p>
+<li><p><code>Prewalk&#40;rw; threaded&#61;false, thread_cutoff&#61;100&#41;</code> returns a rewriter which does a pre-order   &#40;<em>from top to bottom and from left to right</em>&#41; traversal of a given expression and applies   the rewriter <code>rw</code>. <code>threaded&#61;true</code> will use multi threading for traversal.  Note that if <code>rw</code> returns <code>nothing</code> when a match is not found, then <code>Prewalk&#40;rw&#41;</code> will  also return nothing unless a match is found at every level of the walk. If you are  applying multiple rules, then <code>Chain</code> already has the appropriate passthrough behavior.  If you only want to apply one rule, then consider using <code>PassThrough</code>. <code>thread_cutoff</code>   is the minimum number of nodes in a subtree which should be walked in a threaded spawn.</p>
 </li>
 <li><p><code>Postwalk&#40;rw; threaded&#61;false, thread_cutoff&#61;100&#41;</code> similarly does post-order   &#40;<em>from left to right and from bottom to top</em>&#41; traversal.</p>
 </li>
@@ -204,7 +204,7 @@ rcas((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><cod
 <pre><code class="julia hljs">Fixpoint(cas)((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">1 + 2cos(x)*sin(x)</code></pre>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: April 13, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: April 14, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

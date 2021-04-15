@@ -164,11 +164,11 @@
 <p>Represents coeff * &#40;key1 ^ val1&#41; * &#40;key2 ^ val2&#41; * ....</p>
 <p>where coeff is a &lt;:Number and keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
 <ul>
-<li><p><code>symtype&#40;::Add&#41;</code> – returns <code>T</code>.</p>
+<li><p><code>symtype&#40;::Mul&#41;</code> – returns <code>T</code>.</p>
 </li>
-<li><p><code>operation&#40;::Add&#41;</code> – returns <code>*</code>.</p>
+<li><p><code>operation&#40;::Mul&#41;</code> – returns <code>*</code>.</p>
 </li>
-<li><p><code>arguments&#40;::Add&#41;</code> – returns a totally ordered vector of arguments. i.e. <code>&#91;coeff, keyM^valM, keyN^valN...&#93;</code></p>
+<li><p><code>arguments&#40;::Mul&#41;</code> – returns a totally ordered vector of arguments. i.e. <code>&#91;coeff, keyM^valM, keyN^valN...&#93;</code></p>
 </li>
 </ul>
 </div>

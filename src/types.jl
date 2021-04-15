@@ -691,9 +691,9 @@ Represents coeff * (key1 ^ val1) * (key2 ^ val2) * ....
 where coeff is a <:Number and keys and values come from the dictionary (`dict`).
 where `coeff` and the vals are `<:Number` and keys are symbolic.
 
-- `symtype(::Add)` -- returns `T`.
-- `operation(::Add)` -- returns `*`.
-- `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
+- `symtype(::Mul)` -- returns `T`.
+- `operation(::Mul)` -- returns `*`.
+- `arguments(::Mul)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
 struct Mul{X, T<:Number, D, M} <: Symbolic{X}

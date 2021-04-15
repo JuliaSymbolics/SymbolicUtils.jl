@@ -195,6 +195,7 @@ end
         @test x - x === 0
         @test isequal(-x, -1x)
         @test isequal(x^1, x)
+        @test isequal((x^-1)*inv(x^-1), 1)
     end
 end
 

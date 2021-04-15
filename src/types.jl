@@ -831,7 +831,7 @@ function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
     Pow{T, typeof(a), typeof(b), typeof(metadata)}(a,b,metadata)
 end
 function Pow(a, b; metadata=NO_METADATA)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(a, b, metadata=metadata)
+    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
 end
 symtype(a::Pow{X}) where {X} = X
 
@@ -846,6 +846,16 @@ Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 Base.isequal(p::Pow, b::Pow) = isequal(p.base, b.base) && isequal(p.exp, b.exp)
 
 Base.show(io::IO, p::Pow) = show_term(io, p)
+
+function makepow(a, b)
+    base = a
+    exp = b
+    if a isa Pow
+        base = a.base
+        exp = a.exp * b
+    end
+    return (base, exp)
+end
 
 ^(a::SN, b) = Pow(a, b)
 

@@ -167,8 +167,33 @@ f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code
 <h2 id="term_rewriting"><a href="#term_rewriting" class="header-anchor">Term rewriting</a></h2>
 <p>SymbolicUtils contains <a href="/rewrite/#rule-based_rewriting">a rule-based rewriting language</a> for easy pattern matching and rewriting of expression. There is also a <a href="/rewrite/#composing_rewriters">combinator library</a> to combine rules to chain, branch and loop over rules.</p>
 <h2 id="simplification"><a href="#simplification" class="header-anchor">Simplification</a></h2>
-<p>By default <code>*</code> and <code>&#43;</code> operations apply the most basic simplification upon construction of the expression.</p>
-<p>Commutativity and associativity are assumed over <code>&#43;</code> and <code>*</code> operations on <code>Symbolic&#123;&lt;:Number&#125;</code>.</p>
+<p>By default <code>&#43;</code>, <code>*</code> and <code>^</code> operations apply the most basic simplification upon construction of the expression.</p>
+<p>The rules with which the canonical form of <code>Symbolic&#123;&lt;:Number&#125;</code> terms are constructed are the next &#40;where <code>x isa Symbolic</code> and <code>c isa Number</code>&#41;</p>
+<ul>
+<li><p><code>0 &#43; x</code>, <code>1 * x</code> and <code>x^1</code> always gives <code>x</code></p>
+</li>
+<li><p><code>0 * x</code> always gives <code>0</code> and <code>x ^ 0</code> gives <code>1</code></p>
+</li>
+<li><p><code>-x</code>, <code>1/x</code> and <code>x\1</code> get transformed into <code>&#40;-1&#41;*x</code>, <code>x^&#40;-1&#41;</code> and <code>x^&#40;-1&#41;</code>.</p>
+</li>
+<li><p>commutativity and associativity over <code>&#43;</code> and <code>*</code> are assumed. Re-ordering of terms will be done under a <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/ordering.jl">total order</a></p>
+</li>
+<li><p><code>x &#43; ... &#43; x</code> will be fused into <code>n*x</code> with type <code>Mul</code></p>
+</li>
+<li><p><code>x * ... * x</code> will be fused into <code>x^n</code> with type <code>Pow</code></p>
+</li>
+<li><p>sum of <code>Add</code>&#39;s are fused</p>
+</li>
+<li><p>product of <code>Mul</code>&#39;s are fused</p>
+</li>
+<li><p><code>c * &#40;c₁x₁ &#43; ... &#43; cₙxₙ&#41;</code> will be converted into <code>c*c₁*x₁ &#43; ... &#43; c*cₙ*xₙ</code></p>
+</li>
+<li><p><code>&#40;x₁^c₁ * ... * xₙ^cₙ&#41;^c</code> will be converted into <code>x₁^&#40;c*c₁&#41; * ... * xₙ^&#40;c*cₙ&#41;</code></p>
+</li>
+<li><p>there are come other simplifications on construction that you can check <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/methods.jl">here</a></p>
+</li>
+</ul>
+<p>Here is an example of this</p>
 <pre><code class="julia hljs"><span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>)</code></pre><pre><code class="plaintext hljs">4w + 2α + 2β + 2(cos(z)^2) + 2(sin(z)^2) - 2</code></pre>
 <p>The <code>simplify</code> function applies a built-in set of rules to rewrite expressions in order to simplify it.</p>
 <pre><code class="julia hljs">simplify(<span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>))</code></pre><pre><code class="plaintext hljs">4w + 2α + 2β + 2(cos(z)^2) + 2(sin(z)^2) - 2</code></pre>

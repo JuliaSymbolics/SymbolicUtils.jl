@@ -56,8 +56,16 @@ symtype(x) = typeof(x)
 
 symtype(::Symbolic{T}) where {T} = T
 
+"""
+    metadata(s)
+Get all the metadata of a term or `nothing` if no metadata is defined.
+
+"""
+metadata(s::Symbolic) = s.metadata
+metadata(s::Any) = nothing
+
 function hasmetadata(s::Symbolic, ctx)
-    s.metadata isa AbstractDict && haskey(s.metadata, ctx)
+    metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
 function getmetadata(s::Symbolic, ctx)
@@ -388,7 +396,7 @@ function term(f, args...; type = nothing)
 end
 
 """
-    similarterm(t, f, args, symtype)
+    similarterm(t, f, args, symtype; metadata=nothing)
 
 Create a term that is similar in type to `t`. Extending this function allows packages
 using their own expression types with SymbolicUtils to define how new terms should
@@ -403,9 +411,9 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-similarterm(t, f, args, symtype) = f(args...)
-similarterm(t, f, args) = similarterm(t, f, args, _promote_symtype(f, args))
-similarterm(t::Term, f, args) = Term{_promote_symtype(f, args)}(f, args)
+similarterm(t, f, args, symtype; metadata=nothing) = f(args...)
+similarterm(t, f, args; metadata=nothing) = similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
+similarterm(t::Term, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -917,18 +925,18 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}}
 
-function similarterm(p::NumericTerm, f, args, T=nothing)
+function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
     if T === nothing
         T = _promote_symtype(f, args)
     end
     if f === (+)
-        Add(T, makeadd(1, 0, args...)...)
+        Add(T, makeadd(1, 0, args...)...; metadata=metadata)
     elseif f == (*)
-        Mul(T, makemul(1, args...)...)
+        Mul(T, makemul(1, args...)...; metadata=metadata)
     elseif f == (^) && length(args) == 2
-        Pow{T, typeof.(args)...}(args...)
+        Pow{T, typeof.(args)...}(args...; metadata=metadata)
     else
-        Term{T}(f, args)
+        Term{T}(f, args; metadata=metadata)
     end
 end
 

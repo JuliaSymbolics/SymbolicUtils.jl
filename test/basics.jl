@@ -78,6 +78,15 @@ struct Ctx2 end
         @test getmetadata(a′, Ctx1) == "meta_1"
         @test getmetadata(a′, Ctx2) == "meta_2"
     end
+
+    # In substitute #283
+    #
+    @syms f(t) t
+    f = setmetadata(f(t), Ctx1, "yes")
+    hasmetadata(f, Ctx1) # true
+    newf = substitute(f, Dict(a=>b)) # unrelated substitution
+    @test hasmetadata(newf, Ctx1)
+    @test getmetadata(newf, Ctx1) == "yes"
 end
 
 @testset "Base methods" begin

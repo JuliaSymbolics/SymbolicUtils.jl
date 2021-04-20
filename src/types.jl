@@ -62,7 +62,7 @@ Get all the metadata of a term or `nothing` if no metadata is defined.
 
 """
 metadata(s::Symbolic) = s.metadata
-metadata(s::Any) = x
+metadata(s::Any) = nothing
 
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)

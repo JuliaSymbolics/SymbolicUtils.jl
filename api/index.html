@@ -238,7 +238,7 @@ julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
       <h2 class="doc-header" id="similarterm">
         <a href="#similarterm">similarterm</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">similarterm(t, f, args, symtype)</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">similarterm(t, f, args, symtype; metadata=<span class="hljs-literal">nothing</span>)</code></pre>
 <p>Create a term that is similar in type to <code>t</code>. Extending this function allows packages using their own expression types with SymbolicUtils to define how new terms should be created. Note that <code>similarterm</code> may return an object that has a different type than <code>t</code>, because <code>f</code> also influences the result.</p>
 <h2 id="arguments"><a href="#arguments" class="header-anchor">Arguments</a></h2>
 <ul>
@@ -420,7 +420,7 @@ julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: April 15, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: April 20, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

@@ -1,1 +1,1 @@
-Argument to g(::Real, ::Real)::Real at position 2 must be of symbolic type Real
+Tuple{Int64,Number} is not a subtype of Tuple{Real,Real}.

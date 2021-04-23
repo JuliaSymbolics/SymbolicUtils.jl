@@ -464,6 +464,15 @@ end
     SArray{Tuple{dims...}, T}(elems...)
 end
 
+## MArray
+@inline function create_array(::Type{<:MArray}, ::Nothing, nd::Val, ::Val{dims}, elems...) where dims
+    MArray{Tuple{dims...}}(elems...)
+end
+
+@inline function create_array(::Type{<:MArray}, T, nd::Val, ::Val{dims}, elems...) where dims
+    MArray{Tuple{dims...}, T}(elems...)
+end
+
 ## LabelledArrays
 @inline function create_array(A::Type{<:SLArray}, T, nd::Val, d::Val{dims}, elems...) where {dims}
     a = create_array(SArray, T, nd, d, elems...)

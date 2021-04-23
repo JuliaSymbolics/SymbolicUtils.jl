@@ -215,18 +215,11 @@ function promote_symtype(f::Sym{FnType{X,Y}}, args...) where {X, Y}
         return Y
     end
 
-    nrequired = fieldcount(X)
-    ngiven    = nfields(args)
-
-    if nrequired !== ngiven
-        error("$f takes $nrequired arguments; $ngiven arguments given")
-    end
-
-    for i in 1:ngiven
-        t = X.parameters[i]
-        if !(args[i] <: t)
-            error("Argument to $f at position $i must be of symbolic type $t")
-        end
+    # This is to handle `Tuple{T} where T`, so we cannot reliably query the type
+    # parameters of the `Tuple` in `FnType`.
+    t = Tuple{args...}
+    if !(t <: X)
+        error("$t is not a subtype of $X.")
     end
     return Y
 end
@@ -291,7 +284,9 @@ end
 
 function Base.show(io::IO, f::Sym{<:FnType{X,Y}}) where {X,Y}
     print(io, f.name)
-    argrepr = join(map(t->"::"*string(t), X.parameters), ", ")
+    # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
+    # best printing, but it's better than erroring.
+    argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")
     print(io, "(", argrepr, ")")
     print(io, "::", Y)
 end

@@ -212,3 +212,10 @@ end
     @syms a b c
     @test isequal(a + b, a + b + 0.01 - 0.01)
 end
+
+@testset "subtyping" begin
+    T = FnType{Tuple{T,S,Int} where {T,S}, Real}
+    s = Sym{T}(:t)
+    @syms a b c::Int
+    @test isequal(arguments(s(a, b, c)), [a, b, c])
+end

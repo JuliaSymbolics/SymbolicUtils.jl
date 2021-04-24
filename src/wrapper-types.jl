@@ -24,27 +24,24 @@ function getname(x::Expr)
 end
 
 macro symbolic_wrap(expr)
-    @assert expr isa Expr && expr.head == :(<:)
-    T = getname(expr.args[1])
-    supertype = set_where(expr.args[1], expr.args[2])
+    @assert expr isa Expr && expr.head == :struct
+    @assert expr.args[2].head == :(<:)
+    sig = expr.args[2]
+    T = getname(sig.args[1])
+    supertype = set_where(sig.args[1], sig.args[2])
 
     quote
-        struct $(expr)
-            value
-        end
-
+        $expr
 
         SymbolicUtils.has_symwrapper(::Type{<:$supertype}) = true
         SymbolicUtils.wrapper_type(::Type{<:$supertype}) = $T
         SymbolicUtils.wraps_type(::Type{$T}) = $supertype
-        SymbolicUtils.unwrap(x::$T) = x.value
     end |> esc
 end
 
+unwrap(x) = x
 function wrapper_type end
 function wraps_type end
-
-unwrap(x) = x
 
 has_symwrapper(::Type) = false
 #=

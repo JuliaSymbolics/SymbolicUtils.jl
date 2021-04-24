@@ -37,7 +37,6 @@ macro symbolic_wrap(expr)
         SymbolicUtils.has_symwrapper(::Type{<:$supertype}) = true
         SymbolicUtils.wrapper_type(::Type{<:$supertype}) = $T
         SymbolicUtils.wraps_type(::Type{$T}) = $supertype
-        SymbolicUtils.iswrapper(::Type{$T}) = true
         SymbolicUtils.unwrap(x::$T) = x.value
     end |> esc
 end
@@ -48,10 +47,6 @@ function wraps_type end
 unwrap(x) = x
 
 has_symwrapper(::Type) = false
-
-iswrapper(x::Type) = false
-
-iswrapper(x) = iswrapper(typeof(x))
 #=
 @symbolic_wrap Num <: Real
 @symbolic_wrap IntLike <: Integer

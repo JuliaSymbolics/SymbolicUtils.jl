@@ -188,7 +188,7 @@ Base.show(io::IO, v::Sym) = Base.show_unquoted(io, v.name)
 # Maybe don't even need a new type, can just use Sym{FnType}
 struct FnType{X<:Tuple,Y} end
 
-(f::Sym{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
+(f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
 
 function (f::Sym)(args...)
     error("Sym $f is not callable. " *
@@ -202,7 +202,7 @@ end
 The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
-function promote_symtype(f::Sym{FnType{X,Y}}, args...) where {X, Y}
+function promote_symtype(f::Symbolic{FnType{X,Y}}, args...) where {X, Y}
     if X === Tuple
         return Y
     end
@@ -251,13 +251,7 @@ macro syms(xs...)
         :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
         nt = _name_type(x)
         n, t = nt.name, nt.type
-        m = get(nt, :array_metadata, nothing)
-        if m !== nothing
-            :($(esc(n)) = setmetadata(Sym{$(esc(t))}($(Expr(:quote, n))),
-                                      Symbolics.ArrayShapeCtx, $m))
-        else
-            :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
-        end
+        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
     end
     Expr(:block, defs...,
          :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
@@ -295,7 +289,7 @@ function _name_type(x)
     end
 end
 
-function Base.show(io::IO, f::Sym{<:FnType{X,Y}}) where {X,Y}
+function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
     print(io, f.name)
     argrepr = join(map(t->"::"*string(t), X.parameters), ", ")
     print(io, "(", argrepr, ")")
@@ -533,7 +527,7 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
-    fname = nameof(f)
+    fname = istree(f) ? Symbol(repr(f)) : nameof(f)
     binary = Base.isbinaryoperator(fname)
     if binary
         for (i, t) in enumerate(args)

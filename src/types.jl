@@ -518,13 +518,13 @@ function show_ref(io, f, args)
     x = args[1]
     idx = args[2:end]
 
+    istree(x) && print(io, "(")
     print(io, x)
+    istree(x) && print(io, ")")
     print(io, "[")
     for i=1:length(idx)
         print_arg(io, idx[i])
-        if i!=length(idx)
-            print(io, ", ")
-        end
+        i != length(idx) && print(io, ", ")
     end
     print(io, "]")
 end

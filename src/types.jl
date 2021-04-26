@@ -198,7 +198,7 @@ struct FnType{X<:Tuple,Y} end
 
 (f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
 
-function (f::Sym)(args...)
+function (f::Symbolic)(args...)
     error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable. " *
           "See ?@fun for more options")

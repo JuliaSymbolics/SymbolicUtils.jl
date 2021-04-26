@@ -56,8 +56,16 @@ symtype(x) = typeof(x)
 
 symtype(::Symbolic{T}) where {T} = T
 
+"""
+    metadata(s)
+Get all the metadata of a term or `nothing` if no metadata is defined.
+
+"""
+metadata(s::Symbolic) = s.metadata
+metadata(s::Any) = nothing
+
 function hasmetadata(s::Symbolic, ctx)
-    s.metadata isa AbstractDict && haskey(s.metadata, ctx)
+    metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
 function getmetadata(s::Symbolic, ctx)
@@ -207,18 +215,11 @@ function promote_symtype(f::Symbolic{FnType{X,Y}}, args...) where {X, Y}
         return Y
     end
 
-    nrequired = fieldcount(X)
-    ngiven    = nfields(args)
-
-    if nrequired !== ngiven
-        error("$f takes $nrequired arguments; $ngiven arguments given")
-    end
-
-    for i in 1:ngiven
-        t = X.parameters[i]
-        if !(args[i] <: t)
-            error("Argument to $f at position $i must be of symbolic type $t")
-        end
+    # This is to handle `Tuple{T} where T`, so we cannot reliably query the type
+    # parameters of the `Tuple` in `FnType`.
+    t = Tuple{args...}
+    if !(t <: X)
+        error("$t is not a subtype of $X.")
     end
     return Y
 end
@@ -291,7 +292,9 @@ end
 
 function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
     print(io, f.name)
-    argrepr = join(map(t->"::"*string(t), X.parameters), ", ")
+    # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
+    # best printing, but it's better than erroring.
+    argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")
     print(io, "(", argrepr, ")")
     print(io, "::", Y)
 end
@@ -396,7 +399,7 @@ function term(f, args...; type = nothing)
 end
 
 """
-    similarterm(t, f, args, symtype)
+    similarterm(t, f, args, symtype; metadata=nothing)
 
 Create a term that is similar in type to `t`. Extending this function allows packages
 using their own expression types with SymbolicUtils to define how new terms should
@@ -411,9 +414,9 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-similarterm(t, f, args, symtype) = f(args...)
-similarterm(t, f, args) = similarterm(t, f, args, _promote_symtype(f, args))
-similarterm(t::Term, f, args) = Term{_promote_symtype(f, args)}(f, args)
+similarterm(t, f, args, symtype; metadata=nothing) = f(args...)
+similarterm(t, f, args; metadata=nothing) = similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
+similarterm(t::Term, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -716,9 +719,9 @@ Represents coeff * (key1 ^ val1) * (key2 ^ val2) * ....
 where coeff is a <:Number and keys and values come from the dictionary (`dict`).
 where `coeff` and the vals are `<:Number` and keys are symbolic.
 
-- `symtype(::Add)` -- returns `T`.
-- `operation(::Add)` -- returns `*`.
-- `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
+- `symtype(::Mul)` -- returns `T`.
+- `operation(::Mul)` -- returns `*`.
+- `arguments(::Mul)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
 struct Mul{X, T<:Number, D, M} <: Symbolic{X}
@@ -856,7 +859,7 @@ function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
     Pow{T, typeof(a), typeof(b), typeof(metadata)}(a,b,metadata)
 end
 function Pow(a, b; metadata=NO_METADATA)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(a, b, metadata=metadata)
+    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
 end
 symtype(a::Pow{X}) where {X} = X
 
@@ -871,6 +874,16 @@ Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 Base.isequal(p::Pow, b::Pow) = isequal(p.base, b.base) && isequal(p.exp, b.exp)
 
 Base.show(io::IO, p::Pow) = show_term(io, p)
+
+function makepow(a, b)
+    base = a
+    exp = b
+    if a isa Pow
+        base = a.base
+        exp = a.exp * b
+    end
+    return (base, exp)
+end
 
 ^(a::SN, b) = Pow(a, b)
 
@@ -932,18 +945,18 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}}
 
-function similarterm(p::NumericTerm, f, args, T=nothing)
+function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
     if T === nothing
         T = _promote_symtype(f, args)
     end
     if f === (+)
-        Add(T, makeadd(1, 0, args...)...)
+        Add(T, makeadd(1, 0, args...)...; metadata=metadata)
     elseif f == (*)
-        Mul(T, makemul(1, args...)...)
+        Mul(T, makemul(1, args...)...; metadata=metadata)
     elseif f == (^) && length(args) == 2
-        Pow{T, typeof.(args)...}(args...)
+        Pow{T, typeof.(args)...}(args...; metadata=metadata)
     else
-        Term{T}(f, args)
+        Term{T}(f, args; metadata=metadata)
     end
 end
 

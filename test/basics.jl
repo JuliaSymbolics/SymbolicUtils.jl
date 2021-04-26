@@ -78,6 +78,15 @@ struct Ctx2 end
         @test getmetadata(a′, Ctx1) == "meta_1"
         @test getmetadata(a′, Ctx2) == "meta_2"
     end
+
+    # In substitute #283
+    #
+    @syms f(t) t
+    f = setmetadata(f(t), Ctx1, "yes")
+    hasmetadata(f, Ctx1) # true
+    newf = substitute(f, Dict(a=>b)) # unrelated substitution
+    @test hasmetadata(newf, Ctx1)
+    @test getmetadata(newf, Ctx1) == "yes"
 end
 
 @testset "Base methods" begin
@@ -195,10 +204,18 @@ end
         @test x - x === 0
         @test isequal(-x, -1x)
         @test isequal(x^1, x)
+        @test isequal((x^-1)*inv(x^-1), 1)
     end
 end
 
 @testset "isequal" begin
     @syms a b c
     @test isequal(a + b, a + b + 0.01 - 0.01)
+end
+
+@testset "subtyping" begin
+    T = FnType{Tuple{T,S,Int} where {T,S}, Real}
+    s = Sym{T}(:t)
+    @syms a b c::Int
+    @test isequal(arguments(s(a, b, c)), [a, b, c])
 end

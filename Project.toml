@@ -1,11 +1,12 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "0.11.0"
+version = "0.11.2"
 
 [deps]
 AbstractAlgebra = "c3fe647b-3220-5bb0-a1ea-a7954cac585d"
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
@@ -20,8 +21,9 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
-AbstractAlgebra = "0.9, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15"
+AbstractAlgebra = "0.9, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16"
 AbstractTrees = "0.3"
+ChainRulesCore = "0.9"
 Combinatorics = "1.0"
 ConstructionBase = "1.1"
 DataStructures = "0.18"
@@ -40,6 +42,7 @@ Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PkgBenchmark = "32113eaa-f34f-5b0d-bd6c-c81e245fc73d"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["Test", "Random", "PkgBenchmark", "BenchmarkTools", "Pkg"]
+test = ["Test", "Random", "PkgBenchmark", "BenchmarkTools", "Pkg", "Zygote"]

@@ -53,4 +53,7 @@ include("api.jl")
 
 include("code.jl")
 
+# ADjoints
+include("adjoints.jl")
+
 end # module

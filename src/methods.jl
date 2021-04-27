@@ -37,7 +37,7 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     skip_basics = options !== nothing ? options == :skipbasics : false
     skips = Meta.isexpr(options, [:vcat, :hcat, :vect]) ? Set(options.args) : []
     basic_monadic = [-, +]
-    basic_diadic = [+, -, *, /, \, ^]
+    basic_diadic = [+, -, *, /, //, \, ^]
 
     rhs2 = :($assert_like(f, Number, a, b); $rhs2)
     rhs1 = :($assert_like(f, Number, a); $rhs1)

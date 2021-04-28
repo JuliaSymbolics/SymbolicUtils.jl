@@ -119,6 +119,12 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SLVector((:a, :b))(@SVector[1,2])],
                           MakeArray([a+b,a/b], arr)))) === @SLVector((:a, :b))(@SVector [3, 1/2])
+    
+    R1 = eval(toexpr(Let([a ← 1, b ← 2, arr ← @MVector([1,2])],MakeArray([a,b,a+b,a/b], arr))))
+    @test R1 == (@MVector [1, 2, 3, 1/2]) && R1 isa MVector
+
+    R2 = eval(toexpr(Let([a ← 1, b ← 2, arr ← @MVector([1,2])],MakeArray([a b;a+b a/b], arr))))
+    @test R2 == (@MArray [1 2; 3 1/2]) && R2 isa MMatrix
 
     mksp = MakeSparseArray(sparse([1,2,31,32,2],
                                   [1,2,31,32,2],

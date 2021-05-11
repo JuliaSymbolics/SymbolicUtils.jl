@@ -626,7 +626,7 @@ operation(a::Add) = +
 
 function arguments(a::Add)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([similarterm(k,*,[v,k]) for (k,v) in a.dict], lt=<ₑ)
+    args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
@@ -949,16 +949,15 @@ function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
     if T === nothing
         T = _promote_symtype(f, args)
     end
-    if T <: Number
-        if f === (+)
-            return Add(T, makeadd(1, 0, args...)...; metadata=metadata)
-        elseif f == (*)
-            return Mul(T, makemul(1, args...)...; metadata=metadata)
-        elseif f == (^) && length(args) == 2
-            return Pow{T, typeof.(args)...}(args...; metadata=metadata)
-        end
+    if f === (+)
+        Add(T, makeadd(1, 0, args...)...; metadata=metadata)
+    elseif f == (*)
+        Mul(T, makemul(1, args...)...; metadata=metadata)
+    elseif f == (^) && length(args) == 2
+        Pow{T, typeof.(args)...}(args...; metadata=metadata)
+    else
+        Term{T}(f, args; metadata=metadata)
     end
-    Term{T}(f, args; metadata=metadata)
 end
 
 function Base.hash(t::Union{Add,Mul}, u::UInt64)

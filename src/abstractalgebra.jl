@@ -59,6 +59,7 @@ let
                         @rule(zero(~x) => 0)
                         @rule(one(~x) => 1)]
 
+    simterm(x, f, args;metadata=nothing) = similarterm(x,f,args, symtype(x); metadata=metadata)
     mpoly_rules = [@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
                    @rule(-(~x) => -1 * ~x)
                    @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
@@ -66,8 +67,8 @@ let
                    @acrule(~x::ismpoly * ~y::ismpoly => ~x * ~y)
                    @rule(*(~x) => ~x)
                    @rule((~x::ismpoly)^(~a::isnonnegint) => (~x)^(~a))]
-    global const MPOLY_CLEANUP = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_preprocess))))
-    MPOLY_MAKER = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_rules))))
+    global const MPOLY_CLEANUP = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_preprocess)), similarterm=simterm))
+    MPOLY_MAKER = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_rules)), similarterm=simterm))
 
     global to_mpoly
     function to_mpoly(t, dicts=_dicts())

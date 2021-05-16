@@ -61,7 +61,7 @@ function substitute(expr, dict; fold=true)
         else
             args = map(x->substitute(x, dict), arguments(expr))
         end
-        similarterm(expr, operation(expr), args, metadata=metadata(expr))
+        similarterm(expr, operation(expr), args, symtype(expr), metadata=metadata(expr))
     else
         expr
     end

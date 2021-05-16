@@ -329,7 +329,7 @@ function (acr::ACRule)(term)
             if !isnothing(result)
                 # Assumption: inds are unique
                 length(args) == length(inds) && return result
-                return similarterm(term, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
+                return similarterm(term, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], symtype(term))
             end
         end
     end

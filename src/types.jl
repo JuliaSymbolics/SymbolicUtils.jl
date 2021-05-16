@@ -598,7 +598,7 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 - `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM*valM, keyN*valN...]`
 """
-struct Add{X, T<:Number, D, M} <: Symbolic{X}
+struct Add{X<:Number, T<:Number, D, M} <: Symbolic{X}
     coeff::T
     dict::D
     sorted_args_cache::Ref{Any}
@@ -724,7 +724,7 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 - `arguments(::Mul)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
-struct Mul{X, T<:Number, D, M} <: Symbolic{X}
+struct Mul{X<:Number, T<:Number, D, M} <: Symbolic{X}
     coeff::T
     dict::D
     sorted_args_cache::Ref{Any}

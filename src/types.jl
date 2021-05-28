@@ -196,9 +196,9 @@ Base.show(io::IO, v::Sym) = Base.show_unquoted(io, v.name)
 # Maybe don't even need a new type, can just use Sym{FnType}
 struct FnType{X<:Tuple,Y} end
 
-(f::Sym{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
+(f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
 
-function (f::Sym)(args...)
+function (f::Symbolic)(args...)
     error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable. " *
           "See ?@fun for more options")
@@ -210,7 +210,7 @@ end
 The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
-function promote_symtype(f::Sym{FnType{X,Y}}, args...) where {X, Y}
+function promote_symtype(f::Symbolic{FnType{X,Y}}, args...) where {X, Y}
     if X === Tuple
         return Y
     end
@@ -250,8 +250,10 @@ macro syms(xs...)
     defs = map(xs) do x
         n, t = _name_type(x)
         :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
+        nt = _name_type(x)
+        n, t = nt.name, nt.type
+        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
     end
-
     Expr(:block, defs...,
          :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
 end
@@ -275,6 +277,12 @@ function _name_type(x)
         else
             return (name=lhs, type=rhs)
         end
+    elseif x isa Expr && x.head === :ref
+        ntype = _name_type(x.args[1]) # a::Number
+        N = length(x.args)-1
+        return (name=ntype.name,
+                type=:(Array{$(ntype.type), $N}),
+                array_metadata=:(Base.Slice.(($(x.args[2:end]...),))))
     elseif x isa Expr && x.head === :call
         return _name_type(:($x::Number))
     else
@@ -282,7 +290,7 @@ function _name_type(x)
     end
 end
 
-function Base.show(io::IO, f::Sym{<:FnType{X,Y}}) where {X,Y}
+function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
     print(io, f.name)
     # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
     # best printing, but it's better than erroring.
@@ -433,7 +441,7 @@ setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
-isbinop(f) = istree(f) && Base.isbinaryoperator(nameof(operation(f)))
+isbinop(f) = istree(f) && !istree(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")
@@ -506,8 +514,23 @@ function show_mul(io, args)
     end
 end
 
+function show_ref(io, f, args)
+    x = args[1]
+    idx = args[2:end]
+
+    istree(x) && print(io, "(")
+    print(io, x)
+    istree(x) && print(io, ")")
+    print(io, "[")
+    for i=1:length(idx)
+        print_arg(io, idx[i])
+        i != length(idx) && print(io, ", ")
+    end
+    print(io, "]")
+end
+
 function show_call(io, f, args)
-    fname = nameof(f)
+    fname = istree(f) ? Symbol(repr(f)) : nameof(f)
     binary = Base.isbinaryoperator(fname)
     if binary
         for (i, t) in enumerate(args)
@@ -543,6 +566,8 @@ function show_term(io::IO, t)
         show_mul(io, args)
     elseif f === (^)
         show_pow(io, args)
+    elseif f === (getindex)
+        show_ref(io, f, args)
     else
         show_call(io, f, args)
     end
@@ -573,7 +598,7 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 - `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM*valM, keyN*valN...]`
 """
-struct Add{X, T<:Number, D, M} <: Symbolic{X}
+struct Add{X<:Number, T<:Number, D, M} <: Symbolic{X}
     coeff::T
     dict::D
     sorted_args_cache::Ref{Any}
@@ -699,7 +724,7 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 - `arguments(::Mul)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
-struct Mul{X, T<:Number, D, M} <: Symbolic{X}
+struct Mul{X<:Number, T<:Number, D, M} <: Symbolic{X}
     coeff::T
     dict::D
     sorted_args_cache::Ref{Any}

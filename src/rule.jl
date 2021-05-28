@@ -69,10 +69,12 @@ function makepattern(expr, keys)
             else
                 :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
             end
+        elseif expr.head === :ref
+            :(term(getindex, $(map(x->makepattern(x, keys), expr.args)...); type=Any))
         elseif expr.head === :$
             return esc(expr.args[1])
         else
-            error("Unsupported Expr of type $(expr.head) found in pattern")
+            Expr(expr.head, makepattern.(expr.args, (keys,))...)
         end
     else
         # treat as a literal
@@ -327,7 +329,7 @@ function (acr::ACRule)(term)
             if !isnothing(result)
                 # Assumption: inds are unique
                 length(args) == length(inds) && return result
-                return similarterm(term, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
+                return similarterm(term, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], symtype(term))
             end
         end
     end

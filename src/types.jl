@@ -991,8 +991,8 @@ end
 AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 
-print_tree(x; maxdepth=Inf, kw...) = print_tree(stdout, x; maxdepth=maxdepth, kw...)
-function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; kw...)
+print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show_type=show_type, maxdepth=maxdepth, kw...)
+function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; show_type=false, kw...)
     AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
         if istree(y)
             print(io, operation(y))
@@ -1000,6 +1000,9 @@ function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; kw...)
             print(io, "(", y.op, ")")
         else
             print(io, y)
+        end
+        if !(y isa TreePrint) && show_type
+            print(io, " [", typeof(y), "]")
         end
     end
 end

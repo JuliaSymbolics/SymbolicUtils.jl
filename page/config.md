@@ -19,7 +19,7 @@ The latter allows you to plug in values that you would have defined here.
              deployed page to be in a subfolder e.g.: `YourPackage.jl/web/`.
 -->
 @def title       = "SymbolicUtils.jl"
-@def prepath     = "SymbolicUtils.jl"
+@def prepath     = ""
 @def description = """
                    Parallelly process file trees
                    """

@@ -21,10 +21,4 @@ include("code.jl")
 include("nf.jl")
 include("interface.jl")
 include("fuzz.jl")
-
-if haskey(ENV, "CI")
-    include("benchmark.jl")
-    using Pkg
-    Pkg.add(url="https://github.com/SciML/ModelingToolkit.jl.git", rev="master")
-    Pkg.test("ModelingToolkit")
-end
+include("adjoints.jl")

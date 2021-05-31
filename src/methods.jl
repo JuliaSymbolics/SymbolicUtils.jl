@@ -4,12 +4,12 @@ import SpecialFunctions: gamma, loggamma, erf, erfc, erfcinv, erfi, erfcx,
                          besselj1, bessely0, bessely1, besselj, bessely, besseli,
                          besselk, hankelh1, hankelh2, polygamma, beta, logbeta
 
-const monadic = [deg2rad, rad2deg, transpose, conj, asind, log1p, acsch,
+const monadic = [deg2rad, rad2deg, transpose, asind, log1p, acsch,
                  acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh,
                  abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, acotd,
                  asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10,
                  sech, coth, asin, cotd, cosd, sinh, abs, csc, tanh, secd,
-                 atand, sec, acscd, cot, exp2, expm1, atanh, real, gamma,
+                 atand, sec, acscd, cot, exp2, expm1, atanh, gamma,
                  loggamma, erf, erfc, erfcinv, erfi, erfcx, dawson, digamma,
                  trigamma, invdigamma, polygamma, airyai, airyaiprime, airybi,
                  airybiprime, besselj0, besselj1, bessely0, bessely1]
@@ -34,14 +34,16 @@ islike(a, T) = symtype(a) <: T
 function number_methods(T, rhs1, rhs2, options=nothing)
     exprs = []
 
-    skip_basics = !isnothing(options) ? options == :skipbasics : false
+    skip_basics = options !== nothing ? options == :skipbasics : false
+    skips = Meta.isexpr(options, [:vcat, :hcat, :vect]) ? Set(options.args) : []
     basic_monadic = [-, +]
-    basic_diadic = [+, -, *, /, \, ^]
+    basic_diadic = [+, -, *, /, //, \, ^]
 
     rhs2 = :($assert_like(f, Number, a, b); $rhs2)
     rhs1 = :($assert_like(f, Number, a); $rhs1)
 
     for f in (skip_basics ? diadic : vcat(basic_diadic, diadic))
+        nameof(f) in skips && continue
         for S in previously_declared_for
             push!(exprs, quote
                       (f::$(typeof(f)))(a::$T, b::$S) = $rhs2
@@ -62,6 +64,7 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     end
 
     for f in (skip_basics ? monadic : vcat(basic_monadic, monadic))
+        nameof(f) in skips && continue
         push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
     end
     push!(exprs, :(push!($previously_declared_for, $T)))
@@ -91,14 +94,11 @@ for f in [+, -, *, \, /, ^]
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
-Base.rem2pi(x::Symbolic, mode::Base.RoundingMode) = term(rem2pi, x, mode)
+Base.rem2pi(x::Symbolic{<:Number}, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
 for f in monadic
-    if f in [real]
-        continue
-    end
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
-    @eval (::$(typeof(f)))(a::Symbolic)   = term($f, a)
+    @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
@@ -109,7 +109,11 @@ for f in [identity, one, zero, *, +, -]
 end
 
 promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
-Base.real(s::Symbolic) = islike(s, Real) ? s : term(real, s)
+Base.real(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(real, s)
+promote_symtype(::typeof(Base.conj), T::Type{<:Number}) = T
+Base.conj(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(conj, s)
+promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real
+Base.imag(s::Symbolic{<:Number}) = islike(s, Real) ? zero(symtype(s)) : term(conj, s)
 
 ## Booleans
 
@@ -142,8 +146,12 @@ function ifelse(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(ifelse, Any[_if, _then, _else])
 end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
-Base.@deprecate cond(_if, _then, _else) ifelse(_if, _then, _else)
 
 # Specially handle inv and literal pow
-Base.inv(x::Symbolic) = Base.:^(x, -1)
-Base.literal_pow(::typeof(^), x::Symbolic, ::Val{p}) where {p} = Base.:^(x, p)
+Base.inv(x::Symbolic{<:Number}) = Base.:^(x, -1)
+Base.literal_pow(::typeof(^), x::Symbolic{<:Number}, ::Val{p}) where {p} = Base.:^(x, p)
+
+# Array-like operations
+Base.size(x::Symbolic{<:Number}) = ()
+Base.length(x::Symbolic{<:Number}) = 1
+Base.ndims(x::Symbolic{<:Number}) = 0

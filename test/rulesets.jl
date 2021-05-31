@@ -1,5 +1,5 @@
 using Random: shuffle, seed!
-using SymbolicUtils: getdepth, Rewriters
+using SymbolicUtils: getdepth, Rewriters, Term
 
 @testset "Chain, Postwalk and Fixpoint" begin
     @syms w z α::Real β::Real
@@ -18,6 +18,9 @@ end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number
+    @eqtest simplify(Term{Real}(conj, [x])) == x
+    @eqtest simplify(Term{Real}(real, [x])) == x
+    @eqtest simplify(Term{Real}(imag, [x])) == 0
     @eqtest simplify(x - y) == x + -1*y
     @eqtest simplify(x - sin(y)) == x + -1*sin(y)
     @eqtest simplify(-sin(x)) == -1*sin(x)
@@ -117,4 +120,13 @@ end
     @syms a b c d
     expr1 = foldr((x,y)->rand([*, /])(x,y), rand([a,b,c,d], 100))
     SymbolicUtils.@timerewrite simplify(expr1)
+end
+
+
+@testset "interpolation" begin
+    f(y) = sin
+    @syms a
+
+    @test isnothing(@rule(f(1)(a) => 2)(sin(a)))
+    @test @rule($(f(1))(a) => 2)(sin(a)) == 2
 end

@@ -69,8 +69,12 @@ function makepattern(expr, keys)
             else
                 :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
             end
+        elseif expr.head === :ref
+            :(term(getindex, $(map(x->makepattern(x, keys), expr.args)...); type=Any))
+        elseif expr.head === :$
+            return esc(expr.args[1])
         else
-            error("Unsupported Expr of type $(expr.head) found in pattern")
+            Expr(expr.head, makepattern.(expr.args, (keys,))...)
         end
     else
         # treat as a literal
@@ -179,11 +183,11 @@ cos((1 + a))
 A rule with 2 segment variables
 
 ```julia
-julia> r = @rule ~x - ~y => ~x + (-(~y))
-~x - ~y => ~x + -(~y)
+julia> r = @rule sin(~x + ~y) => sin(~x)*cos(~y) + cos(~x)*sin(~y)
+sin(~x + ~y) => sin(~x) * cos(~y) + cos(~x) * sin(~y)
 
-julia> r(a-2b)
-(a + (-(2 * b)))
+julia> r(sin(a + b))
+cos(a)*sin(b) + sin(a)*cos(b)
 ```
 
 A rule that matches two of the same expressions:
@@ -325,7 +329,7 @@ function (acr::ACRule)(term)
             if !isnothing(result)
                 # Assumption: inds are unique
                 length(args) == length(inds) && return result
-                return similarterm(term, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...])
+                return similarterm(term, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], symtype(term))
             end
         end
     end

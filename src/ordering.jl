@@ -46,20 +46,22 @@ end
 
 <ₑ(a::Sym, b::Sym) = a.name < b.name
 
+<ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
+
 function cmp_term_term(a, b)
     la = arglength(a)
     lb = arglength(b)
 
     if la == 0 && lb == 0
-        return nameof(operation(a)) <ₑ nameof(operation(b))
+        return operation(a) <ₑ operation(b)
     elseif la === 0
         return operation(a) <ₑ b
     elseif lb === 0
         return a <ₑ operation(b)
     end
 
-    na = nameof(operation(a))
-    nb = nameof(operation(b))
+    na = operation(a)
+    nb = operation(b)
 
     if 0 < arglength(a) <= 2 && 0 < arglength(b) <= 2
         # e.g. a < sin(a) < b ^ 2 < b

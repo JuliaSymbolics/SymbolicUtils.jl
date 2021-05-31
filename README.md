@@ -11,12 +11,15 @@
   </a>
 </p>
 
-SymbolicUtils.jl provides various utilities for symbolic computing.
+SymbolicUtils.jl provides various utilities for symbolic computing. SymbolicUtils.jl is what one would use to build
+a Computer Algebra System (CAS). If you're looking for a complete CAS, similar to SymPy or Mathematica, see
+[Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl). If you want to build a crazy CAS for your weird
+Octonian algebras, you've come to the right place.
 
-[Symbols in SymbolicUtils](https://juliasymbolics.github.io/SymbolicUtils.jl/#creating_symbolic_expressions) carry type information. Operations on them propagate this information. [A rule-based rewriting language](https://juliasymbolics.github.io/SymbolicUtils.jl/#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification](https://juliasymbolics.github.io/SymbolicUtils.jl/#simplification) rules for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
+[Symbols in SymbolicUtils](https://symbolicutils.juliasymbolics.org/#creating_symbolic_expressions) carry type information. Operations on them propagate this information. [A rule-based rewriting language](https://symbolicutils.juliasymbolics.org/rewrite/#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification](https://juliasymbolics.github.io/SymbolicUtils.jl/#simplification) rules for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
 
 
-If you are a Julia package develper in need of a rule rewriting system for your own types, have a look at the [interfacing guide](https://juliasymbolics.github.io/SymbolicUtils.jl/interface/).
+If you are a Julia package develper in need of a rule rewriting system for your own types, have a look at the [interfacing guide](https://symbolicutils.juliasymbolics.org/interface/).
 
 [**Go to the manual**](https://juliasymbolics.github.io/SymbolicUtils.jl/)
 

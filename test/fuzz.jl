@@ -4,9 +4,9 @@ using Random: seed!
 
 seed!(6174)
 @testset "Fuzz test" begin
-    @testset "polynormalize fuzz" begin
+    @testset "expand fuzz" begin
         for i=1:500
-            fuzz_test(5, num_spec, SymbolicUtils.polynormalize; min_depth=3)
+            fuzz_test(5, num_spec, SymbolicUtils.expand; min_depth=3)
         end
     end
     @testset "num fuzz" begin

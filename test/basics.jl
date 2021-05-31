@@ -58,6 +58,37 @@ end
     @test ex1.hash[] == h
 end
 
+struct Ctx1 end
+struct Ctx2 end
+
+@testset "metadata" begin
+    @syms a b c
+    for a = [a, sin(a), a+b, a*b, a^3]
+
+        a′ = setmetadata(a, Ctx1, "meta_1")
+
+        @test hasmetadata(a′, Ctx1)
+        @test !hasmetadata(a′, Ctx2)
+
+        a′ = setmetadata(a′, Ctx2, "meta_2")
+
+        @test hasmetadata(a′, Ctx1)
+        @test hasmetadata(a′, Ctx2)
+
+        @test getmetadata(a′, Ctx1) == "meta_1"
+        @test getmetadata(a′, Ctx2) == "meta_2"
+    end
+
+    # In substitute #283
+    #
+    @syms f(t) t
+    f = setmetadata(f(t), Ctx1, "yes")
+    hasmetadata(f, Ctx1) # true
+    newf = substitute(f, Dict(a=>b)) # unrelated substitution
+    @test hasmetadata(newf, Ctx1)
+    @test getmetadata(newf, Ctx1) == "yes"
+end
+
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
@@ -90,6 +121,11 @@ end
     @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{Bool}(==, [w, 0]))
+
+    @eqtest x // 5 == (1 // 5) * x
+    @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
+    @eqtest 5 // x == 5 / x
+    @eqtest x // a == x / a
 end
 
 @testset "err test" begin
@@ -105,6 +141,13 @@ end
     @test substitute(exp(a), Dict(a=>2)) ≈ exp(2)
 end
 
+@testset "occursin" begin
+    @syms a b c
+    @test occursin(a, a + b)
+    @test !occursin(sin(a), a + b + c)
+    @test occursin(sin(a),  a * b + c + sin(a^2 * sin(a)))
+end
+
 @testset "printing" begin
     @syms a b c
     @test repr(a+b) == "a + b"
@@ -117,8 +160,10 @@ end
     @test repr(Term(*, [1, 1])) == "*1"
     @test repr(Term(*, [2, 1])) == "2*1"
     @test repr((a + b) - (b + c)) == "a - c"
-    @test repr(a + -1*(b + c)) == "a - (b + c)"
+    @test repr(a + -1*(b + c)) == "a - b - c"
     @test repr(a + -1*b) == "a - b"
+    @test repr(-1^a) == "-(1^a)"
+    @test repr((-1)^a) == "(-1)^a"
 end
 
 @testset "similarterm with Add" begin
@@ -131,7 +176,7 @@ toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
 @testset "diffs" begin
     @syms a b c
     @test isequal(toterm(-1c), Term{Number}(*, [-1, c]))
-    @test isequal(toterm(-1(a+b)), Term{Number}(*, [-1, a+b]))
+    @test isequal(toterm(-1(a+b)), Term{Number}(+, [-1a, -b]))
     @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [a, -1c]))
 end
 
@@ -139,4 +184,38 @@ end
     @syms a b
     @test hash(a + b, UInt(0)) === hash(a + b) === hash(a + b, UInt(0)) # test caching
     @test hash(a + b, UInt(2)) !== hash(a + b)
+end
+
+@testset "methoderror" begin
+    @syms a::Any b::Any
+
+    @test_throws MethodError a * b
+    @test_throws MethodError a + b
+end
+
+@testset "canonical form" begin
+    @syms a b c
+    for x in [a, a*b, a+b, a-b, a^2, sin(a)]
+        @test isequal(x * 1, x)
+        @test x * 0 === 0
+        @test isequal(x + 0, x)
+        @test isequal(x + x, 2x)
+        @test isequal(x + 2x, 3x)
+        @test x - x === 0
+        @test isequal(-x, -1x)
+        @test isequal(x^1, x)
+        @test isequal((x^-1)*inv(x^-1), 1)
+    end
+end
+
+@testset "isequal" begin
+    @syms a b c
+    @test isequal(a + b, a + b + 0.01 - 0.01)
+end
+
+@testset "subtyping" begin
+    T = FnType{Tuple{T,S,Int} where {T,S}, Real}
+    s = Sym{T}(:t)
+    @syms a b c::Int
+    @test isequal(arguments(s(a, b, c)), [a, b, c])
 end

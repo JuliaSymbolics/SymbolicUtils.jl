@@ -33,6 +33,8 @@ These are all exported when you do `using SymbolicUtils.Code`
 
 {{doc Func Func type Code}}
 
+{{doc SpawnFetch SpawnFetch type Code}}
+
 {{doc SetArray SetArray type Code}}
 
 {{doc MakeArray MakeArray type Code}}

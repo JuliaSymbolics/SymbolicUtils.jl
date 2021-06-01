@@ -4,10 +4,11 @@ using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       SpawnFetch, Multithreaded
+       SpawnFetch, Multithreaded, cse
 
 import ..SymbolicUtils
-import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
+import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments,
+                      symtype, similarterm
 
 ##== state management ==##
 
@@ -593,34 +594,39 @@ end
 
 ### Code-related utilities
 
-using SymbolicUtils
-
-using SymbolicUtils: Sym, Term
-
-using SymbolicUtils.Rewriters
-
-using DataStructures
-
 ### Common subexprssion evaluation
 
-newsym() = Sym{Number}(gensym("cse"))
+@inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
 
-function _cse(expr, dict=OrderedDict())
-    r = @rule ~x::istree => haskey(dict, ~x) ? dict[~x] : dict[~x] = newsym()
-    final = Postwalk(Chain([r]))(expr)
+function _cse!(mem, expr)
+    istree(expr) || return expr
+    op = _cse!(mem, operation(expr))
+    args = map(Base.Fix1(_cse!, mem), arguments(expr))
+    t = similarterm(expr, op, args)
+
+    v, dict = mem
+    update! = let v=v, t=t
+        () -> begin
+            var = newsym(symtype(t))
+            push!(v, var ← t)
+            length(v)
+        end
+    end
+    v[get!(update!, dict, t)].lhs
 end
 
 function cse(expr)
     !istree(expr) && return expr
-    dict=OrderedDict()
-    final = _cse(expr, dict)
-    Let([var ← ex for (ex, var) in pairs(dict)], final)
+    assignments = Assignment[]
+    final = _cse!((assignments, Dict{Any,Int}()), expr)
+    Let(assignments, final)
 end
 
 function _cse(exprs::AbstractArray)
-    dict = OrderedDict()
-    final = map(ex->_cse(ex, dict), exprs)
-    ([var ← ex for (ex, var) in pairs(dict)], final)
+    assignments = Assignment[]
+    mem = (assignments, Dict{Any,Int}())
+    final = map(Base.Fix1(_cse!, mem), exprs)
+    assignments, final
 end
 
 function cse(x::MakeArray)

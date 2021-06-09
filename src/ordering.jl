@@ -13,7 +13,7 @@ function <ₑ(a, b)
     if !istree(a) && !istree(b)
         T = typeof(a)
         S = typeof(b)
-        return T===S ? isless(a, b) : nameof(T) < nameof(S)
+        return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)
     elseif istree(b) && !istree(a)
         return true
     elseif istree(a) && istree(b)

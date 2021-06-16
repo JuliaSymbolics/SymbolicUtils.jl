@@ -19,7 +19,7 @@ function labels!(dicts, t::Sym,  variable_type::Type)
 end
 
 function labels!(dicts, t, variable_type::Type)
-    if t isa Integer
+    if t isa Number
         return t
     elseif istree(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
         tt = arguments(t)
@@ -49,7 +49,7 @@ function labels!(dicts, t, variable_type::Type)
     end
 end
 
-ismpoly(x) = x isa MP.AbstractPolynomialLike || x isa Integer
+ismpoly(x) = x isa MP.AbstractPolynomialLike || x isa Number
 isnonnegint(x) = x isa Integer && x >= 0
 
 _dicts(t2s=OrderedDict{Any, Sym}()) = (OrderedDict{Sym, Any}(), t2s)
@@ -127,7 +127,7 @@ function _to_term(reference, term::MP.AbstractTermLike, dict, syms)
     if isone(coef)
         return mono
     else
-        return Int(MP.coefficient(term)) * mono
+        return MP.coefficient(term) * mono
     end
 end
 

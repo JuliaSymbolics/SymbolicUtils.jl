@@ -71,7 +71,7 @@ let
     MPOLY_MAKER = Fixpoint(Postwalk(PassThrough(RestartedChain(mpoly_rules)), similarterm=simterm))
 
     global to_mpoly
-    function to_mpoly(t, variable_type::Type, dicts=_dicts())
+    function to_mpoly(t, variable_type::Type=DynamicPolynomials.PolyVar{true}, dicts=_dicts())
         # term2sym is only used to assign the same
         # symbol for the same term -- in other words,
         # it does common subexpression elimination

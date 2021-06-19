@@ -166,9 +166,10 @@ end
     @test repr((-1)^a) == "(-1)^a"
 end
 
-@testset "similarterm with Add" begin
+@testset "similarterm" begin
     @syms a b c
     @test isequal(SymbolicUtils.similarterm((b + c), +, [a,  (b+c)]).dict, Dict(a=>1,b=>1,c=>1))
+    @test isequal(SymbolicUtils.similarterm(b^2, ^, [b^2,  1//2]), b)
 end
 
 toterm(t) = Term{symtype(t)}(operation(t), arguments(t))

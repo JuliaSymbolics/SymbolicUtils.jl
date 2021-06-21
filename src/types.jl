@@ -494,7 +494,7 @@ end
 function show_mul(io, args)
     length(args) == 1 && return print_arg(io, *, args[1])
 
-    paren_scalar = args[1] isa Complex || args[1] isa Rational
+    paren_scalar = args[1] isa Complex || args[1] isa Rational || (args[1] isa Number && !isfinite(args[1]))
     minus = args[1] isa Number && args[1] == -1
     unit = args[1] isa Number && args[1] == 1
     nostar = !paren_scalar && args[1] isa Number && !(args[2] isa Number)
@@ -867,7 +867,10 @@ istree(a::Pow) = true
 
 operation(a::Pow) = ^
 
-arguments(a::Pow) = [a.base, a.exp]
+# Use `Union` to avoid promoting the base and exponent to the same type.
+# For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
+# we don't want to promote `a.exp` to a multivariate polynomial.
+arguments(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
 
 Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 

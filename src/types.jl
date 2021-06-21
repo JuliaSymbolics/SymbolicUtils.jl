@@ -957,7 +957,7 @@ function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
     elseif f == (*)
         Mul(T, makemul(1, args...)...; metadata=metadata)
     elseif f == (^) && length(args) == 2
-        Pow{T, typeof.(args)...}(args...; metadata=metadata)
+        Pow{T}(makepow(args...)...; metadata=metadata)
     else
         Term{T}(f, args; metadata=metadata)
     end

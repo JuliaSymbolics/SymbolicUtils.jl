@@ -371,9 +371,9 @@ sin((a + c))</code></pre>
       <h2 class="doc-header" id="expand">
         <a href="#expand">expand</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">expand(expr)</code></pre>
-<p>Expand expressions by distributing multiplication over addition.</p>
-<p><code>a*&#40;b&#43;c&#41;</code> becomes <code>ab&#43;ac</code>. <code>expand</code> uses <a href="https://nemocas.github.io/AbstractAlgebra.jl/latest/">AbstractAlgebra.jl</a> to construct dense Multi-variate polynomial to do this very fast.</p>
+      <div class="doc-content"><pre><code class="julia hljs">expand(expr, variable_type::<span class="hljs-built_in">Type</span>=DynamicPolynomials.PolyVar{<span class="hljs-literal">true</span>})</code></pre>
+<p>Expand expressions by distributing multiplication over addition, e.g., <code>a*&#40;b&#43;c&#41;</code> becomes <code>ab&#43;ac</code>.</p>
+<p><code>expand</code> uses replace symbols and non-algebraic expressions by variables of type <code>variable_type</code> to compute the distribution using a specialized sparse multivariate polynomials implementation. <code>variable_type</code> can be any subtype of <code>MultivariatePolynomials.AbstractVariable</code>.</p>
 </div>
   </div>
 

@@ -831,7 +831,7 @@ end
 
 \(a::Number, b::SN) = b / a
 
-/(a::SN, b::Number) = inv(b) * a
+/(a::SN, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
 
 //(a::Union{SN, Number}, b::SN) = a / b
 

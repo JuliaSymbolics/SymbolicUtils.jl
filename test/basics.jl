@@ -123,6 +123,7 @@ end
     @test isequal(w == 0, Term{Bool}(==, [w, 0]))
 
     @eqtest x // 5 == (1 // 5) * x
+    @eqtest (1//2 * x) / 5 == (1 // 10) * x
     @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
     @eqtest 5 // x == 5 / x
     @eqtest x // a == x / a

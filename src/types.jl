@@ -493,7 +493,7 @@ end
 function show_mul(io, args)
     length(args) == 1 && return print_arg(io, *, args[1])
 
-    paren_scalar = args[1] isa Complex || args[1] isa Rational || (args[1] isa Number && !isfinite(args[1]))
+    paren_scalar = (args[1] isa Complex && !_iszero(imag(args[1]))) || args[1] isa Rational || (args[1] isa Number && !isfinite(args[1]))
     minus = args[1] isa Number && args[1] == -1
     unit = args[1] isa Number && args[1] == 1
     nostar = !paren_scalar && args[1] isa Number && !(args[2] isa Number)

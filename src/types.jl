@@ -55,6 +55,9 @@ symtype(x::Number) = typeof(x)
 symtype(x) = typeof(x)
 
 symtype(::Symbolic{T}) where {T} = T
+Base.ndims(::Type{<:Symbolic}) = 0
+Broadcast.broadcastable(x::Symbolic) = x
+Base.getindex(x::Symbolic, idx...) = x
 
 """
     metadata(s)

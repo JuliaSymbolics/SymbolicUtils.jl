@@ -97,6 +97,7 @@ end
     @test isequal(a + b, Add(Real, 0, Dict(a=>1, b=>1)))
     @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
     @test isequal(a + z, Add(Number, 0, Dict(a=>1, z=>1)))
+    @test isequal([2x, 3x], [1, 2] * x .+ x)
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real

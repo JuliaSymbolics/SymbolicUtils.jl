@@ -69,15 +69,17 @@ function hasmetadata(s::Symbolic, ctx)
 end
 
 function getmetadata(s::Symbolic, ctx)
-    if s.metadata isa AbstractDict
-        s.metadata[ctx]
+    md = metadata(s)
+    if md isa AbstractDict
+        md[ctx]
     else
         throw(ArgumentError("$s does not have metadata for $ctx"))
     end
 end
 
 function getmetadata(s::Symbolic, ctx, default)
-    s.metadata isa AbstractDict ? get(s.metadata, ctx, default) : default
+    md = metadata(s)
+    md isa AbstractDict ? get(md, ctx, default) : default
 end
 
 # pirated for Setfield purposes:

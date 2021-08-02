@@ -40,10 +40,19 @@ end
 Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)
 
 """
-    substitute(expr, dict)
+    substitute(expr, dict; fold=true)
 
 substitute any subexpression that matches a key in `dict` with
-the corresponding value.
+the corresponding value. If `fold=false`,
+expressions which can be evaluated won't be evaluated.
+
+```julia
+julia> substitute(1+sqrt(y), Dict(y => 2), fold=true)
+2.414213562373095
+
+julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
+1 + sqrt(2)
+```
 """
 function substitute(expr, dict; fold=true)
     haskey(dict, expr) && return dict[expr]
@@ -59,7 +68,7 @@ function substitute(expr, dict; fold=true)
             canfold && return operation(expr)(args...)
             args
         else
-            args = map(x->substitute(x, dict), arguments(expr))
+            args = map(x->substitute(x, dict, fold=fold), arguments(expr))
         end
         similarterm(expr, operation(expr), args, symtype(expr), metadata=metadata(expr))
     else

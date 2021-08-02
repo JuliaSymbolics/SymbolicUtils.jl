@@ -58,11 +58,18 @@ symtype(::Symbolic{T}) where {T} = T
 
 """
     metadata(s)
-Get all the metadata of a term or `nothing` if no metadata is defined.
 
+Get all the metadata of a term or `nothing` if no metadata is defined.
 """
 metadata(s::Symbolic) = s.metadata
 metadata(s::Any) = nothing
+"""
+    metadata(s, meta)
+
+Set the metadata for `s`. `meta` must be an `ImmutableDict{DataType, Any}` or
+`Nothing`.
+"""
+metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
@@ -292,7 +299,7 @@ function _name_type(x)
 end
 
 function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
-    print(io, f.name)
+    print(io, nameof(f))
     # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
     # best printing, but it's better than erroring.
     argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")

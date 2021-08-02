@@ -90,7 +90,7 @@ struct Ctx2 end
 
     @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false), 1 + term(sqrt, 2, type=Number))
 
-    @test substitute(1+sqrt(y), Dict(y => 2), fold=true) isa Float64
+    @test substitute(1+sqrt(a), Dict(a => 2), fold=true) isa Float64
 end
 
 @testset "Base methods" begin

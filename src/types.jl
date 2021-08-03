@@ -80,6 +80,32 @@ function getmetadata(s::Symbolic, ctx, default)
     s.metadata isa AbstractDict ? get(s.metadata, ctx, default) : default
 end
 
+propagate_metadata(T, f, args...) = nothing
+
+function _propagate_metadata(f, args)
+    if any(x->metadata(x) !== nothing, args)
+        Ts = Set{DataType}()
+        for x in args
+            if metadata(x) !== nothing
+                union!(Ts, keys(metadata(x)))
+            end
+        end
+
+        m = nothing
+        for T in Ts
+            mT = propagate_metadata(T, f, args...)
+            if mT !== nothing
+                m = m !== nothing ?
+                    ImmutableDict{DataType,Any}(m, T => mT) :
+                    ImmutableDict{DataType,Any}(T, mT)
+            end
+        end
+        return m
+    else
+        return nothing
+    end
+end
+
 # pirated for Setfield purposes:
 Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
 
@@ -332,13 +358,13 @@ function ConstructionBase.constructorof(s::Type{<:Term{T}}) where {T}
     end
 end
 
-function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
+function (::Type{Term{T}})(f, args; metadata=_propagate_metadata(f, args)) where {T}
     Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
 istree(t::Term) = true
 
-function Term(f, args; metadata=NO_METADATA)
+function Term(f, args; metadata=_propagate_metadata(f, args))
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
@@ -388,13 +414,13 @@ function _promote_symtype(f, args)
     end
 end
 
-function term(f, args...; type = nothing)
+function term(f, args...; type = nothing, metadata = _propagate_metadata(f, args))
     if type === nothing
         T = _promote_symtype(f, args)
     else
         T = type
     end
-    Term{T}(f, [args...])
+    Term{T}(f, [args...], metadata=metadata)
 end
 
 """
@@ -414,8 +440,10 @@ different type than `t`, because `f` also influences the result.
   resulting similar term to this type.
 """
 similarterm(t, f, args, symtype; metadata=nothing) = f(args...)
-similarterm(t, f, args; metadata=nothing) = similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
-similarterm(t::Term, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+function similarterm(t, f, args; metadata=_propagate_metadata(f, args))
+    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
+end
+similarterm(t::Term, f, args; metadata=_propagate_metadata(f, args)) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -947,7 +975,7 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}}
 
-function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
+function similarterm(p::NumericTerm, f, args, T=nothing; metadata=_propagate_metadata(f, args))
     if T === nothing
         T = _promote_symtype(f, args)
     end

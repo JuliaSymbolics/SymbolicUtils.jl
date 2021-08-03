@@ -87,6 +87,11 @@ struct Ctx2 end
     newf = substitute(f, Dict(a=>b)) # unrelated substitution
     @test hasmetadata(newf, Ctx1)
     @test getmetadata(newf, Ctx1) == "yes"
+
+
+    @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
+                  1 + term(sqrt, 2, type=Number))
+    @test substitute(1+sqrt(a), Dict(a => 2), fold=true) isa Float64
 end
 
 @testset "Base methods" begin

@@ -381,8 +381,12 @@ sin((a + c))</code></pre>
       <h2 class="doc-header" id="substitute">
         <a href="#substitute">substitute</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">substitute(expr, dict)</code></pre>
-<p>substitute any subexpression that matches a key in <code>dict</code> with the corresponding value.</p>
+      <div class="doc-content"><pre><code class="julia hljs">substitute(expr, dict; fold=<span class="hljs-literal">true</span>)</code></pre>
+<p>substitute any subexpression that matches a key in <code>dict</code> with the corresponding value. If <code>fold&#61;false</code>, expressions which can be evaluated won&#39;t be evaluated.</p>
+<pre><code class="julia hljs">julia&gt; substitute(<span class="hljs-number">1</span>+sqrt(y), <span class="hljs-built_in">Dict</span>(y =&gt; <span class="hljs-number">2</span>), fold=<span class="hljs-literal">true</span>)
+<span class="hljs-number">2.414213562373095</span>
+julia&gt; substitute(<span class="hljs-number">1</span>+sqrt(y), <span class="hljs-built_in">Dict</span>(y =&gt; <span class="hljs-number">2</span>), fold=<span class="hljs-literal">false</span>)
+<span class="hljs-number">1</span> + sqrt(<span class="hljs-number">2</span>)</code></pre>
 </div>
   </div>
 
@@ -420,7 +424,7 @@ julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: July 22, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 03, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

@@ -97,34 +97,34 @@
 <p>Returns the appropriate output type of applying <code>f</code> on arguments of type <code>arg_symtypes</code>.</p>
 <h2 id="example"><a href="#example" class="header-anchor">Example</a></h2>
 <p>Suppose you were feeling the temptations of type piracy and wanted to make a quick and dirty symbolic library built on top of Julia&#39;s <code>Expr</code> type, e.g.</p>
-<pre><code class="julia hljs"><span class="hljs-keyword">for</span> f ∈ [:+, :-, :*, :/, :^] <span class="hljs-comment">#Note, this is type piracy!</span>
-    <span class="hljs-meta">@eval</span> <span class="hljs-keyword">begin</span>
-        Base.$f(x::<span class="hljs-built_in">Union</span>{<span class="hljs-built_in">Expr</span>, <span class="hljs-built_in">Symbol</span>}, y::<span class="hljs-built_in">Number</span>) = <span class="hljs-built_in">Expr</span>(:call, $f, x, y)
-        Base.$f(x::<span class="hljs-built_in">Number</span>, y::<span class="hljs-built_in">Union</span>{<span class="hljs-built_in">Expr</span>, <span class="hljs-built_in">Symbol</span>}) = <span class="hljs-built_in">Expr</span>(:call, $f, x, y)
-        Base.$f(x::<span class="hljs-built_in">Union</span>{<span class="hljs-built_in">Expr</span>, <span class="hljs-built_in">Symbol</span>}, y::<span class="hljs-built_in">Union</span>{<span class="hljs-built_in">Expr</span>, <span class="hljs-built_in">Symbol</span>}) = (<span class="hljs-built_in">Expr</span>(:call, $f, x, y))
-    <span class="hljs-keyword">end</span>
-<span class="hljs-keyword">end</span>
+<pre><code class="language-julia">for f ∈ &#91;:&#43;, :-, :*, :/, :^&#93; #Note, this is type piracy&#33;
+    @eval begin
+        Base.&#36;f&#40;x::Union&#123;Expr, Symbol&#125;, y::Number&#41; &#61; Expr&#40;:call, &#36;f, x, y&#41;
+        Base.&#36;f&#40;x::Number, y::Union&#123;Expr, Symbol&#125;&#41; &#61; Expr&#40;:call, &#36;f, x, y&#41;
+        Base.&#36;f&#40;x::Union&#123;Expr, Symbol&#125;, y::Union&#123;Expr, Symbol&#125;&#41; &#61; &#40;Expr&#40;:call, &#36;f, x, y&#41;&#41;
+    end
+end
 
 
-ex = <span class="hljs-number">1</span> + (:x - <span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">:((+)(1, (-)(x, 2)))</code></pre>
+ex &#61; 1 &#43; &#40;:x - 2&#41;</code></pre><pre><code class="plaintext code-output">:((+)(1, (-)(x, 2)))</code></pre>
 <p>How can we use SymbolicUtils.jl to convert <code>ex</code> to <code>&#40;-&#41;&#40;:x, 1&#41;</code>? We simply implement <code>istree</code>, <code>operation</code>, <code>arguments</code> and we&#39;ll be able to do rule-based rewriting on <code>Expr</code>s:</p>
-<pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
+<pre><code class="language-julia">using SymbolicUtils
 
-SymbolicUtils.istree(ex::<span class="hljs-built_in">Expr</span>) = ex.head == :call
-SymbolicUtils.operation(ex::<span class="hljs-built_in">Expr</span>) = ex.args[<span class="hljs-number">1</span>]
-SymbolicUtils.arguments(ex::<span class="hljs-built_in">Expr</span>) = ex.args[<span class="hljs-number">2</span>:<span class="hljs-keyword">end</span>]
+SymbolicUtils.istree&#40;ex::Expr&#41; &#61; ex.head &#61;&#61; :call
+SymbolicUtils.operation&#40;ex::Expr&#41; &#61; ex.args&#91;1&#93;
+SymbolicUtils.arguments&#40;ex::Expr&#41; &#61; ex.args&#91;2:end&#93;
 
-<span class="hljs-meta">@rule</span>(~x =&gt; ~x - <span class="hljs-number">1</span>)(ex)</code></pre><pre><code class="plaintext hljs">:((-)((+)(1, (-)(x, 2)), 1))</code></pre>
+@rule&#40;~x &#61;&gt; ~x - 1&#41;&#40;ex&#41;</code></pre><pre><code class="plaintext code-output">:((-)((+)(1, (-)(x, 2)), 1))</code></pre>
 <p>However, this is not enough to get SymbolicUtils to use its own algebraic simplification system on <code>Expr</code>s:</p>
-<pre><code class="julia hljs">simplify(ex)</code></pre><pre><code class="plaintext hljs">:((+)(1, (-)(x, 2)))</code></pre>
+<pre><code class="language-julia">simplify&#40;ex&#41;</code></pre><pre><code class="plaintext code-output">:((+)(1, (-)(x, 2)))</code></pre>
 <p>The reason that the expression was not simplified is that the expression tree is untyped, so SymbolicUtils  doesn&#39;t know what rules to apply to the expression. To mimic the behaviour of most computer algebra  systems, the simplest thing to do would be to assume that all <code>Expr</code>s are of type <code>Number</code>:</p>
-<pre><code class="julia hljs">SymbolicUtils.symtype(s::<span class="hljs-built_in">Expr</span>) = <span class="hljs-built_in">Number</span>
+<pre><code class="language-julia">SymbolicUtils.symtype&#40;s::Expr&#41; &#61; Number
 
-simplify(ex)</code></pre><pre><code class="plaintext hljs">:((+)(-1, x))</code></pre>
+simplify&#40;ex&#41;</code></pre><pre><code class="plaintext code-output">:((+)(-1, x))</code></pre>
 <p>Now SymbolicUtils is able to apply the <code>Number</code> simplification rule to <code>Expr</code>.</p>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: July 22, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 03, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->
@@ -141,8 +141,8 @@ simplify(ex)</code></pre><pre><code class="plaintext hljs">:((+)(-1, x))</code><
         }
     </script>
     
-        
-
+        <script src="/libs/highlight/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
 
     
   </body>

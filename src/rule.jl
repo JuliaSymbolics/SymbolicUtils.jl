@@ -140,7 +140,7 @@ function (r::Rule)(term)
     try
         return r.matcher((term,), EMPTY_DICT) do bindings, n
             # n == 1 means that exactly one term of the input (term,) was matched
-            n === 1 ? (@timer "RHS" rhs(bindings)) : nothing
+            n == 1 ? (@timer "RHS" rhs(bindings)) : nothing
         end
     catch err
         throw(RuleRewriteError(r, term))

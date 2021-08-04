@@ -762,7 +762,7 @@ function Mul(T, a,b; metadata=NO_METADATA)
         if _isone(last(pair)) # first value
             return first(pair)
         else
-            return Pow(first(pair), last(pair))
+            return unstable_pow(first(pair), last(pair))
         end
     else
         Mul{T, typeof(a), typeof(b), typeof(metadata)}(a,b, Ref{Any}(nothing), Ref{UInt}(0), metadata)
@@ -775,9 +775,11 @@ istree(a::Mul) = true
 
 operation(a::Mul) = *
 
+unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
+
 function arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([k^v for (k,v) in a.dict], lt=<ₑ)
+    args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
@@ -903,7 +905,7 @@ end
 ^(a::Number, b::SN) = Pow(a, b)
 
 function ^(a::Mul, b::Number)
-    coeff = a.coeff isa Integer && b isa Integer ? (a.coeff//1) ^ b : a.coeff ^ b
+    coeff = unstable_pow(a.coeff, b)
     Mul(promote_symtype(^, symtype(a), symtype(b)),
         coeff, mapvalues((k, v) -> b*v, a.dict))
 end

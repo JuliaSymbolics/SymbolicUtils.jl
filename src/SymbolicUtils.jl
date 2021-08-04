@@ -1,5 +1,9 @@
+"""
+$(DocStringExtensions.README)
+"""
 module SymbolicUtils
 
+using DocStringExtensions
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 # Sym, Term,

@@ -777,7 +777,7 @@ operation(a::Mul) = *
 
 function arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([Pow(k, v) for (k,v) in a.dict], lt=<ₑ)
+    args = sort!([k^v for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 

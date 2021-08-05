@@ -236,8 +236,8 @@ function fuzz_addmulpow(lvl, d=test_dict)
         err
     end
 
-    if !(rl isa Number) && rr isa Number
-        return # lhs errored, rhs did not
+    if !(rl isa Number) || !(rr isa Number)
+        return
     end
     if rl isa Number || rr isa Number
         if isequal(rl, rr)

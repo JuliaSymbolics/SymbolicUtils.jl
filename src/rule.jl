@@ -138,10 +138,9 @@ function (r::Rule)(term)
     rhs = r.rhs
 
     try
-        return r.matcher((term,), EMPTY_DICT) do bindings, n
-            # n == 1 means that exactly one term of the input (term,) was matched
-            n == 1 ? (@timer "RHS" rhs(bindings)) : nothing
-        end
+        # n == 1 means that exactly one term of the input (term,) was matched
+        success(bindings, n) = n == 1 ? (@timer "RHS" rhs(bindings)) : nothing
+        return r.matcher(success, (term,), EMPTY_DICT)
     catch err
         throw(RuleRewriteError(r, term))
     end

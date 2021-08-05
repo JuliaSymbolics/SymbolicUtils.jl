@@ -174,6 +174,3 @@ function expand(expr, variable_type::Type=DynamicPolynomials.PolyVar{true})
 end
 
 Base.@deprecate polynormalize(x) expand(x)
-
-## Hack till https://github.com/JuliaAlgebra/MultivariatePolynomials.jl/issues/170 is fixed
-MP.polynomialtype(_,_) = Any

@@ -154,9 +154,9 @@ The `:where` is rewritten from, for example, `~x where f(~x)` to `f(~x) ? ~x : n
 """
 function rewrite_rhs(expr::Expr)
     if expr.head == :where
-        left = expr.args[1]
-        right = expr.args[2]
-        expr = Meta.parse("$right ? $left : nothing")
+        rhs = expr.args[1]
+        predicate = expr.args[2]
+        expr = Meta.parse("$predicate ? $rhs : nothing")
     end
     return expr
 end

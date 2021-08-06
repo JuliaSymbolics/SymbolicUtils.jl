@@ -131,3 +131,20 @@ end
     @test isnothing(@rule(f(1)(a) => 2)(sin(a)))
     @test @rule($(f(1))(a) => 2)(sin(a)) == 2
 end
+
+@testset "where" begin
+    expected = Meta.parse("f(~x) ? ~x + ~y : nothing")
+    @test SymbolicUtils.rewrite_rhs(:((~x + ~y) where f(~x))) == expected
+
+    @syms a b
+    f(x) = x === a
+    r = @rule ~x => ~x where f(~x)
+    @eqtest r(a) == a
+    @test isnothing(r(b))
+
+    r = @acrule ~x => ~x where f(~x)
+    @eqtest r(a) == a
+    @test isnothing(r(b))
+
+    # It would probably be good to add a test with a more complex rule here.
+end

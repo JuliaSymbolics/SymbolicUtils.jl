@@ -147,6 +147,22 @@ function (r::Rule)(term)
 end
 
 """
+    rewrite_rhs(expr::Expr)
+
+Rewrite the `expr` by dealing with `:where` if necessary.
+The `:where` is rewritten from, for example, `~x where f(~x)` to `f(~x) ? ~x : nothing`.
+"""
+function rewrite_rhs(expr::Expr)
+    if expr.head == :where
+        left = expr.args[1]
+        right = expr.args[2]
+        expr = Meta.parse("$right ? $left : nothing")
+    end
+    return expr
+end
+rewrite_rhs(expr) = expr
+
+"""
     @rule LHS => RHS
 
 Creates a `Rule` object. A rule object is callable, and  takes an expression and rewrites
@@ -221,7 +237,8 @@ julia> r(2 * (a+b+c))
 
 **Predicates**:
 
-Predicates can be used on both `~x` and `~~x` by using the `~x::f` or `~~x::f`.
+There are two kinds of predicates, namely over slot variables and over the whole rule.
+For the former, predicates can be used on both `~x` and `~~x` by using the `~x::f` or `~~x::f`.
 Here `f` can be any julia function. In the case of a slot the function gets a single
 matched subexpression, in the case of segment, it gets an array of matched expressions.
 
@@ -249,6 +266,25 @@ sin((a + c))
 
 Predicate function gets an array of values if attached to a segment variable (`~~x`).
 
+For the predicate over the whole rule, use `@rule <LHS> => <RHS> where <predicate>`:
+
+```
+julia> @syms a b;
+
+julia> predicate(x) = x === a;
+
+julia> r = @rule ~x => ~x where f(~x);
+
+julia> r(a)
+a
+
+julia> r(b) === nothing
+true
+```
+
+Note that this is syntactic sugar and that it is the same as something like
+`@rule ~x => f(~x) ? ~x : nothing`.
+
 **Context**:
 
 _In predicates_: Contextual predicates are functions wrapped in the `Contextual` type.
@@ -264,7 +300,8 @@ of an expression.
 """
 macro rule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
-    lhs,rhs = expr.args[2], expr.args[3]
+    lhs = expr.args[2]
+    rhs = rewrite_rhs(expr.args[3])
     keys = Symbol[]
     lhs_term = makepattern(lhs, keys)
     unique!(keys)

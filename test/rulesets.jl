@@ -144,7 +144,5 @@ end
 
     r = @acrule ~x => ~x where f(~x)
     @eqtest r(a) == a
-    @test isnothing(r(b))
-
-    # It would probably be good to add a test with a more complex rule here.
+    @test r(b) === nothing
 end

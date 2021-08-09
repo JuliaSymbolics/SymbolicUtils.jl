@@ -325,7 +325,7 @@ function (acr::ACRule)(term)
 
         for inds in itr
             result = r(Term{T}(f, @views args[inds]))
-            if !isnothing(result)
+            if result !== nothing
                 # Assumption: inds are unique
                 length(args) == length(inds) && return result
                 return similarterm(term, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], symtype(term))

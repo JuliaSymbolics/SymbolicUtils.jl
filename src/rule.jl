@@ -156,7 +156,7 @@ function rewrite_rhs(expr::Expr)
     if expr.head == :where
         rhs = expr.args[1]
         predicate = expr.args[2]
-        expr = Meta.parse("$predicate ? $rhs : nothing")
+        expr = :($predicate ? $rhs : nothing)
     end
     return expr
 end

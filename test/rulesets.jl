@@ -133,7 +133,7 @@ end
 end
 
 @testset "where" begin
-    expected = Meta.parse("f(~x) ? ~x + ~y : nothing")
+    expected = :(f(~x) ? ~x + ~y : nothing)
     @test SymbolicUtils.rewrite_rhs(:((~x + ~y) where f(~x))) == expected
 
     @syms a b

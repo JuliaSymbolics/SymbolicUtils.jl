@@ -22,3 +22,7 @@ include("nf.jl")
 include("interface.jl")
 include("fuzz.jl")
 include("adjoints.jl")
+
+if haskey(ENV, "CI")
+    include("benchmark.jl")
+end

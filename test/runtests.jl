@@ -13,6 +13,7 @@ macro eqtest(expr)
 end
 SymbolicUtils.show_simplified[] = false
 
+
 if haskey(ENV, "SU_BENCHMARK_ONLY")
     include("benchmark.jl")
 else

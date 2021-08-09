@@ -97,22 +97,22 @@
       <h2 class="doc-header" id="toexpr">
         <a href="#toexpr">toexpr</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">toexpr&#40;ex, &#91;st,&#93;&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">toexpr(ex, [st,])</code></pre>
 <p>Convert a symbolic expression into an <code>Expr</code>, suitable to be passed into <code>eval</code>.</p>
 <p>For example,</p>
-<pre><code class="language-julia">julia&gt; @syms a b
-&#40;a, b&#41;
+<pre><code class="julia hljs">julia&gt; <span class="hljs-meta">@syms</span> a b
+(a, b)
 
-julia&gt; toexpr&#40;a&#43;b&#41;
-:&#40;&#40;&#43;&#41;&#40;a, b&#41;&#41;
+julia&gt; toexpr(a+b)
+:((+)(a, b))
 
-julia&gt; toexpr&#40;a&#43;b&#41; |&gt; dump
-Expr
-  head: Symbol call
-  args: Array&#123;Any&#125;&#40;&#40;3,&#41;&#41;
-    1: &#43; &#40;function of type typeof&#40;&#43;&#41;&#41;
-    2: Symbol a
-    3: Symbol b</code></pre>
+julia&gt; toexpr(a+b) |&gt; dump
+<span class="hljs-built_in">Expr</span>
+  head: <span class="hljs-built_in">Symbol</span> call
+  args: <span class="hljs-built_in">Array</span>{<span class="hljs-built_in">Any</span>}((<span class="hljs-number">3</span>,))
+    <span class="hljs-number">1</span>: + (<span class="hljs-keyword">function</span> of type typeof(+))
+    <span class="hljs-number">2</span>: <span class="hljs-built_in">Symbol</span> a
+    <span class="hljs-number">3</span>: <span class="hljs-built_in">Symbol</span> b</code></pre>
 <p>Note that the function is an actual function object.</p>
 <p>For more complex expressions, see other code-related combinators,</p>
 <p>Namely <code>Assignment</code>, <code>Let</code>, <code>Func</code>, <code>SetArray</code>, <code>MakeArray</code>, <code>MakeSparseArray</code> and <code>MakeTuple</code>.</p>
@@ -126,7 +126,7 @@ Expr
       <h2 class="doc-header" id="Assignment">
         <a href="#Assignment">Assignment</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">Assignment&#40;lhs, rhs&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Assignment(lhs, rhs)</code></pre>
 <p>An assignment expression. Shorthand <code>lhs ← rhs</code> &#40;<code>\leftarrow</code>&#41;</p>
 </div>
   </div>
@@ -135,7 +135,7 @@ Expr
       <h2 class="doc-header" id="Let">
         <a href="#Let">Let</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">Let&#40;assignments, body&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Let(assignments, body)</code></pre>
 <p>A Let block.</p>
 <ul>
 <li><p><code>assignments</code> is a vector of <code>Assignment</code>s</p>
@@ -150,7 +150,7 @@ Expr
       <h2 class="doc-header" id="Func">
         <a href="#Func">Func</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">Func&#40;args, kwargs, body&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Func(args, kwargs, body)</code></pre>
 <p>A function.</p>
 <ul>
 <li><p><code>args</code> is a vector of expressions</p>
@@ -168,19 +168,19 @@ Expr
 </li>
 </ul>
 <p>For example,</p>
-<pre><code class="language-julia">julia&gt; @syms a b c t f&#40;d&#41; x&#40;t&#41; y&#40;t&#41; z&#40;t&#41;
-&#40;a, b, c, t, f&#40;::Number&#41;::Number, x&#40;::Number&#41;::Number, y&#40;::Number&#41;::Number, z&#40;::Number&#41;::Number&#41;
+<pre><code class="julia hljs">julia&gt; <span class="hljs-meta">@syms</span> a b c t f(d) x(t) y(t) z(t)
+(a, b, c, t, f(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Number</span>, x(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Number</span>, y(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Number</span>, z(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Number</span>)
 
-julia&gt; func &#61; Func&#40;&#91;a,x&#40;t&#41;, DestructuredArgs&#40;&#91;b, y&#40;t&#41;&#93;&#41;, f&#93;, # args
-                   &#91;c ← 2, z&#40;t&#41; ← 42&#93;, # kwargs
-                   f&#40;&#40;a &#43; b &#43; c&#41; / x&#40;t&#41; &#43; y&#40;t&#41; &#43; z&#40;t&#41;&#41;&#41;;
+julia&gt; func = Func([a,x(t), DestructuredArgs([b, y(t)]), f], <span class="hljs-comment"># args</span>
+                   [c ← <span class="hljs-number">2</span>, z(t) ← <span class="hljs-number">42</span>], <span class="hljs-comment"># kwargs</span>
+                   f((a + b + c) / x(t) + y(t) + z(t)));
 
-julia&gt; toexpr&#40;func&#41;
-:&#40;function &#40;a, var&quot;x&#40;t&#41;&quot;, var&quot;##arg#255&quot;, f; c &#61; 2, var&quot;z&#40;t&#41;&quot; &#61; 42&#41;
-      let b &#61; var&quot;##arg#255&quot;&#91;1&#93;, var&quot;y&#40;t&#41;&quot; &#61; var&quot;##arg#255&quot;&#91;2&#93;
-          f&#40;&#40;&#43;&#41;&#40;var&quot;y&#40;t&#41;&quot;, var&quot;z&#40;t&#41;&quot;, &#40;*&#41;&#40;&#40;&#43;&#41;&#40;a, b, c&#41;, &#40;inv&#41;&#40;var&quot;x&#40;t&#41;&quot;&#41;&#41;&#41;&#41;
-      end
-  end&#41;</code></pre>
+julia&gt; toexpr(func)
+:(<span class="hljs-keyword">function</span> (a, <span class="hljs-string">var&quot;x(t)&quot;</span>, <span class="hljs-string">var&quot;##arg#255&quot;</span>, f; c = <span class="hljs-number">2</span>, <span class="hljs-string">var&quot;z(t)&quot;</span> = <span class="hljs-number">42</span>)
+      <span class="hljs-keyword">let</span> b = <span class="hljs-string">var&quot;##arg#255&quot;</span>[<span class="hljs-number">1</span>], <span class="hljs-string">var&quot;y(t)&quot;</span> = <span class="hljs-string">var&quot;##arg#255&quot;</span>[<span class="hljs-number">2</span>]
+          f((+)(<span class="hljs-string">var&quot;y(t)&quot;</span>, <span class="hljs-string">var&quot;z(t)&quot;</span>, (*)((+)(a, b, c), (inv)(<span class="hljs-string">var&quot;x(t)&quot;</span>))))
+      <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>)</code></pre>
 <ul>
 <li><p>the second argument is a <code>DestructuredArgs</code>, in the <code>Expr</code> form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of <code>c</code> and <code>y&#40;t&#41;</code>. The let block that is automatically generated &quot;destructures&quot; these arguments.</p>
 </li>
@@ -193,11 +193,11 @@ julia&gt; toexpr&#40;func&#41;
 </li>
 </ul>
 <p>An example invocation of this function is:</p>
-<pre><code class="language-julia">julia&gt; executable &#61; eval&#40;toexpr&#40;func&#41;&#41;
-#10 &#40;generic function with 1 method&#41;
+<pre><code class="julia hljs">julia&gt; executable = eval(toexpr(func))
+<span class="hljs-comment">#10 (generic function with 1 method)</span>
 
-julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&#40;t&#41;&quot; &#61; sqrt&#40;42&#41;&#41;
-&quot;11.98074069840786&quot;</code></pre>
+julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0</span>, [<span class="hljs-number">2</span>,<span class="hljs-number">3.0</span>], x-&gt;string(x); <span class="hljs-string">var&quot;z(t)&quot;</span> = sqrt(<span class="hljs-number">42</span>))
+<span class="hljs-string">&quot;11.98074069840786&quot;</span></code></pre>
 </div>
   </div>
 
@@ -205,7 +205,7 @@ julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&
       <h2 class="doc-header" id="SpawnFetch">
         <a href="#SpawnFetch">SpawnFetch</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">SpawnFetch&#123;ParallelType&#125;&#40;funcs &#91;, args&#93;, reduce&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">SpawnFetch{ParallelType}(funcs [, args], reduce)</code></pre>
 <p>Run every expression in <code>funcs</code> in its own task, the expression should be a <code>Func</code> object and is passed to <code>Threads.Task&#40;f&#41;</code>. If <code>Func</code> takes arguments, then the arguments must be passed in as <code>args</code>–a vector of vector of arguments to each function in <code>funcs</code>. We don&#39;t use <code>@spawn</code> in order to support RuntimeGeneratedFunctions which disallow closures, instead we interpolate these functions or closures as smaller RuntimeGeneratedFunctions.</p>
 <p><code>reduce</code> function is used to combine the results of executing <code>exprs</code>. A SpawnFetch expression returns the reduced result.</p>
 <p>Use <code>Symbolics.MultithreadedForm</code> ParallelType from the Symbolics.jl package to get the RuntimeGeneratedFunction version SpawnFetch.</p>
@@ -217,7 +217,7 @@ julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&
       <h2 class="doc-header" id="SetArray">
         <a href="#SetArray">SetArray</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">SetArray&#40;inbounds, arr, elems&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">SetArray(inbounds, arr, elems)</code></pre>
 <p>An expression representing setting of elements of <code>arr</code>.</p>
 <p>By default, every element of <code>elems</code> is copied over to <code>arr</code>,</p>
 <p>but if <code>elems</code> contains <code>AtIndex&#40;i, val&#41;</code> objects, then <code>arr&#91;i&#93; &#61; val</code> is performed in its place.</p>
@@ -229,7 +229,7 @@ julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&
       <h2 class="doc-header" id="MakeArray">
         <a href="#MakeArray">MakeArray</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">MakeArray&#40;elems, similarto, &#91;output_eltype&#61;nothing&#93;&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">MakeArray(elems, similarto, [output_eltype=<span class="hljs-literal">nothing</span>])</code></pre>
 <p>An expression which constructs an array.</p>
 <ul>
 <li><p><code>elems</code> is the output array</p>
@@ -240,12 +240,12 @@ julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&
 </li>
 </ul>
 <p>You can define:</p>
-<pre><code class="language-julia">@inline function create_array&#40;A::Type&#123;&lt;:MyArray&#125;,a
-                              ::Nothing, d::Val&#123;dims&#125;, elems...&#41; where dims
+<pre><code class="julia hljs"><span class="hljs-meta">@inline</span> <span class="hljs-keyword">function</span> create_array(A::<span class="hljs-built_in">Type</span>{&lt;:MyArray},a
+                              ::<span class="hljs-built_in">Nothing</span>, d::<span class="hljs-built_in">Val</span>{dims}, elems...) <span class="hljs-keyword">where</span> dims
 
-# and
+<span class="hljs-comment"># and</span>
 
-@inlline function create_array&#40;::Type&#123;&lt;:MyArray&#125;, T, ::Val&#123;dims&#125;, elems...&#41; where dims</code></pre>
+<span class="hljs-meta">@inlline</span> <span class="hljs-keyword">function</span> create_array(::<span class="hljs-built_in">Type</span>{&lt;:MyArray}, T, ::<span class="hljs-built_in">Val</span>{dims}, elems...) <span class="hljs-keyword">where</span> dims</code></pre>
 <p>which creates an array of size <code>dims</code> using the elements <code>elems</code> and eltype <code>T</code>, to allow <code>MakeArray</code> to create arrays similarto <code>MyArray</code>s.</p>
 </div>
   </div>
@@ -254,7 +254,7 @@ julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&
       <h2 class="doc-header" id="MakeSparseArray">
         <a href="#MakeSparseArray">MakeSparseArray</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">MakeSpaseArray&#40;array&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">MakeSpaseArray(array)</code></pre>
 <p>An expression which creates a <code>SparseMatrixCSC</code> or a <code>SparseVector</code>.</p>
 <p>The generated expression contains the sparsity information of <code>array</code>,</p>
 <p>it only creates the <code>nzval</code> field at run time.</p>
@@ -265,7 +265,7 @@ julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&
       <h2 class="doc-header" id="MakeTuple">
         <a href="#MakeTuple">MakeTuple</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">MakeTuple&#40;tup&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">MakeTuple(tup)</code></pre>
 <p>Make a Tuple from a tuple of expressions.</p>
 </div>
   </div>
@@ -274,7 +274,7 @@ julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&
       <h2 class="doc-header" id="LiteralExpr">
         <a href="#LiteralExpr">LiteralExpr</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="language-julia">LiteralExpr&#40;ex&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">LiteralExpr(ex)</code></pre>
 <p>Literally <code>ex</code>, an <code>Expr</code>. <code>toexpr</code> on <code>LiteralExpr</code> recursively calls <code>toexpr</code> on any interpolated symbolic expressions.</p>
 </div>
   </div>
@@ -298,8 +298,8 @@ julia&gt; exec&#40;1, 2.0, &#91;2,3.0&#93;, x-&gt;string&#40;x&#41;; var&quot;z&
         }
     </script>
     
-        <script src="/libs/highlight/highlight.pack.js"></script>
-<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+        
+
 
     
   </body>

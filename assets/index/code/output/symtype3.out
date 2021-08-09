@@ -1,2 +1,2 @@
-typeof(w) = SymbolicUtils.Sym{Number,Nothing}
-typeof(α) = SymbolicUtils.Sym{Real,Nothing}
+typeof(w) = SymbolicUtils.Sym{Number, Nothing}
+typeof(α) = SymbolicUtils.Sym{Real, Nothing}

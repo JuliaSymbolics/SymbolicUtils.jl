@@ -99,7 +99,7 @@ r1&#40;sin&#40;2z&#41;&#41;</code></pre><pre><code class="plaintext code-output"
 r2&#40;sin&#40;α&#43;β&#41;&#41;</code></pre><pre><code class="plaintext code-output">cos(α)*sin(β) + sin(α)*cos(β)</code></pre>
 <p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~xs</code> in the following example is a segment variable:</p>
 <pre><code class="language-julia">@syms x y z
-@rule&#40;&#43;&#40;~~xs&#41; &#61;&gt; ~~xs&#41;&#40;x &#43; y &#43; z&#41;</code></pre><pre><code class="plaintext code-output">3-element view(::Array{SymbolicUtils.Sym{Number,Nothing},1}, 1:3) with eltype SymbolicUtils.Sym{Number,Nothing}:
+@rule&#40;&#43;&#40;~~xs&#41; &#61;&gt; ~~xs&#41;&#40;x &#43; y &#43; z&#41;</code></pre><pre><code class="plaintext code-output">3-element view(::Vector{SymbolicUtils.Sym{Number, Nothing}}, 1:3) with eltype SymbolicUtils.Sym{Number, Nothing}:
  x
  y
  z</code></pre>

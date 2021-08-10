@@ -1,5 +1,9 @@
+"""
+$(DocStringExtensions.README)
+"""
 module SymbolicUtils
 
+using DocStringExtensions
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 # Sym, Term,
@@ -36,8 +40,9 @@ include("rule.jl")
 include("matchers.jl")
 
 # Convert to an efficient multi-variate polynomial representation
-import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
-using AbstractAlgebra: ismonomial, symbols
+import MultivariatePolynomials
+const MP = MultivariatePolynomials
+import DynamicPolynomials
 export expand
 include("abstractalgebra.jl")
 

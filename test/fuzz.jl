@@ -6,17 +6,20 @@ seed!(6174)
 @testset "Fuzz test" begin
     @time @testset "expand fuzz" begin
         for i=1:500
+            i % 100 == 0 && @info "expand fuzz" iter=i
             fuzz_test(5, num_spec, SymbolicUtils.expand; min_depth=3)
         end
     end
     @time @testset "num fuzz" begin
         for i=1:1500
+            i % 100 == 0 && @info "num fuzz" iter=i
             fuzz_test(5, num_spec)
         end
     end
     @time @testset "bool fuzz" begin
         for i=1:500
             seed!(i)
+            i % 100 == 0 && @info "bool fuzz" iter=i
             fuzz_test(5, bool_spec)
         end
     end

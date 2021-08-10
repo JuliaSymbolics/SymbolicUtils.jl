@@ -1,6 +1,22 @@
+using Documenter
+using Pkg
 using Test
 using SymbolicUtils
 import IfElse: ifelse
+
+DocMeta.setdocmeta!(
+    SymbolicUtils,
+    :DocTestSetup,
+    :(using SymbolicUtils);
+    recursive=true
+)
+
+# Only test one Julia version to avoid differences due to changes in printing.
+if v"1.6" ≤ VERSION < v"1.7-beta3.0"
+    doctest(SymbolicUtils)
+else
+    @warn "Skipping doctests"
+end
 
 # == / != syntax is nice, let's use it in tests
 macro eqtest(expr)
@@ -12,6 +28,7 @@ macro eqtest(expr)
     end |> esc
 end
 SymbolicUtils.show_simplified[] = false
+
 
 include("basics.jl")
 include("order.jl")

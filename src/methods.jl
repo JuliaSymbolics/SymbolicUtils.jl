@@ -113,7 +113,7 @@ Base.real(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(real, s)
 promote_symtype(::typeof(Base.conj), T::Type{<:Number}) = T
 Base.conj(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(conj, s)
 promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real
-Base.imag(s::Symbolic{<:Number}) = islike(s, Real) ? zero(symtype(s)) : term(conj, s)
+Base.imag(s::Symbolic{<:Number}) = islike(s, Real) ? zero(symtype(s)) : term(imag, s)
 
 ## Booleans
 

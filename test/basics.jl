@@ -87,6 +87,11 @@ struct Ctx2 end
     newf = substitute(f, Dict(a=>b)) # unrelated substitution
     @test hasmetadata(newf, Ctx1)
     @test getmetadata(newf, Ctx1) == "yes"
+
+
+    @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
+                  1 + term(sqrt, 2, type=Number))
+    @test substitute(1+sqrt(a), Dict(a => 2), fold=true) isa Float64
 end
 
 @testset "Base methods" begin
@@ -123,6 +128,7 @@ end
     @test isequal(w == 0, Term{Bool}(==, [w, 0]))
 
     @eqtest x // 5 == (1 // 5) * x
+    @eqtest (1//2 * x) / 5 == (1 // 10) * x
     @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
     @eqtest 5 // x == 5 / x
     @eqtest x // a == x / a
@@ -166,9 +172,10 @@ end
     @test repr((-1)^a) == "(-1)^a"
 end
 
-@testset "similarterm with Add" begin
+@testset "similarterm" begin
     @syms a b c
     @test isequal(SymbolicUtils.similarterm((b + c), +, [a,  (b+c)]).dict, Dict(a=>1,b=>1,c=>1))
+    @test isequal(SymbolicUtils.similarterm(b^2, ^, [b^2,  1//2]), b)
 end
 
 toterm(t) = Term{symtype(t)}(operation(t), arguments(t))

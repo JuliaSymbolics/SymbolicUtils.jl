@@ -58,26 +58,35 @@ symtype(::Symbolic{T}) where {T} = T
 
 """
     metadata(s)
-Get all the metadata of a term or `nothing` if no metadata is defined.
 
+Get all the metadata of a term or `nothing` if no metadata is defined.
 """
 metadata(s::Symbolic) = s.metadata
 metadata(s::Any) = nothing
+"""
+    metadata(s, meta)
+
+Set the metadata for `s`. `meta` must be an `ImmutableDict{DataType, Any}` or
+`Nothing`.
+"""
+metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
 function getmetadata(s::Symbolic, ctx)
-    if s.metadata isa AbstractDict
-        s.metadata[ctx]
+    md = metadata(s)
+    if md isa AbstractDict
+        md[ctx]
     else
         throw(ArgumentError("$s does not have metadata for $ctx"))
     end
 end
 
 function getmetadata(s::Symbolic, ctx, default)
-    s.metadata isa AbstractDict ? get(s.metadata, ctx, default) : default
+    md = metadata(s)
+    md isa AbstractDict ? get(md, ctx, default) : default
 end
 
 # pirated for Setfield purposes:
@@ -200,8 +209,7 @@ struct FnType{X<:Tuple,Y} end
 
 function (f::Symbolic)(args...)
     error("Sym $f is not callable. " *
-          "Use @syms $f(var1, var2,...) to create it as a callable. " *
-          "See ?@fun for more options")
+          "Use @syms $f(var1, var2,...) to create it as a callable.")
 end
 
 """
@@ -291,7 +299,7 @@ function _name_type(x)
 end
 
 function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
-    print(io, f.name)
+    print(io, nameof(f))
     # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
     # best printing, but it's better than erroring.
     argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")
@@ -494,7 +502,7 @@ end
 function show_mul(io, args)
     length(args) == 1 && return print_arg(io, *, args[1])
 
-    paren_scalar = args[1] isa Complex || args[1] isa Rational
+    paren_scalar = (args[1] isa Complex && !_iszero(imag(args[1]))) || args[1] isa Rational || (args[1] isa Number && !isfinite(args[1]))
     minus = args[1] isa Number && args[1] == -1
     unit = args[1] isa Number && args[1] == 1
     nostar = !paren_scalar && args[1] isa Number && !(args[2] isa Number)
@@ -754,7 +762,7 @@ function Mul(T, a,b; metadata=NO_METADATA)
         if _isone(last(pair)) # first value
             return first(pair)
         else
-            return Pow(first(pair), last(pair))
+            return unstable_pow(first(pair), last(pair))
         end
     else
         Mul{T, typeof(a), typeof(b), typeof(metadata)}(a,b, Ref{Any}(nothing), Ref{UInt}(0), metadata)
@@ -767,9 +775,11 @@ istree(a::Mul) = true
 
 operation(a::Mul) = *
 
+unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
+
 function arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([Pow(k, v) for (k,v) in a.dict], lt=<ₑ)
+    args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
@@ -831,7 +841,7 @@ end
 
 \(a::Number, b::SN) = b / a
 
-/(a::SN, b::Number) = inv(b) * a
+/(a::SN, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
 
 //(a::Union{SN, Number}, b::SN) = a / b
 
@@ -867,7 +877,10 @@ istree(a::Pow) = true
 
 operation(a::Pow) = ^
 
-arguments(a::Pow) = [a.base, a.exp]
+# Use `Union` to avoid promoting the base and exponent to the same type.
+# For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
+# we don't want to promote `a.exp` to a multivariate polynomial.
+arguments(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
 
 Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 
@@ -892,7 +905,7 @@ end
 ^(a::Number, b::SN) = Pow(a, b)
 
 function ^(a::Mul, b::Number)
-    coeff = a.coeff isa Integer && b isa Integer ? (a.coeff//1) ^ b : a.coeff ^ b
+    coeff = unstable_pow(a.coeff, b)
     Mul(promote_symtype(^, symtype(a), symtype(b)),
         coeff, mapvalues((k, v) -> b*v, a.dict))
 end
@@ -954,7 +967,7 @@ function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
     elseif f == (*)
         Mul(T, makemul(1, args...)...; metadata=metadata)
     elseif f == (^) && length(args) == 2
-        Pow{T, typeof.(args)...}(args...; metadata=metadata)
+        Pow{T}(makepow(args...)...; metadata=metadata)
     else
         Term{T}(f, args; metadata=metadata)
     end

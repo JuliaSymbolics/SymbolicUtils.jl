@@ -72,8 +72,8 @@ function substitute(expr, dict; fold=true)
 
         similarterm(expr,
                     substitute(operation(expr), dict, fold=fold),
-                    args,
-                    symtype(expr),
+                    args;
+                    type=symtype(expr),
                     metadata=metadata(expr))
     else
         expr

@@ -23,9 +23,9 @@ function labels!(dicts, t, variable_type::Type)
         return t
     elseif isterm(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
         tt = arguments(t)
-        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), tt), symtype(t))
+        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), tt); type=symtype(t))
     elseif isterm(t) && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
-        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), arguments(t)), symtype(t))
+        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), arguments(t)), type=symtype(t))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
@@ -36,8 +36,8 @@ function labels!(dicts, t, variable_type::Type)
             sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
             dicts2 = _dicts(dicts[2])
             sym2term[sym] = similarterm(t, operation(t),
-                                        map(x->to_mpoly(x, variable_type, dicts)[1], arguments(t)),
-                                        symtype(t))
+                                        map(x->to_mpoly(x, variable_type, dicts)[1], arguments(t));
+                                        type=symtype(t))
         else
             sym = Sym{symtype(t)}(gensym("literal"))
             sym2term[sym] = t
@@ -59,7 +59,7 @@ let
                         @rule(zero(~x) => 0)
                         @rule(one(~x) => 1)]
 
-    simterm(x, f, args;metadata=nothing) = similarterm(x,f,args, symtype(x); metadata=metadata)
+    simterm(x, f, args;metadata=nothing) = similarterm(x,f,args; type=symtype(x), metadata=metadata)
     mpoly_rules = [@rule(~x::ismpoly - ~y::ismpoly => ~x + -1 * (~y))
                    @rule(-(~x) => -1 * ~x)
                    @acrule(~x::ismpoly + ~y::ismpoly => ~x + ~y)
@@ -117,7 +117,7 @@ function _to_term(reference, mono::MP.AbstractMonomialLike, dict, syms)
     elseif isempty(monics)
         return 1
     else
-        return similarterm(reference, *, monics, symtype(reference))
+        return similarterm(reference, *, monics; type=symtype(reference))
     end
 end
 
@@ -140,13 +140,13 @@ function _to_term(reference, x::MP.AbstractPolynomialLike, dict, syms)
         terms = map(MP.terms(x)) do term
             _to_term(reference, term, dict, syms)
         end
-        return similarterm(reference, +, terms, symtype(reference))
+        return similarterm(reference, +, terms; type=symtype(reference))
     end
 end
 
 function _to_term(reference, x, dict, vars)
     if isterm(x)
-        t = similarterm(x, operation(x), _to_term.((reference,), arguments(x), (dict,), (vars,)), symtype(x))
+        t = similarterm(x, operation(x), _to_term.((reference,), arguments(x), (dict,), (vars,)); type=symtype(x))
     else
         if haskey(dict, x)
             return dict[x]

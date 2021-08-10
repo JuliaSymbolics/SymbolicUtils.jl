@@ -34,7 +34,7 @@ Returns the arguments (a `Vector`) for an expression tree.
 Called only if `isterm(x)` is `true`. Part of the API required
 for `simplify` to work. Other required methods are `operation` and `isterm`
 """
-function arguments end
+# function arguments end
 
 """
     symtype(x)
@@ -49,13 +49,8 @@ Define this for your symbolic types if you want `simplify` to apply rules
 specific to numbers (such as commutativity of multiplication). Or such
 rules that may be implemented in the future.
 """
-function symtype end
-
-symtype(x::Number) = typeof(x)
-
-symtype(x) = typeof(x)
-
-symtype(::Symbolic{T}) where {T} = T
+TermInterface.symtype(x::Number) = typeof(x)
+TermInterface.symtype(::Symbolic{T}) where {T} = T
 
 """
     metadata(s)
@@ -425,8 +420,8 @@ different type than `t`, because `f` also influences the result.
 """
 TermInterface.similarterm(t::T, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} = similarterm(t, f, args; type=_promote_symtype(f, args), metadata=nothing)
 TermInterface.similarterm(t::Type{T}, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} = similarterm(t, f, args; type=_promote_symtype(f, args), metadata=nothing)
-TermInterface.similarterm(t::Term, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
-TermInterface.similarterm(t::Type{Term}, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+TermInterface.similarterm(t::Term, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+TermInterface.similarterm(t::Type{Term}, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 node_count(t) = isterm(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
@@ -627,7 +622,7 @@ function Add(T, coeff, dict; metadata=NO_METADATA)
     Add{T, typeof(coeff), typeof(dict), typeof(metadata)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0), metadata)
 end
 
-symtype(a::Add{X}) where {X} = X
+TermInterface.symtype(a::Add{X}) where {X} = X
 
 
 TermInterface.isterm(a::Add) = true
@@ -773,7 +768,7 @@ function Mul(T, a,b; metadata=NO_METADATA)
     end
 end
 
-symtype(a::Mul{X}) where {X} = X
+TermInterface.symtype(a::Mul{X}) where {X} = X
 
 TermInterface.isterm(a::Mul) = true
 TermInterface.isterm(a::Type{Mul}) = true
@@ -876,7 +871,7 @@ end
 function Pow(a, b; metadata=NO_METADATA)
     Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
 end
-symtype(a::Pow{X}) where {X} = X
+TermInterface.symtype(a::Pow{X}) where {X} = X
 
 TermInterface.isterm(a::Pow) = true
 TermInterface.isterm(a::Type{Pow}) = true
@@ -964,7 +959,8 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}}
 
-function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
+function TermInterface.similarterm(p::Type{NumericTerm}, f, args; type=nothing, metadata=nothing)
+    T = type
     if T === nothing
         T = _promote_symtype(f, args)
     end
@@ -978,6 +974,10 @@ function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
         Term{T}(f, args; metadata=metadata)
     end
 end
+
+TermInterface.similarterm(p::NumericTerm, f, args; type=nothing, metadata=nothing) = 
+    similarterm(NumericTerm, f, args; type=type, metadata=metadata)
+
 
 function Base.hash(t::Union{Add,Mul}, u::UInt64)
     !iszero(u) && return hash(hash(t, zero(UInt64)), u)

@@ -173,4 +173,9 @@ function expand(expr, variable_type::Type=DynamicPolynomials.PolyVar{true})
     to_term(expr, to_mpoly(expr, variable_type)...)
 end
 
+## Hack to fix https://github.com/JuliaAlgebra/MultivariatePolynomials.jl/issues/169
+
+Base.promote_rule(::Type{S}, ::Type{T}) where {S<:Symbolic, T<:MP.AbstractPolynomialLike}= Any
+Base.promote_rule(::Type{T}, ::Type{S}) where {S<:Symbolic, T<:MP.AbstractPolynomialLike}= Any
+
 Base.@deprecate polynormalize(x) expand(x)

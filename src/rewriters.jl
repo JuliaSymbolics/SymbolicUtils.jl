@@ -41,11 +41,16 @@ struct Empty end
 
 (rw::Empty)(x) = nothing
 
+instrument(x, f) = f(x)
+instrument(x::Empty, f) = x
+
 struct IfElse{F, A, B}
     cond::F
     yes::A
     no::B
 end
+
+instrument(x::IfElse, f) = IfElse(x.cond, instrument(x.yes, f), instrument(x.no, f))
 
 function (rw::IfElse)(x)
     rw.cond(x) ?  rw.yes(x) : rw.no(x)
@@ -67,10 +72,13 @@ function (rw::Chain)(x)
     return x
 end
 
+instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
 
 struct RestartedChain{Cs}
     rws::Cs
 end
+
+instrument(c::RestartedChain, f) = RestartedChain(map(x->instrument(x,f), c.rws))
 
 function (rw::RestartedChain)(x)
     for f in rw.rws
@@ -99,6 +107,8 @@ struct Fixpoint{C}
     rw::C
 end
 
+instrument(x::Fixpoint, f) = Fixpoint(instrument(x.rw, f))
+
 function (rw::Fixpoint)(x)
     f = rw.rw
     y = @timer cached_repr(f) f(x)
@@ -116,6 +126,13 @@ struct Walk{ord, C, F, threaded}
     similarterm::F
 end
 
+function instrument(x::Walk{ord, C,F,threaded}, f) where {ord,C,F,threaded}
+    irw = instrument(x.rw, f)
+    Walk{ord, typeof(irw), typeof(x.similarterm), threaded}(irw,
+                                                            x.thread_cutoff,
+                                                            x.similarterm)
+end
+
 using .Threads
 
 function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
@@ -129,6 +146,8 @@ end
 struct PassThrough{C}
     rw::C
 end
+instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
+
 (p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
 
 passthrough(x, default) = x === nothing ? default : x
@@ -168,6 +187,20 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
     else
         return p.rw(x)
     end
+end
+
+function instrument_io(x)
+    function io_instrumenter(r)
+        function (args...)
+            println("Rule: ", r)
+            println("Input: ", args)
+            res = r(args...)
+            println("Output: ", res)
+            res
+        end
+    end
+
+    instrument(x, io_instrumenter)
 end
 
 end # end module

@@ -30,7 +30,7 @@ using SymbolicUtils # hide
 
 ## Interfacing
 
-{{doc istree istree fn}}
+{{doc isterm isterm fn}}
 
 {{doc operation operation fn}}
 

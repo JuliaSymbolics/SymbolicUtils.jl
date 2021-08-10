@@ -35,7 +35,7 @@ struct LL{V}
     i::Int
 end
 
-islist(x) = istree(x) || !isempty(x)
+islist(x) = isterm(x) || !isempty(x)
 
 Base.empty(l::LL) = empty(l.v)
 Base.isempty(l::LL) = l.i > length(l.v)
@@ -49,9 +49,9 @@ Base.isempty(t::Term) = false
 @inline car(t::Term) = operation(t)
 @inline cdr(t::Term) = arguments(t)
 
-@inline car(v) = istree(v) ? operation(v) : first(v)
+@inline car(v) = isterm(v) ? operation(v) : first(v)
 @inline function cdr(v)
-    if istree(v)
+    if isterm(v)
         arguments(v)
     else
         islist(v) ? LL(v, 2) : error("asked cdr of empty")
@@ -65,7 +65,7 @@ end
     if n === 0
         return ll
     else
-        istree(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
+        isterm(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
     end
 end
 @inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)
@@ -78,7 +78,7 @@ pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
 
 # Simplification utilities
 function has_trig(term)
-    !istree(term) && return false
+    !isterm(term) && return false
     fns = (sin, cos, tan, cot, sec, csc)
     op = operation(term)
 
@@ -90,7 +90,7 @@ function has_trig(term)
 end
 
 function fold(t)
-    if istree(t)
+    if isterm(t)
         tt = map(fold, arguments(t))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
@@ -106,7 +106,7 @@ end
 ### Predicates
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
-is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
+is_operation(f) = @nospecialize(x) -> isterm(x) && (operation(x) == f)
 
 isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(x)
@@ -125,7 +125,7 @@ function isnotflat(⋆)
     function (x)
         args = arguments(x)
         for t in args
-            if istree(t) && operation(t) === (⋆)
+            if isterm(t) && operation(t) === (⋆)
                 return true
             end
         end
@@ -185,7 +185,7 @@ function flatten_term(⋆, x)
     # flatten nested ⋆
     flattened_args = []
     for t in args
-        if istree(t) && operation(t) === (⋆)
+        if isterm(t) && operation(t) === (⋆)
             append!(flattened_args, arguments(t))
         else
             push!(flattened_args, t)
@@ -219,7 +219,7 @@ macro matchable(expr)
     fields = map(get_name, fields)
     quote
         $expr
-        SymbolicUtils.istree(::$name) = true
+        SymbolicUtils.isterm(::$name) = true
         SymbolicUtils.operation(::$name) = $name
         SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         Base.length(x::$name) = $(length(fields) + 1)

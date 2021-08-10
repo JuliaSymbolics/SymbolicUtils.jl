@@ -135,7 +135,7 @@ Symbolic expressions are of type `Term{T}`, `Add{T}`, `Mul{T}` or `Pow{T}` and d
 
 All the expression types support the following:
 
-- `istree(x)` -- always returns `true` denoting, `x` is not a leaf node like Sym or a literal.
+- `isterm(x)` -- always returns `true` denoting, `x` is not a leaf node like Sym or a literal.
 - `operation(x)` -- the function being called
 - `arguments(x)` -- a vector of arguments
 - `symtype(x)` -- the "inferred" type (`T`)

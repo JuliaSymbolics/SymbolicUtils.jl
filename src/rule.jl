@@ -346,7 +346,7 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if !istree(term)
+    if !isterm(term)
         r(term)
     else
         f =  operation(term)

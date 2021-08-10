@@ -7,7 +7,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SpawnFetch, Multithreaded
 
 import ..SymbolicUtils
-import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
+import SymbolicUtils: @matchable, Sym, Term, isterm, operation, arguments
 
 ##== state management ==##
 
@@ -119,7 +119,7 @@ end
 function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
 
 function toexpr(O, st)
-    !istree(O) && return O
+    !isterm(O) && return O
     op = operation(O)
     expr′ = function_to_expr(op, O, st)
     if expr′ !== nothing
@@ -159,7 +159,7 @@ get_symbolify(args::DestructuredArgs) = ()
 function get_symbolify(args::Union{AbstractArray, Tuple})
     cflatten(map(get_symbolify, args))
 end
-get_symbolify(x) = istree(x) ? (x,) : ()
+get_symbolify(x) = isterm(x) ? (x,) : ()
 cflatten(x) = Iterators.flatten(x) |> collect
 
 function get_assignments(d::DestructuredArgs, st)

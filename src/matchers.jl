@@ -88,7 +88,7 @@ function matcher(term::Term)
     function term_matcher(success, data, bindings)
 
         !islist(data) && return nothing
-        !istree(car(data)) && return nothing
+        !isterm(car(data)) && return nothing
 
         function loop(term, bindings′, matchers′) # Get it to compile faster
             if !islist(matchers′)

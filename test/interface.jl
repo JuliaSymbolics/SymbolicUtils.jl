@@ -1,9 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Sym, istree, operation, arguments, symtype
-
-SymbolicUtils.istree(ex::Expr) = ex.head == :call
-SymbolicUtils.operation(ex::Expr) = ex.args[1]
-SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
+using SymbolicUtils: Term, Sym, isterm, operation, arguments, symtype
 
 for f ∈ [:+, :-, :*, :/, :^]
     @eval begin

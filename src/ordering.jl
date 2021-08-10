@@ -10,13 +10,13 @@
 
 arglength(a) = length(arguments(a))
 function <ₑ(a, b)
-    if !istree(a) && !istree(b)
+    if !isterm(a) && !isterm(b)
         T = typeof(a)
         S = typeof(b)
         return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)
-    elseif istree(b) && !istree(a)
+    elseif isterm(b) && !isterm(a)
         return true
-    elseif istree(a) && istree(b)
+    elseif isterm(a) && isterm(b)
         return cmp_term_term(a,b)
     else
         return !(b <ₑ a)

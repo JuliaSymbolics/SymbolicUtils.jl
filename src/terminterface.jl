@@ -1,5 +1,3 @@
-using TermInterface 
-
 TermInterface.isterm(t::Type{<:Sym}) = false
 TermInterface.isterm(t::Type{<:Symbolic}) = true
 

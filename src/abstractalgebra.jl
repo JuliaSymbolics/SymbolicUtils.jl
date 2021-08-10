@@ -21,17 +21,17 @@ end
 function labels!(dicts, t, variable_type::Type)
     if t isa Number
         return t
-    elseif istree(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
+    elseif isterm(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
         tt = arguments(t)
         return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), tt), symtype(t))
-    elseif istree(t) && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
+    elseif isterm(t) && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
         return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), arguments(t)), symtype(t))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
             return term2sym[t]
         end
-        if istree(t)
+        if isterm(t)
             tt = arguments(t)
             sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
             dicts2 = _dicts(dicts[2])
@@ -145,7 +145,7 @@ function _to_term(reference, x::MP.AbstractPolynomialLike, dict, syms)
 end
 
 function _to_term(reference, x, dict, vars)
-    if istree(x)
+    if isterm(x)
         t = similarterm(x, operation(x), _to_term.((reference,), arguments(x), (dict,), (vars,)), symtype(x))
     else
         if haskey(dict, x)

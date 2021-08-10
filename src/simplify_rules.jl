@@ -102,7 +102,7 @@ let
     ]
 
     function number_simplifier()
-        rule_tree = [If(istree, Chain(ASSORTED_RULES)),
+        rule_tree = [If(isterm, Chain(ASSORTED_RULES)),
                      If(is_operation(+),
                         Chain(PLUS_RULES)),
                      If(is_operation(*),
@@ -139,12 +139,12 @@ let
     end
 
     # reduce overhead of simplify by defining these as constant
-    serial_simplifier = If(istree, Fixpoint(default_simplifier()))
+    serial_simplifier = If(isterm, Fixpoint(default_simplifier()))
 
     threaded_simplifier(cutoff) = Fixpoint(default_simplifier(threaded=true,
                                                               thread_cutoff=cutoff))
 
-    serial_expand_simplifier = If(istree,
+    serial_expand_simplifier = If(isterm,
                                   Fixpoint(Chain((expand,
                                                   Fixpoint(default_simplifier())))))
 

@@ -6,6 +6,8 @@ module SymbolicUtils
 using DocStringExtensions
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
+using TermInterface
+
 # Sym, Term,
 # Add, Mul and Pow
 using DataStructures

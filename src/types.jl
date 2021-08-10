@@ -6,23 +6,24 @@ abstract type Symbolic{T} end
 
 ### Interface to be defined for `simplify` to work:
 
-"""
-    istree(x::T)
 
-Check if `x` represents an expression tree. If returns true,
-it will be assumed that `operation(::T)` and `arguments(::T)`
-methods are defined. Definining these three should allow use
-of `simplify` on custom types. Optionally `symtype(x)` can be
-defined to return the expected type of the symbolic expression.
-"""
-istree(x) = false
+# TODO_TERMINTERFACE
+# """
+#     isterm(x::T)
+
+# Check if `x` represents an expression tree. If returns true,
+# it will be assumed that `operation(::T)` and `arguments(::T)`
+# methods are defined. Definining these three should allow use
+# of `simplify` on custom types. Optionally `symtype(x)` can be
+# defined to return the expected type of the symbolic expression.
+# """
 
 """
     operation(x::T)
 
 Returns the operation (a function object) performed by an expression
-tree. Called only if `istree(::T)` is true. Part of the API required
-for `simplify` to work. Other required methods are `arguments` and `istree`
+tree. Called only if `isterm(::T)` is true. Part of the API required
+for `simplify` to work. Other required methods are `arguments` and `isterm`
 """
 function operation end
 
@@ -30,8 +31,8 @@ function operation end
     arguments(x::T)
 
 Returns the arguments (a `Vector`) for an expression tree.
-Called only if `istree(x)` is `true`. Part of the API required
-for `simplify` to work. Other required methods are `operation` and `istree`
+Called only if `isterm(x)` is `true`. Part of the API required
+for `simplify` to work. Other required methods are `operation` and `isterm`
 """
 function arguments end
 
@@ -128,7 +129,7 @@ Base.isequal(::Symbolic, ::Symbolic) = false
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
-                 "symbolic structure using `istree(x)`, `operation(x)`, `arguments(x)` " *
+                 "symbolic structure using `isterm(x)`, `operation(x)`, `arguments(x)` " *
                  "and `similarterm(::YourType, f, args, symtype)`", :to_symbolic, force=true)
 
     x
@@ -345,7 +346,7 @@ function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
     Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
-istree(t::Term) = true
+TermInterface.isterm(t::Term) = true
 
 function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
@@ -422,11 +423,12 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-similarterm(t, f, args, symtype; metadata=nothing) = f(args...)
-similarterm(t, f, args; metadata=nothing) = similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
-similarterm(t::Term, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+TermInterface.similarterm(t::T, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} = similarterm(t, f, args; type=_promote_symtype(f, args), metadata=nothing)
+TermInterface.similarterm(t::Type{T}, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} = similarterm(t, f, args; type=_promote_symtype(f, args), metadata=nothing)
+TermInterface.similarterm(t::Term, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+TermInterface.similarterm(t::Type{Term}, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
-node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
+node_count(t) = isterm(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
 
 #--------------------
 #--------------------
@@ -438,7 +440,7 @@ Base.show(io::IO, t::Term) = show_term(io, t)
 
 isnegative(t::Real) = t < 0
 function isnegative(t)
-    if istree(t) && operation(t) === (*)
+    if isterm(t) && operation(t) === (*)
         coeff = first(arguments(t))
         return isnegative(coeff)
     end
@@ -449,7 +451,7 @@ setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
-isbinop(f) = istree(f) && !istree(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
+isbinop(f) = isterm(f) && !isterm(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")
@@ -526,9 +528,9 @@ function show_ref(io, f, args)
     x = args[1]
     idx = args[2:end]
 
-    istree(x) && print(io, "(")
+    isterm(x) && print(io, "(")
     print(io, x)
-    istree(x) && print(io, ")")
+    isterm(x) && print(io, ")")
     print(io, "[")
     for i=1:length(idx)
         print_arg(io, idx[i])
@@ -538,7 +540,7 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
-    fname = istree(f) ? Symbol(repr(f)) : nameof(f)
+    fname = isterm(f) ? Symbol(repr(f)) : nameof(f)
     binary = Base.isbinaryoperator(fname)
     if binary
         for (i, t) in enumerate(args)
@@ -628,7 +630,9 @@ end
 symtype(a::Add{X}) where {X} = X
 
 
-istree(a::Add) = true
+TermInterface.isterm(a::Add) = true
+TermInterface.isterm(a::Type{Add}) = true
+
 
 operation(a::Add) = +
 
@@ -771,7 +775,8 @@ end
 
 symtype(a::Mul{X}) where {X} = X
 
-istree(a::Mul) = true
+TermInterface.isterm(a::Mul) = true
+TermInterface.isterm(a::Type{Mul}) = true
 
 operation(a::Mul) = *
 
@@ -873,7 +878,8 @@ function Pow(a, b; metadata=NO_METADATA)
 end
 symtype(a::Pow{X}) where {X} = X
 
-istree(a::Pow) = true
+TermInterface.isterm(a::Pow) = true
+TermInterface.isterm(a::Type{Pow}) = true
 
 operation(a::Pow) = ^
 
@@ -1007,7 +1013,7 @@ AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show_type=show_type, maxdepth=maxdepth, kw...)
 function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; show_type=false, kw...)
     AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
-        if istree(y)
+        if isterm(y)
             print(io, operation(y))
         elseif y isa TreePrint
             print(io, "(", y.op, ")")

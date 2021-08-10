@@ -21,11 +21,11 @@ end
 function labels!(dicts, t, variable_type::Type)
     if t isa Number
         return t
-    elseif isterm(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
+    elseif isterm(t) && (gethead(t) == (*) || gethead(t) == (+) || gethead(t) == (-))
         tt = arguments(t)
-        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), tt); type=symtype(t))
-    elseif isterm(t) && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
-        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), arguments(t)), type=symtype(t))
+        return similarterm(t, gethead(t), map(x->labels!(dicts, x, variable_type), tt); type=symtype(t))
+    elseif isterm(t) && gethead(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
+        return similarterm(t, gethead(t), map(x->labels!(dicts, x, variable_type), arguments(t)), type=symtype(t))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
@@ -33,9 +33,9 @@ function labels!(dicts, t, variable_type::Type)
         end
         if isterm(t)
             tt = arguments(t)
-            sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
+            sym = Sym{symtype(t)}(gensym(nameof(gethead(t))))
             dicts2 = _dicts(dicts[2])
-            sym2term[sym] = similarterm(t, operation(t),
+            sym2term[sym] = similarterm(t, gethead(t),
                                         map(x->to_mpoly(x, variable_type, dicts)[1], arguments(t));
                                         type=symtype(t))
         else
@@ -146,7 +146,7 @@ end
 
 function _to_term(reference, x, dict, vars)
     if isterm(x)
-        t = similarterm(x, operation(x), _to_term.((reference,), arguments(x), (dict,), (vars,)); type=symtype(x))
+        t = similarterm(x, gethead(x), _to_term.((reference,), arguments(x), (dict,), (vars,)); type=symtype(x))
     else
         if haskey(dict, x)
             return dict[x]

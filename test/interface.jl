@@ -1,8 +1,9 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Sym, istree, operation, arguments, symtype
+using SymbolicUtils: Term, Sym, gethead, arguments, symtype
+using TermInterface
 
 TermInterface.isterm(ex::Expr) = ex.head == :call
-SymbolicUtils.operation(ex::Expr) = ex.args[1]
+TermInterface.gethead(ex::Expr) = ex.args[1]
 SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
 
 for f ∈ [:+, :-, :*, :/, :^]

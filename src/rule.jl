@@ -349,9 +349,9 @@ function (acr::ACRule)(term)
     if !isterm(term)
         r(term)
     else
-        f =  operation(term)
+        f =  gethead(term)
         # Assume that the matcher was formed by closing over a term
-        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
+        if f != gethead(r.lhs) # Maybe offer a fallback if m.term errors. 
             return nothing
         end
 

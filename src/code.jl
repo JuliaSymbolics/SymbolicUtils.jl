@@ -7,7 +7,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SpawnFetch, Multithreaded
 
 import ..SymbolicUtils
-import SymbolicUtils: @matchable, Sym, Term, isterm, operation, arguments
+import SymbolicUtils: @matchable, Sym, Term, isterm, gethead, arguments
 
 ##== state management ==##
 
@@ -120,7 +120,7 @@ function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
 
 function toexpr(O, st)
     !isterm(O) && return O
-    op = operation(O)
+    op = gethead(O)
     expr′ = function_to_expr(op, O, st)
     if expr′ !== nothing
         return expr′

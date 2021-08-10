@@ -21,14 +21,14 @@ with SymbolicUtils.jl
 #### `isterm(x::T)`
 
 Check if `x` represents an expression tree. If returns true,
-it will be assumed that `operation(::T)` and `arguments(::T)`
+it will be assumed that `head(::T)` and `arguments(::T)`
 methods are defined. Definining these three should allow use
 of `simplify` on custom types. Optionally `symtype(x)` can be
 defined to return the expected type of the symbolic expression.
 
-#### `operation(x::T)`
+#### `head(x::T)`
 
-Returns the operation (a function object) performed by an expression
+Returns the head (a function object) performed by an expression
 tree. Called only if `isterm(::T)` is true. Part of the API required
 for `simplify` to work. Other required methods are `arguments` and `isterm`
 
@@ -36,7 +36,7 @@ for `simplify` to work. Other required methods are `arguments` and `isterm`
 
 Returns the arguments (a `Vector`) for an expression tree.
 Called only if `isterm(x)` is `true`. Part of the API required
-for `simplify` to work. Other required methods are `operation` and `isterm`
+for `simplify` to work. Other required methods are `gethead` and `isterm`
 
 In addition, the methods for `Base.hash` and `Base.isequal` should also be implemented by the types for the purposes of substitution and equality matching respectively.
 
@@ -84,12 +84,12 @@ ex = 1 + (:x - 2)
 
 
 How can we use SymbolicUtils.jl to convert `ex` to `(-)(:x, 1)`? We simply implement `isterm`,
-`operation`, `arguments` and we'll be able to do rule-based rewriting on `Expr`s:
+`head`, `arguments` and we'll be able to do rule-based rewriting on `Expr`s:
 ```julia:piracy2
 using SymbolicUtils
 
 SymbolicUtils.isterm(ex::Expr) = ex.head == :call
-SymbolicUtils.operation(ex::Expr) = ex.args[1]
+SymbolicUtils.head(ex::Expr) = ex.args[1]
 SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
 
 @rule(~x => ~x - 1)(ex)

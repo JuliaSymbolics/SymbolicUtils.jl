@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype, gethead, arguments
 using SymbolicUtils
 using IfElse: ifelse
 using Test
@@ -178,7 +178,7 @@ end
     @test isequal(SymbolicUtils.similarterm(b^2, ^, [b^2,  1//2]), b)
 end
 
-toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
+toterm(t) = Term{symtype(t)}(gethead(t), arguments(t))
 
 @testset "diffs" begin
     @syms a b c

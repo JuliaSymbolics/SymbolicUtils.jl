@@ -46,10 +46,10 @@ Base.length(l::LL) = length(l.v)-l.i+1
 
 Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
 Base.isempty(t::Term) = false
-@inline car(t::Term) = operation(t)
+@inline car(t::Term) = gethead(t)
 @inline cdr(t::Term) = arguments(t)
 
-@inline car(v) = isterm(v) ? operation(v) : first(v)
+@inline car(v) = isterm(v) ? gethead(v) : first(v)
 @inline function cdr(v)
     if isterm(v)
         arguments(v)
@@ -80,7 +80,7 @@ pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
 function has_trig(term)
     !isterm(term) && return false
     fns = (sin, cos, tan, cot, sec, csc)
-    op = operation(term)
+    op = gethead(term)
 
     if Base.@nany 6 i->fns[i] === op
         return true
@@ -94,9 +94,9 @@ function fold(t)
         tt = map(fold, arguments(t))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
-            return operation(t)(tt...)
+            return gethead(t)(tt...)
         else
-            return similarterm(t, operation(t), tt)
+            return similarterm(t, gethead(t), tt)
         end
     else
         return t
@@ -106,7 +106,7 @@ end
 ### Predicates
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
-is_operation(f) = @nospecialize(x) -> isterm(x) && (operation(x) == f)
+is_operation(f) = @nospecialize(x) -> isterm(x) && (gethead(x) == f)
 
 isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(x)
@@ -125,7 +125,7 @@ function isnotflat(⋆)
     function (x)
         args = arguments(x)
         for t in args
-            if isterm(t) && operation(t) === (⋆)
+            if isterm(t) && gethead(t) === (⋆)
                 return true
             end
         end
@@ -185,7 +185,7 @@ function flatten_term(⋆, x)
     # flatten nested ⋆
     flattened_args = []
     for t in args
-        if isterm(t) && operation(t) === (⋆)
+        if isterm(t) && gethead(t) === (⋆)
             append!(flattened_args, arguments(t))
         else
             push!(flattened_args, t)
@@ -220,7 +220,7 @@ macro matchable(expr)
     quote
         $expr
         SymbolicUtils.isterm(::$name) = true
-        SymbolicUtils.operation(::$name) = $name
+        SymbolicUtils.gethead(::$name) = $name
         SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         Base.length(x::$name) = $(length(fields) + 1)
     end |> esc

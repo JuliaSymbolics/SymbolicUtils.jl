@@ -32,7 +32,7 @@ using SymbolicUtils # hide
 
 {{doc isterm isterm fn}}
 
-{{doc operation operation fn}}
+{{doc gethead gethead fn}}
 
 {{doc arguments arguments fn}}
 

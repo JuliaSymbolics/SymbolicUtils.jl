@@ -12,27 +12,26 @@ abstract type Symbolic{T} end
 #     isterm(x::T)
 
 # Check if `x` represents an expression tree. If returns true,
-# it will be assumed that `operation(::T)` and `arguments(::T)`
+# it will be assumed that `gethead(::T)` and `arguments(::T)`
 # methods are defined. Definining these three should allow use
 # of `simplify` on custom types. Optionally `symtype(x)` can be
 # defined to return the expected type of the symbolic expression.
 # """
 
-"""
-    operation(x::T)
+# """
+#     gethead(x::T)
 
-Returns the operation (a function object) performed by an expression
-tree. Called only if `isterm(::T)` is true. Part of the API required
-for `simplify` to work. Other required methods are `arguments` and `isterm`
-"""
-function operation end
+# Returns the operation (a function object) performed by an expression
+# tree. Called only if `isterm(::T)` is true. Part of the API required
+# for `simplify` to work. Other required methods are `arguments` and `isterm`
+# """
 
 """
     arguments(x::T)
 
 Returns the arguments (a `Vector`) for an expression tree.
 Called only if `isterm(x)` is `true`. Part of the API required
-for `simplify` to work. Other required methods are `operation` and `isterm`
+for `simplify` to work. Other required methods are `gethead` and `isterm`
 """
 # function arguments end
 
@@ -124,7 +123,7 @@ Base.isequal(::Symbolic, ::Symbolic) = false
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
-                 "symbolic structure using `isterm(x)`, `operation(x)`, `arguments(x)` " *
+                 "symbolic structure using `isterm(x)`, `gethead(x)`, `arguments(x)` " *
                  "and `similarterm(::YourType, f, args, symtype)`", :to_symbolic, force=true)
 
     x
@@ -315,7 +314,7 @@ or
 
 Symbolic expression representing the result of calling `f(args...)`.
 
-- `operation(t::Term)` returns `f`
+- `gethead(t::Term)` returns `f`
 - `arguments(t::Term)` returns `args`
 - `symtype(t::Term)` returns `T`
 
@@ -347,7 +346,7 @@ function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
-operation(x::Term) = getfield(x, :f)
+TermInterface.gethead(x::Term) = getfield(x, :f)
 
 arguments(x::Term) = getfield(x, :arguments)
 
@@ -358,7 +357,7 @@ function Base.isequal(t1::Term, t2::Term)
     a1 = arguments(t1)
     a2 = arguments(t2)
 
-    isequal(operation(t1), operation(t2)) &&
+    isequal(gethead(t1), gethead(t2)) &&
         length(a1) == length(a2) &&
         all(isequal(l,r) for (l, r) in zip(a1,a2))
 end
@@ -370,7 +369,7 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
     !iszero(salt) && return hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
     !iszero(h) && return h
-    h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
+    h′ = hashvec(arguments(t), hash(gethead(t), hash(T, salt)))
     t.hash[] = h′
     return h′
 end
@@ -435,18 +434,18 @@ Base.show(io::IO, t::Term) = show_term(io, t)
 
 isnegative(t::Real) = t < 0
 function isnegative(t)
-    if isterm(t) && operation(t) === (*)
+    if isterm(t) && gethead(t) === (*)
         coeff = first(arguments(t))
         return isnegative(coeff)
     end
     return false
 end
 
-setargs(t, args) = Term{symtype(t)}(operation(t), args)
+setargs(t, args) = Term{symtype(t)}(gethead(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
-isbinop(f) = isterm(f) && !isterm(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
+isbinop(f) = isterm(f) && !isterm(gethead(f)) && Base.isbinaryoperator(nameof(gethead(f)))
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")
@@ -562,7 +561,7 @@ function show_term(io::IO, t)
         return print(IOContext(io, :simplify=>false), simplify(t))
     end
 
-    f = operation(t)
+    f = gethead(t)
     args = arguments(t)
 
     if f === (+)
@@ -598,7 +597,7 @@ Represents `coeff + (key1 * val1) + (key2 * val2) + ...`
 where keys and values come from the dictionary (`dict`).
 where `coeff` and the vals are `<:Number` and keys are symbolic.
 
-- `operation(::Add)` -- returns `+`.
+- `gethead(::Add)` -- returns `+`.
 - `symtype(::Add)` -- returns `T`.
 - `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM*valM, keyN*valN...]`
@@ -629,7 +628,7 @@ TermInterface.isterm(a::Add) = true
 TermInterface.isterm(a::Type{Add}) = true
 
 
-operation(a::Add) = +
+TermInterface.gethead(a::Add) = +
 
 function arguments(a::Add)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
@@ -727,7 +726,7 @@ where coeff is a <:Number and keys and values come from the dictionary (`dict`).
 where `coeff` and the vals are `<:Number` and keys are symbolic.
 
 - `symtype(::Mul)` -- returns `T`.
-- `operation(::Mul)` -- returns `*`.
+- `gethead(::Mul)` -- returns `*`.
 - `arguments(::Mul)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
@@ -773,7 +772,7 @@ TermInterface.symtype(a::Mul{X}) where {X} = X
 TermInterface.isterm(a::Mul) = true
 TermInterface.isterm(a::Type{Mul}) = true
 
-operation(a::Mul) = *
+TermInterface.gethead(a::Mul) = *
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
@@ -876,7 +875,7 @@ TermInterface.symtype(a::Pow{X}) where {X} = X
 TermInterface.isterm(a::Pow) = true
 TermInterface.isterm(a::Type{Pow}) = true
 
-operation(a::Pow) = ^
+TermInterface.gethead(a::Pow) = ^
 
 # Use `Union` to avoid promoting the base and exponent to the same type.
 # For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
@@ -1014,7 +1013,7 @@ print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show
 function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; show_type=false, kw...)
     AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
         if isterm(y)
-            print(io, operation(y))
+            print(io, gethead(y))
         elseif y isa TreePrint
             print(io, "(", y.op, ")")
         else

@@ -58,20 +58,20 @@ function substitute(expr, dict; fold=true)
 
     if isterm(expr)
         if fold
-            canfold = !(operation(expr) isa Symbolic)
+            canfold = !(gethead(expr) isa Symbolic)
             args = map(arguments(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
                 canfold = canfold && !(x′ isa Symbolic)
                 x′
             end
-            canfold && return operation(expr)(args...)
+            canfold && return gethead(expr)(args...)
             args
         else
             args = map(x->substitute(x, dict, fold=fold), arguments(expr))
         end
 
         similarterm(expr,
-                    substitute(operation(expr), dict, fold=fold),
+                    substitute(gethead(expr), dict, fold=fold),
                     args;
                     type=symtype(expr),
                     metadata=metadata(expr))

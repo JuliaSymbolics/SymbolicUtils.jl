@@ -53,15 +53,15 @@ function cmp_term_term(a, b)
     lb = arglength(b)
 
     if la == 0 && lb == 0
-        return operation(a) <ₑ operation(b)
+        return gethead(a) <ₑ gethead(b)
     elseif la === 0
-        return operation(a) <ₑ b
+        return gethead(a) <ₑ b
     elseif lb === 0
-        return a <ₑ operation(b)
+        return a <ₑ gethead(b)
     end
 
-    na = operation(a)
-    nb = operation(b)
+    na = gethead(a)
+    nb = gethead(b)
 
     if 0 < arglength(a) <= 2 && 0 < arglength(b) <= 2
         # e.g. a < sin(a) < b ^ 2 < b

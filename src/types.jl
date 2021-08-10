@@ -417,10 +417,18 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-TermInterface.similarterm(t::T, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} = similarterm(t, f, args; type=_promote_symtype(f, args), metadata=nothing)
-TermInterface.similarterm(t::Type{T}, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} = similarterm(t, f, args; type=_promote_symtype(f, args), metadata=nothing)
+function TermInterface.similarterm(t::Type{T}, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} 
+    if type === nothing 
+        similarterm(t, f, args; type=_promote_symtype(f, args), metadata=nothing)
+    else 
+        f(args...)
+    end
+end 
+    
+TermInterface.similarterm(t::T, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} =
+    similarterm(typeof(t), f, args; type=type, metadata=metadata)
 TermInterface.similarterm(t::Term, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
-TermInterface.similarterm(t::Type{Term}, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+TermInterface.similarterm(t::Type{<:Term}, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 node_count(t) = isterm(t) ? reduce(+, node_count(x) for x in  getargs(t), init=0) + 1 : 1
 

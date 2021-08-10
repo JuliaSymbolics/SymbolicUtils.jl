@@ -1024,3 +1024,6 @@ function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; show_type=false, kw.
         end
     end
 end
+
+TermInterface.isterm(t::Type{<:Sym}) = false
+TermInterface.isterm(t::Type{<:Symbolic}) = true

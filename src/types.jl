@@ -12,7 +12,7 @@ abstract type Symbolic{T} end
 #     isterm(x::T)
 
 # Check if `x` represents an expression tree. If returns true,
-# it will be assumed that `gethead(::T)` and `arguments(::T)`
+# it will be assumed that `gethead(::T)` and `getargs(::T)`
 # methods are defined. Definining these three should allow use
 # of `simplify` on custom types. Optionally `symtype(x)` can be
 # defined to return the expected type of the symbolic expression.
@@ -27,13 +27,13 @@ abstract type Symbolic{T} end
 # """
 
 """
-    arguments(x::T)
+    getargs(x::T)
 
 Returns the arguments (a `Vector`) for an expression tree.
 Called only if `isterm(x)` is `true`. Part of the API required
 for `simplify` to work. Other required methods are `gethead` and `isterm`
 """
-# function arguments end
+# function getargs end
 
 """
     symtype(x)
@@ -123,7 +123,7 @@ Base.isequal(::Symbolic, ::Symbolic) = false
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
-                 "symbolic structure using `isterm(x)`, `gethead(x)`, `arguments(x)` " *
+                 "symbolic structure using `isterm(x)`, `gethead(x)`, `getargs(x)` " *
                  "and `similarterm(::YourType, f, args, symtype)`", :to_symbolic, force=true)
 
     x
@@ -315,7 +315,7 @@ or
 Symbolic expression representing the result of calling `f(args...)`.
 
 - `gethead(t::Term)` returns `f`
-- `arguments(t::Term)` returns `args`
+- `getargs(t::Term)` returns `args`
 - `symtype(t::Term)` returns `T`
 
 If `T` is not provided during construction, it is queried by calling
@@ -348,14 +348,14 @@ end
 
 TermInterface.gethead(x::Term) = getfield(x, :f)
 
-arguments(x::Term) = getfield(x, :arguments)
+TermInterface.getargs(x::Term) = getfield(x, :arguments)
 
 function Base.isequal(t1::Term, t2::Term)
     t1 === t2 && return true
     symtype(t1) !== symtype(t2) && return false
 
-    a1 = arguments(t1)
-    a2 = arguments(t2)
+    a1 = getargs(t1)
+    a2 = getargs(t2)
 
     isequal(gethead(t1), gethead(t2)) &&
         length(a1) == length(a2) &&
@@ -369,7 +369,7 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
     !iszero(salt) && return hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
     !iszero(h) && return h
-    h′ = hashvec(arguments(t), hash(gethead(t), hash(T, salt)))
+    h′ = hashvec(getargs(t), hash(gethead(t), hash(T, salt)))
     t.hash[] = h′
     return h′
 end
@@ -422,7 +422,7 @@ TermInterface.similarterm(t::Type{T}, f, args; type=nothing, metadata=nothing) w
 TermInterface.similarterm(t::Term, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 TermInterface.similarterm(t::Type{Term}, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
-node_count(t) = isterm(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
+node_count(t) = isterm(t) ? reduce(+, node_count(x) for x in  getargs(t), init=0) + 1 : 1
 
 #--------------------
 #--------------------
@@ -435,7 +435,7 @@ Base.show(io::IO, t::Term) = show_term(io, t)
 isnegative(t::Real) = t < 0
 function isnegative(t)
     if isterm(t) && gethead(t) === (*)
-        coeff = first(arguments(t))
+        coeff = first(getargs(t))
         return isnegative(coeff)
     end
     return false
@@ -562,7 +562,7 @@ function show_term(io::IO, t)
     end
 
     f = gethead(t)
-    args = arguments(t)
+    args = getargs(t)
 
     if f === (+)
         show_add(io, args)
@@ -599,7 +599,7 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 
 - `gethead(::Add)` -- returns `+`.
 - `symtype(::Add)` -- returns `T`.
-- `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
+- `getargs(::Add)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM*valM, keyN*valN...]`
 """
 struct Add{X<:Number, T<:Number, D, M} <: Symbolic{X}
@@ -630,7 +630,7 @@ TermInterface.isterm(a::Type{Add}) = true
 
 TermInterface.gethead(a::Add) = +
 
-function arguments(a::Add)
+function TermInterface.getargs(a::Add)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
@@ -727,7 +727,7 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 
 - `symtype(::Mul)` -- returns `T`.
 - `gethead(::Mul)` -- returns `*`.
-- `arguments(::Mul)` -- returns a totally ordered vector of arguments. i.e.
+- `getargs(::Mul)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
 struct Mul{X<:Number, T<:Number, D, M} <: Symbolic{X}
@@ -776,7 +776,7 @@ TermInterface.gethead(a::Mul) = *
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
-function arguments(a::Mul)
+function TermInterface.getargs(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
@@ -880,7 +880,7 @@ TermInterface.gethead(a::Pow) = ^
 # Use `Union` to avoid promoting the base and exponent to the same type.
 # For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
 # we don't want to promote `a.exp` to a multivariate polynomial.
-arguments(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
+TermInterface.getargs(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
 
 Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 
@@ -994,7 +994,7 @@ struct TreePrint
     op
     x
 end
-AbstractTrees.children(x::Term) = arguments(x)
+AbstractTrees.children(x::Term) = getargs(x)
 function AbstractTrees.children(x::Union{Add, Mul})
     children = Any[x.coeff]
     for (key, coeff) in pairs(x.dict)

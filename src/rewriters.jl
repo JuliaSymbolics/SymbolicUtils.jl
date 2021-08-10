@@ -29,7 +29,7 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer, is_operation, isterm, gethead, similarterm, arguments, node_count
+using SymbolicUtils: @timer, is_operation, isterm, gethead, similarterm, getargs, node_count
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
@@ -139,7 +139,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if isterm(x)
-            x = p.similarterm(x, gethead(x), map(PassThrough(p), arguments(x)))
+            x = p.similarterm(x, gethead(x), map(PassThrough(p), getargs(x)))
         end
         return ord === :post ? p.rw(x) : x
     else
@@ -154,14 +154,14 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if isterm(x)
-            _args = map(arguments(x)) do arg
+            _args = map(getargs(x)) do arg
                 if node_count(arg) > p.thread_cutoff
                     Threads.@spawn p(arg)
                 else
                     p(arg)
                 end
             end
-            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
+            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, getargs(x))
             t = p.similarterm(x, gethead(x), args)
         end
         return ord === :post ? p.rw(t) : t

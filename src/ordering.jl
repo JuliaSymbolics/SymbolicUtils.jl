@@ -8,7 +8,7 @@
 <ₑ(a::Symbolic, b::Number) = false
 <ₑ(a::Number,   b::Symbolic) = true
 
-arglength(a) = length(arguments(a))
+arglength(a) = length(getargs(a))
 function <ₑ(a, b)
     if !isterm(a) && !isterm(b)
         T = typeof(a)
@@ -74,7 +74,7 @@ function cmp_term_term(a, b)
         return arglength(a) < arglength(b)
     else
         @label compare_args
-        aa, ab = arguments(a), arguments(b)
+        aa, ab = getargs(a), getargs(b)
         if length(aa) !== length(ab)
             return length(aa) < length(ab)
         else

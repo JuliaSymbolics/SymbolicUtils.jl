@@ -7,7 +7,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SpawnFetch, Multithreaded
 
 import ..SymbolicUtils
-import SymbolicUtils: @matchable, Sym, Term, isterm, gethead, arguments
+import SymbolicUtils: @matchable, Sym, Term, isterm, gethead, getargs
 
 ##== state management ==##
 
@@ -99,7 +99,7 @@ toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 function_to_expr(op, args, st) = nothing
 
 function function_to_expr(::typeof(^), O, st)
-    args = arguments(O)
+    args = getargs(O)
     if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
@@ -112,7 +112,7 @@ function function_to_expr(::typeof(^), O, st)
 end
 
 function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
-    args = arguments(O)
+    args = getargs(O)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end
 
@@ -126,7 +126,7 @@ function toexpr(O, st)
         return expr′
     else
         haskey(st.symbolify, O) && return st.symbolify[O]
-        args = arguments(O)
+        args = getargs(O)
         return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
     end
 end

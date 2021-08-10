@@ -59,7 +59,7 @@ function substitute(expr, dict; fold=true)
     if isterm(expr)
         if fold
             canfold = !(gethead(expr) isa Symbolic)
-            args = map(arguments(expr)) do x
+            args = map(getargs(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
                 canfold = canfold && !(x′ isa Symbolic)
                 x′
@@ -67,7 +67,7 @@ function substitute(expr, dict; fold=true)
             canfold && return gethead(expr)(args...)
             args
         else
-            args = map(x->substitute(x, dict, fold=fold), arguments(expr))
+            args = map(x->substitute(x, dict, fold=fold), getargs(expr))
         end
 
         similarterm(expr,
@@ -93,7 +93,7 @@ function _occursin(needle, haystack)
     isequal(needle, haystack) && return true
 
     if isterm(haystack)
-        args = arguments(haystack)
+        args = getargs(haystack)
         for arg in args
             occursin(needle, arg) && return true
         end

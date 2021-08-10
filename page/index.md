@@ -137,7 +137,7 @@ All the expression types support the following:
 
 - `isterm(x)` -- always returns `true` denoting, `x` is not a leaf node like Sym or a literal.
 - `gethead(x)` -- the function being called
-- `arguments(x)` -- a vector of arguments
+- `getargs(x)` -- a vector of arguments
 - `symtype(x)` -- the "inferred" type (`T`)
 
 See more on the interface [here](/interface)

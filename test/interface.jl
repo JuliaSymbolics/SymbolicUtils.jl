@@ -1,10 +1,10 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Sym, gethead, arguments, symtype
+using SymbolicUtils: Term, Sym, gethead, getargs, symtype
 using TermInterface
 
 TermInterface.isterm(ex::Expr) = ex.head == :call
 TermInterface.gethead(ex::Expr) = ex.args[1]
-SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
+SymbolicUtils.getargs(ex::Expr) = ex.args[2:end]
 
 for f ∈ [:+, :-, :*, :/, :^]
     @eval begin

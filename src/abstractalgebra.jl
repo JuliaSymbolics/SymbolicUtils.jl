@@ -22,21 +22,21 @@ function labels!(dicts, t, variable_type::Type)
     if t isa Number
         return t
     elseif isterm(t) && (gethead(t) == (*) || gethead(t) == (+) || gethead(t) == (-))
-        tt = arguments(t)
+        tt = getargs(t)
         return similarterm(t, gethead(t), map(x->labels!(dicts, x, variable_type), tt); type=symtype(t))
-    elseif isterm(t) && gethead(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
-        return similarterm(t, gethead(t), map(x->labels!(dicts, x, variable_type), arguments(t)), type=symtype(t))
+    elseif isterm(t) && gethead(t) == (^) && length(getargs(t)) > 1 && isnonnegint(getargs(t)[2])
+        return similarterm(t, gethead(t), map(x->labels!(dicts, x, variable_type), getargs(t)), type=symtype(t))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
             return term2sym[t]
         end
         if isterm(t)
-            tt = arguments(t)
+            tt = getargs(t)
             sym = Sym{symtype(t)}(gensym(nameof(gethead(t))))
             dicts2 = _dicts(dicts[2])
             sym2term[sym] = similarterm(t, gethead(t),
-                                        map(x->to_mpoly(x, variable_type, dicts)[1], arguments(t));
+                                        map(x->to_mpoly(x, variable_type, dicts)[1], getargs(t));
                                         type=symtype(t))
         else
             sym = Sym{symtype(t)}(gensym("literal"))
@@ -146,7 +146,7 @@ end
 
 function _to_term(reference, x, dict, vars)
     if isterm(x)
-        t = similarterm(x, gethead(x), _to_term.((reference,), arguments(x), (dict,), (vars,)); type=symtype(x))
+        t = similarterm(x, gethead(x), _to_term.((reference,), getargs(x), (dict,), (vars,)); type=symtype(x))
     else
         if haskey(dict, x)
             return dict[x]

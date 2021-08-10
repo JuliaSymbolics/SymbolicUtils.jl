@@ -44,15 +44,15 @@ Base.length(l::LL) = length(l.v)-l.i+1
 @inline car(l::LL) = l.v[l.i]
 @inline cdr(l::LL) = isempty(l) ? empty(l) : LL(l.v, l.i+1)
 
-Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
+Base.length(t::Term) = length(getargs(t)) + 1 # PIRACY
 Base.isempty(t::Term) = false
 @inline car(t::Term) = gethead(t)
-@inline cdr(t::Term) = arguments(t)
+@inline cdr(t::Term) = getargs(t)
 
 @inline car(v) = isterm(v) ? gethead(v) : first(v)
 @inline function cdr(v)
     if isterm(v)
-        arguments(v)
+        getargs(v)
     else
         islist(v) ? LL(v, 2) : error("asked cdr of empty")
     end
@@ -65,7 +65,7 @@ end
     if n === 0
         return ll
     else
-        isterm(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
+        isterm(ll) ? drop_n(getargs(ll), n-1) : drop_n(cdr(ll), n-1)
     end
 end
 @inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)
@@ -85,13 +85,13 @@ function has_trig(term)
     if Base.@nany 6 i->fns[i] === op
         return true
     else
-        return any(has_trig, arguments(term))
+        return any(has_trig, getargs(term))
     end
 end
 
 function fold(t)
     if isterm(t)
-        tt = map(fold, arguments(t))
+        tt = map(fold, getargs(t))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
             return gethead(t)(tt...)
@@ -118,12 +118,12 @@ _isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) 
 _isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
-needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
+needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(getargs(x))
 
 # are there nested ⋆ terms?
 function isnotflat(⋆)
     function (x)
-        args = arguments(x)
+        args = getargs(x)
         for t in args
             if isterm(t) && gethead(t) === (⋆)
                 return true
@@ -181,12 +181,13 @@ x + 2y
 ```
 """
 function flatten_term(⋆, x)
-    args = arguments(x)
+    args = getargs(x)
     # flatten nested ⋆
     flattened_args = []
     for t in args
         if isterm(t) && gethead(t) === (⋆)
-            append!(flattened_args, arguments(t))
+            append!(flattened_args, getargs(
+t))
         else
             push!(flattened_args, t)
         end
@@ -195,7 +196,8 @@ function flatten_term(⋆, x)
 end
 
 function sort_args(f, t)
-    args = arguments(t)
+    args = getargs(
+t)
     if length(args) < 2
         return similarterm(t, f, args)
     elseif length(args) == 2
@@ -221,7 +223,7 @@ macro matchable(expr)
         $expr
         SymbolicUtils.isterm(::$name) = true
         SymbolicUtils.gethead(::$name) = $name
-        SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
+        SymbolicUtils.getargs(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         Base.length(x::$name) = $(length(fields) + 1)
     end |> esc
 end

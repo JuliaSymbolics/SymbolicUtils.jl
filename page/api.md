@@ -34,7 +34,7 @@ using SymbolicUtils # hide
 
 {{doc gethead gethead fn}}
 
-{{doc arguments arguments fn}}
+{{doc getargs getargs fn}}
 
 {{doc similarterm similarterm fn}}
 

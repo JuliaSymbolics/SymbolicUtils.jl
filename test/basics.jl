@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype, gethead, arguments
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype, gethead, getargs
 using SymbolicUtils
 using IfElse: ifelse
 using Test
@@ -178,7 +178,7 @@ end
     @test isequal(SymbolicUtils.similarterm(b^2, ^, [b^2,  1//2]), b)
 end
 
-toterm(t) = Term{symtype(t)}(gethead(t), arguments(t))
+toterm(t) = Term{symtype(t)}(gethead(t), getargs(t))
 
 @testset "diffs" begin
     @syms a b c
@@ -224,5 +224,5 @@ end
     T = FnType{Tuple{T,S,Int} where {T,S}, Real}
     s = Sym{T}(:t)
     @syms a b c::Int
-    @test isequal(arguments(s(a, b, c)), [a, b, c])
+    @test isequal(getargs(s(a, b, c)), [a, b, c])
 end

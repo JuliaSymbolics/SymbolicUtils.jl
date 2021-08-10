@@ -21,7 +21,7 @@ with SymbolicUtils.jl
 #### `isterm(x::T)`
 
 Check if `x` represents an expression tree. If returns true,
-it will be assumed that `head(::T)` and `arguments(::T)`
+it will be assumed that `gethead(::T)` and `getargs(::T)`
 methods are defined. Definining these three should allow use
 of `simplify` on custom types. Optionally `symtype(x)` can be
 defined to return the expected type of the symbolic expression.
@@ -30,9 +30,9 @@ defined to return the expected type of the symbolic expression.
 
 Returns the head (a function object) performed by an expression
 tree. Called only if `isterm(::T)` is true. Part of the API required
-for `simplify` to work. Other required methods are `arguments` and `isterm`
+for `simplify` to work. Other required methods are `getargs` and `isterm`
 
-#### `arguments(x::T)`
+#### `getargs(x::T)`
 
 Returns the arguments (a `Vector`) for an expression tree.
 Called only if `isterm(x)` is `true`. Part of the API required
@@ -90,7 +90,7 @@ using SymbolicUtils
 
 SymbolicUtils.isterm(ex::Expr) = ex.head == :call
 SymbolicUtils.head(ex::Expr) = ex.args[1]
-SymbolicUtils.arguments(ex::Expr) = ex.args[2:end]
+SymbolicUtils.getargs(ex::Expr) = ex.args[2:end]
 
 @rule(~x => ~x - 1)(ex)
 ```

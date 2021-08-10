@@ -103,7 +103,7 @@ function (rw::Fixpoint)(x)
     f = rw.rw
     y = @timer cached_repr(f) f(x)
     while x !== y && !isequal(x, y)
-        isnothing(y) && return x
+        y === nothing && return x
         x = y
         y = @timer cached_repr(f) f(x)
     end
@@ -129,9 +129,9 @@ end
 struct PassThrough{C}
     rw::C
 end
-(p::PassThrough)(x) = (y=p.rw(x); isnothing(y) ? x : y)
+(p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
 
-passthrough(x, default) = isnothing(x) ? default : x
+passthrough(x, default) = x === nothing ? default : x
 function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
     if istree(x)

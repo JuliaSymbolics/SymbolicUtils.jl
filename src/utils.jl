@@ -167,8 +167,19 @@ function merge_repeats(merge, xs)
     return merged
 end
 
+"""
+    flatten_term(⋆, x)
 
-# Numbers to the back
+Return a flattened expression with the numbers at the back.
+
+# Example
+```jldoctest
+julia> @syms x y;
+
+julia> SymbolicUtils.flatten_term(+, y + y + x)
+x + 2y
+```
+"""
 function flatten_term(⋆, x)
     args = arguments(x)
     # flatten nested ⋆

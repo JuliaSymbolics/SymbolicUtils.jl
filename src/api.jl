@@ -59,7 +59,7 @@ function substitute(expr, dict; fold=true)
     if istree(expr)
         if fold
             canfold = !(operation(expr) isa Symbolic)
-            args = map(arguments(expr)) do x
+            args = map(arguments(expr; sort=false)) do x
                 x′ = substitute(x, dict; fold=fold)
                 canfold = canfold && !(x′ isa Symbolic)
                 x′
@@ -67,7 +67,7 @@ function substitute(expr, dict; fold=true)
             canfold && return operation(expr)(args...)
             args
         else
-            args = map(x->substitute(x, dict, fold=fold), arguments(expr))
+            args = map(x->substitute(x, dict, fold=fold), arguments(expr; sort=false))
         end
 
         similarterm(expr,

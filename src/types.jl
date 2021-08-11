@@ -353,7 +353,7 @@ end
 
 operation(x::Term) = getfield(x, :f)
 
-arguments(x::Term) = getfield(x, :arguments)
+arguments(x::Term; kwargs...) = getfield(x, :arguments)
 
 function Base.isequal(t1::Term, t2::Term)
     t1 === t2 && return true
@@ -632,10 +632,13 @@ istree(a::Add) = true
 
 operation(a::Add) = +
 
-function arguments(a::Add)
+function arguments(a::Add; sort=true, kwargs...)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
-    a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
+    args = [v*k for (k,v) in a.dict]
+    sort && sort!(args, lt=<ₑ)
+    args = iszero(a.coeff) ? args : vcat(a.coeff, args)
+    sort && (a.sorted_args_cache[] = args)
+    args
 end
 
 Base.isequal(a::Add, b::Add) = a.coeff == b.coeff && isequal(a.dict, b.dict)
@@ -777,10 +780,13 @@ operation(a::Mul) = *
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
-function arguments(a::Mul)
+function arguments(a::Mul; sort=true, kwargs...)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
-    a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
+    args = [unstable_pow(k, v) for (k,v) in a.dict]
+    sort && sort!(args, lt=<ₑ)
+    args = isone(a.coeff) ? args : vcat(a.coeff, args)
+    sort && (a.sorted_args_cache[] = args)
+    args
 end
 
 Base.isequal(a::Mul, b::Mul) = a.coeff == b.coeff && isequal(a.dict, b.dict)
@@ -880,7 +886,7 @@ operation(a::Pow) = ^
 # Use `Union` to avoid promoting the base and exponent to the same type.
 # For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
 # we don't want to promote `a.exp` to a multivariate polynomial.
-arguments(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
+arguments(a::Pow; kwargs...) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
 
 Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 

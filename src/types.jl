@@ -340,7 +340,7 @@ function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
     Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
-TermInterface.isterm(t::Term) = true
+TermInterface.isterm(t::Type{<:Term}) = true
 
 function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
@@ -425,9 +425,6 @@ function TermInterface.similarterm(t::Type{T}, f, args; type=nothing, metadata=n
     end
 end 
     
-TermInterface.similarterm(t::T, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} =
-    similarterm(typeof(t), f, args; type=type, metadata=metadata)
-TermInterface.similarterm(t::Term, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 TermInterface.similarterm(t::Type{<:Term}, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 node_count(t) = isterm(t) ? reduce(+, node_count(x) for x in  getargs(t), init=0) + 1 : 1
@@ -632,9 +629,7 @@ end
 TermInterface.symtype(a::Add{X}) where {X} = X
 
 
-TermInterface.isterm(a::Add) = true
 TermInterface.isterm(a::Type{Add}) = true
-
 
 TermInterface.gethead(a::Add) = +
 
@@ -777,7 +772,6 @@ end
 
 TermInterface.symtype(a::Mul{X}) where {X} = X
 
-TermInterface.isterm(a::Mul) = true
 TermInterface.isterm(a::Type{Mul}) = true
 
 TermInterface.gethead(a::Mul) = *
@@ -880,7 +874,6 @@ function Pow(a, b; metadata=NO_METADATA)
 end
 TermInterface.symtype(a::Pow{X}) where {X} = X
 
-TermInterface.isterm(a::Pow) = true
 TermInterface.isterm(a::Type{Pow}) = true
 
 TermInterface.gethead(a::Pow) = ^

@@ -7,6 +7,8 @@ where appropriate -->
 
 # Interfacing with SymbolicUtils.jl
 
+<!-- TODO: document TermInterface.jl -->
+
 \tableofcontents <!-- you can use \toc as well -->
 
 This section is for Julia package developers who may want to use the `simplify` and rule rewriting system on their own expression types.

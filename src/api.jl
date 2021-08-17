@@ -60,7 +60,7 @@ function substitute(expr, dict; fold=true)
         op = substitute(operation(expr), dict; fold=fold)
         if fold
             canfold = !(op isa Symbolic)
-            args = map(arguments(expr; sort=false)) do x
+            args = map(unsorted_arguments(expr; sort=false)) do x
                 x′ = substitute(x, dict; fold=fold)
                 canfold = canfold && !(x′ isa Symbolic)
                 x′
@@ -68,7 +68,7 @@ function substitute(expr, dict; fold=true)
             canfold && return op(args...)
             args
         else
-            args = map(x->substitute(x, dict, fold=fold), arguments(expr; sort=false))
+            args = map(x->substitute(x, dict, fold=fold), unsorted_arguments(expr; sort=false))
         end
 
         similarterm(expr,

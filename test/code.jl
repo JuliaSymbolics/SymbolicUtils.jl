@@ -150,13 +150,13 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
               :((a,b,$(+)(a,b))))
 
     @test SpawnFetch{Multithreaded}([()->1,()->2],vcat)|>toexpr|>eval == [1,2]
-    @test @elapsed(SpawnFetch{Multithreaded}([:(()->sleep(.6)),
+    @test @elapsed(SpawnFetch{Multithreaded}([:(()->sleep(2)),
                                               Func([:x],
                                                    [],
                                                    :(sleep(x)))],
                                              [(),
-                                              (0.6,)],
-                                             vcat)|>toexpr|>eval) < 1.1
+                                              (2,)],
+                                             vcat)|>toexpr|>eval) < 3
 
     let
         @syms a b

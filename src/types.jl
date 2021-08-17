@@ -353,6 +353,7 @@ end
 
 operation(x::Term) = getfield(x, :f)
 
+unsorted_arguments(x) = arguments(x)
 arguments(x::Term) = getfield(x, :arguments)
 
 function Base.isequal(t1::Term, t2::Term)
@@ -632,6 +633,11 @@ istree(a::Add) = true
 
 operation(a::Add) = +
 
+function unsorted_arguments(a::Add)
+    args = [v*k for (k,v) in a.dict]
+    iszero(a.coeff) ? args : vcat(a.coeff, args)
+end
+
 function arguments(a::Add)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
@@ -776,6 +782,11 @@ istree(a::Mul) = true
 operation(a::Mul) = *
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
+
+function unsorted_arguments(a::Mul)
+    args = [unstable_pow(k, v) for (k,v) in a.dict]
+    isone(a.coeff) ? args : vcat(a.coeff, args)
+end
 
 function arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]

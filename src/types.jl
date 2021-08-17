@@ -785,7 +785,7 @@ unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
 function unsorted_arguments(a::Mul)
     args = [unstable_pow(k, v) for (k,v) in a.dict]
-    isone(a.coeff) ? vcat(a.coeff, args) : args
+    isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
 function arguments(a::Mul)

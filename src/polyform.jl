@@ -1,11 +1,23 @@
-export PolyForm
+export PolyForm, Div
+using Bijections
 
 struct PolyForm{T, M} <: Symbolic{T}
     p::MP.AbstractPolynomialLike
-    pvar2sym::Dict   # @polyvar x --> @sym x  etc.
-    sym2term::Dict   # gensym("sin") --> sin(PolyForm(...))
+    pvar2sym::Bijection   # @polyvar x --> @sym x  etc.
+    sym2term::Dict        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
     metadata::M
 end
+
+function mix_dicts(p, q)
+    (p.pvar2sym === q.pvar2sym ? p.pvar2sym : merge(p.pvar2sym, q.pvar2sym),
+     p.sym2term === q.sym2term ? p.sym2term : merge(p.sym2term, q.sym2term))
+end
+
+# forward gcd
+gcd(x::PolyForm, y::PolyForm) = PolyForm(gcd(x.p, y.p), mix_dicts(x, y)...)
+gcd(x::Integer, y::PolyForm) = PolyForm(gcd(x, y.p), y.pvar2sym, y.sym2term)
+gcd(x::PolyForm, y::Integer) = PolyForm(gcd(x.p, y), x.pvar2sym, x.sym2term)
+
 
 function polyize(x, pvar2sym, sym2term, vtype)
     if istree(x)
@@ -27,18 +39,32 @@ function polyize(x, pvar2sym, sym2term, vtype)
             return local_polyize(args[1])^(args[2])
         else
             # create a new symbol to store this
-            name = gensym(string(op))
 
+            name = Symbol(string(op), "-", hash(x))
+
+            @label lookup
             sym = Sym{symtype(x)}(name)
-            sym2term[sym] = similarterm(x,
-                                        op,
-                                        map(a->PolyForm(a, pvar2sym, sym2term, vtype),
-                                            args), symtype(x))
+            if haskey(sym2term, sym)
+                if isequal(sym2term[sym][1], x)
+                    return sym2term[sym][2]
+                else # hash collision
+                    name = Symbol(name, "_")
+                    @goto lookup
+                end
+            end
+
+            sym2term[sym] = x => similarterm(x,
+                                             op,
+                                             map(a->PolyForm(a, pvar2sym, sym2term, vtype),
+                                                 args), symtype(x))
             return local_polyize(sym)
         end
     elseif x isa Number
         return x
     elseif x isa Sym
+        if haskey(active_inv(pvar2sym), x)
+            return active_inv(pvar2sym)[x]
+        end
         pvar = MP.similarvariable(vtype, nameof(x))
         pvar2sym[pvar] = x
         return pvar
@@ -46,13 +72,14 @@ function polyize(x, pvar2sym, sym2term, vtype)
 end
 
 function PolyForm(x::Symbolic{<:Number},
-        pvar2sym=Dict{Any, Sym}(),
+        pvar2sym=Bijection{Any, Sym}(),
         sym2term=Dict{Sym, Any}(),
-        vtype = DynamicPolynomials.PolyVar{true})
+        vtype=DynamicPolynomials.PolyVar{true};
+        metadata=metadata(x))
 
     # Polyize and return a PolyForm
-    PolyForm{symtype(x)}(polyize(x, pvar2sym, sym2term, vtype),
-                         pvar2sym, sym2term, metadata(x))
+    PolyForm{symtype(x), typeof(metadata)}(polyize(x, pvar2sym, sym2term, vtype),
+                                           pvar2sym, sym2term, metadata)
 end
 
 PolyForm(x, args...) = x
@@ -70,9 +97,16 @@ function arguments(x::PolyForm{T}) where {T}
         isone(sum(x->abs(MP.degree(v, x)), MP.variables(MP.monomial(v))))
     end
 
-    function resolve(pvar)
+    function get_var(v)
+        # must be called only after a is_var check
+        MP.variable(MP.monomial(v))
+    end
+
+    function resolve(p)
+        !is_var(p) && return p
+        pvar = get_var(p)
         s = x.pvar2sym[pvar]
-        haskey(x.sym2term, s) ? x.sym2term[s] : s
+        haskey(x.sym2term, s) ? x.sym2term[s][2] : s
     end
 
     if MP.nterms(x.p) == 1
@@ -93,3 +127,53 @@ end
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
 
+
+struct Div{T} <: Symbolic{T}
+    num::Vector
+    den::Vector
+    simplified::Bool
+end
+
+facts_symtype(xs) = isempty(xs) ? Int : promote_symtype(*, symtype(xs[1]), facts_symtype(xs[2:end]))
+
+function Div(n, d, simplified=false)
+    Div{promote_symtype((/), facts_symtype(n), facts_symtype(d))}(n, d, simplified)
+end
+
+istree(d::Div) = true
+operation(d::Div) = (/)
+function arguments(d::Div)
+    num = isempty(d.num) ? 1 : Term{symtype(d)}(*, d.num)
+    den = isempty(d.num) ? 1 : Term{symtype(d)}(*, d.den)
+    [num, den]
+end
+
+function normalize(d::Div)
+    pvar2sym = Bijection{Any, Sym}()
+    sym2term = Dict{Sym, Any}()
+
+    ns = map(x->PolyForm(x, pvar2sym, sym2term), d.num)
+    ds = map(x->PolyForm(x, pvar2sym, sym2term), d.den)
+
+    rm_gcd!(ns, ds)
+
+    Div(ns, ds, true)
+end
+
+function rm_gcd!(ns, ds)
+
+    for i = 1:length(ns)
+        for j = 1:length(ds)
+            g = gcd(ns[i], ds[j])
+            if !isone(g)
+                ns[i] = div(ns[i], g)
+                ds[j] = div(ds[j], g)
+            end
+        end
+    end
+
+    filter!(!_isone, ns)
+    filter!(!_isone, ds)
+
+    nothing
+end

@@ -50,7 +50,7 @@ function polyize(x, pvar2sym, sym2term, vtype)
             sym = Sym{symtype(x)}(name)
             if haskey(sym2term, sym)
                 if isequal(sym2term[sym][1], x)
-                    return sym2term[sym][2]
+                    return pvar2sym(sym)
                 else # hash collision
                     name = Symbol(name, "_")
                     @goto lookup
@@ -67,7 +67,7 @@ function polyize(x, pvar2sym, sym2term, vtype)
         return x
     elseif x isa Sym
         if haskey(active_inv(pvar2sym), x)
-            return active_inv(pvar2sym)[x]
+            return pvar2sym(x)
         end
         pvar = MP.similarvariable(vtype, nameof(x))
         pvar2sym[pvar] = x

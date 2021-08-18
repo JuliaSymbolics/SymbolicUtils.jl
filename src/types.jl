@@ -469,6 +469,7 @@ function print_arg(io, f, x)
 end
 
 function remove_minus(t)
+    !istree(t) && return -t
     @assert operation(t) == (*)
     args = arguments(t)
     @assert args[1] < 0

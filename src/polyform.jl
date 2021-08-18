@@ -154,6 +154,17 @@ function Div(n, d, simplified=false)
     Div{promote_symtype((/), facts_symtype(n), facts_symtype(d))}(n, d, simplified)
 end
 
+function /(a::Union{SN,Number}, b::SN)
+    n = istree(a) && operation(a) == (*) ? arguments(a) : [a]
+    d = istree(b) && operation(b) == (*) ? arguments(b) : [b]
+    Div(n, d)
+end
+
+*(a::Div, b::Div) = Div(vcat(a.num, b.num), vcat(a.den, b.den))
+
+/(a::Div, b::Div) = Div(vcat(a.num, b.den), vcat(a.den, b.num))
+
+
 istree(d::Div) = true
 operation(d::Div) = (/)
 function arguments(d::Div)
@@ -164,13 +175,20 @@ end
 
 Base.show(io::IO, d::Div) = show_term(io, d)
 
-function simplify_fractions(d::Div)
+function polyform_factors(d::Div)
     pvar2sym = Bijection{Any, Sym}()
     sym2term = Dict{Sym, Any}()
 
     ns = map(x->PolyForm(x, pvar2sym, sym2term), d.num)
     ds = map(x->PolyForm(x, pvar2sym, sym2term), d.den)
 
+    return Div(ns, ds, true)
+end
+
+function simplify_fractions(d::Div)
+    p = polyform_factors(d)
+    ns = p.num
+    ds = p.den
     rm_gcd!(ns, ds)
     if all(_isone, ds)
         return isempty(ns) ? 1 : *(ns...)
@@ -179,12 +197,23 @@ function simplify_fractions(d::Div)
     end
 end
 
+function add_divs(x::Div, y::Div)
+    x = polyform_factors(x)
+    y = polyform_factors(y)
+
+    Div([prod(x.num) * prod(y.den) + prod(x.den) * prod(y.num)], vcat(x.den, y.den))
+end
+
 function simplify_fractions(x)
-    Postwalk(PassThrough(@rule ~x::(x->x isa Div) => simplify_fractions(~x)))(x)
+    isdiv(x) = x isa Div
+
+    rules = [@acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)
+             @rule ~x::isdiv => simplify_fractions(~x)]
+
+    Postwalk(RestartedChain(rules))(x)
 end
 
 function rm_gcd!(ns, ds)
-
     for i = 1:length(ns)
         for j = 1:length(ds)
             g = gcd(ns[i], ds[j])
@@ -201,8 +230,3 @@ function rm_gcd!(ns, ds)
     nothing
 end
 
-function /(a::Union{SN,Number}, b::SN)
-    n = istree(a) && operation(a) == (*) ? arguments(a) : [a]
-    d = istree(b) && operation(b) == (*) ? arguments(b) : [b]
-    Div(n, d)
-end

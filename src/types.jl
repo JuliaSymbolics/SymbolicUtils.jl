@@ -887,6 +887,12 @@ struct Div{T,N,D} <: Symbolic{T}
     simplified::Bool
 end
 
+function Div(n, d, simplified=false)
+    @assert !(n isa AbstractArray)
+    @assert !(d isa AbstractArray)
+    Div{promote_symtype((/), symtype(n), symtype(d)), typeof(n), typeof(d)}(n, d, simplified)
+end
+
 function numerators(d::Div)
     x = d.num
     istree(x) && operation(x) == (*) ? arguments(x) : [x]
@@ -906,10 +912,6 @@ function arguments(d::Div)
 end
 
 Base.show(io::IO, d::Div) = show_term(io, d)
-
-function Div(n, d, simplified=false)
-    Div{promote_symtype((/), symtype(n), symtype(d)), typeof(n), typeof(d)}(n, d, simplified)
-end
 
 function /(a::Union{SN,Number}, b::SN)
     if a isa Div && b isa Div

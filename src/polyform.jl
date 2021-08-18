@@ -23,7 +23,7 @@ for f in [:gcd, :div]
 end
 _isone(p::PolyForm) = isone(p.p)
 
-function polyize(x, pvar2sym, sym2term, vtype)
+function polyize(x, pvar2sym, sym2term, vtype, pow)
     if istree(x)
         if !(symtype(x) <: Number)
             error("Cannot convert $x of symtype $(symtype(x)) into a PolyForm")
@@ -32,13 +32,13 @@ function polyize(x, pvar2sym, sym2term, vtype)
         op = operation(x)
         args = arguments(x)
 
-        local_polyize(y) = polyize(y, pvar2sym, sym2term, vtype)
+        local_polyize(y) = polyize(y, pvar2sym, sym2term, vtype, pow)
 
         if op == (+)
             return sum(local_polyize, args)
         elseif op == (*)
             return prod(local_polyize, args)
-        elseif op == (^) && args[2] isa Integer
+        elseif pow && op == (^) && args[2] isa Integer
             @assert length(args) == 2
             return local_polyize(args[1])^(args[2])
         else
@@ -79,22 +79,24 @@ function PolyForm(x::Symbolic{<:Number},
         pvar2sym=Bijection{Any, Sym}(),
         sym2term=Dict{Sym, Any}(),
         vtype=DynamicPolynomials.PolyVar{true};
+        pow=true,
         metadata=metadata(x))
 
     # Polyize and return a PolyForm
-    PolyForm{symtype(x), typeof(metadata)}(polyize(x, pvar2sym, sym2term, vtype),
+    PolyForm{symtype(x), typeof(metadata)}(polyize(x, pvar2sym, sym2term, vtype, pow),
                                            pvar2sym, sym2term, metadata)
 end
 
 function PolyForm(x::MP.AbstractPolynomialLike,
         pvar2sym=Bijection{Any, Sym}(),
         sym2term=Dict{Sym, Any}(),
+        pow=true,
         metadata=nothing)
     # make number go
     PolyForm{Number, Nothing}(x, pvar2sym, sym2term, metadata)
 end
 
-PolyForm(x, args...) = x
+PolyForm(x, args...;kw...) = x
 
 istree(x::PolyForm) = true
 
@@ -145,29 +147,27 @@ function polyform_factors(d::Div)
     pvar2sym = Bijection{Any, Sym}()
     sym2term = Dict{Sym, Any}()
 
-    ns = map(x->PolyForm(x, pvar2sym, sym2term), d.num)
-    ds = map(x->PolyForm(x, pvar2sym, sym2term), d.den)
+    ns = map(x->PolyForm(x, pvar2sym, sym2term; pow=false), numerators(d))
+    ds = map(x->PolyForm(x, pvar2sym, sym2term; pow=false), denominators(d))
 
-    return Div(ns, ds, true)
+    return ns, ds
 end
 
 function simplify_fractions(d::Div)
-    p = polyform_factors(d)
-    ns = p.num
-    ds = p.den
+    ns, ds = polyform_factors(d)
     rm_gcd!(ns, ds)
     if all(_isone, ds)
         return isempty(ns) ? 1 : *(ns...)
     else
-        return Div(ns, ds, true)
+        return Div(*(ns...), *(ds...), true)
     end
 end
 
 function add_divs(x::Div, y::Div)
-    x = polyform_factors(x)
-    y = polyform_factors(y)
+    x_num, x_den = polyform_factors(x)
+    y_num, y_den = polyform_factors(y)
 
-    Div([prod(x.num) * prod(y.den) + prod(x.den) * prod(y.num)], vcat(x.den, y.den))
+    Div(*(x_num..., y_den...) + *(x_den..., y_num...), *(x_den..., y_den...))
 end
 
 function simplify_fractions(x)

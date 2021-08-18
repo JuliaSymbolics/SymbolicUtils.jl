@@ -131,7 +131,11 @@ function arguments(x::PolyForm{T}) where {T}
         end
     else
         ts = MP.terms(x.p)
-        return [is_var(t) ? resolve(t) : PolyForm{T, Nothing}(t, x.pvar2sym, x.sym2term, nothing) for t in ts]
+        return [MP.isconstant(t) ?
+                convert(Number, t) :
+                (is_var(t) ?
+                 resolve(t) :
+                 PolyForm{T, Nothing}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
 
@@ -199,6 +203,6 @@ end
 
 function /(a::Union{SN,Number}, b::SN)
     n = istree(a) && operation(a) == (*) ? arguments(a) : [a]
-    d = istree(b) && operation(b) == (*) ? arguments(a) : [b]
+    d = istree(b) && operation(b) == (*) ? arguments(b) : [b]
     Div(n, d)
 end

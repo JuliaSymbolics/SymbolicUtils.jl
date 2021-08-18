@@ -14,10 +14,14 @@ function mix_dicts(p, q)
 end
 
 # forward gcd
-gcd(x::PolyForm, y::PolyForm) = PolyForm(gcd(x.p, y.p), mix_dicts(x, y)...)
-gcd(x::Integer, y::PolyForm) = PolyForm(gcd(x, y.p), y.pvar2sym, y.sym2term)
-gcd(x::PolyForm, y::Integer) = PolyForm(gcd(x.p, y), x.pvar2sym, x.sym2term)
-
+for f in [:gcd, :div]
+    @eval begin
+        Base.$f(x::PolyForm, y::PolyForm) = PolyForm($f(x.p, y.p), mix_dicts(x, y)...)
+        Base.$f(x::Integer, y::PolyForm) = PolyForm($f(x, y.p), y.pvar2sym, y.sym2term)
+        Base.$f(x::PolyForm, y::Integer) = PolyForm($f(x.p, y), x.pvar2sym, x.sym2term)
+    end
+end
+_isone(p::PolyForm) = isone(p.p)
 
 function polyize(x, pvar2sym, sym2term, vtype)
     if istree(x)
@@ -80,6 +84,14 @@ function PolyForm(x::Symbolic{<:Number},
     # Polyize and return a PolyForm
     PolyForm{symtype(x), typeof(metadata)}(polyize(x, pvar2sym, sym2term, vtype),
                                            pvar2sym, sym2term, metadata)
+end
+
+function PolyForm(x::MP.AbstractPolynomialLike,
+        pvar2sym=Bijection{Any, Sym}(),
+        sym2term=Dict{Sym, Any}(),
+        metadata=nothing)
+    # make number go
+    PolyForm{Number, Nothing}(x, pvar2sym, sym2term, metadata)
 end
 
 PolyForm(x, args...) = x
@@ -165,7 +177,7 @@ function rm_gcd!(ns, ds)
     for i = 1:length(ns)
         for j = 1:length(ds)
             g = gcd(ns[i], ds[j])
-            if !isone(g)
+            if !_isone(g)
                 ns[i] = div(ns[i], g)
                 ds[j] = div(ds[j], g)
             end

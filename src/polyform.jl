@@ -1,4 +1,4 @@
-export PolyForm, Div
+export PolyForm, simplify_fractions
 using Bijections
 
 struct PolyForm{T, M} <: Symbolic{T}

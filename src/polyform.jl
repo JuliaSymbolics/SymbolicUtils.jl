@@ -38,7 +38,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
             return sum(local_polyize, args)
         elseif op == (*)
             return prod(local_polyize, args)
-        elseif pow && op == (^) && args[2] isa Integer
+        elseif op == (^) && args[2] isa Integer && args[2] > 0
             @assert length(args) == 2
             return local_polyize(args[1])^(args[2])
         else
@@ -79,18 +79,16 @@ function PolyForm(x::Symbolic{<:Number},
         pvar2sym=Bijection{Any, Sym}(),
         sym2term=Dict{Sym, Any}(),
         vtype=DynamicPolynomials.PolyVar{true};
-        pow=true,
         metadata=metadata(x))
 
     # Polyize and return a PolyForm
-    PolyForm{symtype(x), typeof(metadata)}(polyize(x, pvar2sym, sym2term, vtype, pow),
-                                           pvar2sym, sym2term, metadata)
+    p = polyize(x, pvar2sym, sym2term, vtype, pow)
+    PolyForm{symtype(x), typeof(metadata)}(p, pvar2sym, sym2term, metadata)
 end
 
 function PolyForm(x::MP.AbstractPolynomialLike,
         pvar2sym=Bijection{Any, Sym}(),
         sym2term=Dict{Sym, Any}(),
-        pow=true,
         metadata=nothing)
     # make number go
     PolyForm{Number, Nothing}(x, pvar2sym, sym2term, metadata)
@@ -147,15 +145,20 @@ function polyform_factors(d::Div)
     pvar2sym = Bijection{Any, Sym}()
     sym2term = Dict{Sym, Any}()
 
-    ns = map(x->PolyForm(x, pvar2sym, sym2term; pow=false), numerators(d))
-    ds = map(x->PolyForm(x, pvar2sym, sym2term; pow=false), denominators(d))
+    make(xs) = map(xs) do x
+        if x isa Pow && arguments(x)[2] isa Integer && arguments(x)[2] > 0
+            Pow(PolyForm(arguments(x)[1]), arguments(x)[2])
+        else
+            PolyForm(x)
+        end
+    end
 
-    return ns, ds
+    return make(numerators(d)), make(denominators(d))
 end
 
 function simplify_fractions(d::Div)
     ns, ds = polyform_factors(d)
-    rm_gcd!(ns, ds)
+    ns, ds = rm_gcds(ns, ds)
     if all(_isone, ds)
         return isempty(ns) ? 1 : *(ns...)
     else
@@ -179,7 +182,14 @@ function simplify_fractions(x)
     Postwalk(RestartedChain(rules))(x)
 end
 
-function rm_gcd!(ns, ds)
+flatten_pows(xs) = map(xs) do x
+    x isa Pow ? Iterators.repeated(arguments(x)...) : (x,)
+end |> Iterators.flatten |> collect
+
+function rm_gcds(ns, ds)
+    ns = flatten_pows(ns)
+    ds = flatten_pows(ds)
+
     for i = 1:length(ns)
         for j = 1:length(ds)
             g = gcd(ns[i], ds[j])
@@ -193,5 +203,5 @@ function rm_gcd!(ns, ds)
     filter!(!_isone, ns)
     filter!(!_isone, ds)
 
-    nothing
+    ns,ds
 end

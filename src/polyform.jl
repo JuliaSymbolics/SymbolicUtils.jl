@@ -160,7 +160,7 @@ end
 
 Base.show(io::IO, d::Div) = show_term(io, d)
 
-function normalize(d::Div)
+function simplify_fractions(d::Div)
     pvar2sym = Bijection{Any, Sym}()
     sym2term = Dict{Sym, Any}()
 
@@ -168,8 +168,15 @@ function normalize(d::Div)
     ds = map(x->PolyForm(x, pvar2sym, sym2term), d.den)
 
     rm_gcd!(ns, ds)
+    if all(_isone, ds)
+        return isempty(ns) ? 1 : *(ns...)
+    else
+        return Div(ns, ds, true)
+    end
+end
 
-    Div(ns, ds, true)
+function simplify_fractions(x)
+    Postwalk(PassThrough(@rule ~x::(x->x isa Div) => simplify_fractions(~x)))(x)
 end
 
 function rm_gcd!(ns, ds)

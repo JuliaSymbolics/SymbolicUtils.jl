@@ -156,9 +156,11 @@ istree(d::Div) = true
 operation(d::Div) = (/)
 function arguments(d::Div)
     num = isempty(d.num) ? 1 : Term{symtype(d)}(*, d.num)
-    den = isempty(d.num) ? 1 : Term{symtype(d)}(*, d.den)
+    den = isempty(d.den) ? 1 : Term{symtype(d)}(*, d.den)
     [num, den]
 end
+
+Base.show(io::IO, d::Div) = show_term(io, d)
 
 function normalize(d::Div)
     pvar2sym = Bijection{Any, Sym}()

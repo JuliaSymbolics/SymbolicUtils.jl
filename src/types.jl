@@ -468,6 +468,13 @@ function print_arg(io, f, x)
     end
 end
 
+function remove_minus(t)
+    @assert operation(t) == (*)
+    args = arguments(t)
+    @assert args[1] < 0
+    [-args[1], args[2:end]...]
+end
+
 function show_add(io, args)
     negs = filter(isnegative, args)
     nnegs = filter(!isnegative, args)
@@ -481,7 +488,7 @@ function show_add(io, args)
             print_arg(io, -, t)
         else
             print(io, " - ")
-            print_arg(io, -t, paren=true)
+            show_mul(io, remove_minus(t))
         end
     end
 end

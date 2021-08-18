@@ -98,14 +98,12 @@ PolyForm(x, args...) = x
 
 istree(x::PolyForm) = true
 
-function operation(x::PolyForm)
-    MP.nterms(x.p) == 1 ? (*) : (+)
-end
+operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
 function arguments(x::PolyForm{T}) where {T}
 
     function is_var(v)
-        MP.nterms(v) == 1 &&
+        MP.nterms(v) == 1 && isone(MP.coefficient(MP.terms(v)[1])) &&
         isone(sum(x->abs(MP.degree(v, x)), MP.variables(MP.monomial(v))))
     end
 
@@ -125,15 +123,15 @@ function arguments(x::PolyForm{T}) where {T}
         c = MP.coefficient(x.p)
 
         if !isone(c)
-            return [c, (unstable_pow(resolve(v), pow)
-                        for (v, pow) in MP.powers(MP.monomial(x.p)))...]
+            [c, (unstable_pow(resolve(v), pow)
+                        for (v, pow) in MP.powers(MP.monomial(x.p)) if !iszero(pow))...]
         else
-            return [unstable_pow(resolve(v), pow)
-                    for (v, pow) in MP.powers(MP.monomial(x.p))]
+            [unstable_pow(resolve(v), pow)
+                    for (v, pow) in MP.powers(MP.monomial(x.p)) if !iszero(pow)]
         end
     else
         ts = MP.terms(x.p)
-        return [is_var(t) ? resolve(t) : PolyForm{T}(t, x.pvar2sym, x.sym2term) for t in ts]
+        return [is_var(t) ? resolve(t) : PolyForm{T, Nothing}(t, x.pvar2sym, x.sym2term, nothing) for t in ts]
     end
 end
 

@@ -141,15 +141,12 @@ end
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
 
-function polyform_factors(d::Div)
-    pvar2sym = Bijection{Any, Sym}()
-    sym2term = Dict{Sym, Any}()
-
+function polyform_factors(d::Div, pvar2sym, sym2term)
     make(xs) = map(xs) do x
         if x isa Pow && arguments(x)[2] isa Integer && arguments(x)[2] > 0
-            Pow(PolyForm(arguments(x)[1]), arguments(x)[2])
+            Pow(PolyForm(arguments(x)[1], pvar2sym, sym2term), arguments(x)[2])
         else
-            PolyForm(x)
+            PolyForm(x, pvar2sym, sym2term)
         end
     end
 
@@ -157,7 +154,10 @@ function polyform_factors(d::Div)
 end
 
 function simplify_fractions(d::Div)
-    ns, ds = polyform_factors(d)
+    pvar2sym = Bijection{Any, Sym}()
+    sym2term = Dict{Sym, Any}()
+
+    ns, ds = polyform_factors(d, pvar2sym, sym2term)
     ns, ds = rm_gcds(ns, ds)
     if all(_isone, ds)
         return isempty(ns) ? 1 : *(ns...)
@@ -167,8 +167,11 @@ function simplify_fractions(d::Div)
 end
 
 function add_divs(x::Div, y::Div)
-    x_num, x_den = polyform_factors(x)
-    y_num, y_den = polyform_factors(y)
+    pvar2sym = Bijection{Any, Sym}()
+    sym2term = Dict{Sym, Any}()
+
+    x_num, x_den = polyform_factors(x, pvar2sym, sym2term)
+    y_num, y_den = polyform_factors(y, pvar2sym, sym2term)
 
     Div(*(x_num..., y_den...) + *(x_den..., y_num...), *(x_den..., y_den...))
 end

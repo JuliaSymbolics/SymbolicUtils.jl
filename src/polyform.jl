@@ -191,3 +191,9 @@ function rm_gcd!(ns, ds)
 
     nothing
 end
+
+function /(a::Union{SN,Number}, b::SN)
+    n = istree(a) && operation(a) == (*) ? arguments(a) : [a]
+    d = istree(b) && operation(b) == (*) ? arguments(a) : [b]
+    Div(n, d)
+end

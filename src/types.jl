@@ -846,7 +846,7 @@ end
 
 *(a::SN, b::Number) = b * a
 
-/(a::Union{SN,Number}, b::SN) = a * b^(-1)
+# /(a::Union{SN,Number}, b::SN) = Div(a,b) --> Now in polyform.jl
 
 \(a::SN, b::Union{Number, SN}) = b / a
 

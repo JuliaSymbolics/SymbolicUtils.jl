@@ -854,8 +854,6 @@ end
 
 *(a::SN, b::Number) = b * a
 
-# /(a::Union{SN,Number}, b::SN) = Div(a,b) --> Now in polyform.jl
-
 \(a::SN, b::Union{Number, SN}) = b / a
 
 \(a::Number, b::SN) = b / a
@@ -865,6 +863,55 @@ end
 //(a::Union{SN, Number}, b::SN) = a / b
 
 //(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
+
+"""
+    Div(numerator_factors, denominator_factors, simplified=false)
+
+"""
+struct Div{T} <: Symbolic{T}
+    num::Vector
+    den::Vector
+    simplified::Bool
+end
+
+istree(d::Div) = true
+
+operation(d::Div) = (/)
+
+function arguments(d::Div)
+    num = isempty(d.num) ? 1 : Term{symtype(d)}(*, d.num)
+    den = isempty(d.den) ? 1 : Term{symtype(d)}(*, d.den)
+    [num, den]
+end
+
+Base.show(io::IO, d::Div) = show_term(io, d)
+
+facts_symtype(xs) = isempty(xs) ? Int : promote_symtype(*, symtype(xs[1]), facts_symtype(xs[2:end]))
+
+function Div(n, d, simplified=false)
+    Div{promote_symtype((/), facts_symtype(n), facts_symtype(d))}(n, d, simplified)
+end
+
+function /(a::Union{SN,Number}, b::SN)
+    if a isa Div && b isa Div
+        return Div(vcat(a.num, b.den), vcat(a.den, b.num))
+    end
+
+    n = istree(a) && operation(a) == (*) ? arguments(a) : [a]
+    d = istree(b) && operation(b) == (*) ? arguments(b) : [b]
+
+    if a isa Div
+        Div(a.num, vcat(a.den, d))
+    elseif b isa Div
+        Div(vcat(n, b.den), b.num)
+    else
+        Div(n,d)
+    end
+end
+
+*(a::Div, b::Div) = Div(vcat(a.num, b.num), vcat(a.den, b.den))
+
+/(a::Div, b::Div) = Div(vcat(a.num, b.den), vcat(a.den, b.num))
 
 """
     Pow(base, exp)

@@ -141,40 +141,6 @@ end
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
 
-
-struct Div{T} <: Symbolic{T}
-    num::Vector
-    den::Vector
-    simplified::Bool
-end
-
-facts_symtype(xs) = isempty(xs) ? Int : promote_symtype(*, symtype(xs[1]), facts_symtype(xs[2:end]))
-
-function Div(n, d, simplified=false)
-    Div{promote_symtype((/), facts_symtype(n), facts_symtype(d))}(n, d, simplified)
-end
-
-function /(a::Union{SN,Number}, b::SN)
-    n = istree(a) && operation(a) == (*) ? arguments(a) : [a]
-    d = istree(b) && operation(b) == (*) ? arguments(b) : [b]
-    Div(n, d)
-end
-
-*(a::Div, b::Div) = Div(vcat(a.num, b.num), vcat(a.den, b.den))
-
-/(a::Div, b::Div) = Div(vcat(a.num, b.den), vcat(a.den, b.num))
-
-
-istree(d::Div) = true
-operation(d::Div) = (/)
-function arguments(d::Div)
-    num = isempty(d.num) ? 1 : Term{symtype(d)}(*, d.num)
-    den = isempty(d.den) ? 1 : Term{symtype(d)}(*, d.den)
-    [num, den]
-end
-
-Base.show(io::IO, d::Div) = show_term(io, d)
-
 function polyform_factors(d::Div)
     pvar2sym = Bijection{Any, Sym}()
     sym2term = Dict{Sym, Any}()
@@ -229,4 +195,3 @@ function rm_gcd!(ns, ds)
 
     nothing
 end
-

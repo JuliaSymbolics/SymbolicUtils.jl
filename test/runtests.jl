@@ -34,6 +34,7 @@ if haskey(ENV, "SU_BENCHMARK_ONLY")
 else
     include("basics.jl")
     include("order.jl")
+    include("polyform.jl")
     include("rewrite.jl")
     include("rulesets.jl")
     include("code.jl")

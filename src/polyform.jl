@@ -95,6 +95,7 @@ function PolyForm(x::Symbolic{<:Number},
 
     # Polyize and return a PolyForm
     p = polyize(x, pvar2sym, sym2term, vtype, pow)
+    MP.isconstant(p) && return convert(Number, p)
     PolyForm{symtype(x), typeof(metadata)}(p, pvar2sym, sym2term, metadata)
 end
 
@@ -133,14 +134,16 @@ function arguments(x::PolyForm{T}) where {T}
     end
 
     if MP.nterms(x.p) == 1
+        MP.isconstant(x.p) && return [convert(Number, x.p)]
         c = MP.coefficient(x.p)
+        t = MP.monomial(x.p)
 
         if !isone(c)
             [c, (unstable_pow(resolve(v), pow)
-                        for (v, pow) in MP.powers(MP.monomial(x.p)) if !iszero(pow))...]
+                        for (v, pow) in MP.powers(t) if !iszero(pow))...]
         else
             [unstable_pow(resolve(v), pow)
-                    for (v, pow) in MP.powers(MP.monomial(x.p)) if !iszero(pow)]
+                    for (v, pow) in MP.powers(t) if !iszero(pow)]
         end
     else
         ts = MP.terms(x.p)
@@ -182,6 +185,8 @@ function polyform_factors(d::Div, pvar2sym, sym2term)
     return make(numerators(d)), make(denominators(d))
 end
 
+_mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
+
 function simplify_fractions(d::Div)
     pvar2sym = Bijection{Any, Sym}()
     sym2term = Dict{Sym, Any}()
@@ -189,9 +194,9 @@ function simplify_fractions(d::Div)
     ns, ds = polyform_factors(d, pvar2sym, sym2term)
     ns, ds = rm_gcds(ns, ds)
     if all(_isone, ds)
-        return isempty(ns) ? 1 : *(ns...)
+        return isempty(ns) ? 1 : _mul(ns)
     else
-        return Div(*(ns...), *(ds...), true)
+        return Div(_mul(ns), _mul(ds), true)
     end
 end
 
@@ -202,7 +207,7 @@ function add_divs(x::Div, y::Div)
     x_num, x_den = polyform_factors(x, pvar2sym, sym2term)
     y_num, y_den = polyform_factors(y, pvar2sym, sym2term)
 
-    Div(*(x_num..., y_den...) + *(x_den..., y_num...), *(x_den..., y_den...))
+    Div(_mul(x_num, y_den) + _mul(x_den, y_num), _mul(x_den, y_den))
 end
 
 function simplify_fractions(x)
@@ -216,7 +221,7 @@ end
 
 flatten_pows(xs) = map(xs) do x
     x isa Pow ? Iterators.repeated(arguments(x)...) : (x,)
-end |> Iterators.flatten |> collect
+end |> Iterators.flatten |> a->collect(Any,a)
 
 function rm_gcds(ns, ds)
     ns = flatten_pows(ns)

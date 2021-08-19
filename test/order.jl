@@ -73,9 +73,6 @@ end
 
     @test x <ₑ (3 + x) && !((3 + x) <ₑ x)
     @test istotal(y, x^2)
-
-    # a nice consequence
-    @test simplify(x/(x+3) + 3/(x+3)) == 1
 end
 
 @testset "small terms" begin

@@ -1,6 +1,9 @@
 export PolyForm, simplify_fractions
 using Bijections
 using DynamicPolynomials: PolyVar
+using BloomFilters
+
+const ID_SET = BloomFilter(10^6, 0.001)
 
 """
     PolyForm{T} <: Symbolic{T}
@@ -78,7 +81,13 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end
-        pvar = _similarvariable(vtype, nameof(x), reinterpret(Int, hash(x))) # TODO: collison detect
+        h′ = h = hash(x)
+        while h in ID_SET
+            h += 1
+            h == h′ && error("Could not create a unique ID") # explored all 2^64 of them
+        end
+
+        pvar = _similarvariable(vtype, nameof(x), reinterpret(Int, h))
         pvar2sym[pvar] = x
         return pvar
     end

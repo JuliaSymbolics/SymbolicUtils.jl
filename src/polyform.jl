@@ -106,8 +106,9 @@ operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 function arguments(x::PolyForm{T}) where {T}
 
     function is_var(v)
-        MP.nterms(v) == 1 && isone(MP.coefficient(MP.terms(v)[1])) &&
-        isone(sum(x->abs(MP.degree(v, x)), MP.variables(MP.monomial(v))))
+        MP.nterms(v) == 1 &&
+        isone(MP.coefficient(MP.terms(v)[1])) &&
+        MP.degree(MP.monomial(v)) == 1
     end
 
     function get_var(v)

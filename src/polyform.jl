@@ -1,6 +1,12 @@
 export PolyForm, simplify_fractions
 using Bijections
+using DynamicPolynomials: PolyVar
 
+"""
+    PolyForm{T} <: Symbolic{T}
+
+A polynomial-normal form term.
+"""
 struct PolyForm{T, M} <: Symbolic{T}
     p::MP.AbstractPolynomialLike
     pvar2sym::Bijection   # @polyvar x --> @sym x  etc.
@@ -72,11 +78,14 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end
-        pvar = MP.similarvariable(vtype, nameof(x))
+        pvar = _similarvariable(vtype, nameof(x), hash(x))
         pvar2sym[pvar] = x
         return pvar
     end
 end
+
+_similarvariable(::Type{PolyVar{true}}, name, id) = PolyVar{true}(String(name), id)
+_similarvariable(T, name, id) = MT.similarvariable(T, name)
 
 function PolyForm(x::Symbolic{<:Number},
         pvar2sym=Bijection{Any, Sym}(),

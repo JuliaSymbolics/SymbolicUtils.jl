@@ -154,6 +154,22 @@ end
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
 
+"""
+    expand(expr)
+
+Expand expressions by distributing multiplication over addition, e.g.,
+`a*(b+c)` becomes `ab+ac`.
+
+`expand` uses replace symbols and non-algebraic expressions by variables of type
+`variable_type` to compute the distribution using a specialized sparse
+multivariate polynomials implementation.
+`variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
+"""
+expand(expr) = PolyForm(expr)
+
+
+## Rational Polynomial form with Div
+
 function polyform_factors(d::Div, pvar2sym, sym2term)
     make(xs) = map(xs) do x
         if x isa Pow && arguments(x)[2] isa Integer && arguments(x)[2] > 0

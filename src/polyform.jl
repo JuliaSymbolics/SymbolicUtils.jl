@@ -8,6 +8,9 @@ struct PolyForm{T, M} <: Symbolic{T}
     metadata::M
 end
 
+Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  0xbabacacababacaca)
+Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
+
 function mix_dicts(p, q)
     (p.pvar2sym === q.pvar2sym ? p.pvar2sym : merge(p.pvar2sym, q.pvar2sym),
      p.sym2term === q.sym2term ? p.sym2term : merge(p.sym2term, q.sym2term))

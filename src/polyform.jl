@@ -78,7 +78,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end
-        pvar = _similarvariable(vtype, nameof(x), hash(x))
+        pvar = _similarvariable(vtype, nameof(x), reinterpret(Int, hash(x))) # TODO: collison detect
         pvar2sym[pvar] = x
         return pvar
     end

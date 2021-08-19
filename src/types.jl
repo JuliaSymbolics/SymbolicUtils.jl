@@ -887,6 +887,9 @@ struct Div{T,N,D} <: Symbolic{T}
     simplified::Bool
 end
 
+Base.hash(x::Div, u::UInt64) = hash(x.num, hash(x.den, u))
+Base.isequal(x::Div, y::Div) = isequal(x.num, y.num) && isequal(x.den, y.den)
+
 function Div(n, d, simplified=false)
     @assert !(n isa AbstractArray)
     @assert !(d isa AbstractArray)

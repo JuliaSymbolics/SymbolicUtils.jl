@@ -20,10 +20,17 @@ Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
 # We use the same PVAR2SYM bijection to maintain the PolyVar <-> Sym mapping,
 # When all PolyForms go out of scope in a session, we allow it to free up memory and
 # start over if necessary
-const PVAR2SYM = WeakRef()
-const SYM2TERM = WeakRef()
-get_pvar2sym() = PVAR2SYM.value === nothing ? (PVAR2SYM.value = Bijection{Any, Sym}()) : PVAR2SYM.value
-get_sym2term() = SYM2TERM.value === nothing ? (SYM2TERM.value = Dict{Sym, Any}()) : SYM2TERM.value
+const PVAR2SYM = Ref(WeakRef())
+const SYM2TERM = Ref(WeakRef())
+function get_pvar2sym()
+    v = PVAR2SYM[].value
+    v === nothing ?  (PVAR2SYM[] = WeakRef(Bijection{Any, Sym}())) : v
+end
+
+function get_sym2term()
+    v = SYM2TERM[].value
+    v === nothing ?  (SYM2TERM[] = WeakRef(Dict{Sym, Any}())) : v
+end
 
 function mix_dicts(p, q)
     (p.pvar2sym === q.pvar2sym ? p.pvar2sym : merge(p.pvar2sym, q.pvar2sym),
@@ -65,7 +72,6 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
 
             @label lookup
             sym = Sym{symtype(x)}(name)
-            @show sym2term
             if haskey(sym2term, sym)
                 if isequal(sym2term[sym][1], x)
                     return pvar2sym(sym)
@@ -84,7 +90,6 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
     elseif x isa Number
         return x
     elseif x isa Sym
-        @show pvar2sym
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end

@@ -24,12 +24,24 @@ const PVAR2SYM = Ref(WeakRef())
 const SYM2TERM = Ref(WeakRef())
 function get_pvar2sym()
     v = PVAR2SYM[].value
-    v === nothing ?  (PVAR2SYM[] = WeakRef(Bijection{Any, Sym}())) : v
+    if v === nothing
+        d = Bijection{Any,Sym}()
+        PVAR2SYM[] = WeakRef(d)
+        return d
+    else
+        return v
+    end
 end
 
 function get_sym2term()
     v = SYM2TERM[].value
-    v === nothing ?  (SYM2TERM[] = WeakRef(Dict{Sym, Any}())) : v
+    if v === nothing
+        d = Dict{Sym,Any}()
+        SYM2TERM[] = WeakRef(d)
+        return d
+    else
+        return v
+    end
 end
 
 function mix_dicts(p, q)
@@ -74,7 +86,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
             sym = Sym{symtype(x)}(name)
             if haskey(sym2term, sym)
                 if isequal(sym2term[sym][1], x)
-                    return pvar2sym(sym)
+                    return local_polyize(sym)
                 else # hash collision
                     name = Symbol(name, "_")
                     @goto lookup

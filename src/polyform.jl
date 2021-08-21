@@ -17,6 +17,14 @@ end
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
 
+# We use the same PVAR2SYM bijection to maintain the PolyVar <-> Sym mapping,
+# When all PolyForms go out of scope in a session, we allow it to free up memory and
+# start over if necessary
+const PVAR2SYM = WeakRef()
+const SYM2TERM = WeakRef()
+get_pvar2sym() = PVAR2SYM.value === nothing ? (PVAR2SYM.value = Bijection{Any, Sym}()) : PVAR2SYM.value
+get_sym2term() = SYM2TERM.value === nothing ? (SYM2TERM.value = Dict{Sym, Any}()) : SYM2TERM.value
+
 function mix_dicts(p, q)
     (p.pvar2sym === q.pvar2sym ? p.pvar2sym : merge(p.pvar2sym, q.pvar2sym),
      p.sym2term === q.sym2term ? p.sym2term : merge(p.sym2term, q.sym2term))
@@ -57,6 +65,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
 
             @label lookup
             sym = Sym{symtype(x)}(name)
+            @show sym2term
             if haskey(sym2term, sym)
                 if isequal(sym2term[sym][1], x)
                     return pvar2sym(sym)
@@ -75,21 +84,19 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
     elseif x isa Number
         return x
     elseif x isa Sym
+        @show pvar2sym
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end
-        pvar = _similarvariable(vtype, nameof(x), reinterpret(Int, hash(x))) # TODO: collison detect
+        pvar = MP.similarvariable(vtype, nameof(x))
         pvar2sym[pvar] = x
         return pvar
     end
 end
 
-_similarvariable(::Type{PolyVar{true}}, name, id) = PolyVar{true}(String(name), id)
-_similarvariable(T, name, id) = MT.similarvariable(T, name)
-
 function PolyForm(x::Symbolic{<:Number},
-        pvar2sym=Bijection{Any, Sym}(),
-        sym2term=Dict{Sym, Any}(),
+        pvar2sym=get_pvar2sym(),
+        sym2term=get_sym2term(),
         vtype=DynamicPolynomials.PolyVar{true};
         metadata=metadata(x))
 
@@ -100,8 +107,8 @@ function PolyForm(x::Symbolic{<:Number},
 end
 
 function PolyForm(x::MP.AbstractPolynomialLike,
-        pvar2sym=Bijection{Any, Sym}(),
-        sym2term=Dict{Sym, Any}(),
+        pvar2sym=get_pvar2sym(),
+        sym2term=get_sym2term(),
         metadata=nothing)
     # make number go
     PolyForm{Number, Nothing}(x, pvar2sym, sym2term, metadata)
@@ -188,10 +195,7 @@ end
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
 function simplify_fractions(d::Div)
-    pvar2sym = Bijection{Any, Sym}()
-    sym2term = Dict{Sym, Any}()
-
-    ns, ds = polyform_factors(d, pvar2sym, sym2term)
+    ns, ds = polyform_factors(d, get_pvar2sym(), get_sym2term())
     ns, ds = rm_gcds(ns, ds)
     if all(_isone, ds)
         return isempty(ns) ? 1 : _mul(ns)
@@ -201,11 +205,8 @@ function simplify_fractions(d::Div)
 end
 
 function add_divs(x::Div, y::Div)
-    pvar2sym = Bijection{Any, Sym}()
-    sym2term = Dict{Sym, Any}()
-
-    x_num, x_den = polyform_factors(x, pvar2sym, sym2term)
-    y_num, y_den = polyform_factors(y, pvar2sym, sym2term)
+    x_num, x_den = polyform_factors(x, get_pvar2sym(), get_sym2term())
+    y_num, y_den = polyform_factors(y, get_pvar2sym(), get_sym2term())
 
     Div(_mul(x_num, y_den) + _mul(x_den, y_num), _mul(x_den, y_den))
 end

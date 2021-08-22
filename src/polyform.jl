@@ -46,8 +46,10 @@ function get_sym2term()
 end
 
 function mix_dicts(p, q)
-    (p.pvar2sym === q.pvar2sym ? p.pvar2sym : merge(p.pvar2sym, q.pvar2sym),
-     p.sym2term === q.sym2term ? p.sym2term : merge(p.sym2term, q.sym2term))
+    p.pvar2sym !== q.pvar2sym && error("pvar2sym mappings don't match for $p and $q")
+    p.sym2term !== q.sym2term && error("sym2term mappings don't match for $p and $q")
+
+    p.pvar2sym, p.sym2term
 end
 
 # forward gcd

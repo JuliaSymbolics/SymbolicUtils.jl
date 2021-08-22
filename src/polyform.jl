@@ -5,7 +5,8 @@ using DynamicPolynomials: PolyVar
 """
     PolyForm{T} <: Symbolic{T}
 
-A polynomial-normal form term.
+Abstracts a [MultivariatePolynomials.jl](https://juliaalgebra.github.io/MultivariatePolynomials.jl/stable/) as a SymbolicUtils expression and vice-versa.
+We use this to hold polynomials in memory while doing `simplify_fractions`.
 """
 struct PolyForm{T, M} <: Symbolic{T}
     p::MP.AbstractPolynomialLike

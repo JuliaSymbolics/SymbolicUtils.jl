@@ -224,7 +224,7 @@ end
 
 test_dict = Dict{Any, Rational{BigInt}}(a=>1,b=>-1,c=>2,d=>-2,e=>5//3,g=>-2//3)
 function fuzz_addmulpow(lvl, d=test_dict)
-    l, r = gen_expr()
+    l, r = gen_expr(lvl)
     rl = try
         substitute(l, d)
     catch err

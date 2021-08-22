@@ -29,13 +29,16 @@ macro eqtest(expr)
 end
 SymbolicUtils.show_simplified[] = false
 
-
-include("basics.jl")
-include("order.jl")
-include("rewrite.jl")
-include("rulesets.jl")
-include("code.jl")
-include("nf.jl")
-include("interface.jl")
-include("fuzz.jl")
-include("adjoints.jl")
+if haskey(ENV, "SU_BENCHMARK_ONLY")
+    include("benchmark.jl")
+else
+    include("basics.jl")
+    include("order.jl")
+    include("rewrite.jl")
+    include("rulesets.jl")
+    include("code.jl")
+    include("nf.jl")
+    include("interface.jl")
+    include("fuzz.jl")
+    include("adjoints.jl")
+end

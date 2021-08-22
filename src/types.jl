@@ -329,6 +329,7 @@ end
 
 TermInterface.gethead(x::Term) = getfield(x, :f)
 
+unsorted_arguments(x) = TermInterface.getargs(x)
 TermInterface.getargs(x::Term) = getfield(x, :arguments)
 
 function Base.isequal(t1::Term, t2::Term)
@@ -614,6 +615,11 @@ TermInterface.isterm(a::Type{Add}) = true
 
 TermInterface.gethead(a::Add) = +
 
+function unsorted_arguments(a::Add)
+    args = [v*k for (k,v) in a.dict]
+    iszero(a.coeff) ? args : vcat(a.coeff, args)
+end
+
 function TermInterface.getargs(a::Add)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
@@ -758,6 +764,11 @@ TermInterface.isterm(a::Type{Mul}) = true
 TermInterface.gethead(a::Mul) = *
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
+
+function unsorted_arguments(a::Mul)
+    args = [unstable_pow(k, v) for (k,v) in a.dict]
+    isone(a.coeff) ? args : vcat(a.coeff, args)
+end
 
 function TermInterface.getargs(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]

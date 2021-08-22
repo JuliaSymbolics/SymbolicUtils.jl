@@ -168,7 +168,7 @@ function get_assignments(d::DestructuredArgs, st)
         ex = (i isa Symbol ? :($name.$i) : :($name[$i]))
         ex = d.inbounds ? :(@inbounds($ex)) : ex
         a ← ex
-    end   
+    end
 end
 
 @matchable struct Let

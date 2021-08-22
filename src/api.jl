@@ -57,21 +57,22 @@ function substitute(expr, dict; fold=true)
     haskey(dict, expr) && return dict[expr]
 
     if isterm(expr)
+        op = substitute(gethead(expr), dict; fold=fold)
         if fold
-            canfold = !(gethead(expr) isa Symbolic)
-            args = map(getargs(expr)) do x
+            canfold = !(op isa Symbolic)
+            args = map(unsorted_arguments(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
                 canfold = canfold && !(x′ isa Symbolic)
                 x′
             end
-            canfold && return gethead(expr)(args...)
+            canfold && return op(args...)
             args
         else
-            args = map(x->substitute(x, dict, fold=fold), getargs(expr))
+            args = map(x->substitute(x, dict, fold=fold), unsorted_arguments(expr))
         end
 
         similarterm(expr,
-                    substitute(gethead(expr), dict, fold=fold),
+                    op,
                     args;
                     type=symtype(expr),
                     metadata=metadata(expr))

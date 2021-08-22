@@ -4,67 +4,16 @@
 #--------------------
 abstract type Symbolic{T} end
 
-### Interface to be defined for `simplify` to work:
-
 
 # TODO_TERMINTERFACE
-# """
-#     isterm(x::T)
 
-# Check if `x` represents an expression tree. If returns true,
-# it will be assumed that `gethead(::T)` and `getargs(::T)`
-# methods are defined. Definining these three should allow use
-# of `simplify` on custom types. Optionally `symtype(x)` can be
-# defined to return the expected type of the symbolic expression.
-# """
-
-# """
-#     gethead(x::T)
-
-# Returns the operation (a function object) performed by an expression
-# tree. Called only if `isterm(::T)` is true. Part of the API required
-# for `simplify` to work. Other required methods are `arguments` and `isterm`
-# """
-
-"""
-    getargs(x::T)
-
-Returns the arguments (a `Vector`) for an expression tree.
-Called only if `isterm(x)` is `true`. Part of the API required
-for `simplify` to work. Other required methods are `gethead` and `isterm`
-"""
-# function getargs end
-
-"""
-    symtype(x)
-
-The supposed type of values in the domain of x. Tracing tools can use this type to
-pick the right method to run or analyse code.
-
-This defaults to `typeof(x)` if `x` is numeric, or `Any` otherwise.
-For the types defined in this package, namely `T<:Symbolic{S}` it is `S`.
-
-Define this for your symbolic types if you want `simplify` to apply rules
-specific to numbers (such as commutativity of multiplication). Or such
-rules that may be implemented in the future.
-"""
 TermInterface.symtype(x::Number) = typeof(x)
 TermInterface.symtype(::Symbolic{T}) where {T} = T
 
-"""
-    metadata(s)
+TermInterface.metadata(s::Symbolic) = s.metadata
+TermInterface.metadata(s::Any) = nothing
 
-Get all the metadata of a term or `nothing` if no metadata is defined.
-"""
-metadata(s::Symbolic) = s.metadata
-metadata(s::Any) = nothing
-"""
-    metadata(s, meta)
-
-Set the metadata for `s`. `meta` must be an `ImmutableDict{DataType, Any}` or
-`Nothing`.
-"""
-metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
+TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)

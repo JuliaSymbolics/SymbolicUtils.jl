@@ -887,19 +887,21 @@ end
     Div(numerator_factors, denominator_factors, simplified=false)
 
 """
-struct Div{T,N,D} <: Symbolic{T}
+struct Div{T,N,D, M} <: Symbolic{T}
     num::N
     den::D
     simplified::Bool
+    metadata::M
 end
 
 Base.hash(x::Div, u::UInt64) = hash(x.num, hash(x.den, u))
 Base.isequal(x::Div, y::Div) = isequal(x.num, y.num) && isequal(x.den, y.den)
 
-function Div(n, d, simplified=false)
+function Div(n, d, simplified=false; metadata=nothing)
     @assert !(n isa AbstractArray)
     @assert !(d isa AbstractArray)
-    Div{promote_symtype((/), symtype(n), symtype(d)), typeof(n), typeof(d)}(n, d, simplified)
+    Div{promote_symtype((/), symtype(n), symtype(d)),
+        typeof(n), typeof(d), typeof(metadata)}(n, d, simplified, metadata)
 end
 
 function numerators(d::Div)
@@ -1092,7 +1094,7 @@ AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 
 print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show_type=show_type, maxdepth=maxdepth, kw...)
-function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; show_type=false, kw...)
+function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow, Div}; show_type=false, kw...)
     AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
         if istree(y)
             print(io, operation(y))

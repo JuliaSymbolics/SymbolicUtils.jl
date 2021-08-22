@@ -215,12 +215,13 @@ end
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
 function simplify_fractions(d::Div)
+    d.simplified && return d
     ns, ds = polyform_factors(d, get_pvar2sym(), get_sym2term())
     ns, ds = rm_gcds(ns, ds)
     if all(_isone, ds)
-        return isempty(ns) ? 1 : _mul(ns)
+        return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
     else
-        return Div(_mul(ns), _mul(ds), true)
+        return Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)), true)
     end
 end
 
@@ -237,7 +238,7 @@ function simplify_fractions(x)
     rules = [@acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)
              @rule ~x::isdiv => simplify_fractions(~x)]
 
-    Postwalk(RestartedChain(rules))(x)
+    Prewalk(RestartedChain(rules))(x)
 end
 
 flatten_pows(xs) = map(xs) do x

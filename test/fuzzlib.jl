@@ -244,6 +244,7 @@ function fuzz_addmulpow(lvl, d=test_dict)
             @test true
         else
             println("Weird bug here:")
+            @show d
             @show r l
             @show rl rr
             @test false

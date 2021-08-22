@@ -4,6 +4,38 @@
 #--------------------
 abstract type Symbolic{T} end
 
+# DEPRECATION WARNINGS
+_has_warned_deprecation = Set{Symbol}()
+macro warn_once(key, msg)
+    quote
+         if !($key in _has_warned_deprecation)
+            @warn $msg 
+            push!(_has_warned_deprecation, $key);
+         end 
+    end
+end
+
+function istree(x) 
+    @warn_once :istree "`SymbolicUtils.istree` is DEPRECATED, please use `TermInterface.isterm`"
+    isterm(x)
+end
+
+function operation(x) 
+    @warn_once :operation "`SymbolicUtils.operation` is DEPRECATED, please use `TermInterface.gethead`"
+    gethead(x)
+end
+
+function arguments(x) 
+    @warn :arguments "`SymbolicUtils.arguments` is DEPRECATED, please use `TermInterface.getargs`"
+    getargs(x)
+end
+
+# function similarterm(t::T, f, args, symtype=nothing; metadata=nothing) where {T} 
+#     @warn :arguments "`SymbolicUtils.similarterm` is DEPRECATED, please use `TermInterface.similarterm`"
+#     TermInterface.similarterm(t, f, args; type=symtype, metadata=nothing)
+# end
+
+
 
 # TODO_TERMINTERFACE
 

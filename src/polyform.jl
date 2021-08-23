@@ -53,13 +53,13 @@ function mix_dicts(p, q)
 end
 
 # forward gcd
-for f in [:gcd, :div]
-    @eval begin
-        Base.$f(x::PolyForm, y::PolyForm) = PolyForm($f(x.p, y.p), mix_dicts(x, y)...)
-        Base.$f(x::Integer, y::PolyForm) = PolyForm($f(x, y.p), y.pvar2sym, y.sym2term)
-        Base.$f(x::PolyForm, y::Integer) = PolyForm($f(x.p, y), x.pvar2sym, x.sym2term)
-    end
-end
+Base.div(x::PolyForm, y::PolyForm) = PolyForm(div(x.p, y.p), mix_dicts(x, y)...)
+Base.div(x::Integer, y::PolyForm) = PolyForm(div(x, y.p), y.pvar2sym, y.sym2term)
+Base.div(x::PolyForm, y::Integer) = PolyForm(div(x.p, y), x.pvar2sym, x.sym2term)
+
+Base.gcd(x::PolyForm, y::PolyForm) = PolyForm(_gcd(x.p, y.p), mix_dicts(x, y)...)
+Base.gcd(x::Integer, y::PolyForm) = PolyForm(_gcd(x, y.p), y.pvar2sym, y.sym2term)
+Base.gcd(x::PolyForm, y::Integer) = PolyForm(_gcd(x.p, y), x.pvar2sym, x.sym2term)
 _isone(p::PolyForm) = isone(p.p)
 
 function polyize(x, pvar2sym, sym2term, vtype, pow)
@@ -245,13 +245,21 @@ flatten_pows(xs) = map(xs) do x
     x isa Pow ? Iterators.repeated(arguments(x)...) : (x,)
 end |> Iterators.flatten |> a->collect(Any,a)
 
+_gcd(x::Union{PolyForm, Integer}, y::Union{PolyForm, Integer}) = gcd(x,y)
+_gcd(x::MP.AbstractPolynomialLike, y::MP.AbstractPolynomialLike) = gcd(x,y)
+_gcd(x::MP.AbstractPolynomialLike{Complex{Float64}}, y::MP.AbstractPolynomialLike) = 1
+_gcd(x::MP.AbstractPolynomialLike{Complex{Float64}},
+     y::MP.AbstractPolynomialLike{Complex{Float64}}) = 1
+_gcd(x::MP.AbstractPolynomialLike, y::MP.AbstractPolynomialLike{Complex{Float64}}) = 1
+_gcd(x, y) = 1
+
 function rm_gcds(ns, ds)
     ns = flatten_pows(ns)
     ds = flatten_pows(ds)
 
     for i = 1:length(ns)
         for j = 1:length(ds)
-            g = gcd(ns[i], ds[j])
+            g = _gcd(ns[i], ds[j])
             if !_isone(g)
                 ns[i] = div(ns[i], g)
                 ds[j] = div(ds[j], g)

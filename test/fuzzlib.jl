@@ -46,8 +46,8 @@ const num_spec = let
     nopow  = filter(x->x!==(^), binops)
     twoargfns = vcat(nopow, (x,y)->x isa Union{Int, Rational, Complex{<:Rational}} ? x * y : x^y)
     fns = vcat(1 .=> vcat(SymbolicUtils.monadic, [one, zero]),
-               2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5)),
-    3 .=> [+, *])
+               2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5), fill(/, 40)),
+               3 .=> [+, *])
 
 
     (leaves=leaf_funcs, funcs=fns, input=rand_input)

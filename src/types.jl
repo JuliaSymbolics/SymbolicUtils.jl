@@ -897,11 +897,14 @@ end
 Base.hash(x::Div, u::UInt64) = hash(x.num, hash(x.den, u))
 Base.isequal(x::Div, y::Div) = isequal(x.num, y.num) && isequal(x.den, y.den)
 
-function Div(n, d, simplified=false; metadata=nothing)
+function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
     @assert !(n isa AbstractArray)
     @assert !(d isa AbstractArray)
-    Div{promote_symtype((/), symtype(n), symtype(d)),
-        typeof(n), typeof(d), typeof(metadata)}(n, d, simplified, metadata)
+    Div{T, typeof(n), typeof(d), typeof(metadata)}(n, d, simplified, metadata)
+end
+
+function Div(n,d, simplified=false; kw...)
+    Div{promote_symtype((/), symtype(n), symtype(d))}(n,d, simplified; kw...)
 end
 
 function numerators(d::Div)

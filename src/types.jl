@@ -1045,7 +1045,7 @@ function mapvalues(f, d1::AbstractDict)
 end
 
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
-                          Add{<:Number}, Pow{<:Number}}
+                          Add{<:Number}, Pow{<:Number}, Div{<:Number}}
 
 function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
     if T === nothing
@@ -1055,6 +1055,9 @@ function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
         Add(T, makeadd(1, 0, args...)...; metadata=metadata)
     elseif f == (*)
         Mul(T, makemul(1, args...)...; metadata=metadata)
+    elseif f == (/)
+        @assert length(args) == 2
+        Div{T}(args...; metadata=metadata)
     elseif f == (^) && length(args) == 2
         Pow{T}(makepow(args...)...; metadata=metadata)
     else

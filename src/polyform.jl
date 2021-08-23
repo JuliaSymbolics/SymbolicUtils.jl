@@ -6,6 +6,8 @@ using DynamicPolynomials: PolyVar
     PolyForm{T} <: Symbolic{T}
 
 Abstracts a [MultivariatePolynomials.jl](https://juliaalgebra.github.io/MultivariatePolynomials.jl/stable/) as a SymbolicUtils expression and vice-versa.
+
+The SymbolicUtils term interface (`istree`, `operation, and `arguments`) works on PolyForm lazily: the `operation` and `arguments` are created by converting one level of arguments into SymbolicUtils expressions. They may further contain PolyForm within them.
 We use this to hold polynomials in memory while doing `simplify_fractions`.
 """
 struct PolyForm{T, M} <: Symbolic{T}
@@ -245,12 +247,12 @@ flatten_pows(xs) = map(xs) do x
     x isa Pow ? Iterators.repeated(arguments(x)...) : (x,)
 end |> Iterators.flatten |> a->collect(Any,a)
 
-_gcd(x::Union{PolyForm, Integer}, y::Union{PolyForm, Integer}) = gcd(x,y)
-_gcd(x::MP.AbstractPolynomialLike, y::MP.AbstractPolynomialLike) = gcd(x,y)
-_gcd(x::MP.AbstractPolynomialLike{Complex{Float64}}, y::MP.AbstractPolynomialLike) = 1
-_gcd(x::MP.AbstractPolynomialLike{Complex{Float64}},
-     y::MP.AbstractPolynomialLike{Complex{Float64}}) = 1
-_gcd(x::MP.AbstractPolynomialLike, y::MP.AbstractPolynomialLike{Complex{Float64}}) = 1
+coefftype(x::PolyForm) = coefftype(x.p)
+coefftype(x::MP.AbstractPolynomialLike{T}) where {T} = T
+coefftype(x) = typeof(x)
+
+const MaybeGcd = Union{PolyForm, MP.AbstractPolynomialLike, Integer}
+_gcd(x::MaybeGcd, y::MaybeGcd) = (coefftype(x) <: Complex || coefftype(y) <: Complex) ? 1 : gcd(x, y)
 _gcd(x, y) = 1
 
 function rm_gcds(ns, ds)

@@ -184,7 +184,9 @@ function arguments(x::PolyForm{T}) where {T}
     end
 end
 
-Base.show(io::IO, x::PolyForm) = show_term(io, x)
+function Base.show(io::IO, x::PolyForm)
+    Base.printstyled(io, sprint(io->show_term(io, x)), color=:yellow)
+end
 
 """
     expand(expr)

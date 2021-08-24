@@ -12,11 +12,11 @@ We use this to hold polynomials in memory while doing `simplify_fractions`.
 """
 struct PolyForm{T, M} <: Symbolic{T}
     p::MP.AbstractPolynomialLike
-    pvar2sym::Bijection   # @polyvar x --> @sym x  etc.
-    sym2term::Dict        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
+    pvar2sym::Bijection{Any,Sym}   # @polyvar x --> @sym x  etc.
+    sym2term::Dict{Sym,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
     metadata::M
 end
-(::PolyForm{T})(p, d1, d2, m) where {T} = PolyForm{T, typeof(m)}(p, d1, d2, m)
+(::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T} = PolyForm{T, typeof(m)}(p, d1, d2, m)
 
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
@@ -58,7 +58,7 @@ end
 
 # forward gcd
 
-PF = :(PolyForm{promote_type(/, symtype(x), symtype(y))})
+PF = :(PolyForm{promote_symtype(/, symtype(x), symtype(y))})
 @eval begin
     Base.div(x::PolyForm, y::PolyForm) = $PF(div(x.p, y.p), mix_dicts(x, y)...)
     Base.div(x::Integer, y::PolyForm)  = $PF(div(x, y.p), y.pvar2sym, y.sym2term)
@@ -114,7 +114,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
                 end
             end
 
-            sym2term[sym] = x => y
+            sym2term[sym] = (x => y)
 
             return local_polyize(sym)
         end

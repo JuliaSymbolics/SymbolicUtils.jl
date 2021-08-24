@@ -4,29 +4,19 @@
 #--------------------
 abstract type Symbolic{T} end
 
-# DEPRECATION WARNINGS
-_has_warned_deprecation = Set{Symbol}()
-macro warn_once(key, msg)
-    quote
-         if !($key in _has_warned_deprecation)
-            @warn $msg 
-            push!(_has_warned_deprecation, $key);
-         end 
-    end
-end
 
-function istree(x) 
-    @warn_once :istree "`SymbolicUtils.istree` is DEPRECATED, please use `TermInterface.isterm`"
+function istree(x)
+    Base.depwarn("`SymbolicUtils.istree` is deprecated, please use `TermInterface.isterm`", :istree, force=true)
     isterm(x)
 end
 
 function operation(x) 
-    @warn_once :operation "`SymbolicUtils.operation` is DEPRECATED, please use `TermInterface.gethead`"
+    Base.depwarn("`SymbolicUtils.operation` is deprecated, please use `TermInterface.gethead`", :operation, force=true)
     gethead(x)
 end
 
 function arguments(x) 
-    @warn :arguments "`SymbolicUtils.arguments` is DEPRECATED, please use `TermInterface.getargs`"
+    Base.depwarn("`SymbolicUtils.arguments` is deprecated, please use `TermInterface.getargs`", :arguments, force=true)
     getargs(x)
 end
 
@@ -402,8 +392,6 @@ end
     
 TermInterface.similarterm(t::Type{<:Term}, f, args, symtype=nothing; metadata=nothing) = 
     Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
-
-node_count(t) = isterm(t) ? reduce(+, node_count(x) for x in  getargs(t), init=0) + 1 : 1
 
 #--------------------
 #--------------------

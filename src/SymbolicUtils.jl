@@ -7,6 +7,7 @@ using DocStringExtensions
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 using TermInterface
+using TermInterface: node_count
 
 # Sym, Term,
 # Add, Mul and Pow

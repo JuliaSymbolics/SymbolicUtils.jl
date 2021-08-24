@@ -317,6 +317,30 @@ macro rule(expr)
 end
 
 #-----------------------------
+#### Capture Macro
+macro capture(ex, lhs)
+    keys = Symbol[]
+    lhs_term = makepattern(lhs, keys)
+    unique!(keys)
+    bind = Expr(:block, map(key-> :($(esc(key)) = getindex(__MATCHES__, $(QuoteNode(key)))), keys)...)
+    quote
+        $(__source__)
+        lhs_pattern = $(lhs_term)
+        __MATCHES__ = Rule($(QuoteNode(lhs)),
+             lhs_pattern,
+             matcher(lhs_pattern),
+             identity,
+             rule_depth($lhs_term))($(esc(ex)))
+        if __MATCHES__ !== nothing
+            $bind
+            true
+        else
+            false
+        end
+    end
+end
+
+#-----------------------------
 #### Associative Commutative Rules
 
 struct ACRule{F,R} <: AbstractRule

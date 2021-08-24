@@ -382,13 +382,8 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-function TermInterface.similarterm(t::Type{T}, f, args, symtype=nothing; metadata=nothing) where {T<:Symbolic} 
-    if symtype === nothing 
-        similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
-    else 
-        f(args...)
-    end
-end 
+TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing) = 
+    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
     
 TermInterface.similarterm(t::Type{<:Term}, f, args, symtype=nothing; metadata=nothing) = 
     Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
@@ -933,7 +928,7 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}}
 
-function TermInterface.similarterm(p::Type{NumericTerm}, f, args, symtype=nothing; metadata=nothing)
+function TermInterface.similarterm(t::Type{P}, f, args, symtype=nothing; metadata=nothing) where P<:NumericTerm
     T = symtype
     if T === nothing
         T = _promote_symtype(f, args)
@@ -948,10 +943,6 @@ function TermInterface.similarterm(p::Type{NumericTerm}, f, args, symtype=nothin
         Term{T}(f, args; metadata=metadata)
     end
 end
-
-TermInterface.similarterm(p::NumericTerm, f, args, symtype=nothing; metadata=nothing) = 
-    similarterm(NumericTerm, f, args, symtype; metadata=metadata)
-
 
 function Base.hash(t::Union{Add,Mul}, u::UInt64)
     !iszero(u) && return hash(hash(t, zero(UInt64)), u)

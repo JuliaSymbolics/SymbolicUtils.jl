@@ -383,7 +383,7 @@ different type than `t`, because `f` also influences the result.
   resulting similar term to this type.
 """
 function TermInterface.similarterm(t::Type{T}, f, args, symtype=nothing; metadata=nothing) where {T<:Symbolic} 
-    if type === nothing 
+    if symtype === nothing 
         similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
     else 
         f(args...)

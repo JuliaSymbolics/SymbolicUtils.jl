@@ -16,6 +16,7 @@ struct PolyForm{T, M} <: Symbolic{T}
     sym2term::Dict        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
     metadata::M
 end
+(::PolyForm{T})(p, d1, d2, m) where {T} = PolyForm{T, typeof(m)}(p, d1, d2, m)
 
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
@@ -25,6 +26,7 @@ Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
 # start over if necessary
 const PVAR2SYM = Ref(WeakRef())
 const SYM2TERM = Ref(WeakRef())
+clear_dicts() = (PVAR2SYM[] = WeakRef(nothing); SYM2TERM[] = WeakRef(nothing); nothing)
 function get_pvar2sym()
     v = PVAR2SYM[].value
     if v === nothing
@@ -55,16 +57,21 @@ function mix_dicts(p, q)
 end
 
 # forward gcd
-Base.div(x::PolyForm, y::PolyForm) = PolyForm(div(x.p, y.p), mix_dicts(x, y)...)
-Base.div(x::Integer, y::PolyForm) = PolyForm(div(x, y.p), y.pvar2sym, y.sym2term)
-Base.div(x::PolyForm, y::Integer) = PolyForm(div(x.p, y), x.pvar2sym, x.sym2term)
 
-Base.gcd(x::PolyForm, y::PolyForm) = PolyForm(_gcd(x.p, y.p), mix_dicts(x, y)...)
-Base.gcd(x::Integer, y::PolyForm) = PolyForm(_gcd(x, y.p), y.pvar2sym, y.sym2term)
-Base.gcd(x::PolyForm, y::Integer) = PolyForm(_gcd(x.p, y), x.pvar2sym, x.sym2term)
+PF = :(PolyForm{promote_type(/, symtype(x), symtype(y))})
+@eval begin
+    Base.div(x::PolyForm, y::PolyForm) = $PF(div(x.p, y.p), mix_dicts(x, y)...)
+    Base.div(x::Integer, y::PolyForm)  = $PF(div(x, y.p), y.pvar2sym, y.sym2term)
+    Base.div(x::PolyForm, y::Integer)  = $PF(div(x.p, y), x.pvar2sym, x.sym2term)
+
+    Base.gcd(x::PolyForm, y::PolyForm) = $PF(_gcd(x.p, y.p), mix_dicts(x, y)...)
+    Base.gcd(x::Integer, y::PolyForm)  = $PF(_gcd(x, y.p), y.pvar2sym, y.sym2term)
+    Base.gcd(x::PolyForm, y::Integer)  = $PF(_gcd(x.p, y), x.pvar2sym, x.sym2term)
+end
+
 _isone(p::PolyForm) = isone(p.p)
 
-function polyize(x, pvar2sym, sym2term, vtype, pow)
+function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     if istree(x)
         if !(symtype(x) <: Number)
             error("Cannot convert $x of symtype $(symtype(x)) into a PolyForm")
@@ -73,19 +80,28 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
         op = operation(x)
         args = arguments(x)
 
-        local_polyize(y) = polyize(y, pvar2sym, sym2term, vtype, pow)
+        local_polyize(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
 
-        if op == (+)
+        if typeof(+) <: Fs && op == (+)
             return sum(local_polyize, args)
-        elseif op == (*)
+        elseif typeof(*) <: Fs && op == (*)
             return prod(local_polyize, args)
-        elseif op == (^) && args[2] isa Integer && args[2] > 0
+        elseif typeof(^) <: Fs && op == (^) && args[2] isa Integer && args[2] > 0
             @assert length(args) == 2
             return local_polyize(args[1])^(args[2])
         else
             # create a new symbol to store this
 
-            name = Symbol(string(op), "-", hash(x))
+            y = if recurse
+                similarterm(x,
+                            op,
+                            map(a->PolyForm(a, pvar2sym, sym2term, vtype, Fs, recurse),
+                                args), symtype(x))
+            else
+                x
+            end
+
+            name = Symbol(string(op), "-", hash(y))
 
             @label lookup
             sym = Sym{symtype(x)}(name)
@@ -98,10 +114,8 @@ function polyize(x, pvar2sym, sym2term, vtype, pow)
                 end
             end
 
-            sym2term[sym] = x => similarterm(x,
-                                             op,
-                                             map(a->PolyForm(a, pvar2sym, sym2term, vtype),
-                                                 args), symtype(x))
+            sym2term[sym] = x => y
+
             return local_polyize(sym)
         end
     elseif x isa Number
@@ -120,20 +134,14 @@ function PolyForm(x::Symbolic{<:Number},
         pvar2sym=get_pvar2sym(),
         sym2term=get_sym2term(),
         vtype=DynamicPolynomials.PolyVar{true};
+        Fs = Union{typeof(+), typeof(*), typeof(^)},
+        recurse=false,
         metadata=metadata(x))
 
     # Polyize and return a PolyForm
-    p = polyize(x, pvar2sym, sym2term, vtype, pow)
+    p = polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     MP.isconstant(p) && return convert(Number, p)
     PolyForm{symtype(x), typeof(metadata)}(p, pvar2sym, sym2term, metadata)
-end
-
-function PolyForm(x::MP.AbstractPolynomialLike,
-        pvar2sym=get_pvar2sym(),
-        sym2term=get_sym2term(),
-        metadata=nothing)
-    # make number go
-    PolyForm{Number, Nothing}(x, pvar2sym, sym2term, metadata)
 end
 
 PolyForm(x, args...;kw...) = x
@@ -184,9 +192,7 @@ function arguments(x::PolyForm{T}) where {T}
     end
 end
 
-function Base.show(io::IO, x::PolyForm)
-    Base.printstyled(io, sprint(io->show_term(io, x)), color=:yellow)
-end
+Base.show(io::IO, x::PolyForm) = show_term(io, x)
 
 """
     expand(expr)

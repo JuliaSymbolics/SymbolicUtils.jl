@@ -5,7 +5,8 @@ using TermInterface
 TermInterface.isterm(ex::Expr) = ex.head == :call
 TermInterface.gethead(ex::Expr) = ex.args[1]
 TermInterface.getargs(ex::Expr) = ex.args[2:end]
-TermInterface.similarterm(x::Type{Expr}, head, args; type=nothing, metadata=nothing) = Expr(:call, head, args...)
+TermInterface.similarterm(x::Type{Expr}, head, args, symtype=nothing; metadata=nothing) = 
+    Expr(:call, head, args...)
 
 for f ∈ [:+, :-, :*, :/, :^]
     @eval begin

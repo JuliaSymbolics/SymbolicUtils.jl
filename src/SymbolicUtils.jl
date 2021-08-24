@@ -16,7 +16,7 @@ import Setfield: PropertyLens
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 include("types.jl")
-export istree, operation, arguments
+export istree, operation, arguments, similarterm
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath

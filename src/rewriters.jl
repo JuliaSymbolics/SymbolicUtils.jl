@@ -29,7 +29,8 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer, is_operation, isterm, gethead, similarterm, getargs, node_count
+using SymbolicUtils: @timer, node_count
+using TermInterface: is_operation, isterm, gethead, similarterm, getargs
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 

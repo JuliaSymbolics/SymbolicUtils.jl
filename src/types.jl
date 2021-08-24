@@ -30,13 +30,6 @@ function arguments(x)
     getargs(x)
 end
 
-# function similarterm(t::T, f, args, symtype=nothing; metadata=nothing) where {T} 
-#     @warn :arguments "`SymbolicUtils.similarterm` is DEPRECATED, please use `TermInterface.similarterm`"
-#     TermInterface.similarterm(t, f, args; type=symtype, metadata=nothing)
-# end
-
-
-
 # TODO_TERMINTERFACE
 
 TermInterface.symtype(x::Number) = typeof(x)
@@ -399,15 +392,16 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-function TermInterface.similarterm(t::Type{T}, f, args; type=nothing, metadata=nothing) where {T<:Symbolic} 
+function TermInterface.similarterm(t::Type{T}, f, args, symtype=nothing; metadata=nothing) where {T<:Symbolic} 
     if type === nothing 
-        similarterm(t, f, args; type=_promote_symtype(f, args), metadata=nothing)
+        similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
     else 
         f(args...)
     end
 end 
     
-TermInterface.similarterm(t::Type{<:Term}, f, args; type=nothing, metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+TermInterface.similarterm(t::Type{<:Term}, f, args, symtype=nothing; metadata=nothing) = 
+    Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 node_count(t) = isterm(t) ? reduce(+, node_count(x) for x in  getargs(t), init=0) + 1 : 1
 
@@ -951,8 +945,8 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}}
 
-function TermInterface.similarterm(p::Type{NumericTerm}, f, args; type=nothing, metadata=nothing)
-    T = type
+function TermInterface.similarterm(p::Type{NumericTerm}, f, args, symtype=nothing; metadata=nothing)
+    T = symtype
     if T === nothing
         T = _promote_symtype(f, args)
     end
@@ -967,8 +961,8 @@ function TermInterface.similarterm(p::Type{NumericTerm}, f, args; type=nothing, 
     end
 end
 
-TermInterface.similarterm(p::NumericTerm, f, args; type=nothing, metadata=nothing) = 
-    similarterm(NumericTerm, f, args; type=type, metadata=metadata)
+TermInterface.similarterm(p::NumericTerm, f, args, symtype=nothing; metadata=nothing) = 
+    similarterm(NumericTerm, f, args, symtype; metadata=metadata)
 
 
 function Base.hash(t::Union{Add,Mul}, u::UInt64)

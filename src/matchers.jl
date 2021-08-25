@@ -84,11 +84,11 @@ function matcher(segment::Segment)
 end
 
 function matcher(term::Term)
-    matchers = (matcher(gethead(term)), map(matcher, getargs(term))...,)
+    matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
     function term_matcher(success, data, bindings)
 
         !islist(data) && return nothing
-        !isterm(car(data)) && return nothing
+        !istree(car(data)) && return nothing
 
         function loop(term, bindings′, matchers′) # Get it to compile faster
             if !islist(matchers′)

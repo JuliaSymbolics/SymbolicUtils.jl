@@ -8,15 +8,15 @@
 <ₑ(a::Symbolic, b::Number) = false
 <ₑ(a::Number,   b::Symbolic) = true
 
-arglength(a) = length(getargs(a))
+arglength(a) = length(arguments(a))
 function <ₑ(a, b)
-    if !isterm(a) && !isterm(b)
+    if !istree(a) && !istree(b)
         T = typeof(a)
         S = typeof(b)
         return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)
-    elseif isterm(b) && !isterm(a)
+    elseif istree(b) && !istree(a)
         return true
-    elseif isterm(a) && isterm(b)
+    elseif istree(a) && istree(b)
         return cmp_term_term(a,b)
     else
         return !(b <ₑ a)
@@ -53,15 +53,15 @@ function cmp_term_term(a, b)
     lb = arglength(b)
 
     if la == 0 && lb == 0
-        return gethead(a) <ₑ gethead(b)
+        return operation(a) <ₑ operation(b)
     elseif la === 0
-        return gethead(a) <ₑ b
+        return operation(a) <ₑ b
     elseif lb === 0
-        return a <ₑ gethead(b)
+        return a <ₑ operation(b)
     end
 
-    na = gethead(a)
-    nb = gethead(b)
+    na = operation(a)
+    nb = operation(b)
 
     if 0 < arglength(a) <= 2 && 0 < arglength(b) <= 2
         # e.g. a < sin(a) < b ^ 2 < b
@@ -74,7 +74,7 @@ function cmp_term_term(a, b)
         return arglength(a) < arglength(b)
     else
         @label compare_args
-        aa, ab = getargs(a), getargs(b)
+        aa, ab = arguments(a), arguments(b)
         if length(aa) !== length(ab)
             return length(aa) < length(ab)
         else

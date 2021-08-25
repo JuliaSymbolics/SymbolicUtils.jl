@@ -35,7 +35,7 @@ struct LL{V}
     i::Int
 end
 
-islist(x) = isterm(x) || !isempty(x)
+islist(x) = istree(x) || !isempty(x)
 
 Base.empty(l::LL) = empty(l.v)
 Base.isempty(l::LL) = l.i > length(l.v)
@@ -44,15 +44,15 @@ Base.length(l::LL) = length(l.v)-l.i+1
 @inline car(l::LL) = l.v[l.i]
 @inline cdr(l::LL) = isempty(l) ? empty(l) : LL(l.v, l.i+1)
 
-Base.length(t::Term) = length(getargs(t)) + 1 # PIRACY
+Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
 Base.isempty(t::Term) = false
-@inline car(t::Term) = gethead(t)
-@inline cdr(t::Term) = getargs(t)
+@inline car(t::Term) = operation(t)
+@inline cdr(t::Term) = arguments(t)
 
-@inline car(v) = isterm(v) ? gethead(v) : first(v)
+@inline car(v) = istree(v) ? operation(v) : first(v)
 @inline function cdr(v)
-    if isterm(v)
-        getargs(v)
+    if istree(v)
+        arguments(v)
     else
         islist(v) ? LL(v, 2) : error("asked cdr of empty")
     end
@@ -65,7 +65,7 @@ end
     if n === 0
         return ll
     else
-        isterm(ll) ? drop_n(getargs(ll), n-1) : drop_n(cdr(ll), n-1)
+        istree(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
     end
 end
 @inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)
@@ -78,25 +78,25 @@ pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
 
 # Simplification utilities
 function has_trig(term)
-    !isterm(term) && return false
+    !istree(term) && return false
     fns = (sin, cos, tan, cot, sec, csc)
-    op = gethead(term)
+    op = operation(term)
 
     if Base.@nany 6 i->fns[i] === op
         return true
     else
-        return any(has_trig, getargs(term))
+        return any(has_trig, arguments(term))
     end
 end
 
 function fold(t)
-    if isterm(t)
-        tt = map(fold, getargs(t))
+    if istree(t)
+        tt = map(fold, arguments(t))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
-            return gethead(t)(tt...)
+            return operation(t)(tt...)
         else
-            return similarterm(t, gethead(t), tt)
+            return similarterm(t, operation(t), tt)
         end
     else
         return t
@@ -117,14 +117,14 @@ _isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) 
 _isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
-needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(getargs(x))
+needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
 
 # are there nested ⋆ terms?
 function isnotflat(⋆)
     function (x)
-        args = getargs(x)
+        args = arguments(x)
         for t in args
-            if isterm(t) && gethead(t) === (⋆)
+            if istree(t) && operation(t) === (⋆)
                 return true
             end
         end
@@ -180,12 +180,12 @@ x + 2y
 ```
 """
 function flatten_term(⋆, x)
-    args = getargs(x)
+    args = arguments(x)
     # flatten nested ⋆
     flattened_args = []
     for t in args
-        if isterm(t) && gethead(t) === (⋆)
-            append!(flattened_args, getargs(
+        if istree(t) && operation(t) === (⋆)
+            append!(flattened_args, arguments(
 t))
         else
             push!(flattened_args, t)
@@ -195,7 +195,7 @@ t))
 end
 
 function sort_args(f, t)
-    args = getargs(
+    args = arguments(
 t)
     if length(args) < 2
         return similarterm(t, f, args)
@@ -220,9 +220,9 @@ macro matchable(expr)
     fields = map(get_name, fields)
     quote
         $expr
-        SymbolicUtils.isterm(::$name) = true
-        SymbolicUtils.gethead(::$name) = $name
-        SymbolicUtils.getargs(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
+        SymbolicUtils.istree(::$name) = true
+        SymbolicUtils.operation(::$name) = $name
+        SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         Base.length(x::$name) = $(length(fields) + 1)
     end |> esc
 end

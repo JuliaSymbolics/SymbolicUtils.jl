@@ -1,6 +1,6 @@
 using Test
 using Combinatorics
-using SymbolicUtils: <ₑ, getargs
+using SymbolicUtils: <ₑ, arguments
 SymbolicUtils.show_simplified[] = false
 
 @syms a b c
@@ -89,6 +89,6 @@ end
     # issue #160
     @syms σ x y z
     expr = σ*sin(x + -1y)*(sin(z)^(-1))*(-1x + y)
-    args = getargs(expr)
+    args = arguments(expr)
     @test all(((a, b), )->a <ₑ b,  combinations(args, 2))
 end

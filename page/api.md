@@ -30,11 +30,11 @@ using SymbolicUtils # hide
 
 ## Interfacing
 
-{{doc isterm isterm fn}}
+{{doc istree istree fn}}
 
-{{doc gethead gethead fn}}
+{{doc operation operation fn}}
 
-{{doc getargs getargs fn}}
+{{doc arguments arguments fn}}
 
 {{doc similarterm similarterm fn}}
 

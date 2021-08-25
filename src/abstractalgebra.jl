@@ -21,22 +21,22 @@ end
 function labels!(dicts, t, variable_type::Type)
     if t isa Number
         return t
-    elseif isterm(t) && (gethead(t) == (*) || gethead(t) == (+) || gethead(t) == (-))
-        tt = getargs(t)
-        return similarterm(t, gethead(t), map(x->labels!(dicts, x, variable_type), tt), symtype(t))
-    elseif isterm(t) && gethead(t) == (^) && length(getargs(t)) > 1 && isnonnegint(getargs(t)[2])
-        return similarterm(t, gethead(t), map(x->labels!(dicts, x, variable_type), getargs(t)), symtype(t))
+    elseif istree(t) && (operation(t) == (*) || operation(t) == (+) || operation(t) == (-))
+        tt = arguments(t)
+        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), tt), symtype(t))
+    elseif istree(t) && operation(t) == (^) && length(arguments(t)) > 1 && isnonnegint(arguments(t)[2])
+        return similarterm(t, operation(t), map(x->labels!(dicts, x, variable_type), arguments(t)), symtype(t))
     else
         sym2term, term2sym = dicts
         if haskey(term2sym, t)
             return term2sym[t]
         end
-        if isterm(t)
-            tt = getargs(t)
-            sym = Sym{symtype(t)}(gensym(nameof(gethead(t))))
+        if istree(t)
+            tt = arguments(t)
+            sym = Sym{symtype(t)}(gensym(nameof(operation(t))))
             dicts2 = _dicts(dicts[2])
-            sym2term[sym] = similarterm(t, gethead(t),
-                                        map(x->to_mpoly(x, variable_type, dicts)[1], getargs(t)), symtype(t))
+            sym2term[sym] = similarterm(t, operation(t),
+                                        map(x->to_mpoly(x, variable_type, dicts)[1], arguments(t)), symtype(t))
         else
             sym = Sym{symtype(t)}(gensym("literal"))
             sym2term[sym] = t
@@ -144,8 +144,8 @@ function _to_term(reference, x::MP.AbstractPolynomialLike, dict, syms)
 end
 
 function _to_term(reference, x, dict, vars)
-    if isterm(x)
-        t = similarterm(x, gethead(x), _to_term.((reference,), getargs(x), (dict,), (vars,)), symtype(x))
+    if istree(x)
+        t = similarterm(x, operation(x), _to_term.((reference,), arguments(x), (dict,), (vars,)), symtype(x))
     else
         if haskey(dict, x)
             return dict[x]

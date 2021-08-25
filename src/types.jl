@@ -5,21 +5,6 @@
 abstract type Symbolic{T} end
 
 
-function istree(x)
-    Base.depwarn("`SymbolicUtils.istree` is deprecated, please use `TermInterface.isterm`", :istree, force=true)
-    isterm(x)
-end
-
-function operation(x) 
-    Base.depwarn("`SymbolicUtils.operation` is deprecated, please use `TermInterface.gethead`", :operation, force=true)
-    gethead(x)
-end
-
-function arguments(x) 
-    Base.depwarn("`SymbolicUtils.arguments` is deprecated, please use `TermInterface.getargs`", :arguments, force=true)
-    getargs(x)
-end
-
 # TODO_TERMINTERFACE
 
 TermInterface.symtype(x::Number) = typeof(x)
@@ -87,7 +72,7 @@ Base.isequal(::Symbolic, ::Symbolic) = false
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
-                 "symbolic structure using `isterm(x)`, `gethead(x)`, `getargs(x)` " *
+                 "symbolic structure using `istree(x)`, `operation(x)`, `arguments(x)` " *
                  "and `similarterm(::YourType, f, args, symtype)`", :to_symbolic, force=true)
 
     x
@@ -278,8 +263,8 @@ or
 
 Symbolic expression representing the result of calling `f(args...)`.
 
-- `gethead(t::Term)` returns `f`
-- `getargs(t::Term)` returns `args`
+- `operation(t::Term)` returns `f`
+- `arguments(t::Term)` returns `args`
 - `symtype(t::Term)` returns `T`
 
 If `T` is not provided during construction, it is queried by calling
@@ -304,25 +289,25 @@ function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
     Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
-TermInterface.isterm(t::Type{<:Term}) = true
+TermInterface.istree(t::Type{<:Term}) = true
 
 function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
-TermInterface.gethead(x::Term) = getfield(x, :f)
+TermInterface.operation(x::Term) = getfield(x, :f)
 
-unsorted_arguments(x) = TermInterface.getargs(x)
-TermInterface.getargs(x::Term) = getfield(x, :arguments)
+unsorted_arguments(x) = TermInterface.arguments(x)
+TermInterface.arguments(x::Term) = getfield(x, :arguments)
 
 function Base.isequal(t1::Term, t2::Term)
     t1 === t2 && return true
     symtype(t1) !== symtype(t2) && return false
 
-    a1 = getargs(t1)
-    a2 = getargs(t2)
+    a1 = arguments(t1)
+    a2 = arguments(t2)
 
-    isequal(gethead(t1), gethead(t2)) &&
+    isequal(operation(t1), operation(t2)) &&
         length(a1) == length(a2) &&
         all(isequal(l,r) for (l, r) in zip(a1,a2))
 end
@@ -334,7 +319,7 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
     !iszero(salt) && return hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
     !iszero(h) && return h
-    h′ = hashvec(getargs(t), hash(gethead(t), hash(T, salt)))
+    h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
     t.hash[] = h′
     return h′
 end
@@ -398,18 +383,18 @@ Base.show(io::IO, t::Term) = show_term(io, t)
 
 isnegative(t::Real) = t < 0
 function isnegative(t)
-    if isterm(t) && gethead(t) === (*)
-        coeff = first(getargs(t))
+    if istree(t) && operation(t) === (*)
+        coeff = first(arguments(t))
         return isnegative(coeff)
     end
     return false
 end
 
-setargs(t, args) = Term{symtype(t)}(gethead(t), args)
+setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
-isbinop(f) = isterm(f) && !isterm(gethead(f)) && Base.isbinaryoperator(nameof(gethead(f)))
+isbinop(f) = istree(f) && !istree(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")
@@ -486,9 +471,9 @@ function show_ref(io, f, args)
     x = args[1]
     idx = args[2:end]
 
-    isterm(x) && print(io, "(")
+    istree(x) && print(io, "(")
     print(io, x)
-    isterm(x) && print(io, ")")
+    istree(x) && print(io, ")")
     print(io, "[")
     for i=1:length(idx)
         print_arg(io, idx[i])
@@ -498,7 +483,7 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
-    fname = isterm(f) ? Symbol(repr(f)) : nameof(f)
+    fname = istree(f) ? Symbol(repr(f)) : nameof(f)
     binary = Base.isbinaryoperator(fname)
     if binary
         for (i, t) in enumerate(args)
@@ -525,8 +510,8 @@ function show_term(io::IO, t)
         return print(IOContext(io, :simplify=>false), simplify(t))
     end
 
-    f = gethead(t)
-    args = getargs(t)
+    f = operation(t)
+    args = arguments(t)
 
     if f === (+)
         show_add(io, args)
@@ -561,9 +546,9 @@ Represents `coeff + (key1 * val1) + (key2 * val2) + ...`
 where keys and values come from the dictionary (`dict`).
 where `coeff` and the vals are `<:Number` and keys are symbolic.
 
-- `gethead(::Add)` -- returns `+`.
+- `operation(::Add)` -- returns `+`.
 - `symtype(::Add)` -- returns `T`.
-- `getargs(::Add)` -- returns a totally ordered vector of arguments. i.e.
+- `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM*valM, keyN*valN...]`
 """
 struct Add{X<:Number, T<:Number, D, M} <: Symbolic{X}
@@ -588,16 +573,16 @@ end
 TermInterface.symtype(a::Add{X}) where {X} = X
 
 
-TermInterface.isterm(a::Type{Add}) = true
+TermInterface.istree(a::Type{Add}) = true
 
-TermInterface.gethead(a::Add) = +
+TermInterface.operation(a::Add) = +
 
 function unsorted_arguments(a::Add)
     args = [v*k for (k,v) in a.dict]
     iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-function TermInterface.getargs(a::Add)
+function TermInterface.arguments(a::Add)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
@@ -693,8 +678,8 @@ where coeff is a <:Number and keys and values come from the dictionary (`dict`).
 where `coeff` and the vals are `<:Number` and keys are symbolic.
 
 - `symtype(::Mul)` -- returns `T`.
-- `gethead(::Mul)` -- returns `*`.
-- `getargs(::Mul)` -- returns a totally ordered vector of arguments. i.e.
+- `operation(::Mul)` -- returns `*`.
+- `arguments(::Mul)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
 struct Mul{X<:Number, T<:Number, D, M} <: Symbolic{X}
@@ -736,9 +721,9 @@ end
 
 TermInterface.symtype(a::Mul{X}) where {X} = X
 
-TermInterface.isterm(a::Type{Mul}) = true
+TermInterface.istree(a::Type{Mul}) = true
 
-TermInterface.gethead(a::Mul) = *
+TermInterface.operation(a::Mul) = *
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
@@ -747,7 +732,7 @@ function unsorted_arguments(a::Mul)
     isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-function TermInterface.getargs(a::Mul)
+function TermInterface.arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
@@ -843,14 +828,14 @@ function Pow(a, b; metadata=NO_METADATA)
 end
 TermInterface.symtype(a::Pow{X}) where {X} = X
 
-TermInterface.isterm(a::Type{Pow}) = true
+TermInterface.istree(a::Type{Pow}) = true
 
-TermInterface.gethead(a::Pow) = ^
+TermInterface.operation(a::Pow) = ^
 
 # Use `Union` to avoid promoting the base and exponent to the same type.
 # For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
 # we don't want to promote `a.exp` to a multivariate polynomial.
-TermInterface.getargs(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
+TermInterface.arguments(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
 
 Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 
@@ -960,7 +945,7 @@ struct TreePrint
     op
     x
 end
-AbstractTrees.children(x::Term) = getargs(x)
+AbstractTrees.children(x::Term) = arguments(x)
 function AbstractTrees.children(x::Union{Add, Mul})
     children = Any[x.coeff]
     for (key, coeff) in pairs(x.dict)
@@ -978,8 +963,8 @@ AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show_type=show_type, maxdepth=maxdepth, kw...)
 function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; show_type=false, kw...)
     AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
-        if isterm(y)
-            print(io, gethead(y))
+        if istree(y)
+            print(io, operation(y))
         elseif y isa TreePrint
             print(io, "(", y.op, ")")
         else
@@ -991,5 +976,5 @@ function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; show_type=false, kw.
     end
 end
 
-TermInterface.isterm(t::Type{<:Sym}) = false
-TermInterface.isterm(t::Type{<:Symbolic}) = true
+TermInterface.istree(t::Type{<:Sym}) = false
+TermInterface.istree(t::Type{<:Symbolic}) = true

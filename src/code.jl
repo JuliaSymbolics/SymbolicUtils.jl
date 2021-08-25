@@ -7,7 +7,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SpawnFetch, Multithreaded
 
 import ..SymbolicUtils
-import SymbolicUtils: @matchable, Sym, Term, isterm, gethead, getargs
+import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
 
 ##== state management ==##
 
@@ -99,7 +99,7 @@ toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 function_to_expr(op, args, st) = nothing
 
 function function_to_expr(::typeof(^), O, st)
-    args = getargs(O)
+    args = arguments(O)
     if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
@@ -112,7 +112,7 @@ function function_to_expr(::typeof(^), O, st)
 end
 
 function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
-    args = getargs(O)
+    args = arguments(O)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end
 
@@ -121,14 +121,14 @@ function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
 toexpr(O::Expr, st) = O
 
 function toexpr(O, st)
-    !isterm(O) && return O
-    op = gethead(O)
+    !istree(O) && return O
+    op = operation(O)
     expr′ = function_to_expr(op, O, st)
     if expr′ !== nothing
         return expr′
     else
         haskey(st.symbolify, O) && return st.symbolify[O]
-        args = getargs(O)
+        args = arguments(O)
         return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
     end
 end
@@ -161,7 +161,7 @@ get_symbolify(args::DestructuredArgs) = ()
 function get_symbolify(args::Union{AbstractArray, Tuple})
     cflatten(map(get_symbolify, args))
 end
-get_symbolify(x) = isterm(x) ? (x,) : ()
+get_symbolify(x) = istree(x) ? (x,) : ()
 cflatten(x) = Iterators.flatten(x) |> collect
 
 function get_assignments(d::DestructuredArgs, st)

@@ -1,10 +1,10 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Sym, gethead, getargs, symtype
+using SymbolicUtils: Term, Sym, operation, arguments, symtype
 using TermInterface
 
-TermInterface.isterm(ex::Expr) = ex.head == :call
-TermInterface.gethead(ex::Expr) = ex.args[1]
-TermInterface.getargs(ex::Expr) = ex.args[2:end]
+TermInterface.istree(ex::Expr) = ex.head == :call
+TermInterface.operation(ex::Expr) = ex.args[1]
+TermInterface.arguments(ex::Expr) = ex.args[2:end]
 TermInterface.similarterm(x::Type{Expr}, head, args, symtype=nothing; metadata=nothing) = 
     Expr(:call, head, args...)
 

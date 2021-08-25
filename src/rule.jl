@@ -121,7 +121,7 @@ getdepth(r::Rule) = r.depth
 
 function rule_depth(rule, d=0, maxdepth=0)
     if rule isa Term
-        maxdepth = reduce(max, (rule_depth(r, d+1, maxdepth) for r in getargs(rule)), init=1)
+        maxdepth = reduce(max, (rule_depth(r, d+1, maxdepth) for r in arguments(rule)), init=1)
     elseif rule isa Slot || rule isa Segment
         maxdepth = max(d, maxdepth)
     end
@@ -346,17 +346,17 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if !isterm(term)
+    if !istree(term)
         r(term)
     else
-        f =  gethead(term)
+        f =  operation(term)
         # Assume that the matcher was formed by closing over a term
-        if f != gethead(r.lhs) # Maybe offer a fallback if m.term errors. 
+        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
             return nothing
         end
 
         T = symtype(term)
-        args = getargs(term)
+        args = arguments(term)
 
         itr = acr.sets(eachindex(args), acr.arity)
 

@@ -32,7 +32,12 @@ struct PolyForm{T, M} <: Symbolic{T}
     sym2term::Dict{Sym,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
     metadata::M
 end
-(::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T} = PolyForm{T, typeof(m)}(p, d1, d2, m)
+
+function (::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T}
+    p isa Number && return p
+    MP.isconstant(p) && return convert(Number, p)
+    PolyForm{T, typeof(m)}(p, d1, d2, m)
+end
 
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
@@ -156,8 +161,7 @@ function PolyForm(x::Symbolic{<:Number},
 
     # Polyize and return a PolyForm
     p = polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
-    MP.isconstant(p) && return convert(Number, p)
-    PolyForm{symtype(x), typeof(metadata)}(p, pvar2sym, sym2term, metadata)
+    PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)
 end
 
 PolyForm(x, args...;kw...) = x

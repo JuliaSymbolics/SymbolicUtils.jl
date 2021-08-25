@@ -11,7 +11,6 @@ TermInterface.symtype(x::Number) = typeof(x)
 TermInterface.symtype(::Symbolic{T}) where {T} = T
 
 TermInterface.metadata(s::Symbolic) = s.metadata
-TermInterface.metadata(s::Any) = nothing
 
 TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 

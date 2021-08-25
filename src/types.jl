@@ -370,7 +370,7 @@ different type than `t`, because `f` also influences the result.
 TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing) = 
     similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
     
-TermInterface.similarterm(t::Type{<:Term}, f, args, symtype=nothing; metadata=nothing) = 
+TermInterface.similarterm(t::Type{<:Term}, f, args, symtype; metadata=nothing) = 
     Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 #--------------------
@@ -913,7 +913,7 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}}
 
-function TermInterface.similarterm(t::Type{P}, f, args, symtype=nothing; metadata=nothing) where P<:NumericTerm
+function TermInterface.similarterm(t::Type{P}, f, args, symtype; metadata=nothing) where P<:NumericTerm
     T = symtype
     if T === nothing
         T = _promote_symtype(f, args)

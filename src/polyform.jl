@@ -111,13 +111,13 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
             y = if recurse
                 similarterm(x,
                             op,
-                            map(a->PolyForm(a, pvar2sym, sym2term, vtype, Fs, recurse),
+                            map(a->PolyForm(a, pvar2sym, sym2term, vtype; Fs, recurse),
                                 args), symtype(x))
             else
                 x
             end
 
-            name = Symbol(string(op), "-", hash(y))
+            name = Symbol(string(op), "_", hash(y))
 
             @label lookup
             sym = Sym{symtype(x)}(name)

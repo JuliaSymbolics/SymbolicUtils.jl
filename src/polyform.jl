@@ -221,7 +221,7 @@ Expand expressions by distributing multiplication over addition, e.g.,
 multivariate polynomials implementation.
 `variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
 """
-expand(expr) = PolyForm(expr)
+expand(expr) = PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true)
 
 
 ## Rational Polynomial form with Div

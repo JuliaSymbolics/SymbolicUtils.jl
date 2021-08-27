@@ -2,17 +2,17 @@
 
 Performance of symbolic simplification depends on the datastructures used to represent them. Efficient datastructures often have the advantage of automatic simplification, and of efficient storage.
 
-The most basic term representation simply holds a function call and stores the function and the arguments it is called with. This is done by the `Term` type in Symbolics. Functions that aren't commutative or associative, such as `sin` or `hypot` are stored as `Term`s. Commutatative and associative operations like `+` (and `-`), `*`, `/` and `^`, when applied to terms of type `<:Number`, stand to gain from the use of more efficient datastrucutres.
+The most basic term representation simply holds a function call and stores the function and the arguments it is called with. This is done by the `Term` type in Symbolics. Functions that aren't commutative or associative, such as `sin` or `hypot` are stored as `Term`s. Commutatative and associative operations like `+`, `*`, and their supporting operations like `-`, `/` and `^`, when used on terms of type `<:Number`, stand to gain from the use of more efficient datastrucutres.
 
-All term representations must support `operation` and `arguments` functions. And define `istree` to return `true` on their type. Generic term-manipulation programs such as the rule-based rewriter make use of this interface to inspect expressions. In this way, the interface wins back the generality lost by having a zoo of term representations.
+All term representations must support `operation` and `arguments` functions. And they must define `istree` to return `true` when called with an instance of the type. Generic term-manipulation programs such as the rule-based rewriter make use of this interface to inspect expressions. In this way, the interface wins back the generality lost by having a zoo of term representations instead of one.
 
 
 ### Representation of arithmetic
 
-Linear combinations such as $\alpha_1  x_1 + \alpha_2 x_2 +...+ \alpha_n x_n$ are represented by `Add(Dict(x₁ => α₁, x₂ => α₂, ..., xₙ => αₙ))`. Now $x_n$ may themselves be other types mentioned here, except for `Add`. When an `Add` is added to an `Add`, we merge their dictionaries and add up matching coefficients to create a single Add.
+Linear combinations such as $\alpha_1  x_1 + \alpha_2 x_2 +...+ \alpha_n x_n$ are represented by `Add(Dict(x₁ => α₁, x₂ => α₂, ..., xₙ => αₙ))`. Here, any $x_i$ may itself be other types mentioned here, except for `Add`. When an `Add` is added to an `Add`, we merge their dictionaries and add up matching coefficients to create a single "flattened" Add.
 
 Similarly, $x_1^{m_1}x_2^{m_2}...x_{m_n}$ is represented by
-`Mul(Dict(x₁ => m₁, x₂ => m₂, ..., xₙ => mₙ))`. $x_i$ may not themselves be `Mul`, multiplying a Mul with another Mul returns a flattened Mul.
+`Mul(Dict(x₁ => m₁, x₂ => m₂, ..., xₙ => mₙ))`. $x_i$ may not themselves be `Mul`, multiplying a Mul with another Mul returns a "flattened" Mul.
 
 $p / q$ is represented by `Div(p, q)`. The result of `*` on `Div` is maintainted as a `Div`. For example, `Div(p_1, q_1) * Div(p_2, q_2)` results in `Div(p_1 * p_2, q_1 * q_2)` and so on. The effect is, in `Div(p, q)`, `p` or `q` or, if they are Mul, any of their multiplicands is not a Div. So `Mul`s must always be nested inside a `Div` and can never show up immediately wrapping it.
 
@@ -20,9 +20,9 @@ Note that this storage performs a preliminary simplification which suffices to s
 
 ### Polynomial representation
 
-Packages like DynamicPolynomials.jl provide representations that are even more efficient than the `Add` and `Mul` types mentioned above, and are designed specifically for multi-variate polynomials. They also provide common efficient algorithms such as multi-variate polynomial GCD. However, DynamicPolynomials can only represent flat polynomials. For example, `(x-3)*(x+5)` can only be represented as `(x^2) + 15 - 8x`. Moreover, DynamicPolynomials does not have ways to represent generic Terms such as `sin(x-y)` in the tree.
+Packages like DynamicPolynomials.jl provide representations that are even more efficient than the `Add` and `Mul` types mentioned above. They are designed specifically for multi-variate polynomials. They provide common algorithms such as multi-variate polynomial GCD. The restrictions that make it fast also mean some things are not possible: Firstly, DynamicPolynomials can only represent flat polynomials. For example, `(x-3)*(x+5)` can only be represented as `(x^2) + 15 - 8x`. Secondly, DynamicPolynomials does not have ways to represent generic Terms such as `sin(x-y)` in the tree.
 
-To reconcile these differences while being able to use the efficient representation of DynamicPolynomials we have the `PolyForm` type. This type holds a polynomial and the mappings necessary to present the polynomial as a SymbolicUtils expression (i.e. by defining `operation` and `arguments`).  The mappings constructed for the conversion are 1) a bijection from DynamicPolynomials PolyVar type to a Symbolics `Sym`, and 2) a mapping from `Sym`s to non-polynomial terms that the `Sym`s stand-in for. These terms may themselves contain PolyForm if there are polynomials inside them. The mappings are transiently global, that is, when all references to the mappings go out of scope, they are released and re-created.
+To reconcile these differences while being able to use the efficient algorithms of DynamicPolynomials we have the `PolyForm` type. This type holds a polynomial and the mappings necessary to present the polynomial as a SymbolicUtils expression (i.e. by defining `operation` and `arguments`).  The mappings constructed for the conversion are 1) a bijection from DynamicPolynomials PolyVar type to a Symbolics `Sym`, and 2) a mapping from `Sym`s to non-polynomial terms that the `Sym`s stand-in for. These terms may themselves contain PolyForm if there are polynomials inside them. The mappings are transiently global, that is, when all references to the mappings go out of scope, they are released and re-created.
 
 ```julia
 julia> @syms x y

@@ -1,25 +1,28 @@
 ## Term representation and simplification
 
-### Preliminary representation
+Performance of symbolic simplification depends on the datastructures used to represent them. Efficient datastructures often have the advantage of automatic simplification, and of efficient storage.
 
-An expression is stored as a tree where the nodes store their children in some efficient data structure. A node `n` is a non-leaf node if `istree(n)` is true. For such nodes, `operation` and `arguments` must be defined. These return the operation and arguments of the term represented by the subtree `n`.
+The most basic term representation simply holds a function call and stores the function and the arguments it is called with. This is done by the `Term` type in Symbolics. Functions that aren't commutative or associative, such as `sin` or `hypot` are stored as `Term`s. Commutatative and associative operations like `+` (and `-`), `*`, `/` and `^`, when applied to terms of type `<:Number`, stand to gain from the use of more efficient datastrucutres.
 
-A generic term is represented with the `Term` type. It simply holds the function `f` being called and a vector of arguments in the order they were passed to `f`. The operators `+` (and `-`), `*`, `/` and `^` create terms with special storage.
+All term representations must support `operation` and `arguments` functions. And define `istree` to return `true` on their type. Generic term-manipulation programs such as the rule-based rewriter make use of this interface to inspect expressions. In this way, the interface wins back the generality lost by having a zoo of term representations.
 
-Linear combinations such as $\alpha_1  x_1 + \alpha_2 x_2 +...+ \alpha_n x_n$
-are represented by `Add(Dict(x₁ => α₁, x₂ => α₂, ..., xₙ => αₙ))`. Now $x_n$ may themselves be other types mentioned in this section, but may not be an `Add`. When an `Add` is added to an `Add`, we merge their dictionaries and add up matching coefficients to create a single Add.
+
+### Representation of arithmetic
+
+Linear combinations such as $\alpha_1  x_1 + \alpha_2 x_2 +...+ \alpha_n x_n$ are represented by `Add(Dict(x₁ => α₁, x₂ => α₂, ..., xₙ => αₙ))`. Now $x_n$ may themselves be other types mentioned here, except for `Add`. When an `Add` is added to an `Add`, we merge their dictionaries and add up matching coefficients to create a single Add.
 
 Similarly, $x_1^{m_1}x_2^{m_2}...x_{m_n}$ is represented by
 `Mul(Dict(x₁ => m₁, x₂ => m₂, ..., xₙ => mₙ))`. $x_i$ may not themselves be `Mul`, multiplying a Mul with another Mul returns a flattened Mul.
 
 $p / q$ is represented by `Div(p, q)`. The result of `*` on `Div` is maintainted as a `Div`. For example, `Div(p_1, q_1) * Div(p_2, q_2)` results in `Div(p_1 * p_2, q_1 * q_2)` and so on. The effect is, in `Div(p, q)`, `p` or `q` or, if they are Mul, any of their multiplicands is not a Div. So `Mul`s must always be nested inside a `Div` and can never show up immediately wrapping it.
 
+Note that this storage performs a preliminary simplification which suffices to simplify numeric expressions to a large extent already during construction.
 
 ### Polynomial representation
 
-Packages like DynamicPolynomials.jl provide even more efficient representations for polynomials. They also have efficient operations such as multi-variate polynomial GCD. However, DynamicPolynomials can only represent flat polynomials. For example, `(x-3)*(x+5)` can only be represented as `(x^2) + 15 - 8x`. Moreover, DynamicPolynomials does not have ways to represent generic Terms such as `sin(x-y)` in the tree.
+Packages like DynamicPolynomials.jl provide representations that are even more efficient than the `Add` and `Mul` types mentioned above, and are designed specifically for multi-variate polynomials. They also provide common efficient algorithms such as multi-variate polynomial GCD. However, DynamicPolynomials can only represent flat polynomials. For example, `(x-3)*(x+5)` can only be represented as `(x^2) + 15 - 8x`. Moreover, DynamicPolynomials does not have ways to represent generic Terms such as `sin(x-y)` in the tree.
 
-To reconcile these differences while being able to use the efficient representation of DynamicPolynomials we have the `PolyForm` type. This type holds a polynomial and the mappings necessary to present them as a SymbolicUtils expression.  The mappings constructed for the conversion are 1) a bijection from DynamicPolynomials PolyVar type to a Symbolics `Sym`, and 2) a mapping from `Sym`s to non-polynomial terms that the `Sym`s stand-in for. These terms may themselves contain PolyForm if there are polynomials inside them. The mappings are transiently global, that is, when all references to the mappings go out of scope, they are released and re-created.
+To reconcile these differences while being able to use the efficient representation of DynamicPolynomials we have the `PolyForm` type. This type holds a polynomial and the mappings necessary to present the polynomial as a SymbolicUtils expression (i.e. by defining `operation` and `arguments`).  The mappings constructed for the conversion are 1) a bijection from DynamicPolynomials PolyVar type to a Symbolics `Sym`, and 2) a mapping from `Sym`s to non-polynomial terms that the `Sym`s stand-in for. These terms may themselves contain PolyForm if there are polynomials inside them. The mappings are transiently global, that is, when all references to the mappings go out of scope, they are released and re-created.
 
 ```julia
 julia> @syms x y
@@ -29,7 +32,7 @@ julia> PolyForm((x-3)*(y-5))
 x*y + 15 - 5x - 3y
 ```
 
-Further, generic terms such as `sin` or `cos` terms are replaced with a symbol when representing the polynomial.
+Terms for which the `operation` is not `+`, `*`, or `^` are replaced with a generated symbol when representing the polynomial, and a mapping from this new symbol to the original expression it stands-in for is maintained as stated above.
 
 ```julia
 julia> p = PolyForm((sin(x) + cos(x))^2)
@@ -39,20 +42,20 @@ julia> p.p # this is the actual DynamicPolynomial stored
 cos_3658410937268741549² + 2cos_3658410937268741549sin_10720964503106793468 + sin_10720964503106793468²
 ```
 
-By default, polynomials inside generic terms are not also converted to PolyForm. For example,
+By default, polynomials inside non-polynomial terms are not also converted to PolyForm. For example,
 
 ```julia
 julia> PolyForm(sin((x-3)*(y-5)))
 sin((x - 3)*(y - 5))
 ```
-But you can pass in the `recurse=true` keyword argument to get this going.
+But you can pass in the `recurse=true` keyword argument to do this.
 
 ```julia
 julia> PolyForm(sin((x-3)*(y-5)), recurse=true)
 sin(x*y + 15 - 5x - 3y)
 ```
 
-Polynomials are constructed by first turning symbols and generic terms into Polynomial variables and then applying the `+`, `*`, `^` operations on these variables. You can control which of these operations are actually constructed with the `Fs` keyword argument. It is a Union type of the functions to apply. For example, let's say you want to turn terms into polynomials by only applying the `+` and `^` operations, and want to preserve `*` operations as-is, you could pass in `Fs=Union{typeof(+), typeof(^)}`
+Polynomials are constructed by first turning symbols and non-polynomial terms into DynamicPolynomials-style variables and then applying the `+`, `*`, `^` operations on these variables. You can control the list of the polynomial operations with the `Fs` keyword argument. It is a `Union` type of the functions to apply. For example, let's say you want to turn terms into polynomials by only applying the `+` and `^` operations, and want to preserve `*` operations as-is, you could pass in `Fs=Union{typeof(+), typeof(^)}`
 
 ```julia
 julia> PolyForm((x+y)^2*(x-y), Fs=Union{typeof(+), typeof(^)}, recurse=true)

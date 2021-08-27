@@ -45,6 +45,7 @@ const MP = MultivariatePolynomials
 import DynamicPolynomials
 export expand
 include("abstractalgebra.jl")
+include("polyform.jl")
 
 # Term ordering
 include("ordering.jl")

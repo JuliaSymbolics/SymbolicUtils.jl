@@ -1,10 +1,11 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "0.13.4"
+version = "0.14.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+Bijections = "e2ed5e7c-b2de-5872-ae92-c73ca462fb04"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"

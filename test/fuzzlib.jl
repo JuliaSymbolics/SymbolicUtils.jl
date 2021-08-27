@@ -46,8 +46,8 @@ const num_spec = let
     nopow  = filter(x->x!==(^), binops)
     twoargfns = vcat(nopow, (x,y)->x isa Union{Int, Rational, Complex{<:Rational}} ? x * y : x^y)
     fns = vcat(1 .=> vcat(SymbolicUtils.monadic, [one, zero]),
-               2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5)),
-    3 .=> [+, *])
+               2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5), fill(/, 40)),
+               3 .=> [+, *])
 
 
     (leaves=leaf_funcs, funcs=fns, input=rand_input)
@@ -224,7 +224,7 @@ end
 
 test_dict = Dict{Any, Rational{BigInt}}(a=>1,b=>-1,c=>2,d=>-2,e=>5//3,g=>-2//3)
 function fuzz_addmulpow(lvl, d=test_dict)
-    l, r = gen_expr()
+    l, r = gen_expr(lvl)
     rl = try
         substitute(l, d)
     catch err
@@ -244,6 +244,7 @@ function fuzz_addmulpow(lvl, d=test_dict)
             @test true
         else
             println("Weird bug here:")
+            @show d
             @show r l
             @show rl rr
             @test false

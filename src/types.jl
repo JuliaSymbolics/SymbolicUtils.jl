@@ -468,6 +468,14 @@ function print_arg(io, f, x)
     end
 end
 
+function remove_minus(t)
+    !istree(t) && return -t
+    @assert operation(t) == (*)
+    args = arguments(t)
+    @assert args[1] < 0
+    [-args[1], args[2:end]...]
+end
+
 function show_add(io, args)
     negs = filter(isnegative, args)
     nnegs = filter(!isnegative, args)
@@ -481,7 +489,7 @@ function show_add(io, args)
             print_arg(io, -, t)
         else
             print(io, " - ")
-            print_arg(io, -t, paren=true)
+            show_mul(io, remove_minus(t))
         end
     end
 end
@@ -503,10 +511,16 @@ end
 function show_mul(io, args)
     length(args) == 1 && return print_arg(io, *, args[1])
 
-    paren_scalar = (args[1] isa Complex && !_iszero(imag(args[1]))) || args[1] isa Rational || (args[1] isa Number && !isfinite(args[1]))
     minus = args[1] isa Number && args[1] == -1
     unit = args[1] isa Number && args[1] == 1
-    nostar = !paren_scalar && args[1] isa Number && !(args[2] isa Number)
+
+    paren_scalar = (args[1] isa Complex && !_iszero(imag(args[1]))) ||
+                   args[1] isa Rational ||
+                   (args[1] isa Number && !isfinite(args[1]))
+
+    nostar = minus || unit ||
+            (!paren_scalar && args[1] isa Number && !(args[2] isa Number))
+
     for (i, t) in enumerate(args)
         if i != 1
             if i==2 && nostar
@@ -824,7 +838,18 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 
-*(a::SN, b::SN) = Mul(mul_t(a,b), makemul(1, a, b)...)
+function *(a::SN, b::SN)
+    # Always make sure Div wraps Mul
+    if a isa Div && b isa Div
+        Div(a.num * b.num, a.den * b.den)
+    elseif a isa Div
+        Div(a.num * b, a.den)
+    elseif b isa Div
+        Div(a * b.num, b.den)
+    else
+        Mul(mul_t(a,b), makemul(1, a, b)...)
+    end
+end
 
 *(a::Mul, b::Mul) = Mul(mul_t(a, b),
                         a.coeff * b.coeff,
@@ -835,6 +860,8 @@ function *(a::Number, b::SN)
         a
     elseif isone(a)
         b
+    elseif b isa Div
+        Div(a*b.num, b.den)
     elseif b isa Add
         # 2(a+b) -> 2a + 2b
         T = promote_symtype(+, typeof(a), symtype(b))
@@ -846,8 +873,6 @@ end
 
 *(a::SN, b::Number) = b * a
 
-/(a::Union{SN,Number}, b::SN) = a * b^(-1)
-
 \(a::SN, b::Union{Number, SN}) = b / a
 
 \(a::Number, b::SN) = b / a
@@ -857,6 +882,62 @@ end
 //(a::Union{SN, Number}, b::SN) = a / b
 
 //(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
+
+"""
+    Div(numerator_factors, denominator_factors, simplified=false)
+
+"""
+struct Div{T,N,D, M} <: Symbolic{T}
+    num::N
+    den::D
+    simplified::Bool
+    metadata::M
+end
+
+Base.hash(x::Div, u::UInt64) = hash(x.num, hash(x.den, u))
+Base.isequal(x::Div, y::Div) = isequal(x.num, y.num) && isequal(x.den, y.den)
+
+function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
+    @assert !(n isa AbstractArray)
+    @assert !(d isa AbstractArray)
+    Div{T, typeof(n), typeof(d), typeof(metadata)}(n, d, simplified, metadata)
+end
+
+function Div(n,d, simplified=false; kw...)
+    Div{promote_symtype((/), symtype(n), symtype(d))}(n,d, simplified; kw...)
+end
+
+function numerators(d::Div)
+    x = d.num
+    istree(x) && operation(x) == (*) ? arguments(x) : [x]
+end
+
+function denominators(d::Div)
+    x = d.den
+    istree(x) && operation(x) == (*) ? arguments(x) : [x]
+end
+
+istree(d::Div) = true
+
+operation(d::Div) = (/)
+
+function arguments(d::Div)
+    [d.num, d.den]
+end
+
+Base.show(io::IO, d::Div) = show_term(io, d)
+
+function /(a::Union{SN,Number}, b::SN)
+    if a isa Div && b isa Div
+        Div(a.num * b.den, a.den * b.num)
+    elseif a isa Div
+        Div(a.num, a.den * b)
+    elseif b isa Div
+        Div(a * b.den, b.num)
+    else
+        Div(a,b)
+    end
+end
 
 """
     Pow(base, exp)
@@ -967,7 +1048,7 @@ function mapvalues(f, d1::AbstractDict)
 end
 
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
-                          Add{<:Number}, Pow{<:Number}}
+                          Add{<:Number}, Pow{<:Number}, Div{<:Number}}
 
 function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
     if T === nothing
@@ -977,6 +1058,9 @@ function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
         Add(T, makeadd(1, 0, args...)...; metadata=metadata)
     elseif f == (*)
         Mul(T, makemul(1, args...)...; metadata=metadata)
+    elseif f == (/)
+        @assert length(args) == 2
+        Div{T}(args...; metadata=metadata)
     elseif f == (^) && length(args) == 2
         Pow{T}(makepow(args...)...; metadata=metadata)
     else
@@ -1016,7 +1100,7 @@ AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 
 print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show_type=show_type, maxdepth=maxdepth, kw...)
-function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; show_type=false, kw...)
+function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow, Div}; show_type=false, kw...)
     AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
         if istree(y)
             print(io, operation(y))

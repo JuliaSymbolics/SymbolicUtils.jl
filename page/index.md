@@ -20,6 +20,7 @@ where appropriate -->
 - Fast expressions
 - A [rule-based rewriting language](/rewrite/#rule-based_rewriting).
 - A [combinator library](/rewrite/#composing_rewriters) for making rewriters.
+- [Efficient representation](/representation/) of numeric expressions
 - Type promotion:
   - Symbols (`Sym`s) carry type information. ([read more](#creating_symbolic_expressions))
   - Compound expressions composed of `Sym`s propagate type information. ([read more](#expression_interface))
@@ -131,7 +132,7 @@ g(2//5, g(1, β))
 
 ## Expression interface
 
-Symbolic expressions are of type `Term{T}`, `Add{T}`, `Mul{T}` or `Pow{T}` and denote some function call where one or more arguments are themselves such expressions or `Sym`s.
+Symbolic expressions are of type `Term{T}`, `Add{T}`, `Mul{T}`, `Pow{T}` or `Div{T}` and denote some function call where one or more arguments are themselves such expressions or `Sym`s. See more about the representation [here](/representation/).
 
 All the expression types support the following:
 
@@ -155,8 +156,10 @@ The rules with which the canonical form of `Symbolic{<:Number}` terms are constr
 
  -  `0 + x`, `1 * x` and `x^1` always gives `x`
  -  `0 * x` always gives `0` and `x ^ 0` gives `1`
- -  `-x`, `1/x` and `x\1` get transformed into `(-1)*x`, `x^(-1)` and `x^(-1)`.
+ -  `-x` becomes `(-1)*x`
  -  commutativity and associativity over `+` and `*` are assumed. Re-ordering of terms will be done under a [total order](https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/ordering.jl)
+ - `p/q * x` or `x * p/q` results in `(p*x)/q`
+ - `p/q * x/y` results in `(p*x)/(q*y)`
  -  `x + ... + x` will be fused into `n*x` with type `Mul`
  -  `x * ... * x` will be fused into `x^n` with type `Pow`
  -  sum of `Add`'s are fused

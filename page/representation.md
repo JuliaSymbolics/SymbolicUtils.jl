@@ -2,15 +2,15 @@
 
 ### Preliminary representation
 
-Expressions are stored as a tree where the nodes store their children in some efficient data structure. A node `n` is a non-leaf node `istree(n)` is true. For such nodes, `gethead` and `getargs` must be defined. These return the head and args of the term represented by the subtree `n`.
+An expression is stored as a tree where the nodes store their children in some efficient data structure. A node `n` is a non-leaf node if `istree(n)` is true. For such nodes, `operation` and `arguments` must be defined. These return the operation and arguments of the term represented by the subtree `n`.
 
 A generic term is represented with the `Term` type. It simply holds the function `f` being called and a vector of arguments in the order they were passed to `f`. The operators `+` (and `-`), `*`, `/` and `^` create terms with special storage.
 
 Linear combinations such as $\alpha_1  x_1 + \alpha_2 x_2 +...+ \alpha_n x_n$
-are represented by `Add(Dict(x_1 => \alpha_1, x_2 => \alpha_2, ..., x_n => \alpha_n))`. Now $x_n$ may themselves be other types mentioned in this section, but may not be an `Add`. When an `Add` is added to an `Add`, we merge their dictionaries and adding up matching coefficients.
+are represented by `Add(Dict(x₁ => α₁, x₂ => α₂, ..., xₙ => αₙ))`. Now $x_n$ may themselves be other types mentioned in this section, but may not be an `Add`. When an `Add` is added to an `Add`, we merge their dictionaries and add up matching coefficients to create a single Add.
 
-Similarly, $x_1^{m_1}x_2^{m_2}\ellipsisx_{m_n}$ is represented by
-`Mul(Dict(x_1 => m_1, x_2 => m_2,..., x_n => m_n))`. $x_i$ may not themselves be `Mul`, multiplying a Mul with another Mul returns a flattened Mul.
+Similarly, $x_1^{m_1}x_2^{m_2}...x_{m_n}$ is represented by
+`Mul(Dict(x₁ => m₁, x₂ => m₂, ..., xₙ => mₙ))`. $x_i$ may not themselves be `Mul`, multiplying a Mul with another Mul returns a flattened Mul.
 
 $p / q$ is represented by `Div(p, q)`. The result of `*` on `Div` is maintainted as a `Div`. For example, `Div(p_1, q_1) * Div(p_2, q_2)` results in `Div(p_1 * p_2, q_1 * q_2)` and so on. The effect is, in `Div(p, q)`, `p` or `q` or, if they are Mul, any of their multiplicands is not a Div. So `Mul`s must always be nested inside a `Div` and can never show up immediately wrapping it.
 

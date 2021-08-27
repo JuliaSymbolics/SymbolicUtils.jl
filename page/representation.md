@@ -14,9 +14,10 @@ Linear combinations such as $\alpha_1  x_1 + \alpha_2 x_2 +...+ \alpha_n x_n$ ar
 Similarly, $x_1^{m_1}x_2^{m_2}...x_{m_n}$ is represented by
 `Mul(Dict(x₁ => m₁, x₂ => m₂, ..., xₙ => mₙ))`. $x_i$ may not themselves be `Mul`, multiplying a Mul with another Mul returns a "flattened" Mul.
 
-$p / q$ is represented by `Div(p, q)`. The result of `*` on `Div` is maintainted as a `Div`. For example, `Div(p_1, q_1) * Div(p_2, q_2)` results in `Div(p_1 * p_2, q_1 * q_2)` and so on. The effect is, in `Div(p, q)`, `p` or `q` or, if they are Mul, any of their multiplicands is not a Div. So `Mul`s must always be nested inside a `Div` and can never show up immediately wrapping it.
+Note that `Add` and `Mul` types perform a preliminary simplification which suffices to simplify numeric expressions to a large extent during construction.
 
-Note that this storage performs a preliminary simplification which suffices to simplify numeric expressions to a large extent already during construction.
+$p / q$ is represented by `Div(p, q)`. The result of `*` on `Div` is maintainted as a `Div`. For example, `Div(p_1, q_1) * Div(p_2, q_2)` results in `Div(p_1 * p_2, q_1 * q_2)` and so on. The effect is, in `Div(p, q)`, `p` or `q` or, if they are Mul, any of their multiplicands is not a Div. So `Mul`s must always be nested inside a `Div` and can never show up immediately wrapping it. This rule sets up an expression so that it helps the `simplify_fractions` procedure described two sections below.
+
 
 ### Polynomial representation
 

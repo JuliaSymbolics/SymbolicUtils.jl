@@ -55,6 +55,7 @@
     </style>
     <nav class="sidebar-nav" style="opacity: 0.9">
       <a class="sidebar-nav-item active" href="/">Getting Started</a>
+      <a class="sidebar-nav-item " href="/representation/">Term representation</a>
       <a class="sidebar-nav-item " href="/rewrite/">Term Rewriting</a>
       <a class="sidebar-nav-item " href="/interface/">Interfacing</a>
       <a class="sidebar-nav-item " href="/codegen/">Code generation</a>
@@ -87,6 +88,8 @@
 <li><p>A <a href="/rewrite/#rule-based_rewriting">rule-based rewriting language</a>.</p>
 </li>
 <li><p>A <a href="/rewrite/#composing_rewriters">combinator library</a> for making rewriters.</p>
+</li>
+<li><p><a href="/representation/">Efficient representation</a> of numeric expressions</p>
 </li>
 <li><p>Type promotion:</p>
 <ul>
@@ -133,11 +136,11 @@ expr2 &#61; α*cos&#40;z&#41;^2 &#43; β*sin&#40;w&#41;^2
 
 expr1 &#43; expr2</code></pre><pre><code class="plaintext code-output">α*(sin(w)^2) + α*(cos(z)^2) + β*(sin(w)^2) + β*(cos(z)^2)</code></pre>
 <p>SymbolicUtils automatically simplifies</p>
-<pre><code class="language-julia">2w &#43; 3w - 3z &#43; α</code></pre><pre><code class="plaintext code-output">α + 5w - (3z)</code></pre>
+<pre><code class="language-julia">2w &#43; 3w - 3z &#43; α</code></pre><pre><code class="plaintext code-output">α + 5w - 3z</code></pre>
 <p>and reorders</p>
 <pre><code class="language-julia">&#40;z &#43; w&#41;*&#40;α &#43; β&#41;</code></pre><pre><code class="plaintext code-output">(w + z)*(α + β)</code></pre>
 <p>expressions of type <code>Symbolic&#123;&lt;:Number&#125;</code> &#40;which includes <code>Sym&#123;Real&#125;</code>&#41; when they are created. It also does constant elimination &#40;including rational numbers&#41;</p>
-<pre><code class="language-julia">5 &#43; 2w - 3z &#43; α - &#40;β &#43; 5//3&#41; &#43; 3w - 2 &#43; 3//2 * β</code></pre><pre><code class="plaintext code-output">(4//3) + α + 5w + (1//2)*β - (3z)</code></pre>
+<pre><code class="language-julia">5 &#43; 2w - 3z &#43; α - &#40;β &#43; 5//3&#41; &#43; 3w - 2 &#43; 3//2 * β</code></pre><pre><code class="plaintext code-output">(4//3) + α + 5w + (1//2)*β - 3z</code></pre>
 <p>It&#39;s worth remembering that the expression may be transformed with respect to the input when it&#39;s created.</p>
 <p><strong>Function-like symbols</strong></p>
 <p>Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same <code>symtype</code>.</p>
@@ -151,7 +154,7 @@ f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre><pre><code 
 <p>This works because <code>g</code> &quot;returns&quot; a <code>Real</code>.</p>
 <pre><code class="language-julia">g&#40;2//5, g&#40;1, β&#41;&#41;</code></pre><pre><code class="plaintext code-output">g(2//5, g(1, β))</code></pre>
 <h2 id="expression_interface"><a href="#expression_interface" class="header-anchor">Expression interface</a></h2>
-<p>Symbolic expressions are of type <code>Term&#123;T&#125;</code>, <code>Add&#123;T&#125;</code>, <code>Mul&#123;T&#125;</code> or <code>Pow&#123;T&#125;</code> and denote some function call where one or more arguments are themselves such expressions or <code>Sym</code>s.</p>
+<p>Symbolic expressions are of type <code>Term&#123;T&#125;</code>, <code>Add&#123;T&#125;</code>, <code>Mul&#123;T&#125;</code>, <code>Pow&#123;T&#125;</code> or <code>Div&#123;T&#125;</code> and denote some function call where one or more arguments are themselves such expressions or <code>Sym</code>s. See more about the representation <a href="/representation/">here</a>.</p>
 <p>All the expression types support the following:</p>
 <ul>
 <li><p><code>istree&#40;x&#41;</code> – always returns <code>true</code> denoting, <code>x</code> is not a leaf node like Sym or a literal.</p>
@@ -174,9 +177,13 @@ f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre><pre><code 
 </li>
 <li><p><code>0 * x</code> always gives <code>0</code> and <code>x ^ 0</code> gives <code>1</code></p>
 </li>
-<li><p><code>-x</code>, <code>1/x</code> and <code>x\1</code> get transformed into <code>&#40;-1&#41;*x</code>, <code>x^&#40;-1&#41;</code> and <code>x^&#40;-1&#41;</code>.</p>
+<li><p><code>-x</code> becomes <code>&#40;-1&#41;*x</code></p>
 </li>
 <li><p>commutativity and associativity over <code>&#43;</code> and <code>*</code> are assumed. Re-ordering of terms will be done under a <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/ordering.jl">total order</a></p>
+</li>
+<li><p><code>p/q * x</code> or <code>x * p/q</code> results in <code>&#40;p*x&#41;/q</code></p>
+</li>
+<li><p><code>p/q * x/y</code> results in <code>&#40;p*x&#41;/&#40;q*y&#41;</code></p>
 </li>
 <li><p><code>x &#43; ... &#43; x</code> will be fused into <code>n*x</code> with type <code>Mul</code></p>
 </li>
@@ -208,7 +215,7 @@ f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre><pre><code 
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 17, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 27, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

@@ -55,6 +55,7 @@
     </style>
     <nav class="sidebar-nav" style="opacity: 0.9">
       <a class="sidebar-nav-item " href="/">Getting Started</a>
+      <a class="sidebar-nav-item " href="/representation/">Term representation</a>
       <a class="sidebar-nav-item " href="/rewrite/">Term Rewriting</a>
       <a class="sidebar-nav-item " href="/interface/">Interfacing</a>
       <a class="sidebar-nav-item " href="/codegen/">Code generation</a>
@@ -384,7 +385,7 @@ true</code></pre>
       <h2 class="doc-header" id="expand">
         <a href="#expand">expand</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">expand&#40;expr, variable_type::Type&#61;DynamicPolynomials.PolyVar&#123;true&#125;&#41;</code></pre>
+      <div class="doc-content"><pre><code class="language-julia">expand&#40;expr&#41;</code></pre>
 <p>Expand expressions by distributing multiplication over addition, e.g., <code>a*&#40;b&#43;c&#41;</code> becomes <code>ab&#43;ac</code>.</p>
 <p><code>expand</code> uses replace symbols and non-algebraic expressions by variables of type <code>variable_type</code> to compute the distribution using a specialized sparse multivariate polynomials implementation. <code>variable_type</code> can be any subtype of <code>MultivariatePolynomials.AbstractVariable</code>.</p>
 </div>
@@ -437,7 +438,7 @@ julia&gt; @timerewrite simplify&#40;expr&#41;
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 17, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 27, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

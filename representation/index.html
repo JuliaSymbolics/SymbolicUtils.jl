@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+   <link rel="stylesheet" href="/libs/katex/katex.min.css">
+     
+   <link rel="stylesheet" href="/libs/highlight/github.min.css">
+   
+  <link rel="stylesheet" href="/css/franklin.css">
+<link rel="stylesheet" href="/css/poole_hyde.css">
+<link rel="stylesheet" href="/css/custom.css">
+<!-- style adjustments -->
+<style>
+  html {font-size: 17px;}
+  .franklin-content {position: relative; padding-left: 8%; padding-right: 5%;}
+  @media (min-width: 940px) {
+    .franklin-content {width: 100%; margin-left: auto; margin-right: auto;}
+  }
+  @media (max-width: 768px) {
+    .franklin-content {padding-left: 6%; padding-right: 6%;}
+  }
+</style>
+<link rel="icon" href="/assets/favicon.png">
+
+   <title>SymbolicUtils.jl</title>  
+</head>
+<body>
+<div class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <h1 class="sidebar-title"><a href="/">SymbolicUtils<span style="opacity:0.4">.jl</span></a></h1>
+      <br>
+    </div>
+    <style>
+@media (min-width: 768px) {
+    .sidebar-nav {
+    }
+}
+    .sidebar .container.sidebar-sticky {
+        top: 4rem;
+    }
+    .sidebar-nav .sidebar-nav-item.active {
+        box-sizing: border-box;
+        border-bottom: 1px #f1f1f1 solid;
+        margin-right: -1em;
+        margin-left: -0.5em;
+        padding-left: 0.5em;
+        color: white;
+        font-weight: normal !important;
+    }
+    .sidebar-nav .sidebar-nav-item {
+        color: #cccccc;
+        margin: 0.25em 0;
+    }
+    </style>
+    <nav class="sidebar-nav" style="opacity: 0.9">
+      <a class="sidebar-nav-item " href="/">Getting Started</a>
+      <a class="sidebar-nav-item active" href="/representation/">Term representation</a>
+      <a class="sidebar-nav-item " href="/rewrite/">Term Rewriting</a>
+      <a class="sidebar-nav-item " href="/interface/">Interfacing</a>
+      <a class="sidebar-nav-item " href="/codegen/">Code generation</a>
+      <a class="sidebar-nav-item " href="/api/">API documentation</a>
+    </nav>
+
+  </div>
+  <div style="font-size: 0.85em; bottom: 3em; position: fixed">
+      <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">Go to GitHub repository &rarr;</a> <br>  <br>
+
+      <a href="https://julialang.org/"><img src="https://raw.githubusercontent.com/JuliaLang/julia-logo-graphics/master/images/julia-logo-dark.svg" height="32" style="display: inline-block; margin-bottom: -8px; opacity: 0.7">
+          powered.</a>
+  </div>
+</div>
+<div class="content container">
+
+<!-- Content appended here -->
+<div class="franklin-content"><h2 id="term_representation_and_simplification"><a href="#term_representation_and_simplification" class="header-anchor">Term representation and simplification</a></h2>
+<h3 id="preliminary_representation"><a href="#preliminary_representation" class="header-anchor">Preliminary representation</a></h3>
+<p>Expressions are stored as a tree where the nodes store their children in some efficient data structure. A node <code>n</code> is a non-leaf node <code>istree&#40;n&#41;</code> is true. For such nodes, <code>gethead</code> and <code>getargs</code> must be defined. These return the head and args of the term represented by the subtree <code>n</code>.</p>
+<p>A generic term is represented with the <code>Term</code> type. It simply holds the function <code>f</code> being called and a vector of arguments in the order they were passed to <code>f</code>. The operators <code>&#43;</code> &#40;and <code>-</code>&#41;, <code>*</code>, <code>/</code> and <code>^</code> create terms with special storage.</p>
+<p>Linear combinations such as \(\alpha_1  x_1 + \alpha_2 x_2 +...+ \alpha_n x_n\) are represented by <code>Add&#40;Dict&#40;x_1 &#61;&gt; \alpha_1, x_2 &#61;&gt; \alpha_2, ..., x_n &#61;&gt; \alpha_n&#41;&#41;</code>. Now \(x_n\) may themselves be other types mentioned in this section, but may not be an <code>Add</code>. When an <code>Add</code> is added to an <code>Add</code>, we merge their dictionaries and adding up matching coefficients.</p>
+<p>Similarly, \(x_1^{m_1}x_2^{m_2}\ellipsisx_{m_n}\) is represented by <code>Mul&#40;Dict&#40;x_1 &#61;&gt; m_1, x_2 &#61;&gt; m_2,..., x_n &#61;&gt; m_n&#41;&#41;</code>. \(x_i\) may not themselves be <code>Mul</code>, multiplying a Mul with another Mul returns a flattened Mul.</p>
+<p>\(p / q\) is represented by <code>Div&#40;p, q&#41;</code>. The result of <code>*</code> on <code>Div</code> is maintainted as a <code>Div</code>. For example, <code>Div&#40;p_1, q_1&#41; * Div&#40;p_2, q_2&#41;</code> results in <code>Div&#40;p_1 * p_2, q_1 * q_2&#41;</code> and so on. The effect is, in <code>Div&#40;p, q&#41;</code>, <code>p</code> or <code>q</code> or, if they are Mul, any of their multiplicands is not a Div. So <code>Mul</code>s must always be nested inside a <code>Div</code> and can never show up immediately wrapping it.</p>
+<h3 id="polynomial_representation"><a href="#polynomial_representation" class="header-anchor">Polynomial representation</a></h3>
+<p>Packages like DynamicPolynomials.jl provide even more efficient representations for polynomials. They also have efficient operations such as multi-variate polynomial GCD. However, DynamicPolynomials can only represent flat polynomials. For example, <code>&#40;x-3&#41;*&#40;x&#43;5&#41;</code> can only be represented as <code>&#40;x^2&#41; &#43; 15 - 8x</code>. Moreover, DynamicPolynomials does not have ways to represent generic Terms such as <code>sin&#40;x-y&#41;</code> in the tree.</p>
+<p>To reconcile these differences while being able to use the efficient representation of DynamicPolynomials we have the <code>PolyForm</code> type. This type holds a polynomial and the mappings necessary to present them as a SymbolicUtils expression.  The mappings constructed for the conversion are 1&#41; a bijection from DynamicPolynomials PolyVar type to a Symbolics <code>Sym</code>, and 2&#41; a mapping from <code>Sym</code>s to non-polynomial terms that the <code>Sym</code>s stand-in for. These terms may themselves contain PolyForm if there are polynomials inside them. The mappings are transiently global, that is, when all references to the mappings go out of scope, they are released and re-created.</p>
+<pre><code class="language-julia">julia&gt; @syms x y
+&#40;x, y&#41;
+
+julia&gt; PolyForm&#40;&#40;x-3&#41;*&#40;y-5&#41;&#41;
+x*y &#43; 15 - 5x - 3y</code></pre>
+<p>Further, generic terms such as <code>sin</code> or <code>cos</code> terms are replaced with a symbol when representing the polynomial.</p>
+<pre><code class="language-julia">julia&gt; p &#61; PolyForm&#40;&#40;sin&#40;x&#41; &#43; cos&#40;x&#41;&#41;^2&#41;
+&#40;cos&#40;x&#41;^2&#41; &#43; 2cos&#40;x&#41;*sin&#40;x&#41; &#43; &#40;sin&#40;x&#41;^2&#41;
+
+julia&gt; p.p # this is the actual DynamicPolynomial stored
+cos_3658410937268741549² &#43; 2cos_3658410937268741549sin_10720964503106793468 &#43; sin_10720964503106793468²</code></pre>
+<p>By default, polynomials inside generic terms are not also converted to PolyForm. For example,</p>
+<pre><code class="language-julia">julia&gt; PolyForm&#40;sin&#40;&#40;x-3&#41;*&#40;y-5&#41;&#41;&#41;
+sin&#40;&#40;x - 3&#41;*&#40;y - 5&#41;&#41;</code></pre>
+<p>But you can pass in the <code>recurse&#61;true</code> keyword argument to get this going.</p>
+<pre><code class="language-julia">julia&gt; PolyForm&#40;sin&#40;&#40;x-3&#41;*&#40;y-5&#41;&#41;, recurse&#61;true&#41;
+sin&#40;x*y &#43; 15 - 5x - 3y&#41;</code></pre>
+<p>Polynomials are constructed by first turning symbols and generic terms into Polynomial variables and then applying the <code>&#43;</code>, <code>*</code>, <code>^</code> operations on these variables. You can control which of these operations are actually constructed with the <code>Fs</code> keyword argument. It is a Union type of the functions to apply. For example, let&#39;s say you want to turn terms into polynomials by only applying the <code>&#43;</code> and <code>^</code> operations, and want to preserve <code>*</code> operations as-is, you could pass in <code>Fs&#61;Union&#123;typeof&#40;&#43;&#41;, typeof&#40;^&#41;&#125;</code></p>
+<pre><code class="language-julia">julia&gt; PolyForm&#40;&#40;x&#43;y&#41;^2*&#40;x-y&#41;, Fs&#61;Union&#123;typeof&#40;&#43;&#41;, typeof&#40;^&#41;&#125;, recurse&#61;true&#41;
+&#40;&#40;x - &#40;y&#41;&#41;*&#40;&#40;x^2&#41; &#43; 2x*y &#43; &#40;y^2&#41;&#41;&#41;</code></pre>
+<p>Note that in this case <code>recurse&#61;true</code> was necessary as otherwise the polynomialization would not descend into the <code>*</code> operation as it is now considered a generic operation.</p>
+<h3 id="simplifying_fractions"><a href="#simplifying_fractions" class="header-anchor">Simplifying fractions</a></h3>
+<p><code>simplify_fractions&#40;expr&#41;</code> recurses through <code>expr</code> finding <code>Div</code>s and simplifying them using polynomial divison.</p>
+<p>First the factors of the numerators and the denominators are converted into PolyForm objects, then numerators and denominators are divided by their respective pairwise GCDs. The conversion of the numerator and denominator into PolyForm is set up so that <code>simplify_fractions</code> does not result in increase in the expression size due to polynomial expansion. Specifically, the factors are individually converted into PolyForm objects, and any powers of polynomial is not expanded, but the divison process repeatedly divides them as many times as the power.</p>
+<pre><code class="language-julia">julia&gt; simplify_fractions&#40;&#40;x*y&#43;5x&#43;3y&#43;15&#41;/&#40;&#40;x&#43;3&#41;*&#40;x-4&#41;&#41;&#41;
+&#40;5.0 &#43; y&#41; / &#40;x - 4&#41;
+
+julia&gt; simplify_fractions&#40;&#40;x*y&#43;5x&#43;3y&#43;15&#41;^2/&#40;&#40;x&#43;3&#41;*&#40;x-4&#41;&#41;&#41;
+&#40;&#40;5.0 &#43; y&#41;*&#40;15 &#43; 5x &#43; x*y &#43; 3y&#41;&#41; / &#40;x - 4&#41;
+
+julia&gt; simplify_fractions&#40;3/&#40;x&#43;3&#41; &#43; x/&#40;x&#43;3&#41;&#41;
+1
+
+julia&gt; simplify_fractions&#40;sin&#40;x&#41;/cos&#40;x&#41; &#43; cos&#40;x&#41;/sin&#40;x&#41;&#41;
+&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2&#41; / &#40;cos&#40;x&#41;*sin&#40;x&#41;&#41;
+
+julia&gt; simplify&#40;ans&#41;
+1 / &#40;cos&#40;x&#41;*sin&#40;x&#41;&#41;</code></pre>
+<div class="page-foot">
+  <div class="copyright">
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 27, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+  </div>
+</div>
+</div><!-- CONTENT ENDS HERE -->
+    </div>  <!-- div: content container -->
+    
+        <script src="/libs/katex/katex.min.js"></script>
+<script src="/libs/katex/auto-render.min.js"></script>
+<script>renderMathInElement(document.body)</script>
+
+    
+    <script>
+        var els =  document.querySelectorAll(".language-julia")
+        for (var i=0, l = els.length; i < l; i++) {
+            var el = els[i]
+            var out = el.parentNode.nextSibling
+            if (out.tagName === "PRE") {
+                out.className = out.className + " code-output"
+            }
+        }
+    </script>
+    
+        <script src="/libs/highlight/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+
+    
+  </body>
+</html>

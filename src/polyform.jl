@@ -166,11 +166,11 @@ end
 
 PolyForm(x, args...;kw...) = x
 
-istree(x::PolyForm) = true
+TermInterface.istree(x::Type{PolyForm}) = true
 
-operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
+TermInterface.operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
-function arguments(x::PolyForm{T}) where {T}
+function TermInterface.arguments(x::PolyForm{T}) where {T}
 
     function is_var(v)
         MP.nterms(v) == 1 &&

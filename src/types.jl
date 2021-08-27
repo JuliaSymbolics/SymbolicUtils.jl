@@ -860,11 +860,11 @@ function denominators(d::Div)
     istree(x) && operation(x) == (*) ? arguments(x) : [x]
 end
 
-istree(d::Div) = true
+TermInterface.istree(d::Type{Div}) = true
 
-operation(d::Div) = (/)
+TermInterface.operation(d::Div) = (/)
 
-function arguments(d::Div)
+function TermInterface.arguments(d::Div)
     [d.num, d.den]
 end
 

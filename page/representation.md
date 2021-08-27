@@ -1,13 +1,13 @@
 ## Term representation and simplification
 
-Performance of symbolic simplification depends on the datastructures used to represent them. Efficient datastructures often have the advantage of automatic simplification, and of efficient storage.
+Performance of symbolic simplification depends on the datastructures used to represent terms. Efficient datastructures often have the advantage of automatic simplification, and of efficient storage.
 
-The most basic term representation simply holds a function call and stores the function and the arguments it is called with. This is done by the `Term` type in Symbolics. Functions that aren't commutative or associative, such as `sin` or `hypot` are stored as `Term`s. Commutatative and associative operations like `+`, `*`, and their supporting operations like `-`, `/` and `^`, when used on terms of type `<:Number`, stand to gain from the use of more efficient datastrucutres.
+The most basic term representation simply holds a function call and stores the function and the arguments it is called with. This is done by the `Term` type in SymbolicUtils. Functions that aren't commutative or associative, such as `sin` or `hypot` are stored as `Term`s. Commutatative and associative operations like `+`, `*`, and their supporting operations like `-`, `/` and `^`, when used on terms of type `<:Number`, stand to gain from the use of more efficient datastrucutres.
 
-All term representations must support `operation` and `arguments` functions. And they must define `istree` to return `true` when called with an instance of the type. Generic term-manipulation programs such as the rule-based rewriter make use of this interface to inspect expressions. In this way, the interface wins back the generality lost by having a zoo of term representations instead of one.
+All term representations must support `operation` and `arguments` functions. And they must define `istree` to return `true` when called with an instance of the type. Generic term-manipulation programs such as the rule-based rewriter make use of this interface to inspect expressions. In this way, the interface wins back the generality lost by having a zoo of term representations instead of one. (see [interface](/interface/) section for more on this.)
 
 
-### Representation of arithmetic
+### Preliminary representation of arithmetic
 
 Linear combinations such as $\alpha_1  x_1 + \alpha_2 x_2 +...+ \alpha_n x_n$ are represented by `Add(Dict(x₁ => α₁, x₂ => α₂, ..., xₙ => αₙ))`. Here, any $x_i$ may itself be other types mentioned here, except for `Add`. When an `Add` is added to an `Add`, we merge their dictionaries and add up matching coefficients to create a single "flattened" Add.
 

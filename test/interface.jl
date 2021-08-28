@@ -1,5 +1,4 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Sym, operation, arguments, symtype
 using TermInterface
 
 TermInterface.istree(ex::Expr) = ex.head == :call

@@ -185,8 +185,7 @@ function flatten_term(⋆, x)
     flattened_args = []
     for t in args
         if istree(t) && operation(t) === (⋆)
-            append!(flattened_args, arguments(
-t))
+            append!(flattened_args, arguments(t))
         else
             push!(flattened_args, t)
         end
@@ -195,8 +194,7 @@ t))
 end
 
 function sort_args(f, t)
-    args = arguments(
-t)
+    args = arguments(t)
     if length(args) < 2
         return similarterm(t, f, args)
     elseif length(args) == 2

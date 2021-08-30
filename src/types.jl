@@ -123,6 +123,7 @@ struct Sym{T, M} <: Symbolic{T}
     metadata::M
 end
 
+TermInterface.issym(s::Sym) = true
 Base.nameof(s::Sym) = s.name
 
 ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = (n,m) -> Sym{T}(n, metadata=m)

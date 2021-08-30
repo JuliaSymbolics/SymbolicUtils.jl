@@ -28,14 +28,14 @@ PolyForm(sin((x+y)^2), recurse=true) #=> sin((x^2 + (2x)y + y^2))
 """
 struct PolyForm{T, M} <: Symbolic{T}
     p::MP.AbstractPolynomialLike
-    pvar2sym::Bijection{Any,Sym}   # @polyvar x --> @sym x  etc.
+    pvar2sym::Bijection{Any,Any}   # @polyvar x --> @sym x  etc.
     sym2term::Dict{Sym,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
     metadata::M
 end
 
 function (::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T}
     p isa Number && return p
-    MP.isconstant(p) && return convert(Number, p)
+    p isa MP.AbstractPolynomialLike && MP.isconstant(p) && return convert(Number, p)
     PolyForm{T, typeof(m)}(p, d1, d2, m)
 end
 
@@ -51,7 +51,7 @@ clear_dicts() = (PVAR2SYM[] = WeakRef(nothing); SYM2TERM[] = WeakRef(nothing); n
 function get_pvar2sym()
     v = PVAR2SYM[].value
     if v === nothing
-        d = Bijection{Any,Sym}()
+        d = Bijection{Any,Any}()
         PVAR2SYM[] = WeakRef(d)
         return d
     else
@@ -93,7 +93,9 @@ end
 _isone(p::PolyForm) = isone(p.p)
 
 function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
-    if istree(x)
+    if x isa Number
+        return x
+    elseif istree(x)
         if !(symtype(x) <: Number)
             error("Cannot convert $x of symtype $(symtype(x)) into a PolyForm")
         end
@@ -139,9 +141,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
 
             return local_polyize(sym)
         end
-    elseif x isa Number
-        return x
-    elseif x isa Sym
+    elseif issym(x)
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end
@@ -151,7 +151,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     end
 end
 
-function PolyForm(x::Symbolic{<:Number},
+function PolyForm(x,
         pvar2sym=get_pvar2sym(),
         sym2term=get_sym2term(),
         vtype=DynamicPolynomials.PolyVar{true};
@@ -163,8 +163,6 @@ function PolyForm(x::Symbolic{<:Number},
     p = polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)
 end
-
-PolyForm(x, args...;kw...) = x
 
 TermInterface.istree(x::Type{PolyForm}) = true
 

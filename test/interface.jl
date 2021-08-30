@@ -7,6 +7,9 @@ TermInterface.arguments(ex::Expr) = ex.args[2:end]
 TermInterface.similarterm(x::Type{Expr}, head, args, symtype=nothing; metadata=nothing) = 
     Expr(:call, head, args...)
 
+TermInterface.issym(s::Symbol) = true
+Base.nameof(s::Symbol) = s
+
 for f ∈ [:+, :-, :*, :/, :^]
     @eval begin
         Base.$f(x::Union{Expr, Symbol}, y::Number) = Expr(:call, $f, x, y)

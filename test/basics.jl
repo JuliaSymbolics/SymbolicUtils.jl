@@ -229,6 +229,7 @@ end
 
 @testset "div" begin
     @syms x y
+    @test (2x/2y).num isa Sym
     @test (2x/3y).num.coeff == 2//3
     @test (2x/3x).num.coeff == 2//3
     @test (2.5x/3x).num.coeff == 2.5

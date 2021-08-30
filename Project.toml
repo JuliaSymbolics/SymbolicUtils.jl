@@ -1,7 +1,7 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "0.14.0"
+version = "0.15.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -21,6 +21,7 @@ Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
@@ -39,6 +40,7 @@ NaNMath = "0.3"
 Setfield = "0.7"
 SpecialFunctions = "0.10, 1.0"
 StaticArrays = "0.12, 1.0"
+TermInterface = "0.1.7"
 TimerOutputs = "0.5"
 julia = "1.3"
 

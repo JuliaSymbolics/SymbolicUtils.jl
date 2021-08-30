@@ -118,6 +118,8 @@ end
 
 function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
 
+toexpr(O::Expr, st) = O
+
 function toexpr(O, st)
     !istree(O) && return O
     op = operation(O)

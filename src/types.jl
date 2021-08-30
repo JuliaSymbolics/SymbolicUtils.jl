@@ -4,72 +4,15 @@
 #--------------------
 abstract type Symbolic{T} end
 
-### Interface to be defined for `simplify` to work:
 
-"""
-    istree(x::T)
+# TODO_TERMINTERFACE
 
-Check if `x` represents an expression tree. If returns true,
-it will be assumed that `operation(::T)` and `arguments(::T)`
-methods are defined. Definining these three should allow use
-of `simplify` on custom types. Optionally `symtype(x)` can be
-defined to return the expected type of the symbolic expression.
-"""
-istree(x) = false
+TermInterface.symtype(x::Number) = typeof(x)
+TermInterface.symtype(::Symbolic{T}) where {T} = T
 
-"""
-    operation(x::T)
+TermInterface.metadata(s::Symbolic) = s.metadata
 
-Returns the operation (a function object) performed by an expression
-tree. Called only if `istree(::T)` is true. Part of the API required
-for `simplify` to work. Other required methods are `arguments` and `istree`
-"""
-function operation end
-
-"""
-    arguments(x::T)
-
-Returns the arguments (a `Vector`) for an expression tree.
-Called only if `istree(x)` is `true`. Part of the API required
-for `simplify` to work. Other required methods are `operation` and `istree`
-"""
-function arguments end
-
-"""
-    symtype(x)
-
-The supposed type of values in the domain of x. Tracing tools can use this type to
-pick the right method to run or analyse code.
-
-This defaults to `typeof(x)` if `x` is numeric, or `Any` otherwise.
-For the types defined in this package, namely `T<:Symbolic{S}` it is `S`.
-
-Define this for your symbolic types if you want `simplify` to apply rules
-specific to numbers (such as commutativity of multiplication). Or such
-rules that may be implemented in the future.
-"""
-function symtype end
-
-symtype(x::Number) = typeof(x)
-
-symtype(x) = typeof(x)
-
-symtype(::Symbolic{T}) where {T} = T
-
-"""
-    metadata(s)
-
-Get all the metadata of a term or `nothing` if no metadata is defined.
-"""
-metadata(s::Symbolic) = s.metadata
-metadata(s::Any) = nothing
-"""
-    metadata(s, meta)
-
-Set the metadata for `s`. `meta` must be an `ImmutableDict{DataType, Any}` or
-`Nothing`.
-"""
-metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
+TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
@@ -180,6 +123,7 @@ struct Sym{T, M} <: Symbolic{T}
     metadata::M
 end
 
+TermInterface.issym(s::Sym) = true
 Base.nameof(s::Sym) = s.name
 
 ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = (n,m) -> Sym{T}(n, metadata=m)
@@ -345,16 +289,16 @@ function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
     Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
-istree(t::Term) = true
+TermInterface.istree(t::Type{<:Term}) = true
 
 function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
-operation(x::Term) = getfield(x, :f)
+TermInterface.operation(x::Term) = getfield(x, :f)
 
-unsorted_arguments(x) = arguments(x)
-arguments(x::Term) = getfield(x, :arguments)
+unsorted_arguments(x) = TermInterface.arguments(x)
+TermInterface.arguments(x::Term) = getfield(x, :arguments)
 
 function Base.isequal(t1::Term, t2::Term)
     t1 === t2 && return true
@@ -423,11 +367,11 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-similarterm(t, f, args, symtype; metadata=nothing) = f(args...)
-similarterm(t, f, args; metadata=nothing) = similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
-similarterm(t::Term, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
-
-node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
+TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing) = 
+    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
+    
+TermInterface.similarterm(t::Type{<:Term}, f, args, symtype; metadata=nothing) = 
+    Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 #--------------------
 #--------------------
@@ -640,19 +584,19 @@ function Add(T, coeff, dict; metadata=NO_METADATA)
     Add{T, typeof(coeff), typeof(dict), typeof(metadata)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0), metadata)
 end
 
-symtype(a::Add{X}) where {X} = X
+TermInterface.symtype(a::Add{X}) where {X} = X
 
 
-istree(a::Add) = true
+TermInterface.istree(a::Type{Add}) = true
 
-operation(a::Add) = +
+TermInterface.operation(a::Add) = +
 
 function unsorted_arguments(a::Add)
     args = [v*k for (k,v) in a.dict]
     iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-function arguments(a::Add)
+function TermInterface.arguments(a::Add)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
@@ -789,11 +733,11 @@ function Mul(T, a,b; metadata=NO_METADATA)
     end
 end
 
-symtype(a::Mul{X}) where {X} = X
+TermInterface.symtype(a::Mul{X}) where {X} = X
 
-istree(a::Mul) = true
+TermInterface.istree(a::Type{Mul}) = true
 
-operation(a::Mul) = *
+TermInterface.operation(a::Mul) = *
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
@@ -802,7 +746,7 @@ function unsorted_arguments(a::Mul)
     isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
-function arguments(a::Mul)
+function TermInterface.arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
@@ -917,11 +861,11 @@ function denominators(d::Div)
     istree(x) && operation(x) == (*) ? arguments(x) : [x]
 end
 
-istree(d::Div) = true
+TermInterface.istree(d::Type{Div}) = true
 
-operation(d::Div) = (/)
+TermInterface.operation(d::Div) = (/)
 
-function arguments(d::Div)
+function TermInterface.arguments(d::Div)
     [d.num, d.den]
 end
 
@@ -963,16 +907,16 @@ end
 function Pow(a, b; metadata=NO_METADATA)
     Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
 end
-symtype(a::Pow{X}) where {X} = X
+TermInterface.symtype(a::Pow{X}) where {X} = X
 
-istree(a::Pow) = true
+TermInterface.istree(a::Type{Pow}) = true
 
-operation(a::Pow) = ^
+TermInterface.operation(a::Pow) = ^
 
 # Use `Union` to avoid promoting the base and exponent to the same type.
 # For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
 # we don't want to promote `a.exp` to a multivariate polynomial.
-arguments(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
+TermInterface.arguments(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
 
 Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 
@@ -1050,7 +994,8 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}, Div{<:Number}}
 
-function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
+function TermInterface.similarterm(t::Type{P}, f, args, symtype; metadata=nothing) where P<:NumericTerm
+    T = symtype
     if T === nothing
         T = _promote_symtype(f, args)
     end
@@ -1114,3 +1059,6 @@ function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow, Div}; show_type=false
         end
     end
 end
+
+TermInterface.istree(t::Type{<:Sym}) = false
+TermInterface.istree(t::Type{<:Symbolic}) = true

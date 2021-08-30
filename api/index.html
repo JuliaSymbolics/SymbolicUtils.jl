@@ -113,9 +113,7 @@
         <a href="#symtype">symtype</a>
         <div class="doc-type">fn</div></h2>
       <div class="doc-content"><pre><code class="language-julia">symtype&#40;x&#41;</code></pre>
-<p>The supposed type of values in the domain of x. Tracing tools can use this type to pick the right method to run or analyse code.</p>
-<p>This defaults to <code>typeof&#40;x&#41;</code> if <code>x</code> is numeric, or <code>Any</code> otherwise. For the types defined in this package, namely <code>T&lt;:Symbolic&#123;S&#125;</code> it is <code>S</code>.</p>
-<p>Define this for your symbolic types if you want <code>simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
+<p>Returns the symbolic type of <code>x</code>. By default this is just <code>typeof&#40;x&#41;</code>. Define this for your symbolic types if you want <code>SymbolicUtils.simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
 </div>
   </div>
 
@@ -212,8 +210,8 @@ Complex</code></pre>
       <h2 class="doc-header" id="istree">
         <a href="#istree">istree</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">istree&#40;x::T&#41;</code></pre>
-<p>Check if <code>x</code> represents an expression tree. If returns true, it will be assumed that <code>operation&#40;::T&#41;</code> and <code>arguments&#40;::T&#41;</code> methods are defined. Definining these three should allow use of <code>simplify</code> on custom types. Optionally <code>symtype&#40;x&#41;</code> can be defined to return the expected type of the symbolic expression.</p>
+      <div class="doc-content"><pre><code class="language-julia">istree&#40;x&#41;</code></pre>
+<p>Returns <code>true</code> if <code>x</code> is a term. If true, <code>operation</code>, <code>arguments</code> must also be defined for <code>x</code> appropriately.</p>
 </div>
   </div>
 
@@ -221,8 +219,8 @@ Complex</code></pre>
       <h2 class="doc-header" id="operation">
         <a href="#operation">operation</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">operation&#40;x::T&#41;</code></pre>
-<p>Returns the operation &#40;a function object&#41; performed by an expression tree. Called only if <code>istree&#40;::T&#41;</code> is true. Part of the API required for <code>simplify</code> to work. Other required methods are <code>arguments</code> and <code>istree</code></p>
+      <div class="doc-content"><pre><code class="language-julia">operation&#40;x&#41;</code></pre>
+<p>If <code>x</code> is a term as defined by <code>istree&#40;x&#41;</code>, <code>operation&#40;x&#41;</code> returns the head of the term if <code>x</code> represents a function call, for example, the head is the function being called.</p>
 </div>
   </div>
 
@@ -230,8 +228,8 @@ Complex</code></pre>
       <h2 class="doc-header" id="arguments">
         <a href="#arguments">arguments</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">arguments&#40;x::T&#41;</code></pre>
-<p>Returns the arguments &#40;a <code>Vector</code>&#41; for an expression tree. Called only if <code>istree&#40;x&#41;</code> is <code>true</code>. Part of the API required for <code>simplify</code> to work. Other required methods are <code>operation</code> and <code>istree</code></p>
+      <div class="doc-content"><pre><code class="language-julia">arguments&#40;x&#41;</code></pre>
+<p>Get the arguments of <code>x</code>, must be defined if <code>istree&#40;x&#41;</code> is <code>true</code>.</p>
 </div>
   </div>
 
@@ -239,7 +237,9 @@ Complex</code></pre>
       <h2 class="doc-header" id="similarterm">
         <a href="#similarterm">similarterm</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">similarterm&#40;t, f, args, symtype; metadata&#61;nothing&#41;</code></pre>
+      <div class="doc-content"><pre><code class="language-julia">similarterm&#40;x, head, args, symtype&#61;nothing; metadata&#61;nothing&#41;</code></pre>
+<p>Returns a term that is in the same closure of types as <code>typeof&#40;x&#41;</code>, with <code>head</code> as the head and <code>args</code> as the arguments, <code>type</code> as the symtype and <code>metadata</code> as the metadata. By default this will execute <code>head&#40;args...&#41;</code>. <code>x</code> parameter can also be a <code>Type</code>.</p>
+<pre><code class="language-julia">similarterm&#40;t, f, args, symtype; metadata&#61;nothing&#41;</code></pre>
 <p>Create a term that is similar in type to <code>t</code>. Extending this function allows packages using their own expression types with SymbolicUtils to define how new terms should be created. Note that <code>similarterm</code> may return an object that has a different type than <code>t</code>, because <code>f</code> also influences the result.</p>
 <h2 id="arguments"><a href="#arguments" class="header-anchor">Arguments</a></h2>
 <ul>
@@ -438,7 +438,7 @@ julia&gt; @timerewrite simplify&#40;expr&#41;
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 27, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 30, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

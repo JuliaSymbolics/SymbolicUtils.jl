@@ -841,9 +841,26 @@ end
 Base.hash(x::Div, u::UInt64) = hash(x.num, hash(x.den, u))
 Base.isequal(x::Div, y::Div) = isequal(x.num, y.num) && isequal(x.den, y.den)
 
+const Rat = Union{Rational, Integer}
+
 function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
     @assert !(n isa AbstractArray)
     @assert !(d isa AbstractArray)
+    _iszero(n) && return zero(n)
+    _isone(d) && return n
+    d isa Number && _isone(-d) && return -1 * n
+    if ((n isa Mul && n.coeff isa Rat) || n isa Rat) && (d isa Mul && d.coeff isa Rat)
+        if !_isone(d.coeff)
+            nc = n isa Mul ? n.coeff : n
+            c = nc // d.coeff
+            if n isa Mul
+                Setfield.@set! n.coeff = c
+            else
+                n = c
+            end
+            Setfield.@set! d.coeff = 1
+        end
+    end
     Div{T, typeof(n), typeof(d), typeof(metadata)}(n, d, simplified, metadata)
 end
 

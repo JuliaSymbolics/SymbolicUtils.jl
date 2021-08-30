@@ -226,3 +226,12 @@ end
     @syms a b c::Int
     @test isequal(arguments(s(a, b, c)), [a, b, c])
 end
+
+@testset "div" begin
+    @syms x y
+    @test (2x/3y).num.coeff == 2//3
+    @test (2x/3x).num.coeff == 2//3
+    @test (2.5x/3x).num.coeff == 2.5
+    @test (2.5x/3x).den.coeff == 3
+    @test (x/3x).den.coeff == 3
+end

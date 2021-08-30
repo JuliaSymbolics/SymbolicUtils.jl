@@ -40,7 +40,7 @@ NaNMath = "0.3"
 Setfield = "0.7"
 SpecialFunctions = "0.10, 1.0"
 StaticArrays = "0.12, 1.0"
-TermInterface = "0.1.7"
+TermInterface = "0.1.8"
 TimerOutputs = "0.5"
 julia = "1.3"
 

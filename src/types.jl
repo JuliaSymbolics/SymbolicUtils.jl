@@ -846,21 +846,28 @@ const Rat = Union{Rational, Integer}
 ratcoeff(x) = false, NaN
 ratcoeff(x::Rat) = true, x
 ratcoeff(x::Mul) = ratcoeff(x.coeff)
-ratio(x::Integer,y::Integer) = iszero(Base.rem(x,y)) ? x/y : x//y
+ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
 ratio(x::Rat,y::Rat) = x//y
+function maybe_intcoeff(x::Mul)
+    x.coeff isa Rational && isone(x.coeff.den) ? Setfield.@set!(x.coeff = x.coeff.num) : x
+end
+maybe_intcoeff(x::Rational) = isone(x.den) ? x.num : x
+maybe_intcoeff(x) = x
 
 function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
     _iszero(n) && return zero(typeof(n))
     _isone(d) && return n
     d isa Number && _isone(-d) && return -1 * n
 
+    # GCD coefficient upon construction
     rat, nc = ratcoeff(n)
     if rat
         rat, dc = ratcoeff(d)
         if rat
-            invdc = ratio(1, dc)
-            n = invdc * n
-            d = invdc * d
+            g = gcd(nc, dc) * sign(dc) # make denominator positive
+            invdc = ratio(1, g)
+            n = maybe_intcoeff(invdc * n)
+            d = maybe_intcoeff(invdc * d)
         end
     end
 

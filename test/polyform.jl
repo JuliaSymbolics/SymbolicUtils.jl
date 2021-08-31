@@ -43,4 +43,6 @@ end
     @eqtest simplify_fractions(2x^3 * y / x) == 2y*x^2
     @eqtest simplify_fractions(x / (3(x^3)*y)) == simplify_fractions(1/(3*(y*x^2)))
     @eqtest simplify_fractions(2x / (3(x^3)*y)) == simplify_fractions(2/(3*(y*x^2)))
+    @eqtest simplify_fractions(x^2 / (3(x^3)*y)) == simplify_fractions(1/(3*(y*x)))
+    @eqtest simplify_fractions((3(x^3)*y) / x^2) == simplify_fractions(3*(y*x))
 end

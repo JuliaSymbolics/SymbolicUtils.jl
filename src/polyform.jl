@@ -1,4 +1,4 @@
-export PolyForm, simplify_fractions
+export PolyForm, simplify_fractions, quick_cancel
 using Bijections
 using DynamicPolynomials: PolyVar
 
@@ -340,6 +340,27 @@ function quick_cancel(x::Mul, y)
         return x, y
     end
 end
+
+function quick_cancel(x::Mul, y::Pow)
+    if haskey(x.dict, y.base)
+        d = copy(x.dict)
+        if x.dict[y.base] > y.exp
+            d[y.base] -= y.exp
+            den = 1
+        elseif x.dict[y.base] == y.exp
+            delete!(d, y.base)
+            den = 1
+        else
+            den = Pow{symtype(y)}(y.base, y.exp-d[y.base])
+            delete!(d, y.base)
+        end
+        return Mul(symtype(x), x.coeff, d), den
+    else
+        return x, y
+    end
+end
+
+quick_cancel(x::Pow, y::Mul) = reverse(quick_cancel(y,x))
 
 quick_cancel(y, x::Mul) = reverse(quick_cancel(x,y))
 

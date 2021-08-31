@@ -42,7 +42,7 @@ end
     @eqtest simplify(a + b + 0*c + d) == simplify(a + b + d)
     @eqtest simplify(a * b * c^0 * d) == simplify(a * b * d)
     @eqtest simplify(a * b * 1*c * d) == simplify(a * b * c * d)
-    @eqtest repr(simplify_fractions(x^2.0/(x*y)^2.0)) == "1 / (y^2.0)"
+    @eqtest simplify_fractions(x^2.0/(x*y)^2.0) == simplify_fractions(1 / (y^2.0))
 
     @test simplify(Term(one, [a])) == 1
     @test simplify(Term(one, [b+1])) == 1

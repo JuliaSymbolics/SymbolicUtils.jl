@@ -269,12 +269,18 @@ Find `Div` nodes and simplify them by cancelling a set of factors of numerators
 and denominators. It may leave some expressions in `PolyForm` format.
 """
 function simplify_fractions(x)
+    !has_div(x) && return x
+
     isdiv(x) = x isa Div
 
-    rules = [@acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)
-             @rule ~x::isdiv => simplify_fractions(~x)]
+    rules = [@rule ~x::isdiv => simplify_fractions(~x)
+             @acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)]
 
-    Prewalk(RestartedChain(rules))(x)
+    Fixpoint(Postwalk(Chain(rules)))(x)
+end
+
+function has_div(x)
+    return x isa Div || (istree(x) && any(has_div, unsorted_arguments(x)))
 end
 
 flatten_pows(xs) = map(xs) do x

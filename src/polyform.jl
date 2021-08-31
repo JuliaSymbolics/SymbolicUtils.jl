@@ -251,7 +251,7 @@ function simplify_div(d::Div)
     if all(_isone, ds)
         return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
     else
-        return Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)), true)
+        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)), true)
     end
 end
 
@@ -269,17 +269,22 @@ Find `Div` nodes and simplify them by cancelling a set of factors of numerators
 and denominators. It may leave some expressions in `PolyForm` format.
 """
 function simplify_fractions(x)
-    x = quick_cancel(x)
+    x = Postwalk(quick_cancel)(x)
 
-    !has_div(x) && return x
+    !needs_div_rules(x) && return x
 
     isdiv(x) = x isa Div
 
-    rules = [@rule ~x::isdiv => quick_cancel(~x)
-             @rule ~x::isdiv => simplify_div(~x)
+    rules = [@rule ~x::isdiv => simplify_div(~x)
              @acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)]
 
     Fixpoint(Postwalk(Chain(rules)))(x)
+end
+
+function needs_div_rules(x)
+    (x isa Div && !(x.num isa Number) && !(x.den isa Number)) ||
+    (istree(x) && operation(x) === (+) && count(has_div, unsorted_arguments(x)) > 1) ||
+    (istree(x) && any(needs_div_rules, unsorted_arguments(x)))
 end
 
 function has_div(x)

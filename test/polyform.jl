@@ -9,7 +9,7 @@ include("utils.jl")
     @test repr(x/y*x/z) == "(x^2) / (y*z)"
     @test repr(simplify_fractions(((x-y+z)*(x+4z+1)) /
                                   (y*(2x - 3y + 3z) +
-                                   x*(x + z)))) == "(1 + x + 4z) / (x + 3.0y)"
+                                   x*(x + z)))) == repr(simplify_fractions((1 + x + 4z) / (x + 3.0y)))
     @test simplify_fractions(x/(x+3) + 3/(x+3)) == 1
     @test repr(simplify(simplify_fractions(cos(x)/sin(x) + sin(x)/cos(x)))) == "1 / (cos(x)*sin(x))"
 end

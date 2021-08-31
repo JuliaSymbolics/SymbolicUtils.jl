@@ -162,7 +162,7 @@ end
     @test repr(-(a + b)) == "-a - b"
     @test repr((2a)^(-2a)) == "(2a)^(-2a)"
     @test repr(1/2a) == "1 / (2a)"
-    @test repr(2/(2*a)) == "2 / (2a)"
+    @test repr(2/(2*a)) == "1 / a"
     @test repr(Term(*, [1, 1])) == "1"
     @test repr(Term(*, [2, 1])) == "2*1"
     @test repr((a + b) - (b + c)) == "a - c"
@@ -233,7 +233,7 @@ end
     @test (2x/3y).num.coeff == 2
     @test (2x/3y).den.coeff == 3
     @test (2x/-3x).num.coeff == -2
-    @test (2x/-t3x).den.coeff == 3
+    @test (2x/-3x).den.coeff == 3
     @test (2.5x/3x).num.coeff == 2.5
     @test (2.5x/3x).den.coeff == 3
     @test (x/3x).den.coeff == 3

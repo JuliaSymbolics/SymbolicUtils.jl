@@ -230,10 +230,10 @@ expand(expr) = PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse
 
 function polyform_factors(d::Div, pvar2sym, sym2term)
     make(xs) = map(xs) do x
-        if x isa Pow && arguments(x)[2] isa Integer && arguments(x)[2] > 0
+        if x isa Pow && x.base isa Integer && x.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(PolyForm(arguments(x)[1], pvar2sym, sym2term), arguments(x)[2])
+            Pow(PolyForm(x.base, pvar2sym, sym2term), x.exp)
         else
             PolyForm(x, pvar2sym, sym2term)
         end
@@ -244,7 +244,7 @@ end
 
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
-function simplify_fractions(d::Div)
+function simplify_div(d::Div)
     d.simplified && return d
     ns, ds = polyform_factors(d, get_pvar2sym(), get_sym2term())
     ns, ds = rm_gcds(ns, ds)
@@ -269,11 +269,14 @@ Find `Div` nodes and simplify them by cancelling a set of factors of numerators
 and denominators. It may leave some expressions in `PolyForm` format.
 """
 function simplify_fractions(x)
+    x = quick_cancel(x)
+
     !has_div(x) && return x
 
     isdiv(x) = x isa Div
 
-    rules = [@rule ~x::isdiv => simplify_fractions(~x)
+    rules = [@rule ~x::isdiv => quick_cancel(~x)
+             @rule ~x::isdiv => simplify_div(~x)
              @acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)]
 
     Fixpoint(Postwalk(Chain(rules)))(x)
@@ -294,6 +297,77 @@ coefftype(x) = typeof(x)
 const MaybeGcd = Union{PolyForm, MP.AbstractPolynomialLike, Integer}
 _gcd(x::MaybeGcd, y::MaybeGcd) = (coefftype(x) <: Complex || coefftype(y) <: Complex) ? 1 : gcd(x, y)
 _gcd(x, y) = 1
+
+
+quick_cancel(d::Div) = Div{symtype(d)}(quick_cancel(d.num, d.den)...)
+
+quick_cancel(x) = x
+
+quick_cancel(x, y) = isequal(x, y) ? (1,1) : (x, y)
+
+function quick_cancel(x::Pow, y)
+    isequal(x.base, y) && x.exp >= 1 ? (Pow{symtype(x)}(x.base, x.exp - 1),1) : (x, y)
+end
+
+quick_cancel(y, x::Pow) = reverse(quick_cancel(x,y))
+
+function quick_cancel(x::Pow, y::Pow)
+    if isequal(x.base, y.base)
+        if x.exp > y.exp
+            return Pow{symtype(x)}(x.base, x.exp-y.exp), 1
+        elseif x.exp == y.exp
+            return 1, 1
+        else # x.exp < y.exp
+            return 1, Pow{symtype(y)}(y.base, y.exp-x.exp)
+        end
+    end
+    return x, y
+end
+
+function quick_cancel(x::Mul, y)
+    if haskey(x.dict, y) && x.dict[y] >= 1
+        d = copy(x.dict)
+        if d[y] > 1
+            d[y] -= 1
+        elseif d[y] == 1
+            delete!(d, y)
+        else
+            error("Can't reach")
+        end
+
+        return Mul(symtype(x), x.coeff, d), 1
+    else
+        return x, y
+    end
+end
+
+quick_cancel(y, x::Mul) = reverse(quick_cancel(x,y))
+
+function quick_cancel(x::Mul, y::Mul)
+    num_dict, den_dict = _merge_div(x.dict, y.dict)
+    Mul(symtype(x), x.coeff, num_dict), Mul(symtype(y), y.coeff, den_dict)
+end
+
+function _merge_div(ndict, ddict)
+    num = copy(ndict)
+    den = copy(ddict)
+    for (k, v) in den
+        if haskey(num, k)
+            nk = num[k]
+            if nk > v
+                num[k] -= v
+                delete!(den, k)
+            elseif nk == v
+                delete!(num, k)
+                delete!(den, k)
+            else
+                den[k] -= nk
+                delete!(num, k)
+            end
+        end
+    end
+    num, den
+end
 
 function rm_gcds(ns, ds)
     ns = flatten_pows(ns)

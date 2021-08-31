@@ -17,17 +17,9 @@ if v"1.6" ≤ VERSION < v"1.7-beta3.0"
 else
     @warn "Skipping doctests"
 end
-
-# == / != syntax is nice, let's use it in tests
-macro eqtest(expr)
-    @assert expr.head == :call && expr.args[1] in [:(==), :(!=)]
-    if expr.args[1] == :(==)
-        :(@test isequal($(expr.args[2]), $(expr.args[3])))
-    else
-        :(@test !isequal($(expr.args[2]), $(expr.args[3])))
-    end |> esc
-end
 SymbolicUtils.show_simplified[] = false
+
+include("utils.jl")
 
 if haskey(ENV, "SU_BENCHMARK_ONLY")
     include("benchmark.jl")

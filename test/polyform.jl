@@ -1,6 +1,8 @@
 using SymbolicUtils: PolyForm, Term, symtype
 using Test, SymbolicUtils
 
+include("utils.jl")
+
 @testset "div and polyform" begin
     @syms x y z
     @test repr(PolyForm(x-y)) == "x - y"
@@ -30,4 +32,15 @@ end
    #@test expand(Term{Number}(zero, 0)) == 0
    #@test expand(identity(a * b) - b * a) == 0
     @test expand(a * b - b * a) == 0
+end
+
+@testset "simplify_fractions with quick-cancel" begin
+    @syms x y
+    @test simplify_fractions(x/2x) == 1//2
+    @test simplify_fractions(2x//x) == 2
+    @eqtest simplify_fractions((x+y) * (x-y) / (x+y)) == (x-y)
+    @eqtest simplify_fractions(x^3 * y / x) == y*x^2
+    @eqtest simplify_fractions(2x^3 * y / x) == 2y*x^2
+    @eqtest simplify_fractions(x / (3(x^3)*y)) == simplify_fractions(1/(3*(y*x^2)))
+    @eqtest simplify_fractions(2x / (3(x^3)*y)) == simplify_fractions(2/(3*(y*x^2)))
 end

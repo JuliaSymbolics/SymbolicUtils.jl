@@ -311,6 +311,7 @@ quick_cancel(x) = x
 quick_cancel(x, y) = isequal(x, y) ? (1,1) : (x, y)
 
 function quick_cancel(x::Pow, y)
+    x.exp isa Number || return (x, y)
     isequal(x.base, y) && x.exp >= 1 ? (Pow{symtype(x)}(x.base, x.exp - 1),1) : (x, y)
 end
 
@@ -318,6 +319,7 @@ quick_cancel(y, x::Pow) = reverse(quick_cancel(x,y))
 
 function quick_cancel(x::Pow, y::Pow)
     if isequal(x.base, y.base)
+        !(x.exp isa Number && y.exp isa Number) && return (x, y)
         if x.exp > y.exp
             return Pow{symtype(x)}(x.base, x.exp-y.exp), 1
         elseif x.exp == y.exp
@@ -347,6 +349,7 @@ function quick_cancel(x::Mul, y)
 end
 
 function quick_cancel(x::Mul, y::Pow)
+    y.exp isa Number || return (x, y)
     if haskey(x.dict, y.base)
         d = copy(x.dict)
         if x.dict[y.base] > y.exp

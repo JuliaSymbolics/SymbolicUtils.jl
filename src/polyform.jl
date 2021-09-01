@@ -1,4 +1,4 @@
-export PolyForm, simplify_fractions, quick_cancel
+export PolyForm, simplify_fractions, quick_cancel, flatten_fraction
 using Bijections
 using DynamicPolynomials: PolyVar
 
@@ -7,7 +7,8 @@ using DynamicPolynomials: PolyVar
 
 Abstracts a [MultivariatePolynomials.jl](https://juliaalgebra.github.io/MultivariatePolynomials.jl/stable/) as a SymbolicUtils expression and vice-versa.
 
-The SymbolicUtils term interface (`istree`, `operation, and `arguments`) works on PolyForm lazily: the `operation` and `arguments` are created by converting one level of arguments into SymbolicUtils expressions. They may further contain PolyForm within them.
+The SymbolicUtils term interface (`istree`, `operation, and `arguments`) works on PolyForm lazily:
+the `operation` and `arguments` are created by converting one level of arguments into SymbolicUtils expressions. They may further contain PolyForm within them.
 We use this to hold polynomials in memory while doing `simplify_fractions`.
 
     PolyForm{T}(x; Fs=Union{typeof(*),typeof(+),typeof(^)}, recurse=false)
@@ -190,15 +191,16 @@ function TermInterface.arguments(x::PolyForm{T}) where {T}
 
     if MP.nterms(x.p) == 1
         MP.isconstant(x.p) && return [convert(Number, x.p)]
-        c = MP.coefficient(x.p)
-        t = MP.monomial(x.p)
+        t = MP.term(x.p)
+        c = MP.coefficient(t)
+        m = MP.monomial(t)
 
         if !isone(c)
             [c, (unstable_pow(resolve(v), pow)
-                        for (v, pow) in MP.powers(t) if !iszero(pow))...]
+                        for (v, pow) in MP.powers(m) if !iszero(pow))...]
         else
             [unstable_pow(resolve(v), pow)
-                    for (v, pow) in MP.powers(t) if !iszero(pow)]
+                    for (v, pow) in MP.powers(m) if !iszero(pow)]
         end
     else
         ts = MP.terms(x.p)
@@ -228,7 +230,7 @@ expand(expr) = PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse
 
 ## Rational Polynomial form with Div
 
-function polyform_factors(d::Div, pvar2sym, sym2term)
+function polyform_factors(d, pvar2sym, sym2term)
     make(xs) = map(xs) do x
         if x isa Pow && x.base isa Integer && x.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
@@ -255,11 +257,11 @@ function simplify_div(d::Div)
     end
 end
 
-function add_divs(x::Div, y::Div)
+function add_divs(x, y)
     x_num, x_den = polyform_factors(x, get_pvar2sym(), get_sym2term())
     y_num, y_den = polyform_factors(y, get_pvar2sym(), get_sym2term())
 
-    Div(_mul(x_num, y_den) + _mul(x_den, y_num), _mul(x_den, y_den))
+    (_mul(x_num, y_den) + _mul(x_den, y_num)) / (_mul(x_den, y_den))
 end
 
 """
@@ -278,7 +280,21 @@ function simplify_fractions(x)
     rules = [@rule ~x::isdiv => simplify_div(~x)
              @acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)]
 
-    Fixpoint(Postwalk(Chain(rules)))(x)
+    Fixpoint(Postwalk(RestartedChain(rules)))(x)
+end
+
+"""
+    flatten_fraction(x)
+
+Flatten nested fractions that are added together.
+
+```julia
+julia> flatten_fraction((1+(1+1/a)/a)/a)
+(1 + a + a^2) / (a^3)
+```
+"""
+function flatten_fraction(x)
+    Fixpoint(Postwalk(PassThrough(@acrule ~a::(x->x isa Div) + ~b => add_divs(~a,~b))))(x)
 end
 
 function needs_div_rules(x)

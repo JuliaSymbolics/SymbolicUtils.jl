@@ -1,4 +1,4 @@
-export PolyForm, simplify_fractions, quick_cancel, flatten_fraction
+export PolyForm, simplify_fractions, quick_cancel, flatten_fractions
 using Bijections
 using DynamicPolynomials: PolyVar
 
@@ -284,17 +284,32 @@ function simplify_fractions(x)
 end
 
 """
-    flatten_fraction(x)
+    flatten_fractions(x)
 
 Flatten nested fractions that are added together.
 
 ```julia
-julia> flatten_fraction((1+(1+1/a)/a)/a)
+julia> flatten_fractions((1+(1+1/a)/a)/a)
 (1 + a + a^2) / (a^3)
 ```
 """
-function flatten_fraction(x)
-    Fixpoint(Postwalk(PassThrough(@acrule ~a::(x->x isa Div) + ~b => add_divs(~a,~b))))(x)
+function flatten_fractions(x)
+    rules = [@acrule ~a::(x->x isa Div) + ~b => add_divs(~a,~b)
+             @rule *(~~x, ~a / ~b, ~~y) / ~c => *((~~x)..., ~a, (~~y)...) / (~b * ~c)
+             @rule ~c / *(~~x, ~a / ~b, ~~y)  => (~b * ~c) / *((~~x)..., ~a, (~~y)...)]
+    Fixpoint(Postwalk(Chain(rules)))(x)
+end
+
+function fraction_iszero(x)
+    !istree(x) && return _iszero(x)
+    # fast path and then slow path
+    any(_iszero, numerators(flatten_fractions(x))) ||
+    any(_iszero∘expand, numerators(flatten_fractions(x)))
+end
+
+function fraction_isone(x)
+    !istree(x) && return _isone(x)
+    _isone(simplify_fractions(flatten_fractions(x)))
 end
 
 function needs_div_rules(x)

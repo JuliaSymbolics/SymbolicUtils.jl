@@ -53,3 +53,16 @@ end
     @eqtest simplify_fractions(3*(x^2)*(y^3)/(3*(x^3)*(y^2))) == y/x
     @eqtest simplify_fractions(3*(x^x)/x*y) == 3*(x^x)/x*y
 end
+
+@testset "isone iszero" begin
+    @syms a b c d e f g h i
+    x = (f + ((((g*(c^2)*(e^2)) / d - e*h*(c^2)) / b + (-c*e*f*g) / d + c*e*i) /
+              (i + ((c*e*g) / d - c*h) / b + (-f*g) / d) - c*e) / b +
+         ((g*(f^2)) / d + ((-c*e*f*g) / d + c*f*h) / b - f*i) /
+         (i + ((c*e*g) / d - c*h) / b + (-f*g) / d)) / d
+
+    o = (d + (e*((c*(g + (-d*g) / d)) / (i + (-c*(h + (-e*g) / d)) / b + (-f*g) / d))) / b + (-f*(g + (-d*g) / d)) / (i + (-c*(h + (-e*g) / d)) / b + (-f*g) / d)) / d
+    @test SymbolicUtils.fraction_iszero(x)
+    @test !SymbolicUtils.fraction_isone(x)
+    @test SymbolicUtils.fraction_isone(o)
+end

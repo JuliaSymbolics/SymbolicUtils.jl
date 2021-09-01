@@ -857,6 +857,15 @@ maybe_intcoeff(x) = x
 function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
     _iszero(n) && return zero(typeof(n))
     _isone(d) && return n
+
+    if n isa Div && d isa Div
+        return Div{T}(n.num * d.den, n.den * d.num)
+    elseif n isa Div
+        return Div{T}(n.num, n.den * d)
+    elseif d isa Div
+        return Div{T}(n * d.den, d.num)
+    end
+
     d isa Number && _isone(-d) && return -1 * n
     n isa Rat && d isa Rat && return n // d # maybe called by oblivious code in simplify
 
@@ -879,15 +888,11 @@ function Div(n,d, simplified=false; kw...)
     Div{promote_symtype((/), symtype(n), symtype(d))}(n,d, simplified; kw...)
 end
 
-function numerators(d::Div)
-    x = d.num
-    istree(x) && operation(x) == (*) ? arguments(x) : [x]
-end
+numerators(x) = istree(x) && operation(x) == (*) ? arguments(x) : [x]
+numerators(d::Div) = numerators(d.num)
 
-function denominators(d::Div)
-    x = d.den
-    istree(x) && operation(x) == (*) ? arguments(x) : [x]
-end
+denominators(x) = [1]
+denominators(d::Div) = numerators(d.den)
 
 TermInterface.istree(d::Type{Div}) = true
 
@@ -899,17 +904,7 @@ end
 
 Base.show(io::IO, d::Div) = show_term(io, d)
 
-function /(a::Union{SN,Number}, b::SN)
-    if a isa Div && b isa Div
-        Div(a.num * b.den, a.den * b.num)
-    elseif a isa Div
-        Div(a.num, a.den * b)
-    elseif b isa Div
-        Div(a * b.den, b.num)
-    else
-        Div(a,b)
-    end
-end
+/(a::Union{SN,Number}, b::SN) = Div(a,b)
 
 """
     Pow(base, exp)

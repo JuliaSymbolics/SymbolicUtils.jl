@@ -27,12 +27,11 @@ include("methods.jl")
 # LinkedList, simplification utilities
 include("utils.jl")
 
-export Rewriters
 
 # A library for composing together expr -> expr functions
-include("rewriters.jl")
-
-using .Rewriters
+using TimerOutputs
+using Rewriters
+export Rewriters
 
 using Combinatorics: permutations, combinations
 export @rule, @acrule, RuleSet

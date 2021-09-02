@@ -386,14 +386,14 @@ getdepth(::Any) = typemax(Int)
 end
 
 function timerewrite(f)
-    if !TIMER_OUTPUTS
+    if !Rewriters.TIMER_OUTPUTS
         error("timerewrite must be called after enabling " *
-              "TIMER_OUTPUTS in the main file of this package")
+              "TIMER_OUTPUTS in the main file of Rewriters.jl")
     end
     reset_timer!()
-    being_timed[] = true
+    Rewriters.being_timed[] = true
     x = f()
-    being_timed[] = false
+    Rewriters.being_timed[] = false
     print_timer()
     println()
     x

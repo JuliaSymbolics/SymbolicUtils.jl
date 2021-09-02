@@ -29,7 +29,7 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer
+using SymbolicUtils: @timer, unsorted_arguments
 using TermInterface: is_operation, istree, operation, similarterm, arguments, node_count
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
@@ -159,7 +159,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if istree(x)
-            x = p.similarterm(x, operation(x), map(PassThrough(p), arguments(x)))
+            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)))
         end
         return ord === :post ? p.rw(x) : x
     else

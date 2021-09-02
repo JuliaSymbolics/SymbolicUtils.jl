@@ -260,6 +260,7 @@ end
 add_divs(x::Div, y::Div) = (x.num * y.den + y.num * x.den) / (x.den * y.den)
 add_divs(x::Div, y) = (x.num + y * x.den) / x.den
 add_divs(x, y::Div) = (x * y.den + y.num) / y.den
+add_divs(x, y) = x + y
 
 """
     simplify_fractions(x)
@@ -272,24 +273,21 @@ function simplify_fractions(x)
 
     !needs_div_rules(x) && return x
 
-    isdiv(x) = x isa Div
+    sdiv(a) = a isa Div ? simplify_div(a) : a
 
-    rules = [@rule ~x::isdiv => simplify_div(~x)
-             @acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)]
-
-    Fixpoint(Postwalk(RestartedChain(rules)))(x)
+    Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
 end
 
-function add_with_div(x)
-    (!istree(x) || operation(x) != (+)) && return nothing
+function add_with_div(x, flatten=true)
+    (!istree(x) || operation(x) != (+)) && return x
     aa = unsorted_arguments(x)
-    !any(a->a isa Div, aa) && return nothing # no rewrite necessary
+    !any(a->a isa Div, aa) && return x # no rewrite necessary
 
     divs = filter(a->a isa Div, aa)
     nondivs = filter(a->!(a isa Div), aa)
     nds = isempty(nondivs) ? 0 : +(nondivs...)
-
-    return quick_cancel(add_divs(reduce(quick_cancel∘add_divs, divs), nds))
+    d = reduce(quick_cancel∘add_divs, divs)
+    flatten ? quick_cancel(add_divs(d, nds)) : d + nds
 end
 """
     flatten_fractions(x)
@@ -302,7 +300,7 @@ julia> flatten_fractions((1+(1+1/a)/a)/a)
 ```
 """
 function flatten_fractions(x)
-    Fixpoint(Postwalk(PassThrough(add_with_div)))(x)
+    Fixpoint(Postwalk(add_with_div))(x)
 end
 
 function fraction_iszero(x)

@@ -10,7 +10,11 @@
 
 arglength(a) = length(arguments(a))
 function <ₑ(a, b)
-    if !istree(a) && !istree(b)
+    if a isa Term && (b isa Symbolic && !(b isa Term))
+        return false
+    elseif  b isa Term && (a isa Symbolic && !(a isa Term))
+        return true
+    elseif !istree(a) && !istree(b)
         T = typeof(a)
         S = typeof(b)
         return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)

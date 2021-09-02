@@ -30,7 +30,10 @@ include("utils.jl")
 
 # A library for composing together expr -> expr functions
 using TimerOutputs
-using Rewriters
+using RewriterCombinators
+# Julia Registrator did not like the Rewriters.jl package name,
+# had to hardfix 
+const Rewriters = RewriterCombinators
 export Rewriters
 
 using Combinatorics: permutations, combinations

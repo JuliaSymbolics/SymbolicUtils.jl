@@ -356,7 +356,7 @@ function (acr::ACRule)(term)
         end
 
         T = symtype(term)
-        args = arguments(term)
+        args = unsorted_arguments(term)
 
         itr = acr.sets(eachindex(args), acr.arity)
 

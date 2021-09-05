@@ -257,12 +257,10 @@ function simplify_div(d::Div)
     end
 end
 
-function add_divs(x, y)
-    x_num, x_den = polyform_factors(x, get_pvar2sym(), get_sym2term())
-    y_num, y_den = polyform_factors(y, get_pvar2sym(), get_sym2term())
-
-    (_mul(x_num, y_den) + _mul(x_den, y_num)) / (_mul(x_den, y_den))
-end
+add_divs(x::Div, y::Div) = (x.num * y.den + y.num * x.den) / (x.den * y.den)
+add_divs(x::Div, y) = (x.num + y * x.den) / x.den
+add_divs(x, y::Div) = (x * y.den + y.num) / y.den
+add_divs(x, y) = x + y
 
 """
     simplify_fractions(x)
@@ -275,14 +273,22 @@ function simplify_fractions(x)
 
     !needs_div_rules(x) && return x
 
-    isdiv(x) = x isa Div
+    sdiv(a) = a isa Div ? simplify_div(a) : a
 
-    rules = [@rule ~x::isdiv => simplify_div(~x)
-             @acrule ~a::isdiv + ~b::isdiv => add_divs(~a,~b)]
-
-    Fixpoint(Postwalk(RestartedChain(rules)))(x)
+    Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
 end
 
+function add_with_div(x, flatten=true)
+    (!istree(x) || operation(x) != (+)) && return x
+    aa = unsorted_arguments(x)
+    !any(a->a isa Div, aa) && return x # no rewrite necessary
+
+    divs = filter(a->a isa Div, aa)
+    nondivs = filter(a->!(a isa Div), aa)
+    nds = isempty(nondivs) ? 0 : +(nondivs...)
+    d = reduce(quick_cancel∘add_divs, divs)
+    flatten ? quick_cancel(add_divs(d, nds)) : d + nds
+end
 """
     flatten_fractions(x)
 
@@ -294,17 +300,15 @@ julia> flatten_fractions((1+(1+1/a)/a)/a)
 ```
 """
 function flatten_fractions(x)
-    rules = [@acrule ~a::(x->x isa Div) + ~b => add_divs(~a,~b)
-             @rule *(~~x, ~a / ~b, ~~y) / ~c => *((~~x)..., ~a, (~~y)...) / (~b * ~c)
-             @rule ~c / *(~~x, ~a / ~b, ~~y)  => (~b * ~c) / *((~~x)..., ~a, (~~y)...)]
-    Fixpoint(Postwalk(Chain(rules)))(x)
+    Fixpoint(Postwalk(add_with_div))(x)
 end
 
 function fraction_iszero(x)
     !istree(x) && return _iszero(x)
+    ff = flatten_fractions(x)
     # fast path and then slow path
-    any(_iszero, numerators(flatten_fractions(x))) ||
-    any(_iszero∘expand, numerators(flatten_fractions(x)))
+    any(_iszero, numerators(ff)) ||
+    any(_iszero∘expand, numerators(ff))
 end
 
 function fraction_isone(x)

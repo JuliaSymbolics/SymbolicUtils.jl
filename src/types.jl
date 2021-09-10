@@ -4,14 +4,12 @@
 #--------------------
 abstract type Symbolic{T} end
 
-
-# TODO_TERMINTERFACE
+TermInterface.exprhead(x::Symbolic) = :call
 
 TermInterface.symtype(x::Number) = typeof(x)
 TermInterface.symtype(::Symbolic{T}) where {T} = T
 
 TermInterface.metadata(s::Symbolic) = s.metadata
-
 TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
 function hasmetadata(s::Symbolic, ctx)
@@ -297,7 +295,6 @@ end
 
 TermInterface.operation(x::Term) = getfield(x, :f)
 
-unsorted_arguments(x) = TermInterface.arguments(x)
 TermInterface.arguments(x::Term) = getfield(x, :arguments)
 
 function Base.isequal(t1::Term, t2::Term)
@@ -367,11 +364,11 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing) = 
-    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
+TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing, exprhead=:call) = 
+    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata, exprhead=exprhead)
     
-TermInterface.similarterm(t::Type{<:Term}, f, args, symtype; metadata=nothing) = 
-    Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+TermInterface.similarterm(t::Type{<:Term}, f, args, symtype; metadata=nothing, exprhead=:call) = 
+    Term{_promote_symtype(f, args)}(f, args; metadata=metadata, exprhead=exprhead)
 
 #--------------------
 #--------------------
@@ -591,7 +588,7 @@ TermInterface.istree(a::Type{Add}) = true
 
 TermInterface.operation(a::Add) = +
 
-function unsorted_arguments(a::Add)
+function TermInterface.unsorted_arguments(a::Add)
     args = [v*k for (k,v) in a.dict]
     iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
@@ -741,7 +738,7 @@ TermInterface.operation(a::Mul) = *
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
-function unsorted_arguments(a::Mul)
+function TermInterface.unsorted_arguments(a::Mul)
     args = [unstable_pow(k, v) for (k,v) in a.dict]
     isone(a.coeff) ? args : vcat(a.coeff, args)
 end
@@ -1017,7 +1014,7 @@ end
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
                           Add{<:Number}, Pow{<:Number}, Div{<:Number}}
 
-function TermInterface.similarterm(t::Type{P}, f, args, symtype; metadata=nothing) where P<:NumericTerm
+function TermInterface.similarterm(t::Type{P}, f, args, symtype; metadata=nothing, exprhead=:call) where P<:NumericTerm
     T = symtype
     if T === nothing
         T = _promote_symtype(f, args)

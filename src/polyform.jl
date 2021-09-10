@@ -263,19 +263,24 @@ add_divs(x, y::Div) = (x * y.den + y.num) / y.den
 add_divs(x, y) = x + y
 
 """
-    simplify_fractions(x)
+    simplify_fractions(x; polyform=false)
 
 Find `Div` nodes and simplify them by cancelling a set of factors of numerators
-and denominators. It may leave some expressions in `PolyForm` format.
+and denominators. If `polyform=true` the factors which were converted into PolyForm
+for the purpose of finding polynomial GCDs will be left as they are.
+Note that since PolyForms have different `hash`es than SymbolicUtils expressions,
+`substitute` may not work if `polyform=true`
 """
-function simplify_fractions(x)
+function simplify_fractions(x; polyform=false)
     x = Postwalk(quick_cancel)(x)
 
     !needs_div_rules(x) && return x
 
     sdiv(a) = a isa Div ? simplify_div(a) : a
 
-    Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
+    expr = Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
+
+    polyform ? expr : Postwalk(identity)(expr)
 end
 
 function add_with_div(x, flatten=true)

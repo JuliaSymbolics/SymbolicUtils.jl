@@ -6,6 +6,9 @@ module SymbolicUtils
 using DocStringExtensions
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
+using TermInterface
+using TermInterface: node_count
+
 # Sym, Term,
 # Add, Mul and Pow
 using DataStructures
@@ -14,6 +17,7 @@ import Setfield: PropertyLens
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 include("types.jl")
+export istree, operation, arguments, similarterm
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
@@ -45,6 +49,7 @@ const MP = MultivariatePolynomials
 import DynamicPolynomials
 export expand
 include("abstractalgebra.jl")
+include("polyform.jl")
 
 # Term ordering
 include("ordering.jl")

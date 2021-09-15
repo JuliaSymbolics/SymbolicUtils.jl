@@ -42,7 +42,7 @@ end
     @eqtest simplify(a + b + 0*c + d) == simplify(a + b + d)
     @eqtest simplify(a * b * c^0 * d) == simplify(a * b * d)
     @eqtest simplify(a * b * 1*c * d) == simplify(a * b * c * d)
-    @eqtest simplify(x^2.0/(x*y)^2.0) == y ^ (-2.0)
+    @eqtest simplify_fractions(x^2.0/(x*y)^2.0) == simplify_fractions(1 / (y^2.0))
 
     @test simplify(Term(one, [a])) == 1
     @test simplify(Term(one, [b+1])) == 1
@@ -114,7 +114,7 @@ end
           ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
            ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
     @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
-    @test SymbolicUtils.node_count(a + b * c / d) == 8
+    @test SymbolicUtils.node_count(a + b * c / d) == 7
 end
 
 @testset "timerwrite" begin

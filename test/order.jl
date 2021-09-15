@@ -5,7 +5,7 @@ SymbolicUtils.show_simplified[] = false
 
 @syms a b c
 
-function istotal(x,y)
+function istotal(x, y)
     #either
     if x <ₑ y
         return !(y <ₑ x)
@@ -13,7 +13,7 @@ function istotal(x,y)
         return !(x <ₑ y) # already tested
     else
         # neither, equal
-        return true
+        return isequal(x, y)
     end
 end
 
@@ -73,16 +73,12 @@ end
 
     @test x <ₑ (3 + x) && !((3 + x) <ₑ x)
     @test istotal(y, x^2)
-
-    # a nice consequence
-    @test simplify(x/(x+3) + 3/(x+3)) == 1
 end
 
 @testset "small terms" begin
     # this failing was a cause of a nasty stackoverflow #82
     @syms a
-    @test Term(^, [a, -1]) <ₑ (a + 2)
-    @test !((a + 2) <ₑ Term(^, [a, -1]))
+    istotal(Term(^, [a, -1]), (a + 2))
 end
 
 @testset "transitivity" begin

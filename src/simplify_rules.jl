@@ -39,7 +39,7 @@ let
         @rule((((~x)^(~p::_isinteger))^(~q::_isinteger)) => (~x)^((~p)*(~q)))
         @rule(^(~x, ~z::_iszero) => 1)
         @rule(^(~x, ~z::_isone) => ~x)
-        @rule(inv(~x) => ~x ^ -1)
+        @rule(inv(~x) => 1/(~x))
     ]
 
     ASSORTED_RULES = [
@@ -48,7 +48,6 @@ let
         @rule(-(~x, ~y) => ~x + -1(~y))
         @rule(~x::_isone \ ~y => ~y)
         @rule(~x \ ~y => ~y / (~x))
-        @rule(~x / ~y => ~x * pow(~y, -1))
         @rule(one(~x) => one(symtype(~x)))
         @rule(zero(~x) => zero(symtype(~x)))
         @rule(conj(~x::_isreal) => ~x)

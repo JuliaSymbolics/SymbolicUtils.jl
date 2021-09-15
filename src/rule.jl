@@ -316,8 +316,16 @@ macro rule(expr)
     end
 end
 
-#-----------------------------
-#### Capture Macro
+"""
+    @capture ex LHS
+
+Uses a `Rule` object to capture an expression if it matches the LHS pattern. Returns `true` and injects
+slot variable match results into the calling scope when the LHS matches, otherwise returns false. The
+rule language for specifying the LHS pattern is the same in @capture as it is in `@rule`. Contextual matching
+is not yet supported
+
+See also: [`@rule`](@ref)
+"""
 macro capture(ex, lhs)
     keys = Symbol[]
     lhs_term = makepattern(lhs, keys)

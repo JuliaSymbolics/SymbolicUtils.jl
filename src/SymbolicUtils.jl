@@ -8,6 +8,10 @@ export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 using TermInterface
 using TermInterface: node_count
+using Metatheory
+using Metatheory.Rules
+using Metatheory.Rewriters
+using Metatheory.SUSyntax
 
 # Sym, Term,
 # Add, Mul and Pow
@@ -30,9 +34,6 @@ include("utils.jl")
 export Rewriters
 
 # A library for composing together expr -> expr functions
-include("rewriters.jl")
-
-using .Rewriters
 
 using Combinatorics: permutations, combinations
 export @rule, @acrule, RuleSet
@@ -40,15 +41,11 @@ export @rule, @acrule, RuleSet
 # Rule type and @rule macro
 include("rule.jl")
 
-# Matching a Rule
-include("matchers.jl")
-
 # Convert to an efficient multi-variate polynomial representation
 import MultivariatePolynomials
 const MP = MultivariatePolynomials
 import DynamicPolynomials
 export expand
-include("abstractalgebra.jl")
 include("polyform.jl")
 
 # Term ordering

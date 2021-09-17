@@ -160,6 +160,10 @@ function PolyForm(x,
         recurse=false,
         metadata=metadata(x))
 
+    if !(symtype(x) <: Number)
+        return x
+    end
+
     # Polyize and return a PolyForm
     p = polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)

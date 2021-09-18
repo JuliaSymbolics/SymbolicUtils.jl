@@ -324,16 +324,16 @@ slot variable match results into the calling scope when the `pattern` matches, o
 rule language for specifying the `pattern` is the same in @capture as it is in `@rule`. Contextual matching
 is not yet supported
 
-e.g.
+```julia
+julia> @syms a; ex = a^a;
 
-    julia> @syms a; ex = a ^ a;
-
-    julia> if @capture ex (~x) + (~x)
-               @show x
-           elseif @capture ex (~y) ^ (~y)
-               @show y
-           end;
-    y = a
+julia> if @capture ex (~x)^(~x)
+           @show x
+       elseif @capture ex 2(~y)
+           @show y
+       end;
+x = a
+```
 
 See also: [`@rule`](@ref)
 """

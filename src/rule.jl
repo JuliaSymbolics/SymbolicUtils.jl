@@ -317,7 +317,7 @@ macro rule(expr)
 end
 
 """
-    @capture ex LHS
+    @capture ex pattern
 
 Uses a `Rule` object to capture an expression if it matches the LHS pattern. Returns `true` and injects
 slot variable match results into the calling scope when the LHS matches, otherwise returns false. The

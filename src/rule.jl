@@ -319,10 +319,21 @@ end
 """
     @capture ex pattern
 
-Uses a `Rule` object to capture an expression if it matches the LHS pattern. Returns `true` and injects
-slot variable match results into the calling scope when the LHS matches, otherwise returns false. The
-rule language for specifying the LHS pattern is the same in @capture as it is in `@rule`. Contextual matching
+Uses a `Rule` object to capture an expression if it matches the `pattern`. Returns `true` and injects
+slot variable match results into the calling scope when the `pattern` matches, otherwise returns false. The
+rule language for specifying the `pattern` is the same in @capture as it is in `@rule`. Contextual matching
 is not yet supported
+
+e.g.
+
+    julia> @syms a; ex = a ^ a;
+
+    julia> if @capture ex (~x) + (~x)
+               @show x
+           elseif @capture ex (~y) ^ (~y)
+               @show y
+           end;
+    y = a
 
 See also: [`@rule`](@ref)
 """

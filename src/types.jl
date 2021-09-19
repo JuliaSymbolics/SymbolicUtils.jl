@@ -368,7 +368,7 @@ TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing, exprhe
     similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata, exprhead=exprhead)
     
 TermInterface.similarterm(t::Type{<:Term}, f, args, symtype; metadata=nothing, exprhead=:call) = 
-    Term{_promote_symtype(f, args)}(f, args; metadata=metadata, exprhead=exprhead)
+    Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 #--------------------
 #--------------------

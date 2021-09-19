@@ -160,6 +160,10 @@ function PolyForm(x,
         recurse=false,
         metadata=metadata(x))
 
+    if !(symtype(x) <: Number)
+        return x
+    end
+
     # Polyize and return a PolyForm
     p = polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)
@@ -225,8 +229,12 @@ Expand expressions by distributing multiplication over addition, e.g.,
 multivariate polynomials implementation.
 `variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
 """
-expand(expr) = Postwalk(identity)(PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
+expand(expr) = unpolyize(PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
 
+function unpolyize(x)
+    simterm(x, f, args; kw...) = similarterm(x, f, args, symtype(x); kw...)
+    Postwalk(identity, similarterm=simterm)(x)
+end
 
 ## Rational Polynomial form with Div
 
@@ -280,7 +288,7 @@ function simplify_fractions(x; polyform=false)
 
     expr = Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
 
-    polyform ? expr : Postwalk(identity)(expr)
+    polyform ? expr : unpolyize(expr)
 end
 
 function add_with_div(x, flatten=true)

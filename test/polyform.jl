@@ -32,6 +32,10 @@ end
    #@test expand(Term{Number}(zero, 0)) == 0
    #@test expand(identity(a * b) - b * a) == 0
     @test expand(a * b - b * a) == 0
+
+    @syms A::Vector{Real}
+    # test that the following works
+    expand(Term{Real}(getindex, [A, 3]) - 3)
 end
 
 @testset "simplify_fractions with quick-cancel" begin

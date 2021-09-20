@@ -134,7 +134,7 @@ typeof(α) = SymbolicUtils.Sym{Real, Nothing}
 <pre><code class="language-julia">expr1 &#61; α*sin&#40;w&#41;^2 &#43; β*cos&#40;z&#41;^2
 expr2 &#61; α*cos&#40;z&#41;^2 &#43; β*sin&#40;w&#41;^2
 
-expr1 &#43; expr2</code></pre><pre><code class="plaintext code-output">α*(sin(w)^2) + α*(cos(z)^2) + β*(sin(w)^2) + β*(cos(z)^2)</code></pre>
+expr1 &#43; expr2</code></pre><pre><code class="plaintext code-output">α*(sin(w)^2) + β*(sin(w)^2) + α*(cos(z)^2) + β*(cos(z)^2)</code></pre>
 <p>SymbolicUtils automatically simplifies</p>
 <pre><code class="language-julia">2w &#43; 3w - 3z &#43; α</code></pre><pre><code class="plaintext code-output">α + 5w - 3z</code></pre>
 <p>and reorders</p>
@@ -215,7 +215,7 @@ f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre><pre><code 
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: September 17, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: September 20, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

@@ -96,8 +96,8 @@ end
     #@eqtest R(sin(sin(sin(x + 1))), depth=2) == cos(cos(sin(x + 1)))
 end
 
+pred(x) = error("Fail")
 @testset "RuleRewriteError" begin
-    pred(x) = error("Fail")
 
     @syms a b
 

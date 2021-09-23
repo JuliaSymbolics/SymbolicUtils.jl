@@ -316,6 +316,49 @@ macro rule(expr)
     end
 end
 
+"""
+    @capture ex pattern
+
+Uses a `Rule` object to capture an expression if it matches the `pattern`. Returns `true` and injects
+slot variable match results into the calling scope when the `pattern` matches, otherwise returns false. The
+rule language for specifying the `pattern` is the same in @capture as it is in `@rule`. Contextual matching
+is not yet supported
+
+```julia
+julia> @syms a; ex = a^a;
+
+julia> if @capture ex (~x)^(~x)
+           @show x
+       elseif @capture ex 2(~y)
+           @show y
+       end;
+x = a
+```
+
+See also: [`@rule`](@ref)
+"""
+macro capture(ex, lhs)
+    keys = Symbol[]
+    lhs_term = makepattern(lhs, keys)
+    unique!(keys)
+    bind = Expr(:block, map(key-> :($(esc(key)) = getindex(__MATCHES__, $(QuoteNode(key)))), keys)...)
+    quote
+        $(__source__)
+        lhs_pattern = $(lhs_term)
+        __MATCHES__ = Rule($(QuoteNode(lhs)),
+             lhs_pattern,
+             matcher(lhs_pattern),
+             identity,
+             rule_depth($lhs_term))($(esc(ex)))
+        if __MATCHES__ !== nothing
+            $bind
+            true
+        else
+            false
+        end
+    end
+end
+
 #-----------------------------
 #### Associative Commutative Rules
 

@@ -161,23 +161,3 @@ function sort_args(f, t)
     args = args isa Tuple ? [args...] : args
     similarterm(t, f, sort(args, lt=<ₑ))
 end
-
-# Take a struct definition and make it be able to match in `@rule`
-macro matchable(expr)
-    @assert expr.head == :struct
-    name = expr.args[2]
-    if name isa Expr && name.head === :curly
-        name = name.args[1]
-    end
-    fields = filter(x-> !(x isa LineNumberNode), expr.args[3].args)
-    get_name(s::Symbol) = s
-    get_name(e::Expr) = (@assert(e.head == :(::)); e.args[1])
-    fields = map(get_name, fields)
-    quote
-        $expr
-        SymbolicUtils.istree(::$name) = true
-        SymbolicUtils.operation(::$name) = $name
-        SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
-        Base.length(x::$name) = $(length(fields) + 1)
-    end |> esc
-end

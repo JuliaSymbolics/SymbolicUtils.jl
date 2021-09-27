@@ -1,6 +1,7 @@
 module Code
 
 using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra
+using TermInterface
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,

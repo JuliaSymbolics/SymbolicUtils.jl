@@ -1,5 +1,6 @@
 using BenchmarkTools, SymbolicUtils
 using SymbolicUtils: is_literal_number
+using Metatheory
 
 using Random
 

@@ -98,11 +98,11 @@ end
 
 pred(x) = error("Fail")
 @testset "RuleRewriteError" begin
-
+    using Metatheory
     @syms a b
 
     rs = Rewriters.Postwalk(Rewriters.Chain(([@rule ~x + ~y::pred => ~x])))
-    @test_throws SymbolicUtils.RuleRewriteError rs(a+b)
+    @test_throws Metatheory.Rules.RuleRewriteError rs(a+b)
     err = try rs(a+b) catch err; err; end
     @test sprint(io->Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
 end
@@ -124,25 +124,27 @@ end
 end
 
 
+_g(y) = sin
 @testset "interpolation" begin
-    f(y) = sin
     @syms a
 
-    @test isnothing(@rule(f(1)(a) => 2)(sin(a)))
-    @test @rule($(f(1))(a) => 2)(sin(a)) == 2
+    @test isnothing(@rule(_g(1)(a) => 2)(sin(a)))
+    @test @rule($(_g(1))(a) => 2)(sin(a)) == 2
 end
 
+_f(x) = x === a
 @testset "where" begin
-    expected = :(f(~x) ? ~x + ~y : nothing)
-    @test SymbolicUtils.rewrite_rhs(:((~x + ~y) where f(~x))) == expected
+    using Metatheory
+    using Metatheory.SUSyntax
+    expected = :(_f(~x) ? ~x + ~y : nothing)
+    @test SUSyntax.rewrite_rhs(:((~x + ~y) where _f(~x))) == expected
 
     @syms a b
-    f(x) = x === a
-    r = @rule ~x => ~x where f(~x)
+    r = @rule ~x => ~x where _f(~x)
     @eqtest r(a) == a
     @test isnothing(r(b))
 
-    r = @acrule ~x => ~x where f(~x)
+    r = @acrule ~x => ~x where _f(~x)
     @eqtest r(a) == a
     @test r(b) === nothing
 end

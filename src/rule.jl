@@ -3,18 +3,9 @@
 const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 
 
-struct RuleRewriteError
-    rule
-    expr
-end
 
 getdepth(::Any) = typemax(Int)
 
-@noinline function Base.showerror(io::IO, err::RuleRewriteError)
-    msg = "Failed to apply rule $(err.rule) on expression "
-    msg *= sprint(io->showraw(io, err.expr))
-    print(io, msg)
-end
 
 function timerewrite(f)
     if !TIMER_OUTPUTS
@@ -99,7 +90,6 @@ end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-# TODO REVIEWME
 @inline _nameof(x) = x isa Function ? nameof(x) : x 
 
 function (acr::ACRule)(term::Y) where {Y}

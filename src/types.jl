@@ -4,80 +4,32 @@
 #--------------------
 abstract type Symbolic{T} end
 
-### Interface to be defined for `simplify` to work:
 
-"""
-    istree(x::T)
+# TODO_TERMINTERFACE
 
-Check if `x` represents an expression tree. If returns true,
-it will be assumed that `operation(::T)` and `arguments(::T)`
-methods are defined. Definining these three should allow use
-of `simplify` on custom types. Optionally `symtype(x)` can be
-defined to return the expected type of the symbolic expression.
-"""
-istree(x) = false
+TermInterface.symtype(x::Number) = typeof(x)
+TermInterface.symtype(::Symbolic{T}) where {T} = T
 
-"""
-    operation(x::T)
+TermInterface.metadata(s::Symbolic) = s.metadata
 
-Returns the operation (a function object) performed by an expression
-tree. Called only if `istree(::T)` is true. Part of the API required
-for `simplify` to work. Other required methods are `arguments` and `istree`
-"""
-function operation end
-
-"""
-    arguments(x::T)
-
-Returns the arguments (a `Vector`) for an expression tree.
-Called only if `istree(x)` is `true`. Part of the API required
-for `simplify` to work. Other required methods are `operation` and `istree`
-"""
-function arguments end
-
-"""
-    symtype(x)
-
-The supposed type of values in the domain of x. Tracing tools can use this type to
-pick the right method to run or analyse code.
-
-This defaults to `typeof(x)` if `x` is numeric, or `Any` otherwise.
-For the types defined in this package, namely `T<:Symbolic{S}` it is `S`.
-
-Define this for your symbolic types if you want `simplify` to apply rules
-specific to numbers (such as commutativity of multiplication). Or such
-rules that may be implemented in the future.
-"""
-function symtype end
-
-symtype(x::Number) = typeof(x)
-
-symtype(x) = typeof(x)
-
-symtype(::Symbolic{T}) where {T} = T
-
-"""
-    metadata(s)
-Get all the metadata of a term or `nothing` if no metadata is defined.
-
-"""
-metadata(s::Symbolic) = s.metadata
-metadata(s::Any) = nothing
+TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
 function getmetadata(s::Symbolic, ctx)
-    if s.metadata isa AbstractDict
-        s.metadata[ctx]
+    md = metadata(s)
+    if md isa AbstractDict
+        md[ctx]
     else
         throw(ArgumentError("$s does not have metadata for $ctx"))
     end
 end
 
 function getmetadata(s::Symbolic, ctx, default)
-    s.metadata isa AbstractDict ? get(s.metadata, ctx, default) : default
+    md = metadata(s)
+    md isa AbstractDict ? get(md, ctx, default) : default
 end
 
 # pirated for Setfield purposes:
@@ -171,6 +123,7 @@ struct Sym{T, M} <: Symbolic{T}
     metadata::M
 end
 
+TermInterface.issym(s::Sym) = true
 Base.nameof(s::Sym) = s.name
 
 ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = (n,m) -> Sym{T}(n, metadata=m)
@@ -200,8 +153,7 @@ struct FnType{X<:Tuple,Y} end
 
 function (f::Symbolic)(args...)
     error("Sym $f is not callable. " *
-          "Use @syms $f(var1, var2,...) to create it as a callable. " *
-          "See ?@fun for more options")
+          "Use @syms $f(var1, var2,...) to create it as a callable.")
 end
 
 """
@@ -291,7 +243,7 @@ function _name_type(x)
 end
 
 function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
-    print(io, f.name)
+    print(io, nameof(f))
     # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
     # best printing, but it's better than erroring.
     argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")
@@ -337,15 +289,16 @@ function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
     Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
 end
 
-istree(t::Term) = true
+TermInterface.istree(t::Type{<:Term}) = true
 
 function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
-operation(x::Term) = getfield(x, :f)
+TermInterface.operation(x::Term) = getfield(x, :f)
 
-arguments(x::Term) = getfield(x, :arguments)
+unsorted_arguments(x) = TermInterface.arguments(x)
+TermInterface.arguments(x::Term) = getfield(x, :arguments)
 
 function Base.isequal(t1::Term, t2::Term)
     t1 === t2 && return true
@@ -414,11 +367,11 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-similarterm(t, f, args, symtype; metadata=nothing) = f(args...)
-similarterm(t, f, args; metadata=nothing) = similarterm(t, f, args, _promote_symtype(f, args); metadata=nothing)
-similarterm(t::Term, f, args; metadata=nothing) = Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
-
-node_count(t) = istree(t) ? reduce(+, node_count(x) for x in  arguments(t), init=0) + 1 : 1
+TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing) = 
+    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
+    
+TermInterface.similarterm(t::Type{<:Term}, f, args, symtype; metadata=nothing) = 
+    Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
 
 #--------------------
 #--------------------
@@ -459,6 +412,14 @@ function print_arg(io, f, x)
     end
 end
 
+function remove_minus(t)
+    !istree(t) && return -t
+    @assert operation(t) == (*)
+    args = arguments(t)
+    @assert args[1] < 0
+    [-args[1], args[2:end]...]
+end
+
 function show_add(io, args)
     negs = filter(isnegative, args)
     nnegs = filter(!isnegative, args)
@@ -472,7 +433,7 @@ function show_add(io, args)
             print_arg(io, -, t)
         else
             print(io, " - ")
-            print_arg(io, -t, paren=true)
+            show_mul(io, remove_minus(t))
         end
     end
 end
@@ -494,10 +455,16 @@ end
 function show_mul(io, args)
     length(args) == 1 && return print_arg(io, *, args[1])
 
-    paren_scalar = args[1] isa Complex || args[1] isa Rational
     minus = args[1] isa Number && args[1] == -1
     unit = args[1] isa Number && args[1] == 1
-    nostar = !paren_scalar && args[1] isa Number && !(args[2] isa Number)
+
+    paren_scalar = (args[1] isa Complex && !_iszero(imag(args[1]))) ||
+                   args[1] isa Rational ||
+                   (args[1] isa Number && !isfinite(args[1]))
+
+    nostar = minus || unit ||
+            (!paren_scalar && args[1] isa Number && !(args[2] isa Number))
+
     for (i, t) in enumerate(args)
         if i != 1
             if i==2 && nostar
@@ -617,14 +584,19 @@ function Add(T, coeff, dict; metadata=NO_METADATA)
     Add{T, typeof(coeff), typeof(dict), typeof(metadata)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0), metadata)
 end
 
-symtype(a::Add{X}) where {X} = X
+TermInterface.symtype(a::Add{X}) where {X} = X
 
 
-istree(a::Add) = true
+TermInterface.istree(a::Type{Add}) = true
 
-operation(a::Add) = +
+TermInterface.operation(a::Add) = +
 
-function arguments(a::Add)
+function unsorted_arguments(a::Add)
+    args = [v*k for (k,v) in a.dict]
+    iszero(a.coeff) ? args : vcat(a.coeff, args)
+end
+
+function TermInterface.arguments(a::Add)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
     args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
@@ -754,22 +726,29 @@ function Mul(T, a,b; metadata=NO_METADATA)
         if _isone(last(pair)) # first value
             return first(pair)
         else
-            return Pow(first(pair), last(pair))
+            return unstable_pow(first(pair), last(pair))
         end
     else
         Mul{T, typeof(a), typeof(b), typeof(metadata)}(a,b, Ref{Any}(nothing), Ref{UInt}(0), metadata)
     end
 end
 
-symtype(a::Mul{X}) where {X} = X
+TermInterface.symtype(a::Mul{X}) where {X} = X
 
-istree(a::Mul) = true
+TermInterface.istree(a::Type{Mul}) = true
 
-operation(a::Mul) = *
+TermInterface.operation(a::Mul) = *
 
-function arguments(a::Mul)
+unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
+
+function unsorted_arguments(a::Mul)
+    args = [unstable_pow(k, v) for (k,v) in a.dict]
+    isone(a.coeff) ? args : vcat(a.coeff, args)
+end
+
+function TermInterface.arguments(a::Mul)
     a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([Pow(k, v) for (k,v) in a.dict], lt=<ₑ)
+    args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
     a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
@@ -803,7 +782,18 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 
-*(a::SN, b::SN) = Mul(mul_t(a,b), makemul(1, a, b)...)
+function *(a::SN, b::SN)
+    # Always make sure Div wraps Mul
+    if a isa Div && b isa Div
+        Div(a.num * b.num, a.den * b.den)
+    elseif a isa Div
+        Div(a.num * b, a.den)
+    elseif b isa Div
+        Div(a * b.num, b.den)
+    else
+        Mul(mul_t(a,b), makemul(1, a, b)...)
+    end
+end
 
 *(a::Mul, b::Mul) = Mul(mul_t(a, b),
                         a.coeff * b.coeff,
@@ -814,6 +804,8 @@ function *(a::Number, b::SN)
         a
     elseif isone(a)
         b
+    elseif b isa Div
+        Div(a*b.num, b.den)
     elseif b isa Add
         # 2(a+b) -> 2a + 2b
         T = promote_symtype(+, typeof(a), symtype(b))
@@ -825,17 +817,94 @@ end
 
 *(a::SN, b::Number) = b * a
 
-/(a::Union{SN,Number}, b::SN) = a * b^(-1)
-
 \(a::SN, b::Union{Number, SN}) = b / a
 
 \(a::Number, b::SN) = b / a
 
-/(a::SN, b::Number) = inv(b) * a
+/(a::SN, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
 
 //(a::Union{SN, Number}, b::SN) = a / b
 
 //(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
+
+"""
+    Div(numerator_factors, denominator_factors, simplified=false)
+
+"""
+struct Div{T,N,D, M} <: Symbolic{T}
+    num::N
+    den::D
+    simplified::Bool
+    metadata::M
+end
+
+Base.hash(x::Div, u::UInt64) = hash(x.num, hash(x.den, u))
+Base.isequal(x::Div, y::Div) = isequal(x.num, y.num) && isequal(x.den, y.den)
+
+const Rat = Union{Rational, Integer}
+
+ratcoeff(x) = false, NaN
+ratcoeff(x::Rat) = true, x
+ratcoeff(x::Mul) = ratcoeff(x.coeff)
+ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
+ratio(x::Rat,y::Rat) = x//y
+function maybe_intcoeff(x::Mul)
+    x.coeff isa Rational && isone(x.coeff.den) ? Setfield.@set!(x.coeff = x.coeff.num) : x
+end
+maybe_intcoeff(x::Rational) = isone(x.den) ? x.num : x
+maybe_intcoeff(x) = x
+
+function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
+    _iszero(n) && return zero(typeof(n))
+    _isone(d) && return n
+
+    if n isa Div && d isa Div
+        return Div{T}(n.num * d.den, n.den * d.num)
+    elseif n isa Div
+        return Div{T}(n.num, n.den * d)
+    elseif d isa Div
+        return Div{T}(n * d.den, d.num)
+    end
+
+    d isa Number && _isone(-d) && return -1 * n
+    n isa Rat && d isa Rat && return n // d # maybe called by oblivious code in simplify
+
+    # GCD coefficient upon construction
+    rat, nc = ratcoeff(n)
+    if rat
+        rat, dc = ratcoeff(d)
+        if rat
+            g = gcd(nc, dc) * sign(dc) # make denominator positive
+            invdc = ratio(1, g)
+            n = maybe_intcoeff(invdc * n)
+            d = maybe_intcoeff(invdc * d)
+        end
+    end
+
+    Div{T, typeof(n), typeof(d), typeof(metadata)}(n, d, simplified, metadata)
+end
+
+function Div(n,d, simplified=false; kw...)
+    Div{promote_symtype((/), symtype(n), symtype(d))}(n,d, simplified; kw...)
+end
+
+numerators(x) = istree(x) && operation(x) == (*) ? arguments(x) : [x]
+numerators(d::Div) = numerators(d.num)
+
+denominators(x) = [1]
+denominators(d::Div) = numerators(d.den)
+
+TermInterface.istree(d::Type{Div}) = true
+
+TermInterface.operation(d::Div) = (/)
+
+function TermInterface.arguments(d::Div)
+    [d.num, d.den]
+end
+
+Base.show(io::IO, d::Div) = show_term(io, d)
+
+/(a::Union{SN,Number}, b::SN) = Div(a,b)
 
 """
     Pow(base, exp)
@@ -861,13 +930,16 @@ end
 function Pow(a, b; metadata=NO_METADATA)
     Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
 end
-symtype(a::Pow{X}) where {X} = X
+TermInterface.symtype(a::Pow{X}) where {X} = X
 
-istree(a::Pow) = true
+TermInterface.istree(a::Type{Pow}) = true
 
-operation(a::Pow) = ^
+TermInterface.operation(a::Pow) = ^
 
-arguments(a::Pow) = [a.base, a.exp]
+# Use `Union` to avoid promoting the base and exponent to the same type.
+# For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
+# we don't want to promote `a.exp` to a multivariate polynomial.
+TermInterface.arguments(a::Pow) = Union{typeof(a.base), typeof(a.exp)}[a.base, a.exp]
 
 Base.hash(p::Pow, u::UInt) = hash(p.exp, hash(p.base, u))
 
@@ -892,7 +964,7 @@ end
 ^(a::Number, b::SN) = Pow(a, b)
 
 function ^(a::Mul, b::Number)
-    coeff = a.coeff isa Integer && b isa Integer ? (a.coeff//1) ^ b : a.coeff ^ b
+    coeff = unstable_pow(a.coeff, b)
     Mul(promote_symtype(^, symtype(a), symtype(b)),
         coeff, mapvalues((k, v) -> b*v, a.dict))
 end
@@ -943,9 +1015,10 @@ function mapvalues(f, d1::AbstractDict)
 end
 
 const NumericTerm = Union{Term{<:Number}, Mul{<:Number},
-                          Add{<:Number}, Pow{<:Number}}
+                          Add{<:Number}, Pow{<:Number}, Div{<:Number}}
 
-function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
+function TermInterface.similarterm(t::Type{P}, f, args, symtype; metadata=nothing) where P<:NumericTerm
+    T = symtype
     if T === nothing
         T = _promote_symtype(f, args)
     end
@@ -953,8 +1026,11 @@ function similarterm(p::NumericTerm, f, args, T=nothing; metadata=nothing)
         Add(T, makeadd(1, 0, args...)...; metadata=metadata)
     elseif f == (*)
         Mul(T, makemul(1, args...)...; metadata=metadata)
+    elseif f == (/)
+        @assert length(args) == 2
+        Div{T}(args...; metadata=metadata)
     elseif f == (^) && length(args) == 2
-        Pow{T, typeof.(args)...}(args...; metadata=metadata)
+        Pow{T}(makepow(args...)...; metadata=metadata)
     else
         Term{T}(f, args; metadata=metadata)
     end
@@ -991,8 +1067,8 @@ end
 AbstractTrees.children(x::Union{Pow}) = [x.base, x.exp]
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 
-print_tree(x; maxdepth=Inf, kw...) = print_tree(stdout, x; maxdepth=maxdepth, kw...)
-function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; kw...)
+print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show_type=show_type, maxdepth=maxdepth, kw...)
+function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow, Div}; show_type=false, kw...)
     AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
         if istree(y)
             print(io, operation(y))
@@ -1001,5 +1077,11 @@ function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow}; kw...)
         else
             print(io, y)
         end
+        if !(y isa TreePrint) && show_type
+            print(io, " [", typeof(y), "]")
+        end
     end
 end
+
+TermInterface.istree(t::Type{<:Sym}) = false
+TermInterface.istree(t::Type{<:Symbolic}) = true

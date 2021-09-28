@@ -119,6 +119,8 @@ end
 
 function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
 
+toexpr(O::Expr, st) = O
+
 function toexpr(O, st)
     !istree(O) && return O
     op = operation(O)
@@ -169,7 +171,7 @@ function get_assignments(d::DestructuredArgs, st)
         ex = (i isa Symbol ? :($name.$i) : :($name[$i]))
         ex = d.inbounds ? :(@inbounds($ex)) : ex
         a ← ex
-    end   
+    end
 end
 
 @matchable struct Let
@@ -565,7 +567,7 @@ end
 (::Type{SpawnFetch{T}})(exprs, combine) where {T} = SpawnFetch{T}(exprs, nothing, combine)
 
 function toexpr(p::SpawnFetch{Multithreaded}, st)
-    args = isnothing(p.args) ? Iterators.repeated((), length(p.exprs)) : p.args
+    args = p.args === nothing ? Iterators.repeated((), length(p.exprs)) : p.args
     spawns = map(p.exprs, args) do thunk, xs
         :(Base.Threads.@spawn $(toexpr(thunk, st))($(toexpr.(xs, (st,))...)))
     end

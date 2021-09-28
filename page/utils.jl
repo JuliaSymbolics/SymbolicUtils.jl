@@ -13,6 +13,8 @@ function hfun_doc(params)
         doc = eval(Meta.parse("using SymbolicUtils; @doc SymbolicUtils.$fname"))
     end
     txt = Markdown.plain(doc)
+    # jldoctest blocks don't get syntax highlighting in Franklin.jl.
+    txt = replace(txt, "```jldoctest" => "```")
     # possibly further processing here
     body = Franklin.fd2html(txt, internal=true)
     return """

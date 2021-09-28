@@ -1,6 +1,13 @@
+"""
+$(DocStringExtensions.README)
+"""
 module SymbolicUtils
 
+using DocStringExtensions
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
+
+using TermInterface
+using TermInterface: node_count
 
 # Sym, Term,
 # Add, Mul and Pow
@@ -10,6 +17,7 @@ import Setfield: PropertyLens
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 include("types.jl")
+export istree, operation, arguments, similarterm
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
@@ -27,7 +35,7 @@ include("rewriters.jl")
 using .Rewriters
 
 using Combinatorics: permutations, combinations
-export @rule, @acrule, RuleSet
+export @rule, @acrule, RuleSet, @capture
 
 # Rule type and @rule macro
 include("rule.jl")
@@ -36,10 +44,12 @@ include("rule.jl")
 include("matchers.jl")
 
 # Convert to an efficient multi-variate polynomial representation
-import AbstractAlgebra.Generic: MPoly, PolynomialRing, ZZ, exponent_vector
-using AbstractAlgebra: ismonomial, symbols
+import MultivariatePolynomials
+const MP = MultivariatePolynomials
+import DynamicPolynomials
 export expand
 include("abstractalgebra.jl")
+include("polyform.jl")
 
 # Term ordering
 include("ordering.jl")

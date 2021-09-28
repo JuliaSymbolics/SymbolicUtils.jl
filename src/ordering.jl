@@ -10,10 +10,16 @@
 
 arglength(a) = length(arguments(a))
 function <ₑ(a, b)
-    if !istree(a) && !istree(b)
+    if a isa Term && (b isa Symbolic && !(b isa Term))
+        return false
+    elseif b isa Term && (a isa Symbolic && !(a isa Term))
+        return true
+    elseif (a isa Union{Add,Mul}) && (b isa Union{Add,Mul})
+        return cmp_mul_adds(a, b)
+    elseif !istree(a) && !istree(b)
         T = typeof(a)
         S = typeof(b)
-        return T===S ? isless(a, b) : nameof(T) < nameof(S)
+        return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)
     elseif istree(b) && !istree(a)
         return true
     elseif istree(a) && istree(b)
@@ -21,6 +27,21 @@ function <ₑ(a, b)
     else
         return !(b <ₑ a)
     end
+end
+
+function cmp_mul_adds(a, b)
+    (a isa Add && b isa Mul) && return true
+    (a isa Mul && b isa Add) && return false
+    a_args = unsorted_arguments(a)
+    b_args = unsorted_arguments(b)
+    length(a_args) < length(b_args) && return true
+    length(a_args) > length(b_args) && return false
+    a_args = arguments(a)
+    b_args = arguments(b)
+    for (x, y) in zip(a_args, b_args)
+        x <ₑ y && return true
+    end
+    return false
 end
 
 <ₑ(a::Symbolic, b::Sym) = !(b <ₑ a)

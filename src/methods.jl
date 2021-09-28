@@ -80,6 +80,7 @@ end
 @number_methods(Add, term(f, a), term(f, a, b), skipbasics)
 @number_methods(Mul, term(f, a), term(f, a, b), skipbasics)
 @number_methods(Pow, term(f, a), term(f, a, b), skipbasics)
+@number_methods(Div, term(f, a), term(f, a, b), skipbasics)
 
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),
@@ -113,7 +114,7 @@ Base.real(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(real, s)
 promote_symtype(::typeof(Base.conj), T::Type{<:Number}) = T
 Base.conj(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(conj, s)
 promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real
-Base.imag(s::Symbolic{<:Number}) = islike(s, Real) ? zero(symtype(s)) : term(conj, s)
+Base.imag(s::Symbolic{<:Number}) = islike(s, Real) ? zero(symtype(s)) : term(imag, s)
 
 ## Booleans
 

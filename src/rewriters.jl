@@ -29,7 +29,8 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer, is_operation, istree, operation, similarterm, arguments, node_count
+using SymbolicUtils: @timer, unsorted_arguments
+using TermInterface: is_operation, istree, operation, similarterm, arguments, node_count
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
@@ -41,11 +42,16 @@ struct Empty end
 
 (rw::Empty)(x) = nothing
 
+instrument(x, f) = f(x)
+instrument(x::Empty, f) = x
+
 struct IfElse{F, A, B}
     cond::F
     yes::A
     no::B
 end
+
+instrument(x::IfElse, f) = IfElse(x.cond, instrument(x.yes, f), instrument(x.no, f))
 
 function (rw::IfElse)(x)
     rw.cond(x) ?  rw.yes(x) : rw.no(x)
@@ -67,10 +73,13 @@ function (rw::Chain)(x)
     return x
 end
 
+instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
 
 struct RestartedChain{Cs}
     rws::Cs
 end
+
+instrument(c::RestartedChain, f) = RestartedChain(map(x->instrument(x,f), c.rws))
 
 function (rw::RestartedChain)(x)
     for f in rw.rws
@@ -99,11 +108,13 @@ struct Fixpoint{C}
     rw::C
 end
 
+instrument(x::Fixpoint, f) = Fixpoint(instrument(x.rw, f))
+
 function (rw::Fixpoint)(x)
     f = rw.rw
     y = @timer cached_repr(f) f(x)
     while x !== y && !isequal(x, y)
-        isnothing(y) && return x
+        y === nothing && return x
         x = y
         y = @timer cached_repr(f) f(x)
     end
@@ -114,6 +125,13 @@ struct Walk{ord, C, F, threaded}
     rw::C
     thread_cutoff::Int
     similarterm::F
+end
+
+function instrument(x::Walk{ord, C,F,threaded}, f) where {ord,C,F,threaded}
+    irw = instrument(x.rw, f)
+    Walk{ord, typeof(irw), typeof(x.similarterm), threaded}(irw,
+                                                            x.thread_cutoff,
+                                                            x.similarterm)
 end
 
 using .Threads
@@ -129,9 +147,11 @@ end
 struct PassThrough{C}
     rw::C
 end
-(p::PassThrough)(x) = (y=p.rw(x); isnothing(y) ? x : y)
+instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 
-passthrough(x, default) = isnothing(x) ? default : x
+(p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
+
+passthrough(x, default) = x === nothing ? default : x
 function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
     if istree(x)
@@ -139,7 +159,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if istree(x)
-            x = p.similarterm(x, operation(x), map(PassThrough(p), arguments(x)))
+            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)))
         end
         return ord === :post ? p.rw(x) : x
     else
@@ -168,6 +188,20 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
     else
         return p.rw(x)
     end
+end
+
+function instrument_io(x)
+    function io_instrumenter(r)
+        function (args...)
+            println("Rule: ", r)
+            println("Input: ", args)
+            res = r(args...)
+            println("Output: ", res)
+            res
+        end
+    end
+
+    instrument(x, io_instrumenter)
 end
 
 end # end module

@@ -21,6 +21,7 @@ end
     @eqtest simplify(Term{Real}(conj, [x])) == x
     @eqtest simplify(Term{Real}(real, [x])) == x
     @eqtest simplify(Term{Real}(imag, [x])) == 0
+    @eqtest simplify(Term{Real}(imag, [y])) == imag(y)
     @eqtest simplify(x - y) == x + -1*y
     @eqtest simplify(x - sin(y)) == x + -1*sin(y)
     @eqtest simplify(-sin(x)) == -1*sin(x)
@@ -41,7 +42,7 @@ end
     @eqtest simplify(a + b + 0*c + d) == simplify(a + b + d)
     @eqtest simplify(a * b * c^0 * d) == simplify(a * b * d)
     @eqtest simplify(a * b * 1*c * d) == simplify(a * b * c * d)
-    @eqtest simplify(x^2.0/(x*y)^2.0) == y ^ (-2.0)
+    @eqtest simplify_fractions(x^2.0/(x*y)^2.0) == simplify_fractions(1 / (y^2.0))
 
     @test simplify(Term(one, [a])) == 1
     @test simplify(Term(one, [b+1])) == 1
@@ -113,7 +114,7 @@ end
           ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
            ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
     @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
-    @test SymbolicUtils.node_count(a + b * c / d) == 8
+    @test SymbolicUtils.node_count(a + b * c / d) == 7
 end
 
 @testset "timerwrite" begin
@@ -129,4 +130,19 @@ end
 
     @test isnothing(@rule(f(1)(a) => 2)(sin(a)))
     @test @rule($(f(1))(a) => 2)(sin(a)) == 2
+end
+
+@testset "where" begin
+    expected = :(f(~x) ? ~x + ~y : nothing)
+    @test SymbolicUtils.rewrite_rhs(:((~x + ~y) where f(~x))) == expected
+
+    @syms a b
+    f(x) = x === a
+    r = @rule ~x => ~x where f(~x)
+    @eqtest r(a) == a
+    @test isnothing(r(b))
+
+    r = @acrule ~x => ~x where f(~x)
+    @eqtest r(a) == a
+    @test r(b) === nothing
 end

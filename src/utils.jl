@@ -106,7 +106,6 @@ end
 ### Predicates
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
-is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
 
 isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(x)
@@ -167,8 +166,19 @@ function merge_repeats(merge, xs)
     return merged
 end
 
+"""
+    flatten_term(⋆, x)
 
-# Numbers to the back
+Return a flattened expression with the numbers at the back.
+
+# Example
+```jldoctest
+julia> @syms x y;
+
+julia> SymbolicUtils.flatten_term(+, y + y + x)
+x + 2y
+```
+"""
 function flatten_term(⋆, x)
     args = arguments(x)
     # flatten nested ⋆

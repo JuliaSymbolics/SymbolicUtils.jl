@@ -55,7 +55,7 @@ function makeslot(s::Expr, keys)
     :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
 end
 
-function makepattern(expr, keys)
+function makepattern(expr, keys, slots)
     if expr isa Expr
         if expr.head === :call
             if expr.args[1] === :(~)
@@ -67,15 +67,31 @@ function makepattern(expr, keys)
                     makeslot(expr.args[2], keys)
                 end
             else
-                :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
+                :(term($(map(x->makepattern(x, keys, slots), expr.args)...); type=Any))
+            end
+        elseif expr.head === :...
+            if expr.args[1] === :(~)
+                if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
+                    # matches ~~x...
+                    makesegment(expr.args[2].args[2], keys)
+                else
+                    # matches ~x...
+                    makesegment(expr.args[2], keys)
+                end
+            elseif expr.args[1] in slots
+                makesegment(expr.args[1], keys)
+            else
+                Expr(:..., makepattern.(expr.args, (keys,), (slots,))...)
             end
         elseif expr.head === :ref
-            :(term(getindex, $(map(x->makepattern(x, keys), expr.args)...); type=Any))
+            :(term(getindex, $(map(x->makepattern(x, keys, slots), expr.args)...); type=Any))
         elseif expr.head === :$
             return esc(expr.args[1])
         else
-            Expr(expr.head, makepattern.(expr.args, (keys,))...)
+            Expr(expr.head, makepattern.(expr.args, (keys,), (slots,))...)
         end
+    elseif expr in slots
+        makeslot(expr, keys)
     else
         # treat as a literal
         return esc(expr)
@@ -161,6 +177,26 @@ function rewrite_rhs(expr::Expr)
     return expr
 end
 rewrite_rhs(expr) = expr
+
+function addslots(expr, slots)
+    if expr isa Expr
+        if expr.head === :macrocall && expr.args[1] in [Symbol("@rule"), Symbol("@capture"), Symbol("@slots")]
+            Expr(:macrocall, expr.args[1:2]..., slots..., expr.args[3:end]...)
+        else
+            Expr(expr.head, addslots.(expr.args, (slots,))...)
+        end
+    else
+        expr
+    end
+end
+
+macro slots(args...)
+    length(args) >= 1 || ArgumentError("@slots requires at least one argument")
+    slots = args[1:end-1]
+    expr = args[end]
+
+    return esc(addslots(expr, slots))
+end
 
 """
     @rule LHS => RHS
@@ -298,20 +334,25 @@ whether the predicate holds or not.
 _In the consequent pattern_: Use `(@ctx)` to access the context object on the right hand side
 of an expression.
 """
-macro rule(expr)
+macro rule(args...)
+    length(args) >= 1 || ArgumentError("@rule requires at least one argument")
+    slots = args[1:end-1]
+    expr = args[end]
+
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs = expr.args[2]
     rhs = rewrite_rhs(expr.args[3])
     keys = Symbol[]
-    lhs_term = makepattern(lhs, keys)
+    lhs_term = makepattern(lhs, keys, slots)
     unique!(keys)
+    bind = Expr(:block, map(key-> :($(esc(key)) = getindex(__MATCHES__, $(QuoteNode(key)))), keys)...)
     quote
         $(__source__)
         lhs_pattern = $(lhs_term)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
-             __MATCHES__ -> $(makeconsequent(rhs)),
+             __MATCHES__ -> ($bind; $(makeconsequent(rhs))),
              rule_depth($lhs_term))
     end
 end
@@ -337,9 +378,14 @@ x = a
 
 See also: [`@rule`](@ref)
 """
-macro capture(ex, lhs)
+macro capture(args...)
+    length(args) >= 2 || ArgumentError("@capture requires at least two arguments")
+    slots = args[1:end-2]
+    ex = args[end-1]
+    lhs = args[end]
+
     keys = Symbol[]
-    lhs_term = makepattern(lhs, keys)
+    lhs_term = makepattern(lhs, keys, slots)
     unique!(keys)
     bind = Expr(:block, map(key-> :($(esc(key)) = getindex(__MATCHES__, $(QuoteNode(key)))), keys)...)
     quote

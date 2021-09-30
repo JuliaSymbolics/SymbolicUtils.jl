@@ -1,5 +1,6 @@
-using SymbolicUtils.Code, Test
+using SymbolicUtils, SymbolicUtils.Code, Test
 @testset "CSE" begin
+    @syms x
     t = cse(hypot(hypot(cos(x), sin(x)), atan(cos(x), sin(x))))
 
     @test t isa Let

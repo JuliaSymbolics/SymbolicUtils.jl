@@ -364,9 +364,9 @@ Has optimized processes for `Mul` and `Pow` terms.
 """
 quick_cancel(d::Div) = Div{symtype(d)}(quick_cancel(d.num, d.den)...)
 
-quick_cancel(x::Pow) = x.base isa Div ? Div(x.base.num^x.exp, x.base.den^x.exp) : x
+quick_cancel(x::Pow) = x.base isa Div ? quick_cancel((x.base.num^x.exp) / (x.base.den^x.exp)) : x
 
-quick_cancel(x::Mul) = any(a->a isa Div, unsorted_arguments(x)) ? expand(x) : x
+quick_cancel(x::Mul) = any(a->a isa Div, unsorted_arguments(x)) ? prod(unsorted_arguments(x)) : x
 
 quick_cancel(x) = x
 

@@ -669,6 +669,10 @@ function cse_block!(assignments, counter, names, name, state, x)
             counter[] += 1
             return sym
         end
+    elseif istree(x)
+        args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
+        return similarterm(x, operation(x), args, symtype(x),
+                    metadata=metadata(x))
     else
         return x
     end
@@ -678,10 +682,7 @@ function cse_block(state, t, name=Symbol("var-", hash(t)))
     assignments = Assignment[]
     counter = Ref{Int}(1)
     names = Dict{Any, Sym}()
-    t′ = Rewriters.Postwalk(x->cse_block!(assignments, counter, names, name, state, x),
-                  similarterm = (t, f, args) -> similarterm(t, f, args, symtype(t),
-                                                            metadata=metadata(t)))(t)
-    Let(assignments, t′)
+    Let(assignments, cse_block!(assignments, counter, names, name, state, t))
 end
 
 end

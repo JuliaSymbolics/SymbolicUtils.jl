@@ -499,7 +499,7 @@ end
 function show_call(io, f, args)
     fname = istree(f) ? Symbol(repr(f)) : nameof(f)
     binary = Base.isbinaryoperator(fname)
-    if binary
+    if binary && length(args) == 2
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")
             print_arg(io, t, paren=true)

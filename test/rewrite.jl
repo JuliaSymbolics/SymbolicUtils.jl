@@ -16,11 +16,23 @@ end
 end
 
 @testset "Slot matcher" begin
+    @test @slots x @rule(x => true)("?") === true
+    @test @slots x @rule(x => x)(2) === 2
+
     @test @rule(~x => true)("?") === true
     @test @rule( ~x => ~x)(2) === 2
 end
 
 @testset "Term matcher" begin
+    @slots x begin
+        @test @rule(sin(x) => x)(sin(a)) === a
+        @eqtest @rule(sin(x) => x)(sin(a^2)) == a^2
+        @test @rule(sin(x) => x)(sin(a)^2) === nothing
+        @test @rule(sin(sin(x)) => x)(sin(a^2)) === nothing
+    end
+    @test @slots x @rule(sin(sin(x)) => x)(sin(sin(a))) === a
+    @test @slots x @rule(sin(x)^2 => x)(sin(a)^2) === a
+
     @test @rule(sin(~x) => ~x)(sin(a)) === a
     @eqtest @rule(sin(~x) => ~x)(sin(a^2)) == a^2
     @test @rule(sin(~x) => ~x)(sin(a)^2) === nothing
@@ -41,6 +53,20 @@ end
     @eqtest @rule(+(~~x,~y, ~~x) => (~~x, ~y))(term(+,9,8,9,type=Any)) == ([9,],8)
     @eqtest @rule(+(~~x,~y, ~~x) => (~~x, ~y, ~~x))(term(+,9,8,9,9,8,type=Any)) == ([9,8], 9, [9,8])
     @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
+
+    @slots x y begin
+        @eqtest @rule(+(x...) => x)(a + b) == [a,b]
+        @eqtest @rule(+(x...) => x)(term(+, a, b, c)) == [a,b,c]
+        @eqtest @rule(+(x..., y, x...) => (x, y))(term(+,9,8,9,type=Any)) == ([9,],8)
+    end
+    @eqtest @rule(+(~x...,~y, ~x...) => (x, y, x))(term(+,9,8,9,9,8,type=Any)) == ([9,8], 9, [9,8])
+    @eqtest @rule(+(~x...,~y, ~x...) => (~x, ~y, ~x))(term(+,6,type=Any)) == ([], 6, [])
+
+    @eqtest (@slots x @rule x::iseven => x)(4) == 4
+    @eqtest (@slots x @rule x::iseven => x)(5) == nothing
+    alleven(x) = all(iseven.(x))
+    @eqtest @rule(+(~x::alleven...) => (x...,))(term(+,9,8,type=Any)) == nothing
+    @eqtest (@slots x @rule +(x::alleven...) => (x...,))(term(+,4,8,type=Any)) == (4, 8)
 end
 
 @testset "Capture form" begin
@@ -49,7 +75,7 @@ end
     #note that @test inserts a soft local scope (try-catch) that would gobble
     #the matches from assignment statements in @capture macro, so we call it
     #outside the test macro 
-    ret = @capture ex (~x)^(~x)
+    ret = @slots x @capture ex x^x
     @test ret
     @test @isdefined x
     @test x === a
@@ -59,7 +85,7 @@ end
     @test !ret
     @test !(@isdefined y)
 
-    ret = @capture (a + b) (+)(~~z)
+    ret = @slots z @capture (a + b) (+)(z...)
     @test ret
     @test @isdefined z
     @test all(z .=== arguments(a + b))

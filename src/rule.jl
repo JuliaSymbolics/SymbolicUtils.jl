@@ -55,47 +55,41 @@ function makeslot(s::Expr, keys)
     :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
 end
 
-function makepattern(expr, keys, slots)
-    if expr isa Expr
+function makepattern(expr, keys, slots, splat = false)
+    res = if expr isa Expr
         if expr.head === :call
             if expr.args[1] === :(~)
-                if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
-                    # matches ~~x::predicate
-                    makesegment(expr.args[2].args[2], keys)
+                if expr.args[2] isa Expr && expr.args[2].head === :call expr.args[2].args[1] == :(~)
+                    # matches ~~x::predicate or ~~x::predicate...
+                    return makesegment(expr.args[2].args[2], keys)
+                elseif splat
+                    # matches ~x::predicate...
+                    return makesegment(expr.args[2], keys)
                 else
                     # matches ~x::predicate
-                    makeslot(expr.args[2], keys)
+                    return makeslot(expr.args[2], keys)
                 end
             else
                 :(term($(map(x->makepattern(x, keys, slots), expr.args)...); type=Any))
             end
         elseif expr.head === :...
-            if expr.args[1] === :(~)
-                if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
-                    # matches ~~x...
-                    makesegment(expr.args[2].args[2], keys)
-                else
-                    # matches ~x...
-                    makesegment(expr.args[2], keys)
-                end
-            elseif expr.args[1] in slots
-                makesegment(expr.args[1], keys)
-            else
-                Expr(:..., makepattern.(expr.args, (keys,), (slots,))...)
-            end
+            makepattern(expr.args[1], keys, slots, true)
+        elseif expr.head == :(::) && expr.args[1] in slots
+            return splat ? makesegment(expr, keys) : makeslot(expr, keys)
         elseif expr.head === :ref
             :(term(getindex, $(map(x->makepattern(x, keys, slots), expr.args)...); type=Any))
         elseif expr.head === :$
-            return esc(expr.args[1])
+            esc(expr.args[1])
         else
             Expr(expr.head, makepattern.(expr.args, (keys,), (slots,))...)
         end
     elseif expr in slots
-        makeslot(expr, keys)
+        return splat ? makesegment(expr, keys) : makeslot(expr, keys)
     else
         # treat as a literal
-        return esc(expr)
+        esc(expr)
     end
+    return splat ? Expr(:..., res) : res
 end
 
 function makeconsequent(expr)

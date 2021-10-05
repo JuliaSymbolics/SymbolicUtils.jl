@@ -15,7 +15,7 @@ using SymbolicUtils
 
 (w, z, α, β) # hide
 
-r1 = @rule sin(2(~x)) => 2sin(~x)*cos(~x)
+r1 = @rule sin(2(~x)) => 2sin(x)*cos(x)
 
 r1(sin(2z))
 ```
@@ -44,22 +44,22 @@ r1(sin(2*(w+z)*(α+β))) === nothing
 Rules are of course not limited to single slot variable
 
 ```julia:rewrite5
-r2 = @rule sin(~x + ~y) => sin(~x)*cos(~y) + cos(~x)*sin(~y);
+r2 = @rule sin(~x + ~y) => sin(x)*cos(y) + cos(x)*sin(y);
 
 r2(sin(α+β))
 ```
 
-If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~xs` in the following example is a segment variable:
+If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~xs...` in the following example is a segment variable:
 
 ```julia:rewrite6
 @syms x y z
-@rule(+(~~xs) => ~~xs)(x + y + z)
+@rule(+(~xs...) => xs)(x + y + z)
 ```
 
-`~~xs` is a vector of subexpressions matched. You can use it to construct something more useful:
+`~xs` is a vector of subexpressions matched. You can use it to construct something more useful:
 
 ```julia:rewrite7
-r3 = @rule ~x * +(~~ys) => sum(map(y-> ~x * y, ~~ys));
+r3 = @rule ~x * +(~ys...) => sum(map(y-> x * y, ys));
 
 r3(2 * (w+w+α+β))
 ```
@@ -74,14 +74,14 @@ Notice that the expression was autosimplified before application of the rule.
 
 Matcher pattern may contain slot variables with attached predicates, written as `~x::f` where `f` is a function that takes a matched expression and returns a boolean value. Such a slot will be considered a match only if `f` returns true.
 
-Similarly `~~x::g` is a way of attaching a predicate `g` to a segment variable. In the case of segment variables `g` gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate.
+Similarly `~x::g...` is a way of attaching a predicate `g` to a segment variable. In the case of segment variables `g` gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate.
 
 For example,
 
 ```julia:pred1
 @syms a b c d
 
-r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms";
+r = @rule +(~x, ~y::(ys->iseven(length(ys)))...) => "odd terms";
 
 @show r(a + b + c + d)
 @show r(b + c + d)
@@ -89,6 +89,19 @@ r = @rule ~x + ~~y::(ys->iseven(length(ys))) => "odd terms";
 @show r(a + b)
 ```
 
+### Declaring Slots
+
+Slot variables can be declared without the `~` using the `@slots` macro
+
+```julia:slots1
+@slots x y @rule sin(x + y) => sin(x)*cos(y) + cos(x)*sin(y);
+```
+
+This works for segments as well:
+
+```julia:slots2
+@slots xs @rule(+(~xs...) => xs);
+```
 
 ### Associative-Commutative Rules
 
@@ -97,7 +110,7 @@ Given an expression `f(x, f(y, z, u), v, w)`, a `f` is said to be associative if
 ```julia:acr
 @syms x y z
 
-acr = @acrule((~a)^(~x) * (~a)^(~y) => (~a)^(~x + ~y))
+acr = @acrule((~a)^(~x) * (~a)^(~y) => (a)^(x + y))
 
 acr(x^y * x^z)
 ```
@@ -112,7 +125,7 @@ using SymbolicUtils
 
 @syms x::Real y::Real
 
-sqexpand = @rule (~x + ~y)^2 => (~x)^2 + (~y)^2 + 2 * ~x * ~y
+sqexpand = @rule (~x + ~y)^2 => (x)^2 + (y)^2 + 2 * x * y
 
 sqexpand((cos(x) + sin(x))^2)
 ```
@@ -179,7 +192,7 @@ To check that, we will combine rules from [previous example](#example of applyin
 using SymbolicUtils
 using SymbolicUtils.Rewriters
 
-sqexpand = @rule (~x + ~y)^2 => (~x)^2 + (~y)^2 + 2 * ~x * ~y
+sqexpand = @rule (~x + ~y)^2 => (x)^2 + (y)^2 + 2 * x * y
 acpyid = @acrule sin(~x)^2 + cos(~x)^2 => 1
 
 csa = Chain([sqexpand, acpyid])
@@ -218,4 +231,14 @@ You can also use `Fixpoint` to apply the rules until there are no changes.
 
 ```julia:composing5
 Fixpoint(cas)((cos(x) + sin(x))^2)
+```
+
+The @slots macro is especially useful when declaring several rules at once with the same slot variables:
+
+```julia:composing6
+julia> @slots x y z a b c SymbolicUtils.Chain([
+    (@rule x^2 + 2x*y + y^2 => (x + y)^2),
+    (@rule x^a * y^b => (x*y)^a * y^(b-a)),
+    (@rule +(x...) => sum(x)),
+]);
 ```

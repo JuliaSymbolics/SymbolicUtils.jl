@@ -190,6 +190,25 @@ function addslots(expr, slots)
     end
 end
 
+
+"""
+    @slots [SLOTS...] ex
+
+Declare SLOTS as slot variables for all `@rule` or `@capture` invocations in the expression `ex`.
+
+_Example:_
+
+```julia
+julia> @slots x y z a b c SymbolicUtils.Chain([
+    (@rule x^2 + 2x*y + y^2 => (x + y)^2),
+    (@rule x^a * y^b => (x*y)^a * y^(b-a)),
+    (@rule +(x...) => sum(x)),
+])
+SymbolicUtils.Chain(SymbolicUtils.Rule{SymbolicUtils.Term{Any, Nothing}}[...]))
+```
+
+See also: [`@rule`](@ref), [`@capture`](@ref)
+"""
 macro slots(args...)
     length(args) >= 1 || ArgumentError("@slots requires at least one argument")
     slots = args[1:end-1]
@@ -199,18 +218,21 @@ macro slots(args...)
 end
 
 """
-    @rule LHS => RHS
+    @rule [SLOTS...] LHS => RHS
 
-Creates a `Rule` object. A rule object is callable, and  takes an expression and rewrites
-it if it matches the LHS pattern to the RHS pattern, returns `nothing` otherwise.
-The rule language is described below.
+Creates a `Rule` object. A rule object is callable, and takes an expression and
+rewrites it if it matches the LHS pattern to the RHS expression, returns
+`nothing` otherwise. The rule language is described below.
 
-LHS can be any possibly nested function call expression where any of the arugments can
-optionally be a Slot (`~x`) or a Segment (`~~x`) (described below).
+LHS can be any possibly nested function call expression where any of the arguments can
+optionally be a Slot (`~x`) or a Segment (`~x...`) (described below).
 
-If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS
-Segment (`~x`) and slot variables (`~~x`) on the RHS will substitute the result of the
-matches found for these variables in the LHS.
+SLOTS is an optional list of symbols to be interpted as slots or segments
+directly (without using `~`).  To declare slots for several rules at once, see
+the `@slots` macro.
+
+If an expression matches LHS entirely, then it is rewritten to the result of the
+expression RHS, whose local scope includes the slot matches as variables.
 
 **Slot**:
 
@@ -224,8 +246,8 @@ Simple rule to turn any `sin` into `cos`:
 julia> @syms a b c
 (a, b, c)
 
-julia> r = @rule sin(~x) => cos(~x)
-sin(~x) => cos(~x)
+julia> r = @rule sin(~x) => cos(x)
+sin(~x) => cos(x)
 
 julia> r(sin(1+a))
 cos((1 + a))
@@ -234,8 +256,8 @@ cos((1 + a))
 A rule with 2 segment variables
 
 ```julia
-julia> r = @rule sin(~x + ~y) => sin(~x)*cos(~y) + cos(~x)*sin(~y)
-sin(~x + ~y) => sin(~x) * cos(~y) + cos(~x) * sin(~y)
+julia> r = @rule sin(~x + ~y) => sin(x)*cos(y) + cos(x)*sin(y)
+sin(~x + ~y) => sin(x) * cos(y) + cos(x) * sin(y)
 
 julia> r(sin(a + b))
 cos(a)*sin(b) + sin(a)*cos(b)
@@ -254,27 +276,42 @@ julia> r(sin(2a)^2 + cos(a)^2)
 # nothing
 ```
 
+A rule without `~`
+
+```julia
+julia> r = @slots x y z @rule x(y + z) => xy + xz
+x(y + z) => xy + xz
+```
+
 **Segment**:
 
-A Segment variable is written as `~~x` and matches zero or more expressions in the
-function call.
+A Segment variable matches zero or more expressions in the function call.
+Segments may be written by splatting slot variables (`~x...`).
 
 _Example:_
 
-This implements the distributive property of multiplication: `+(~~ys)` matches expressions
-like `a + b`, `a+b+c` and so on. On the RHS `~~ys` presents as any old julia array.
+This implements the distributive property of multiplication: `+(~ys...)` matches expressions
+like `a + b`, `a+b+c` and so on. On the RHS `ys` presents as any old julia array.
 
 ```julia
-julia> r = @rule ~x * +((~~ys)) => sum(map(y-> ~x * y, ~~ys));
+julia> r = @rule ~x * +((~ys...)) => sum(map(y-> x * y, ys));
 
 julia> r(2 * (a+b+c))
 ((2 * a) + (2 * b) + (2 * c))
 ```
 
+A segment without `~`.
+
+```julia
+julia> r = @slots xs @rule min(xs...) => foldl(min, xs, Inf);
+
+julia> r(min(a, b, c))
+min(min(a, b), c)
+
 **Predicates**:
 
 There are two kinds of predicates, namely over slot variables and over the whole rule.
-For the former, predicates can be used on both `~x` and `~~x` by using the `~x::f` or `~~x::f`.
+For the former, predicates can be used on both `~x` and `~x...` like `~x::f` or `~x::f...`.
 Here `f` can be any julia function. In the case of a slot the function gets a single
 matched subexpression, in the case of segment, it gets an array of matched expressions.
 
@@ -288,8 +325,8 @@ two_πs (generic function with 1 method)
 julia> two_πs(x) = false
 two_πs (generic function with 2 methods)
 
-julia> r = @rule sin(~~x + ~y::two_πs + ~~z) => sin(+(~~x..., ~~z...))
-sin(~(~x) + ~(y::two_πs) + ~(~z)) => sin(+(~(~x)..., ~(~z)...))
+julia> r = @slots x y z @rule sin(+(x..., y::two_πs, z...)) => sin(+(x..., z...))
+sin(+(x..., y::two_πs, z...)) => sin(+(x..., z...))
 
 julia> r(sin(a+3π))
 
@@ -300,8 +337,6 @@ julia> r(sin(a+6π+c))
 sin((a + c))
 ```
 
-Predicate function gets an array of values if attached to a segment variable (`~~x`).
-
 For the predicate over the whole rule, use `@rule <LHS> => <RHS> where <predicate>`:
 
 ```
@@ -309,7 +344,7 @@ julia> @syms a b;
 
 julia> predicate(x) = x === a;
 
-julia> r = @rule ~x => ~x where f(~x);
+julia> r = @rule ~x => x where f(x);
 
 julia> r(a)
 a
@@ -319,7 +354,7 @@ true
 ```
 
 Note that this is syntactic sugar and that it is the same as something like
-`@rule ~x => f(~x) ? ~x : nothing`.
+`@rule ~x => f(x) ? x : nothing`.
 
 **Context**:
 
@@ -333,6 +368,11 @@ whether the predicate holds or not.
 
 _In the consequent pattern_: Use `(@ctx)` to access the context object on the right hand side
 of an expression.
+
+**Compatibility**:
+Segment variables may still be written as (`~~x`), and slot (`~x`) and segment (`~x...` or `~~x`) syntaxes on the RHS will still substitute the result of the matches.
+
+See also: [`@capture`](@ref), [`@slots`](@ref)
 """
 macro rule(args...)
     length(args) >= 1 || ArgumentError("@rule requires at least one argument")
@@ -358,12 +398,12 @@ macro rule(args...)
 end
 
 """
-    @capture ex pattern
+    @capture [SLOTS...] ex pattern
 
 Uses a `Rule` object to capture an expression if it matches the `pattern`. Returns `true` and injects
 slot variable match results into the calling scope when the `pattern` matches, otherwise returns false. The
 rule language for specifying the `pattern` is the same in @capture as it is in `@rule`. Contextual matching
-is not yet supported
+is not yet supported.
 
 ```julia
 julia> @syms a; ex = a^a;
@@ -376,7 +416,7 @@ julia> if @capture ex (~x)^(~x)
 x = a
 ```
 
-See also: [`@rule`](@ref)
+See also: [`@rule`](@ref), [`@slots`](@ref)
 """
 macro capture(args...)
     length(args) >= 2 || ArgumentError("@capture requires at least two arguments")

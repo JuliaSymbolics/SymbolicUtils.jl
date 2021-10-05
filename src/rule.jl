@@ -414,6 +414,46 @@ function (acr::ACRule)(term)
     end
 end
 
+#-----------------------------
+#### Associative Rules
+
+struct AssocRule{R} <: AbstractRule
+    rule::R
+    arity::Int
+end
+Rule(cr::AssocRule) = cr.rule
+getdepth(cr::AssocRule) = getdepth(cr.rule)
+
+macro assocrule(expr)
+    arity = length(expr.args[2].args[2:end])
+    quote
+        AssocRule($(esc(:(@rule($(expr))))), $arity)
+    end
+end
+Base.show(io::IO, acr::AssocRule) = print(io, "AssocRule(", acr.rule, ")")
+
+function (ar::AssocRule)(term)
+    r = Rule(ar)
+    if !istree(term)
+        r(term)
+    else
+        f = operation(term)
+        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
+            return nothing
+        end
+        arity = ar.arity
+        T = symtype(term)
+        args = arguments(term)
+        for i in 1:length(args)+1-arity
+            result = r(Term{T}(f, @views args[i:i+arity-1]))
+            if !isnothing(result)
+                length(args) == arity && return result
+                return similarterm(term, f, @views [args[1:i-1]; result; args[i+arity:end]])
+            end
+        end
+    end
+end
+
 
 struct RuleRewriteError
     rule

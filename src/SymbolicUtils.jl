@@ -9,6 +9,8 @@ export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 using TermInterface
 using TermInterface: node_count
 
+using LinearAlgebra: Diagonal
+
 # Sym, Term,
 # Add, Mul and Pow
 using DataStructures

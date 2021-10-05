@@ -790,8 +790,11 @@ function *(a::SN, b::SN)
         Div(a.num * b, a.den)
     elseif b isa Div
         Div(a * b.num, b.den)
-    else
+    elseif commutes(*, a) && commutes(*, b)
         Mul(mul_t(a,b), makemul(1, a, b)...)
+    else
+        c, d = map(x -> commutes(*, x) ? x : MCMul(symtype(x), 1, [x]), (a, b))
+        c * d
     end
 end
 
@@ -815,7 +818,7 @@ function *(a::Number, b::SN)
     end
 end
 
-*(a::SN, b::Number) = b * a
+(*)(a::SN, b::Number) = b * a
 
 \(a::SN, b::Union{Number, SN}) = b / a
 
@@ -827,6 +830,95 @@ end
 
 //(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
 
+ 
+
+
+"""
+    NCMul(T, coeff, vec)
+
+Represents coeff * vec[1] * vec[2] * ....
+
+where coeff is a commutative quantity, and the elements of `vec` are meant to
+be non-commutatitve.
+
+- `symtype(::NCMul)` -- returns `T`.
+- `operation(::NCMul)` -- returns `*`.
+- `arguments(::NCMul)` -- returns a totally ordered vector of arguments. i.e.
+ `[coeff; vec]`
+"""
+struct NCMul{T, M} <: Symbolic{T}
+    coeff::Any
+    vec::Vector
+    hash::Ref{UInt}
+    metadata::M
+end
+NCMul(T, coeff, vec; metadata=SymbolicUtils.NO_METADATA) = NCMul{T, typeof(metadata)}(coeff, vec, Ref{UInt}(0), metadata)
+
+TermInterface.istree(::NCMul) = true
+TermInterface.operation(::NCMul) = (*)
+TermInterface.arguments(t::NCMul) = isequal(t.coeff, 1) ? t.vec : [t.coeff; t.vec]
+
+TermInterface.similarterm(t::NCMul, ::typeof(*), args, T=nothing) = similarterm(typeof(t), *, args, T)
+function TermInterface.similarterm(::Type{<:NCMul}, ::typeof(*), args, T=nothing)
+    if isnothing(T)
+        T = _promote_symtype(*, args)
+    end
+    x = prod(args)
+    if x isa NCMul{T}
+        x
+    elseif x isa NCMul
+        NCMul(T, x.coeff, x.vec; metadata=x.metadata)
+    else
+        NCMul(T, 1, [x])
+    end
+end
+
+Base.show(io::IO, x::NCMul) = show_term(io, x)
+
+function Base.isequal(t1::NCMul, t2::NCMul)
+    t1 === t2 && return true
+    symtype(t1) !== symtype(t2) && return false
+
+    a1 = arguments(t1)
+    a2 = arguments(t2)
+
+    isequal(operation(t1), operation(t2)) &&
+        length(a1) == length(a2) &&
+        all(isequal.(a1, a2))
+end
+
+for supertype ∈ (:Any, :Number, :AbstractMatrix)
+    @eval begin
+        function Base.:(*)(a::A, b::NCMul{B}) where {A <: $supertype, B}
+            T = promote_symtype(*, A, B)
+            if commutes(*, A)
+                coeff = a * b.coeff
+                vec = b.vec
+            else
+                coeff = b.coeff
+                vec = [a; b.vec]
+            end
+            NCMul(T, coeff, vec)
+        end
+        function Base.:(*)(a::NCMul{A}, b::B) where {A, B <: $supertype}
+            T = promote_symtype(*, A, B)
+            if commutes(*, B)
+                coeff = a.coeff * b
+                vec = a.vec
+            else
+                coeff = a.coeff
+                vec = [a.vec; b]
+            end
+            NCMul(T, coeff, vec)
+        end
+    end
+end
+Base.:(*)(a::NCMul{A}, b::NCMul{B}) where {A, B} = NCMul(promote_symtype(A,B), a.coeff*b.coeff, [a.vec; b.vec], Ref{UInt}(0))
+Base.:(-)(a::NCMul{T}) where {T} = NCMul(T, -a.coeff, a.vec)
+
+
+
+ 
 """
     Div(numerator_factors, denominator_factors, simplified=false)
 

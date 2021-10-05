@@ -107,6 +107,35 @@ end
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 
+"""
+    commutes(f, x) :: Bool
+    commutes(f) = x -> commutes(f, x)
+
+Returns true if `x` (or, if x is a type, then the types represented by x) is a commutative quantity under
+the operation `f`, else false.
+
+e.g.
+
+    julia> commutes(*, 1)
+    true
+
+    julia> commutes(*, [1 2; 3 4])
+    false
+"""
+commutes(op) = x -> commutes(op, x)
+commutes(f, ::T) where {T} = commutes(f, T)
+commutes(::typeof(*), ::Type{<:Symbolic{T}}) where {T} = commutes(*, T)
+
+commutes(::typeof(*), ::Type{<:NCMul}) = false
+commutes(::typeof(*), ::Type{<:Number}) = true
+commutes(::typeof(*), ::Type{<:AbstractMatrix}) = false
+commutes(::typeof(*), ::Type{<:Diagonal}) = true
+
+# By default assume that non-numbers do not commute under multiplication, but things should commute under addition
+commutes(::typeof(*), x) = false
+commutes(::typeof(+), x) = true
+commutes(::typeof(/), x) = commutes(*, x)
+
 isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(x)
 
@@ -118,7 +147,7 @@ _isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Rea
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
 needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
-
+ 
 # are there nested ⋆ terms?
 function isnotflat(⋆)
     function (x)

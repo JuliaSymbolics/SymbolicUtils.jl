@@ -379,14 +379,14 @@ macro rule(args...)
     keys = Symbol[]
     lhs_term = makepattern(lhs, keys, slots)
     unique!(keys)
-    bind = Expr(:block, map(key-> :($(esc(key)) = getindex(__MATCHES__, $(QuoteNode(key)))), keys)...)
+    bind = map(key-> :($(esc(key)) = getindex(__MATCHES__, $(QuoteNode(key)))), keys)
     quote
         $(__source__)
         lhs_pattern = $(lhs_term)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
              matcher(lhs_pattern),
-             __MATCHES__ -> ($bind; $(makeconsequent(rhs))),
+             __MATCHES__ -> let $(bind...); $(makeconsequent(rhs)) end,
              rule_depth($lhs_term))
     end
 end

@@ -132,7 +132,7 @@ function (::Type{Sym{T}})(name; metadata=NO_METADATA) where {T}
     Sym{T, typeof(metadata)}(name, metadata)
 end
 
-Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
+Base.hash(s::Sym, u::UInt) = hash(s.name, u ⊻ 0xcb475c8bf0f958d8)
 
 function Base.isequal(a::Sym, b::Sym)
     symtype(a) !== symtype(b) && return false
@@ -319,7 +319,7 @@ function Base.hash(t::Term{T}, salt::UInt) where {T}
     !iszero(salt) && return hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
     !iszero(h) && return h
-    h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
+    h′ = hashvec(arguments(t), hash(operation(t)) ⊻ 0x8aa2ecec9ac15e01)
     t.hash[] = h′
     return h′
 end

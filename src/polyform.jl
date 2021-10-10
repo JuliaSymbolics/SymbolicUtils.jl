@@ -231,10 +231,12 @@ multivariate polynomials implementation.
 """
 expand(expr) = unpolyize(PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
 
-function unpolyize(x)
-    simterm(x, f, args; kw...) = similarterm(x, f, args, symtype(x); kw...)
-    Postwalk(identity, similarterm=simterm)(x)
-end
+simp_simterm(x, f, args) = similarterm(
+                                       x, f, args, SymbolicUtils.symtype(x);
+                                       metadata=SymbolicUtils.metadata(x)
+                                      )
+
+unpolyize(x) = Postwalk(identity, similarterm=simp_simterm)(x)
 
 ## Rational Polynomial form with Div
 
@@ -280,13 +282,16 @@ Note that since PolyForms have different `hash`es than SymbolicUtils expressions
 `substitute` may not work if `polyform=true`
 """
 function simplify_fractions(x; polyform=false)
-    x = Postwalk(quick_cancel)(x)
+    x = Postwalk(quick_cancel, similarterm=simp_simterm)(x)
 
     !needs_div_rules(x) && return x
 
     sdiv(a) = a isa Div ? simplify_div(a) : a
 
-    expr = Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
+    expr = Postwalk(
+            sdiv ∘ quick_cancel,
+            similarterm=simp_simterm
+           )(Postwalk(add_with_div, similarterm=simp_simterm)(x))
 
     polyform ? expr : unpolyize(expr)
 end
@@ -313,7 +318,7 @@ julia> flatten_fractions((1+(1+1/a)/a)/a)
 ```
 """
 function flatten_fractions(x)
-    Fixpoint(Postwalk(add_with_div))(x)
+    Fixpoint(Postwalk(add_with_div, similarterm=simp_simterm))(x)
 end
 
 function fraction_iszero(x)

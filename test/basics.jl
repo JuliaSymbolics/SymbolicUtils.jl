@@ -68,6 +68,7 @@ struct Ctx2 end
         a′ = setmetadata(a, Ctx1, "meta_1")
 
         @test hasmetadata(a′, Ctx1)
+        @test hasmetadata(simplify_fractions(a′), Ctx1)
         @test !hasmetadata(a′, Ctx2)
 
         a′ = setmetadata(a′, Ctx2, "meta_2")

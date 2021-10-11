@@ -77,15 +77,15 @@ pow(x, y::Symbolic) = Base.:^(x,y)
 pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
 
 # Simplification utilities
-function has_trig(term)
+function has_trig_exp(term)
     !istree(term) && return false
-    fns = (sin, cos, tan, cot, sec, csc)
+    fns = (sin, cos, tan, cot, sec, csc, exp)
     op = operation(term)
 
-    if Base.@nany 6 i->fns[i] === op
+    if Base.@nany 7 i->fns[i] === op
         return true
     else
-        return any(has_trig, arguments(term))
+        return any(has_trig_exp, arguments(term))
     end
 end
 

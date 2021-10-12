@@ -135,9 +135,8 @@ end
 _f(x) = x === a
 @testset "where" begin
     using Metatheory
-    using Metatheory.SUSyntax
     expected = :(_f(~x) ? ~x + ~y : nothing)
-    @test SUSyntax.rewrite_rhs(:((~x + ~y) where _f(~x))) == expected
+    @test Metatheory.Syntax.rewrite_rhs(:((~x + ~y) where _f(~x))) == expected
 
     @syms a b
     r = @rule ~x => ~x where _f(~x)

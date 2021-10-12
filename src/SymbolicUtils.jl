@@ -11,7 +11,6 @@ using TermInterface: node_count
 using Metatheory
 using Metatheory.Rules
 using Metatheory.Rewriters
-using Metatheory.SUSyntax
 
 # Sym, Term,
 # Add, Mul and Pow

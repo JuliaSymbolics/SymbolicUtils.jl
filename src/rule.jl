@@ -9,7 +9,6 @@ getdepth(::Any) = typemax(Int)
 
 Base.@deprecate RuleSet(x) Postwalk(Chain(x))
 
-
 struct ACRule{F,R} <: Metatheory.AbstractRule
     sets::F
     rule::R

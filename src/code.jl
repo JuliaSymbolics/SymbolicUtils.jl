@@ -7,7 +7,8 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SpawnFetch, Multithreaded
 
 import ..SymbolicUtils
-import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
+import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments,
+                      symtype
 
 ##== state management ==##
 
@@ -97,6 +98,20 @@ Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 
 function_to_expr(op, args, st) = nothing
+
+function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
+    args = map(toexpr, arguments(O))
+    if length(args) >= 3 && symtype(O) <: Number
+        x, xs = Iterators.peel(args)
+        foldl(xs, init=x) do a, b
+            Expr(:call, op, a, b)
+        end
+    else
+        expr = Expr(:call, op)
+        append!(expr.args, args)
+        expr
+    end
+end
 
 function function_to_expr(::typeof(^), O, st)
     args = arguments(O)

@@ -56,7 +56,7 @@ let
         @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
     ]
 
-    TRIG_RULES = [
+    TRIG_EXP_RULES = [
         @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
         @acrule(sin(~x)^2 + -1        => cos(~x)^2)
         @acrule(cos(~x)^2 + -1        => sin(~x)^2)
@@ -68,6 +68,9 @@ let
         @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
         @acrule(cot(~x)^2 +  1 => csc(~x)^2)
         @acrule(csc(~x)^2 + -1 => cot(~x)^2)
+
+        @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y))
+        @rule(exp(~x)^(~y) => exp(~x * ~y))
     ]
 
     BOOLEAN_RULES = [
@@ -112,7 +115,7 @@ let
         rule_tree
     end
 
-    trig_simplifier(;kw...) = Chain(TRIG_RULES)
+    trig_exp_simplifier(;kw...) = Chain(TRIG_EXP_RULES)
 
     bool_simplifier() = Chain(BOOLEAN_RULES)
 
@@ -123,10 +126,10 @@ let
     global serial_expand_simplifier
 
     function default_simplifier(; kw...)
-        IfElse(has_trig,
+        IfElse(has_trig_exp,
                Postwalk(IfElse(x->symtype(x) <: Number,
                                Chain((number_simplifier(),
-                                      trig_simplifier())),
+                                      trig_exp_simplifier())),
                                If(x->symtype(x) <: Bool,
                                   bool_simplifier()))
                         ; kw...),

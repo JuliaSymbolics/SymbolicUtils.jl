@@ -43,7 +43,10 @@ end
     @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
 end
 
+using SymbolicUtils: @capture
+
 @testset "Capture form" begin
+
     ex = a^a
 
     #note that @test inserts a soft local scope (try-catch) that would gobble

@@ -35,7 +35,7 @@ include("rewriters.jl")
 using .Rewriters
 
 using Combinatorics: permutations, combinations
-export @rule, @acrule, RuleSet, @capture
+export @rule, @acrule, RuleSet
 
 # Rule type and @rule macro
 include("rule.jl")

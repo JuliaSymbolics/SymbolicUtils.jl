@@ -88,6 +88,15 @@ end
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
 end
 
+@testset "Exponentials" begin
+    @syms a::Real b::Real
+    @eqtest simplify(exp(a)*exp(b)) == simplify(exp(a+b))
+    @eqtest simplify(exp(a)*exp(a)) == simplify(exp(2a))
+    @test simplify(exp(a)*exp(-a)) == 1
+    @eqtest simplify(exp(a)^2) == simplify(exp(2a))
+    @eqtest simplify(exp(a) * a * exp(b)) == simplify(a*exp(a+b))
+end
+
 @testset "Depth" begin
     @syms x
     R = Rewriters.Postwalk(Rewriters.Chain([@rule(sin(~x) => cos(~x)),

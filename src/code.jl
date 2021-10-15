@@ -100,6 +100,22 @@ toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 
 function_to_expr(op, args, st) = nothing
 
+function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
+    out = get(st.symbolify, O, nothing)
+    out === nothing || return out
+    args = map(Base.Fix2(toexpr, st), arguments(O))
+    if length(args) >= 3 && symtype(O) <: Number
+        x, xs = Iterators.peel(args)
+        foldl(xs, init=x) do a, b
+            Expr(:call, op, a, b)
+        end
+    else
+        expr = Expr(:call, op)
+        append!(expr.args, args)
+        expr
+    end
+end
+
 function function_to_expr(::typeof(^), O, st)
     args = arguments(O)
     if length(args) == 2 && args[2] isa Real && args[2] < 0

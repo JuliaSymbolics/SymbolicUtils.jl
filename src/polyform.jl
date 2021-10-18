@@ -119,7 +119,8 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
             y = if recurse
                 similarterm(x,
                             op,
-                            map(a->PolyForm(a, pvar2sym, sym2term, vtype; Fs, recurse),
+                            map(a->PolyForm(a, pvar2sym, sym2term, vtype;
+                                            Fs, recurse, metadata=metadata(a)),
                                 args), symtype(x))
             else
                 x
@@ -231,10 +232,8 @@ multivariate polynomials implementation.
 """
 expand(expr) = unpolyize(PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
 
-simp_simterm(x, f, args) = similarterm(
-                                       x, f, args, SymbolicUtils.symtype(x);
-                                       metadata=SymbolicUtils.metadata(x)
-                                      )
+simp_simterm(x, f, args) = similarterm((@show(metadata(x));x), f, args, symtype(x);
+                                       metadata=metadata(x))
 
 unpolyize(x) = Postwalk(identity, similarterm=simp_simterm)(x)
 
@@ -282,7 +281,9 @@ Note that since PolyForms have different `hash`es than SymbolicUtils expressions
 `substitute` may not work if `polyform=true`
 """
 function simplify_fractions(x; polyform=false)
+    push!(Main._a, (0, x))
     x = Postwalk(quick_cancel, similarterm=simp_simterm)(x)
+    push!(Main._a, (1, x))
 
     !needs_div_rules(x) && return x
 
@@ -292,8 +293,11 @@ function simplify_fractions(x; polyform=false)
             sdiv ∘ quick_cancel,
             similarterm=simp_simterm
            )(Postwalk(add_with_div, similarterm=simp_simterm)(x))
+    push!(Main._a, (2, expr))
 
-    polyform ? expr : unpolyize(expr)
+    aa = polyform ? expr : unpolyize(expr)
+    push!(Main._a, (3, aa))
+    aa
 end
 
 function add_with_div(x, flatten=true)

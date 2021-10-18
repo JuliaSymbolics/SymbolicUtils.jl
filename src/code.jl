@@ -5,11 +5,12 @@ using TermInterface
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       SpawnFetch, Multithreaded
+       SpawnFetch, Multithreaded, cse
 
 import ..SymbolicUtils
+import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments,
-                      symtype
+                      symtype, similarterm, unsorted_arguments, metadata
 
 ##== state management ==##
 
@@ -608,6 +609,97 @@ recurse_expr(ex, st) = toexpr(ex, st)
 
 function toexpr(exp::LiteralExpr, st)
     recurse_expr(exp.ex, st)
+end
+
+
+### Code-related utilities
+
+### Common subexprssion evaluation
+
+@inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
+
+function _cse!(mem, expr)
+    istree(expr) || return expr
+    op = _cse!(mem, operation(expr))
+    args = map(Base.Fix1(_cse!, mem), arguments(expr))
+    t = similarterm(expr, op, args)
+
+    v, dict = mem
+    update! = let v=v, t=t
+        () -> begin
+            var = newsym(symtype(t))
+            push!(v, var ← t)
+            length(v)
+        end
+    end
+    v[get!(update!, dict, t)].lhs
+end
+
+function cse(expr)
+    state = Dict{Any, Int}()
+    cse_state!(state, expr)
+    cse_block(state, expr)
+end
+
+
+function _cse(exprs::AbstractArray)
+    letblock = cse(Term{Any}(tuple, exprs))
+    letblock.pairs, arguments(letblock.body)
+end
+
+function cse(x::MakeArray)
+    assigns, expr = _cse(x.elems)
+    Let(assigns, MakeArray(expr, x.similarto, x.output_eltype))
+end
+
+function cse(x::SetArray)
+    assigns, expr = _cse(x.elems)
+    Let(assigns, SetArray(x.inbounds, x.arr, expr))
+end
+
+function cse(x::MakeSparseArray)
+    sp = x.array
+    assigns, expr = _cse(sp.nzval)
+    if sp isa SparseMatrixCSC
+        Let(assigns, MakeSparseArray(SparseMatrixCSC(sp.m, sp.n,
+                                                     sp.colptr, sp.rowval, exprs)))
+    else
+        Let(assigns, MakeSparseArray(SparseVector(sp.n, sp.nzinds, exprs)))
+    end
+end
+
+
+function cse_state!(state, t)
+    !istree(t) && return t
+    state[t] = Base.get!(state, t, 0) + 1
+    foreach(x->cse_state!(state, x), unsorted_arguments(t))
+end
+
+function cse_block!(assignments, counter, names, name, state, x)
+    if get(state, x, 0) > 1
+        if haskey(names, x)
+            return names[x]
+        else
+            sym = Sym{symtype(x)}(Symbol(name, counter[]))
+            names[x] = sym
+            push!(assignments, sym ← x)
+            counter[] += 1
+            return sym
+        end
+    elseif istree(x)
+        args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
+        return similarterm(x, operation(x), args, symtype(x),
+                    metadata=metadata(x))
+    else
+        return x
+    end
+end
+
+function cse_block(state, t, name=Symbol("var-", hash(t)))
+    assignments = Assignment[]
+    counter = Ref{Int}(1)
+    names = Dict{Any, Sym}()
+    Let(assignments, cse_block!(assignments, counter, names, name, state, t))
 end
 
 end

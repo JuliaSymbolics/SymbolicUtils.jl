@@ -30,6 +30,7 @@ else
     include("rewrite.jl")
     include("rulesets.jl")
     include("code.jl")
+    include("cse.jl")
     include("interface.jl")
     include("fuzz.jl")
     include("adjoints.jl")

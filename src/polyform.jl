@@ -1,4 +1,4 @@
-export PolyForm, simplify_fractions, quick_cancel, flatten_fractions
+export PolyForm, simplify_fractions, quick_cancel, flatten_fractions, as_polynomial
 using Bijections
 using DynamicPolynomials: PolyVar
 
@@ -42,6 +42,16 @@ end
 
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
+
+
+function as_polynomial(f, exprs...; polyform=false, T=Real)
+    @assert length(exprs) >= 1 "At least one expression must be passed to `multivariatepolynomial`."
+
+    pvar2sym, sym2term = get_pvar2sym(), get_sym2term()
+    ps = map(x->PolyForm(x, pvar2sym, sym2term), exprs)
+    q = PolyForm{T}(f(map(x->x.p, ps)...), pvar2sym, sym2term) # substitute back
+    polyform ? q : unpolyize(q)
+end
 
 # We use the same PVAR2SYM bijection to maintain the PolyVar <-> Sym mapping,
 # When all PolyForms go out of scope in a session, we allow it to free up memory and

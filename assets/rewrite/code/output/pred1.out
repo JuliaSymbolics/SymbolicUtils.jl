@@ -1,4 +1,1 @@
-r(a + b + c + d) = nothing
-r(b + c + d) = "odd terms"
-r(b + c + b) = nothing
-r(a + b) = nothing
+UndefVarError: PatSegment not defined

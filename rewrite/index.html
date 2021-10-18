@@ -85,29 +85,33 @@
 
 r1 &#61; @rule sin&#40;2&#40;~x&#41;&#41; &#61;&gt; 2sin&#40;~x&#41;*cos&#40;~x&#41;
 
-r1&#40;sin&#40;2z&#41;&#41;</code></pre><pre><code class="plaintext code-output">2cos(z)*sin(z)</code></pre>
+r1&#40;sin&#40;2z&#41;&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>The <code>@rule</code> macro takes a pair of patterns – the <em>matcher</em> and the <em>consequent</em> &#40;<code>@rule matcher &#61;&gt; consequent</code>&#41;. If an expression matches the matcher pattern, it is rewritten to the consequent pattern. <code>@rule</code> returns a callable object that applies the rule to an expression.</p>
 <p><code>~x</code> in the example is what is a <strong>slot variable</strong> named <code>x</code>. In a matcher pattern, slot variables are placeholders that match exactly one expression. When used on the consequent side, they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, all corresponding matches must be equal &#40;as tested by <code>Base.isequal</code> function&#41;. Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.</p>
 <p>If you try to apply this rule to an expression with triple angle, it will return <code>nothing</code> – this is the way a rule signifies failure to match.</p>
-<pre><code class="language-julia">r1&#40;sin&#40;3z&#41;&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">true</code></pre>
+<pre><code class="language-julia">r1&#40;sin&#40;3z&#41;&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">UndefVarError: r1 not defined
+</code></pre>
 <p>Slot variable &#40;matcher&#41; is not necessary a single variable</p>
-<pre><code class="language-julia">r1&#40;sin&#40;2*&#40;w-z&#41;&#41;&#41;</code></pre>
+<pre><code class="language-julia">r1&#40;sin&#40;2*&#40;w-z&#41;&#41;&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: r1 not defined
+</code></pre>
 <p>but it must be a single expression</p>
-<pre><code class="language-julia">r1&#40;sin&#40;2*&#40;w&#43;z&#41;*&#40;α&#43;β&#41;&#41;&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">true</code></pre>
+<pre><code class="language-julia">r1&#40;sin&#40;2*&#40;w&#43;z&#41;*&#40;α&#43;β&#41;&#41;&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">UndefVarError: r1 not defined
+</code></pre>
 <p>Rules are of course not limited to single slot variable</p>
 <pre><code class="language-julia">r2 &#61; @rule sin&#40;~x &#43; ~y&#41; &#61;&gt; sin&#40;~x&#41;*cos&#40;~y&#41; &#43; cos&#40;~x&#41;*sin&#40;~y&#41;;
 
-r2&#40;sin&#40;α&#43;β&#41;&#41;</code></pre><pre><code class="plaintext code-output">cos(α)*sin(β) + sin(α)*cos(β)</code></pre>
+r2&#40;sin&#40;α&#43;β&#41;&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~xs</code> in the following example is a segment variable:</p>
 <pre><code class="language-julia">@syms x y z
-@rule&#40;&#43;&#40;~~xs&#41; &#61;&gt; ~~xs&#41;&#40;x &#43; y &#43; z&#41;</code></pre><pre><code class="plaintext code-output">3-element view(::Vector{SymbolicUtils.Sym{Number, Nothing}}, 1:3) with eltype SymbolicUtils.Sym{Number, Nothing}:
- x
- y
- z</code></pre>
+@rule&#40;&#43;&#40;~~xs&#41; &#61;&gt; ~~xs&#41;&#40;x &#43; y &#43; z&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p><code>~~xs</code> is a vector of subexpressions matched. You can use it to construct something more useful:</p>
 <pre><code class="language-julia">r3 &#61; @rule ~x * &#43;&#40;~~ys&#41; &#61;&gt; sum&#40;map&#40;y-&gt; ~x * y, ~~ys&#41;&#41;;
 
-r3&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;</code></pre>
+r3&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>Notice that the expression was autosimplified before application of the rule.</p>
 <pre><code class="language-julia">2 * &#40;w&#43;w&#43;α&#43;β&#41;</code></pre><pre><code class="plaintext code-output">4w + 2α + 2β</code></pre>
 <h3 id="predicates_for_matching"><a href="#predicates_for_matching" class="header-anchor">Predicates for matching</a></h3>
@@ -121,10 +125,7 @@ r &#61; @rule ~x &#43; ~~y::&#40;ys-&gt;iseven&#40;length&#40;ys&#41;&#41;&#41; 
 @show r&#40;a &#43; b &#43; c &#43; d&#41;
 @show r&#40;b &#43; c &#43; d&#41;
 @show r&#40;b &#43; c &#43; b&#41;
-@show r&#40;a &#43; b&#41;</code></pre><pre><code class="plaintext code-output">r(a + b + c + d) = nothing
-r(b + c + d) = "odd terms"
-r(b + c + b) = nothing
-r(a + b) = nothing
+@show r&#40;a &#43; b&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatSegment not defined
 </code></pre>
 <h3 id="associative-commutative_rules"><a href="#associative-commutative_rules" class="header-anchor">Associative-Commutative Rules</a></h3>
 <p>Given an expression <code>f&#40;x, f&#40;y, z, u&#41;, v, w&#41;</code>, a <code>f</code> is said to be associative if the expression is equivalent to <code>f&#40;x, y, z, u, v, w&#41;</code> and commutative if the order of arguments does not matter.  SymbolicUtils has a special <code>@acrule</code> macro meant for rules on functions which are associate and commutative such as addition and multiplication of real and complex numbers.</p>
@@ -132,7 +133,8 @@ r(a + b) = nothing
 
 acr &#61; @acrule&#40;&#40;~a&#41;^&#40;~x&#41; * &#40;~a&#41;^&#40;~y&#41; &#61;&gt; &#40;~a&#41;^&#40;~x &#43; ~y&#41;&#41;
 
-acr&#40;x^y * x^z&#41;</code></pre><pre><code class="plaintext code-output">x^(y + z)</code></pre>
+acr&#40;x^y * x^z&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>although in case of <code>Number</code> it also works the same way with regular <code>@rule</code> since autosimplification orders and applies associativity and commutativity to the expression.</p>
 <h3 id="example_of_applying_the_rules_to_simplify_expression"><a href="#example_of_applying_the_rules_to_simplify_expression" class="header-anchor">Example of applying the rules to simplify expression</a></h3>
 <p>Consider expression <code>&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2</code> that we would like simplify by applying some trigonometric rules. First, we need rule to expand square of <code>cos&#40;x&#41; &#43; sin&#40;x&#41;</code>. First we try the simplest rule to expand square of the sum and try it on simple expression</p>
@@ -142,15 +144,18 @@ acr&#40;x^y * x^z&#41;</code></pre><pre><code class="plaintext code-output">x^(y
 
 sqexpand &#61; @rule &#40;~x &#43; ~y&#41;^2 &#61;&gt; &#40;~x&#41;^2 &#43; &#40;~y&#41;^2 &#43; 2 * ~x * ~y
 
-sqexpand&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x)</code></pre>
+sqexpand&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>It works. This can be further simplified using Pythagorean identity and check it</p>
 <pre><code class="language-julia">pyid &#61; @rule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1
 
-pyid&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">true</code></pre>
+pyid&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>Why does it return <code>nothing</code>? If we look at the rule, we see that the order of <code>sin&#40;x&#41;</code> and <code>cos&#40;x&#41;</code> is different. Therefore, in order to work, the rule needs to be associative-commutative.</p>
 <pre><code class="language-julia">acpyid &#61; @acrule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1
 
-acpyid&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2 &#43; 2cos&#40;x&#41;*sin&#40;x&#41;&#41;</code></pre><pre><code class="plaintext code-output">1 + 2cos(x)*sin(x)</code></pre>
+acpyid&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2 &#43; 2cos&#40;x&#41;*sin&#40;x&#41;&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>It has been some work. Fortunately rules may be <a href="#chaining rewriters">chained together</a> into more sophisticated rewirters to avoid manual application of the rules.</p>
 <h2 id="composing_rewriters"><a href="#composing_rewriters" class="header-anchor">Composing rewriters</a></h2>
 <p>A rewriter is any callable object which takes an expression and returns an expression or <code>nothing</code>. If <code>nothing</code> is returned that means there was no changes applicable to the input expression. The Rules we created above are rewriters.</p>
@@ -186,26 +191,31 @@ acpyid &#61; @acrule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1
 
 csa &#61; Chain&#40;&#91;sqexpand, acpyid&#93;&#41;
 
-csa&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">1 + 2cos(x)*sin(x)</code></pre>
+csa&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>Important feature of <code>Chain</code> is that it returns the expressiona instead of <code>nothing</code> if it doesn&#39;t change the expression</p>
-<pre><code class="language-julia">Chain&#40;&#91;@acrule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1&#93;&#41;&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">(cos(x) + sin(x))^2</code></pre>
+<pre><code class="language-julia">Chain&#40;&#91;@acrule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1&#93;&#41;&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: PatTerm not defined
+</code></pre>
 <p>its important to notice, that chain is ordered, so if rules are in different order it wouldn&#39;t work the same as in earlier example</p>
 <pre><code class="language-julia">cas &#61; Chain&#40;&#91;acpyid, sqexpand&#93;&#41;
 
-cas&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x)</code></pre>
+cas&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: acpyid not defined
+</code></pre>
 <p>since Pythagorean identity is applied before square expansion, so it is unable to match squares of sine and cosine.</p>
 <p>One way to circumvent the problem of order of applying rules in chain is to use <code>RestartedChain</code></p>
 <pre><code class="language-julia">using SymbolicUtils.Rewriters: RestartedChain
 
 rcas &#61; RestartedChain&#40;&#91;acpyid, sqexpand&#93;&#41;
 
-rcas&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">1 + 2cos(x)*sin(x)</code></pre>
+rcas&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: acpyid not defined
+</code></pre>
 <p>It restarts the chain after each successful application of a rule, so after <code>sqexpand</code> is hit it &#40;re&#41;starts again and successfully applies <code>acpyid</code> to resulting expression.</p>
 <p>You can also use <code>Fixpoint</code> to apply the rules until there are no changes.</p>
-<pre><code class="language-julia">Fixpoint&#40;cas&#41;&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">1 + 2cos(x)*sin(x)</code></pre>
+<pre><code class="language-julia">Fixpoint&#40;cas&#41;&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">UndefVarError: cas not defined
+</code></pre>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: October 15, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: October 18, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

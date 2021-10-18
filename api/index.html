@@ -237,8 +237,8 @@ Complex</code></pre>
       <h2 class="doc-header" id="similarterm">
         <a href="#similarterm">similarterm</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">similarterm&#40;x, head, args, symtype&#61;nothing; metadata&#61;nothing&#41;</code></pre>
-<p>Returns a term that is in the same closure of types as <code>typeof&#40;x&#41;</code>, with <code>head</code> as the head and <code>args</code> as the arguments, <code>type</code> as the symtype and <code>metadata</code> as the metadata. By default this will execute <code>head&#40;args...&#41;</code>. <code>x</code> parameter can also be a <code>Type</code>.</p>
+      <div class="doc-content"><pre><code class="language-julia">similarterm&#40;x, head, args, symtype&#61;nothing; metadata&#61;nothing, exprhead&#61;:call&#41;</code></pre>
+<p>Returns a term that is in the same closure of types as <code>typeof&#40;x&#41;</code>, with <code>head</code> as the head and <code>args</code> as the arguments, <code>type</code> as the symtype and <code>metadata</code> as the metadata. By default this will execute <code>head&#40;args...&#41;</code>. <code>x</code> parameter can also be a <code>Type</code>. The <code>exprhead</code> keyword argument is useful  when manipulating <code>Expr</code>s.</p>
 <pre><code class="language-julia">similarterm&#40;t, f, args, symtype; metadata&#61;nothing&#41;</code></pre>
 <p>Create a term that is similar in type to <code>t</code>. Extending this function allows packages using their own expression types with SymbolicUtils to define how new terms should be created. Note that <code>similarterm</code> may return an object that has a different type than <code>t</code>, because <code>f</code> also influences the result.</p>
 <h2 id="arguments"><a href="#arguments" class="header-anchor">Arguments</a></h2>
@@ -260,45 +260,54 @@ Complex</code></pre>
       <h2 class="doc-header" id="@rule">
         <a href="#@rule">@rule</a>
         <div class="doc-type">macro</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">@rule LHS &#61;&gt; RHS</code></pre>
-<p>Creates a <code>Rule</code> object. A rule object is callable, and  takes an expression and rewrites it if it matches the LHS pattern to the RHS pattern, returns <code>nothing</code> otherwise. The rule language is described below.</p>
-<p>LHS can be any possibly nested function call expression where any of the arugments can optionally be a Slot &#40;<code>~x</code>&#41; or a Segment &#40;<code>~~x</code>&#41; &#40;described below&#41;.</p>
-<p>If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS Segment &#40;<code>~x</code>&#41; and slot variables &#40;<code>~~x</code>&#41; on the RHS will substitute the result of the matches found for these variables in the LHS.</p>
+      <div class="doc-content"><pre><code class="language-julia">@rule &#91;SLOTS...&#93; LHS operator RHS</code></pre>
+<p>Creates an <code>AbstractRule</code> object. A rule object is callable, and takes an expression and rewrites it if it matches the LHS pattern to the RHS pattern, returns <code>nothing</code> otherwise. The rule language is described below.</p>
+<p>LHS can be any possibly nested function call expression where any of the arugments can optionally be a Slot &#40;<code>~x</code>&#41; or a Segment &#40;<code>~x...</code>&#41; &#40;described below&#41;.</p>
+<p>SLOTS is an optional list of symbols to be interpeted as slots or segments directly &#40;without using <code>~</code>&#41;.  To declare slots for several rules at once, see the <code>@slots</code> macro.</p>
+<p>If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS , whose local scope includes the slot matches as variables. Segment &#40;<code>~x</code>&#41; and slot variables &#40;<code>~~x</code>&#41; on the RHS will substitute the result of the matches found for these variables in the LHS.</p>
+<p><strong>Rule operators</strong>:</p>
+<ul>
+<li><p><code>LHS &#61;&gt; RHS</code>: create a <code>DynamicRule</code>. The RHS is <em>evaluated</em> on rewrite.</p>
+</li>
+<li><p><code>LHS --&gt; RHS</code>: create a <code>RewriteRule</code>. The RHS is <strong>not</strong> evaluated but <em>symbolically substituted</em> on rewrite.</p>
+</li>
+<li><p><code>LHS &#61;&#61; RHS</code>: create a <code>EqualityRule</code>. In e-graph rewriting, this rule behaves like <code>RewriteRule</code> but can go in both directions. Doesn&#39;t work in classical rewriting</p>
+</li>
+<li><p><code>LHS ≠ RHS</code>: create a <code>UnequalRule</code>. Can only be used in e-graphs, and is used to eagerly stop the process of rewriting if LHS is found to be equal to RHS.</p>
+</li>
+</ul>
 <p><strong>Slot</strong>:</p>
 <p>A Slot variable is written as <code>~x</code> and matches a single expression. <code>x</code> is the name of the variable. If a slot appears more than once in an LHS expression then expression matched at every such location must be equal &#40;as shown by <code>isequal</code>&#41;.</p>
 <p><em>Example:</em></p>
 <p>Simple rule to turn any <code>sin</code> into <code>cos</code>:</p>
-<pre><code class="language-julia">julia&gt; @syms a b c
-&#40;a, b, c&#41;
+<pre><code class="language-julia">julia&gt; r &#61; @rule sin&#40;~x&#41; --&gt; cos&#40;~x&#41;
+sin&#40;~x&#41; --&gt; cos&#40;~x&#41;
 
-julia&gt; r &#61; @rule sin&#40;~x&#41; &#61;&gt; cos&#40;~x&#41;
-sin&#40;~x&#41; &#61;&gt; cos&#40;~x&#41;
-
-julia&gt; r&#40;sin&#40;1&#43;a&#41;&#41;
-cos&#40;&#40;1 &#43; a&#41;&#41;</code></pre>
+julia&gt; r&#40;:&#40;sin&#40;1&#43;a&#41;&#41;&#41;
+:&#40;cos&#40;&#40;1 &#43; a&#41;&#41;&#41;</code></pre>
 <p>A rule with 2 segment variables</p>
-<pre><code class="language-julia">julia&gt; r &#61; @rule sin&#40;~x &#43; ~y&#41; &#61;&gt; sin&#40;~x&#41;*cos&#40;~y&#41; &#43; cos&#40;~x&#41;*sin&#40;~y&#41;
-sin&#40;~x &#43; ~y&#41; &#61;&gt; sin&#40;~x&#41; * cos&#40;~y&#41; &#43; cos&#40;~x&#41; * sin&#40;~y&#41;
+<pre><code class="language-julia">julia&gt; r &#61; @rule sin&#40;~x &#43; ~y&#41; --&gt; sin&#40;~x&#41;*cos&#40;~y&#41; &#43; cos&#40;~x&#41;*sin&#40;~y&#41;
+sin&#40;~x &#43; ~y&#41; --&gt; sin&#40;~x&#41; * cos&#40;~y&#41; &#43; cos&#40;~x&#41; * sin&#40;~y&#41;
 
-julia&gt; r&#40;sin&#40;a &#43; b&#41;&#41;
-cos&#40;a&#41;*sin&#40;b&#41; &#43; sin&#40;a&#41;*cos&#40;b&#41;</code></pre>
+julia&gt; r&#40;:&#40;sin&#40;a &#43; b&#41;&#41;&#41;
+:&#40;cos&#40;a&#41;*sin&#40;b&#41; &#43; sin&#40;a&#41;*cos&#40;b&#41;&#41;</code></pre>
 <p>A rule that matches two of the same expressions:</p>
-<pre><code class="language-julia">julia&gt; r &#61; @rule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1
-sin&#40;~x&#41; ^ 2 &#43; cos&#40;~x&#41; ^ 2 &#61;&gt; 1
+<pre><code class="language-julia">julia&gt; r &#61; @rule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 --&gt; 1
+sin&#40;~x&#41; ^ 2 &#43; cos&#40;~x&#41; ^ 2 --&gt; 1
 
-julia&gt; r&#40;sin&#40;2a&#41;^2 &#43; cos&#40;2a&#41;^2&#41;
+julia&gt; r&#40;:&#40;sin&#40;2a&#41;^2 &#43; cos&#40;2a&#41;^2&#41;&#41;
 1
 
-julia&gt; r&#40;sin&#40;2a&#41;^2 &#43; cos&#40;a&#41;^2&#41;
+julia&gt; r&#40;:&#40;sin&#40;2a&#41;^2 &#43; cos&#40;a&#41;^2&#41;&#41;
 # nothing</code></pre>
-<p><strong>Segment</strong>:</p>
-<p>A Segment variable is written as <code>~~x</code> and matches zero or more expressions in the function call.</p>
+<p>A rule without <code>~</code></p>
+<pre><code class="language-julia">julia&gt; r &#61; @slots x y z @rule x&#40;y &#43; z&#41; --&gt; x*y &#43; x*z
+x&#40;y &#43; z&#41; --&gt; x*y &#43; x*z</code></pre>
+<p><strong>Segment</strong>: A Segment variable matches zero or more expressions in the function call. Segments may be written by splatting slot variables &#40;<code>~x...</code>&#41;.</p>
 <p><em>Example:</em></p>
-<p>This implements the distributive property of multiplication: <code>&#43;&#40;~~ys&#41;</code> matches expressions like <code>a &#43; b</code>, <code>a&#43;b&#43;c</code> and so on. On the RHS <code>~~ys</code> presents as any old julia array.</p>
-<pre><code class="language-julia">julia&gt; r &#61; @rule ~x * &#43;&#40;&#40;~~ys&#41;&#41; &#61;&gt; sum&#40;map&#40;y-&gt; ~x * y, ~~ys&#41;&#41;;
-
-julia&gt; r&#40;2 * &#40;a&#43;b&#43;c&#41;&#41;
-&#40;&#40;2 * a&#41; &#43; &#40;2 * b&#41; &#43; &#40;2 * c&#41;&#41;</code></pre>
+<pre><code class="language-julia">julia&gt; r &#61; @rule f&#40;~xs...&#41; --&gt; g&#40;~xs...&#41;;
+julia&gt; r&#40;:&#40;f&#40;1, 2, 3&#41;&#41;&#41;
+:&#40;g&#40;1,2,3&#41;&#41;</code></pre>
 <p><strong>Predicates</strong>:</p>
 <p>There are two kinds of predicates, namely over slot variables and over the whole rule. For the former, predicates can be used on both <code>~x</code> and <code>~~x</code> by using the <code>~x::f</code> or <code>~~x::f</code>. Here <code>f</code> can be any julia function. In the case of a slot the function gets a single matched subexpression, in the case of segment, it gets an array of matched expressions.</p>
 <p>The predicate should return <code>true</code> if the current match is acceptable, and <code>false</code> otherwise.</p>
@@ -308,21 +317,19 @@ two_πs &#40;generic function with 1 method&#41;
 julia&gt; two_πs&#40;x&#41; &#61; false
 two_πs &#40;generic function with 2 methods&#41;
 
-julia&gt; r &#61; @rule sin&#40;~~x &#43; ~y::two_πs &#43; ~~z&#41; &#61;&gt; sin&#40;&#43;&#40;~~x..., ~~z...&#41;&#41;
-sin&#40;~&#40;~x&#41; &#43; ~&#40;y::two_πs&#41; &#43; ~&#40;~z&#41;&#41; &#61;&gt; sin&#40;&#43;&#40;~&#40;~x&#41;..., ~&#40;~z&#41;...&#41;&#41;
+julia&gt; r &#61; @rule sin&#40;~~x &#43; ~y::two_πs &#43; ~~z&#41; &#61;&gt; :&#40;sin&#40;&#36;&#40;Expr&#40;:call, :&#43;, ~~x..., ~~z...&#41;&#41;&#41;&#41;
+sin&#40;~&#40;~x&#41; &#43; ~&#40;y::two_πs&#41; &#43; ~&#40;~z&#41;&#41; --&gt; sin&#40;&#43;&#40;~&#40;~x&#41;..., ~&#40;~z&#41;...&#41;&#41;
 
-julia&gt; r&#40;sin&#40;a&#43;3π&#41;&#41;
+julia&gt; r&#40;:&#40;sin&#40;a&#43;&#36;&#40;3π&#41;&#41;&#41;&#41;
 
-julia&gt; r&#40;sin&#40;a&#43;6π&#41;&#41;
-sin&#40;a&#41;
+julia&gt; r&#40;:&#40;sin&#40;a&#43;&#36;&#40;6π&#41;&#41;&#41;&#41;
+:&#40;sin&#40;&#43;a&#41;&#41;
 
 julia&gt; r&#40;sin&#40;a&#43;6π&#43;c&#41;&#41;
-sin&#40;&#40;a &#43; c&#41;&#41;</code></pre>
-<p>Predicate function gets an array of values if attached to a segment variable &#40;<code>~~x</code>&#41;.</p>
+:&#40;sin&#40;a &#43; c&#41;&#41;</code></pre>
+<p>Predicate function gets an array of values if attached to a segment variable &#40;<code>~x...</code>&#41;.</p>
 <p>For the predicate over the whole rule, use <code>@rule &lt;LHS&gt; &#61;&gt; &lt;RHS&gt; where &lt;predicate&gt;</code>:</p>
-<pre><code class="language-julia">julia&gt; @syms a b;
-
-julia&gt; predicate&#40;x&#41; &#61; x &#61;&#61;&#61; a;
+<pre><code class="language-julia">julia&gt; predicate&#40;x&#41; &#61; x &#61;&#61;&#61; a;
 
 julia&gt; r &#61; @rule ~x &#61;&gt; ~x where f&#40;~x&#41;;
 
@@ -331,11 +338,8 @@ a
 
 julia&gt; r&#40;b&#41; &#61;&#61;&#61; nothing
 true</code></pre>
-<p>Note that this is syntactic sugar and that it is the same as something like <code>@rule ~x &#61;&gt; f&#40;~x&#41; ? ~x : nothing</code>.</p>
-<p><strong>Context</strong>:</p>
-<p><em>In predicates</em>: Contextual predicates are functions wrapped in the <code>Contextual</code> type. The function is called with 2 arguments: the expression and a context object passed during a call to the Rule object &#40;maybe done by passing a context to <code>simplify</code> or a <code>RuleSet</code> object&#41;.</p>
-<p>The function can use the inputs however it wants, and must return a boolean indicating whether the predicate holds or not.</p>
-<p><em>In the consequent pattern</em>: Use <code>&#40;@ctx&#41;</code> to access the context object on the right hand side of an expression.</p>
+<p>Note that this is syntactic sugar and that it is the same as <code>@rule ~x &#61;&gt; f&#40;~x&#41; ? ~x : nothing</code>.</p>
+<p><strong>Compatibility</strong>: Segment variables may still be written as &#40;<code>~~x</code>&#41;, and slot &#40;<code>~x</code>&#41; and segment &#40;<code>~x...</code> or <code>~~x</code>&#41; syntaxes on the RHS will still substitute the result of the matches. See also: <a href="@ref"><code>@capture</code></a>, <a href="@ref"><code>@slots</code></a></p>
 </div>
   </div>
 
@@ -344,7 +348,7 @@ true</code></pre>
         <a href="#Rewriters">module</a>
         <div class="doc-type"></div></h2>
       <div class="doc-content"><p>A rewriter is any function which takes an expression and returns an expression or <code>nothing</code>. If <code>nothing</code> is returned that means there was no changes applicable to the input expression.</p>
-<p>The <code>SymbolicUtils.Rewriters</code> module contains some types which create and transform rewriters.</p>
+<p>The <code>Rewriters</code> module contains some types which create and transform rewriters.</p>
 <ul>
 <li><p><code>Empty&#40;&#41;</code> is a rewriter which always returns <code>nothing</code></p>
 </li>
@@ -362,7 +366,21 @@ true</code></pre>
 </li>
 <li><p><code>Fixpoint&#40;rw&#41;</code> returns a rewriter which applies <code>rw</code> repeatedly until there are no changes to be made.</p>
 </li>
+<li><p><code>FixpointNoCycle</code> behaves like <a href="@ref"><code>Fixpoint</code></a> but instead it applies <code>rw</code> repeatedly only while it is returning new results.</p>
+</li>
 <li><p><code>PassThrough&#40;rw&#41;</code> returns a rewriter which if <code>rw&#40;x&#41;</code> returns <code>nothing</code> will instead  return <code>x</code> otherwise will return <code>rw&#40;x&#41;</code>.</p>
+</li>
+</ul>
+<hr />
+<h2 id="imports"><a href="#imports" class="header-anchor">Imports</a></h2>
+<ul>
+<li><p><code>Base</code></p>
+</li>
+<li><p><code>Base.Threads</code></p>
+</li>
+<li><p><code>Core</code></p>
+</li>
+<li><p><code>TermInterface</code></p>
 </li>
 </ul>
 </div>
@@ -424,21 +442,25 @@ julia&gt; @timerewrite simplify&#40;expr&#41;
 
  Section                                 ncalls     time   &#37;tot     avg     alloc   &#37;tot      avg
  ────────────────────────────────────────────────────────────────────────────────────────────────
- ACRule&#40;&#40;~y&#41; ^ ~n * ~y &#61;&gt; &#40;~y&#41; ^ &#40;~n ...    667   11.1ms  21.3&#37;  16.7μs   2.66MiB  26.8&#37;  4.08KiB
+ Rule&#40;&#40;~y&#41; ^ ~n * ~y &#61;&gt; &#40;~y&#41; ^ &#40;~n ...    667   11.1ms  21.3&#37;  16.7μs   2.66MiB  26.8&#37;  4.08KiB
    RHS                                       92    277μs  0.53&#37;  3.01μs   14.4KiB  0.14&#37;     160B
- ACRule&#40;&#40;~x&#41; ^ ~n * &#40;~x&#41; ^ ~m &#61;&gt; &#40;~x&#41;...    575   7.63ms  14.6&#37;  13.3μs   1.83MiB  18.4&#37;  3.26KiB
+ Rule&#40;&#40;~x&#41; ^ ~n * &#40;~x&#41; ^ ~m &#61;&gt; &#40;~x&#41;...    575   7.63ms  14.6&#37;  13.3μs   1.83MiB  18.4&#37;  3.26KiB
  &#40;*&#41;&#40;~&#40;~&#40;x::&#33;issortedₑ&#41;&#41;&#41; &#61;&gt; sort_arg...    831   6.31ms  12.1&#37;  7.59μs    738KiB  7.26&#37;     910B
    RHS                                      164   3.03ms  5.81&#37;  18.5μs    250KiB  2.46&#37;  1.52KiB
    ...
    ...
  ────────────────────────────────────────────────────────────────────────────────────────────────
 &#40;a ^ 26&#41; * &#40;b ^ 30&#41; * &#40;c ^ 16&#41; * &#40;d ^ 28&#41;</code></pre>
+<hr />
+<h1 id="signatures"><a href="#signatures" class="header-anchor">Signatures</a></h1>
+<hr />
+<h2 id="methods"><a href="#methods" class="header-anchor">Methods</a></h2>
 </div>
   </div>
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: October 15, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: October 18, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

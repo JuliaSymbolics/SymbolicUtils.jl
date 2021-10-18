@@ -1,1 +1,1 @@
-1 + 2cos(x)*sin(x)
+nothing

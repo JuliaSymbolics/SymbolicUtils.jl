@@ -11,7 +11,7 @@ abstract type Symbolic end
 ###
 
 @enum ValueType::UInt8 BOOL INT RATIONAL REAL
-@enum ExprType::UInt8  SYM TERM ADD MUL POW DIV #FNTYPE # FNTYPE seems useless?
+@enum ExprType::UInt8  SYM TERM ADD MUL POW DIV
 
 const Metadata = Union{Nothing,Base.ImmutableDict{DataType,Any}}
 const NO_METADATA = nothing
@@ -20,13 +20,11 @@ const NO_METADATA = nothing
 const ARRAY = 0x01
 const COMPLEX = 0x01 << 1
 const SIMPLIFIED = 0x01 << 2
-#const FNTYPE = 0x01 << 3
 
 sdict(kv...) = Dict{Any, Any}(kv...)
 
 using Base: RefValue
 const EMPTY_ARGS = []
-const EMPTY_REF_ARGS = Ref(EMPTY_ARGS)
 const EMPTY_HASH = RefValue(UInt(0))
 const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
@@ -41,14 +39,35 @@ Base.@kwdef struct BasicSymbolic <: Symbolic
     # Sym
     name::Symbol           = :OOF
     # Term
-    f::Any                 = identity  # base/num if Pow
+    f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
     arguments::Vector{Any} = EMPTY_ARGS
     # Mul/Add
     coeff::Any             = 0         # exp/den if Pow
     dict::EMPTY_DICT_T     = EMPTY_DICT
     hash::RefValue{UInt}   = EMPTY_HASH
     metadata::Metadata     = NO_METADATA
-    unsorted_args_cache::RefValue{Vector{Any}} = EMPTY_REF_ARGS
+end
+
+@inline function Base.getproperty(x::BasicSymbolic, s::Symbol)
+    (s === :metadata || s === :hash) && return getfield(x, s)
+    E = exprtype(x)
+    if (E === SYM && s === :name) ||
+        (E === TERM && (s === :f || s === :arguments)) ||
+        ((E === ADD || E === MUL) && (s === :coeff || s === :dict))
+        getfield(x, s)
+    elseif E === DIV
+        s === :num ? getfield(x, :f) :
+        s === :den ? getfield(x, :coeff) :
+        error_property(E, s)
+    elseif E === POW
+        s === :base ? getfield(x, :f) :
+        s === :exp ? getfield(x, :coeff) :
+        error_property(E, s)
+    elseif (E === ADD || E === MUL) && s === :issorted
+        getfield(x, :f)::RefValue{Bool}
+    else
+        error_property(E, s)
+    end
 end
 
 @inline function valtype2type(T::ValueType)
@@ -61,7 +80,7 @@ end
 @noinline error_no_valtype(T) = error("$T is not supported.")
 @noinline error_on_type(E) = error("Internal error: type $E not handled!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
-@noinline error_property(E, s) = error("$E doesn't have field $s!")
+@noinline error_property(E, s) = error("$E doesn't have field $s")
 
 @inline function type2valtype(@nospecialize T)
     T === Real ? REAL :
@@ -75,7 +94,6 @@ end
 @inline isarray(x::BasicSymbolic) = is_of_type(x, ARRAY)
 @inline iscomplex(x::BasicSymbolic) = is_of_type(x, COMPLEX)
 @inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
-#isfntype(x::BasicSymbolic) = is_of_type(x, FNTYPE)
 
 @inline valtype(x::BasicSymbolic) = getfield(x, :valtype)
 @inline exprtype(x::BasicSymbolic) = getfield(x, :exprtype)
@@ -108,7 +126,10 @@ end
 function TermInterface.arguments(x::BasicSymbolic)
     args = unsorted_arguments(x)
     E = exprtype(x)
-    (E === ADD || E === MUL) && sort!(args, lt = <ₑ)
+    if (E === ADD || E === MUL) && x.issorted[]
+        sort!(args, lt = <ₑ)
+        x.issorted[] = true
+    end
     return args
 end
 function TermInterface.unsorted_arguments(x::BasicSymbolic)
@@ -155,7 +176,6 @@ end
 
 TermInterface.istree(s::BasicSymbolic) = issym(s)
 TermInterface.issym(s::BasicSymbolic) = exprtype(s) === SYM
-#isfntype(s::BasicSymbolic) = exprtype(s) === FNTYPE
 isterm(x) = x isa BasicSymbolic && exprtype(x) === TERM
 ismul(x)  = x isa BasicSymbolic && exprtype(x) === MUL
 isadd(x)  = x isa BasicSymbolic && exprtype(x) === ADD
@@ -165,26 +185,6 @@ isdiv(x)  = x isa BasicSymbolic && exprtype(x) === DIV
 ###
 ### Base interface
 ###
-
-@inline function Base.getproperty(x::BasicSymbolic, s::Symbol)
-    (s === :metadata || s === :hash) && return getfield(x, s)
-    E = exprtype(x)
-    if (E === SYM && s === :name) ||
-        (E === TERM && (s === :f || s === :arguments)) ||
-        ((E === ADD || E === MUL) && (s === :coeff || s === :dict))
-        getfield(x, s)
-    elseif E === DIV
-        s === :num ? getfield(x, :f) :
-        s === :den ? getfield(x, :coeff) :
-        error_property(E, s)
-    elseif E === POW
-        s === :base ? getfield(x, :f) :
-        s === :exp ? getfield(x, :coeff) :
-        error_property(E, s)
-    else
-        error_property(E, s)
-    end
-end
 
 Base.isequal(::Symbolic, x) = false
 Base.isequal(x, ::Symbolic) = false
@@ -263,7 +263,8 @@ for C in [:Sym, :Term, :Mul, :Add, :Pow, :Div]
 end
 
 Term{T}(f, args::Vector{Any}; kw...) where T = BasicSymbolic(;
-    exprtype=TERM, f=f, arguments=args, hash=Ref(UInt(0)),
+    exprtype=TERM, f=f, arguments=args,
+    hash=Ref(UInt(0)),
     valtype=type2valtype(T),
     kw...)
 Sym{T}(name::Symbol; kw...) where T = BasicSymbolic(;
@@ -271,11 +272,15 @@ Sym{T}(name::Symbol; kw...) where T = BasicSymbolic(;
     valtype=type2valtype(T),
     kw...)
 Mul{T}(coeff, dict::Dict{Any, Any}; kw...) where T = BasicSymbolic(;
-    exprtype=MUL, coeff=coeff, dict=dict, hash=Ref(UInt(0)),
+    exprtype=MUL, coeff=coeff, dict=dict,
+    f=Ref(false),
+    hash=Ref(UInt(0)),
     valtype=type2valtype(T),
     kw...)
 Add{T}(coeff, dict::Dict{Any, Any}; kw...) where T = BasicSymbolic(;
-    exprtype=ADD, coeff=coeff, dict=dict, hash=Ref(UInt(0)),
+    exprtype=ADD, coeff=coeff, dict=dict,
+    f=Ref(false),
+    hash=Ref(UInt(0)),
     valtype=type2valtype(T),
     kw...)
 function Pow{T}(base, exp; kw...) where T
@@ -433,7 +438,7 @@ end
     istree(x) && operation(x) == (*) ? arguments(x) : Any[x]
 end
 
-@inline denominators(x::BasicSymbolic) = exprtype(x) === DIV && ? x.coeff : Any[1]
+@inline denominators(x::BasicSymbolic) = exprtype(x) === DIV ? x.coeff : Any[1]
 
 function term(f, args...; type = nothing)
     if type === nothing

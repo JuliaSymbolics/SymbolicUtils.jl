@@ -1,5 +1,3 @@
-using TermInterface
-
 #--------------------
 #--------------------
 #### Symbolic
@@ -10,7 +8,7 @@ abstract type Symbolic end
 ### Uni-type design
 ###
 
-@enum ValueType::UInt8 BOOL INT RATIONAL REAL
+@enum ValueType::UInt8 BOOL INT RATIONAL REAL NUMBER
 @enum ExprType::UInt8  SYM TERM ADD MUL POW DIV
 
 const Metadata = Union{Nothing,Base.ImmutableDict{DataType,Any}}
@@ -53,7 +51,7 @@ end
     E = exprtype(x)
     if (E === SYM && s === :name) ||
         (E === TERM && (s === :f || s === :arguments)) ||
-        ((E === ADD || E === MUL) && (s === :coeff || s === :dict))
+        ((E === ADD || E === MUL) && (s === :coeff || s === :dict || s === :arguments))
         getfield(x, s)
     elseif E === DIV
         s === :num ? getfield(x, :f) :
@@ -71,6 +69,7 @@ end
 end
 
 @inline function valtype2type(T::ValueType)
+    T === NUMBER ? Number :
     T === REAL ? Real :
     T === RATIONAL ? Rational :
     T === INT ? Int :
@@ -83,11 +82,12 @@ end
 @noinline error_property(E, s) = error("$E doesn't have field $s")
 
 @inline function type2valtype(@nospecialize T)
+    T === Number ? NUMBER :
     T === Real ? REAL :
     T === Rational ? RATIONAL :
     T === Int ? INT :
     T === Bool ? BOOL :
-    error_no_valtype()
+    error_no_valtype(T)
 end
 
 @inline is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
@@ -101,16 +101,12 @@ end
 ###
 ### TermInterface
 ###
+using TermInterface
+
 TermInterface.exprhead(x::Symbolic) = :call
 TermInterface.symtype(x::Number) = typeof(x)
 TermInterface.symtype(::Symbolic) = Any
-@inline function TermInterface.symtype(s::BasicSymbolic)
-    T = s.valtype
-    T === REAL ? Real :
-    T === RATIONAL ? Rational :
-    T === INT ? Int :
-    Bool
-end
+@inline TermInterface.symtype(s::BasicSymbolic) = valtype2type(valtype(s))
 
 @inline function TermInterface.operation(x::BasicSymbolic)
     E = exprtype(x)
@@ -136,7 +132,7 @@ function TermInterface.unsorted_arguments(x::BasicSymbolic)
     E = exprtype(x)
     if E === TERM
         return getfield(x, :arguments)
-    elseif E === Add || E === MUL
+    elseif E === ADD || E === MUL
         args = x.arguments
         isempty(args) || return args
         siz = length(x.dict)
@@ -401,6 +397,8 @@ function makemul(coeff, xs...; d=sdict())
     (coeff, d)
 end
 
+unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
+
 function Mul(T, a, b; metadata=NO_METADATA)
     isempty(b) && return a
     if _isone(a) && length(b) == 1
@@ -487,205 +485,6 @@ function TermInterface.similarterm(t::Type{<:BasicSymbolic}, f, args, symtype; m
     end
 end
 
-add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
-sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
-sub_t(a) = promote_symtype(-, symtype(a))
-
-function +(a::SN, b::SN)
-    if a isa Add
-        coeff, dict = makeadd(1, 0, b)
-        T = promote_symtype(+, symtype(a), symtype(b))
-        return Add(add_t(a,b), a.coeff + coeff, _merge(+, a.dict, dict, filter=_iszero))
-    elseif b isa Add
-        return b + a
-    end
-    Add(add_t(a,b), makeadd(1, 0, a, b)...)
-end
-
-+(a::Number, b::SN) = Add(add_t(a,b), makeadd(1, a, b)...)
-
-+(a::SN, b::Number) = Add(add_t(a,b), makeadd(1, b, a)...)
-
-+(a::SN) = a
-
-+(a::Add, b::Add) = Add(add_t(a,b),
-                        a.coeff + b.coeff,
-                        _merge(+, a.dict, b.dict, filter=_iszero))
-
-+(a::Number, b::Add) = iszero(a) ? b : Add(add_t(a,b), a + b.coeff, b.dict)
-
-+(b::Add, a::Number) = iszero(a) ? b : Add(add_t(a,b), a + b.coeff, b.dict)
-
--(a::Add) = Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict))
-
--(a::SN) = Add(sub_t(a), makeadd(-1, 0, a)...)
-
--(a::Add, b::Add) = Add(sub_t(a,b),
-                        a.coeff - b.coeff,
-                        _merge(-, a.dict, b.dict, filter=_iszero))
-
--(a::SN, b::SN) = a + (-b)
-
--(a::Number, b::SN) = a + (-b)
-
--(a::SN, b::Number) = a + (-b)
-
-TermInterface.symtype(a::Mul{X}) where {X} = X
-
-TermInterface.istree(a::Type{Mul}) = true
-
-TermInterface.operation(a::Mul) = *
-
-unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
-
-Base.show(io::IO, a::Mul) = show_term(io, a)
-
-mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
-mul_t(a) = promote_symtype(*, symtype(a))
-
-*(a::SN) = a
-
-function *(a::SN, b::SN)
-    # Always make sure Div wraps Mul
-    if isdiv(a) && isdiv(b)
-        # TODO
-        Div(a.num * b.num, a.den * b.den)
-    elseif isdiv(a)
-        Div(a.num * b, a.den)
-    elseif isdiv(b)
-        Div(a * b.num, b.den)
-    elseif ismul(a) && ismul(b)
-    else
-        Mul(mul_t(a,b), makemul(1, a, b)...)
-    end
-end
-
-*(a::Mul, b::Mul) = Mul(mul_t(a, b),
-                        a.coeff * b.coeff,
-                        _merge(+, a.dict, b.dict, filter=_iszero))
-
-function *(a::Number, b::SN)
-    if iszero(a)
-        a
-    elseif isone(a)
-        b
-    elseif b isa Div
-        Div(a*b.num, b.den)
-    elseif b isa Add
-        # 2(a+b) -> 2a + 2b
-        T = promote_symtype(+, typeof(a), symtype(b))
-        Add(T, b.coeff * a, Dict(k=>v*a for (k, v) in b.dict))
-    else
-        Mul(mul_t(a, b), makemul(a, b)...)
-    end
-end
-
-*(a::SN, b::Number) = b * a
-
-\(a::SN, b::Union{Number, SN}) = b / a
-
-\(a::Number, b::SN) = b / a
-
-/(a::SN, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
-
-//(a::Union{SN, Number}, b::SN) = a / b
-
-//(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
-
-const Rat = Union{Rational, Integer}
-
-function ratcoeff(x)
-    if ismul(x)
-        ratcoeff(x.coeff)
-    elseif x isa Rat
-        true, x
-    else
-        false, NaN
-    end
-end
-ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
-ratio(x::Rat,y::Rat) = x//y
-function maybe_intcoeff(x)
-    if ismul(x)
-        x.coeff isa Rational && isone(x.coeff.den) ? Setfield.@set!(x.coeff = x.coeff.num) : x
-    elseif x isa Rational
-        isone(x.den) ? x.num : x
-    else
-        x
-    end
-end
-
-TermInterface.istree(d::Type{Div}) = true
-
-TermInterface.operation(d::Div) = (/)
-
-Base.show(io::IO, d::Div) = show_term(io, d)
-
-/(a::Union{SN,Number}, b::SN) = Div(a,b)
-
-# Use `Union` to avoid promoting the base and exponent to the same type.
-# For instance, if `a.base` is a multivariate polynomial and  `a.exp` is a number,
-# we don't want to promote `a.exp` to a multivariate polynomial.
-
-Base.show(io::IO, p::Pow) = show_term(io, p)
-
-^(a::SN, b) = Pow(a, b)
-
-^(a::SN, b::SN) = Pow(a, b)
-
-^(a::Number, b::SN) = Pow(a, b)
-
-function ^(a::Mul, b::Number)
-    coeff = unstable_pow(a.coeff, b)
-    Mul(promote_symtype(^, symtype(a), symtype(b)),
-        coeff, mapvalues((k, v) -> b*v, a.dict))
-end
-
-function *(a::Mul, b::Pow)
-    if b.exp isa Number
-        Mul(mul_t(a, b),
-            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
-    else
-        Mul(mul_t(a, b),
-            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
-    end
-end
-
-*(a::Pow, b::Mul) = b * a
-
-function copy_similar(d, others)
-    K = promote_type(keytype(d), keytype.(others)...)
-    V = promote_type(valtype(d), valtype.(others)...)
-    Dict{K, V}(d)
-end
-
-_merge(f, d, others...; filter=x->false) = _merge!(f, copy_similar(d, others), others...; filter=filter)
-function _merge!(f, d, others...; filter=x->false)
-    acc = d
-    for other in others
-        for (k, v) in other
-            v = f(v)
-            if haskey(acc, k)
-                v = acc[k] + v
-            end
-            if filter(v)
-                delete!(acc, k)
-            else
-                acc[k] = v
-            end
-        end
-    end
-    acc
-end
-
-function mapvalues(f, d1::AbstractDict)
-    d = copy(d1)
-    for (k, v) in d
-        d[k] = f(k, v)
-    end
-    d
-end
-
 ###
 ### Tree print
 ###
@@ -732,6 +531,7 @@ TermInterface.istree(t::Type{<:Symbolic}) = true
 ###
 ### Metadata
 ###
+using Setfield
 TermInterface.metadata(s::Symbolic) = s.metadata
 TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
@@ -754,6 +554,7 @@ function getmetadata(s::Symbolic, ctx, default)
 end
 
 # pirated for Setfield purposes:
+using Base: ImmutableDict
 Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
 
 assocmeta(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
@@ -1017,11 +818,13 @@ promote_symtype(f, Ts...) = Any
 # Maybe don't even need a new type, can just use Sym{FnType}
 struct FnType{X<:Tuple,Y} end
 
-(f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
-
 function (f::Symbolic)(args...)
-    error("Sym $f is not callable. " *
-          "Use @syms $f(var1, var2,...) to create it as a callable.")
+    if isterm(f) && f.f isa FnType
+        Term{promote_symtype(f.f, symtype.(args)...)}(f, Any[args...])
+    else
+        error("Sym $f is not callable. " *
+              "Use @syms $f(var1, var2,...) to create it as a callable.")
+    end
 end
 
 """
@@ -1030,7 +833,7 @@ end
 The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
-function promote_symtype(f::Symbolic{FnType{X,Y}}, args...) where {X, Y}
+function promote_symtype(f::FnType{X,Y}, args...) where {X, Y}
     if X === Tuple
         return Y
     end
@@ -1044,7 +847,7 @@ function promote_symtype(f::Symbolic{FnType{X,Y}}, args...) where {X, Y}
     return Y
 end
 
-@inline isassociative(op) = op === + || op === *
+@inline isassociative(op) = op === (+) || op === (*)
 
 _promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
 function _promote_symtype(f, args)
@@ -1130,3 +933,178 @@ function _name_type(x)
         syms_syntax_error()
     end
 end
+
+###
+### Arithmetic
+###
+_merge(f, d, others...; filter=x->false) = _merge!(f, Dict{Any,Any}(d), others...; filter=filter)
+function _merge!(f, d, others...; filter=x->false)
+    acc = d
+    for other in others
+        for (k, v) in other
+            v = f(v)
+            if haskey(acc, k)
+                v = acc[k] + v
+            end
+            if filter(v)
+                delete!(acc, k)
+            else
+                acc[k] = v
+            end
+        end
+    end
+    acc
+end
+
+function mapvalues(f, d1::AbstractDict)
+    d = copy(d1)
+    for (k, v) in d
+        d[k] = f(k, v)
+    end
+    d
+end
+
+add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
+sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
+sub_t(a) = promote_symtype(-, symtype(a))
+
+function +(a::SN, b::SN)
+    if a isa Add
+        coeff, dict = makeadd(1, 0, b)
+        T = promote_symtype(+, symtype(a), symtype(b))
+        return Add(add_t(a,b), a.coeff + coeff, _merge(+, a.dict, dict, filter=_iszero))
+    elseif b isa Add
+        return b + a
+    end
+    Add(add_t(a,b), makeadd(1, 0, a, b)...)
+end
+
++(a::Number, b::SN) = Add(add_t(a,b), makeadd(1, a, b)...)
+
++(a::SN, b::Number) = Add(add_t(a,b), makeadd(1, b, a)...)
+
++(a::SN) = a
+
++(a::Add, b::Add) = Add(add_t(a,b),
+                        a.coeff + b.coeff,
+                        _merge(+, a.dict, b.dict, filter=_iszero))
+
++(a::Number, b::Add) = iszero(a) ? b : Add(add_t(a,b), a + b.coeff, b.dict)
+
++(b::Add, a::Number) = iszero(a) ? b : Add(add_t(a,b), a + b.coeff, b.dict)
+
+-(a::Add) = Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict))
+
+-(a::SN) = Add(sub_t(a), makeadd(-1, 0, a)...)
+
+-(a::Add, b::Add) = Add(sub_t(a,b),
+                        a.coeff - b.coeff,
+                        _merge(-, a.dict, b.dict, filter=_iszero))
+
+-(a::SN, b::SN) = a + (-b)
+
+-(a::Number, b::SN) = a + (-b)
+
+-(a::SN, b::Number) = a + (-b)
+
+
+mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
+mul_t(a) = promote_symtype(*, symtype(a))
+
+*(a::SN) = a
+
+function *(a::SN, b::SN)
+    # Always make sure Div wraps Mul
+    if isdiv(a) && isdiv(b)
+        # TODO
+        Div(a.num * b.num, a.den * b.den)
+    elseif isdiv(a)
+        Div(a.num * b, a.den)
+    elseif isdiv(b)
+        Div(a * b.num, b.den)
+    elseif ismul(a) && ismul(b)
+    else
+        Mul(mul_t(a,b), makemul(1, a, b)...)
+    end
+end
+
+*(a::Mul, b::Mul) = Mul(mul_t(a, b),
+                        a.coeff * b.coeff,
+                        _merge(+, a.dict, b.dict, filter=_iszero))
+
+function *(a::Number, b::SN)
+    if iszero(a)
+        a
+    elseif isone(a)
+        b
+    elseif b isa Div
+        Div(a*b.num, b.den)
+    elseif b isa Add
+        # 2(a+b) -> 2a + 2b
+        T = promote_symtype(+, typeof(a), symtype(b))
+        Add(T, b.coeff * a, Dict(k=>v*a for (k, v) in b.dict))
+    else
+        Mul(mul_t(a, b), makemul(a, b)...)
+    end
+end
+
+*(a::SN, b::Number) = b * a
+
+\(a::SN, b::Union{Number, SN}) = b / a
+
+\(a::Number, b::SN) = b / a
+
+/(a::SN, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
+
+//(a::Union{SN, Number}, b::SN) = a / b
+
+//(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
+
+const Rat = Union{Rational, Integer}
+
+function ratcoeff(x)
+    if ismul(x)
+        ratcoeff(x.coeff)
+    elseif x isa Rat
+        true, x
+    else
+        false, NaN
+    end
+end
+ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
+ratio(x::Rat,y::Rat) = x//y
+function maybe_intcoeff(x)
+    if ismul(x)
+        x.coeff isa Rational && isone(x.coeff.den) ? Setfield.@set!(x.coeff = x.coeff.num) : x
+    elseif x isa Rational
+        isone(x.den) ? x.num : x
+    else
+        x
+    end
+end
+
+/(a::Union{SN,Number}, b::SN) = Div(a,b)
+
+^(a::SN, b) = Pow(a, b)
+
+^(a::SN, b::SN) = Pow(a, b)
+
+^(a::Number, b::SN) = Pow(a, b)
+
+function ^(a::Mul, b::Number)
+    coeff = unstable_pow(a.coeff, b)
+    Mul(promote_symtype(^, symtype(a), symtype(b)),
+        coeff, mapvalues((k, v) -> b*v, a.dict))
+end
+
+function *(a::Mul, b::Pow)
+    if b.exp isa Number
+        Mul(mul_t(a, b),
+            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
+    else
+        Mul(mul_t(a, b),
+            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
+    end
+end
+
+*(a::Pow, b::Mul) = b * a

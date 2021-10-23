@@ -97,8 +97,11 @@ end
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 Base.rem2pi(x::Symbolic{<:Number}, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
+# transpose in Julia infers the output type with `promote_op`, hence we need to trick the compiler
+Base.transpose(a::Symbolic{<:Number}) = a
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
+    f === transpose && continue
     @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 

@@ -280,7 +280,7 @@ end
 
 function ConstructionBase.constructorof(s::Type{<:Term{T}}) where {T}
     function (f, args, meta, hash)
-        Term{T, typeof(meta)}(f, args, meta, hash)
+        Term{T}(f, args, meta, hash)
     end
 end
 
@@ -914,7 +914,7 @@ end
 
 function ConstructionBase.constructorof(::Type{<:Pow{X}}) where {X}
     (base, exp, m) ->
-    Pow{promote_symtype(^, symtype(base), symtype(exp)), typeof(base), typeof(exp), typeof(m)}(base,exp,m)
+    Pow{promote_symtype(^, symtype(base), symtype(exp))}(base,exp,m)
 end
 
 function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}

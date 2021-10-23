@@ -1,4 +1,5 @@
 using TermInterface
+
 #--------------------
 #--------------------
 #### Symbolic
@@ -21,30 +22,33 @@ const COMPLEX = 0x01 << 1
 const SIMPLIFIED = 0x01 << 2
 #const FNTYPE = 0x01 << 3
 
+sdict(kv...) = Dict{Any, Any}(kv...)
+
 using Base: RefValue
 const EMPTY_ARGS = []
 const EMPTY_REF_ARGS = Ref(EMPTY_ARGS)
 const EMPTY_HASH = RefValue(UInt(0))
-const EMPTY_DICT = Dict()
+const EMPTY_DICT = sdict()
+const EMPTY_DICT_T = typeof(EMPTY_DICT)
 
 # IT IS IMPORTANT TO MAKE SURE ANYS ARE ANY!!!
 #
 # Also, try to union split
 Base.@kwdef struct BasicSymbolic <: Symbolic
-    valtype::ValueType   = REAL
-    exprtype::ExprType   = TERM
-    bitflags::UInt8      = 0x00
+    valtype::ValueType     = REAL
+    exprtype::ExprType     = TERM
+    bitflags::UInt8        = 0x00
     # Sym
-    name::Symbol         = :OOF
+    name::Symbol           = :OOF
     # Term
-    f::Any               = identity  # base/num if Pow
+    f::Any                 = identity  # base/num if Pow
     arguments::Vector{Any} = EMPTY_ARGS
-    hash::RefValue{UInt} = EMPTY_HASH
     # Mul/Add
-    coeff::Any           = 0         # exp/den if Pow
-    dict::Dict{Any,Any}  = EMPTY_DICT
+    coeff::Any             = 0         # exp/den if Pow
+    dict::EMPTY_DICT_T     = EMPTY_DICT
+    hash::RefValue{UInt}   = EMPTY_HASH
+    metadata::Metadata     = NO_METADATA
     unsorted_args_cache::RefValue{Vector{Any}} = EMPTY_REF_ARGS
-    metadata::Metadata   = NO_METADATA
 end
 
 @inline function valtype2type(T::ValueType)
@@ -55,6 +59,9 @@ end
 end
 
 @noinline error_no_valtype(T) = error("$T is not supported.")
+@noinline error_on_type(E) = error("Internal error: type $E not handled!")
+@noinline error_sym() = error("Sym doesn't have a operation or arguments!")
+@noinline error_property(E, s) = error("$E doesn't have field $s!")
 
 @inline function type2valtype(@nospecialize T)
     T === Real ? REAL :
@@ -64,7 +71,193 @@ end
     error_no_valtype()
 end
 
-# Convenient constructors
+@inline is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
+@inline isarray(x::BasicSymbolic) = is_of_type(x, ARRAY)
+@inline iscomplex(x::BasicSymbolic) = is_of_type(x, COMPLEX)
+@inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
+#isfntype(x::BasicSymbolic) = is_of_type(x, FNTYPE)
+
+@inline valtype(x::BasicSymbolic) = getfield(x, :valtype)
+@inline exprtype(x::BasicSymbolic) = getfield(x, :exprtype)
+
+###
+### TermInterface
+###
+TermInterface.exprhead(x::Symbolic) = :call
+TermInterface.symtype(x::Number) = typeof(x)
+TermInterface.symtype(::Symbolic) = Any
+@inline function TermInterface.symtype(s::BasicSymbolic)
+    T = s.valtype
+    T === REAL ? Real :
+    T === RATIONAL ? Rational :
+    T === INT ? Int :
+    Bool
+end
+
+@inline function TermInterface.operation(x::BasicSymbolic)
+    E = exprtype(x)
+    E === TERM ? getfield(x, :f) :
+    E === ADD ? (+) :
+    E === MUL ? (*) :
+    E === DIV ? (/) :
+    E === POW ? (^) :
+    E === SYM ? error_sym() :
+    error_on_type(E)
+end
+
+function TermInterface.arguments(x::BasicSymbolic)
+    args = unsorted_arguments(x)
+    E = exprtype(x)
+    (E === ADD || E === MUL) && sort!(args, lt = <ₑ)
+    return args
+end
+function TermInterface.unsorted_arguments(x::BasicSymbolic)
+    E = exprtype(x)
+    if E === TERM
+        return getfield(x, :arguments)
+    elseif E === Add || E === MUL
+        args = x.arguments
+        isempty(args) || return args
+        siz = length(x.dict)
+        iszerocoeff = iszero(x.coeff)
+        sizehint!(args, iszerocoeff ? siz : siz + 1)
+        iszerocoeff || push!(args, x.coeff)
+        if E === ADD
+            for (k, v) in x.dict
+                push!(args, k * v)
+            end
+        else # MUL
+            for (k, v) in x.dict
+                push!(args, unstable_pow(k, v))
+            end
+        end
+        return args
+    elseif E === DIV
+        args = x.arguments
+        isempty(args) || return args
+        sizehint!(args, 2)
+        push!(args, numerators(x))
+        push!(args, denominators(x))
+        return args
+    elseif E === POW
+        args = x.arguments
+        isempty(args) || return args
+        sizehint!(args, 2)
+        push!(args, getbase(x))
+        push!(args, getexp(x))
+        return args
+    elseif E === SYM
+        error_sym()
+    else
+        error_on_type(E)
+    end
+end
+
+TermInterface.istree(s::BasicSymbolic) = issym(s)
+TermInterface.issym(s::BasicSymbolic) = exprtype(s) === SYM
+#isfntype(s::BasicSymbolic) = exprtype(s) === FNTYPE
+isterm(x) = x isa BasicSymbolic && exprtype(x) === TERM
+ismul(x)  = x isa BasicSymbolic && exprtype(x) === MUL
+isadd(x)  = x isa BasicSymbolic && exprtype(x) === ADD
+ispow(x)  = x isa BasicSymbolic && exprtype(x) === POW
+isdiv(x)  = x isa BasicSymbolic && exprtype(x) === DIV
+
+###
+### Base interface
+###
+
+@inline function Base.getproperty(x::BasicSymbolic, s::Symbol)
+    (s === :metadata || s === :hash) && return getfield(x, s)
+    E = exprtype(x)
+    if (E === SYM && s === :name) ||
+        (E === TERM && (s === :f || s === :arguments)) ||
+        ((E === ADD || E === MUL) && (s === :coeff || s === :dict))
+        getfield(x, s)
+    elseif E === DIV
+        s === :num ? getfield(x, :f) :
+        s === :den ? getfield(x, :coeff) :
+        error_property(E, s)
+    elseif E === POW
+        s === :base ? getfield(x, :f) :
+        s === :exp ? getfield(x, :coeff) :
+        error_property(E, s)
+    else
+        error_property(E, s)
+    end
+end
+
+Base.isequal(::Symbolic, x) = false
+Base.isequal(x, ::Symbolic) = false
+Base.isequal(::Symbolic, ::Symbolic) = false
+
+function Base.isequal(a::BasicSymbolic, b::BasicSymbolic)
+    a === b && return true
+
+    E = exprtype(a)
+    E === exprtype(b) || return false
+
+    T = valtype(a)
+    T === valtype(b) || return false
+
+    if E === SYM
+        nameof(a) === nameof(b)
+    elseif E === ADD || E === MUL
+        a.coeff == b.coeff && isequal(a.dict, b.dict)
+    elseif E === DIV
+        isequal(numerators(a), numerators(b)) && isequal(denominators(a), denominators(b))
+    elseif E === POW
+        isequal(getexp(a), getexp(b)) && isequal(getbase(a), getbase(b))
+    elseif E === TERM
+        a1 = arguments(a)
+        a2 = arguments(b)
+        isequal(operation(a), operation(b)) &&
+            length(a1) == length(a2) &&
+            all(isequal(l, r) for (l, r) in zip(a1, a2))
+    else
+        error_on_type(E)
+    end
+end
+
+Base.one( s::Symbolic) = one( symtype(s))
+Base.zero(s::Symbolic) = zero(symtype(s))
+
+Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymbolic doesn't have a name")
+
+## This is much faster than hash of an array of Any
+hashvec(xs, z) = foldr(hash, xs, init=z)
+function Base.hash(s::BasicSymbolic, salt::UInt)
+    E = exprtype(s)
+    T = valtype(s)
+    if E === SYM
+        hash(T, hash(nameof(s), salt ⊻ 0x4de7d7c66d41da43))
+    elseif E === ADD || E === MUL
+        !iszero(salt) && return hash(hash(t, zero(UInt64)), salt)
+        h = t.hash[]
+        !iszero(h) && return h
+        hashoffset = t isa Add ? 0xaddaddaddaddadda : 0xaaaaaaaaaaaaaaaa
+        h′= hash(hashoffset, hash(t.coeff, hash(t.dict, salt)))
+        t.hash[] = h′
+        return h′
+    elseif E === DIV
+        return hash(numerators(x), hash(denominators(x), salt ⊻ 0x334b218e73bbba53))
+    elseif E === POW
+        hash(getexp(p), hash(getbase(p), salt ⊻ 0x2b55b97a6efb080c))
+    elseif E === TERM
+        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
+        h = s.hash[]
+        !iszero(h) && return h
+        h′ = hashvec(arguments(s), hash(operation(s), hash(T, salt)))
+        s.hash[] = h′
+        return h′
+    else
+        error_on_type(E)
+    end
+end
+
+###
+### Constructors
+###
+
 for C in [:Sym, :Term, :Mul, :Add, :Pow, :Div]
     @eval struct $C{T} 1+1 end
 end
@@ -137,6 +330,39 @@ function Term(f, args; metadata=NO_METADATA)
     Term{T}(f, args, metadata=metadata)
 end
 
+"""
+    makeadd(sign, coeff::Number, xs...)
+
+Any Muls inside an Add should always have a coeff of 1
+and the key (in Add) should instead be used to store the actual coefficient
+"""
+function makeadd(sign, coeff, xs...)
+    d = sdict()
+    for x in xs
+        if x isa Add
+            coeff += x.coeff
+            _merge!(+, d, x.dict, filter=_iszero)
+            continue
+        end
+        if x isa Number
+            coeff += x
+            continue
+        end
+        if x isa Mul
+            k = Mul(symtype(x), 1, x.dict)
+            v = sign * x.coeff + get(d, k, 0)
+        else
+            k = x
+            v = sign + get(d, x, 0)
+        end
+        if iszero(v)
+            delete!(d, k)
+        else
+            d[k] = v
+        end
+    end
+    coeff, d
+end
 
 function Add(T, coeff, dict; metadata=NO_METADATA)
     if isempty(dict)
@@ -147,6 +373,27 @@ function Add(T, coeff, dict; metadata=NO_METADATA)
     end
 
     Add{T}(coeff, dict, metadata=metadata)
+end
+
+function makemul(coeff, xs...; d=sdict())
+    for x in xs
+        if x isa Pow && x.exp isa Number
+            d[x.base] = x.exp + get(d, x.base, 0)
+        elseif x isa Number
+            coeff *= x
+        elseif x isa Mul
+            coeff *= x.coeff
+            _merge!(+, d, x.dict, filter=_iszero)
+        else
+            v = 1 + get(d, x, 0)
+            if _iszero(v)
+                delete!(d, x)
+            else
+                d[x] = v
+            end
+        end
+    end
+    (coeff, d)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA)
@@ -167,6 +414,16 @@ function Div(n, d, simplified=false; kw...)
     Div{promote_symtype((/), symtype(n), symtype(d))}(n,d, simplified; kw...)
 end
 
+function makepow(a, b)
+    base = a
+    exp = b
+    if a isa Pow
+        base = a.base
+        exp = a.exp * b
+    end
+    return (base, exp)
+end
+
 function Pow(a, b; metadata=NO_METADATA)
     Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
 end
@@ -177,326 +434,6 @@ end
 end
 
 @inline denominators(x::BasicSymbolic) = exprtype(x) === DIV && ? x.coeff : Any[1]
-
-#Term(f, args::Vector{Any}; kw...) = BasicSymbolic(;
-#    exprtype=TERM, f=f, arguments=args, hash=Ref(UInt(0)),
-#    kw...)
-#Sym(name::Symbol; kw...) = BasicSymbolic(;exprtype=SYM, name=name, kw...)
-#Mul(coeff, dict::Dict{Any, Any}; kw...) = BasicSymbolic(;
-#    exprtype=MUL, coeff=coeff, dict=dict, hash=Ref(UInt(0)),
-#    kw...)
-#Add(coeff, dict::Dict{Any, Any}; kw...) = BasicSymbolic(;
-#    exprtype=ADD, coeff=coeff, dict=dict, hash=Ref(UInt(0)),
-#    kw...)
-#Pow(base, exp; kw...) = BasicSymbolic(;exprtype=POW, f=base, coeff=exp, kw...)
-#Div(num, den; kw...) = BasicSymbolic(;exprtype=POW, f=num, coeff=den, kw...)
-
-is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
-isarray(x::BasicSymbolic) = is_of_type(x, ARRAY)
-iscomplex(x::BasicSymbolic) = is_of_type(x, COMPLEX)
-issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
-#isfntype(x::BasicSymbolic) = is_of_type(x, FNTYPE)
-
-valtype(x::BasicSymbolic) = x.valtype
-exprtype(x::BasicSymbolic) = x.exprtype
-
-
-###
-### TermInterface
-###
-TermInterface.exprhead(x::Symbolic) = :call
-TermInterface.symtype(x::Number) = typeof(x)
-TermInterface.symtype(::Symbolic) = Any
-@inline function TermInterface.symtype(s::BasicSymbolic)
-    T = s.valtype
-    T === REAL ? Real :
-    T === RATIONAL ? Rational :
-    T === INT ? Int :
-    Bool
-end
-
-@noinline error_on_type(E) = error("Internal error: type $E not handled!")
-@noinline error_sym() = error("Sym doesn't have a operation or arguments!")
-
-@inline function TermInterface.operation(x::BasicSymbolic)
-    E = exprtype(x)
-    E === TERM ? getfield(x, :f) :
-    E === ADD ? (+) :
-    E === MUL ? (*) :
-    E === DIV ? (/) :
-    E === POW ? (^) :
-    E === SYM ? error_sym() :
-    error_on_type(E)
-end
-
-function TermInterface.arguments(x::BasicSymbolic)
-    args = unsorted_arguments(x)
-    E = exprtype(x)
-    (E === ADD || E === MUL) && sort!(args, lt = <ₑ)
-    return args
-end
-function TermInterface.unsorted_arguments(x::BasicSymbolic)
-    E = exprtype(x)
-    if E === TERM
-        return getfield(x, :arguments)
-    elseif E === Add || E === MUL
-        args = x.arguments
-        isempty(args) || return args
-        siz = length(x.dict)
-        iszerocoeff = iszero(x.coeff)
-        sizehint!(args, iszerocoeff ? siz : siz + 1)
-        iszerocoeff || push!(args, x.coeff)
-        if E === ADD
-            for (k, v) in x.dict
-                push!(args, k * v)
-            end
-        else # MUL
-            for (k, v) in x.dict
-                push!(args, unstable_pow(k, v))
-            end
-        end
-        return args
-    elseif E === DIV
-        args = x.arguments
-        isempty(args) || return args
-        sizehint!(args, 2)
-        push!(args, numerators(x))
-        push!(args, denominators(x))
-        return args
-    elseif E === POW
-        args = x.arguments
-        isempty(args) || return args
-        sizehint!(args, 2)
-        push!(args, getbase(x))
-        push!(args, getexp(x))
-        return args
-    elseif E === SYM
-        error_sym()
-    else
-        error_on_type(E)
-    end
-end
-
-TermInterface.istree(s::BasicSymbolic) = issym(s)
-TermInterface.issym(s::BasicSymbolic) = exprtype(s) === SYM
-#isfntype(s::BasicSymbolic) = exprtype(s) === FNTYPE
-isterm(x) = x isa BasicSymbolic && exprtype(x) === TERM
-ismul(x)  = x isa BasicSymbolic && exprtype(x) === MUL
-isadd(x)  = x isa BasicSymbolic && exprtype(x) === ADD
-ispow(x)  = x isa BasicSymbolic && exprtype(x) === POW
-isdiv(x)  = x isa BasicSymbolic && exprtype(x) === DIV
-
-Base.isequal(::Symbolic, x) = false
-Base.isequal(x, ::Symbolic) = false
-Base.isequal(::Symbolic, ::Symbolic) = false
-
-function Base.isequal(a::BasicSymbolic, b::BasicSymbolic)
-    a === b && return true
-
-    E = exprtype(a)
-    E === exprtype(b) || return false
-
-    T = valtype(a)
-    T === valtype(b) || return false
-
-    if E === SYM
-        nameof(a) === nameof(b)
-    elseif E === ADD || E === MUL
-        a.coeff == b.coeff && isequal(a.dict, b.dict)
-    elseif E === DIV
-        isequal(numerators(a), numerators(b)) && isequal(denominators(a), denominators(b))
-    elseif E === POW
-        isequal(getexp(a), getexp(b)) && isequal(getbase(a), getbase(b))
-    elseif E === TERM
-        a1 = arguments(a)
-        a2 = arguments(b)
-        isequal(operation(a), operation(b)) &&
-            length(a1) == length(a2) &&
-            all(isequal(l, r) for (l, r) in zip(a1, a2))
-    else
-        error_on_type(E)
-    end
-end
-
-Base.one( s::Symbolic) = one( symtype(s))
-Base.zero(s::Symbolic) = zero(symtype(s))
-
-Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymbolic doesn't have a name")
-
-function Base.hash(s::BasicSymbolic, salt::UInt)
-    E = exprtype(s)
-    T = valtype(s)
-    if E === SYM
-        hash(T, hash(nameof(s), salt ⊻ 0x4de7d7c66d41da43))
-    elseif E === ADD || E === MUL
-        !iszero(salt) && return hash(hash(t, zero(UInt64)), salt)
-        h = t.hash[]
-        !iszero(h) && return h
-        hashoffset = t isa Add ? 0xaddaddaddaddadda : 0xaaaaaaaaaaaaaaaa
-        h′= hash(hashoffset, hash(t.coeff, hash(t.dict, salt)))
-        t.hash[] = h′
-        return h′
-    elseif E === DIV
-        return hash(numerators(x), hash(denominators(x), salt ⊻ 0x334b218e73bbba53))
-    elseif E === POW
-        hash(getexp(p), hash(getbase(p), salt ⊻ 0x2b55b97a6efb080c))
-    elseif E === TERM
-        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
-        h = s.hash[]
-        !iszero(h) && return h
-        h′ = hashvec(arguments(s), hash(operation(s), hash(T, salt)))
-        s.hash[] = h′
-        return h′
-    else
-        error_on_type(E)
-    end
-end
-
-"""
-    promote_symtype(f, Ts...)
-
-The result of applying `f` to arguments of [`symtype`](#symtype) `Ts...`
-
-```julia
-julia> promote_symtype(+, Real, Real)
-Real
-
-julia> promote_symtype(+, Complex, Real)
-Number
-
-julia> @syms f(x)::Complex
-(f(::Number)::Complex,)
-
-julia> promote_symtype(f, Number)
-Complex
-```
-
-When constructing [`Term`](#Term)s without an explicit symtype,
-`promote_symtype` is used to figure out the symtype of the Term.
-"""
-promote_symtype(f, Ts...) = Any
-
-#---------------------------
-#---------------------------
-#### Function-like variables
-#---------------------------
-
-# Maybe don't even need a new type, can just use Sym{FnType}
-struct FnType{X<:Tuple,Y} end
-
-(f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
-
-function (f::Symbolic)(args...)
-    error("Sym $f is not callable. " *
-          "Use @syms $f(var1, var2,...) to create it as a callable.")
-end
-
-"""
-    promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)
-
-The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
-if the arguments are of the wrong type then this function will error.
-"""
-function promote_symtype(f::Symbolic{FnType{X,Y}}, args...) where {X, Y}
-    if X === Tuple
-        return Y
-    end
-
-    # This is to handle `Tuple{T} where T`, so we cannot reliably query the type
-    # parameters of the `Tuple` in `FnType`.
-    t = Tuple{args...}
-    if !(t <: X)
-        error("$t is not a subtype of $X.")
-    end
-    return Y
-end
-
-"""
-    @syms <lhs_expr>[::T1] <lhs_expr>[::T2]...
-
-For instance:
-
-    @syms foo::Real bar baz(x, y::Real)::Complex
-
-Create one or more variables. `<lhs_expr>` can be just a symbol in which case
-it will be the name of the variable, or a function call in which case a function-like
-variable which has the same name as the function being called. The Sym type, or
-in the case of a function-like Sym, the output type of calling the function
-can be set using the `::T` syntax.
-
-# Examples:
-
-- `@syms foo bar::Real baz::Int` will create
-variable `foo` of symtype `Number` (the default), `bar` of symtype `Real`
-and `baz` of symtype `Int`
-- `@syms f(x) g(y::Real, x)::Int h(a::Int, f(b))` creates 1-arg `f` 2-arg `g`
-and 2 arg `h`. The second argument to `h` must be a one argument function-like
-variable. So, `h(1, g)` will fail and `h(1, f)` will work.
-"""
-macro syms(xs...)
-    defs = map(xs) do x
-        n, t = _name_type(x)
-        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
-        nt = _name_type(x)
-        n, t = nt.name, nt.type
-        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
-    end
-    Expr(:block, defs...,
-         :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
-end
-
-function syms_syntax_error()
-    error("Incorrect @syms syntax. Try `@syms x::Real y::Complex g(a) f(::Real)::Real` for instance.")
-end
-
-function _name_type(x)
-    if x isa Symbol
-        return (name=x, type=Number)
-    elseif x isa Expr && x.head === :(::)
-        if length(x.args) == 1
-            return (name=nothing, type=x.args[1])
-        end
-        lhs, rhs = x.args[1:2]
-        if lhs isa Expr && lhs.head === :call
-            # e.g. f(::Real)::Unreal
-            type = map(x->_name_type(x).type, lhs.args[2:end])
-            return (name=lhs.args[1], type=:($FnType{Tuple{$(type...)}, $rhs}))
-        else
-            return (name=lhs, type=rhs)
-        end
-    elseif x isa Expr && x.head === :ref
-        ntype = _name_type(x.args[1]) # a::Number
-        N = length(x.args)-1
-        return (name=ntype.name,
-                type=:(Array{$(ntype.type), $N}),
-                array_metadata=:(Base.Slice.(($(x.args[2:end]...),))))
-    elseif x isa Expr && x.head === :call
-        return _name_type(:($x::Number))
-    else
-        syms_syntax_error()
-    end
-end
-
-## This is much faster than hash of an array of Any
-hashvec(xs, z) = foldr(hash, xs, init=z)
-
-isassociative(::Any) = false
-isassociative(::Union{typeof(+),typeof(*)}) = true
-
-_promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
-function _promote_symtype(f, args)
-    if length(args) == 0
-        promote_symtype(f)
-    elseif length(args) == 1
-        promote_symtype(f, symtype(args[1]))
-    elseif length(args) == 2
-        promote_symtype(f, symtype(args[1]), symtype(args[2]))
-    elseif isassociative(f)
-        mapfoldl(symtype, (x,y) -> promote_symtype(f, x, y), args)
-    else
-        promote_symtype(f, map(symtype, args)...)
-    end
-end
 
 function term(f, args...; type = nothing)
     if type === nothing
@@ -543,45 +480,6 @@ function TermInterface.similarterm(t::Type{<:BasicSymbolic}, f, args, symtype; m
     else
         Term{T}(f, args; metadata=metadata)
     end
-end
-
-######   Add Mul and Pow
-
-
-sdict(kv...) = Dict{Any, Number}(kv...)
-
-"""
-    makeadd(sign, coeff::Number, xs...)
-
-Any Muls inside an Add should always have a coeff of 1
-and the key (in Add) should instead be used to store the actual coefficient
-"""
-function makeadd(sign, coeff, xs...)
-    d = sdict()
-    for x in xs
-        if x isa Add
-            coeff += x.coeff
-            _merge!(+, d, x.dict, filter=_iszero)
-            continue
-        end
-        if x isa Number
-            coeff += x
-            continue
-        end
-        if x isa Mul
-            k = Mul(symtype(x), 1, x.dict)
-            v = sign * x.coeff + get(d, k, 0)
-        else
-            k = x
-            v = sign + get(d, x, 0)
-        end
-        if iszero(v)
-            delete!(d, k)
-        else
-            d[k] = v
-        end
-    end
-    coeff, d
 end
 
 add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
@@ -636,27 +534,6 @@ TermInterface.operation(a::Mul) = *
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
 Base.show(io::IO, a::Mul) = show_term(io, a)
-
-function makemul(coeff, xs...; d=sdict())
-    for x in xs
-        if x isa Pow && x.exp isa Number
-            d[x.base] = x.exp + get(d, x.base, 0)
-        elseif x isa Number
-            coeff *= x
-        elseif x isa Mul
-            coeff *= x.coeff
-            _merge!(+, d, x.dict, filter=_iszero)
-        else
-            v = 1 + get(d, x, 0)
-            if _iszero(v)
-                delete!(d, x)
-            else
-                d[x] = v
-            end
-        end
-    end
-    (coeff, d)
-end
 
 mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
 mul_t(a) = promote_symtype(*, symtype(a))
@@ -747,16 +624,6 @@ Base.show(io::IO, d::Div) = show_term(io, d)
 
 Base.show(io::IO, p::Pow) = show_term(io, p)
 
-function makepow(a, b)
-    base = a
-    exp = b
-    if a isa Pow
-        base = a.base
-        exp = a.exp * b
-    end
-    return (base, exp)
-end
-
 ^(a::SN, b) = Pow(a, b)
 
 ^(a::SN, b::SN) = Pow(a, b)
@@ -813,6 +680,10 @@ function mapvalues(f, d1::AbstractDict)
     end
     d
 end
+
+###
+### Tree print
+###
 
 import AbstractTrees
 
@@ -915,10 +786,9 @@ function to_symbolic(x)
     x
 end
 
-#--------------------
-#--------------------
-####  Pretty printing
-#--------------------
+###
+###  Pretty printing
+###
 const show_simplified = Ref(false)
 
 Base.show(io::IO, t::Term) = show_term(io, t)
@@ -1103,5 +973,155 @@ function Base.show(io::IO, v::BasicSymbolic)
         Base.show_unquoted(io, v.name)
     else
         show_term(io, v)
+    end
+end
+
+###
+### Symbolic function / type inference
+###
+
+"""
+    promote_symtype(f, Ts...)
+
+The result of applying `f` to arguments of [`symtype`](#symtype) `Ts...`
+
+```julia
+julia> promote_symtype(+, Real, Real)
+Real
+
+julia> promote_symtype(+, Complex, Real)
+Number
+
+julia> @syms f(x)::Complex
+(f(::Number)::Complex,)
+
+julia> promote_symtype(f, Number)
+Complex
+```
+
+When constructing [`Term`](#Term)s without an explicit symtype,
+`promote_symtype` is used to figure out the symtype of the Term.
+"""
+promote_symtype(f, Ts...) = Any
+
+#---------------------------
+#---------------------------
+#### Function-like variables
+#---------------------------
+
+# Maybe don't even need a new type, can just use Sym{FnType}
+struct FnType{X<:Tuple,Y} end
+
+(f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...])
+
+function (f::Symbolic)(args...)
+    error("Sym $f is not callable. " *
+          "Use @syms $f(var1, var2,...) to create it as a callable.")
+end
+
+"""
+    promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)
+
+The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
+if the arguments are of the wrong type then this function will error.
+"""
+function promote_symtype(f::Symbolic{FnType{X,Y}}, args...) where {X, Y}
+    if X === Tuple
+        return Y
+    end
+
+    # This is to handle `Tuple{T} where T`, so we cannot reliably query the type
+    # parameters of the `Tuple` in `FnType`.
+    t = Tuple{args...}
+    if !(t <: X)
+        error("$t is not a subtype of $X.")
+    end
+    return Y
+end
+
+@inline isassociative(op) = op === + || op === *
+
+_promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
+function _promote_symtype(f, args)
+    if length(args) == 0
+        promote_symtype(f)
+    elseif length(args) == 1
+        promote_symtype(f, symtype(args[1]))
+    elseif length(args) == 2
+        promote_symtype(f, symtype(args[1]), symtype(args[2]))
+    elseif isassociative(f)
+        mapfoldl(symtype, (x,y) -> promote_symtype(f, x, y), args)
+    else
+        promote_symtype(f, map(symtype, args)...)
+    end
+end
+
+###
+### Macro
+###
+
+"""
+    @syms <lhs_expr>[::T1] <lhs_expr>[::T2]...
+
+For instance:
+
+    @syms foo::Real bar baz(x, y::Real)::Complex
+
+Create one or more variables. `<lhs_expr>` can be just a symbol in which case
+it will be the name of the variable, or a function call in which case a function-like
+variable which has the same name as the function being called. The Sym type, or
+in the case of a function-like Sym, the output type of calling the function
+can be set using the `::T` syntax.
+
+# Examples:
+
+- `@syms foo bar::Real baz::Int` will create
+variable `foo` of symtype `Number` (the default), `bar` of symtype `Real`
+and `baz` of symtype `Int`
+- `@syms f(x) g(y::Real, x)::Int h(a::Int, f(b))` creates 1-arg `f` 2-arg `g`
+and 2 arg `h`. The second argument to `h` must be a one argument function-like
+variable. So, `h(1, g)` will fail and `h(1, f)` will work.
+"""
+macro syms(xs...)
+    defs = map(xs) do x
+        n, t = _name_type(x)
+        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
+        nt = _name_type(x)
+        n, t = nt.name, nt.type
+        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
+    end
+    Expr(:block, defs...,
+         :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
+end
+
+function syms_syntax_error()
+    error("Incorrect @syms syntax. Try `@syms x::Real y::Complex g(a) f(::Real)::Real` for instance.")
+end
+
+function _name_type(x)
+    if x isa Symbol
+        return (name=x, type=Number)
+    elseif x isa Expr && x.head === :(::)
+        if length(x.args) == 1
+            return (name=nothing, type=x.args[1])
+        end
+        lhs, rhs = x.args[1:2]
+        if lhs isa Expr && lhs.head === :call
+            # e.g. f(::Real)::Unreal
+            type = map(x->_name_type(x).type, lhs.args[2:end])
+            return (name=lhs.args[1], type=:($FnType{Tuple{$(type...)}, $rhs}))
+        else
+            return (name=lhs, type=rhs)
+        end
+    elseif x isa Expr && x.head === :ref
+        ntype = _name_type(x.args[1]) # a::Number
+        N = length(x.args)-1
+        return (name=ntype.name,
+                type=:(Array{$(ntype.type), $N}),
+                array_metadata=:(Base.Slice.(($(x.args[2:end]...),))))
+    elseif x isa Expr && x.head === :call
+        return _name_type(:($x::Number))
+    else
+        syms_syntax_error()
     end
 end

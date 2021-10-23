@@ -206,9 +206,9 @@ function gen_expr(lvl=5)
     elseif rand() < 0.5
         f = rand((+, *))
         n = rand(1:5)
-        args = [gen_expr(lvl-1) for i in 1:n]
+        args = Any[gen_expr(lvl-1) for i in 1:n]
 
-        Term{Number}(f, first.(args)), f(last.(args)...)
+        Term{Number}(f, first.(args)), mapreduce(last, f, args)
     else
         f = rand((-,/))
         l = gen_expr(lvl-1)
@@ -216,9 +216,8 @@ function gen_expr(lvl=5)
         if f === (/) && r[2] isa Number && iszero(r[2])
             return gen_expr(lvl)
         end
-        args = [l, r]
 
-        Term{Number}(f, first.(args)), f(last.(args)...)
+        Term{Number}(f, [first(l), first(r)]), f(last(l), last(r))
     end
 end
 

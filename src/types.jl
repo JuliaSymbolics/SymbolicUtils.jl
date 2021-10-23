@@ -1,3 +1,4 @@
+@nospecialize
 #--------------------
 #--------------------
 #### Symbolic
@@ -31,7 +32,7 @@ function getmetadata(s::Symbolic, ctx, default)
 end
 
 # pirated for Setfield purposes:
-Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
+Base.ImmutableDict(d::ImmutableDict, x, y) = ImmutableDict{DataType,Any}(d, x, y)
 
 assocmeta(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
 function assocmeta(d::Base.ImmutableDict, ctx, val)::ImmutableDict{DataType,Any}
@@ -270,10 +271,10 @@ If `T` is not provided during construction, it is queried by calling
 
 See [promote_symtype](#promote_symtype)
 """
-struct Term{T, M} <: Symbolic{T}
+struct Term{T} <: Symbolic{T}
     f::Any
     arguments::Any
-    metadata::M
+    metadata::Any
     hash::Ref{UInt} # hash cache
 end
 
@@ -284,7 +285,7 @@ function ConstructionBase.constructorof(s::Type{<:Term{T}}) where {T}
 end
 
 function (::Type{Term{T}})(f, args; metadata=NO_METADATA) where {T}
-    Term{T, typeof(metadata)}(f, args, metadata, Ref{UInt}(0))
+    Term{T}(f, args, metadata, Ref{UInt}(0))
 end
 
 TermInterface.istree(t::Type{<:Term}) = true
@@ -546,7 +547,7 @@ showraw(t) = showraw(stdout, t)
 ######   Add Mul and Pow
 
 
-sdict(kv...) = Dict{Any, Number}(kv...)
+sdict(kv...) = Dict{Any, Any}(kv...)
 
 const SN = Symbolic{<:Number}
 """
@@ -562,12 +563,12 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 - `arguments(::Add)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM*valM, keyN*valN...]`
 """
-struct Add{X<:Number, T<:Number, D, M} <: Symbolic{X}
-    coeff::T
-    dict::D
+struct Add{X<:Number} <: Symbolic{X}
+    coeff::Any
+    dict::Any
     sorted_args_cache::Ref{Any}
     hash::Ref{UInt}
-    metadata::M
+    metadata::Any
 end
 
 function Add(T, coeff, dict; metadata=NO_METADATA)
@@ -578,7 +579,7 @@ function Add(T, coeff, dict; metadata=NO_METADATA)
         return _isone(v) ? k : Mul(T, makemul(v, k)...)
     end
 
-    Add{T, typeof(coeff), typeof(dict), typeof(metadata)}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0), metadata)
+    Add{T}(coeff, dict, Ref{Any}(nothing), Ref{UInt}(0), metadata)
 end
 
 TermInterface.symtype(a::Add{X}) where {X} = X
@@ -693,21 +694,18 @@ where `coeff` and the vals are `<:Number` and keys are symbolic.
 - `arguments(::Mul)` -- returns a totally ordered vector of arguments. i.e.
   `[coeff, keyM^valM, keyN^valN...]`
 """
-struct Mul{X<:Number, T<:Number, D, M} <: Symbolic{X}
-    coeff::T
-    dict::D
+struct Mul{X<:Number} <: Symbolic{X}
+    coeff::Any
+    dict::Any
     sorted_args_cache::Ref{Any}
     hash::Ref{UInt}
-    metadata::M
+    metadata::Any
 end
 
 for S in [Add, Mul]
     @eval function ConstructionBase.constructorof(s::Type{<:$S{T}}) where {T}
         function (coeff, dict, argscache, hash, m)
-            $S{T,
-                typeof(coeff),
-                typeof(dict),
-                typeof(m)}(coeff,
+            $S{T}(coeff,
             dict,
             argscache,
             hash,
@@ -726,7 +724,7 @@ function Mul(T, a,b; metadata=NO_METADATA)
             return unstable_pow(first(pair), last(pair))
         end
     else
-        Mul{T, typeof(a), typeof(b), typeof(metadata)}(a,b, Ref{Any}(nothing), Ref{UInt}(0), metadata)
+        Mul{T}(a,b, Ref{Any}(nothing), Ref{UInt}(0), metadata)
     end
 end
 
@@ -806,7 +804,7 @@ function *(a::Number, b::SN)
     elseif b isa Add
         # 2(a+b) -> 2a + 2b
         T = promote_symtype(+, typeof(a), symtype(b))
-        Add(T, b.coeff * a, Dict(k=>v*a for (k, v) in b.dict))
+        Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
     else
         Mul(mul_t(a, b), makemul(a, b)...)
     end
@@ -828,11 +826,11 @@ end
     Div(numerator_factors, denominator_factors, simplified=false)
 
 """
-struct Div{T,N,D, M} <: Symbolic{T}
-    num::N
-    den::D
+struct Div{T} <: Symbolic{T}
+    num::Any
+    den::Any
     simplified::Bool
-    metadata::M
+    metadata::Any
 end
 
 Base.hash(x::Div, u::UInt64) = hash(x.num, hash(x.den, u))
@@ -878,7 +876,7 @@ function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
         end
     end
 
-    Div{T, typeof(n), typeof(d), typeof(metadata)}(n, d, simplified, metadata)
+    Div{T}(n, d, simplified, metadata)
 end
 
 function Div(n,d, simplified=false; kw...)
@@ -908,10 +906,10 @@ Base.show(io::IO, d::Div) = show_term(io, d)
 
 Represents `base^exp`, a lighter version of `Mul(1, Dict(base=>exp))`
 """
-struct Pow{X, B, E, M} <: Symbolic{X}
-    base::B
-    exp::E
-    metadata::M
+struct Pow{X} <: Symbolic{X}
+    base::Any
+    exp::Any
+    metadata::Any
 end
 
 function ConstructionBase.constructorof(::Type{<:Pow{X}}) where {X}
@@ -922,7 +920,7 @@ end
 function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
-    Pow{T, typeof(a), typeof(b), typeof(metadata)}(a,b,metadata)
+    Pow{T}(a,b,metadata)
 end
 function Pow(a, b; metadata=NO_METADATA)
     Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
@@ -969,10 +967,10 @@ end
 function *(a::Mul, b::Pow)
     if b.exp isa Number
         Mul(mul_t(a, b),
-            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
+            a.coeff, _merge(+, a.dict, Base.Dict{Any,Any}(b.base=>b.exp), filter=_iszero))
     else
         Mul(mul_t(a, b),
-            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
+            a.coeff, _merge(+, a.dict, Base.Dict{Any,Any}(b=>1), filter=_iszero))
     end
 end
 
@@ -981,7 +979,7 @@ end
 function copy_similar(d, others)
     K = promote_type(keytype(d), keytype.(others)...)
     V = promote_type(valtype(d), valtype.(others)...)
-    Dict{K, V}(d)
+    Dict{Any, Any}(d)
 end
 
 _merge(f, d, others...; filter=x->false) = _merge!(f, copy_similar(d, others), others...; filter=filter)
@@ -1082,3 +1080,6 @@ end
 
 TermInterface.istree(t::Type{<:Sym}) = false
 TermInterface.istree(t::Type{<:Symbolic}) = true
+
+@specialize
+

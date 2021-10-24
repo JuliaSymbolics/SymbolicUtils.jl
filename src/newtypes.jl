@@ -283,6 +283,7 @@ getexp(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.exp)
 function divt(T, num, den; simplified=false, kw...)
     _iszero(num) && return zero(typeof(num))
     _isone(den) && return num
+
     BasicSymbolic(;
                   exprtype=DIV, f=num, coeff=den,
                   valtype=T isa ValueType ? T : type2valtype(T),
@@ -291,6 +292,33 @@ function divt(T, num, den; simplified=false, kw...)
                   kw...)
 end
 
+const Rat = Union{Rational, Integer}
+
+function ratcoeff(x)
+    if ismul(x)
+        ratcoeff(x.coeff)
+    elseif x isa Rat
+        true, x
+    else
+        false, NaN
+    end
+end
+ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
+ratio(x::Rat,y::Rat) = x//y
+
+using Setfield
+
+function cancel(n, ifactor)
+    if ismul(n)
+        empty!(n.arguments)
+        n.issorted[] = false
+        coeff = ifactor * n.coeff
+        @set n.coeff = isinteger(coeff) ? Integer(coeff) : coeff
+    else
+        coeff = ifactor * n
+        isinteger(coeff) ? Integer(coeff) : coeff
+    end
+end
 
 function Div(n, d, simplified=false; metadata=nothing)
     if n isa Rational
@@ -314,7 +342,7 @@ function Div(n, d, simplified=false; metadata=nothing)
     end
 
     d isa Number && _isone(-d) && return -1 * n
-    n isa Rat && d isa Rat && return n // d # maybe called by oblivious code in simplify
+    (n isa Rat && d isa Rat) && return n // d # maybe called by oblivious code in simplify
 
     # GCD coefficient upon construction
     rat, nc = ratcoeff(n)
@@ -323,8 +351,8 @@ function Div(n, d, simplified=false; metadata=nothing)
         if rat
             g = gcd(nc, dc) * sign(dc) # make denominators positive
             invdc = ratio(1, g)
-            n = maybe_intcoeff(invdc * n)
-            d = maybe_intcoeff(invdc * d)
+            n = cancel(n, invdc)
+            d = cancel(d, invdc)
         end
     end
 
@@ -555,7 +583,6 @@ TermInterface.istree(t::Type{<:Symbolic}) = true
 ###
 ### Metadata
 ###
-using Setfield
 @generated function Setfield.getproperties(obj::BasicSymbolic)
     fnames = fieldnames(obj)
     fvals = map(fnames) do fname
@@ -1112,29 +1139,6 @@ end
 \(a::BasicSymbolic, b::Union{Number, BasicSymbolic}) = b / a
 
 \(a::Number, b::BasicSymbolic) = b / a
-
-const Rat = Union{Rational, Integer}
-
-function ratcoeff(x)
-    if ismul(x)
-        ratcoeff(x.coeff)
-    elseif x isa Rat
-        true, x
-    else
-        false, NaN
-    end
-end
-ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
-ratio(x::Rat,y::Rat) = x//y
-function maybe_intcoeff(x)
-    if ismul(x)
-        x.coeff isa Rational && isone(x.coeff.den) ? Setfield.@set!(x.coeff = x.coeff.num) : x
-    elseif x isa Rational
-        isone(x.den) ? x.num : x
-    else
-        x
-    end
-end
 
 /(a::BasicSymbolic, b::Number) = Div(a, b)
 /(a::Union{BasicSymbolic,Number}, b::BasicSymbolic) = Div(a, b)

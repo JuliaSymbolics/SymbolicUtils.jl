@@ -75,12 +75,7 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
 
-@number_methods(Sym, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Term, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Add, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Mul, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Pow, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Div, term(f, a), term(f, a, b), skipbasics)
+@number_methods(BasicSymbolic, term(f, a), term(f, a, b), skipbasics)
 
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),
@@ -95,13 +90,32 @@ for f in [+, -, *, \, /, ^]
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
-Base.rem2pi(x::Symbolic{<:Number}, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
-for f in monadic
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
-    @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
+error_f_symbolic(f, T) = error("$f is not defined for T.")
+
+function Base.rem2pi(x::Symbolic, mode::Base.RoundingMode)
+    T <: Number ? term(rem2pi, x, mode) : error_f_symbolic(rem2pi, T)
 end
 
+# Specially handle inv and literal pow
+function Base.inv(x::Symbolic)
+    T = symtype(x)
+    T <: Number ? Base.:^(x, -1) : error_f_symbolic(rem2pi, T)
+end
+function Base.literal_pow(::typeof(^), x::Symbolic, ::Val{p}) where {p}
+    T = symtype(x)
+    T <: Number ? Base.:^(x, p) : error_f_symbolic(rem2pi, T)
+end
+
+promote_symtype(::Any, T) = promote_type(T, Real)
+for f in monadic
+    @eval function (::$(typeof(f)))(x::Symbolic)
+        T = symtype(x)
+        T <: Number ? term($f, a) : error_f_symbolic($f, T)
+    end
+end
+
+#=
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
 Base.:*(a::Symbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)
 
@@ -148,11 +162,8 @@ function ifelse(_if::Symbolic{Bool}, _then, _else)
 end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
 
-# Specially handle inv and literal pow
-Base.inv(x::Symbolic{<:Number}) = Base.:^(x, -1)
-Base.literal_pow(::typeof(^), x::Symbolic{<:Number}, ::Val{p}) where {p} = Base.:^(x, p)
-
 # Array-like operations
 Base.size(x::Symbolic{<:Number}) = ()
 Base.length(x::Symbolic{<:Number}) = 1
 Base.ndims(x::Symbolic{<:Number}) = 0
+=#

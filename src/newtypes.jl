@@ -47,11 +47,11 @@ Base.@kwdef struct BasicSymbolic <: Symbolic
 end
 
 @inline function Base.getproperty(x::BasicSymbolic, s::Symbol)
-    (s === :metadata || s === :hash) && return getfield(x, s)
+    (s === :metadata || s === :hash || s === :arguments) && return getfield(x, s)
     E = exprtype(x)
     if (E === SYM && s === :name) ||
-        (E === TERM && (s === :f || s === :arguments)) ||
-        ((E === ADD || E === MUL) && (s === :coeff || s === :dict || s === :arguments))
+        (E === TERM && s === :f) ||
+        ((E === ADD || E === MUL) && (s === :coeff || s === :dict))
         getfield(x, s)
     elseif E === DIV
         s === :num ? getfield(x, :f) :
@@ -95,7 +95,17 @@ end
 @inline iscomplex(x::BasicSymbolic) = is_of_type(x, COMPLEX)
 @inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
 
-@inline valtype(x::BasicSymbolic) = getfield(x, :valtype)
+@inline function valtype(x)
+    if x isa BasicSymbolic
+        getfield(x, :valtype)
+    elseif x isa Union{Int, Bool}
+        type2valtype(typeof(x))
+    elseif x isa Rational
+        RATIONAL
+    else
+        REAL
+    end
+end
 @inline exprtype(x::BasicSymbolic) = getfield(x, :exprtype)
 
 ###
@@ -170,7 +180,7 @@ function TermInterface.unsorted_arguments(x::BasicSymbolic)
     end
 end
 
-TermInterface.istree(s::BasicSymbolic) = issym(s)
+TermInterface.istree(s::BasicSymbolic) = !issym(s)
 TermInterface.issym(s::BasicSymbolic) = exprtype(s) === SYM
 isterm(x) = x isa BasicSymbolic && exprtype(x) === TERM
 ismul(x)  = x isa BasicSymbolic && exprtype(x) === MUL
@@ -227,17 +237,17 @@ function Base.hash(s::BasicSymbolic, salt::UInt)
     if E === SYM
         hash(T, hash(nameof(s), salt ⊻ 0x4de7d7c66d41da43))
     elseif E === ADD || E === MUL
-        !iszero(salt) && return hash(hash(t, zero(UInt64)), salt)
-        h = t.hash[]
+        !iszero(salt) && return hash(hash(s, zero(UInt64)), salt)
+        h = s.hash[]
         !iszero(h) && return h
-        hashoffset = t isa Add ? 0xaddaddaddaddadda : 0xaaaaaaaaaaaaaaaa
-        h′= hash(hashoffset, hash(t.coeff, hash(t.dict, salt)))
-        t.hash[] = h′
+        hashoffset = s isa Add ? 0xaddaddaddaddadda : 0xaaaaaaaaaaaaaaaa
+        h′= hash(hashoffset, hash(s.coeff, hash(s.dict, salt)))
+        s.hash[] = h′
         return h′
     elseif E === DIV
-        return hash(numerators(x), hash(denominators(x), salt ⊻ 0x334b218e73bbba53))
+        return hash(numerators(s), hash(denominators(s), salt ⊻ 0x334b218e73bbba53))
     elseif E === POW
-        hash(getexp(p), hash(getbase(p), salt ⊻ 0x2b55b97a6efb080c))
+        hash(getexp(s), hash(getbase(s), salt ⊻ 0x2b55b97a6efb080c))
     elseif E === TERM
         !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]
@@ -261,42 +271,25 @@ end
 Term{T}(f, args::Vector{Any}; kw...) where T = BasicSymbolic(;
     exprtype=TERM, f=f, arguments=args,
     hash=Ref(UInt(0)),
-    valtype=type2valtype(T),
+    valtype=T isa ValueType ? T : type2valtype(T),
     kw...)
 Sym{T}(name::Symbol; kw...) where T = BasicSymbolic(;
     exprtype=SYM, name=name,
-    valtype=type2valtype(T),
+    valtype=T isa ValueType ? T : type2valtype(T),
     kw...)
-Mul{T}(coeff, dict::Dict{Any, Any}; kw...) where T = BasicSymbolic(;
-    exprtype=MUL, coeff=coeff, dict=dict,
-    f=Ref(false),
-    hash=Ref(UInt(0)),
-    valtype=type2valtype(T),
-    kw...)
-Add{T}(coeff, dict::Dict{Any, Any}; kw...) where T = BasicSymbolic(;
-    exprtype=ADD, coeff=coeff, dict=dict,
-    f=Ref(false),
-    hash=Ref(UInt(0)),
-    valtype=type2valtype(T),
-    kw...)
-function Pow{T}(base, exp; kw...) where T
-    _iszero(exp) && return 1
-    _isone(exp) && return base
-    BasicSymbolic(;
-                  exprtype=POW, f=base, coeff=exp,
-                  valtype=type2valtype(T),
-                  kw...)
-end
-getbase(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.f)
-getexp(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.coeff)
+getbase(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.base)
+getexp(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.exp)
 
 divt(T, num, den; simplified=false, kw...) = BasicSymbolic(;
-    exprtype=POW, f=num, coeff=den,
-    valtype=type2valtype(T),
+    exprtype=DIV, f=num, coeff=den,
+    valtype=T isa ValueType ? T : type2valtype(T),
     bitflags=simplified ? SIMPLIFIED : 0x00,
+    arguments=[],
     kw...)
 
-function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
+
+function Div(n, d, simplified=false; metadata=nothing)
+    T = max(valtype(n), valtype(d), RATIONAL)
     _iszero(n) && return zero(typeof(n))
     _isone(d) && return n
 
@@ -323,7 +316,7 @@ function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
         end
     end
 
-    divt(T, n, d, simplified, metadata)
+    divt(T, n, d; simplified=simplified, metadata=metadata)
 end
 
 function Term(f, args; metadata=NO_METADATA)
@@ -365,7 +358,7 @@ function makeadd(sign, coeff, xs...)
     coeff, d
 end
 
-function Add(T, coeff, dict; metadata=NO_METADATA)
+function Add(T, coeff, dict; metadata=NO_METADATA, kw...)
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
@@ -373,7 +366,13 @@ function Add(T, coeff, dict; metadata=NO_METADATA)
         return _isone(v) ? k : Mul(T, makemul(v, k)...)
     end
 
-    Add{T}(coeff, dict, metadata=metadata)
+    BasicSymbolic(;
+                  exprtype=ADD, coeff=coeff, dict=dict,
+                  f=Ref(false),
+                  hash=Ref(UInt(0)),
+                  valtype=T isa ValueType ? T : type2valtype(T),
+                  arguments=[],
+                  kw...)
 end
 
 function makemul(coeff, xs...; d=sdict())
@@ -399,7 +398,7 @@ end
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
-function Mul(T, a, b; metadata=NO_METADATA)
+function Mul(T, a, b; metadata=NO_METADATA, kw...)
     isempty(b) && return a
     if _isone(a) && length(b) == 1
         pair = first(b)
@@ -409,12 +408,16 @@ function Mul(T, a, b; metadata=NO_METADATA)
             return unstable_pow(first(pair), last(pair))
         end
     else
-        Mul{T}(a,b; metadata=metadata)
+        coeff = a
+        dict = b
+        BasicSymbolic(;
+                      exprtype=MUL, coeff=coeff, dict=dict,
+                      f=Ref(false),
+                      hash=Ref(UInt(0)),
+                      valtype=T isa ValueType ? T : type2valtype(T),
+                      arguments=[],
+                      kw...)
     end
-end
-
-function Div(n, d, simplified=false; kw...)
-    Div{promote_symtype((/), symtype(n), symtype(d))}(n,d, simplified; kw...)
 end
 
 function makepow(a, b)
@@ -427,16 +430,25 @@ function makepow(a, b)
     return (base, exp)
 end
 
-function Pow(a, b; metadata=NO_METADATA)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
+function Pow(a, b; metadata=NO_METADATA, kw...)
+    T = max(valtype(a), valtype(b), BOOL)
+    base = a
+    exp = b
+    _iszero(exp) && return 1
+    _isone(exp) && return base
+    BasicSymbolic(;
+                  exprtype=POW, f=base, coeff=exp,
+                  valtype=T,
+                  arguments=[],
+                  kw...)
 end
 
 @inline function numerators(x::BasicSymbolic)
-    exprtype(x) === DIV && return x.f
+    exprtype(x) === DIV && return x.num
     istree(x) && operation(x) == (*) ? arguments(x) : Any[x]
 end
 
-@inline denominators(x::BasicSymbolic) = exprtype(x) === DIV ? x.coeff : Any[1]
+@inline denominators(x::BasicSymbolic) = exprtype(x) === DIV ? x.den : Any[1]
 
 function term(f, args...; type = nothing)
     if type === nothing
@@ -472,14 +484,14 @@ function TermInterface.similarterm(t::Type{<:BasicSymbolic}, f, args, symtype; m
         T = _promote_symtype(f, args)
     end
     if f === (+)
-        Add{T}(makeadd(1, 0, args...)...; metadata=metadata)
+        Add(T, makeadd(1, 0, args...)...; metadata=metadata)
     elseif f == (*)
-        Mul{T}(T, makemul(1, args...)...; metadata=metadata)
+        Mul(T, makemul(1, args...)...; metadata=metadata)
     elseif f == (/)
         @assert length(args) == 2
-        Div{T}(args...; metadata=metadata)
+        Div(args...; metadata=metadata)
     elseif f == (^) && length(args) == 2
-        Pow{T}(makepow(args...)...; metadata=metadata)
+        Pow(makepow(args...)...; metadata=metadata)
     else
         Term{T}(f, args; metadata=metadata)
     end
@@ -532,6 +544,14 @@ TermInterface.istree(t::Type{<:Symbolic}) = true
 ### Metadata
 ###
 using Setfield
+@generated function Setfield.getproperties(obj::BasicSymbolic)
+    fnames = fieldnames(obj)
+    fvals = map(fnames) do fname
+        Expr(:call, :getfield, :obj, QuoteNode(fname))
+    end
+    fvals = Expr(:tuple, fvals...)
+    :(NamedTuple{$fnames}($fvals))
+end
 TermInterface.metadata(s::Symbolic) = s.metadata
 TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
@@ -851,10 +871,15 @@ end
 
 _promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
 function _promote_symtype(f, args)
+    return Real
     if length(args) == 0
         promote_symtype(f)
     elseif length(args) == 1
-        promote_symtype(f, symtype(args[1]))
+        if f in monadic
+            valtype2type(min(REAL, valtype(args[1])))
+        else
+            promote_symtype(f, symtype(args[1]))
+        end
     elseif length(args) == 2
         promote_symtype(f, symtype(args[1]), symtype(args[2]))
     elseif isassociative(f)
@@ -908,7 +933,7 @@ end
 
 function _name_type(x)
     if x isa Symbol
-        return (name=x, type=Number)
+        return (name=x, type=Real)
     elseif x isa Expr && x.head === :(::)
         if length(x.args) == 1
             return (name=nothing, type=x.args[1])
@@ -928,7 +953,7 @@ function _name_type(x)
                 type=:(Array{$(ntype.type), $N}),
                 array_metadata=:(Base.Slice.(($(x.args[2:end]...),))))
     elseif x isa Expr && x.head === :call
-        return _name_type(:($x::Number))
+        return _name_type(:($x::Real))
     else
         syms_syntax_error()
     end
@@ -964,101 +989,116 @@ function mapvalues(f, d1::AbstractDict)
     d
 end
 
-add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
-sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
-sub_t(a) = promote_symtype(-, symtype(a))
+#add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
+#sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
+#sub_t(a) = promote_symtype(-, symtype(a))
+# TODO
+add_t(a,b) = REAL
+sub_t(a,b) = REAL
+sub_t(a) = REAL
 
-function +(a::SN, b::SN)
-    if a isa Add
+import Base: (+), (-), (*), (//), (/), (\), (^)
+function +(a::BasicSymbolic, b::BasicSymbolic)
+    if isadd(a) && isadd(b)
+        return Add(add_t(a,b),
+            a.coeff + b.coeff,
+            _merge(+, a.dict, b.dict, filter=_iszero))
+    elseif isadd(a)
         coeff, dict = makeadd(1, 0, b)
-        T = promote_symtype(+, symtype(a), symtype(b))
         return Add(add_t(a,b), a.coeff + coeff, _merge(+, a.dict, dict, filter=_iszero))
-    elseif b isa Add
+    elseif isadd(b)
         return b + a
     end
     Add(add_t(a,b), makeadd(1, 0, a, b)...)
 end
 
-+(a::Number, b::SN) = Add(add_t(a,b), makeadd(1, a, b)...)
+function +(a::Number, b::BasicSymbolic)
+    iszero(a) && return b
+    Add(add_t(a,b), makeadd(1, a, b)...)
+end
 
-+(a::SN, b::Number) = Add(add_t(a,b), makeadd(1, b, a)...)
++(a::BasicSymbolic, b::Number) = b + a
 
-+(a::SN) = a
++(a::BasicSymbolic) = a
 
-+(a::Add, b::Add) = Add(add_t(a,b),
-                        a.coeff + b.coeff,
-                        _merge(+, a.dict, b.dict, filter=_iszero))
+function -(a::BasicSymbolic)
+    isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
+    Add(sub_t(a), makeadd(-1, 0, a)...)
+end
 
-+(a::Number, b::Add) = iszero(a) ? b : Add(add_t(a,b), a + b.coeff, b.dict)
+function -(a::BasicSymbolic, b::BasicSymbolic)
+    isadd(a) && isadd(b) ? Add(sub_t(a,b),
+                               a.coeff - b.coeff,
+                               _merge(-, a.dict,
+                                      b.dict,
+                                      filter=_iszero)) : a + (-b)
+end
 
-+(b::Add, a::Number) = iszero(a) ? b : Add(add_t(a,b), a + b.coeff, b.dict)
-
--(a::Add) = Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict))
-
--(a::SN) = Add(sub_t(a), makeadd(-1, 0, a)...)
-
--(a::Add, b::Add) = Add(sub_t(a,b),
-                        a.coeff - b.coeff,
-                        _merge(-, a.dict, b.dict, filter=_iszero))
-
--(a::SN, b::SN) = a + (-b)
-
--(a::Number, b::SN) = a + (-b)
-
--(a::SN, b::Number) = a + (-b)
+-(a::Number, b::BasicSymbolic) = a + (-b)
+-(a::BasicSymbolic, b::Number) = a + (-b)
 
 
-mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
-mul_t(a) = promote_symtype(*, symtype(a))
+#mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
+#mul_t(a) = promote_symtype(*, symtype(a))
+mul_t(a,b) = REAL
+mul_t(a) = REAL
 
-*(a::SN) = a
+*(a::BasicSymbolic) = a
 
-function *(a::SN, b::SN)
+function *(a::BasicSymbolic, b::BasicSymbolic)
     # Always make sure Div wraps Mul
     if isdiv(a) && isdiv(b)
-        # TODO
         Div(a.num * b.num, a.den * b.den)
     elseif isdiv(a)
         Div(a.num * b, a.den)
     elseif isdiv(b)
         Div(a * b.num, b.den)
     elseif ismul(a) && ismul(b)
+        Mul(mul_t(a, b),
+            a.coeff * b.coeff,
+            _merge(+, a.dict, b.dict, filter=_iszero))
+    elseif ismul(a) && ispow(b)
+        if b.exp isa Number
+            Mul(mul_t(a, b),
+                a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
+        else
+            Mul(mul_t(a, b),
+                a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
+        end
+    elseif ispow(a) && ismul(b)
+        b * a
     else
         Mul(mul_t(a,b), makemul(1, a, b)...)
     end
 end
 
-*(a::Mul, b::Mul) = Mul(mul_t(a, b),
-                        a.coeff * b.coeff,
-                        _merge(+, a.dict, b.dict, filter=_iszero))
-
-function *(a::Number, b::SN)
+function *(a::Number, b::BasicSymbolic)
     if iszero(a)
         a
     elseif isone(a)
         b
-    elseif b isa Div
+    elseif isdiv(b)
         Div(a*b.num, b.den)
-    elseif b isa Add
+    elseif isadd(b)
         # 2(a+b) -> 2a + 2b
         T = promote_symtype(+, typeof(a), symtype(b))
-        Add(T, b.coeff * a, Dict(k=>v*a for (k, v) in b.dict))
+        Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
     else
         Mul(mul_t(a, b), makemul(a, b)...)
     end
 end
 
-*(a::SN, b::Number) = b * a
+*(a::BasicSymbolic, b::Number) = b * a
 
-\(a::SN, b::Union{Number, SN}) = b / a
+\(a::BasicSymbolic, b::Union{Number, BasicSymbolic}) = b / a
 
-\(a::Number, b::SN) = b / a
+\(a::Number, b::BasicSymbolic) = b / a
 
-/(a::SN, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
+/(a::BasicSymbolic, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
 
-//(a::Union{SN, Number}, b::SN) = a / b
+//(a::Union{BasicSymbolic, Number}, b::BasicSymbolic) = a / b
 
-//(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
+//(a::BasicSymbolic, b::T) where {T <: Number} = (one(T) // b) * a
 
 const Rat = Union{Rational, Integer}
 
@@ -1083,28 +1123,21 @@ function maybe_intcoeff(x)
     end
 end
 
-/(a::Union{SN,Number}, b::SN) = Div(a,b)
+/(a::Union{BasicSymbolic,Number}, b::BasicSymbolic) = Div(a,b)
 
-^(a::SN, b) = Pow(a, b)
-
-^(a::SN, b::SN) = Pow(a, b)
-
-^(a::Number, b::SN) = Pow(a, b)
-
-function ^(a::Mul, b::Number)
-    coeff = unstable_pow(a.coeff, b)
-    Mul(promote_symtype(^, symtype(a), symtype(b)),
-        coeff, mapvalues((k, v) -> b*v, a.dict))
-end
-
-function *(a::Mul, b::Pow)
-    if b.exp isa Number
-        Mul(mul_t(a, b),
-            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
+function ^(a::BasicSymbolic, b)
+    if ismul(a) && b isa Number
+        coeff = unstable_pow(a.coeff, b)
+        Mul(promote_symtype(^, symtype(a), symtype(b)),
+            coeff, mapvalues((k, v) -> b*v, a.dict))
     else
-        Mul(mul_t(a, b),
-            a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
+        Pow(a, b)
     end
 end
 
-*(a::Pow, b::Mul) = b * a
+^(a::BasicSymbolic, b::BasicSymbolic) = Pow(a, b)
+
+^(a::Number, b::BasicSymbolic) = Pow(a, b)
+
+include("utils.jl")
+include("methods.jl")

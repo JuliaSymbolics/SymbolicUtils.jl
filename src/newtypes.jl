@@ -1014,7 +1014,11 @@ end
 
 function +(a::Number, b::BasicSymbolic)
     iszero(a) && return b
-    Add(add_t(a,b), makeadd(1, a, b)...)
+    if isadd(b)
+        Add(add_t(a,b), a + b.coeff, b.dict)
+    else
+        Add(add_t(a,b), makeadd(1, a, b)...)
+    end
 end
 
 +(a::BasicSymbolic, b::Number) = b + a

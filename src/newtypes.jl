@@ -240,7 +240,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)
         !iszero(salt) && return hash(hash(s, zero(UInt64)), salt)
         h = s.hash[]
         !iszero(h) && return h
-        hashoffset = s isa Add ? 0xaddaddaddaddadda : 0xaaaaaaaaaaaaaaaa
+        hashoffset = isadd(s) ? 0xaddaddaddaddadda : 0xaaaaaaaaaaaaaaaa
         h′= hash(hashoffset, hash(s.coeff, hash(s.dict, salt)))
         s.hash[] = h′
         return h′
@@ -345,7 +345,7 @@ and the key (in Add) should instead be used to store the actual coefficient
 function makeadd(sign, coeff, xs...)
     d = sdict()
     for x in xs
-        if x isa Add
+        if isadd(x)
             coeff += x.coeff
             _merge!(+, d, x.dict, filter=_iszero)
             continue
@@ -354,7 +354,7 @@ function makeadd(sign, coeff, xs...)
             coeff += x
             continue
         end
-        if x isa Mul
+        if ismul(x)
             k = Mul(symtype(x), 1, x.dict)
             v = sign * x.coeff + get(d, k, 0)
         else
@@ -435,7 +435,7 @@ end
 function makepow(a, b)
     base = a
     exp = b
-    if a isa Pow
+    if ispow(a)
         base = a.base
         exp = a.exp * b
     end
@@ -526,7 +526,7 @@ function AbstractTrees.children(x::Union{Add, Mul})
         if coeff == 1
             push!(children, key)
         else
-            push!(children, TreePrint(x isa Add ? (:*) : (:^), (key, coeff)))
+            push!(children, TreePrint(isadd(x) ? (:*) : (:^), (key, coeff)))
         end
     end
     return children
@@ -755,7 +755,7 @@ function show_call(io, f, args)
             print_arg(io, t, paren=true)
         end
     else
-        if f isa Sym
+        if issym(f)
             Base.show_unquoted(io, nameof(f))
         else
             Base.show(io, f)

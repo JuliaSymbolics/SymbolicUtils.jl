@@ -280,15 +280,27 @@ Sym{T}(name::Symbol; kw...) where T = BasicSymbolic(;
 getbase(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.base)
 getexp(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.exp)
 
-divt(T, num, den; simplified=false, kw...) = BasicSymbolic(;
-    exprtype=DIV, f=num, coeff=den,
-    valtype=T isa ValueType ? T : type2valtype(T),
-    bitflags=simplified ? SIMPLIFIED : 0x00,
-    arguments=[],
-    kw...)
+function divt(T, num, den; simplified=false, kw...)
+    _iszero(num) && return zero(typeof(num))
+    _isone(den) && return num
+    BasicSymbolic(;
+                  exprtype=DIV, f=num, coeff=den,
+                  valtype=T isa ValueType ? T : type2valtype(T),
+                  bitflags=simplified ? SIMPLIFIED : 0x00,
+                  arguments=[],
+                  kw...)
+end
 
 
 function Div(n, d, simplified=false; metadata=nothing)
+    if n isa Rational
+        d *= n.den
+        n = n.num
+    end
+    if d isa Rational
+        n *= d.den
+        d = d.num
+    end
     T = max(valtype(n), valtype(d), RATIONAL)
     _iszero(n) && return zero(typeof(n))
     _isone(d) && return n
@@ -377,11 +389,11 @@ end
 
 function makemul(coeff, xs...; d=sdict())
     for x in xs
-        if x isa Pow && x.exp isa Number
+        if ispow(x) && x.exp isa Number
             d[x.base] = x.exp + get(d, x.base, 0)
         elseif x isa Number
             coeff *= x
-        elseif x isa Mul
+        elseif ismul(x)
             coeff *= x.coeff
             _merge!(+, d, x.dict, filter=_iszero)
         else
@@ -1098,12 +1110,6 @@ end
 
 \(a::Number, b::BasicSymbolic) = b / a
 
-/(a::BasicSymbolic, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
-
-//(a::Union{BasicSymbolic, Number}, b::BasicSymbolic) = a / b
-
-//(a::BasicSymbolic, b::T) where {T <: Number} = (one(T) // b) * a
-
 const Rat = Union{Rational, Integer}
 
 function ratcoeff(x)
@@ -1127,10 +1133,18 @@ function maybe_intcoeff(x)
     end
 end
 
-/(a::Union{BasicSymbolic,Number}, b::BasicSymbolic) = Div(a,b)
+/(a::BasicSymbolic, b::Number) = Div(a, b)
+/(a::Union{BasicSymbolic,Number}, b::BasicSymbolic) = Div(a, b)
+//(a::Union{BasicSymbolic, Number}, b::BasicSymbolic) = a / b
+//(a::BasicSymbolic, b::T) where {T <: Number} = a / b
+
 
 function ^(a::BasicSymbolic, b)
-    if ismul(a) && b isa Number
+    if b isa Number && iszero(b)
+        1
+    elseif b isa Number && b < 0
+        Div(1, a ^ (-b))
+    elseif ismul(a) && b isa Number
         coeff = unstable_pow(a.coeff, b)
         Mul(promote_symtype(^, symtype(a), symtype(b)),
             coeff, mapvalues((k, v) -> b*v, a.dict))

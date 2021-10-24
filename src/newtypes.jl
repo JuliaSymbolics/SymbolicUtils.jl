@@ -1093,12 +1093,15 @@ function *(a::Number, b::BasicSymbolic)
         a
     elseif isone(a)
         b
+    elseif a isa Rational
+        Div(a.num * b, a.den)
     elseif isdiv(b)
         Div(a*b.num, b.den)
-    elseif isadd(b)
-        # 2(a+b) -> 2a + 2b
-        T = promote_symtype(+, typeof(a), symtype(b))
-        Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
+    # SymEngine and Mathematica don't do this
+    #elseif isadd(b)
+    #    # 2(a+b) -> 2a + 2b
+    #    T = promote_symtype(+, typeof(a), symtype(b))
+    #    Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
     else
         Mul(mul_t(a, b), makemul(a, b)...)
     end

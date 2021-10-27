@@ -1,7 +1,7 @@
 using Metatheory.Rewriters
 
-function EGraphs.preprocess(t)
-    Chain([Postwalk(toterm), Postwalk(unflatten)])(t) 
+function EGraphs.preprocess(t::Symbolic)
+    toterm(unflatten(t)) 
 end
 
 function symbolicegraph(ex)
@@ -76,12 +76,26 @@ function costfun(n::ENodeTerm, g::EGraph, an)
     cost
 end
 
-costfun(n::ENodeLiteral, g::EGraph, an) = 1
+costfun(n::ENodeLiteral, g::EGraph, an) = 0
 
+egraph_simterm(x, head, args, symtype=nothing; metadata=nothing, exprhead=exprhead(x)) = 
+TermInterface.similarterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
+
+
+# Custom similarterm to use in EGraphs on <:Symbolic types that treats everything as a Term 
+function egraph_simterm(x::Type{<:Term}, f, args, symtype=nothing; metadata=nothing, exprhead=:call)
+    T = symtype
+    if T === nothing
+        T = _promote_symtype(f, args)
+    end
+    res = Term{T}(f isa Symbol ? eval(f) : f, args; metadata=metadata);
+    return res
+end 
 
 function optimize(ex; params=SaturationParams(timeout=20))
     # @show ex
     g = symbolicegraph(ex)
+    params.simterm = egraph_simterm
     saturate!(g, opt_theory, params)
     return extract!(g, costfun)
 end

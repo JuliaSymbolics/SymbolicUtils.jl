@@ -1,1 +1,1 @@
-nothing
+cos(α)*sin(β) + sin(α)*cos(β)

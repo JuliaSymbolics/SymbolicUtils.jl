@@ -1,1 +1,4 @@
-UndefVarError: PatSegment not defined
+r(a + b + c + d) = nothing
+r(b + c + d) = "odd terms"
+r(b + c + b) = nothing
+r(a + b) = nothing

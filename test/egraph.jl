@@ -4,6 +4,7 @@ using Metatheory
 sym_eq(x, y) = simplify(x == y)
 
 @testset "Basic optimization" begin 
+    @syms a b c x y z
     ex = 2a + 2b - (a*(a + b))
     res = optimize(ex)
     @test sym_eq(res, (a+b)*(2-a))

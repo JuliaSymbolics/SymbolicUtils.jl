@@ -236,6 +236,10 @@ function unpolyize(x)
     Postwalk(identity, similarterm=simterm)(x)
 end
 
+function toterm(x::PolyForm)
+    toterm(unpolyize(x))
+end
+
 ## Rational Polynomial form with Div
 
 function polyform_factors(d, pvar2sym, sym2term)

@@ -57,7 +57,12 @@ include("simplify_rules.jl")
 export simplify, substitute
 include("api.jl")
 
+# EGraph rewriting
+include("egraph.jl")
+export optimize
+
 include("code.jl")
+
 
 # ADjoints
 include("adjoints.jl")

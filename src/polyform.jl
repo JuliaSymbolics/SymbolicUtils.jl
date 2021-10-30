@@ -44,12 +44,14 @@ Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacabab
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
 
 
-function as_polynomial(f, exprs...; T=Real)
+function as_polynomial(f, exprs...; polyform=false, T=Real)
     @assert length(exprs) >= 1 "At least one expression must be passed to `multivariatepolynomial`."
 
     pvar2sym, sym2term = get_pvar2sym(), get_sym2term()
     ps = map(x->PolyForm(x, pvar2sym, sym2term), exprs)
-    PolyForm{T}(f(map(x->x.p, ps)...), pvar2sym, sym2term) # substitute back
+    convert_back = polyform ? x -> PolyForm{T}(x, pvar2sym, sym2term) :
+        x -> unpolyize(PolyForm{T}(x, pvar2sym, sym2term)) # substitute back
+    res = f(convert_back, map(x->x.p, ps)...)
 end
 
 # We use the same PVAR2SYM bijection to maintain the PolyVar <-> Sym mapping,

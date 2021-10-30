@@ -81,7 +81,7 @@ end
 @testset "as_polynomial" begin
 
     @syms x y
-    @eqtest as_polynomial(gcd, 10x+10y, 5*(x^2-y^2)) == 5x + 5y
-    @test as_polynomial(gcd, 10x+10y, 5*(x^2-y^2), polyform=true) isa PolyForm
-    @test repr(as_polynomial(gcd, 10x+10y, 5*(x^2-y^2), polyform=true)) == repr(5x + 5y)
+    @eqtest as_polynomial((f, x, y) -> f(gcd(x, y)), 10x+10y, 5*(x^2-y^2)) == 5x + 5y
+    @test as_polynomial((f, x, y) -> f(gcd(x, y)), 10x+10y, 5*(x^2-y^2), polyform=true) isa PolyForm
+    @test repr(as_polynomial((f, x, y) -> f(gcd(x, y)), 10x+10y, 5*(x^2-y^2), polyform=true)) == repr(5x + 5y)
 end

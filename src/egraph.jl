@@ -166,4 +166,3 @@ function getcost(ex)
     return get(SymbolicUtils.op_costs, operation(ex), 1) + mapreduce(getcost, (+), arguments(ex))
 end
 
-getcost(ex) > getcost(optimize(ex))

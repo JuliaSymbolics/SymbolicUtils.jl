@@ -87,7 +87,7 @@ end
 costfun(n::ENodeLiteral, g::EGraph, an) = 0
 
 egraph_simterm(x, head, args, symtype=nothing; metadata=nothing, exprhead=exprhead(x)) = 
-TermInterface.similarterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
+    egraph_simterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
 
 
 # Custom similarterm to use in EGraphs on <:Symbolic types that treats everything as a Term 
@@ -112,7 +112,7 @@ function optimize(ex; params=default_opt_params)
     g = symbolicegraph(ex)
     params.simterm = egraph_simterm
     report = saturate!(g, opt_theory, params)
-    # @info report
+    @info report
     return extract!(g, costfun; simterm=egraph_simterm)
 end
 
@@ -150,7 +150,7 @@ function optimize(exs::AbstractArray; params=default_opt_params, batchsize=Inf)
 
     params.simterm = egraph_simterm
     report = saturate!(g, opt_theory, params)
-    # @info report
+    @info report
     res = map(ids) do id
         extract!(g, costfun; root=id, simterm=egraph_simterm)
     end

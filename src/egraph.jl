@@ -4,10 +4,18 @@ function EGraphs.preprocess(t::Symbolic)
     toterm(unflatten(t)) 
 end
 
+function symbolicegraph()
+    g = EGraph()
+    analyze!(g, SymbolicUtils.SymtypeAnalysis)
+    settermtype!(g, Term{Number})
+    return g
+end
+
+
 function symbolicegraph(ex)
     g = EGraph(ex)
     analyze!(g, SymbolicUtils.SymtypeAnalysis)
-    settermtype!(g, Term{symtype(ex), Any})
+    settermtype!(g, Term{symtype(ex)})
     return g
 end
 
@@ -92,10 +100,70 @@ function egraph_simterm(x::Type{<:Term}, f, args, symtype=nothing; metadata=noth
     return res
 end 
 
-function optimize(ex; params=SaturationParams(timeout=20))
+default_opt_params = SaturationParams(
+    timeout=15, 
+    printiter=true,
+    eclasslimit=300_000,
+    matchlimit=50_000
+)
+
+function optimize(ex; params=default_opt_params)
     # @show ex
     g = symbolicegraph(ex)
     params.simterm = egraph_simterm
-    saturate!(g, opt_theory, params)
-    return extract!(g, costfun)
+    report = saturate!(g, opt_theory, params)
+    # @info report
+    return extract!(g, costfun; simterm=egraph_simterm)
 end
+
+function optimize(exs::AbstractArray; params=default_opt_params, batchsize=Inf)
+    # @show ex
+    # params.eclasslimit=
+    # println("optimizing $(length(exs))")
+    # println.(exs)
+
+    if length(exs) > batchsize
+        # println("batch size $batchsize")
+        batches = collect(Iterators.partition(exs, batchsize))
+        # println("$(length(batches)) batches")
+        v = Vector(undef, length(batches))
+        l = ReentrantLock()
+
+        println(Threads.nthreads())
+
+        Threads.@threads for i in 1:length(batches)
+            batch = batches[i]
+            opt_b = optimize_many(batch; params)
+            lock(l) do 
+                v[i] = opt_b
+            end
+        end
+
+        return Iterators.flatten(v)
+    end
+
+    g = symbolicegraph()
+    ids = map(exs) do ex
+        ec, _ = addexpr!(g, ex)
+        return ec.id
+    end
+
+    params.simterm = egraph_simterm
+    report = saturate!(g, opt_theory, params)
+    # @info report
+    res = map(ids) do id
+        extract!(g, costfun; root=id, simterm=egraph_simterm)
+    end
+    # println.(res)
+    return res
+end
+
+Base.map(::typeof(SymbolicUtils.optimize), x::AbstractArray) = optimize(exs)
+
+
+function getcost(ex)
+    !istree(typeof(ex)) && return 1
+    return get(SymbolicUtils.op_costs, operation(ex), 1) + mapreduce(getcost, (+), arguments(ex))
+end
+
+getcost(ex) > getcost(optimize(ex))

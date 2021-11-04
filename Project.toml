@@ -1,7 +1,7 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "0.18.0"
+version = "0.18.1"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -36,7 +36,7 @@ DocStringExtensions = "0.8"
 DynamicPolynomials = "0.3"
 IfElse = "0.1"
 LabelledArrays = "1.5"
-Metatheory = "1.2"
+Metatheory = "1.2.2"
 MultivariatePolynomials = "0.3"
 NaNMath = "0.3"
 Setfield = "0.7, 0.8"

@@ -549,7 +549,7 @@ showraw(t) = showraw(stdout, t)
 ######   Add Mul and Pow
 
 
-sdict(kv...) = Dict{Any, Number}(kv...)
+sdict(kv...) = OrderedDict{Any, Number}(kv...)
 
 const SN = Symbolic{<:Number}
 """
@@ -597,9 +597,10 @@ function unsorted_arguments(a::Add)
 end
 
 function TermInterface.arguments(a::Add)
-    a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
-    a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
+    return unsorted_arguments(a)
+    #a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
+    #args = sort!([v*k for (k,v) in a.dict], lt=<ₑ)
+    #a.sorted_args_cache[] = iszero(a.coeff) ? args : vcat(a.coeff, args)
 end
 
 Base.isequal(a::Add, b::Add) = a.coeff == b.coeff && isequal(a.dict, b.dict)
@@ -747,9 +748,10 @@ function unsorted_arguments(a::Mul)
 end
 
 function TermInterface.arguments(a::Mul)
-    a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
-    args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
-    a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
+    return unsorted_arguments(a)
+    #a.sorted_args_cache[] !== nothing && return a.sorted_args_cache[]
+    #args = sort!([unstable_pow(k, v) for (k,v) in a.dict], lt=<ₑ)
+    #a.sorted_args_cache[] = isone(a.coeff) ? args : vcat(a.coeff, args)
 end
 
 Base.isequal(a::Mul, b::Mul) = a.coeff == b.coeff && isequal(a.dict, b.dict)

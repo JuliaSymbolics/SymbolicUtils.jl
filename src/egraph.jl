@@ -23,16 +23,19 @@ end
 """
 Equational rewrite rules for optimizing expressions
 """
-opt_theory = @theory a b x y  begin
+opt_theory = @theory a b c x y  begin
     a + b == b + a
     a * b == b * a
     a * x + a * y == a*(x+y)
     -1 * a == -a
     a + (-1 * b) == a - b
+    x * 1 --> x
+    a - a => 0 # is it ok?
+    # fraction rules 
     x^-1 == 1/x 
     1/x * a == a/x
-    # fraction rules 
     # (a/b) + (c/b) => (a+c)/b
+    (a / b) / c --> a/(b*c)
     # trig functions
     sin(x)/cos(x) == tan(x)
     cos(x)/sin(x) == cot(x)
@@ -51,28 +54,28 @@ See
  * https://github.com/triscale-innov/GFlops.jl
 """
 const op_costs = Dict(
-    (+)     => 1,
-    (-)     => 1,
-    abs     => 2,
-    (*)     => 3,
-    exp     => 18,
-    (/)     => 24,
-    (^)     => 100,
-    log1p   => 124,
-    deg2rad => 125,
-    rad2deg => 125,
-    acos    => 127,
-    asind   => 128,
-    acsch   => 133,
-    sin     => 134,
-    cos     => 134,
-    atan    => 135,
-    tan     => 156,
+    :(+)     => 1,
+    :(-)     => 1,
+    :abs     => 2,
+    :(*)     => 3,
+    :exp     => 18,
+    :(/)     => 24,
+    :(^)     => 100,
+    :log1p   => 124,
+    :deg2rad => 125,
+    :rad2deg => 125,
+    :acos    => 127,
+    :asind   => 128,
+    :acsch   => 133,
+    :sin     => 134,
+    :cos     => 134,
+    :atan    => 135,
+    :tan     => 156,
 )
 # TODO some operator costs are in FLOP and not in cycles!!
 
 function costfun(n::ENodeTerm, g::EGraph, an)
-    op = operation(n)
+    op = operation(n) isa Function ? nameof(operation(n)) : operation(n)
     cost = 0
     cost += get(op_costs, op, 1)
 
@@ -100,8 +103,11 @@ function egraph_simterm(x::Type{<:Term}, f, args, symtype=nothing; metadata=noth
     return res
 end 
 
+using Dates
+
 default_opt_params = SaturationParams(
-    timeout=15, 
+    timeout=20, 
+    timelimit = Second(20),
     printiter=true,
     eclasslimit=300_000,
     matchlimit=50_000
@@ -110,7 +116,11 @@ default_opt_params = SaturationParams(
 function optimize(ex; params=default_opt_params)
     # @show ex
     g = symbolicegraph(ex)
+    params = deepcopy(params)
     params.simterm = egraph_simterm
+
+    display(g.classes);println();
+
     report = saturate!(g, opt_theory, params)
     @info report
     return extract!(g, costfun; simterm=egraph_simterm)
@@ -147,8 +157,11 @@ function optimize(exs::AbstractArray; params=default_opt_params, batchsize=Inf)
         ec, _ = addexpr!(g, ex)
         return ec.id
     end
-
+    params = deepcopy(params)
     params.simterm = egraph_simterm
+
+    display(g.classes);println()
+
     report = saturate!(g, opt_theory, params)
     @info report
     res = map(ids) do id
@@ -158,11 +171,12 @@ function optimize(exs::AbstractArray; params=default_opt_params, batchsize=Inf)
     return res
 end
 
-Base.map(::typeof(SymbolicUtils.optimize), x::AbstractArray) = optimize(exs)
+Base.map(::typeof(SymbolicUtils.optimize), x::AbstractArray) = optimize(x)
 
 
 function getcost(ex)
-    !istree(typeof(ex)) && return 1
-    return get(SymbolicUtils.op_costs, operation(ex), 1) + mapreduce(getcost, (+), arguments(ex))
+    exx = Postwalk(EGraphs.preprocess)(ex)
+    !istree(typeof(exx)) && return 1
+    return get(SymbolicUtils.op_costs, operation(exx), 1) + mapreduce(getcost, (+), arguments(exx))
 end
 

@@ -24,20 +24,28 @@ end
 """
 Equational rewrite rules for optimizing expressions
 """
-opt_theory = @theory a b c x y  begin
+opt_theory = @theory a b c x y z begin
+    a + (b + c) == (a + b) + c
+    a * (b * c) == (a * b) * c
+    x + 0 --> x
     a + b == b + a
-    a - a => zero(symtype(a)) # is it ok?
+    a - a => 0 # is it ok?
     a * b == b * a
     a * x + a * y == a*(x+y)
     -1 * a == -a
     a + (-1 * b) == a - b
     x * 1 --> x
+    x * 0 --> 0
+    x/x --> 1
     # fraction rules 
     x^-1 == 1/x 
     1/x * a == a/x # is this needed?
-    a/x * b == (a*b)/x
+    x / (x / y) --> y
+    x * (y / z) == (x * y) / z
+
     (a/b) + (c/b) --> (a+c)/b
     (a / b) / c == a/(b*c)
+    
     # pow rules 
     a * a == a^2
     # trig functions
@@ -46,7 +54,13 @@ opt_theory = @theory a b c x y  begin
     sin(x)^2 + cos(x)^2 --> 1
     sin(2a) == 2sin(a)cos(a)
 end
-
+# opt_theory = @theory a b c x y  begin
+#     a * x == x * a
+#     a * x + a * y == a*(x+y)
+#     -1 * a == -a
+#     a + -b --> a - b 
+#     -b + a --> b - a
+# end
 
 """
 Approximation of costs of operators in number 
@@ -59,9 +73,9 @@ See
 """
 const op_costs = Dict(
     :(+)     => 1,
-    :(-)     => 3,
+    :(-)     => 1,
     :abs     => 2,
-    :(*)     => 4,
+    :(*)     => 3,
     :(/)     => 7,
     :exp     => 18,
     :(^)     => 100,
@@ -80,7 +94,8 @@ const op_costs = Dict(
 
 function costfun(n::ENodeTerm, g::EGraph, an)
     op = operation(n) isa Function ? nameof(operation(n)) : operation(n)
-    mul = get(op_costs, op, 1) #* length(arguments(n))
+    opcost = get(op_costs, op, 1) #* length(arguments(n))
+    l = length(arguments(n))
     cost = 1 
 
     for id ∈ n.args
@@ -88,10 +103,23 @@ function costfun(n::ENodeTerm, g::EGraph, an)
         !hasdata(eclass, an) && (cost += Inf; break)
         cost += last(getdata(eclass, an))
     end
-    cost * mul
+    cost + opcost
 end
 
+
 costfun(n::ENodeLiteral, g::EGraph, an) = 1
+
+
+function getcost(ex::Expr)
+    g = EGraph(ex)
+    getcost!(g, costfun)
+end
+
+function getcost(ex::Symbolic)
+    g = symbolicegraph(ex)
+    getcost!(g, costfun)
+end
+
 
 egraph_simterm(x, head, args, symtype=nothing; metadata=nothing, exprhead=exprhead(x)) = 
     egraph_simterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
@@ -123,7 +151,7 @@ default_opt_params = SaturationParams(
     # scheduler = Schedulers.SimpleScheduler
 )
 
-function optimize(ex::Symbolic; params=default_opt_params)
+function optimize(ex::Symbolic; params=default_opt_params, kws...)
     # @show ex
     g = symbolicegraph(ex)
     params = deepcopy(params)
@@ -133,27 +161,38 @@ function optimize(ex::Symbolic; params=default_opt_params)
 
     report = saturate!(g, opt_theory, params)
     @info report
-    return extract!(g, costfun; simterm=egraph_simterm)
+    extr = extract!(g, costfun; simterm=egraph_simterm)
+    return extr
 end
 
+step2_theory = @theory x y z a b c begin 
+    # (*)(x..., (*)(y...), z...) --> (*)(x..., y..., z...)
+    (x * y) + z --> muladd(x,y,z)
+    z + (x * y) --> muladd(x,y,z)
+    (+)(x..., (+)(y...), z...) => Expr(:call, :+, x..., y..., z...)
+    a + (-b) --> a - b
+    -a + b --> b - a 
+    a * (-b - c) --> -a * (b + c)
+    (a * b) + (a * c) --> a * (b + c)
+    (a * b) - (a * c) --> a * (b - c)
 
-function optimize(ex::Expr; params=default_opt_params)
-    # @show ex
+end
+
+function optimize(ex::Expr; params=default_opt_params, cse=false, kws...)
+    # step 1: equational optimize with CSE
     g = EGraph(ex)
-
     display(g.classes);println();
-
     report = saturate!(g, opt_theory, params)
     @info report
-    return extract!(g, costfun)
+    extr = extract!(g, costfun; cse=cse)
+    println(extr)
+
+    # step 2: 
+    # extr = Fixpoint(Postwalk(Chain(step2_theory)))(extr)
+    return extr
 end
 
-function optimize(exs::AbstractArray; params=default_opt_params, batchsize=Inf)
-    # @show ex
-    # params.eclasslimit=
-    # println("optimizing $(length(exs))")
-    # println.(exs)
-
+function optimize(exs::AbstractArray; params=default_opt_params, batchsize=Inf, kws...)
     if length(exs) > batchsize
         # println("batch size $batchsize")
         batches = collect(Iterators.partition(exs, batchsize))
@@ -175,10 +214,7 @@ function optimize(exs::AbstractArray; params=default_opt_params, batchsize=Inf)
     end
 
     g = symbolicegraph()
-    ids = map(exs) do ex
-        ec, _ = addexpr!(g, ex)
-        return ec.id
-    end
+    ids = map(x -> first(addexpr!(g, x)), exs)
     params = deepcopy(params)
     params.simterm = egraph_simterm
 
@@ -186,19 +222,8 @@ function optimize(exs::AbstractArray; params=default_opt_params, batchsize=Inf)
 
     report = saturate!(g, opt_theory, params)
     @info report
-    res = map(ids) do id
-        extract!(g, costfun; root=id, simterm=egraph_simterm)
-    end
-    # println.(res)
+    res = map(id -> extract!(g, costfun; root=id, simterm=egraph_simterm), ids)
     return res
 end
 
 Base.map(::typeof(SymbolicUtils.optimize), x::AbstractArray) = optimize(x)
-
-
-function getcost(ex)
-    exx = Postwalk(EGraphs.preprocess)(ex)
-    !istree(typeof(exx)) && return 1
-    return get(SymbolicUtils.op_costs, operation(exx), 1) + mapreduce(getcost, (+), arguments(exx))
-end
-

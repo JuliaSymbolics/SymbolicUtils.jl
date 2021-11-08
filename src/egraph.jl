@@ -1,4 +1,6 @@
 using Metatheory.Rewriters
+using SymbolicUtils: monadic, diadic
+using InteractiveUtils
 
 function EGraphs.preprocess(t::Symbolic)
     toterm(unflatten(t)) 
@@ -62,48 +64,81 @@ end
 #     -b + a --> b - a
 # end
 
-"""
-Approximation of costs of operators in number 
-of CPU cycles required for the numerical computation
 
-See 
- * https://latkin.org/blog/2014/11/09/a-simple-benchmark-of-various-math-operations/
- * https://streamhpc.com/blog/2012-07-16/how-expensive-is-an-operation-on-a-cpu/
- * https://github.com/triscale-innov/GFlops.jl
-"""
-const op_costs = Dict(
-    :(+)     => 1,
-    :(-)     => 1,
-    :abs     => 2,
-    :(*)     => 3,
-    :(/)     => 7,
-    :exp     => 18,
-    :(^)     => 100,
-    :log1p   => 124,
-    :deg2rad => 125,
-    :rad2deg => 125,
-    :acos    => 127,
-    :asind   => 128,
-    :acsch   => 133,
-    :sin     => 134,
-    :cos     => 134,
-    :atan    => 135,
-    :tan     => 156,
-)
-# TODO some operator costs are in FLOP and not in cycles!!
+# See 
+#  * https://latkin.org/blog/2014/11/09/a-simple-benchmark-of-various-math-operations/
+#  * https://streamhpc.com/blog/2012-07-16/how-expensive-is-an-operation-on-a-cpu/
+#  * https://github.com/triscale-innov/GFlops.jl
+# Measure the cost of expressions in terms of number of ASM instructions 
 
-function costfun(n::ENodeTerm, g::EGraph, an)
-    op = operation(n) isa Function ? nameof(operation(n)) : operation(n)
-    opcost = get(op_costs, op, 1) #* length(arguments(n))
-    l = length(arguments(n))
-    cost = 1 
+op_costs = Dict()
 
-    for id ∈ n.args
+types = [(Int64, Integer), (Float64, Real), (ComplexF64, Complex)]
+
+io = IOBuffer()
+for f in monadic 
+    op_costs[nameof(f)] = Dict()
+    z = op_costs[nameof(f)]
+    for (t, at) in types
+        try 
+            InteractiveUtils.code_native(io, f, (t,))
+        catch e
+            z[(t,)] = z[(at,)] = 1
+            continue 
+        end
+        str = String(take!(io))
+        z[(t,)] = z[(at,)] = length(split(str, "\n"))
+    end
+end
+
+for f in vcat(diadic, [+, -, /, //, ^])
+    z = get!(op_costs, nameof(f), Dict())
+    for (t1, at1) in types, (t2, at2) in types
+        try 
+            InteractiveUtils.code_native(io, f, (t1, t2))
+        catch e
+            z[(t1, t2)] = z[(at1, at2)] = z[(at1, t2)] = z[(t1, at2)] = 1
+            continue 
+        end
+        str = String(take!(io))
+        z[(t1, t2)] = z[(at1, at2)] = z[(at1, t2)] = z[(t1, at2)] =  length(split(str, "\n"))
+    end
+end
+
+function getopcost(f::Function, types::Tuple)
+    sym = nameof(f)
+    if haskey(op_costs, sym) && haskey(op_costs[sym], types)
+        return op_costs[sym][types]
+    end
+
+    io = IOBuffer()
+    try 
+        InteractiveUtils.code_native(io, f, types)
+    catch e
+        return 1 
+    end
+    str = String(take!(io))
+    c = length(split(str, "\n"))
+    !haskey(op_costs, sym) && (op_costs[sym] = Dict())
+    op_costs[sym][types] = c
+end
+
+getopcost(f, types::Tuple) = get(get(op_costs, f, Dict()), types, 1)
+
+function costfun(n::ENodeTerm, g::EGraph, an)    
+    args = arguments(n)
+    types = Tuple(map(x -> getdata(g[x], SymtypeAnalysis, Real), args))
+    opc = getopcost(operation(n), types)
+
+    # println("$(operation(n)) => $opc")
+
+    cost = 0
+    for id ∈ arguments(n)
         eclass = g[id]
         !hasdata(eclass, an) && (cost += Inf; break)
         cost += last(getdata(eclass, an))
     end
-    cost + opcost
+    opc + cost
 end
 
 

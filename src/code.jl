@@ -105,6 +105,15 @@ function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.symbolify, O, nothing)
     out === nothing || return out
     args = map(Base.Fix2(toexpr, st), arguments(O))
+    if op === (*) &&first(args) === -1
+        if length(args) == 2
+            return Expr(:call, -, args[end])
+        else
+            args[end] = Expr(:call, -, args[end])
+            popfirst!(args)
+        end
+    end
+
     if length(args) >= 3 && symtype(O) <: Number
         x, xs = Iterators.peel(args)
         foldl(xs, init=x) do a, b

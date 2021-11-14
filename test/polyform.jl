@@ -56,6 +56,10 @@ end
     @eqtest simplify_fractions(3x^2/x^3) == 3/x
     @eqtest simplify_fractions(3*(x^2)*(y^3)/(3*(x^3)*(y^2))) == y/x
     @eqtest simplify_fractions(3*(x^x)/x*y) == 3*(x^x)/x*y
+
+    ##404#issuecomment-939404030
+    a = 1 / (x - (2//1)) + ((-5//1) - x) / ((x - (2//1))^2)
+    @test isequal(simplify_fractions(a), -7/(x-2)^2)
 end
 
 @testset "isone iszero" begin

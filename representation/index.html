@@ -86,47 +86,47 @@
 <h3 id="polynomial_representation"><a href="#polynomial_representation" class="header-anchor">Polynomial representation</a></h3>
 <p>Packages like DynamicPolynomials.jl provide representations that are even more efficient than the <code>Add</code> and <code>Mul</code> types mentioned above. They are designed specifically for multi-variate polynomials. They provide common algorithms such as multi-variate polynomial GCD. The restrictions that make it fast also mean some things are not possible: Firstly, DynamicPolynomials can only represent flat polynomials. For example, <code>&#40;x-3&#41;*&#40;x&#43;5&#41;</code> can only be represented as <code>&#40;x^2&#41; &#43; 15 - 8x</code>. Secondly, DynamicPolynomials does not have ways to represent generic Terms such as <code>sin&#40;x-y&#41;</code> in the tree.</p>
 <p>To reconcile these differences while being able to use the efficient algorithms of DynamicPolynomials we have the <code>PolyForm</code> type. This type holds a polynomial and the mappings necessary to present the polynomial as a SymbolicUtils expression &#40;i.e. by defining <code>operation</code> and <code>arguments</code>&#41;.  The mappings constructed for the conversion are 1&#41; a bijection from DynamicPolynomials PolyVar type to a Symbolics <code>Sym</code>, and 2&#41; a mapping from <code>Sym</code>s to non-polynomial terms that the <code>Sym</code>s stand-in for. These terms may themselves contain PolyForm if there are polynomials inside them. The mappings are transiently global, that is, when all references to the mappings go out of scope, they are released and re-created.</p>
-<pre><code class="language-julia">julia&gt; @syms x y
-&#40;x, y&#41;
+<pre><code class="julia hljs">julia&gt; <span class="hljs-meta">@syms</span> x y
+(x, y)
 
-julia&gt; PolyForm&#40;&#40;x-3&#41;*&#40;y-5&#41;&#41;
-x*y &#43; 15 - 5x - 3y</code></pre>
+julia&gt; PolyForm((x-<span class="hljs-number">3</span>)*(y-<span class="hljs-number">5</span>))
+x*y + <span class="hljs-number">15</span> - <span class="hljs-number">5</span>x - <span class="hljs-number">3</span>y</code></pre>
 <p>Terms for which the <code>operation</code> is not <code>&#43;</code>, <code>*</code>, or <code>^</code> are replaced with a generated symbol when representing the polynomial, and a mapping from this new symbol to the original expression it stands-in for is maintained as stated above.</p>
-<pre><code class="language-julia">julia&gt; p &#61; PolyForm&#40;&#40;sin&#40;x&#41; &#43; cos&#40;x&#41;&#41;^2&#41;
-&#40;cos&#40;x&#41;^2&#41; &#43; 2cos&#40;x&#41;*sin&#40;x&#41; &#43; &#40;sin&#40;x&#41;^2&#41;
+<pre><code class="julia hljs">julia&gt; p = PolyForm((sin(x) + cos(x))^<span class="hljs-number">2</span>)
+(cos(x)^<span class="hljs-number">2</span>) + <span class="hljs-number">2</span>cos(x)*sin(x) + (sin(x)^<span class="hljs-number">2</span>)
 
-julia&gt; p.p # this is the actual DynamicPolynomial stored
-cos_3658410937268741549² &#43; 2cos_3658410937268741549sin_10720964503106793468 &#43; sin_10720964503106793468²</code></pre>
+julia&gt; p.p <span class="hljs-comment"># this is the actual DynamicPolynomial stored</span>
+cos_3658410937268741549² + <span class="hljs-number">2</span>cos_3658410937268741549sin_10720964503106793468 + sin_10720964503106793468²</code></pre>
 <p>By default, polynomials inside non-polynomial terms are not also converted to PolyForm. For example,</p>
-<pre><code class="language-julia">julia&gt; PolyForm&#40;sin&#40;&#40;x-3&#41;*&#40;y-5&#41;&#41;&#41;
-sin&#40;&#40;x - 3&#41;*&#40;y - 5&#41;&#41;</code></pre>
+<pre><code class="julia hljs">julia&gt; PolyForm(sin((x-<span class="hljs-number">3</span>)*(y-<span class="hljs-number">5</span>)))
+sin((x - <span class="hljs-number">3</span>)*(y - <span class="hljs-number">5</span>))</code></pre>
 <p>But you can pass in the <code>recurse&#61;true</code> keyword argument to do this.</p>
-<pre><code class="language-julia">julia&gt; PolyForm&#40;sin&#40;&#40;x-3&#41;*&#40;y-5&#41;&#41;, recurse&#61;true&#41;
-sin&#40;x*y &#43; 15 - 5x - 3y&#41;</code></pre>
+<pre><code class="julia hljs">julia&gt; PolyForm(sin((x-<span class="hljs-number">3</span>)*(y-<span class="hljs-number">5</span>)), recurse=<span class="hljs-literal">true</span>)
+sin(x*y + <span class="hljs-number">15</span> - <span class="hljs-number">5</span>x - <span class="hljs-number">3</span>y)</code></pre>
 <p>Polynomials are constructed by first turning symbols and non-polynomial terms into DynamicPolynomials-style variables and then applying the <code>&#43;</code>, <code>*</code>, <code>^</code> operations on these variables. You can control the list of the polynomial operations with the <code>Fs</code> keyword argument. It is a <code>Union</code> type of the functions to apply. For example, let&#39;s say you want to turn terms into polynomials by only applying the <code>&#43;</code> and <code>^</code> operations, and want to preserve <code>*</code> operations as-is, you could pass in <code>Fs&#61;Union&#123;typeof&#40;&#43;&#41;, typeof&#40;^&#41;&#125;</code></p>
-<pre><code class="language-julia">julia&gt; PolyForm&#40;&#40;x&#43;y&#41;^2*&#40;x-y&#41;, Fs&#61;Union&#123;typeof&#40;&#43;&#41;, typeof&#40;^&#41;&#125;, recurse&#61;true&#41;
-&#40;&#40;x - &#40;y&#41;&#41;*&#40;&#40;x^2&#41; &#43; 2x*y &#43; &#40;y^2&#41;&#41;&#41;</code></pre>
+<pre><code class="julia hljs">julia&gt; PolyForm((x+y)^<span class="hljs-number">2</span>*(x-y), Fs=<span class="hljs-built_in">Union</span>{typeof(+), typeof(^)}, recurse=<span class="hljs-literal">true</span>)
+((x - (y))*((x^<span class="hljs-number">2</span>) + <span class="hljs-number">2</span>x*y + (y^<span class="hljs-number">2</span>)))</code></pre>
 <p>Note that in this case <code>recurse&#61;true</code> was necessary as otherwise the polynomialization would not descend into the <code>*</code> operation as it is now considered a generic operation.</p>
 <h3 id="simplifying_fractions"><a href="#simplifying_fractions" class="header-anchor">Simplifying fractions</a></h3>
 <p><code>simplify_fractions&#40;expr&#41;</code> recurses through <code>expr</code> finding <code>Div</code>s and simplifying them using polynomial divison.</p>
 <p>First the factors of the numerators and the denominators are converted into PolyForm objects, then numerators and denominators are divided by their respective pairwise GCDs. The conversion of the numerator and denominator into PolyForm is set up so that <code>simplify_fractions</code> does not result in increase in the expression size due to polynomial expansion. Specifically, the factors are individually converted into PolyForm objects, and any powers of polynomial is not expanded, but the divison process repeatedly divides them as many times as the power.</p>
-<pre><code class="language-julia">julia&gt; simplify_fractions&#40;&#40;x*y&#43;5x&#43;3y&#43;15&#41;/&#40;&#40;x&#43;3&#41;*&#40;x-4&#41;&#41;&#41;
-&#40;5.0 &#43; y&#41; / &#40;x - 4&#41;
+<pre><code class="julia hljs">julia&gt; simplify_fractions((x*y+<span class="hljs-number">5</span>x+<span class="hljs-number">3</span>y+<span class="hljs-number">15</span>)/((x+<span class="hljs-number">3</span>)*(x-<span class="hljs-number">4</span>)))
+(<span class="hljs-number">5.0</span> + y) / (x - <span class="hljs-number">4</span>)
 
-julia&gt; simplify_fractions&#40;&#40;x*y&#43;5x&#43;3y&#43;15&#41;^2/&#40;&#40;x&#43;3&#41;*&#40;x-4&#41;&#41;&#41;
-&#40;&#40;5.0 &#43; y&#41;*&#40;15 &#43; 5x &#43; x*y &#43; 3y&#41;&#41; / &#40;x - 4&#41;
+julia&gt; simplify_fractions((x*y+<span class="hljs-number">5</span>x+<span class="hljs-number">3</span>y+<span class="hljs-number">15</span>)^<span class="hljs-number">2</span>/((x+<span class="hljs-number">3</span>)*(x-<span class="hljs-number">4</span>)))
+((<span class="hljs-number">5.0</span> + y)*(<span class="hljs-number">15</span> + <span class="hljs-number">5</span>x + x*y + <span class="hljs-number">3</span>y)) / (x - <span class="hljs-number">4</span>)
 
-julia&gt; simplify_fractions&#40;3/&#40;x&#43;3&#41; &#43; x/&#40;x&#43;3&#41;&#41;
-1
+julia&gt; simplify_fractions(<span class="hljs-number">3</span>/(x+<span class="hljs-number">3</span>) + x/(x+<span class="hljs-number">3</span>))
+<span class="hljs-number">1</span>
 
-julia&gt; simplify_fractions&#40;sin&#40;x&#41;/cos&#40;x&#41; &#43; cos&#40;x&#41;/sin&#40;x&#41;&#41;
-&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2&#41; / &#40;cos&#40;x&#41;*sin&#40;x&#41;&#41;
+julia&gt; simplify_fractions(sin(x)/cos(x) + cos(x)/sin(x))
+(cos(x)^<span class="hljs-number">2</span> + sin(x)^<span class="hljs-number">2</span>) / (cos(x)*sin(x))
 
-julia&gt; simplify&#40;ans&#41;
-1 / &#40;cos&#40;x&#41;*sin&#40;x&#41;&#41;</code></pre>
+julia&gt; simplify(ans)
+<span class="hljs-number">1</span> / (cos(x)*sin(x))</code></pre>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: October 30, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: November 14, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->
@@ -148,8 +148,8 @@ julia&gt; simplify&#40;ans&#41;
         }
     </script>
     
-        <script src="/libs/highlight/highlight.pack.js"></script>
-<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+        
+
 
     
   </body>

@@ -81,9 +81,9 @@
       <h2 class="doc-header" id="@syms">
         <a href="#@syms">@syms</a>
         <div class="doc-type">macro</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">@syms &lt;lhs_expr&gt;&#91;::T1&#93; &lt;lhs_expr&gt;&#91;::T2&#93;...</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs"><span class="hljs-meta">@syms</span> &lt;lhs_expr&gt;[::T1] &lt;lhs_expr&gt;[::T2]...</code></pre>
 <p>For instance:</p>
-<pre><code class="language-julia">@syms foo::Real bar baz&#40;x, y::Real&#41;::Complex</code></pre>
+<pre><code class="julia hljs"><span class="hljs-meta">@syms</span> foo::<span class="hljs-built_in">Real</span> bar baz(x, y::<span class="hljs-built_in">Real</span>)::<span class="hljs-built_in">Complex</span></code></pre>
 <p>Create one or more variables. <code>&lt;lhs_expr&gt;</code> can be just a symbol in which case it will be the name of the variable, or a function call in which case a function-like variable which has the same name as the function being called. The Sym type, or in the case of a function-like Sym, the output type of calling the function can be set using the <code>::T</code> syntax.</p>
 <h1 id="examples"><a href="#examples" class="header-anchor">Examples:</a></h1>
 <ul>
@@ -103,7 +103,7 @@
       <h2 class="doc-header" id="Sym">
         <a href="#Sym">Sym</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">Sym&#123;T&#125;&#40;name::Symbol&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Sym{T}(name::<span class="hljs-built_in">Symbol</span>)</code></pre>
 <p>A named variable of type <code>T</code>. Type <code>T</code> can be <code>FnType&#123;X,Y&#125;</code> which means the variable is a function with the type signature X -&gt; Y where <code>X</code> is a tuple type of arguments and <code>Y</code> is any type.</p>
 </div>
   </div>
@@ -112,7 +112,7 @@
       <h2 class="doc-header" id="symtype">
         <a href="#symtype">symtype</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">symtype&#40;x&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">symtype(x)</code></pre>
 <p>Returns the symbolic type of <code>x</code>. By default this is just <code>typeof&#40;x&#41;</code>. Define this for your symbolic types if you want <code>SymbolicUtils.simplify</code> to apply rules specific to numbers &#40;such as commutativity of multiplication&#41;. Or such rules that may be implemented in the future.</p>
 </div>
   </div>
@@ -121,7 +121,7 @@
       <h2 class="doc-header" id="Term">
         <a href="#Term">Term</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">Term&#123;T&#125;&#40;f, args::AbstractArray&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Term{T}(f, args::<span class="hljs-built_in">AbstractArray</span>)</code></pre>
 <p>or     Term&#40;f, args::AbstractArray&#41;</p>
 <p>Symbolic expression representing the result of calling <code>f&#40;args...&#41;</code>.</p>
 <ul>
@@ -141,7 +141,7 @@
       <h2 class="doc-header" id="Add">
         <a href="#Add">Add</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">Add&#40;T, coeff, dict::Dict&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Add(T, coeff, dict::<span class="hljs-built_in">Dict</span>)</code></pre>
 <p>Represents <code>coeff &#43; &#40;key1 * val1&#41; &#43; &#40;key2 * val2&#41; &#43; ...</code></p>
 <p>where keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
 <ul>
@@ -159,7 +159,7 @@
       <h2 class="doc-header" id="Mul">
         <a href="#Mul">Mul</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">Mul&#40;T, coeff, dict&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Mul(T, coeff, dict)</code></pre>
 <p>Represents coeff * &#40;key1 ^ val1&#41; * &#40;key2 ^ val2&#41; * ....</p>
 <p>where coeff is a &lt;:Number and keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
 <ul>
@@ -177,7 +177,7 @@
       <h2 class="doc-header" id="Pow">
         <a href="#Pow">Pow</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">Pow&#40;base, exp&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Pow(base, exp)</code></pre>
 <p>Represents <code>base^exp</code>, a lighter version of <code>Mul&#40;1, Dict&#40;base&#61;&gt;exp&#41;&#41;</code></p>
 </div>
   </div>
@@ -186,21 +186,21 @@
       <h2 class="doc-header" id="promote_symtype">
         <a href="#promote_symtype">promote_symtype</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">promote_symtype&#40;f, Ts...&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">promote_symtype(f, Ts...)</code></pre>
 <p>The result of applying <code>f</code> to arguments of <a href="#symtype"><code>symtype</code></a> <code>Ts...</code></p>
-<pre><code class="language-julia">julia&gt; promote_symtype&#40;&#43;, Real, Real&#41;
-Real
+<pre><code class="julia hljs">julia&gt; promote_symtype(+, <span class="hljs-built_in">Real</span>, <span class="hljs-built_in">Real</span>)
+<span class="hljs-built_in">Real</span>
 
-julia&gt; promote_symtype&#40;&#43;, Complex, Real&#41;
-Number
+julia&gt; promote_symtype(+, <span class="hljs-built_in">Complex</span>, <span class="hljs-built_in">Real</span>)
+<span class="hljs-built_in">Number</span>
 
-julia&gt; @syms f&#40;x&#41;::Complex
-&#40;f&#40;::Number&#41;::Complex,&#41;
+julia&gt; <span class="hljs-meta">@syms</span> f(x)::<span class="hljs-built_in">Complex</span>
+(f(::<span class="hljs-built_in">Number</span>)::<span class="hljs-built_in">Complex</span>,)
 
-julia&gt; promote_symtype&#40;f, Number&#41;
-Complex</code></pre>
+julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
+<span class="hljs-built_in">Complex</span></code></pre>
 <p>When constructing <a href="#Term"><code>Term</code></a>s without an explicit symtype, <code>promote_symtype</code> is used to figure out the symtype of the Term.</p>
-<pre><code class="language-julia">promote_symtype&#40;f::Sym&#123;FnType&#123;X,Y&#125;&#125;, arg_symtypes...&#41;</code></pre>
+<pre><code class="julia hljs">promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)</code></pre>
 <p>The output symtype of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</p>
 </div>
   </div>
@@ -210,7 +210,7 @@ Complex</code></pre>
       <h2 class="doc-header" id="istree">
         <a href="#istree">istree</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">istree&#40;x&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">istree(x)</code></pre>
 <p>Returns <code>true</code> if <code>x</code> is a term. If true, <code>operation</code>, <code>arguments</code> must also be defined for <code>x</code> appropriately.</p>
 </div>
   </div>
@@ -219,7 +219,7 @@ Complex</code></pre>
       <h2 class="doc-header" id="operation">
         <a href="#operation">operation</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">operation&#40;x&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">operation(x)</code></pre>
 <p>If <code>x</code> is a term as defined by <code>istree&#40;x&#41;</code>, <code>operation&#40;x&#41;</code> returns the head of the term if <code>x</code> represents a function call, for example, the head is the function being called.</p>
 </div>
   </div>
@@ -228,7 +228,7 @@ Complex</code></pre>
       <h2 class="doc-header" id="arguments">
         <a href="#arguments">arguments</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">arguments&#40;x&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">arguments(x)</code></pre>
 <p>Get the arguments of <code>x</code>, must be defined if <code>istree&#40;x&#41;</code> is <code>true</code>.</p>
 </div>
   </div>
@@ -237,9 +237,9 @@ Complex</code></pre>
       <h2 class="doc-header" id="similarterm">
         <a href="#similarterm">similarterm</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">similarterm&#40;x, head, args, symtype&#61;nothing; metadata&#61;nothing, exprhead&#61;:call&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">similarterm(x, head, args, symtype=<span class="hljs-literal">nothing</span>; metadata=<span class="hljs-literal">nothing</span>, exprhead=:call)</code></pre>
 <p>Returns a term that is in the same closure of types as <code>typeof&#40;x&#41;</code>, with <code>head</code> as the head and <code>args</code> as the arguments, <code>type</code> as the symtype and <code>metadata</code> as the metadata. By default this will execute <code>head&#40;args...&#41;</code>. <code>x</code> parameter can also be a <code>Type</code>. The <code>exprhead</code> keyword argument is useful  when manipulating <code>Expr</code>s.</p>
-<pre><code class="language-julia">similarterm&#40;t, f, args, symtype; metadata&#61;nothing&#41;</code></pre>
+<pre><code class="julia hljs">similarterm(t, f, args, symtype; metadata=<span class="hljs-literal">nothing</span>)</code></pre>
 <p>Create a term that is similar in type to <code>t</code>. Extending this function allows packages using their own expression types with SymbolicUtils to define how new terms should be created. Note that <code>similarterm</code> may return an object that has a different type than <code>t</code>, because <code>f</code> also influences the result.</p>
 <h2 id="arguments"><a href="#arguments" class="header-anchor">Arguments</a></h2>
 <ul>
@@ -260,7 +260,7 @@ Complex</code></pre>
       <h2 class="doc-header" id="@rule">
         <a href="#@rule">@rule</a>
         <div class="doc-type">macro</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">@rule &#91;SLOTS...&#93; LHS operator RHS</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs"><span class="hljs-meta">@rule</span> [SLOTS...] LHS operator RHS</code></pre>
 <p>Creates an <code>AbstractRule</code> object. A rule object is callable, and takes an expression and rewrites it if it matches the LHS pattern to the RHS pattern, returns <code>nothing</code> otherwise. The rule language is described below.</p>
 <p>LHS can be any possibly nested function call expression where any of the arugments can optionally be a Slot &#40;<code>~x</code>&#41; or a Segment &#40;<code>~x...</code>&#41; &#40;described below&#41;.</p>
 <p>SLOTS is an optional list of symbols to be interpeted as slots or segments directly &#40;without using <code>~</code>&#41;.  To declare slots for several rules at once, see the <code>@slots</code> macro.</p>
@@ -280,64 +280,64 @@ Complex</code></pre>
 <p>A Slot variable is written as <code>~x</code> and matches a single expression. <code>x</code> is the name of the variable. If a slot appears more than once in an LHS expression then expression matched at every such location must be equal &#40;as shown by <code>isequal</code>&#41;.</p>
 <p><em>Example:</em></p>
 <p>Simple rule to turn any <code>sin</code> into <code>cos</code>:</p>
-<pre><code class="language-julia">julia&gt; r &#61; @rule sin&#40;~x&#41; --&gt; cos&#40;~x&#41;
-sin&#40;~x&#41; --&gt; cos&#40;~x&#41;
+<pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> sin(~x) --&gt; cos(~x)
+sin(~x) --&gt; cos(~x)
 
-julia&gt; r&#40;:&#40;sin&#40;1&#43;a&#41;&#41;&#41;
-:&#40;cos&#40;&#40;1 &#43; a&#41;&#41;&#41;</code></pre>
+julia&gt; r(:(sin(<span class="hljs-number">1</span>+a)))
+:(cos((<span class="hljs-number">1</span> + a)))</code></pre>
 <p>A rule with 2 segment variables</p>
-<pre><code class="language-julia">julia&gt; r &#61; @rule sin&#40;~x &#43; ~y&#41; --&gt; sin&#40;~x&#41;*cos&#40;~y&#41; &#43; cos&#40;~x&#41;*sin&#40;~y&#41;
-sin&#40;~x &#43; ~y&#41; --&gt; sin&#40;~x&#41; * cos&#40;~y&#41; &#43; cos&#40;~x&#41; * sin&#40;~y&#41;
+<pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> sin(~x + ~y) --&gt; sin(~x)*cos(~y) + cos(~x)*sin(~y)
+sin(~x + ~y) --&gt; sin(~x) * cos(~y) + cos(~x) * sin(~y)
 
-julia&gt; r&#40;:&#40;sin&#40;a &#43; b&#41;&#41;&#41;
-:&#40;cos&#40;a&#41;*sin&#40;b&#41; &#43; sin&#40;a&#41;*cos&#40;b&#41;&#41;</code></pre>
+julia&gt; r(:(sin(a + b)))
+:(cos(a)*sin(b) + sin(a)*cos(b))</code></pre>
 <p>A rule that matches two of the same expressions:</p>
-<pre><code class="language-julia">julia&gt; r &#61; @rule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 --&gt; 1
-sin&#40;~x&#41; ^ 2 &#43; cos&#40;~x&#41; ^ 2 --&gt; 1
+<pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> sin(~x)^<span class="hljs-number">2</span> + cos(~x)^<span class="hljs-number">2</span> --&gt; <span class="hljs-number">1</span>
+sin(~x) ^ <span class="hljs-number">2</span> + cos(~x) ^ <span class="hljs-number">2</span> --&gt; <span class="hljs-number">1</span>
 
-julia&gt; r&#40;:&#40;sin&#40;2a&#41;^2 &#43; cos&#40;2a&#41;^2&#41;&#41;
-1
+julia&gt; r(:(sin(<span class="hljs-number">2</span>a)^<span class="hljs-number">2</span> + cos(<span class="hljs-number">2</span>a)^<span class="hljs-number">2</span>))
+<span class="hljs-number">1</span>
 
-julia&gt; r&#40;:&#40;sin&#40;2a&#41;^2 &#43; cos&#40;a&#41;^2&#41;&#41;
-# nothing</code></pre>
+julia&gt; r(:(sin(<span class="hljs-number">2</span>a)^<span class="hljs-number">2</span> + cos(a)^<span class="hljs-number">2</span>))
+<span class="hljs-comment"># nothing</span></code></pre>
 <p>A rule without <code>~</code></p>
-<pre><code class="language-julia">julia&gt; r &#61; @slots x y z @rule x&#40;y &#43; z&#41; --&gt; x*y &#43; x*z
-x&#40;y &#43; z&#41; --&gt; x*y &#43; x*z</code></pre>
+<pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@slots</span> x y z <span class="hljs-meta">@rule</span> x(y + z) --&gt; x*y + x*z
+x(y + z) --&gt; x*y + x*z</code></pre>
 <p><strong>Segment</strong>: A Segment variable matches zero or more expressions in the function call. Segments may be written by splatting slot variables &#40;<code>~x...</code>&#41;.</p>
 <p><em>Example:</em></p>
-<pre><code class="language-julia">julia&gt; r &#61; @rule f&#40;~xs...&#41; --&gt; g&#40;~xs...&#41;;
-julia&gt; r&#40;:&#40;f&#40;1, 2, 3&#41;&#41;&#41;
-:&#40;g&#40;1,2,3&#41;&#41;</code></pre>
+<pre><code class="julia hljs">julia&gt; r = <span class="hljs-meta">@rule</span> f(~xs...) --&gt; g(~xs...);
+julia&gt; r(:(f(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>)))
+:(g(<span class="hljs-number">1</span>,<span class="hljs-number">2</span>,<span class="hljs-number">3</span>))</code></pre>
 <p><strong>Predicates</strong>:</p>
 <p>There are two kinds of predicates, namely over slot variables and over the whole rule. For the former, predicates can be used on both <code>~x</code> and <code>~~x</code> by using the <code>~x::f</code> or <code>~~x::f</code>. Here <code>f</code> can be any julia function. In the case of a slot the function gets a single matched subexpression, in the case of segment, it gets an array of matched expressions.</p>
 <p>The predicate should return <code>true</code> if the current match is acceptable, and <code>false</code> otherwise.</p>
-<pre><code class="language-julia">julia&gt; two_πs&#40;x::Number&#41; &#61; abs&#40;round&#40;x/&#40;2π&#41;&#41; - x/&#40;2π&#41;&#41; &lt; 10^-9
-two_πs &#40;generic function with 1 method&#41;
+<pre><code class="julia hljs">julia&gt; two_πs(x::<span class="hljs-built_in">Number</span>) = abs(round(x/(<span class="hljs-number">2</span><span class="hljs-literal">π</span>)) - x/(<span class="hljs-number">2</span><span class="hljs-literal">π</span>)) &lt; <span class="hljs-number">10</span>^-<span class="hljs-number">9</span>
+two_πs (generic <span class="hljs-keyword">function</span> with <span class="hljs-number">1</span> method)
 
-julia&gt; two_πs&#40;x&#41; &#61; false
-two_πs &#40;generic function with 2 methods&#41;
+julia&gt; two_πs(x) = <span class="hljs-literal">false</span>
+two_πs (generic <span class="hljs-keyword">function</span> with <span class="hljs-number">2</span> methods)
 
-julia&gt; r &#61; @rule sin&#40;~~x &#43; ~y::two_πs &#43; ~~z&#41; &#61;&gt; :&#40;sin&#40;&#36;&#40;Expr&#40;:call, :&#43;, ~~x..., ~~z...&#41;&#41;&#41;&#41;
-sin&#40;~&#40;~x&#41; &#43; ~&#40;y::two_πs&#41; &#43; ~&#40;~z&#41;&#41; --&gt; sin&#40;&#43;&#40;~&#40;~x&#41;..., ~&#40;~z&#41;...&#41;&#41;
+julia&gt; r = <span class="hljs-meta">@rule</span> sin(~~x + ~y::two_πs + ~~z) =&gt; :(sin($(<span class="hljs-built_in">Expr</span>(:call, :+, ~~x..., ~~z...))))
+sin(~(~x) + ~(y::two_πs) + ~(~z)) --&gt; sin(+(~(~x)..., ~(~z)...))
 
-julia&gt; r&#40;:&#40;sin&#40;a&#43;&#36;&#40;3π&#41;&#41;&#41;&#41;
+julia&gt; r(:(sin(a+$(<span class="hljs-number">3</span><span class="hljs-literal">π</span>))))
 
-julia&gt; r&#40;:&#40;sin&#40;a&#43;&#36;&#40;6π&#41;&#41;&#41;&#41;
-:&#40;sin&#40;&#43;a&#41;&#41;
+julia&gt; r(:(sin(a+$(<span class="hljs-number">6</span><span class="hljs-literal">π</span>))))
+:(sin(+a))
 
-julia&gt; r&#40;sin&#40;a&#43;6π&#43;c&#41;&#41;
-:&#40;sin&#40;a &#43; c&#41;&#41;</code></pre>
+julia&gt; r(sin(a+<span class="hljs-number">6</span><span class="hljs-literal">π</span>+c))
+:(sin(a + c))</code></pre>
 <p>Predicate function gets an array of values if attached to a segment variable &#40;<code>~x...</code>&#41;.</p>
 <p>For the predicate over the whole rule, use <code>@rule &lt;LHS&gt; &#61;&gt; &lt;RHS&gt; where &lt;predicate&gt;</code>:</p>
-<pre><code class="language-julia">julia&gt; predicate&#40;x&#41; &#61; x &#61;&#61;&#61; a;
+<pre><code class="julia hljs">julia&gt; predicate(x) = x === a;
 
-julia&gt; r &#61; @rule ~x &#61;&gt; ~x where f&#40;~x&#41;;
+julia&gt; r = <span class="hljs-meta">@rule</span> ~x =&gt; ~x <span class="hljs-keyword">where</span> f(~x);
 
-julia&gt; r&#40;a&#41;
+julia&gt; r(a)
 a
 
-julia&gt; r&#40;b&#41; &#61;&#61;&#61; nothing
-true</code></pre>
+julia&gt; r(b) === <span class="hljs-literal">nothing</span>
+<span class="hljs-literal">true</span></code></pre>
 <p>Note that this is syntactic sugar and that it is the same as <code>@rule ~x &#61;&gt; f&#40;~x&#41; ? ~x : nothing</code>.</p>
 <p><strong>Compatibility</strong>: Segment variables may still be written as &#40;<code>~~x</code>&#41;, and slot &#40;<code>~x</code>&#41; and segment &#40;<code>~x...</code> or <code>~~x</code>&#41; syntaxes on the RHS will still substitute the result of the matches. See also: <a href="@ref"><code>@capture</code></a>, <a href="@ref"><code>@slots</code></a></p>
 </div>
@@ -391,10 +391,10 @@ true</code></pre>
       <h2 class="doc-header" id="simplify">
         <a href="#simplify">simplify</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">simplify&#40;x; expand&#61;false,
-            threaded&#61;false,
-            thread_subtree_cutoff&#61;100,
-            rewriter&#61;nothing&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">simplify(x; expand=<span class="hljs-literal">false</span>,
+            threaded=<span class="hljs-literal">false</span>,
+            thread_subtree_cutoff=<span class="hljs-number">100</span>,
+            rewriter=<span class="hljs-literal">nothing</span>)</code></pre>
 <p>Simplify an expression &#40;<code>x</code>&#41; by applying <code>rewriter</code> until there are no changes. <code>expand&#61;true</code> applies <a href="/api/#expand"><code>expand</code></a> in the beginning of each fixpoint iteration.</p>
 </div>
   </div>
@@ -403,7 +403,7 @@ true</code></pre>
       <h2 class="doc-header" id="expand">
         <a href="#expand">expand</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">expand&#40;expr&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">expand(expr)</code></pre>
 <p>Expand expressions by distributing multiplication over addition, e.g., <code>a*&#40;b&#43;c&#41;</code> becomes <code>ab&#43;ac</code>.</p>
 <p><code>expand</code> uses replace symbols and non-algebraic expressions by variables of type <code>variable_type</code> to compute the distribution using a specialized sparse multivariate polynomials implementation. <code>variable_type</code> can be any subtype of <code>MultivariatePolynomials.AbstractVariable</code>.</p>
 </div>
@@ -413,12 +413,12 @@ true</code></pre>
       <h2 class="doc-header" id="substitute">
         <a href="#substitute">substitute</a>
         <div class="doc-type">fn</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">substitute&#40;expr, dict; fold&#61;true&#41;</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">substitute(expr, dict; fold=<span class="hljs-literal">true</span>)</code></pre>
 <p>substitute any subexpression that matches a key in <code>dict</code> with the corresponding value. If <code>fold&#61;false</code>, expressions which can be evaluated won&#39;t be evaluated.</p>
-<pre><code class="language-julia">julia&gt; substitute&#40;1&#43;sqrt&#40;y&#41;, Dict&#40;y &#61;&gt; 2&#41;, fold&#61;true&#41;
-2.414213562373095
-julia&gt; substitute&#40;1&#43;sqrt&#40;y&#41;, Dict&#40;y &#61;&gt; 2&#41;, fold&#61;false&#41;
-1 &#43; sqrt&#40;2&#41;</code></pre>
+<pre><code class="julia hljs">julia&gt; substitute(<span class="hljs-number">1</span>+sqrt(y), <span class="hljs-built_in">Dict</span>(y =&gt; <span class="hljs-number">2</span>), fold=<span class="hljs-literal">true</span>)
+<span class="hljs-number">2.414213562373095</span>
+julia&gt; substitute(<span class="hljs-number">1</span>+sqrt(y), <span class="hljs-built_in">Dict</span>(y =&gt; <span class="hljs-number">2</span>), fold=<span class="hljs-literal">false</span>)
+<span class="hljs-number">1</span> + sqrt(<span class="hljs-number">2</span>)</code></pre>
 </div>
   </div>
 
@@ -427,30 +427,30 @@ julia&gt; substitute&#40;1&#43;sqrt&#40;y&#41;, Dict&#40;y &#61;&gt; 2&#41;, fol
       <h2 class="doc-header" id="@timerewrite">
         <a href="#@timerewrite">@timerewrite</a>
         <div class="doc-type">macro</div></h2>
-      <div class="doc-content"><pre><code class="language-julia">@timerewrite expr</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs"><span class="hljs-meta">@timerewrite</span> expr</code></pre>
 <p>If <code>expr</code> calls <code>simplify</code> or a <code>RuleSet</code> object, track the amount of time it spent on applying each rule and pretty print the timing.</p>
 <p>This uses <a href="https://github.com/KristofferC/TimerOutputs.jl">TimerOutputs.jl</a>.</p>
 <h2 id="example"><a href="#example" class="header-anchor">Example:</a></h2>
-<pre><code class="language-julia">julia&gt; expr &#61; foldr&#40;*, rand&#40;&#91;a,b,c,d&#93;, 100&#41;&#41;
-&#40;a ^ 26&#41; * &#40;b ^ 30&#41; * &#40;c ^ 16&#41; * &#40;d ^ 28&#41;
+<pre><code class="julia hljs">julia&gt; expr = foldr(*, rand([a,b,c,d], <span class="hljs-number">100</span>))
+(a ^ <span class="hljs-number">26</span>) * (b ^ <span class="hljs-number">30</span>) * (c ^ <span class="hljs-number">16</span>) * (d ^ <span class="hljs-number">28</span>)
 
-julia&gt; @timerewrite simplify&#40;expr&#41;
+julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
  ────────────────────────────────────────────────────────────────────────────────────────────────
                                                          Time                   Allocations
                                                  ──────────────────────   ───────────────────────
-                Tot / &#37; measured:                     340ms / 15.3&#37;           92.2MiB / 10.8&#37;
+                Tot / % measured:                     <span class="hljs-number">340</span>ms / <span class="hljs-number">15.3</span>%           <span class="hljs-number">92.2</span>MiB / <span class="hljs-number">10.8</span>%
 
- Section                                 ncalls     time   &#37;tot     avg     alloc   &#37;tot      avg
+ Section                                 ncalls     time   %tot     avg     alloc   %tot      avg
  ────────────────────────────────────────────────────────────────────────────────────────────────
- Rule&#40;&#40;~y&#41; ^ ~n * ~y &#61;&gt; &#40;~y&#41; ^ &#40;~n ...    667   11.1ms  21.3&#37;  16.7μs   2.66MiB  26.8&#37;  4.08KiB
-   RHS                                       92    277μs  0.53&#37;  3.01μs   14.4KiB  0.14&#37;     160B
- Rule&#40;&#40;~x&#41; ^ ~n * &#40;~x&#41; ^ ~m &#61;&gt; &#40;~x&#41;...    575   7.63ms  14.6&#37;  13.3μs   1.83MiB  18.4&#37;  3.26KiB
- &#40;*&#41;&#40;~&#40;~&#40;x::&#33;issortedₑ&#41;&#41;&#41; &#61;&gt; sort_arg...    831   6.31ms  12.1&#37;  7.59μs    738KiB  7.26&#37;     910B
-   RHS                                      164   3.03ms  5.81&#37;  18.5μs    250KiB  2.46&#37;  1.52KiB
+ Rule((~y) ^ ~n * ~y =&gt; (~y) ^ (~n ...    <span class="hljs-number">667</span>   <span class="hljs-number">11.1</span>ms  <span class="hljs-number">21.3</span>%  <span class="hljs-number">16.7</span>μs   <span class="hljs-number">2.66</span>MiB  <span class="hljs-number">26.8</span>%  <span class="hljs-number">4.08</span>KiB
+   RHS                                       <span class="hljs-number">92</span>    <span class="hljs-number">277</span>μs  <span class="hljs-number">0.53</span>%  <span class="hljs-number">3.01</span>μs   <span class="hljs-number">14.4</span>KiB  <span class="hljs-number">0.14</span>%     <span class="hljs-number">160</span>B
+ Rule((~x) ^ ~n * (~x) ^ ~m =&gt; (~x)...    <span class="hljs-number">575</span>   <span class="hljs-number">7.63</span>ms  <span class="hljs-number">14.6</span>%  <span class="hljs-number">13.3</span>μs   <span class="hljs-number">1.83</span>MiB  <span class="hljs-number">18.4</span>%  <span class="hljs-number">3.26</span>KiB
+ (*)(~(~(x::!issortedₑ))) =&gt; sort_arg...    <span class="hljs-number">831</span>   <span class="hljs-number">6.31</span>ms  <span class="hljs-number">12.1</span>%  <span class="hljs-number">7.59</span>μs    <span class="hljs-number">738</span>KiB  <span class="hljs-number">7.26</span>%     <span class="hljs-number">910</span>B
+   RHS                                      <span class="hljs-number">164</span>   <span class="hljs-number">3.03</span>ms  <span class="hljs-number">5.81</span>%  <span class="hljs-number">18.5</span>μs    <span class="hljs-number">250</span>KiB  <span class="hljs-number">2.46</span>%  <span class="hljs-number">1.52</span>KiB
    ...
    ...
  ────────────────────────────────────────────────────────────────────────────────────────────────
-&#40;a ^ 26&#41; * &#40;b ^ 30&#41; * &#40;c ^ 16&#41; * &#40;d ^ 28&#41;</code></pre>
+(a ^ <span class="hljs-number">26</span>) * (b ^ <span class="hljs-number">30</span>) * (c ^ <span class="hljs-number">16</span>) * (d ^ <span class="hljs-number">28</span>)</code></pre>
 <hr />
 <h1 id="signatures"><a href="#signatures" class="header-anchor">Signatures</a></h1>
 <hr />
@@ -460,7 +460,7 @@ julia&gt; @timerewrite simplify&#40;expr&#41;
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: October 30, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: November 14, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->
@@ -477,8 +477,8 @@ julia&gt; @timerewrite simplify&#40;expr&#41;
         }
     </script>
     
-        <script src="/libs/highlight/highlight.pack.js"></script>
-<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+        
+
 
     
   </body>

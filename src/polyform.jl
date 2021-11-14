@@ -244,7 +244,7 @@ end
 
 function polyform_factors(d, pvar2sym, sym2term)
     make(xs) = map(xs) do x
-        if x isa Pow && x.base isa Integer && x.exp > 0
+        if x isa Pow && x.exp isa Integer && x.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
             Pow(PolyForm(x.base, pvar2sym, sym2term), x.exp)

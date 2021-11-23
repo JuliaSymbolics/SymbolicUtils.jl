@@ -1,1 +1,1 @@
-cos(α)*sin(β) + sin(α)*cos(β)
+sin(α)*cos(β) + cos(α)*sin(β)

@@ -200,7 +200,7 @@ function get_assignments(d::DestructuredArgs, st)
     name = toexpr(d, st)
     map(d.inds, d.elems) do i, a
         ex = (i isa Symbol ? :($name.$i) : :($name[$i]))
-        ex = d.inbounds ? :(@inbounds($ex)) : ex
+        ex = d.inbounds && d.create_bindings ? :(@inbounds($ex)) : ex
         a ← ex
     end
 end

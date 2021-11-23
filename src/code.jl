@@ -15,9 +15,9 @@ import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments,
 ##== state management ==##
 
 struct NameState
-    symbolify::Dict{Any, Symbol}
+    symbolify::Dict{Any, Any}
 end
-NameState() = NameState(Dict{Any, Symbol}())
+NameState() = NameState(Dict{Any, Any}())
 function union_symbolify!(n, ts)
     for t in ts
         n[t] = Symbol(string(t))
@@ -75,7 +75,10 @@ when `y(t)` is itself the argument of a function rather than `y`.
 
 """
 toexpr(x) = toexpr(x, LazyState())
-toexpr(s::Sym, st) = nameof(s)
+function toexpr(s::Sym, st)
+    s′ = substitute_name(s, st)
+    s′ isa Sym ? nameof(s′) : toexpr(s′, st)
+end
 
 
 @matchable struct Assignment
@@ -139,14 +142,23 @@ function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
 
 toexpr(O::Expr, st) = O
 
+function substitute_name(O, st)
+    if haskey(st.symbolify, O)
+        st.symbolify[O]
+    else
+        O
+    end
+end
+
 function toexpr(O, st)
+    O = substitute_name(O, st)
     !istree(O) && return O
     op = operation(O)
     expr′ = function_to_expr(op, O, st)
     if expr′ !== nothing
         return expr′
     else
-        haskey(st.symbolify, O) && return st.symbolify[O]
+        !istree(O) && return O
         args = arguments(O)
         return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
     end
@@ -158,10 +170,11 @@ end
     inds
     name
     inbounds::Bool
+    create_bindings::Bool
 end
 
-function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems), inbounds=false)
-    DestructuredArgs(elems, inds, name, inbounds)
+function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems), inbounds=false, create_bindings=true)
+    DestructuredArgs(elems, inds, name, inbounds, create_bindings)
 end
 
 """
@@ -211,17 +224,30 @@ function toexpr(l::Let, st)
     if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
         dargs = l.pairs
     else
-        dargs = map(l.pairs) do x
+        assignments = []
+        for x in l.pairs
             if x isa DestructuredArgs
-                get_assignments(x, st)
+                if x.create_bindings
+                    append!(assignments, get_assignments(x, st))
+                else
+                    for x in get_assignments(x, st)
+                        st.symbolify[x.lhs] = x.rhs
+                    end
+                end
             elseif x isa Assignment && x.lhs isa DestructuredArgs
-                [x.lhs.name ← x.rhs, get_assignments(x.lhs, st)...]
+                push!(assignments, x.lhs.name ← x.rhs)
+                if x.lhs.create_bindings
+                    append!(assignments, get_assignments(x.lhs, st))
+                else
+                    error("Not implemented")
+                end
             else
-                (x,)
+                push!(assignments, x)
             end
-        end |> cflatten
+        end
+        @show st
         # expand and come back
-        return toexpr(Let(dargs, l.body), st)
+        return toexpr(Let(assignments, l.body), st)
     end
 
     funkyargs = get_symbolify(map(lhs, dargs))

@@ -245,7 +245,6 @@ function toexpr(l::Let, st)
                 push!(assignments, x)
             end
         end
-        @show st
         # expand and come back
         return toexpr(Let(assignments, l.body), st)
     end
@@ -262,7 +261,10 @@ end
     args::Vector
     kwargs
     body
+    inline::Union{Bool, Nothing}
 end
+
+Func(args, kwargs, body) = Func(args, kwargs, body, nothing)
 
 """
     Func(args, kwargs, body)
@@ -325,13 +327,16 @@ function toexpr(f::Func, st)
     else
         body = f.body
     end
+    inline_meta = isnothing(f.inline) ? () : Expr(:meta, f.inline ? :inline : :noinline)
     if isempty(f.kwargs)
         :(function ($(map(x->toexpr(x, st), f.args)...),)
+              $inline_meta
               $(toexpr(body, st))
           end)
     else
         :(function ($(map(x->toexpr(x, st), f.args)...),;
                     $(map(x->toexpr_kw(x, st), f.kwargs)...))
+              $inline_meta
               $(toexpr(body, st))
           end)
     end

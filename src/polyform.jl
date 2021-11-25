@@ -3,7 +3,7 @@ using Bijections
 using DynamicPolynomials: PolyVar
 
 """
-    PolyForm{T} <: Symbolic{T}
+    PolyForm{T} <: Symbolic
 
 Abstracts a [MultivariatePolynomials.jl](https://juliaalgebra.github.io/MultivariatePolynomials.jl/stable/) as a SymbolicUtils expression and vice-versa.
 
@@ -27,7 +27,7 @@ PolyForm(sin((x+y)^2))               #=> sin((x+y)^2)
 PolyForm(sin((x+y)^2), recurse=true) #=> sin((x^2 + (2x)y + y^2))
 ```
 """
-struct PolyForm{T, M} <: Symbolic{T}
+struct PolyForm{T, M} <: Symbolic
     p::MP.AbstractPolynomialLike
     pvar2sym::Bijection{Any,Any}   # @polyvar x --> @sym x  etc.
     sym2term::Dict{Sym,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
@@ -35,6 +35,7 @@ struct PolyForm{T, M} <: Symbolic{T}
 end
 
 function (::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T}
+#function PolyForm(p, d1, d2, m=nothing) where {T}
     p isa Number && return p
     p isa MP.AbstractPolynomialLike && MP.isconstant(p) && return convert(Number, p)
     PolyForm{T, typeof(m)}(p, d1, d2, m)
@@ -240,10 +241,10 @@ end
 
 function polyform_factors(d, pvar2sym, sym2term)
     make(xs) = map(xs) do x
-        if x isa Pow && x.base isa Integer && x.exp > 0
+        if ispow(x) && x.base isa Integer && x.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(PolyForm(x.base, pvar2sym, sym2term), x.exp)
+            Pow(;base=PolyForm(x.base, pvar2sym, sym2term), x.exp)
         else
             PolyForm(x, pvar2sym, sym2term)
         end
@@ -254,21 +255,32 @@ end
 
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
-function simplify_div(d::Div)
+function simplify_div(d)
     d.simplified && return d
     ns, ds = polyform_factors(d, get_pvar2sym(), get_sym2term())
     ns, ds = rm_gcds(ns, ds)
     if all(_isone, ds)
         return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
     else
-        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)), true)
+        Div(;num=simplify_fractions(_mul(ns)), den=simplify_fractions(_mul(ds)))
     end
 end
 
-add_divs(x::Div, y::Div) = (x.num * y.den + y.num * x.den) / (x.den * y.den)
-add_divs(x::Div, y) = (x.num + y * x.den) / x.den
-add_divs(x, y::Div) = (x * y.den + y.num) / y.den
-add_divs(x, y) = x + y
+#add_divs(x::Div, y::Div) = (x.num * y.den + y.num * x.den) / (x.den * y.den)
+#add_divs(x::Div, y) = (x.num + y * x.den) / x.den
+#add_divs(x, y::Div) = (x * y.den + y.num) / y.den
+#add_divs(x, y) = x + y
+function add_divs(x, y)
+    if isdiv(x) && isdiv(y)
+        return (x.num * y.den + y.num * x.den) / (x.den * y.den)
+    elseif isdiv(x)
+        return (x.num + y * x.den) / x.den
+    elseif isdiv(y)
+        return (x * y.den + y.num) / y.den
+    else
+        x + y
+    end
+end
 
 """
     simplify_fractions(x; polyform=false)
@@ -284,7 +296,7 @@ function simplify_fractions(x; polyform=false)
 
     !needs_div_rules(x) && return x
 
-    sdiv(a) = a isa Div ? simplify_div(a) : a
+    sdiv(a) = isdiv(a) ? simplify_div(a) : a
 
     expr = Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
 
@@ -294,10 +306,10 @@ end
 function add_with_div(x, flatten=true)
     (!istree(x) || operation(x) != (+)) && return x
     aa = unsorted_arguments(x)
-    !any(a->a isa Div, aa) && return x # no rewrite necessary
+    !any(a->isdiv(a), aa) && return x # no rewrite necessary
 
-    divs = filter(a->a isa Div, aa)
-    nondivs = filter(a->!(a isa Div), aa)
+    divs = filter(a->isdiv(a), aa)
+    nondivs = filter(a->!(isdiv(a)), aa)
     nds = isempty(nondivs) ? 0 : +(nondivs...)
     d = reduce(quick_cancel∘add_divs, divs)
     flatten ? quick_cancel(add_divs(d, nds)) : d + nds
@@ -330,17 +342,17 @@ function fraction_isone(x)
 end
 
 function needs_div_rules(x)
-    (x isa Div && !(x.num isa Number) && !(x.den isa Number)) ||
+    (isdiv(x) && !(x.num isa Number) && !(x.den isa Number)) ||
     (istree(x) && operation(x) === (+) && count(has_div, unsorted_arguments(x)) > 1) ||
     (istree(x) && any(needs_div_rules, unsorted_arguments(x)))
 end
 
 function has_div(x)
-    return x isa Div || (istree(x) && any(has_div, unsorted_arguments(x)))
+    return isdiv(x) || (istree(x) && any(has_div, unsorted_arguments(x)))
 end
 
 flatten_pows(xs) = map(xs) do x
-    x isa Pow ? Iterators.repeated(arguments(x)...) : (x,)
+    ispow(x) ? Iterators.repeated(arguments(x)...) : (x,)
 end |> Iterators.flatten |> a->collect(Any,a)
 
 coefftype(x::PolyForm) = coefftype(x.p)
@@ -353,7 +365,7 @@ _gcd(x, y) = 1
 
 
 """
-    quick_cancel(d::Div)
+    quick_cancel(d::BasicSymbolic)
 
 Cancel out matching factors from numerator and denominator.
 This is not as effective as `simplify_fractions`, for example,
@@ -361,34 +373,62 @@ it wouldn't simplify `(x^2 + 15 -  8x)  / (x - 5)` to `(x - 3)`.
 But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
-quick_cancel(d::Div) = Div{symtype(d)}(quick_cancel(d.num, d.den)...)
-
-quick_cancel(x) = x
-
-quick_cancel(x, y) = isequal(x, y) ? (1,1) : (x, y)
-
-function quick_cancel(x::Pow, y)
-    x.exp isa Number || return (x, y)
-    isequal(x.base, y) && x.exp >= 1 ? (Pow{symtype(x)}(x.base, x.exp - 1),1) : (x, y)
+function quick_cancel(d::BasicSymbolic)
+    if isdiv(d)
+        num, den = quick_cancel(d.num, d.den)
+        return Div(;num, den)
+    else
+        return x
+    end
 end
 
-quick_cancel(y, x::Pow) = reverse(quick_cancel(x,y))
+function quick_cancel(x::BasicSymbolic, y::BasicSymbolic)
+    if ispow(x) && ispow(y)
+        return quick_powpow(x, y)
+    elseif ismul(x) && ispow(y)
+        return quick_mulpow(x, y)
+    elseif ispow(x) && ismul(y)
+        return reverse(quick_mulpow(y, x))
+    elseif ismul(x) && ismul(y)
+        return quick_mulmul(x, y)
+    elseif ispow(x)
+        return quick_pow(x, y)
+    elseif ispow(y)
+        return reverse(quick_pow(y, x))
+    elseif ismul(x)
+        return quick_mul(x, y)
+    elseif ismul(y)
+        return reverse(quick_mulpow(y, x))
+    else
+        return isequal(x, y) ? (1,1) : (x, y)
+    end
+end
 
-function quick_cancel(x::Pow, y::Pow)
+# ispow(x) case
+function quick_pow(x, y)
+    x.exp isa Number || return (x, y)
+    isequal(x.base, y) && x.exp >= 1 ? (Pow(;x.base, exp=x.exp - 1),1) : (x, y)
+end
+
+#quick_cancel(y, x::Pow) = reverse(quick_cancel(x,y))
+
+# Double Pow case
+function quick_powpow(x, y)
     if isequal(x.base, y.base)
         !(x.exp isa Number && y.exp isa Number) && return (x, y)
         if x.exp > y.exp
-            return Pow{symtype(x)}(x.base, x.exp-y.exp), 1
+            return Pow(;x.base, exp=x.exp-y.exp), 1
         elseif x.exp == y.exp
             return 1, 1
         else # x.exp < y.exp
-            return 1, Pow{symtype(y)}(y.base, y.exp-x.exp)
+            return 1, Pow(;y.base, exp=y.exp-x.exp)
         end
     end
     return x, y
 end
 
-function quick_cancel(x::Mul, y)
+# ismul(x)
+function quick_mul(x, y)
     if haskey(x.dict, y) && x.dict[y] >= 1
         d = copy(x.dict)
         if d[y] > 1
@@ -399,13 +439,14 @@ function quick_cancel(x::Mul, y)
             error("Can't reach")
         end
 
-        return Mul(symtype(x), x.coeff, d), 1
+        return Mul(;x.coeff, dict=d), 1
     else
         return x, y
     end
 end
 
-function quick_cancel(x::Mul, y::Pow)
+# mul, pow case
+function quick_mulpow(x, y)
     y.exp isa Number || return (x, y)
     if haskey(x.dict, y.base)
         d = copy(x.dict)
@@ -419,19 +460,20 @@ function quick_cancel(x::Mul, y::Pow)
             den = Pow{symtype(y)}(y.base, y.exp-d[y.base])
             delete!(d, y.base)
         end
-        return Mul(symtype(x), x.coeff, d), den
+        return Mul(x.coeff, dict=d), den
     else
         return x, y
     end
 end
 
-quick_cancel(x::Pow, y::Mul) = reverse(quick_cancel(y,x))
+#quick_cancel(x::Pow, y::Mul) = reverse(quick_cancel(y,x))
 
-quick_cancel(y, x::Mul) = reverse(quick_cancel(x,y))
+#quick_cancel(y, x::Mul) = reverse(quick_cancel(x,y))
 
-function quick_cancel(x::Mul, y::Mul)
+# Double mul case
+function quick_mulmul(x, y)
     num_dict, den_dict = _merge_div(x.dict, y.dict)
-    Mul(symtype(x), x.coeff, num_dict), Mul(symtype(y), y.coeff, den_dict)
+    Mul(;x.coeff, dict=num_dict), Mul(;y.coeff, dict=den_dict)
 end
 
 function _merge_div(ndict, ddict)

@@ -8,16 +8,15 @@ abstract type Symbolic end
 ### Uni-type design
 ###
 
-@enum ValueType::UInt8 BOOL INT RATIONAL REAL NUMBER
+@enum ValueType::UInt8 BOOL INT RATIONAL REAL NUMBER FALLBACK
 @enum ExprType::UInt8  SYM TERM ADD MUL POW DIV
 
 const Metadata = Union{Nothing,Base.ImmutableDict{DataType,Any}}
 const NO_METADATA = nothing
 
 # flags
-const ARRAY = 0x01
-const COMPLEX = 0x01 << 1
-const SIMPLIFIED = 0x01 << 2
+const COMPLEX = 0x01 << 0
+const SIMPLIFIED = 0x01 << 1
 
 sdict(kv...) = Dict{Any, Any}(kv...)
 
@@ -30,6 +29,7 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
 # IT IS IMPORTANT TO MAKE SURE ANYS ARE ANY!!!
 #
 # Also, try to union split
+#=
 Base.@kwdef struct BasicSymbolic <: Symbolic
     valtype::ValueType     = REAL
     exprtype::ExprType     = TERM
@@ -45,29 +45,43 @@ Base.@kwdef struct BasicSymbolic <: Symbolic
     hash::RefValue{UInt}   = EMPTY_HASH
     metadata::Metadata     = NO_METADATA
 end
+=#
 
-@inline function Base.getproperty(x::BasicSymbolic, s::Symbol)
-    (s === :metadata || s === :hash || s === :arguments) && return getfield(x, s)
-    E = exprtype(x)
-    if (E === SYM && s === :name) ||
-        (E === TERM && s === :f) ||
-        ((E === ADD || E === MUL) && (s === :coeff || s === :dict))
-        getfield(x, s)
-    elseif E === DIV
-        s === :num ? getfield(x, :f) :
-        s === :den ? getfield(x, :coeff) :
-        error_property(E, s)
-    elseif E === POW
-        s === :base ? getfield(x, :f) :
-        s === :exp ? getfield(x, :coeff) :
-        error_property(E, s)
-    elseif (E === ADD || E === MUL) && s === :issorted
-        getfield(x, :f)::RefValue{Bool}
-    else
-        error_property(E, s)
+@compactify begin
+    @abstract struct BasicSymbolic <: Symbolic
+        valtype::ValueType     = REAL
+        exprtype::ExprType     = TERM
+        bitflags::UInt8        = 0x00
+        metadata::Metadata     = NO_METADATA
+    end
+    struct Sym <: BasicSymbolic
+        name::Symbol           = :OOF
+    end
+    struct Term <: BasicSymbolic
+        f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
+        arguments::Vector{Any} = EMPTY_ARGS
+    end
+    struct Mul <: BasicSymbolic
+        coeff::Any             = 0         # exp/den if Pow
+        dict::EMPTY_DICT_T     = EMPTY_DICT
+        hash::RefValue{UInt}   = EMPTY_HASH
+    end
+    struct Add <: BasicSymbolic
+        coeff::Any             = 0         # exp/den if Pow
+        dict::EMPTY_DICT_T     = EMPTY_DICT
+        hash::RefValue{UInt}   = EMPTY_HASH
+    end
+    struct Div <: BasicSymbolic
+        num::Any               = 1
+        den::Any               = 1
+    end
+    struct Pow <: BasicSymbolic
+        base::Any              = 1
+        exp::Any               = 1
     end
 end
 
+# I'm writing a bunch of things to do type promotion (not this exactly)
 @inline function valtype2type(T::ValueType)
     T === NUMBER ? Number :
     T === REAL ? Real :
@@ -76,6 +90,7 @@ end
     Bool
 end
 
+# Same but different error messages
 @noinline error_no_valtype(T) = error("$T is not supported.")
 @noinline error_on_type(E) = error("Internal error: type $E not handled!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
@@ -90,6 +105,7 @@ end
     error_no_valtype(T)
 end
 
+# We can think about arrays later
 @inline is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
 @inline isarray(x::BasicSymbolic) = is_of_type(x, ARRAY)
 @inline iscomplex(x::BasicSymbolic) = is_of_type(x, COMPLEX)
@@ -97,7 +113,7 @@ end
 
 @inline function valtype(x)
     if x isa BasicSymbolic
-        getfield(x, :valtype)
+        x.valtype
     elseif x isa Union{Int, Bool}
         type2valtype(typeof(x))
     elseif x isa Rational
@@ -106,11 +122,12 @@ end
         REAL
     end
 end
-@inline exprtype(x::BasicSymbolic) = getfield(x, :exprtype)
+@inline exprtype(x::BasicSymbolic) = x.exprtype
 
 ###
 ### TermInterface
 ###
+# I will need this
 using TermInterface
 
 TermInterface.exprhead(x::Symbolic) = :call
@@ -118,9 +135,10 @@ TermInterface.symtype(x::Number) = typeof(x)
 TermInterface.symtype(::Symbolic) = Any
 @inline TermInterface.symtype(s::BasicSymbolic) = valtype2type(valtype(s))
 
+# We're returning a function pointer
 @inline function TermInterface.operation(x::BasicSymbolic)
     E = exprtype(x)
-    E === TERM ? getfield(x, :f) :
+    E === TERM ? x.f :
     E === ADD ? (+) :
     E === MUL ? (*) :
     E === DIV ? (/) :
@@ -141,7 +159,7 @@ end
 function TermInterface.unsorted_arguments(x::BasicSymbolic)
     E = exprtype(x)
     if E === TERM
-        return getfield(x, :arguments)
+        return x.arguments
     elseif E === ADD || E === MUL
         args = x.arguments
         isempty(args) || return args
@@ -264,22 +282,27 @@ end
 ### Constructors
 ###
 
+#=
 for C in [:Sym, :Term, :Mul, :Add, :Pow, :Div]
     @eval struct $C{T} 1+1 end
 end
+=#
 
-Term{T}(f, args::Vector{Any}; kw...) where T = BasicSymbolic(;
+#=
+Term{T}(f, args::Vector{Any}; kw...) where T = Term(;
     exprtype=TERM, f=f, arguments=args,
     hash=Ref(UInt(0)),
     valtype=T isa ValueType ? T : type2valtype(T),
     kw...)
-Sym{T}(name::Symbol; kw...) where T = BasicSymbolic(;
+Sym{T}(name::Symbol; kw...) where T = Sym(;
     exprtype=SYM, name=name,
     valtype=T isa ValueType ? T : type2valtype(T),
     kw...)
+=#
+
 getbase(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.base)
 getexp(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.exp)
-
+#=
 function divt(T, num, den; simplified=false, kw...)
     _iszero(num) && return zero(typeof(num))
     _isone(den) && return num
@@ -291,7 +314,8 @@ function divt(T, num, den; simplified=false, kw...)
                   arguments=[],
                   kw...)
 end
-
+=#
+#=
 const Rat = Union{Rational, Integer}
 
 function ratcoeff(x)
@@ -303,11 +327,11 @@ function ratcoeff(x)
         false, NaN
     end
 end
-ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
-ratio(x::Rat,y::Rat) = x//y
+=#
+#ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
+#ratio(x::Rat,y::Rat) = x//y
 
-using Setfield
-
+#=
 function cancel(n, ifactor)
     if ismul(n)
         empty!(n.arguments)
@@ -319,7 +343,8 @@ function cancel(n, ifactor)
         isinteger(coeff) ? Integer(coeff) : coeff
     end
 end
-
+=#
+#=
 function Div(n, d, simplified=false; metadata=nothing)
     if n isa Rational
         d *= n.den
@@ -358,11 +383,13 @@ function Div(n, d, simplified=false; metadata=nothing)
 
     divt(T, n, d; simplified=simplified, metadata=metadata)
 end
-
+=#
+#=
 function Term(f, args; metadata=NO_METADATA)
     T = type2valtype(_promote_symtype(f, args))
-    Term{T}(f, args, metadata=metadata)
+    Term(;f, arguments=args, metadata=metadata)
 end
+=#
 
 """
     makeadd(sign, coeff::Number, xs...)
@@ -398,6 +425,7 @@ function makeadd(sign, coeff, xs...)
     coeff, d
 end
 
+#=
 function Add(T, coeff, dict; metadata=NO_METADATA, kw...)
     if isempty(dict)
         return coeff
@@ -414,6 +442,7 @@ function Add(T, coeff, dict; metadata=NO_METADATA, kw...)
                   arguments=[],
                   kw...)
 end
+=#
 
 function makemul(coeff, xs...; d=sdict())
     for x in xs
@@ -438,6 +467,7 @@ end
 
 unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
 
+#=
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
     isempty(b) && return a
     if _isone(a) && length(b) == 1
@@ -459,6 +489,7 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
                       kw...)
     end
 end
+=#
 
 function makepow(a, b)
     base = a
@@ -496,7 +527,7 @@ function term(f, args...; type = nothing)
     else
         T = type
     end
-    Term{T}(f, Any[args...])
+    Term(;f=f, arguments=Any[args...])
 end
 
 """
@@ -533,7 +564,7 @@ function TermInterface.similarterm(t::Type{<:BasicSymbolic}, f, args, symtype; m
     elseif f == (^) && length(args) == 2
         Pow(makepow(args...)...; metadata=metadata)
     else
-        Term{T}(f, args; metadata=metadata)
+        Term(;f=f, arguments=args, metadata=metadata)
     end
 end
 
@@ -547,38 +578,50 @@ struct TreePrint
     op
     x
 end
-AbstractTrees.children(x::Union{Term, Pow}) = arguments(x)
-function AbstractTrees.children(x::Union{Add, Mul})
-    children = Any[x.coeff]
-    for (key, coeff) in pairs(x.dict)
-        if coeff == 1
-            push!(children, key)
-        else
-            push!(children, TreePrint(isadd(x) ? (:*) : (:^), (key, coeff)))
+
+function AbstractTrees.children(x::BasicSymbolic)
+    if isterm(x) || ispow(x)
+        return arguments(x)
+    elseif isadd(x) || ismul(x)
+        children = Any[x.coeff]
+        for (key, coeff) in pairs(x.dict)
+            if coeff == 1
+                push!(children, key)
+            else
+                push!(children, TreePrint(isadd(x) ? (:*) : (:^), (key, coeff)))
+            end
         end
+        return children
     end
-    return children
 end
+
 AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
 
 print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show_type=show_type, maxdepth=maxdepth, kw...)
-function print_tree(_io::IO, x::Union{Term, Add, Mul, Pow, Div}; show_type=false, kw...)
-    AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
-        if istree(y)
-            print(io, operation(y))
-        elseif y isa TreePrint
-            print(io, "(", y.op, ")")
-        else
-            print(io, y)
-        end
-        if !(y isa TreePrint) && show_type
-            print(io, " [", typeof(y), "]")
+
+function print_tree(_io::IO, x::BasicSymbolic; show_type=false, kw...)
+    if isterm(x) || isadd(x) || ismul(x) || ispow(x) || isdiv(x)
+        AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
+            if istree(y)
+                print(io, operation(y))
+            elseif y isa TreePrint
+                print(io, "(", y.op, ")")
+            else
+                print(io, y)
+            end
+            if !(y isa TreePrint) && show_type
+                print(io, " [", typeof(y), "]")
+            end
         end
     end
 end
 
-TermInterface.istree(t::Type{<:Sym}) = false
-TermInterface.istree(t::Type{<:Symbolic}) = true
+# I think we already have this defined on 201?
+#=
+function TermInterface.istree(t::Type{<:Symbolic})
+    TermInterface.issym(t) ? false : true
+end
+=#
 
 ###
 ### Metadata
@@ -656,8 +699,6 @@ end
 ###
 const show_simplified = Ref(false)
 
-Base.show(io::IO, t::Term) = show_term(io, t)
-
 isnegative(t::Real) = t < 0
 function isnegative(t)
     if istree(t) && operation(t) === (*)
@@ -667,7 +708,8 @@ function isnegative(t)
     return false
 end
 
-setargs(t, args) = Term{symtype(t)}(operation(t), args)
+# Term{}
+setargs(t, args) = Term(;f=operation(t), arguments=args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
@@ -834,7 +876,7 @@ end
 =#
 
 function Base.show(io::IO, v::BasicSymbolic)
-    if exprtype(v) === SYM
+    if TermInterface.issym(v)
         Base.show_unquoted(io, v.name)
     else
         show_term(io, v)
@@ -879,7 +921,7 @@ struct FnType{X<:Tuple,Y} end
 
 function (f::Symbolic)(args...)
     if isterm(f) && f.f isa FnType
-        Term{promote_symtype(f.f, symtype.(args)...)}(f, Any[args...])
+        Term(;f=f, arguments=Any[args...])
     else
         error("Sym $f is not callable. " *
               "Use @syms $f(var1, var2,...) to create it as a callable.")
@@ -908,23 +950,26 @@ end
 
 @inline isassociative(op) = op === (+) || op === (*)
 
-_promote_symtype(f::Sym, args) = promote_symtype(f, map(symtype, args)...)
-function _promote_symtype(f, args)
-    return Real
-    if length(args) == 0
-        promote_symtype(f)
-    elseif length(args) == 1
-        if f in monadic
-            valtype2type(min(REAL, valtype(args[1])))
-        else
-            promote_symtype(f, symtype(args[1]))
-        end
-    elseif length(args) == 2
-        promote_symtype(f, symtype(args[1]), symtype(args[2]))
-    elseif isassociative(f)
-        mapfoldl(symtype, (x,y) -> promote_symtype(f, x, y), args)
-    else
+function _promote_symtype(f::BasicSymbolic, args)
+    if TermInterface.issym(f)
         promote_symtype(f, map(symtype, args)...)
+    else
+        return Real
+        if length(args) == 0
+            promote_symtype(f)
+        elseif length(args) == 1
+            if f in monadic
+                valtype2type(min(REAL, valtype(args[1])))
+            else
+                promote_symtype(f, symtype(args[1]))
+            end
+        elseif length(args) == 2
+            promote_symtype(f, symtype(args[1]), symtype(args[2]))
+        elseif isassociative(f)
+            mapfoldl(symtype, (x,y) -> promote_symtype(f, x, y), args)
+        else
+            promote_symtype(f, map(symtype, args)...)
+        end
     end
 end
 
@@ -1164,5 +1209,5 @@ end
 
 ^(a::Number, b::BasicSymbolic) = Pow(a, b)
 
-include("utils.jl")
-include("methods.jl")
+#include("utils.jl")
+#include("methods.jl")

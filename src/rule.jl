@@ -1,6 +1,6 @@
 # Matcher patterns with Slot and Segment
 
-const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
+#const EMPTY_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 
 
 

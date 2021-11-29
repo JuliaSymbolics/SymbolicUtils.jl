@@ -230,16 +230,19 @@ function toexpr(l::Let, st)
                 if x.create_bindings
                     append!(assignments, get_assignments(x, st))
                 else
-                    for x in get_assignments(x, st)
-                        st.symbolify[x.lhs] = x.rhs
+                    for a in get_assignments(x, st)
+                        st.symbolify[a.lhs] = a.rhs
                     end
                 end
             elseif x isa Assignment && x.lhs isa DestructuredArgs
-                push!(assignments, x.lhs.name ← x.rhs)
                 if x.lhs.create_bindings
+                    push!(assignments, x.lhs.name ← x.rhs)
                     append!(assignments, get_assignments(x.lhs, st))
                 else
-                    error("Not implemented")
+                    push!(assignments, x.lhs.name ← x.rhs)
+                    for a in get_assignments(x.lhs, st)
+                        st.symbolify[a.lhs] = a.rhs
+                    end
                 end
             else
                 push!(assignments, x)

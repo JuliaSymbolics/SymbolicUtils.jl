@@ -15,10 +15,10 @@ import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments,
 ##== state management ==##
 
 struct NameState
-    symbolify::Dict{Any, Any}
+    rewrites::Dict{Any, Any}
 end
 NameState() = NameState(Dict{Any, Any}())
-function union_symbolify!(n, ts)
+function union_rewrites!(n, ts)
     for t in ts
         n[t] = Symbol(string(t))
     end
@@ -34,7 +34,7 @@ function Base.get(st::LazyState)
     s === nothing ? getfield(st, :ref)[] = NameState() : s
 end
 
-@inline Base.getproperty(st::LazyState, f::Symbol) = getproperty(get(st), f)
+@inline Base.getproperty(st::LazyState, f::Symbol) = f==:symbolify ?  getproperty(st, :rewrites) : getproperty(get(st), f)
 
 ##========================##
 
@@ -105,7 +105,7 @@ toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 function_to_expr(op, args, st) = nothing
 
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
-    out = get(st.symbolify, O, nothing)
+    out = get(st.rewrites, O, nothing)
     out === nothing || return out
     args = map(Base.Fix2(toexpr, st), arguments(O))
     if length(args) >= 3 && symtype(O) <: Number
@@ -138,13 +138,13 @@ function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end
 
-function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
+function_to_expr(::Sym, O, st) = get(st.rewrites, O, nothing)
 
 toexpr(O::Expr, st) = O
 
 function substitute_name(O, st)
-    if (issym(O) || istree(O)) && haskey(st.symbolify, O)
-        st.symbolify[O]
+    if (issym(O) || istree(O)) && haskey(st.rewrites, O)
+        st.rewrites[O]
     else
         O
     end
@@ -193,12 +193,15 @@ components. See example in `Func` for more information.
 DestructuredArgs
 
 toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
-get_symbolify(args::DestructuredArgs) = ()
-function get_symbolify(args::Union{AbstractArray, Tuple})
-    cflatten(map(get_symbolify, args))
+get_rewrites(args::DestructuredArgs) = ()
+function get_rewrites(args::Union{AbstractArray, Tuple})
+    cflatten(map(get_rewrites, args))
 end
-get_symbolify(x) = istree(x) ? (x,) : ()
+get_rewrites(x) = istree(x) ? (x,) : ()
 cflatten(x) = Iterators.flatten(x) |> collect
+
+# Used in Symbolics
+Base.@deprecate_binding get_symbolify get_rewrites
 
 function get_assignments(d::DestructuredArgs, st)
     name = toexpr(d, st)
@@ -237,7 +240,7 @@ function toexpr(l::Let, st)
                     append!(assignments, get_assignments(x, st))
                 else
                     for a in get_assignments(x, st)
-                        st.symbolify[a.lhs] = a.rhs
+                        st.rewrites[a.lhs] = a.rhs
                     end
                 end
             elseif x isa Assignment && x.lhs isa DestructuredArgs
@@ -247,7 +250,7 @@ function toexpr(l::Let, st)
                 else
                     push!(assignments, x.lhs.name ← x.rhs)
                     for a in get_assignments(x.lhs, st)
-                        st.symbolify[a.lhs] = a.rhs
+                        st.rewrites[a.lhs] = a.rhs
                     end
                 end
             else
@@ -258,8 +261,8 @@ function toexpr(l::Let, st)
         return toexpr(Let(assignments, l.body, l.let_block), st)
     end
 
-    funkyargs = get_symbolify(map(lhs, dargs))
-    union_symbolify!(st.symbolify, funkyargs)
+    funkyargs = get_rewrites(map(lhs, dargs))
+    union_rewrites!(st.rewrites, funkyargs)
 
     bindings = map(p->toexpr(p, st), dargs)
     l.let_block ? Expr(:let,
@@ -334,8 +337,8 @@ Func
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 function toexpr(f::Func, st)
-    funkyargs = get_symbolify(vcat(f.args, map(lhs, f.kwargs)))
-    union_symbolify!(st.symbolify, funkyargs)
+    funkyargs = get_rewrites(vcat(f.args, map(lhs, f.kwargs)))
+    union_rewrites!(st.rewrites, funkyargs)
     dargs = filter(x->x isa DestructuredArgs, f.args)
     if !isempty(dargs)
         body = Let(dargs, f.body, false)

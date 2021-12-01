@@ -43,7 +43,11 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                            DestructuredArgs((a, b), :params)], [],
                           x(t+1) + x(t) + a  + b)),
               :(function (state, params)
-                    let x = state[1], var"x(t)" = state[2], a = params[1], b = params[2]
+                    begin
+                        x = state[1]
+                        var"x(t)" = state[2]
+                        a = params[1]
+                        b = params[2]
                         $(+)($(+)($(+)(a, b), var"x(t)"), x($(+)(1, t)))
                     end
                 end))
@@ -52,7 +56,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                            DestructuredArgs((a, b), :params, create_bindings=false)], [],
                           x(t+1) + x(t) + a  + b)),
               :(function (state, params)
-                    let
+                    begin
                         $(+)($(+)($(+)(params[1], params[2]), $getindex(state, 2)), state[1]($(+)(1, t)))
                     end
                 end))
@@ -66,7 +70,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     ex = toexpr(Func([DestructuredArgs([x, x(t)], :state, inbounds=true)], [], x(t+1) + x(t)))
     ex = Base.remove_linenums!(ex)
-    for e ∈ ex.args[2].args[1].args[1].args
+    for e ∈ ex.args[2].args[1].args[1:2]
         @test e.args[2].head == :macrocall
     end
 
@@ -106,7 +110,9 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     test_repr(toexpr(Func([DestructuredArgs([a,b],c,inds=[:a, :b])], [],
                           a + b)),
               :(function (c,)
-                    let a = c.a, b = c.b
+                    begin
+                        a = c.a
+                        b = c.b
                         $(+)(a, b)
                     end
                 end))

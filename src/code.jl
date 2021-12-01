@@ -173,7 +173,11 @@ end
     create_bindings::Bool
 end
 
-function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems), inbounds=false, create_bindings=true)
+function DestructuredArgs(elems, name=nothing; inds=eachindex(elems), inbounds=false, create_bindings=true)
+    if name === nothing
+        # I'm sorry if you get a hash collision here lol
+        name = Symbol("##arg#", hash((elems, inds, inbounds, create_bindings)))
+    end
     DestructuredArgs(elems, inds, name, inbounds, create_bindings)
 end
 
@@ -208,17 +212,19 @@ end
 @matchable struct Let
     pairs::Vector{Union{Assignment,DestructuredArgs}} # an iterator of pairs, ordered
     body
+    let_block::Bool
 end
 
 """
-    Let(assignments, body)
+    Let(assignments, body[, let_block])
 
 A Let block.
 
 - `assignments` is a vector of `Assignment`s
 - `body` is the body of the let block
+- `let_block` boolean (default=true) -- do not create a let block if false.
 """
-Let
+Let(assignments, body) = Let(assignments, body, true)
 
 function toexpr(l::Let, st)
     if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
@@ -249,15 +255,18 @@ function toexpr(l::Let, st)
             end
         end
         # expand and come back
-        return toexpr(Let(assignments, l.body), st)
+        return toexpr(Let(assignments, l.body, l.let_block), st)
     end
 
     funkyargs = get_symbolify(map(lhs, dargs))
     union_symbolify!(st.symbolify, funkyargs)
 
-    Expr(:let,
-         Expr(:block, map(p->toexpr(p, st), dargs)...),
-         toexpr(l.body, st))
+    bindings = map(p->toexpr(p, st), dargs)
+    l.let_block ? Expr(:let,
+                       Expr(:block, bindings...),
+                       toexpr(l.body, st)) : Expr(:block,
+                                                  bindings...,
+                                                  toexpr(l.body, st))
 end
 
 @matchable struct Func
@@ -270,13 +279,16 @@ end
 Func(args, kwargs, body) = Func(args, kwargs, body, [])
 
 """
-    Func(args, kwargs, body)
+    Func(args, kwargs, body[, pre])
 
 A function.
 
 - `args` is a vector of expressions
 - `kwargs` is a vector of `Assignment`s
 - `body` is the body of the function
+- `pre` a vector of expressions to be prepended to the function body,
+   for example, it could be `[Expr(:meta, :inline), Expr(:meta, :propagate_inbounds)]`
+   to create an `@inline @propagate_inbounds` function definition.
 
 **Special features in `args`**:
 
@@ -326,7 +338,7 @@ function toexpr(f::Func, st)
     union_symbolify!(st.symbolify, funkyargs)
     dargs = filter(x->x isa DestructuredArgs, f.args)
     if !isempty(dargs)
-        body = Let(dargs, f.body)
+        body = Let(dargs, f.body, false)
     else
         body = f.body
     end

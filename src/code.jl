@@ -143,7 +143,7 @@ function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
 toexpr(O::Expr, st) = O
 
 function substitute_name(O, st)
-    if haskey(st.symbolify, O)
+    if (issym(O) || istree(O)) && haskey(st.symbolify, O)
         st.symbolify[O]
     else
         O
@@ -264,10 +264,10 @@ end
     args::Vector
     kwargs
     body
-    inline::Union{Bool, Nothing}
+    pre::Vector
 end
 
-Func(args, kwargs, body) = Func(args, kwargs, body, nothing)
+Func(args, kwargs, body) = Func(args, kwargs, body, [])
 
 """
     Func(args, kwargs, body)
@@ -330,16 +330,15 @@ function toexpr(f::Func, st)
     else
         body = f.body
     end
-    inline_meta = isnothing(f.inline) ? () : Expr(:meta, f.inline ? :inline : :noinline)
     if isempty(f.kwargs)
         :(function ($(map(x->toexpr(x, st), f.args)...),)
-              $inline_meta
+              $(f.pre...)
               $(toexpr(body, st))
           end)
     else
         :(function ($(map(x->toexpr(x, st), f.args)...),;
                     $(map(x->toexpr_kw(x, st), f.kwargs)...))
-              $inline_meta
+              $(f.pre...)
               $(toexpr(body, st))
           end)
     end

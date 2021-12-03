@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments
 using SymbolicUtils
 using IfElse: ifelse
 using Test
@@ -132,6 +132,15 @@ end
     @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
     @eqtest 5 // x == 5 / x
     @eqtest x // a == x / a
+end
+
+@testset "array-like operations" begin
+    abstract type SquareDummy end
+    Base.:*(a::Symbolic{SquareDummy}, b) = b^2
+    @syms s t a::SquareDummy A[1:2, 1:2]
+
+    @test isequal(ndims(A), 2)
+    @test isequal(a.*[1 (s+t); t pi], [1 (s+t)^2; t^2 pi^2])
 end
 
 @testset "err test" begin

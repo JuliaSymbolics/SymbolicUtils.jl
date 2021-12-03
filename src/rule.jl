@@ -76,20 +76,19 @@ function expr_to_canon(expr)
                 if length(expr.args) == 2
                     return :((-1)*$(expr_to_canon(expr.args[2])))
                 elseif !(expr.args[3] isa Number)
-                    return :($(expr_to_canon(expr.args[2])) + (-1)*$(expr_to_canon(expr.args[3])))
-                else
-                    return :($(expr_to_canon(expr.args[2])) + $(-expr.args[3]))
-                end
-            elseif expr.args[1] === :(/)
-                if !(expr.args[2] isa Number) || expr.args[2] != 1
-                    if !(expr.args[3] isa Number) && !(expr.args[3] in [:π, :ℯ, :pi])
-                        return :($(expr_to_canon(expr.args[2])) * $(expr_to_canon(expr.args[3]))^(-1))
+                    if expr.args[3].args[1] == :*
+                        insert!(expr.args[3].args, 2, -1)
+                        return :($(expr_to_canon(expr.args[2])) + $(expr_to_canon(expr.args[3])))
                     else
-                        return :($(eval(:(inv($(expr.args[3]))))) * $(expr_to_canon(expr.args[2])))
+                        return :($(expr_to_canon(expr.args[2])) + (-1)*$(expr_to_canon(expr.args[3])))
                     end
                 else
-                    # literal number
-                    return :($(expr_to_canon(expr.args[3]))^(-1))
+                    if !(expr.args[2] isa Number) && expr.args[2].args[1] == :+
+                        insert!(expr.args[2].args, 2, -1)
+                        return :($(expr_to_canon(expr.args[2])))
+                    else
+                        return :($(expr_to_canon(expr.args[2])) + $(-expr.args[3]))
+                    end
                 end
             elseif expr.args[1] === :(\)
                 return expr_to_canon(:($(expr.args[3]) / $(expr.args[2])))

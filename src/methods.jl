@@ -157,4 +157,4 @@ Base.size(x::Symbolic{<:Number}) = ()
 Base.length(x::Symbolic{<:Number}) = 1
 Base.ndims(x::Symbolic{T}) where {T} = Base.ndims(T)
 Base.ndims(::Type{<:Symbolic{T}}) where {T} = Base.ndims(T)
-Base.broadcastable(x::Symbolic{T}) where {T} = Ref(x)
+Base.broadcastable(x::Symbolic{T}) where {T<:Number} = Ref(x)

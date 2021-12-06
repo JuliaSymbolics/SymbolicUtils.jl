@@ -140,7 +140,8 @@ end
     @syms s t a::SquareDummy A[1:2, 1:2]
 
     @test isequal(ndims(A), 2)
-    @test isequal(a.*[1 (s+t); t pi], [1 (s+t)^2; t^2 pi^2])
+    @test_broken isequal(a.*[1 (s+t); t pi], [1 (s+t)^2; t^2 pi^2])
+    @test isequal(s.*[1 (s+t); t pi], [s s*(s+t); s*t s*pi])
 end
 
 @testset "err test" begin

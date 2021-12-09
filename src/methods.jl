@@ -155,4 +155,6 @@ Base.literal_pow(::typeof(^), x::Symbolic{<:Number}, ::Val{p}) where {p} = Base.
 # Array-like operations
 Base.size(x::Symbolic{<:Number}) = ()
 Base.length(x::Symbolic{<:Number}) = 1
-Base.ndims(x::Symbolic{<:Number}) = 0
+Base.ndims(x::Symbolic{T}) where {T} = Base.ndims(T)
+Base.ndims(::Type{<:Symbolic{T}}) where {T} = Base.ndims(T)
+Base.broadcastable(x::Symbolic{T}) where {T<:Number} = Ref(x)

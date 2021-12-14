@@ -136,12 +136,14 @@ julia&gt; toexpr(a+b) |&gt; dump
       <h2 class="doc-header" id="Let">
         <a href="#Let">Let</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Let(assignments, body)</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Let(assignments, body[, let_block])</code></pre>
 <p>A Let block.</p>
 <ul>
 <li><p><code>assignments</code> is a vector of <code>Assignment</code>s</p>
 </li>
 <li><p><code>body</code> is the body of the let block</p>
+</li>
+<li><p><code>let_block</code> boolean &#40;default&#61;true&#41; – do not create a let block if false.</p>
 </li>
 </ul>
 </div>
@@ -151,7 +153,7 @@ julia&gt; toexpr(a+b) |&gt; dump
       <h2 class="doc-header" id="Func">
         <a href="#Func">Func</a>
         <div class="doc-type"></div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Func(args, kwargs, body)</code></pre>
+      <div class="doc-content"><pre><code class="julia hljs">Func(args, kwargs, body[, pre])</code></pre>
 <p>A function.</p>
 <ul>
 <li><p><code>args</code> is a vector of expressions</p>
@@ -159,6 +161,8 @@ julia&gt; toexpr(a+b) |&gt; dump
 <li><p><code>kwargs</code> is a vector of <code>Assignment</code>s</p>
 </li>
 <li><p><code>body</code> is the body of the function</p>
+</li>
+<li><p><code>pre</code> a vector of expressions to be prepended to the function body,  for example, it could be <code>&#91;Expr&#40;:meta, :inline&#41;, Expr&#40;:meta, :propagate_inbounds&#41;&#93;</code>  to create an <code>@inline @propagate_inbounds</code> function definition.</p>
 </li>
 </ul>
 <p><strong>Special features in <code>args</code></strong>:</p>

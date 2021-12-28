@@ -897,7 +897,7 @@ end
     Div(numerator_factors, denominator_factors, simplified=false)
 
 """
-struct Div{T,N,D, M} <: Symbolic{T}
+struct Div{T,N,D,M} <: Symbolic{T}
     num::N
     den::D
     simplified::Bool
@@ -952,6 +952,10 @@ end
 
 function Div(n,d, simplified=false; kw...)
     Div{promote_symtype((/), symtype(n), symtype(d))}(n,d, simplified; kw...)
+end
+function ConstructionBase.constructorof(::Type{<:Div})
+    (n, d, s, m) ->
+    Div{promote_symtype((/), symtype(n), symtype(d)), typeof(n), typeof(d), typeof(m)}(n, d, s, m)
 end
 
 numerators(x) = istree(x) && operation(x) == (*) ? arguments(x) : [x]

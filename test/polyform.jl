@@ -3,15 +3,22 @@ using Test, SymbolicUtils
 
 include("utils.jl")
 
+struct CtxPoly end
+
 @testset "div and polyform" begin
-    @syms x y z
-    @test repr(PolyForm(x-y)) == "x - y"
-    @test repr(x/y*x/z) == "(x^2) / (y*z)"
-    @test repr(simplify_fractions(((x-y+z)*(x+4z+1)) /
+    @syms t x(..) y z
+    x = x(t)
+    @test repr(PolyForm(x-y)) == "x(t) - y"
+    @test repr(x/y*x/z) == "(x(t)^2) / (y*z)"
+    x = setmetadata(x, CtxPoly, "meta_1")
+    expr = ((x-y+z)*(x+4z+1)) /
                                   (y*(2x - 3y + 3z) +
-                                   x*(x + z)))) == repr(simplify_fractions((1 + x + 4z) / (x + 3.0y)))
+                                   x*(x + z))
+    simp_expr = simplify_fractions(expr)
+    @test getmetadata(arguments(simp_expr.den)[2], CtxPoly, nothing) == "meta_1"
+    @test repr(simp_expr) == repr(simplify_fractions((1 + x + 4z) / (x + 3.0y)))
     @test simplify_fractions(x/(x+3) + 3/(x+3)) == 1
-    @test repr(simplify(simplify_fractions(cos(x)/sin(x) + sin(x)/cos(x)))) == "1 / (cos(x)*sin(x))"
+    @test repr(simplify(simplify_fractions(cos(x)/sin(x) + sin(x)/cos(x)))) == "1 / (cos(x(t))*sin(x(t)))"
 end
 
 @testset "expand" begin

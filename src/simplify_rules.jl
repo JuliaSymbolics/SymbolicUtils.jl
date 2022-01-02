@@ -58,8 +58,8 @@ let
 
     TRIG_EXP_RULES = [
         @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
-        @acrule(sin(~x)^2 + -1        => cos(~x)^2)
-        @acrule(cos(~x)^2 + -1        => sin(~x)^2)
+        @acrule(sin(~x)^2 + -1        => -1*cos(~x)^2)
+        @acrule(cos(~x)^2 + -1        => -1*sin(~x)^2)
 
         @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
         @acrule(tan(~x)^2 +  1 => sec(~x)^2)

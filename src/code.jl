@@ -227,9 +227,12 @@ function toexpr(l::Let, st)
     funkyargs = get_symbolify(map(lhs, dargs))
     union_symbolify!(st.symbolify, funkyargs)
 
-    Expr(:let,
-         Expr(:block, map(p->toexpr(p, st), dargs)...),
-         toexpr(l.body, st))
+    ex = Expr(:block)
+    for p in dargs
+        push!(ex.args, toexpr(p, st))
+    end
+    push!(ex.args, toexpr(l.body, st))
+    return ex
 end
 
 @matchable struct Func

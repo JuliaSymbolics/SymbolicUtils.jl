@@ -335,7 +335,9 @@ function Base.hash(t::Term, salt::UInt)
     !iszero(salt) && return hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
     !iszero(h) && return h
-    h′ = hashvec(arguments(t), hash(operation(t), salt))
+    op = operation(t)
+    oph = op isa Function ? nameof(op) : op
+    h′ = hashvec(arguments(t), hash(oph, salt))
     t.hash[] = h′
     return h′
 end

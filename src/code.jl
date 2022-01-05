@@ -317,7 +317,7 @@ julia> toexpr(func)
   end)
 ```
 
-- the second argument is a `DestructuredArgs`, in the `Expr` form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of `c` and `y(t)`. The let block that is automatically generated "destructures" these arguments.
+- the second argument is a `DestructuredArgs`, in the `Expr` form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of `b` and `y(t)`. The let block that is automatically generated "destructures" these arguments.
 - `x(t)` and `y(t)` have been replaced with `var"x(t)"` and `var"y(t)"` symbols throughout
 the generated Expr. This makes sure that we are not actually calling the expressions `x(t)` or `y(t)` but instead passing the right values in place of the whole expression.
 - `f` is also a function-like symbol, same as `x` and `y`, but since the `args` array contains `f` as itself rather than as say, `f(t)`, it does not become a `var"f(t)"`. The generated function expects a function of one argument to be passed in the position of `f`.
@@ -328,7 +328,7 @@ An example invocation of this function is:
 julia> executable = eval(toexpr(func))
 #10 (generic function with 1 method)
 
-julia> exec(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
+julia> executable(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
 "11.98074069840786"
 ```
 """

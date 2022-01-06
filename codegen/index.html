@@ -187,7 +187,7 @@ julia&gt; toexpr(func)
       <span class="hljs-keyword">end</span>
   <span class="hljs-keyword">end</span>)</code></pre>
 <ul>
-<li><p>the second argument is a <code>DestructuredArgs</code>, in the <code>Expr</code> form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of <code>c</code> and <code>y&#40;t&#41;</code>. The let block that is automatically generated &quot;destructures&quot; these arguments.</p>
+<li><p>the second argument is a <code>DestructuredArgs</code>, in the <code>Expr</code> form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of <code>b</code> and <code>y&#40;t&#41;</code>. The let block that is automatically generated &quot;destructures&quot; these arguments.</p>
 </li>
 <li><p><code>x&#40;t&#41;</code> and <code>y&#40;t&#41;</code> have been replaced with <code>var&quot;x&#40;t&#41;&quot;</code> and <code>var&quot;y&#40;t&#41;&quot;</code> symbols throughout</p>
 </li>
@@ -201,7 +201,7 @@ julia&gt; toexpr(func)
 <pre><code class="julia hljs">julia&gt; executable = eval(toexpr(func))
 <span class="hljs-comment">#10 (generic function with 1 method)</span>
 
-julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0</span>, [<span class="hljs-number">2</span>,<span class="hljs-number">3.0</span>], x-&gt;string(x); <span class="hljs-string">var&quot;z(t)&quot;</span> = sqrt(<span class="hljs-number">42</span>))
+julia&gt; executable(<span class="hljs-number">1</span>, <span class="hljs-number">2.0</span>, [<span class="hljs-number">2</span>,<span class="hljs-number">3.0</span>], x-&gt;string(x); <span class="hljs-string">var&quot;z(t)&quot;</span> = sqrt(<span class="hljs-number">42</span>))
 <span class="hljs-string">&quot;11.98074069840786&quot;</span></code></pre>
 </div>
   </div>
@@ -286,7 +286,7 @@ julia&gt; exec(<span class="hljs-number">1</span>, <span class="hljs-number">2.0
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: December 14, 2021. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: January 06, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

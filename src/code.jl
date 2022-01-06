@@ -264,12 +264,12 @@ function toexpr(l::Let, st)
     funkyargs = get_rewrites(map(lhs, dargs))
     union_rewrites!(st.rewrites, funkyargs)
 
-    bindings = map(p->toexpr(p, st), dargs)
-    l.let_block ? Expr(:let,
-                       Expr(:block, bindings...),
-                       toexpr(l.body, st)) : Expr(:block,
-                                                  bindings...,
-                                                  toexpr(l.body, st))
+    ex = Expr(:block)
+    for p in dargs
+        push!(ex.args, toexpr(p, st))
+    end
+    push!(ex.args, toexpr(l.body, st))
+    return ex
 end
 
 @matchable struct Func

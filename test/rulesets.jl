@@ -88,6 +88,12 @@ end
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
 end
 
+@testset "Double angle formulas" begin
+    @syms r x
+    @eqtest simplify(r*cos(x/2)^2 - r*sin(x/2)^2) == r*cos(x)
+    @eqtest simplify(2cos(x)*sin(x)) == sin(2x)
+end
+
 @testset "Exponentials" begin
     @syms a::Real b::Real
     @eqtest simplify(exp(a)*exp(b)) == simplify(exp(a+b))

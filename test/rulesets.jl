@@ -89,6 +89,7 @@ end
 end
 
 @testset "Double angle formulas" begin
+    @syms r x
     @eqtest simplify(r*cos(x/2)^2 - r*sin(x/2)^2) == r*cos(x)
     @eqtest simplify(2cos(x)*sin(x)) == sin(2x)
 end

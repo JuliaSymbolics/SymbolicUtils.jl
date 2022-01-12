@@ -11,7 +11,7 @@ include("utils.jl")
                                   (y*(2x - 3y + 3z) +
                                    x*(x + z)))) == repr(simplify_fractions((1 + x + 4z) / (x + 3.0y)))
     @test simplify_fractions(x/(x+3) + 3/(x+3)) == 1
-    @test repr(simplify(simplify_fractions(cos(x)/sin(x) + sin(x)/cos(x)))) == "1 / (cos(x)*sin(x))"
+    @test repr(simplify(simplify_fractions(cos(x)/sin(x) + sin(x)/cos(x)))) == "2 / sin(2x)"
 end
 
 @testset "expand" begin

@@ -33,7 +33,6 @@ let
         @rule(*(~x) => ~x)
     ]
 
-
     POW_RULES = [
         @rule(^(*(~~x), ~y::_isinteger) => *(map(a->pow(a, ~y), ~~x)...))
         @rule((((~x)^(~p::_isinteger))^(~q::_isinteger)) => (~x)^((~p)*(~q)))
@@ -77,6 +76,23 @@ let
 
         @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y))
         @rule(exp(~x)^(~y) => exp(~x * ~y))
+    ]
+
+    DIVREMMOD_RULES = [
+        @rule(mod(~x::_isinteger, ~m::(m -> _isone(m) || _isone(-m))) => 0)
+        @rule(mod((~n::_isinteger) * (~~xs::_areintegers), ~m::_isnonzerointeger) => mod(~n * prod(~~xs) - ~m * div(~n, ~m) * prod(~~xs), ~m))
+        @rule(mod(+(~~xs::_areintegers), ~m::_isnonzerointeger) => mod(sum(~~xs) - sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); ~m * div(n, ~m) * prod(rs) end : 0, ~~xs), ~m))
+
+        @rule(rem(~x::_isinteger, ~m::(m -> _isone(m) || _isone(-m))) => 0)
+        @rule(rem((~n::_isinteger) * (~~xs::_areintegers), ~m::_isnonzerointeger) => rem(~n * prod(~~xs) - ~m * div(~n, ~m) * prod(~~xs), ~m))
+        @rule(rem(+(~~xs::_areintegers), ~m::_isnonzerointeger) => rem(sum(~~xs) - sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); ~m * div(n, ~m) * prod(rs) end : 0, ~~xs), ~m))
+
+        @rule(div(~x::_isinteger, ~m::(m -> _isone(m) || _isone(-m))) => ~m * ~x)
+        @rule(div((~n::_isinteger) * (~~xs::_areintegers), ~m::_isnonzerointeger) => div(~n, ~m) * prod(~~xs) + div(~n * prod(~~xs) - ~m * div(~n, ~m) * prod(~~xs), ~m))
+        @rule(div(+(~~xs::_areintegers), ~m::_isnonzerointeger) => sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); div(n, ~m) * prod(rs) end : 0, ~~xs) + div(sum(~~xs) - sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); ~m * div(n, ~m) * prod(rs) end : 0, ~~xs), ~m))
+
+        @acrule(div(~x::_isreal, ~m::_isone) + rem(~x::_isreal, ~m) => ~x)
+        @acrule(~m::(m -> m isa Number && !iszero(m)) * div(~x::_isreal, ~m) + rem(~x::_isreal, ~m) => ~x)
     ]
 
     BOOLEAN_RULES = [
@@ -123,6 +139,8 @@ let
 
     trig_exp_simplifier(;kw...) = Chain(TRIG_EXP_RULES)
 
+    divremmod_simplifier() = Chain(DIVREMMOD_RULES)
+
     bool_simplifier() = Chain(BOOLEAN_RULES)
 
     global default_simplifier
@@ -132,10 +150,11 @@ let
     global serial_expand_simplifier
 
     function default_simplifier(; kw...)
-        IfElse(has_trig_exp,
+        IfElse(t -> (has_trig_exp(t) || has_div_rem_mod(t)),
                Postwalk(IfElse(x->symtype(x) <: Number,
                                Chain((number_simplifier(),
-                                      trig_exp_simplifier())),
+                                      trig_exp_simplifier(),
+                                      divremmod_simplifier())),
                                If(x->symtype(x) <: Bool,
                                   bool_simplifier()))
                         ; kw...),

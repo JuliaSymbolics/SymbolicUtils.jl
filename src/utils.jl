@@ -46,6 +46,18 @@ function has_trig_exp(term)
     end
 end
 
+function has_div_rem_mod(term)
+    !istree(term) && return false
+    fns = (div, rem, mod)
+    op = operation(term)
+
+    if Base.@nany 3 i->fns[i] === op
+        return true
+    else
+        return any(has_div_rem_mod, arguments(term))
+    end
+end
+
 function fold(t)
     if istree(t)
         tt = map(fold, arguments(t))
@@ -72,6 +84,8 @@ _iszero(x) = x isa Number && iszero(x)
 _isone(x) = x isa Number && isone(x)
 _isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) <: Integer)
 _isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
+_areintegers(xs) = all(_isinteger, xs)
+_isnonzerointeger(x) = x isa Number && isinteger(x) && !iszero(x)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
 needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))

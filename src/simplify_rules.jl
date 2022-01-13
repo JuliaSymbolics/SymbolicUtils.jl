@@ -97,8 +97,10 @@ let
         @rule(div((~n::_isinteger) * (~~xs::_areintegers), ~m::_isnonzerointeger) => div(~n, ~m) * prod(~~xs) + div(~n * prod(~~xs) - ~m * div(~n, ~m) * prod(~~xs), ~m))
         @rule(div(+(~~xs::_areintegers), ~m::_isnonzerointeger) => sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); div(n, ~m) * prod(rs) end : 0, ~~xs) + div(sum(~~xs) - sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); ~m * div(n, ~m) * prod(rs) end : 0, ~~xs), ~m))
 
-        @acrule(div(~x::_isreal, ~m::_isone) + rem(~x::_isreal, ~m) => ~x)
-        @acrule(~m::(m -> m isa Number && !iszero(m)) * div(~x::_isreal, ~m) + rem(~x::_isreal, ~m) => ~x)
+        @acrule((~n::_isinteger) * div(~x::_isreal, ~m) + rem(~x::_isreal, ~m::(m -> m isa Number && !iszero(m))) => ~x + (~n - ~m) * div(~x, ~m))
+        @acrule(div(~x::_isreal, ~m::(m -> m isa Number && !iszero(m))) + rem(~x::_isreal, ~m) => ~x + (1 - ~m) * div(~x, ~m))
+        @acrule(div(~x::_isreal, ~m::(m -> m isa Number && !iszero(m))) + (~k::_isinteger) * rem(~x::_isreal, ~m) => ~x + (1 - ~k * ~m) * div(~x, ~m))
+        @acrule((~n::_isinteger) * div(~x::_isreal, ~m) + (~k::_isinteger) * rem(~x::_isreal, ~m::(m -> m isa Number && !iszero(m))) => ~x + (~n - ~m * ~k) * div(~x, ~m))
     ]
 
     BOOLEAN_RULES = [

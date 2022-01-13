@@ -137,6 +137,10 @@ end
     @eqtest simplify(div(17*x*y + z + 12x + 7x * z, 2)) == 6x + 3x*z + 8x*y + div(z + x*(y + z), 2)
     @eqtest simplify(div(2*x + 2w, 2)) == div(2w + 2x, 2)
     @eqtest simplify(5div(21*x*y + z + 13x + 7x * z, 5) + rem(21*x*y + z + 13x + 7x * z, 5)) == z + 13x + 7x*z + 21x*y
+    @eqtest simplify(5div(x + y, 2) + rem(x + y, 2)) == x + y + 3 * div(x + y, 2)
+    @eqtest simplify(5div(x + y, 2) + 2rem(x + y, 2)) == x + y + div(x + y, 2)
+    @eqtest simplify(div(x + y, 2) + 2rem(x + y, 2)) == x + y - 3 * div(x + y, 2)
+    @eqtest simplify(div(x + y, 2) + rem(x + y, 2)) == x + y - div(x + y, 2)
     @eqtest simplify(div(2*x + y, 2) + sin(x)^2 + cos(x)^2 + 1) == 2 + x + div(y, 2)
     @eqtest simplify(mod(mod(x, 5) + mod(div(7y, 3), 5), 5)) == simplify(mod(x + 2y + div(y, 3), 5))
 end

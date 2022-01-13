@@ -82,10 +82,16 @@ let
         @rule(mod(~x::_isinteger, ~m::(m -> _isone(m) || _isone(-m))) => 0)
         @rule(mod((~n::_isinteger) * (~~xs::_areintegers), ~m::_isnonzerointeger) => mod(~n * prod(~~xs) - ~m * div(~n, ~m) * prod(~~xs), ~m))
         @rule(mod(+(~~xs::_areintegers), ~m::_isnonzerointeger) => mod(sum(~~xs) - sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); ~m * div(n, ~m) * prod(rs) end : 0, ~~xs), ~m))
+        @rule(mod(mod(~x::_isinteger, ~m::_isnonzerointeger), ~m) => mod(~x, ~m))
+        @rule(mod(+(~~xs::(xs -> all(x -> x isa Term && x.f == mod && _areintegers(x.arguments), xs))), ~m::_isnonzerointeger) => all(x -> x.arguments[2] == ~m, ~~xs) ? mod(sum(x -> x.arguments[1], ~xs), ~m) : mod(sum(~xs), ~m))
+        @rule(mod(*(~~xs::(xs -> all(x -> x isa Term && x.f == mod && _areintegers(x.arguments), xs))), ~m::_isnonzerointeger) => all(x -> x.arguments[2] == ~m, ~~xs) ? mod(prod(x -> x.arguments[1], ~xs), ~m) : mod(sum(~xs), ~m))
 
         @rule(rem(~x::_isinteger, ~m::(m -> _isone(m) || _isone(-m))) => 0)
         @rule(rem((~n::_isinteger) * (~~xs::_areintegers), ~m::_isnonzerointeger) => rem(~n * prod(~~xs) - ~m * div(~n, ~m) * prod(~~xs), ~m))
         @rule(rem(+(~~xs::_areintegers), ~m::_isnonzerointeger) => rem(sum(~~xs) - sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); ~m * div(n, ~m) * prod(rs) end : 0, ~~xs), ~m))
+        @rule(rem(rem(~x::_isinteger, ~m::_isnonzerointeger), ~m) => rem(~x, ~m))
+        @rule(rem(+(~~xs::(xs -> all(x -> x isa Term && x.f == rem && _areintegers(x.arguments), xs))), ~m::_isnonzerointeger) => all(x -> x.arguments[2] == ~m, ~~xs) ? rem(sum(x -> x.arguments[1], ~xs), ~m) : rem(sum(~xs), ~m))
+        @rule(rem(*(~~xs::(xs -> all(x -> x isa Term && x.f == rem && _areintegers(x.arguments), xs))), ~m::_isnonzerointeger) => all(x -> x.arguments[2] == ~m, ~~xs) ? rem(prod(x -> x.arguments[1], ~xs), ~m) : rem(sum(~xs), ~m))
 
         @rule(div(~x::_isinteger, ~m::(m -> _isone(m) || _isone(-m))) => ~m * ~x)
         @rule(div((~n::_isinteger) * (~~xs::_areintegers), ~m::_isnonzerointeger) => div(~n, ~m) * prod(~~xs) + div(~n * prod(~~xs) - ~m * div(~n, ~m) * prod(~~xs), ~m))

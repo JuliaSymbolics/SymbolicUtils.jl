@@ -113,6 +113,8 @@ end
         @test simplify(mod(-n * m * x, m)) == 0
         @test simplify(rem(-n * m * x, m)) == 0
         @eqtest simplify(div(-n * m * x, m)) == -n * x
+        @eqtest simplify(mod(mod(n * x, m), m)) == simplify(mod(n * x, m))
+        @eqtest simplify(rem(rem(n * x, m), m)) == simplify(rem(n * x, m))
         # single real term
         @eqtest simplify(mod(n * m * u, m)) == mod(n * m * u, m)
         @eqtest simplify(rem(n * m * u, m)) == rem(n * m * u, m)
@@ -121,6 +123,8 @@ end
         @test simplify(mod(n * m * x + 2 * n * m * y + n * m * x * y, m)) == 0
         @test simplify(rem(n * m * x + 2 * n * m * y + n * m * x * y, m)) == 0
         @eqtest simplify(div(n * m * x + 2 * n * m * y + m * x * y, m)) == simplify(n * x + 2 * n * y + x * y)
+        @eqtest simplify(mod(mod(n * x, m) + mod(y, m), m)) == simplify(mod(n * x + y, m))
+        @eqtest simplify(rem(rem(n * x, m) + rem(y, m), m)) == simplify(rem(n * x + y, m))
         # div + rem
         @eqtest simplify(m * div(n * x, m) + rem(n * x, m)) == n * x
         @eqtest simplify(m * div(n * u, m) + rem(n * u, m)) == n * u
@@ -134,6 +138,7 @@ end
     @eqtest simplify(div(2*x + 2w, 2)) == div(2w + 2x, 2)
     @eqtest simplify(5div(21*x*y + z + 13x + 7x * z, 5) + rem(21*x*y + z + 13x + 7x * z, 5)) == z + 13x + 7x*z + 21x*y
     @eqtest simplify(div(2*x + y, 2) + sin(x)^2 + cos(x)^2 + 1) == 2 + x + div(y, 2)
+    @eqtest simplify(mod(mod(x, 5) + mod(div(7y, 3), 5), 5)) == simplify(mod(x + 2y + div(y, 3), 5))
 end
 
 @testset "Depth" begin

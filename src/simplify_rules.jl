@@ -64,10 +64,11 @@ let
         @acrule(cos(~x)^2 + -1        => sin(~x)^2)
 
         @acrule(cos(~x)^2 + -1*sin(~x)^2 => cos(2 * ~x))
-        @acrule(cos(~x)^2 + -1*sin(~x)^2 => cos(2 * ~x))
+        @acrule(sin(~x)^2 + -1*cos(~x)^2 => -cos(2 * ~x))
         @acrule(cos(~x) * sin(~x) => sin(2 * ~x)/2)
 
         @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
+        @acrule(-1*tan(~x)^2 + sec(~x)^2 => one(~x))
         @acrule(tan(~x)^2 +  1 => sec(~x)^2)
         @acrule(sec(~x)^2 + -1 => tan(~x)^2)
 

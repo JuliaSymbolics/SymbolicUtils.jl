@@ -105,44 +105,56 @@ end
 
 @testset "Div, Mod & Rem" begin
     @syms x::Integer y::Integer z::Integer u::Real w
-    for n in (-7, -1, 1, 2), m in (-6, -1, 1, 3)
-        # single integer term
-        @test simplify(mod(n * m * x, m)) == 0
-        @test simplify(rem(n * m * x, m)) == 0
-        @eqtest simplify(div(n * m * x, m)) == n * x
-        @test simplify(mod(-n * m * x, m)) == 0
-        @test simplify(rem(-n * m * x, m)) == 0
-        @eqtest simplify(div(-n * m * x, m)) == -n * x
-        @eqtest simplify(mod(mod(n * x, m), m)) == simplify(mod(n * x, m))
-        @eqtest simplify(rem(rem(n * x, m), m)) == simplify(rem(n * x, m))
-        # single real term
-        @eqtest simplify(mod(n * m * u, m)) == mod(n * m * u, m)
-        @eqtest simplify(rem(n * m * u, m)) == rem(n * m * u, m)
-        @eqtest simplify(div(n * m * u, m)) == div(n * m * u, m)
-        # several terms
-        @test simplify(mod(n * m * x + 2 * n * m * y + n * m * x * y, m)) == 0
-        @test simplify(rem(n * m * x + 2 * n * m * y + n * m * x * y, m)) == 0
-        @eqtest simplify(div(n * m * x + 2 * n * m * y + m * x * y, m)) == simplify(n * x + 2 * n * y + x * y)
-        @eqtest simplify(mod(mod(n * x, m) + mod(y, m), m)) == simplify(mod(n * x + y, m))
-        @eqtest simplify(rem(rem(n * x, m) + rem(y, m), m)) == simplify(rem(n * x + y, m))
-        # div + rem
-        @eqtest simplify(m * div(n * x, m) + rem(n * x, m)) == n * x
-        @eqtest simplify(m * div(n * u, m) + rem(n * u, m)) == n * u
-        @eqtest simplify(m * div(0.5 * n * u, m) + rem(0.5 * n * u, m)) == 0.5 * n * u
-        @eqtest simplify(m * div(n * w, m) + rem(n * w, m)) == m * div(n * w, m) + rem(n * w, m)
+    @testset "single integer term" begin
+        for n in (-7, -1, 1, 2), m in (-6, -1, 1, 3)
+            @test simplify(mod(n * m * x, m)) == 0
+            @test simplify(rem(n * m * x, m)) == 0
+            @eqtest simplify(div(n * m * x, m)) == n * x
+            @test simplify(mod(-n * m * x, m)) == 0
+            @test simplify(rem(-n * m * x, m)) == 0
+            @eqtest simplify(div(-n * m * x, m)) == -n * x
+            @eqtest simplify(mod(mod(n * x, m), m)) == simplify(mod(n * x, m))
+            @eqtest simplify(rem(rem(n * x, m), m)) == simplify(rem(n * x, m))
+        end
     end
-    # mixed
-    @eqtest simplify(mod(21*x*y + z + 13x + 7x * z, 5)) == mod(z + 3x + x*y + 2x*z, 5)
-    @eqtest simplify(rem(21*x*y + z + 13x + 7x * z, -3)) == simplify(rem(x + z + x * z, -3))
-    @eqtest simplify(div(17*x*y + z + 12x + 7x * z, 2)) == 6x + 3x*z + 8x*y + div(z + x*(y + z), 2)
-    @eqtest simplify(div(2*x + 2w, 2)) == div(2w + 2x, 2)
-    @eqtest simplify(5div(21*x*y + z + 13x + 7x * z, 5) + rem(21*x*y + z + 13x + 7x * z, 5)) == z + 13x + 7x*z + 21x*y
-    @eqtest simplify(5div(x + y, 2) + rem(x + y, 2)) == x + y + 3 * div(x + y, 2)
-    @eqtest simplify(5div(x + y, 2) + 2rem(x + y, 2)) == x + y + div(x + y, 2)
-    @eqtest simplify(div(x + y, 2) + 2rem(x + y, 2)) == x + y - 3 * div(x + y, 2)
-    @eqtest simplify(div(x + y, 2) + rem(x + y, 2)) == x + y - div(x + y, 2)
-    @eqtest simplify(div(2*x + y, 2) + sin(x)^2 + cos(x)^2 + 1) == 2 + x + div(y, 2)
-    @eqtest simplify(mod(mod(x, 5) + mod(div(7y, 3), 5), 5)) == simplify(mod(x + 2y + div(y, 3), 5))
+    @testset "single real term" begin
+        @eqtest simplify(mod(u, 1)) == mod(u, 1)
+        @eqtest simplify(rem(u, 1)) == rem(u, 1)
+        @eqtest simplify(div(u, 1)) == div(u, 1)
+        @eqtest simplify(mod(2 * u, 2)) == mod(2 * u, 2)
+        @eqtest simplify(rem(2 * u, 2)) == rem(2 * u, 2)
+        @eqtest simplify(div(2 * u, 2)) == div(2 * u, 2)
+    end
+    @testset "several terms" begin
+        for n in (-3, 2), m in (-1, 1, 3)
+            @test simplify(mod(m * (n * x + 2 * n * y + x * y), m)) == 0
+            @test simplify(rem(m * (n * x + 2 * n * y + x * y), m)) == 0
+            @eqtest simplify(div(m * (n * x + 2 * n * y + x * y), m)) == simplify(n * x + 2 * n * y + x * y)
+            @eqtest simplify(mod(mod(n * x, m) + mod(y, m), m)) == simplify(mod(n * x + y, m))
+            @eqtest simplify(rem(rem(n * x, m) + rem(y, m), m)) == simplify(rem(n * x + y, m))
+        end
+    end
+    @testset "div + rem" begin
+        for n in (1, 2), m in (1, 3)
+            @eqtest simplify(m * div(n * x, m) + rem(n * x, m)) == n * x
+            @eqtest simplify(m * div(n * u, m) + rem(n * u, m)) == n * u
+            @eqtest simplify(m * div(0.5 * n * u, m) + rem(0.5 * n * u, m)) == 0.5 * n * u
+            @eqtest simplify(m * div(n * w, m) + rem(n * w, m)) == m * div(n * w, m) + rem(n * w, m)
+        end
+        @eqtest simplify(5div(21*x*y + z + 13x + 7x * z, 5) + rem(21*x*y + z + 13x + 7x * z, 5)) == z + 13x + 7x*z + 21x*y
+        @eqtest simplify(5div(x + y, 2) + rem(x + y, 2)) == x + y + 3 * div(x + y, 2)
+        @eqtest simplify(5div(x + y, 2) + 2rem(x + y, 2)) == x + y + div(x + y, 2)
+        @eqtest simplify(div(x + y, 2) + 2rem(x + y, 2)) == x + y - 3 * div(x + y, 2)
+        @eqtest simplify(div(x + y, 2) + rem(x + y, 2)) == x + y - div(x + y, 2)
+    end
+    @testset "miscellaneous" begin
+        @eqtest simplify(mod(21*x*y + z + 13x + 7x * z, 5)) == mod(z + 3x + x*y + 2x*z, 5)
+        @eqtest simplify(rem(21*x*y + z + 13x + 7x * z, -3)) == simplify(rem(x + z + x * z, -3))
+        @eqtest simplify(div(17*x*y + z + 12x + 7x * z, 2)) == 6x + 3x*z + 8x*y + div(z + x*(y + z), 2)
+        @eqtest simplify(div(2*x + 2w, 2)) == div(2w + 2x, 2)
+        @eqtest simplify(div(2*x + y, 2) + sin(x)^2 + cos(x)^2 + 1) == 2 + x + div(y, 2)
+        @eqtest simplify(mod(mod(x, 5) + mod(div(7y, 3), 5), 5)) == simplify(mod(x + 2y + div(y, 3), 5))
+    end
 end
 
 @testset "Depth" begin

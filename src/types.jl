@@ -149,7 +149,7 @@ function (::Type{Sym{T}})(name; metadata=NO_METADATA) where {T}
     Sym{T, typeof(metadata)}(name, metadata)
 end
 
-Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
+Base.hash(s::Sym, u::UInt) = hash(s.name, u)
 
 function Base.isequal(a::Sym, b::Sym)
     symtype(a) !== symtype(b) && return false
@@ -331,11 +331,13 @@ end
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
-function Base.hash(t::Term{T}, salt::UInt) where {T}
+function Base.hash(t::Term, salt::UInt)
     !iszero(salt) && return hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
     !iszero(h) && return h
-    h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
+    op = operation(t)
+    oph = op isa Function ? nameof(op) : op
+    h′ = hashvec(arguments(t), hash(oph, salt))
     t.hash[] = h′
     return h′
 end

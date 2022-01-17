@@ -104,6 +104,11 @@ end
     @eqtest simplify(exp(a) * a * exp(b)) == simplify(a*exp(a+b))
 end
 
+@testset "simplify_fractions" begin
+    @syms x y z
+    @eqtest simplify(2*((y + z)/x) - 2*y/x - z/x*2) == 0
+end
+
 @testset "Depth" begin
     @syms x
     R = Rewriters.Postwalk(Rewriters.Chain([@rule(sin(~x) => cos(~x)),

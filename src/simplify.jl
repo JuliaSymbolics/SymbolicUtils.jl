@@ -39,14 +39,13 @@ function simplify(x;
         Fixpoint(rewriter)
     end
 
-    if simplify_fractions
-        f = f ∘ (x->has_operation(x, /) ? SymbolicUtils.simplify_fractions(x) : x)
-    end
-
-    PassThrough(f)(x)
+    x = PassThrough(f)(x)
+    simplify_fractions && has_operation(x, /) ?
+        SymbolicUtils.simplify_fractions(x) : x
 end
 
-has_operation(x, op) = (istree(x) && operation(x) == op) ||
-                (istree(x) && any(x->has_operation(x, op), unsorted_arguments(x)))
+has_operation(x, op) = (istree(x) && (operation(x) == op ||
+                                      any(a->has_operation(a, op),
+                                          unsorted_arguments(x))))
 
 Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)

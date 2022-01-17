@@ -921,6 +921,7 @@ maybe_intcoeff(x::Rational) = isone(x.den) ? x.num : x
 maybe_intcoeff(x) = x
 
 function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
+    n, d = quick_cancel(n, d)
     _iszero(n) && return zero(typeof(n))
     _isone(d) && return n
 
@@ -946,7 +947,6 @@ function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
             d = maybe_intcoeff(invdc * d)
         end
     end
-
     Div{T, typeof(n), typeof(d), typeof(metadata)}(n, d, simplified, metadata)
 end
 

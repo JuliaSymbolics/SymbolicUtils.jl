@@ -274,6 +274,14 @@ add_divs(x::Div, y) = (x.num + y * x.den) / x.den
 add_divs(x, y::Div) = (x * y.den + y.num) / y.den
 add_divs(x, y) = x + y
 
+function frac_similarterm(x, f, args; kw...)
+    if f in (*, /, \, +, -, ^)
+        f(args...)
+    else
+        similarterm(x, f, args; kw...)
+    end
+end
+
 """
     simplify_fractions(x; polyform=false)
 
@@ -290,7 +298,9 @@ function simplify_fractions(x; polyform=false)
 
     sdiv(a) = a isa Div ? simplify_div(a) : a
 
-    expr = Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
+    expr = Postwalk(sdiv ∘ quick_cancel,
+                    similarterm=frac_similarterm)(Postwalk(add_with_div,
+                                                           similarterm=frac_similarterm)(x))
 
     polyform ? expr : unpolyize(expr)
 end

@@ -54,8 +54,11 @@ include("ordering.jl")
 include("simplify_rules.jl")
 
 # API = simplify + substitute
-export simplify, substitute
-include("api.jl")
+export simplify
+include("simplify.jl")
+
+export substitute
+include("substitute.jl")
 
 # EGraph rewriting
 include("egraph.jl")

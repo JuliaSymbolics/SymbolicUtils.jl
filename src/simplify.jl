@@ -1,0 +1,51 @@
+
+"""
+```julia
+simplify(x; expand=false,
+            threaded=false,
+            thread_subtree_cutoff=100,
+            nonzero_denominators=true,
+            rewriter=nothing)
+```
+
+Simplify an expression (`x`) by applying `rewriter` until there are no changes.
+`expand=true` applies [`expand`](/api/#expand) in the beginning of each fixpoint iteration.
+
+Assumes denominators are not zero by default. Pass `nonzero_denominators=false` if otherwise.
+"""
+function simplify(x;
+                  expand=false,
+                  polynorm=nothing,
+                  threaded=false,
+                  simplify_fractions=true,
+                  thread_subtree_cutoff=100,
+                  rewriter=nothing)
+    if polynorm !== nothing
+        Base.depwarn("simplify(..; polynorm=$polynorm) is deprecated, use simplify(..; expand=$polynorm) instead",
+                        :simplify)
+    end
+
+
+    f = if rewriter === nothing
+        if threaded
+            threaded_simplifier(thread_subtree_cutoff)
+        elseif expand
+            serial_expand_simplifier
+        else
+            serial_simplifier
+        end
+    else
+        Fixpoint(rewriter)
+    end
+
+    if simplify_fractions
+        f = f ∘ (x->has_operation(x, /) ? SymbolicUtils.simplify_fractions(x) : x)
+    end
+
+    PassThrough(f)(x)
+end
+
+has_operation(x, op) = (istree(x) && operation(x) == op) ||
+                (istree(x) && any(x->has_operation(x, op), unsorted_arguments(x)))
+
+Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)

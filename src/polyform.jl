@@ -275,8 +275,14 @@ add_divs(x, y::Div) = (x * y.den + y.num) / y.den
 add_divs(x, y) = x + y
 
 function frac_similarterm(x, f, args; kw...)
-    if f in (*, /, \, +, -, ^)
+    if f in (*, /, \, +, -)
         f(args...)
+    elseif f == (^)
+        if args[2] isa Integer && args[2] < 0
+            1/((args[1])^(-args[2]))
+        else
+            args[1]^args[2]
+        end
     else
         similarterm(x, f, args; kw...)
     end

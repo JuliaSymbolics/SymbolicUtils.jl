@@ -154,6 +154,7 @@ end
         @eqtest simplify(div(2*x + 2w, 2)) == div(2w + 2x, 2)
         @eqtest simplify(div(2*x + y, 2) + sin(x)^2 + cos(x)^2 + 1) == 2 + x + div(y, 2)
         @eqtest simplify(mod(mod(x, 5) + mod(div(7y, 3), 5), 5)) == simplify(mod(x + 2y + div(y, 3), 5))
+        @eqtest simplify(div(x + sin(2x)^2 + cos(2x)^2, exp(x)*exp(-x))) == 1 + x
     end
 end
 

@@ -158,19 +158,35 @@ let
     global serial_expand_simplifier
 
     function default_simplifier(; kw...)
-        IfElse(t -> (has_trig_exp(t) || has_div_rem_mod(t)),
-               Postwalk(IfElse(x->symtype(x) <: Number,
-                               Chain((number_simplifier(),
-                                      trig_exp_simplifier(),
-                                      divremmod_simplifier())),
-                               If(x->symtype(x) <: Bool,
-                                  bool_simplifier()))
-                        ; kw...),
-               Postwalk(Chain((If(x->symtype(x) <: Number,
-                                  number_simplifier()),
-                               If(x->symtype(x) <: Bool,
-                                  bool_simplifier())))
-                        ; kw...))
+        IfElse(
+            has_trig_exp,
+            Postwalk(
+                IfElse(
+                    x->symtype(x) <: Number,
+                    Chain((number_simplifier(), trig_exp_simplifier())),
+                    If(x->symtype(x) <: Bool, bool_simplifier())
+                )
+                ; kw...
+            ),
+            IfElse(
+                has_div_rem_mod,
+                Postwalk(
+                    IfElse(
+                        x->symtype(x) <: Number,
+                        Chain((number_simplifier(), divremmod_simplifier())),
+                        If(x->symtype(x) <: Bool,bool_simplifier())
+                    )
+                    ; kw...
+                ),            
+                Postwalk(
+                    Chain(
+                        (If(x->symtype(x) <: Number, number_simplifier()),
+                        If(x->symtype(x) <: Bool, bool_simplifier()))
+                    )
+                    ; kw...
+                )
+            )
+        )
     end
 
     # reduce overhead of simplify by defining these as constant

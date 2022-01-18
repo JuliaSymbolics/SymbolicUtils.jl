@@ -86,11 +86,14 @@ end
 
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
+    @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
+    @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 end
 
 @testset "Double angle formulas" begin
     @syms r x
     @eqtest simplify(r*cos(x/2)^2 - r*sin(x/2)^2) == r*cos(x)
+    @eqtest simplify(r*sin(x/2)^2 - r*cos(x/2)^2) == -r*cos(x)
     @eqtest simplify(2cos(x)*sin(x)) == sin(2x)
 end
 
@@ -156,6 +159,10 @@ end
         @eqtest simplify(mod(mod(x, 5) + mod(div(7y, 3), 5), 5)) == simplify(mod(x + 2y + div(y, 3), 5))
         @eqtest simplify(div(x + sin(2x)^2 + cos(2x)^2, exp(x)*exp(-x))) == 1 + x
     end
+
+@testset "simplify_fractions" begin
+    @syms x y z
+    @eqtest simplify(2*((y + z)/x) - 2*y/x - z/x*2) == 0
 end
 
 @testset "Depth" begin

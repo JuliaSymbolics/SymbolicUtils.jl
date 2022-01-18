@@ -22,6 +22,7 @@ const previously_declared_for = Set([])
 # TODO: it's not possible to dispatch on the symtype! (only problem is Parameter{})
 
 assert_like(f, T) = nothing
+# a and b are objects, arguments gets recursively checked
 function assert_like(f, T, a, b...)
     islike(a, T) || throw(ArgumentError("The function $f cannot be applied to $a which is not a $T-like object." *
                                         "Define `islike(::$(typeof(a)), ::Type{$T}) = true` to enable this."))
@@ -75,8 +76,51 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
 
+# Check master to see more number methods...
+# a and b are objects, arguments gets recursively checked
 @number_methods(BasicSymbolic, term(f, a), term(f, a, b), skipbasics)
 
+# If you want to check type inference runtime you can do Base.inferencebarrier()
+# SymbolicUtils.promote_symtype(Base.inferencebarrier(sin), Number)
+# But there's more type instability, so you'll have more than 118ns of inference time
+
+# To solve this, we want fallback methods
+
+# foo(x) = 1
+# SymbolicUtils.promote_symtype(::typeof(foo), ::Type{<:Number}) = Complex)
+# term(foo, x)
+# term(foo, x) |> SymbolicUtils.symtype
+
+# This is an open typesystem. if-statements are closed typesystems
+# function _promote_symtype(f, a, b))
+# # We want f not to be specialized so that the fallback can do all the compile work
+# # 
+# Base.@nospecialize
+# function _promote_symtype(f, as...)
+#   # Common cases are first (optimized to run first)
+#   if f === ....
+#       return compute(as) # Some computation on as
+#   else
+#       return compute2(as)
+#   elseif f === ...
+#       return compute3(as)
+#   else
+#   # Fallback happens last
+#       promote_symtype(f, as...)
+# Base.@specialize # Turn specialization back on
+
+
+# function _promote_symtype(f::Function, as::Tuple, enumf, ourtypes)
+#       if enumf === ...
+#
+#       if enumf === ...
+# Can speculate on how to compile this thing, and then it's likely
+
+# Here's a nice macro
+# Base.@nif
+# Base.@nexpr
+# Base.@ntuple
+# Base.@nloops
 for f in diadic
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},

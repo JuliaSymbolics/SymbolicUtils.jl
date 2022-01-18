@@ -159,6 +159,7 @@ end
         @eqtest simplify(mod(mod(x, 5) + mod(div(7y, 3), 5), 5)) == simplify(mod(x + 2y + div(y, 3), 5))
         @eqtest simplify(div(x + sin(2x)^2 + cos(2x)^2, exp(x)*exp(-x))) == 1 + x
     end
+end
 
 @testset "simplify_fractions" begin
     @syms x y z

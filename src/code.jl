@@ -9,7 +9,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
-import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments,
+import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, istree, operation, arguments,
                       symtype, similarterm, unsorted_arguments, metadata
 
 ##== state management ==##
@@ -75,7 +75,7 @@ when `y(t)` is itself the argument of a function rather than `y`.
 
 """
 toexpr(x) = toexpr(x, LazyState())
-toexpr(s::Sym, st) = nameof(s)
+toexpr(s::BasicSymbolic, st) = TermInterface.issym(s) && nameof(s)
 
 
 @matchable struct Assignment
@@ -122,9 +122,9 @@ function function_to_expr(::typeof(^), O, st)
     if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
-            return toexpr(Term{Any}(inv, [ex]), st)
+            return toexpr(Term(;f=inv, arguments=[ex]), st)
         else
-            return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
+            return toexpr(Term(;f=^, arguments=[Term(;f=inv, arguments=[ex]), -args[2]]), st)
         end
     end
     return nothing
@@ -135,7 +135,10 @@ function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end
 
-function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
+# Better error checking needed?
+function function_to_expr(x::BasicSymbolic, O, st)
+    TermInterface.issym(x) ? get(st.symbolify, O, nothing) : nothing
+end
 
 toexpr(O::Expr, st) = O
 

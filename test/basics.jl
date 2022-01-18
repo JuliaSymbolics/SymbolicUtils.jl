@@ -7,10 +7,12 @@ using Test
     let
         @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
 
-        @test a isa Sym{Number}
+        @show issym(a)
+        @show a.valtype
+        @test issym(a) && a.valtype isa Number
         @test a.name === :a
 
-        @test b isa Sym{Float64}
+        @test issym(b) && b.valtype isa Float64
         @test b.name === :b
 
         @test f isa Sym{FnType{Tuple{Real}, Number}}

@@ -138,6 +138,7 @@ TermInterface.symtype(::Symbolic) = Any
 # We're returning a function pointer
 @inline function TermInterface.operation(x::BasicSymbolic)
     E = exprtype(x)
+    @show E
     E === TERM ? x.f :
     E === ADD ? (+) :
     E === MUL ? (*) :
@@ -287,6 +288,7 @@ for C in [:Sym, :Term, :Mul, :Add, :Pow, :Div]
     @eval struct $C{T} 1+1 end
 end
 =#
+#struct Term{T} end
 
 #=
 Term{T}(f, args::Vector{Any}; kw...) where T = Term(;
@@ -294,11 +296,17 @@ Term{T}(f, args::Vector{Any}; kw...) where T = Term(;
     hash=Ref(UInt(0)),
     valtype=T isa ValueType ? T : type2valtype(T),
     kw...)
+=#
+#=
 Sym{T}(name::Symbol; kw...) where T = Sym(;
     exprtype=SYM, name=name,
     valtype=T isa ValueType ? T : type2valtype(T),
     kw...)
 =#
+
+# Trying these constructors
+#Term(f, args::Vector{Any}; kw...) = Term(;)
+Sym(name::Symbol; kw...) = Sym(;name, exprtype=SYM, kw...)
 
 getbase(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.base)
 getexp(x::BasicSymbolic) = (@assert exprtype(x) === POW; x.exp)
@@ -425,24 +433,43 @@ function makeadd(sign, coeff, xs...)
     coeff, d
 end
 
-#=
+
 function Add(T, coeff, dict; metadata=NO_METADATA, kw...)
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
         k,v = first(dict)
-        return _isone(v) ? k : Mul(T, makemul(v, k)...)
+        @show _isone(v)
+        if _isone(v)
+            return k
+        else
+            coeff, dict = makemul(v, k)
+            return Mul(;coeff, dict)
+        end
     end
 
-    BasicSymbolic(;
-                  exprtype=ADD, coeff=coeff, dict=dict,
-                  f=Ref(false),
-                  hash=Ref(UInt(0)),
-                  valtype=T isa ValueType ? T : type2valtype(T),
-                  arguments=[],
-                  kw...)
+    Add(;
+        exprtype=ADD, coeff, dict,
+        #f=Ref(false),
+        #hash=Ref(UInt(0)),
+        valtype=T isa ValueType ? T : type2valtype(T),
+        metadata,
+        #arguments=[],
+        kw...)
 end
+
+#=
+
+        @show _isone(v)
+
+        if _isone(v)
+            return k
+        else
+            coeff, dict = makemul(v, k)
+            return Mul(;coeff, dict)
+        end
 =#
+
 
 function makemul(coeff, xs...; d=sdict())
     for x in xs
@@ -929,7 +956,7 @@ function (f::Symbolic)(args...)
 end
 
 """
-    promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)
+    promote_symtype(f::FnType{X,Y}, arg_symtypes...)
 
 The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
@@ -1002,10 +1029,10 @@ variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 macro syms(xs...)
     defs = map(xs) do x
         n, t = _name_type(x)
-        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
+        :($(esc(n)) = Sym(;name=$(Expr(:quote, n))), exprtype=SYM, valtype=$(esc(t)))
         nt = _name_type(x)
         n, t = nt.name, nt.type
-        :($(esc(n)) = Sym{$(esc(t))}($(Expr(:quote, n))))
+        :($(esc(n)) = Sym(;name=$(Expr(:quote, n))), exprtype=SYM, valtype=$(esc(t)))
     end
     Expr(:block, defs...,
          :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
@@ -1093,7 +1120,8 @@ function +(a::BasicSymbolic, b::BasicSymbolic)
     elseif isadd(b)
         return b + a
     end
-    Add(add_t(a,b), makeadd(1, 0, a, b)...)
+    coeff, dict = makeadd(1, 0, a, b)
+    Add(;valtype=add_t(a,b), coeff, dict)
 end
 
 function +(a::Number, b::BasicSymbolic)

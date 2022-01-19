@@ -19,7 +19,13 @@ const diadic = [max, min, hypot, atan, mod, rem, copysign,
                 polygamma, beta, logbeta]
 const previously_declared_for = Set([])
 
-# TODO: it's not possible to dispatch on the symtype! (only problem is Parameter{})
+#################### SafeReal #########################
+export SafeReal
+
+# ideally the relationship should be the other way around
+abstract type SafeReal <: Real end
+
+#######################################################
 
 assert_like(f, T) = nothing
 function assert_like(f, T, a, b...)
@@ -86,12 +92,36 @@ for f in diadic
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
+    @eval function promote_symtype(::$(typeof(f)),
+                   T::Type{<:SafeReal},
+                   S::Type{<:Real})
+        X = promote_type(T, Real)
+        X == Real ? SafeReal : X
+    end
+    @eval function promote_symtype(::$(typeof(f)),
+                   T::Type{<:Real},
+                   S::Type{<:SafeReal})
+        X = promote_type(Real, S)
+        X == Real ? SafeReal : X
+    end
+    @eval function promote_symtype(::$(typeof(f)),
+                   T::Type{<:SafeReal},
+                   S::Type{<:SafeReal})
+        X = promote_type(Real, Real)
+        X == Real ? SafeReal : X
+    end
 end
 
 for f in [+, -, *, \, /, ^]
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
+    @eval function promote_symtype(::$(typeof(f)),
+                   T::Type{<:SafeReal},
+                   S::Type{<:Number})
+        X = promote_type(Real, S)
+        X == Real ? SafeReal : X
+    end
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
@@ -99,6 +129,7 @@ Base.rem2pi(x::Symbolic{<:Number}, mode::Base.RoundingMode) = term(rem2pi, x, mo
 
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
     @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 

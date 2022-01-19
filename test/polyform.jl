@@ -16,6 +16,8 @@ end
 
 @testset "expand" begin
     @syms a b c d
+
+    @test expand(term(*, 0, a)) == 0
     @test expand(a * (b + -1 * c) + -1 * (b * a + -1 * c * a)) == 0
     @eqtest simplify(expand(sin((a+b)^2)^2)) == simplify(sin(a^2+2*(b*a)+b^2)^2)
     @test simplify(expand(sin((a+b)^2)^2 + cos((a+b)^2)^2)) == 1

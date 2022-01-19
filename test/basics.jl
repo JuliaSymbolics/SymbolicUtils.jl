@@ -238,7 +238,7 @@ end
 end
 
 @testset "div" begin
-    @syms x y
+    @syms x::SafeReal y::Real
     @test (2x/2y).num isa Sym
     @test (2x/3y).num.coeff == 2
     @test (2x/3y).den.coeff == 3
@@ -247,4 +247,13 @@ end
     @test (2.5x/3x).num.coeff == 2.5
     @test (2.5x/3x).den.coeff == 3
     @test (x/3x).den.coeff == 3
+
+    @syms x y
+    @test (2x/2y).num isa Sym
+    @test (2x/3y).num.coeff == 2
+    @test (2x/3y).den.coeff == 3
+    @test (2x/-3x) == -2//3
+    @test (2.5x/3x).num == 2.5
+    @test (2.5x/3x).den == 3
+    @test (x/3x) == 1//3
 end

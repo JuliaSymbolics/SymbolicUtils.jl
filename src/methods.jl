@@ -88,7 +88,7 @@ end
 @number_methods(Pow, term(f, a), term(f, a, b), skipbasics)
 @number_methods(Div, term(f, a), term(f, a, b), skipbasics)
 
-for f in diadic
+for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
@@ -108,18 +108,6 @@ for f in diadic
                    T::Type{<:SafeReal},
                    S::Type{<:SafeReal})
         X = promote_type(Real, Real)
-        X == Real ? SafeReal : X
-    end
-end
-
-for f in [+, -, *, \, /, ^]
-    @eval promote_symtype(::$(typeof(f)),
-                   T::Type{<:Number},
-                   S::Type{<:Number}) = promote_type(T, S)
-    @eval function promote_symtype(::$(typeof(f)),
-                   T::Type{<:SafeReal},
-                   S::Type{<:Number})
-        X = promote_type(Real, S)
         X == Real ? SafeReal : X
     end
 end

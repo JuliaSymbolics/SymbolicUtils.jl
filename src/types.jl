@@ -698,6 +698,7 @@ function makeadd(sign, coeff, xs...)
     coeff, d
 end
 
+add_t(a::Number,b::Number) = promote_symtype(+, symtype(a), symtype(b))
 add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
 sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
 sub_t(a) = promote_symtype(-, symtype(a))

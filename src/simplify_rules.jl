@@ -79,7 +79,7 @@ let
         @rule(exp(~x)^(~y) => exp(~x * ~y))
     ]
 
-    DIVREMMOD_RULES = [
+    DIV_REM_MOD_RULES = [
         @rule(mod(~x::_isinteger, ~m::(m -> _isone(m) || _isone(-m))) => 0)
         @rule(mod((~n::_isinteger) * (~~xs::_areintegers), ~m::_isnonzerointeger) => mod(~n * prod(~~xs) - ~m * div(~n, ~m) * prod(~~xs), ~m))
         @rule(mod(+(~~xs::_areintegers), ~m::_isnonzerointeger) => mod(sum(~~xs) - sum(x -> x isa Mul && first(arguments(x)) isa Number ? let (n, rs...) = arguments(x); ~m * div(n, ~m) * prod(rs) end : 0, ~~xs), ~m))
@@ -148,7 +148,7 @@ let
 
     trig_exp_simplifier(;kw...) = Chain(TRIG_EXP_RULES)
 
-    divremmod_simplifier() = Chain(DIVREMMOD_RULES)
+    div_rem_mod_simplifier() = Chain(DIV_REM_MOD_RULES)
 
     bool_simplifier() = Chain(BOOLEAN_RULES)
 
@@ -158,37 +158,17 @@ let
     global serial_simplifier
     global serial_expand_simplifier
 
-    function default_simplifier(; kw...)
-        IfElse(
-            has_trig_exp,
-            Postwalk(
-                IfElse(
-                    x->symtype(x) <: Number,
-                    Chain((number_simplifier(), trig_exp_simplifier())),
-                    If(x->symtype(x) <: Bool, bool_simplifier())
-                )
-                ; kw...
-            ),
-            IfElse(
-                has_div_rem_mod,
-                Postwalk(
-                    IfElse(
-                        x->symtype(x) <: Number,
-                        Chain((number_simplifier(), divremmod_simplifier())),
-                        If(x->symtype(x) <: Bool,bool_simplifier())
-                    )
-                    ; kw...
-                ),            
-                Postwalk(
-                    Chain(
-                        (If(x->symtype(x) <: Number, number_simplifier()),
-                        If(x->symtype(x) <: Bool, bool_simplifier()))
-                    )
-                    ; kw...
-                )
+    default_simplifier(; kw...) = Postwalk(
+        Chain(
+            (
+                If(x->symtype(x) <: Number, number_simplifier()),
+                If(has_trig_exp, trig_exp_simplifier()),
+                If(has_div_rem_mod, div_rem_mod_simplifier()),
+                If(x->symtype(x) <: Bool, bool_simplifier())
             )
         )
-    end
+        ; kw...
+    )
 
     # reduce overhead of simplify by defining these as constant
     serial_simplifier = If(istree, Fixpoint(default_simplifier()))

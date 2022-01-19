@@ -158,6 +158,8 @@ end
         @eqtest simplify(div(2*x + y, 2) + sin(x)^2 + cos(x)^2 + 1) == 2 + x + div(y, 2)
         @eqtest simplify(mod(mod(x, 5) + mod(div(7y, 3), 5), 5)) == simplify(mod(x + 2y + div(y, 3), 5))
         @eqtest simplify(div(x + sin(2x)^2 + cos(2x)^2, exp(x)*exp(-x))) == 1 + x
+        @eqtest simplify(2div(cos(x), 2) + rem(cos(x), 2)) == cos(x)
+        @test simplify(cos(div(x, 2))^2 + sin(div(x, 2))^2) == 1
     end
 end
 

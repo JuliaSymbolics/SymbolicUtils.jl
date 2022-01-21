@@ -138,7 +138,7 @@ TermInterface.symtype(::Symbolic) = Any
 # We're returning a function pointer
 @inline function TermInterface.operation(x::BasicSymbolic)
     E = exprtype(x)
-    @show E
+    #@show E
     E === TERM ? x.f :
     E === ADD ? (+) :
     E === MUL ? (*) :
@@ -160,6 +160,8 @@ end
 function TermInterface.unsorted_arguments(x::BasicSymbolic)
     E = exprtype(x)
     if E === TERM
+        @show typeof(x) fieldnames(typeof(x))
+        @show x.valtype x.exprtype x.metadata
         return x.arguments
     elseif E === ADD || E === MUL
         args = x.arguments
@@ -439,7 +441,7 @@ function Add(T, coeff, dict; metadata=NO_METADATA, kw...)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
         k,v = first(dict)
-        @show _isone(v)
+        #@show _isone(v)
         if _isone(v)
             return k
         else
@@ -1029,10 +1031,10 @@ variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 macro syms(xs...)
     defs = map(xs) do x
         n, t = _name_type(x)
-        :($(esc(n)) = Sym(;name=$(Expr(:quote, n))), exprtype=SYM, valtype=$(esc(t)))
+        :($(esc(n)) = Sym(;name=$(Expr(:quote, n)), exprtype=SYM, valtype=$(esc(t))))
         nt = _name_type(x)
         n, t = nt.name, nt.type
-        :($(esc(n)) = Sym(;name=$(Expr(:quote, n))), exprtype=SYM, valtype=$(esc(t)))
+        :($(esc(n)) = Sym(;name=$(Expr(:quote, n)), exprtype=SYM, valtype=$(esc(t))))
     end
     Expr(:block, defs...,
          :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
@@ -1044,10 +1046,10 @@ end
 
 function _name_type(x)
     if x isa Symbol
-        return (name=x, type=Real)
+        return (name=x, type=type2valtype(Real))
     elseif x isa Expr && x.head === :(::)
         if length(x.args) == 1
-            return (name=nothing, type=x.args[1])
+            return (name=nothing, type=type2valtype(x.args[1]))
         end
         lhs, rhs = x.args[1:2]
         if lhs isa Expr && lhs.head === :call
@@ -1055,13 +1057,13 @@ function _name_type(x)
             type = map(x->_name_type(x).type, lhs.args[2:end])
             return (name=lhs.args[1], type=:($FnType{Tuple{$(type...)}, $rhs}))
         else
-            return (name=lhs, type=rhs)
+            return (name=lhs, type=type2valtype(rhs))
         end
     elseif x isa Expr && x.head === :ref
         ntype = _name_type(x.args[1]) # a::Number
         N = length(x.args)-1
         return (name=ntype.name,
-                type=:(Array{$(ntype.type), $N}),
+                type=:(Array{type2valtype($(ntype.type), $N)}),
                 array_metadata=:(Base.Slice.(($(x.args[2:end]...),))))
     elseif x isa Expr && x.head === :call
         return _name_type(:($x::Real))

@@ -2,13 +2,12 @@
 #--------------------
 #### Symbolic
 #--------------------
-abstract type Symbolic end
+abstract type Symbolic{T} end
 
 ###
 ### Uni-type design
 ###
 
-@enum ValueType::UInt8 BOOL INT RATIONAL REAL NUMBER FALLBACK
 @enum ExprType::UInt8  SYM TERM ADD MUL POW DIV
 
 const Metadata = Union{Nothing,Base.ImmutableDict{DataType,Any}}
@@ -48,62 +47,42 @@ end
 =#
 
 @compactify begin
-    @abstract struct BasicSymbolic <: Symbolic
-        valtype::ValueType     = REAL
+    @abstract struct BasicSymbolic{T} <: Symbolic{T}
         exprtype::ExprType     = TERM
         bitflags::UInt8        = 0x00
         metadata::Metadata     = NO_METADATA
     end
-    struct Sym <: BasicSymbolic
+    struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
     end
-    struct Term <: BasicSymbolic
+    struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    struct Mul <: BasicSymbolic
+    struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
     end
-    struct Add <: BasicSymbolic
+    struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
     end
-    struct Div <: BasicSymbolic
+    struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
         den::Any               = 1
     end
-    struct Pow <: BasicSymbolic
+    struct Pow{T} <: BasicSymbolic{T}
         base::Any              = 1
         exp::Any               = 1
     end
 end
 
-# I'm writing a bunch of things to do type promotion (not this exactly)
-@inline function valtype2type(T::ValueType)
-    T === NUMBER ? Number :
-    T === REAL ? Real :
-    T === RATIONAL ? Rational :
-    T === INT ? Int :
-    Bool
-end
-
 # Same but different error messages
-@noinline error_no_valtype(T) = error("$T is not supported.")
 @noinline error_on_type(E) = error("Internal error: type $E not handled!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
 @noinline error_property(E, s) = error("$E doesn't have field $s")
-
-@inline function type2valtype(@nospecialize T)
-    T === Number ? NUMBER :
-    T === Real ? REAL :
-    T === Rational ? RATIONAL :
-    T === Int ? INT :
-    T === Bool ? BOOL :
-    error_no_valtype(T)
-end
 
 # We can think about arrays later
 @inline is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
@@ -111,17 +90,6 @@ end
 @inline iscomplex(x::BasicSymbolic) = is_of_type(x, COMPLEX)
 @inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
 
-@inline function valtype(x)
-    if x isa BasicSymbolic
-        x.valtype
-    elseif x isa Union{Int, Bool}
-        type2valtype(typeof(x))
-    elseif x isa Rational
-        RATIONAL
-    else
-        REAL
-    end
-end
 @inline exprtype(x::BasicSymbolic) = x.exprtype
 
 ###
@@ -133,7 +101,7 @@ using TermInterface
 TermInterface.exprhead(x::Symbolic) = :call
 TermInterface.symtype(x::Number) = typeof(x)
 TermInterface.symtype(::Symbolic) = Any
-@inline TermInterface.symtype(s::BasicSymbolic) = valtype2type(valtype(s))
+@inline TermInterface.symtype(s::BasicSymbolic{T}) where T = T
 
 # We're returning a function pointer
 @inline function TermInterface.operation(x::BasicSymbolic)
@@ -160,8 +128,6 @@ end
 function TermInterface.unsorted_arguments(x::BasicSymbolic)
     E = exprtype(x)
     if E === TERM
-        @show typeof(x) fieldnames(typeof(x))
-        @show x.valtype x.exprtype x.metadata
         return x.arguments
     elseif E === ADD || E === MUL
         args = x.arguments
@@ -217,14 +183,13 @@ Base.isequal(::Symbolic, x) = false
 Base.isequal(x, ::Symbolic) = false
 Base.isequal(::Symbolic, ::Symbolic) = false
 
-function Base.isequal(a::BasicSymbolic, b::BasicSymbolic)
+function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     a === b && return true
 
     E = exprtype(a)
     E === exprtype(b) || return false
 
-    T = valtype(a)
-    T === valtype(b) || return false
+    T === S || return false
 
     if E === SYM
         nameof(a) === nameof(b)
@@ -254,9 +219,8 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymboli
 hashvec(xs, z) = foldr(hash, xs, init=z)
 function Base.hash(s::BasicSymbolic, salt::UInt)
     E = exprtype(s)
-    T = valtype(s)
     if E === SYM
-        hash(T, hash(nameof(s), salt ⊻ 0x4de7d7c66d41da43))
+        hash(nameof(s), salt ⊻ 0x4de7d7c66d41da43)
     elseif E === ADD || E === MUL
         !iszero(salt) && return hash(hash(s, zero(UInt64)), salt)
         h = s.hash[]
@@ -273,7 +237,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)
         !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]
         !iszero(h) && return h
-        h′ = hashvec(arguments(s), hash(operation(s), hash(T, salt)))
+        h′ = hashvec(arguments(s), hash(operation(s), salt))
         s.hash[] = h′
         return h′
     else
@@ -436,7 +400,7 @@ function makeadd(sign, coeff, xs...)
 end
 
 
-function Add(T, coeff, dict; metadata=NO_METADATA, kw...)
+function Add{T}(coeff, dict; metadata=NO_METADATA, kw...)
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
@@ -454,7 +418,6 @@ function Add(T, coeff, dict; metadata=NO_METADATA, kw...)
         exprtype=ADD, coeff, dict,
         #f=Ref(false),
         #hash=Ref(UInt(0)),
-        valtype=T isa ValueType ? T : type2valtype(T),
         metadata,
         #arguments=[],
         kw...)
@@ -531,16 +494,12 @@ function makepow(a, b)
 end
 
 function Pow(a, b; metadata=NO_METADATA, kw...)
-    T = max(valtype(a), valtype(b), BOOL)
+    T = promote_symtype(^, symtype(a), symtype(b))
     base = a
     exp = b
     _iszero(exp) && return 1
     _isone(exp) && return base
-    BasicSymbolic(;
-                  exprtype=POW, f=base, coeff=exp,
-                  valtype=T,
-                  arguments=[],
-                  kw...)
+    Pow{T}(;base=base, exp=exp, kw...)
 end
 
 @inline function numerators(x::BasicSymbolic)
@@ -983,15 +942,10 @@ function _promote_symtype(f::BasicSymbolic, args)
     if TermInterface.issym(f)
         promote_symtype(f, map(symtype, args)...)
     else
-        return Real
         if length(args) == 0
             promote_symtype(f)
         elseif length(args) == 1
-            if f in monadic
-                valtype2type(min(REAL, valtype(args[1])))
-            else
-                promote_symtype(f, symtype(args[1]))
-            end
+            promote_symtype(f, symtype(args[1]))
         elseif length(args) == 2
             promote_symtype(f, symtype(args[1]), symtype(args[2]))
         elseif isassociative(f)
@@ -1031,10 +985,11 @@ variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 macro syms(xs...)
     defs = map(xs) do x
         n, t = _name_type(x)
-        :($(esc(n)) = Sym(;name=$(Expr(:quote, n)), exprtype=SYM, valtype=$(esc(t))))
+        T = esc(t)
+        #:($(esc(n)) = Sym{$T}(;name=$(Expr(:quote, n)), exprtype=SYM))
         nt = _name_type(x)
         n, t = nt.name, nt.type
-        :($(esc(n)) = Sym(;name=$(Expr(:quote, n)), exprtype=SYM, valtype=$(esc(t))))
+        :($(esc(n)) = Sym{$T}(;name=$(Expr(:quote, n)), exprtype=SYM))
     end
     Expr(:block, defs...,
          :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
@@ -1046,10 +1001,10 @@ end
 
 function _name_type(x)
     if x isa Symbol
-        return (name=x, type=type2valtype(Real))
+        return (name=x, type=Number)
     elseif x isa Expr && x.head === :(::)
         if length(x.args) == 1
-            return (name=nothing, type=type2valtype(x.args[1]))
+            return (name=nothing, type=x.args[1])
         end
         lhs, rhs = x.args[1:2]
         if lhs isa Expr && lhs.head === :call
@@ -1057,13 +1012,13 @@ function _name_type(x)
             type = map(x->_name_type(x).type, lhs.args[2:end])
             return (name=lhs.args[1], type=:($FnType{Tuple{$(type...)}, $rhs}))
         else
-            return (name=lhs, type=type2valtype(rhs))
+            return (name=lhs, type=rhs)
         end
     elseif x isa Expr && x.head === :ref
         ntype = _name_type(x.args[1]) # a::Number
         N = length(x.args)-1
         return (name=ntype.name,
-                type=:(Array{type2valtype($(ntype.type), $N)}),
+                type=:(Array{$(ntype.type), $N}),
                 array_metadata=:(Base.Slice.(($(x.args[2:end]...),))))
     elseif x isa Expr && x.head === :call
         return _name_type(:($x::Real))
@@ -1123,7 +1078,7 @@ function +(a::BasicSymbolic, b::BasicSymbolic)
         return b + a
     end
     coeff, dict = makeadd(1, 0, a, b)
-    Add(;valtype=add_t(a,b), coeff, dict)
+    Add{add_t(a,b)}(coeff, dict)
 end
 
 function +(a::Number, b::BasicSymbolic)

@@ -129,7 +129,7 @@ promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
     @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
-    #@eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
+    @eval (::$(typeof(f)))(a::BasicSymbolic)   = term($f, a)
 end
 
 #=

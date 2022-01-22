@@ -67,6 +67,25 @@ Base.isequal(::Symbolic, ::Symbolic) = false
 
 ### End of interface
 
+### Metatheory.jl e-graph rewriting integration 
+
+"""
+    SymtypeAnalysis
+
+This abstract type is used to identify the EGraph analysis 
+that keeps track of symtype through an EGraph. This must 
+be added to every EGraph that is used in SymbolicUtils.
+"""
+abstract type SymtypeAnalysis <: AbstractAnalysis end
+_getsymtype(T::Type{<:Symbolic{X}}) where X = X
+_getsymtype(T::Type{X}) where {X} = X
+EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeLiteral) = symtype(n.value)
+EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeTerm{T}) where {T} = _getsymtype(T)
+EGraphs.join(an::Type{SymtypeAnalysis}, A, B) = Union{A, B}
+
+# TODO JOIN egraph analysis
+TermInterface.symtype(ec::EClass) = getdata(ec, SymtypeAnalysis, Any)
+
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
                  "symbolic structure using `istree(x)`, `operation(x)`, `arguments(x)` " *
@@ -130,7 +149,7 @@ function (::Type{Sym{T}})(name; metadata=NO_METADATA) where {T}
     Sym{T, typeof(metadata)}(name, metadata)
 end
 
-Base.hash(s::Sym{T}, u::UInt) where {T} = hash(T, hash(s.name, u))
+Base.hash(s::Sym, u::UInt) = hash(s.name, u)
 
 function Base.isequal(a::Sym, b::Sym)
     symtype(a) !== symtype(b) && return false
@@ -312,11 +331,13 @@ end
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
-function Base.hash(t::Term{T}, salt::UInt) where {T}
+function Base.hash(t::Term, salt::UInt)
     !iszero(salt) && return hash(hash(t, zero(UInt)), salt)
     h = t.hash[]
     !iszero(h) && return h
-    h′ = hashvec(arguments(t), hash(operation(t), hash(T, salt)))
+    op = operation(t)
+    oph = op isa Function ? nameof(op) : op
+    h′ = hashvec(arguments(t), hash(oph, salt))
     t.hash[] = h′
     return h′
 end
@@ -349,6 +370,24 @@ function term(f, args...; type = nothing)
 end
 
 """
+    unflatten(t::Symbolic{T})
+Binarizes `Term`s with n-ary operations
+"""
+function unflatten(t::Symbolic{T}) where{T}
+    if istree(t)
+        f = operation(t)
+        if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops 
+            a = arguments(t)
+            return foldl((x,y) -> Term{T}(f, [x, y]), a)
+        end
+    end
+    return t
+end
+
+unflatten(t) = t
+
+
+"""
     similarterm(t, f, args, symtype; metadata=nothing)
 
 Create a term that is similar in type to `t`. Extending this function allows packages
@@ -366,9 +405,16 @@ different type than `t`, because `f` also influences the result.
 """
 TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing, exprhead=:call) = 
     similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata, exprhead=exprhead)
-    
+
+TermInterface.similarterm(t::Type{<:Symbolic}, f::Symbol, args; metadata=nothing, exprhead=:call) =
+    TermInterface.similarterm(t, eval(f), args; metadata=metadata, exprhead=exprhead)
+
 TermInterface.similarterm(t::Type{<:Term}, f, args, symtype; metadata=nothing, exprhead=:call) = 
     Term{_promote_symtype(f, args)}(f, args; metadata=metadata)
+
+TermInterface.similarterm(t::Type{<:Term}, f::Symbol, args, symtype; metadata=nothing, exprhead=:call) = 
+    Term{_promote_symtype(eval(f), args)}(eval(f), args; metadata=metadata)
+
 
 #--------------------
 #--------------------
@@ -549,6 +595,11 @@ showraw(t) = showraw(stdout, t)
 sdict(kv...) = Dict{Any, Number}(kv...)
 
 const SN = Symbolic{<:Number}
+# TODO Reviewme this is necessary for Metatheory.jl egraph rewriting
+# integration. Constructors of `Add, Mul, Pow...` from Base (+, *, ^, ...) 
+# Should now accepts EClasses as arguments. 
+const SN_EC = Union{SN, EClass}
+
 """
     Add(T, coeff, dict::Dict)
 
@@ -583,7 +634,6 @@ end
 
 TermInterface.symtype(a::Add{X}) where {X} = X
 
-
 TermInterface.istree(a::Type{Add}) = true
 
 TermInterface.operation(a::Add) = +
@@ -602,6 +652,17 @@ end
 Base.isequal(a::Add, b::Add) = a.coeff == b.coeff && isequal(a.dict, b.dict)
 
 Base.show(io::IO, a::Add) = show_term(io, a)
+
+function toterm(t::Add{T}) where T
+    args = []
+    for (k, coeff) in t.dict
+        push!(args, coeff == 1 ? k : Term{T}(*, [coeff, k]))
+    end
+    Term{T}(+, args)
+end
+
+toterm(t) = t
+
 
 """
     makeadd(sign, coeff::Number, xs...)
@@ -637,11 +698,12 @@ function makeadd(sign, coeff, xs...)
     coeff, d
 end
 
+add_t(a::Number,b::Number) = promote_symtype(+, symtype(a), symtype(b))
 add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
 sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
 sub_t(a) = promote_symtype(-, symtype(a))
 
-function +(a::SN, b::SN)
+function +(a::SN_EC, b::SN_EC)
     if a isa Add
         coeff, dict = makeadd(1, 0, b)
         T = promote_symtype(+, symtype(a), symtype(b))
@@ -652,11 +714,11 @@ function +(a::SN, b::SN)
     Add(add_t(a,b), makeadd(1, 0, a, b)...)
 end
 
-+(a::Number, b::SN) = Add(add_t(a,b), makeadd(1, a, b)...)
++(a::Number, b::SN_EC) = Add(add_t(a,b), makeadd(1, a, b)...)
 
-+(a::SN, b::Number) = Add(add_t(a,b), makeadd(1, b, a)...)
++(a::SN_EC, b::Number) = Add(add_t(a,b), makeadd(1, b, a)...)
 
-+(a::SN) = a
++(a::SN_EC) = a
 
 +(a::Add, b::Add) = Add(add_t(a,b),
                         a.coeff + b.coeff,
@@ -668,17 +730,17 @@ end
 
 -(a::Add) = Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict))
 
--(a::SN) = Add(sub_t(a), makeadd(-1, 0, a)...)
+-(a::SN_EC) = Add(sub_t(a), makeadd(-1, 0, a)...)
 
 -(a::Add, b::Add) = Add(sub_t(a,b),
                         a.coeff - b.coeff,
                         _merge(-, a.dict, b.dict, filter=_iszero))
 
--(a::SN, b::SN) = a + (-b)
+-(a::SN_EC, b::SN_EC) = a + (-b)
 
--(a::Number, b::SN) = a + (-b)
+-(a::Number, b::SN_EC) = a + (-b)
 
--(a::SN, b::Number) = a + (-b)
+-(a::SN_EC, b::Number) = a + (-b)
 
 """
     Mul(T, coeff, dict)
@@ -753,6 +815,16 @@ Base.isequal(a::Mul, b::Mul) = a.coeff == b.coeff && isequal(a.dict, b.dict)
 
 Base.show(io::IO, a::Mul) = show_term(io, a)
 
+function toterm(t::Mul{T}) where T
+    args = []
+    push!(args, t.coeff)
+    for (k, deg) in t.dict
+        push!(args, deg == 1 ? k : Term{T}(^, [k, deg]))
+    end
+    Term{T}(*, args)
+end
+
+
 function makemul(coeff, xs...; d=sdict())
     for x in xs
         if x isa Pow && x.exp isa Number
@@ -777,9 +849,9 @@ end
 mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
 mul_t(a) = promote_symtype(*, symtype(a))
 
-*(a::SN) = a
+*(a::SN_EC) = a
 
-function *(a::SN, b::SN)
+function *(a::SN_EC, b::SN_EC)
     # Always make sure Div wraps Mul
     if a isa Div && b isa Div
         Div(a.num * b.num, a.den * b.den)
@@ -796,7 +868,7 @@ end
                         a.coeff * b.coeff,
                         _merge(+, a.dict, b.dict, filter=_iszero))
 
-function *(a::Number, b::SN)
+function *(a::Number, b::SN_EC)
     if iszero(a)
         a
     elseif isone(a)
@@ -812,17 +884,17 @@ function *(a::Number, b::SN)
     end
 end
 
-*(a::SN, b::Number) = b * a
+*(a::SN_EC, b::Number) = b * a
 
-\(a::SN, b::Union{Number, SN}) = b / a
+\(a::SN_EC, b::Union{Number, SN_EC}) = b / a
 
-\(a::Number, b::SN) = b / a
+\(a::Number, b::SN_EC) = b / a
 
-/(a::SN, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
+/(a::SN_EC, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
 
-//(a::Union{SN, Number}, b::SN) = a / b
+//(a::Union{SN_EC, Number}, b::SN_EC) = a / b
 
-//(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
+//(a::SN_EC, b::T) where {T <: Number} = (one(T) // b) * a
 
 """
     Div(numerator_factors, denominator_factors, simplified=false)
@@ -852,6 +924,9 @@ maybe_intcoeff(x::Rational) = isone(x.den) ? x.num : x
 maybe_intcoeff(x) = x
 
 function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
+    if T<:Number && !(T<:SafeReal)
+        n, d = quick_cancel(n, d)
+    end
     _iszero(n) && return zero(typeof(n))
     _isone(d) && return n
 
@@ -901,7 +976,11 @@ end
 
 Base.show(io::IO, d::Div) = show_term(io, d)
 
-/(a::Union{SN,Number}, b::SN) = Div(a,b)
+function toterm(t::Div{T}) where T
+    Term{T}(/, [t.num, t.den])
+end
+
+/(a::Union{SN_EC,Number}, b::SN_EC) = Div(a,b)
 
 """
     Pow(base, exp)
@@ -944,6 +1023,10 @@ Base.isequal(p::Pow, b::Pow) = isequal(p.base, b.base) && isequal(p.exp, b.exp)
 
 Base.show(io::IO, p::Pow) = show_term(io, p)
 
+function toterm(t::Pow{T}) where T
+    Term{T}(^, [t.base, t.exp])
+end
+
 function makepow(a, b)
     base = a
     exp = b
@@ -954,11 +1037,11 @@ function makepow(a, b)
     return (base, exp)
 end
 
-^(a::SN, b) = Pow(a, b)
+^(a::SN_EC, b) = Pow(a, b)
 
-^(a::SN, b::SN) = Pow(a, b)
+^(a::SN_EC, b::SN_EC) = Pow(a, b)
 
-^(a::Number, b::SN) = Pow(a, b)
+^(a::Number, b::SN_EC) = Pow(a, b)
 
 function ^(a::Mul, b::Number)
     coeff = unstable_pow(a.coeff, b)

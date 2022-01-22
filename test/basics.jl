@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments
 using SymbolicUtils
 using IfElse: ifelse
 using Test
@@ -136,6 +136,16 @@ end
     @eqtest x // a == x / a
 end
 
+@testset "array-like operations" begin
+    abstract type SquareDummy end
+    Base.:*(a::Symbolic{SquareDummy}, b) = b^2
+    @syms s t a::SquareDummy A[1:2, 1:2]
+
+    @test isequal(ndims(A), 2)
+    @test_broken isequal(a.*[1 (s+t); t pi], [1 (s+t)^2; t^2 pi^2])
+    @test isequal(s.*[1 (s+t); t pi], [s s*(s+t); s*t s*pi])
+end
+
 @testset "err test" begin
     @syms t()
     @test_throws ErrorException t(2)
@@ -230,7 +240,7 @@ end
 end
 
 @testset "div" begin
-    @syms x y
+    @syms x::SafeReal y::Real
     @test (2x/2y).num isa Sym
     @test (2x/3y).num.coeff == 2
     @test (2x/3y).den.coeff == 3
@@ -239,4 +249,13 @@ end
     @test (2.5x/3x).num.coeff == 2.5
     @test (2.5x/3x).den.coeff == 3
     @test (x/3x).den.coeff == 3
+
+    @syms x y
+    @test (2x/2y).num isa Sym
+    @test (2x/3y).num.coeff == 2
+    @test (2x/3y).den.coeff == 3
+    @test (2x/-3x) == -2//3
+    @test (2.5x/3x).num == 2.5
+    @test (2.5x/3x).den == 3
+    @test (x/3x) == 1//3
 end

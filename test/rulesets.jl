@@ -86,6 +86,15 @@ end
 
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
+    @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
+    @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
+end
+
+@testset "Double angle formulas" begin
+    @syms r x
+    @eqtest simplify(r*cos(x/2)^2 - r*sin(x/2)^2) == r*cos(x)
+    @eqtest simplify(r*sin(x/2)^2 - r*cos(x/2)^2) == -r*cos(x)
+    @eqtest simplify(2cos(x)*sin(x)) == sin(2x)
 end
 
 @testset "Exponentials" begin
@@ -95,6 +104,11 @@ end
     @test simplify(exp(a)*exp(-a)) == 1
     @eqtest simplify(exp(a)^2) == simplify(exp(2a))
     @eqtest simplify(exp(a) * a * exp(b)) == simplify(a*exp(a+b))
+end
+
+@testset "simplify_fractions" begin
+    @syms x y z
+    @eqtest simplify(2*((y + z)/x) - 2*y/x - z/x*2) == 0
 end
 
 @testset "Depth" begin

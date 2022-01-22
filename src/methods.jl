@@ -19,7 +19,13 @@ const diadic = [max, min, hypot, atan, mod, rem, copysign,
                 polygamma, beta, logbeta]
 const previously_declared_for = Set([])
 
-# TODO: it's not possible to dispatch on the symtype! (only problem is Parameter{})
+#################### SafeReal #########################
+export SafeReal
+
+# ideally the relationship should be the other way around
+abstract type SafeReal <: Real end
+
+#######################################################
 
 assert_like(f, T) = nothing
 # a and b are objects, arguments gets recursively checked
@@ -76,61 +82,29 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
 
-# Check master to see more number methods...
-# a and b are objects, arguments gets recursively checked
 @number_methods(BasicSymbolic, term(f, a), term(f, a, b), skipbasics)
-
-# If you want to check type inference runtime you can do Base.inferencebarrier()
-# SymbolicUtils.promote_symtype(Base.inferencebarrier(sin), Number)
-# But there's more type instability, so you'll have more than 118ns of inference time
-
-# To solve this, we want fallback methods
-
-# foo(x) = 1
-# SymbolicUtils.promote_symtype(::typeof(foo), ::Type{<:Number}) = Complex)
-# term(foo, x)
-# term(foo, x) |> SymbolicUtils.symtype
-
-# This is an open typesystem. if-statements are closed typesystems
-# function _promote_symtype(f, a, b))
-# # We want f not to be specialized so that the fallback can do all the compile work
-# # 
-# Base.@nospecialize
-# function _promote_symtype(f, as...)
-#   # Common cases are first (optimized to run first)
-#   if f === ....
-#       return compute(as) # Some computation on as
-#   else
-#       return compute2(as)
-#   elseif f === ...
-#       return compute3(as)
-#   else
-#   # Fallback happens last
-#       promote_symtype(f, as...)
-# Base.@specialize # Turn specialization back on
-
-
-# function _promote_symtype(f::Function, as::Tuple, enumf, ourtypes)
-#       if enumf === ...
-#
-#       if enumf === ...
-# Can speculate on how to compile this thing, and then it's likely
-
-# Here's a nice macro
-# Base.@nif
-# Base.@nexpr
-# Base.@ntuple
-# Base.@nloops
-for f in diadic
+for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
-end
-
-for f in [+, -, *, \, /, ^]
-    @eval promote_symtype(::$(typeof(f)),
-                   T::Type{<:Number},
-                   S::Type{<:Number}) = promote_type(T, S)
+    @eval function promote_symtype(::$(typeof(f)),
+                   T::Type{<:SafeReal},
+                   S::Type{<:Real})
+        X = promote_type(T, Real)
+        X == Real ? SafeReal : X
+    end
+    @eval function promote_symtype(::$(typeof(f)),
+                   T::Type{<:Real},
+                   S::Type{<:SafeReal})
+        X = promote_type(Real, S)
+        X == Real ? SafeReal : X
+    end
+    @eval function promote_symtype(::$(typeof(f)),
+                   T::Type{<:SafeReal},
+                   S::Type{<:SafeReal})
+        X = promote_type(Real, Real)
+        X == Real ? SafeReal : X
+    end
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
@@ -153,10 +127,9 @@ end
 
 promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
-    @eval function (::$(typeof(f)))(x::Symbolic)
-        T = symtype(x)
-        T <: Number ? term($f, a) : error_f_symbolic($f, T)
-    end
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
+    #@eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 
 #=
@@ -209,5 +182,7 @@ promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T
 # Array-like operations
 Base.size(x::Symbolic{<:Number}) = ()
 Base.length(x::Symbolic{<:Number}) = 1
-Base.ndims(x::Symbolic{<:Number}) = 0
+Base.ndims(x::Symbolic{T}) where {T} = Base.ndims(T)
+Base.ndims(::Type{<:Symbolic{T}}) where {T} = Base.ndims(T)
+Base.broadcastable(x::Symbolic{T}) where {T<:Number} = Ref(x)
 =#

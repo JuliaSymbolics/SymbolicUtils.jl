@@ -207,6 +207,8 @@ function TermInterface.arguments(x::PolyForm{T}) where {T}
             [unstable_pow(resolve(v), pow)
                     for (v, pow) in MP.powers(m) if !iszero(pow)]
         end
+    elseif MP.nterms(x.p) == 0
+        [0]
     else
         ts = MP.terms(x.p)
         return [MP.isconstant(t) ?
@@ -237,11 +239,15 @@ function unpolyize(x)
     Postwalk(identity, similarterm=simterm)(x)
 end
 
+function toterm(x::PolyForm)
+    toterm(unpolyize(x))
+end
+
 ## Rational Polynomial form with Div
 
 function polyform_factors(d, pvar2sym, sym2term)
     make(xs) = map(xs) do x
-        if ispow(x) && x.base isa Integer && x.exp > 0
+        if ispow(x) && x.exp isa Integer && x.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
             Pow(;base=PolyForm(x.base, pvar2sym, sym2term), x.exp)
@@ -282,6 +288,20 @@ function add_divs(x, y)
     end
 end
 
+function frac_similarterm(x, f, args; kw...)
+    if f in (*, /, \, +, -)
+        f(args...)
+    elseif f == (^)
+        if args[2] isa Integer && args[2] < 0
+            1/((args[1])^(-args[2]))
+        else
+            args[1]^args[2]
+        end
+    else
+        similarterm(x, f, args; kw...)
+    end
+end
+
 """
     simplify_fractions(x; polyform=false)
 
@@ -298,7 +318,9 @@ function simplify_fractions(x; polyform=false)
 
     sdiv(a) = isdiv(a) ? simplify_div(a) : a
 
-    expr = Postwalk(sdiv ∘ quick_cancel)(Postwalk(add_with_div)(x))
+    expr = Postwalk(sdiv ∘ quick_cancel,
+                    similarterm=frac_similarterm)(Postwalk(add_with_div,
+                                                           similarterm=frac_similarterm)(x))
 
     polyform ? expr : unpolyize(expr)
 end

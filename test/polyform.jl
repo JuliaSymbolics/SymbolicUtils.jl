@@ -11,11 +11,13 @@ include("utils.jl")
                                   (y*(2x - 3y + 3z) +
                                    x*(x + z)))) == repr(simplify_fractions((1 + x + 4z) / (x + 3.0y)))
     @test simplify_fractions(x/(x+3) + 3/(x+3)) == 1
-    @test repr(simplify(simplify_fractions(cos(x)/sin(x) + sin(x)/cos(x)))) == "1 / (cos(x)*sin(x))"
+    @test repr(simplify(simplify_fractions(cos(x)/sin(x) + sin(x)/cos(x)))) == "2 / sin(2x)"
 end
 
 @testset "expand" begin
     @syms a b c d
+
+    @test expand(term(*, 0, a)) == 0
     @test expand(a * (b + -1 * c) + -1 * (b * a + -1 * c * a)) == 0
     @eqtest simplify(expand(sin((a+b)^2)^2)) == simplify(sin(a^2+2*(b*a)+b^2)^2)
     @test simplify(expand(sin((a+b)^2)^2 + cos((a+b)^2)^2)) == 1
@@ -56,6 +58,10 @@ end
     @eqtest simplify_fractions(3x^2/x^3) == 3/x
     @eqtest simplify_fractions(3*(x^2)*(y^3)/(3*(x^3)*(y^2))) == y/x
     @eqtest simplify_fractions(3*(x^x)/x*y) == 3*(x^x)/x*y
+
+    ##404#issuecomment-939404030
+    a = 1 / (x - (2//1)) + ((-5//1) - x) / ((x - (2//1))^2)
+    @test isequal(simplify_fractions(a), -7/(x-2)^2)
 end
 
 @testset "isone iszero" begin

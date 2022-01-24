@@ -257,3 +257,14 @@ end
     @test (2.5x/3x).den == 3
     @test (x/3x) == 1//3
 end
+
+@testset "LiteralReal" begin
+    @syms x::LiteralReal y::LiteralReal z::LiteralReal
+    @test repr(x+x) == "x + x"
+    @test repr(x*x) == "x*x"
+    @test repr(x*x + x*x) == "x*x + x*x"
+    for ex in [sin(x), x+x, x*x, x\x, x/x]
+        @test typeof(sin(x)) <: Term{LiteralReal}
+    end
+    @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
+end

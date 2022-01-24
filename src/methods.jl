@@ -115,8 +115,7 @@ for f in vcat(diadic, [+, -, *, \, /, ^])
         @eval function promote_symtype(::$(typeof(f)),
                 T::Type{<:$R},
                 S::Type{<:$R})
-            X = promote_type(Real, Real)
-            X == Real ? $R : X
+            $R
         end
     end
 end
@@ -127,6 +126,7 @@ Base.rem2pi(x::Symbolic{<:Number}, mode::Base.RoundingMode) = term(rem2pi, x, mo
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
     @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralReal}) = LiteralReal
     @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 

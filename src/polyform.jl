@@ -206,6 +206,8 @@ function TermInterface.arguments(x::PolyForm{T}) where {T}
             [unstable_pow(resolve(v), pow)
                     for (v, pow) in MP.powers(m) if !iszero(pow)]
         end
+    elseif MP.nterms(x.p) == 0
+        [0]
     else
         ts = MP.terms(x.p)
         return [MP.isconstant(t) ?

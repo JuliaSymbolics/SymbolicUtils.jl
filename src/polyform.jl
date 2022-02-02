@@ -27,7 +27,7 @@ PolyForm(sin((x+y)^2))               #=> sin((x+y)^2)
 PolyForm(sin((x+y)^2), recurse=true) #=> sin((x^2 + (2x)y + y^2))
 ```
 """
-struct PolyForm{T, M} <: Symbolic
+struct PolyForm{T, M} <: Symbolic{T}
     p::MP.AbstractPolynomialLike
     pvar2sym::Bijection{Any,Any}   # @polyvar x --> @sym x  etc.
     sym2term::Dict{Sym,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
@@ -398,13 +398,13 @@ Has optimized processes for `Mul` and `Pow` terms.
 function quick_cancel(d::BasicSymbolic)
     if isdiv(d)
         num, den = quick_cancel(d.num, d.den)
-        return Div(;num, den)
+        return Div(num, den)
     else
         return x
     end
 end
 
-function quick_cancel(x::BasicSymbolic, y::BasicSymbolic)
+function quick_cancel(x, y)
     if ispow(x) && ispow(y)
         return quick_powpow(x, y)
     elseif ismul(x) && ispow(y)
@@ -420,7 +420,7 @@ function quick_cancel(x::BasicSymbolic, y::BasicSymbolic)
     elseif ismul(x)
         return quick_mul(x, y)
     elseif ismul(y)
-        return reverse(quick_mulpow(y, x))
+        return reverse(quick_mul(y, x))
     else
         return isequal(x, y) ? (1,1) : (x, y)
     end
@@ -429,21 +429,19 @@ end
 # ispow(x) case
 function quick_pow(x, y)
     x.exp isa Number || return (x, y)
-    isequal(x.base, y) && x.exp >= 1 ? (Pow(;x.base, exp=x.exp - 1),1) : (x, y)
+    isequal(x.base, y) && x.exp >= 1 ? (Pow{symtype(x)}(x.base, x.exp - 1),1) : (x, y)
 end
-
-#quick_cancel(y, x::Pow) = reverse(quick_cancel(x,y))
 
 # Double Pow case
 function quick_powpow(x, y)
     if isequal(x.base, y.base)
         !(x.exp isa Number && y.exp isa Number) && return (x, y)
         if x.exp > y.exp
-            return Pow(;x.base, exp=x.exp-y.exp), 1
+            return Pow{symtype(x)}(x.base, x.exp-y.exp), 1
         elseif x.exp == y.exp
             return 1, 1
         else # x.exp < y.exp
-            return 1, Pow(;y.base, exp=y.exp-x.exp)
+            return 1, Pow{symtype(y)}(y.base, y.exp-x.exp)
         end
     end
     return x, y
@@ -461,7 +459,7 @@ function quick_mul(x, y)
             error("Can't reach")
         end
 
-        return Mul(;x.coeff, dict=d), 1
+        return Mul(symtype(x), x.coeff, d), 1
     else
         return x, y
     end
@@ -482,20 +480,16 @@ function quick_mulpow(x, y)
             den = Pow{symtype(y)}(y.base, y.exp-d[y.base])
             delete!(d, y.base)
         end
-        return Mul(x.coeff, dict=d), den
+        return Mul(symtype(x), x.coeff, d), den
     else
         return x, y
     end
 end
 
-#quick_cancel(x::Pow, y::Mul) = reverse(quick_cancel(y,x))
-
-#quick_cancel(y, x::Mul) = reverse(quick_cancel(x,y))
-
 # Double mul case
 function quick_mulmul(x, y)
     num_dict, den_dict = _merge_div(x.dict, y.dict)
-    Mul(;x.coeff, dict=num_dict), Mul(;y.coeff, dict=den_dict)
+    Mul(symtype(x), x.coeff, num_dict), Mul(symtype(y), y.coeff, den_dict)
 end
 
 function _merge_div(ndict, ddict)

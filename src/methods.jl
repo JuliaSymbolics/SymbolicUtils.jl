@@ -129,10 +129,8 @@ promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
     @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
-    @eval (::$(typeof(f)))(a::BasicSymbolic)   = term($f, a)
 end
 
-#=
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)
 Base.:*(a::Symbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)
 
@@ -185,4 +183,3 @@ Base.length(x::Symbolic{<:Number}) = 1
 Base.ndims(x::Symbolic{T}) where {T} = Base.ndims(T)
 Base.ndims(::Type{<:Symbolic{T}}) where {T} = Base.ndims(T)
 Base.broadcastable(x::Symbolic{T}) where {T<:Number} = Ref(x)
-=#

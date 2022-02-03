@@ -27,18 +27,16 @@ PolyForm(sin((x+y)^2))               #=> sin((x+y)^2)
 PolyForm(sin((x+y)^2), recurse=true) #=> sin((x^2 + (2x)y + y^2))
 ```
 """
-struct PolyForm{T, M} <: Symbolic{T}
+struct PolyForm{T} <: Symbolic{T}
     p::MP.AbstractPolynomialLike
     pvar2sym::Bijection{Any,Any}   # @polyvar x --> @sym x  etc.
-    sym2term::Dict{Sym,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
-    metadata::M
-end
-
-function (::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T}
-#function PolyForm(p, d1, d2, m=nothing) where {T}
-    p isa Number && return p
-    p isa MP.AbstractPolynomialLike && MP.isconstant(p) && return convert(Number, p)
-    PolyForm{T, typeof(m)}(p, d1, d2, m)
+    sym2term::Dict{BasicSymbolic,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
+    metadata
+    function (::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T}
+        p isa Number && return p
+        p isa MP.AbstractPolynomialLike && MP.isconstant(p) && return convert(Number, p)
+        new{T}(p, d1, d2, m)
+    end
 end
 
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
@@ -64,7 +62,7 @@ end
 function get_sym2term()
     v = SYM2TERM[].value
     if v === nothing
-        d = Dict{Sym,Any}()
+        d = Dict{BasicSymbolic,Any}()
         SYM2TERM[] = WeakRef(d)
         return d
     else
@@ -215,7 +213,7 @@ function TermInterface.arguments(x::PolyForm{T}) where {T}
                 convert(Number, t) :
                 (is_var(t) ?
                  resolve(t) :
-                 PolyForm{T, Nothing}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
+                 PolyForm{T}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
 
@@ -250,7 +248,7 @@ function polyform_factors(d, pvar2sym, sym2term)
         if ispow(x) && x.exp isa Integer && x.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(;base=PolyForm(x.base, pvar2sym, sym2term), x.exp)
+            Pow(PolyForm(x.base, pvar2sym, sym2term), x.exp)
         else
             PolyForm(x, pvar2sym, sym2term)
         end
@@ -268,7 +266,7 @@ function simplify_div(d)
     if all(_isone, ds)
         return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
     else
-        Div(;num=simplify_fractions(_mul(ns)), den=simplify_fractions(_mul(ds)))
+        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)))
     end
 end
 
@@ -387,7 +385,7 @@ _gcd(x, y) = 1
 
 
 """
-    quick_cancel(d::BasicSymbolic)
+    quick_cancel(d)
 
 Cancel out matching factors from numerator and denominator.
 This is not as effective as `simplify_fractions`, for example,
@@ -395,12 +393,12 @@ it wouldn't simplify `(x^2 + 15 -  8x)  / (x - 5)` to `(x - 3)`.
 But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
-function quick_cancel(d::BasicSymbolic)
+function quick_cancel(d)
     if isdiv(d)
         num, den = quick_cancel(d.num, d.den)
         return Div(num, den)
     else
-        return x
+        return d
     end
 end
 

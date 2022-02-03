@@ -161,8 +161,8 @@ function TermInterface.unsorted_arguments(x::BasicSymbolic)
     args = x.arguments
     isempty(args) || return args
     sizehint!(args, 2)
-    push!(args, numerators(x))
-    push!(args, denominators(x))
+    push!(args, x.num)
+    push!(args, x.den)
     return args
 
     @label POW
@@ -204,7 +204,7 @@ function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     elseif E === ADD || E === MUL
         a.coeff == b.coeff && isequal(a.dict, b.dict)
     elseif E === DIV
-        isequal(numerators(a), numerators(b)) && isequal(denominators(a), denominators(b))
+        isequal(a.num, b.num) && isequal(a.den, b.den)
     elseif E === POW
         isequal(a.exp, b.exp) && isequal(a.base, b.base)
     elseif E === TERM
@@ -238,7 +238,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)
         s.hash[] = h′
         return h′
     elseif E === DIV
-        return hash(numerators(s), hash(denominators(s), salt ⊻ 0x334b218e73bbba53))
+        return hash(s.num, hash(s.den, salt ⊻ 0x334b218e73bbba53))
     elseif E === POW
         hash(s.exp, hash(s.base, salt ⊻ 0x2b55b97a6efb080c))
     elseif E === TERM
@@ -323,7 +323,7 @@ ratio(x::Rat,y::Rat) = x//y
 function maybe_intcoeff(x)
     if ismul(x)
         if x.coeff isa Rational && isone(x.coeff.den)
-            Mul{symtype(x)}(; coeff = x.coeff.num, x.metadata, arguments=[], issorted=RefValue(false))
+            Mul{symtype(x)}(; coeff=x.coeff.num, dict=x.dict, x.metadata, arguments=[], issorted=RefValue(false))
         else
             x
         end
@@ -361,6 +361,10 @@ function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
             invdc = ratio(1, g)
             n = maybe_intcoeff(invdc * n)
             d = maybe_intcoeff(invdc * d)
+            if d isa Number
+                _isone(d) && return n
+                _isone(-d) && return -1 * n
+            end
         end
     end
 
@@ -372,11 +376,11 @@ function Div(n,d, simplified=false; kw...)
 end
 
 @inline function numerators(x)
-    isdiv(x) && return x.num
+    isdiv(x) && return numerators(x.num)
     istree(x) && operation(x) === (*) ? arguments(x) : Any[x]
 end
 
-@inline denominators(x) = isdiv(x) ? x.den : Any[1]
+@inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
 
 function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
     _iszero(b) && return 1

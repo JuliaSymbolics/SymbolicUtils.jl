@@ -10,14 +10,15 @@
 
 arglength(a) = length(arguments(a))
 function <ₑ(a, b)
-    # Copy out BasicSymbolic stuff
-    #if isterm(a) && (b isa Symbolic && !isterm(b))
-    #    return false
-    #elseif isterm(b) && (a isa Symbolic && !isterm(a))
-    #    return true
-    #elseif (isadd(a) || ismul(a)) && (isadd(b) || ismul(b))
-    #    return cmp_mul_adds(a, b)
-    if !TermInterface.istree(a) && !TermInterface.istree(b)
+    if isterm(a) && (b isa Symbolic && !isterm(b))
+        return false
+    elseif isterm(b) && (a isa Symbolic && !isterm(a))
+        return true
+    elseif (isadd(a) || ismul(a)) && (isadd(b) || ismul(b))
+        return cmp_mul_adds(a, b)
+    elseif TermInterface.issym(a) && TermInterface.issym(b)
+        a.name < b.name
+    elseif !TermInterface.istree(a) && !TermInterface.istree(b)
         T = typeof(a)
         S = typeof(b)
         return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)
@@ -43,22 +44,6 @@ function cmp_mul_adds(a, b)
         x <ₑ y && return true
     end
     return false
-end
-
-#<ₑ(a::Symbolic, b::Sym) = !(b <ₑ a) # Don't need because of line 12
-#<ₑ(a::Sym, b::Sym) = a.name < b.name
-function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
-    if isterm(a) && (b isa Symbolic && !isterm(b))
-        return false
-    elseif isterm(b) && (a isa Symbolic && !isterm(a))
-        return true
-    elseif (isadd(a) || ismul(a)) && (isadd(b) || ismul(b))
-        return cmp_mul_adds(a, b)
-    elseif TermInterface.issym(a) && TermInterface.issym(b)
-        a.name < b.name
-    else
-        return !(b <ₑ a)
-    end
 end
 
 function <ₑ(a::Symbol, b::Symbol)

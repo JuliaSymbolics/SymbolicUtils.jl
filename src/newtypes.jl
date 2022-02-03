@@ -22,9 +22,8 @@ const NOT_SORTED = RefValue(false)
 const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 
-@compactify begin
+@compactify show_methods=false begin
     @abstract struct BasicSymbolic{T} <: Symbolic{T}
-        bitflags::UInt8        = 0x00
         metadata::Metadata     = NO_METADATA
     end
     struct Sym{T} <: BasicSymbolic{T}
@@ -246,6 +245,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)
         !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]
         !iszero(h) && return h
+        op = operation(s)
         oph = op isa Function ? nameof(op) : op
         h′ = hashvec(arguments(s), hash(oph, salt))
         s.hash[] = h′
@@ -322,7 +322,11 @@ ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
 ratio(x::Rat,y::Rat) = x//y
 function maybe_intcoeff(x)
     if ismul(x)
-        x.coeff isa Rational && isone(x.coeff.den) ? Setfield.@set!(x.coeff = x.coeff.num) : x
+        if x.coeff isa Rational && isone(x.coeff.den)
+            Mul{symtype(x)}(; coeff = x.coeff.num, x.metadata, arguments=[], issorted=RefValue(false))
+        else
+            x
+        end
     elseif x isa Rational
         isone(x.den) ? x.num : x
     else
@@ -330,18 +334,18 @@ function maybe_intcoeff(x)
     end
 end
 
-function (::Type{Div{T}})(n, d, simplified=false; metadata=nothing) where {T}
+function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
     if T<:Number && !(T<:SafeReal)
         n, d = quick_cancel(n, d)
     end
     _iszero(n) && return zero(typeof(n))
     _isone(d) && return n
 
-    if n isa Div && d isa Div
+    if isdiv(n) && isdiv(d)
         return Div{T}(n.num * d.den, n.den * d.num)
-    elseif n isa Div
+    elseif isdiv(n)
         return Div{T}(n.num, n.den * d)
-    elseif d isa Div
+    elseif isdiv(d)
         return Div{T}(n * d.den, d.num)
     end
 
@@ -1131,8 +1135,6 @@ function *(a::Number, b::SN_EC)
         a
     elseif isone(a)
         b
-    elseif a isa Rational
-        Div(a.num * b, a.den)
     elseif isdiv(b)
         Div(a*b.num, b.den)
     # SymEngine and Mathematica don't do this
@@ -1149,7 +1151,7 @@ end
 ### Div
 ###
 
-/(a::Union{SN_EC,Number}, b::SN_EC) = Div(a,b)
+/(a::Union{SN_EC,Number}, b::SN_EC) = Div(a, b)
 
 *(a::SN_EC, b::Number) = b * a
 

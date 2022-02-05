@@ -36,7 +36,7 @@ end
 
 Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
-@inline _nameof(x) = x isa Function ? nameof(x) : x 
+@inline _nameof(x) = x isa Function ? nameof(x) : x
 
 function (acr::ACRule)(term::Y) where {Y}
     r = rule(acr)

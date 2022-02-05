@@ -121,12 +121,10 @@ end
 function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
     expr = gen_rand_expr(inputs; spec=spec, kwargs...)
-    Main._a[] = expr
     inputs = collect(inputs)
     code = try
         SymbolicUtils.Code.toexpr(expr)
     catch err
-        @show expr
         rethrow(err)
     end
     unsimplifiedstr = """

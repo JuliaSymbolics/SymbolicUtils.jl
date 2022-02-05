@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm
 using SymbolicUtils
 using IfElse: ifelse
 using Test
@@ -7,25 +7,23 @@ using Test
     let
         @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
 
-        @show issym(a)
-        @show a.valtype
-        @test issym(a) && a.valtype isa Number
+        @test issym(a) && symtype(a) == Number
         @test a.name === :a
 
-        @test issym(b) && b.valtype isa Float64
-        @test b.name === :b
+        @test issym(b) && symtype(b) == Float64
+        @test nameof(b) === :b
 
-        @test f isa Sym{FnType{Tuple{Real}, Number}}
+        @test issym(f)
         @test f.name === :f
 
-        @test g isa Sym{FnType{Tuple{Number, FnType{Tuple{Real}, Number}}, Int}}
+        @test issym(g)
         @test g.name === :g
 
-        @test f(b) isa Term
+        @test isterm(f(b))
         @test symtype(f(b)) === Number
         @test_throws ErrorException f(a)
 
-        @test g(b, f) isa Term
+        @test isterm(g(b, f))
         @test_throws ErrorException g(b, a)
 
         @test symtype(g(b, f)) === Int
@@ -99,7 +97,7 @@ end
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test isequal(w + z, Add(Number, 0, Dict(w=>1, z=>1)))
+    @test isequal(w + z, Add(Complex, 0, Dict(w=>1, z=>1)))
     @test isequal(z + a, Add(Number, 0, Dict(z=>1, a=>1)))
     @test isequal(a + b, Add(Real, 0, Dict(a=>1, b=>1)))
     @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
@@ -214,7 +212,7 @@ end
 
 @testset "canonical form" begin
     @syms a b c
-    for x in [a, a*b, a+b, a-b, a^2, sin(a)]
+    for x in [a, a*b, a^2, sin(a)]
         @test isequal(x * 1, x)
         @test x * 0 === 0
         @test isequal(x + 0, x)
@@ -241,7 +239,7 @@ end
 
 @testset "div" begin
     @syms x::SafeReal y::Real
-    @test (2x/2y).num isa Sym
+    @test issym((2x/2y).num)
     @test (2x/3y).num.coeff == 2
     @test (2x/3y).den.coeff == 3
     @test (2x/-3x).num.coeff == -2
@@ -251,7 +249,7 @@ end
     @test (x/3x).den.coeff == 3
 
     @syms x y
-    @test (2x/2y).num isa Sym
+    @test issym((2x/2y).num)
     @test (2x/3y).num.coeff == 2
     @test (2x/3y).den.coeff == 3
     @test (2x/-3x) == -2//3

@@ -140,12 +140,13 @@ function TermInterface.unsorted_arguments(x::BasicSymbolic)
     end
 
     @label ADDMUL
+    E = exprtype(x)
     args = x.arguments
     isempty(args) || return args
     siz = length(x.dict)
-    iszerocoeff = iszero(x.coeff)
-    sizehint!(args, iszerocoeff ? siz : siz + 1)
-    iszerocoeff || push!(args, x.coeff)
+    idcoeff = E === ADD ? iszero(x.coeff) : isone(x.coeff)
+    sizehint!(args, idcoeff ? siz : siz + 1)
+    idcoeff || push!(args, x.coeff)
     if isadd(x)
         for (k, v) in x.dict
             push!(args, k * v)
@@ -394,7 +395,9 @@ end
 
 function toterm(t::BasicSymbolic{T}) where T
     E = exprtype(t)
-    if E === ADD || E === MUL
+    if E === TERM
+        return t
+    elseif E === ADD || E === MUL
         args = []
         for (k, coeff) in t.dict
             push!(args, coeff == 1 ? k : Term{T}(E === MUL ? (^) : (*), Any[coeff, k]))
@@ -493,7 +496,7 @@ Binarizes `Term`s with n-ary operations
 function unflatten(t::Symbolic{T}) where{T}
     if istree(t)
         f = operation(t)
-        if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops 
+        if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops
             a = arguments(t)
             return foldl((x,y) -> Term{T}(f, Any[x, y]), a)
         end
@@ -664,6 +667,25 @@ function setmetadata(s::Symbolic, ctx::DataType, val)
         @set s.metadata = Base.ImmutableDict{DataType, Any}(ctx, val)
     end
 end
+
+### Metatheory.jl e-graph rewriting integration
+
+"""
+    SymtypeAnalysis
+
+This abstract type is used to identify the EGraph analysis
+that keeps track of symtype through an EGraph. This must
+be added to every EGraph that is used in SymbolicUtils.
+"""
+abstract type SymtypeAnalysis <: AbstractAnalysis end
+_getsymtype(T::Type{<:Symbolic{X}}) where X = X
+_getsymtype(T::Type{X}) where {X} = X
+EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeLiteral) = symtype(n.value)
+EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeTerm{T}) where {T} = _getsymtype(T)
+EGraphs.join(an::Type{SymtypeAnalysis}, A, B) = Union{A, B}
+
+# TODO JOIN egraph analysis
+TermInterface.symtype(ec::EClass) = getdata(ec, SymtypeAnalysis, Any)
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
@@ -843,7 +865,6 @@ end
 showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)
 showraw(t) = showraw(stdout, t)
 
-#=
 function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
     print(io, nameof(f))
     # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
@@ -852,7 +873,6 @@ function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
     print(io, "(", argrepr, ")")
     print(io, "::", Y)
 end
-=#
 
 function Base.show(io::IO, v::BasicSymbolic)
     if TermInterface.issym(v)
@@ -910,7 +930,7 @@ end
 The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
-function promote_symtype(f::FnType{X,Y}, args...) where {X, Y}
+function promote_symtype(f::BasicSymbolic{<:FnType{X,Y}}, args...) where {X, Y}
     if X === Tuple
         return Y
     end
@@ -1008,7 +1028,7 @@ function _name_type(x)
                 type=:(Array{$(ntype.type), $N}),
                 array_metadata=:(Base.Slice.(($(x.args[2:end]...),))))
     elseif x isa Expr && x.head === :call
-        return _name_type(:($x::Real))
+        return _name_type(:($x::Number))
     else
         syms_syntax_error()
     end
@@ -1019,7 +1039,7 @@ end
 ###
 const SN = Symbolic{<:Number}
 # TODO Reviewme this is necessary for Metatheory.jl egraph rewriting
-# integration. Constructors of `Add, Mul, Pow...` from Base (+, *, ^, ...) 
+# integration. Constructors of `Add, Mul, Pow...` from Base (+, *, ^, ...)
 # Should now accepts EClasses as arguments.
 const SN_EC = Union{SN, EClass}
 
@@ -1141,11 +1161,10 @@ function *(a::Number, b::SN_EC)
         b
     elseif isdiv(b)
         Div(a*b.num, b.den)
-    # SymEngine and Mathematica don't do this
-    #elseif isadd(b)
-    #    # 2(a+b) -> 2a + 2b
-    #    T = promote_symtype(+, typeof(a), symtype(b))
-    #    Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
+    elseif isone(-a) && isadd(b)
+        # -1(a+b) -> -a - b
+        T = promote_symtype(+, typeof(a), symtype(b))
+        Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
     else
         Mul(mul_t(a, b), makemul(a, b)...)
     end

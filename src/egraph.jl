@@ -79,13 +79,15 @@ end
 costfun(n::ENodeLiteral, g::EGraph, an) = 0
 
 egraph_simterm(x, head, args, symtype=nothing; metadata=nothing, exprhead=exprhead(x)) =
-TermInterface.similarterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
+    TermInterface.similarterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
 
-
-#TODO: this is probably wrong
 # Custom similarterm to use in EGraphs on <:Symbolic types that treats everything as a Term
 function egraph_simterm(x::Type{<:BasicSymbolic}, f, args, symtype=nothing; metadata=nothing, exprhead=:call)
-    res = Term(f isa Symbol ? eval(f) : f, args; metadata=metadata, symtype=symtype)
+    T = symtype
+    if T === nothing
+        T = _promote_symtype(f, args)
+    end
+    res = Term{T}(f isa Symbol ? eval(f) : f, args; metadata=metadata)
     return res
 end
 

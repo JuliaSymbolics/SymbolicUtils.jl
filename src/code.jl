@@ -120,9 +120,9 @@ function function_to_expr(::typeof(^), O, st)
     if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
-            return toexpr(Term(;f=inv, arguments=[ex]), st)
+            return toexpr(Term(inv, Any[ex]), st)
         else
-            return toexpr(Term(;f=^, arguments=[Term(;f=inv, arguments=[ex]), -args[2]]), st)
+            return toexpr(Term(^, Any[Term(inv, Any[ex]), -args[2]]), st)
         end
     end
     return nothing
@@ -748,7 +748,7 @@ end
 function cse_block(state, t, name=Symbol("var-", hash(t)))
     assignments = Assignment[]
     counter = Ref{Int}(1)
-    names = Dict{Any, Sym}()
+    names = Dict{Any, BasicSymbolic}()
     Let(assignments, cse_block!(assignments, counter, names, name, state, t))
 end
 

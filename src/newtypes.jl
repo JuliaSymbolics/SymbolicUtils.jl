@@ -412,7 +412,6 @@ function toterm(t::BasicSymbolic{T}) where T
     end
 end
 
-
 """
     makeadd(sign, coeff::Number, xs...)
 
@@ -865,15 +864,6 @@ end
 showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)
 showraw(t) = showraw(stdout, t)
 
-function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
-    print(io, nameof(f))
-    # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
-    # best printing, but it's better than erroring.
-    argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")
-    print(io, "(", argrepr, ")")
-    print(io, "::", Y)
-end
-
 function Base.show(io::IO, v::BasicSymbolic)
     if TermInterface.issym(v)
         Base.show_unquoted(io, v.name)
@@ -942,6 +932,15 @@ function promote_symtype(f::BasicSymbolic{<:FnType{X,Y}}, args...) where {X, Y}
         error("$t is not a subtype of $X.")
     end
     return Y
+end
+
+function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
+    print(io, nameof(f))
+    # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
+    # best printing, but it's better than erroring.
+    argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")
+    print(io, "(", argrepr, ")")
+    print(io, "::", Y)
 end
 
 @inline isassociative(op) = op === (+) || op === (*)
@@ -1043,15 +1042,16 @@ const SN = Symbolic{<:Number}
 # Should now accepts EClasses as arguments.
 const SN_EC = Union{SN, EClass}
 
-_merge(f, d, others...; filter=x->false) = _merge!(f, Dict{Any,Any}(d), others...; filter=filter)
+_merge(f::F, d, others...; filter=x->false) where F = _merge!(f, Dict{Any,Any}(d), others...; filter=filter)
 
-function _merge!(f, d, others...; filter=x->false)
+function _merge!(f::F, d, others...; filter=x->false) where F
     acc = d
     for other in others
         for (k, v) in other
             v = f(v)
-            if haskey(acc, k)
-                v = acc[k] + v
+            ak = get(acc, k, nothing)
+            if ak !== nothing
+                v = ak + v
             end
             if filter(v)
                 delete!(acc, k)

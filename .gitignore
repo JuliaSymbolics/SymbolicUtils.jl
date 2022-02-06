@@ -6,3 +6,4 @@ Manifest.toml
 benchmark/tune.json
 scratch.jl
 profile.*
+statprof/

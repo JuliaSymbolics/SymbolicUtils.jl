@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic
 using SymbolicUtils
 using IfElse: ifelse
 using Test
@@ -264,7 +264,7 @@ end
     @test repr(x*x) == "x*x"
     @test repr(x*x + x*x) == "x*x + x*x"
     for ex in [sin(x), x+x, x*x, x\x, x/x]
-        @test typeof(sin(x)) <: Term{LiteralReal}
+        @test typeof(sin(x)) <: BasicSymbolic{LiteralReal}
     end
     @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
 end

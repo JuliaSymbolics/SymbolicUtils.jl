@@ -19,11 +19,17 @@ const diadic = [max, min, hypot, atan, mod, rem, copysign,
                 polygamma, beta, logbeta]
 const previously_declared_for = Set([])
 
+const basic_monadic = [-, +]
+const basic_diadic = [+, -, *, /, //, \, ^]
 #################### SafeReal #########################
-export SafeReal
+export SafeReal, LiteralReal
 
 # ideally the relationship should be the other way around
 abstract type SafeReal <: Real end
+
+################### LiteralReal #######################
+
+abstract type LiteralReal <: Real end
 
 #######################################################
 
@@ -42,14 +48,13 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     exprs = []
 
     skip_basics = options !== nothing ? options == :skipbasics : false
+    only_basics = options !== nothing ? options == :onlybasics : false
     skips = Meta.isexpr(options, [:vcat, :hcat, :vect]) ? Set(options.args) : []
-    basic_monadic = [-, +]
-    basic_diadic = [+, -, *, /, //, \, ^]
 
     rhs2 = :($assert_like(f, Number, a, b); $rhs2)
     rhs1 = :($assert_like(f, Number, a); $rhs1)
 
-    for f in (skip_basics ? diadic : vcat(basic_diadic, diadic))
+    for f in (skip_basics ? diadic : only_basics ? basic_diadic : vcat(basic_diadic, diadic))
         nameof(f) in skips && continue
         for S in previously_declared_for
             push!(exprs, quote
@@ -70,7 +75,7 @@ function number_methods(T, rhs1, rhs2, options=nothing)
         push!(exprs, expr)
     end
 
-    for f in (skip_basics ? monadic : vcat(basic_monadic, monadic))
+    for f in (skip_basics ? monadic : only_basics ? basic_monadic : vcat(basic_monadic, monadic))
         nameof(f) in skips && continue
         push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
     end
@@ -83,27 +88,30 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
 end
 
 @number_methods(BasicSymbolic, term(f, a), term(f, a, b), skipbasics)
+@number_methods(BasicSymbolic{<:LiteralReal}, term(f, a), term(f, a, b), onlybasics)
+
 for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
-    @eval function promote_symtype(::$(typeof(f)),
-                   T::Type{<:SafeReal},
-                   S::Type{<:Real})
-        X = promote_type(T, Real)
-        X == Real ? SafeReal : X
-    end
-    @eval function promote_symtype(::$(typeof(f)),
-                   T::Type{<:Real},
-                   S::Type{<:SafeReal})
-        X = promote_type(Real, S)
-        X == Real ? SafeReal : X
-    end
-    @eval function promote_symtype(::$(typeof(f)),
-                   T::Type{<:SafeReal},
-                   S::Type{<:SafeReal})
-        X = promote_type(Real, Real)
-        X == Real ? SafeReal : X
+    for R in [SafeReal, LiteralReal]
+        @eval function promote_symtype(::$(typeof(f)),
+                T::Type{<:$R},
+                S::Type{<:Real})
+            X = promote_type(T, Real)
+            X == Real ? $R : X
+        end
+        @eval function promote_symtype(::$(typeof(f)),
+                T::Type{<:Real},
+                S::Type{<:$R})
+            X = promote_type(Real, S)
+            X == Real ? $R : X
+        end
+        @eval function promote_symtype(::$(typeof(f)),
+                T::Type{<:$R},
+                S::Type{<:$R})
+            $R
+        end
     end
 end
 
@@ -130,6 +138,8 @@ promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
     @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralReal}) = LiteralReal
+    @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)

@@ -67,6 +67,8 @@ end
 
 <ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
 
+<ₑ(a::Type, b::Type) = nameof(a) <ₑ nameof(b)
+
 function cmp_term_term(a, b)
     la = arglength(a)
     lb = arglength(b)
@@ -123,4 +125,3 @@ function cmp_term_term(a, b)
         return na <ₑ nb # all args are equal, compare the name
     end
 end
-

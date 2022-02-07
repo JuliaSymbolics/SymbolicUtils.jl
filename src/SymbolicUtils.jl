@@ -20,7 +20,7 @@ using Setfield
 import Setfield: PropertyLens
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
-include("newtypes.jl")
+include("types.jl")
 export istree, operation, arguments, similarterm
 
 # Methods on symbolic objects

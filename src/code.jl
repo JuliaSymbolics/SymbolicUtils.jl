@@ -212,6 +212,19 @@ function get_assignments(d::DestructuredArgs, st)
     end
 end
 
+@matchable struct Block
+    stmts::Vector
+end
+
+function toexpr(l::Block, st)
+    blk = Expr(:block)
+    resize!(blk.args, length(l.stmts))
+    for (i, s) in enumerate(l.stmts)
+        blk.args[i] = toexpr(s, st)
+    end
+    blk
+end
+
 @matchable struct Let
     pairs::Vector{Union{Assignment,DestructuredArgs}} # an iterator of pairs, ordered
     body

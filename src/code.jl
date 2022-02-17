@@ -3,9 +3,10 @@ module Code
 using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra
 using TermInterface
 
-export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
+export toexpr, Assignment, (←), Block, Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       SpawnFetch, Multithreaded, cse
+       SpawnFetch, Multithreaded, cse,
+       LabelledArgument, ForeignCall, IN, OUT, INOUT
 
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
@@ -671,6 +672,86 @@ recurse_expr(ex, st) = toexpr(ex, st)
 function toexpr(exp::LiteralExpr, st)
     recurse_expr(exp.ex, st)
 end
+
+@enum Attribute IN OUT INOUT
+
+isin(x::Attribute) = x === IN || x === INOUT
+struct LabelledArgument
+    arg
+    metadata::Vector{Attribute}
+end
+LabelledArgument(arg, metadata::Attribute) = LabelledArgument(arg, [metadata])
+struct ForeignCall
+    f
+    args::Vector{LabelledArgument}
+end
+
+function toexpr(fc::ForeignCall, st)
+    # I'm sorry if you get a hash collision here lol
+    num = hash(fc)
+    #TODO: commutate the buffer info to Func
+    buffers = [Sym{Any}(Symbol(:buffer_, (any(isin, a.metadata) ? :in_ : :out_), i, :_, num))
+               for (i, a) in enumerate(fc.args)]
+    calling_args = Vector{Any}(undef, length(fc.args))
+    blk = Expr(:block)
+    stmts = blk.args
+    dargs = []
+    for (i, a) in enumerate(fc.args)
+        if any(isin, a.metadata)
+            if a.arg isa AbstractArray
+                buffer = buffers[i]
+                push!(stmts, toexpr(SetArray(false, buffer, a.arg), st))
+                calling_args[i] = buffers[i]
+                push!(dargs, DestructuredArgs(a.arg, nameof(buffer)))
+            else
+                calling_args[i] = a.arg
+            end
+        else
+            calling_args[i] = buffers[i]
+        end
+    end
+
+    push!(stmts, toexpr(Term{Any}(fc.f, calling_args), st))
+    for darg in dargs
+        for assign in get_assignments(darg, st)
+            push!(stmts, toexpr(assign, st))
+        end
+    end
+    blk
+end
+
+#=
+using SymbolicUtils
+using SymbolicUtils.Code
+@syms out::Any fa fg buffer_out::Any buffer_in::Any p t dummy::Any
+utup = @syms a b c d e f g
+u = collect(utup)
+
+function cfun end
+wf = ForeignCall(cfun, [
+                   LabelledArgument([fa, fg], OUT),
+                   LabelledArgument([c, d, f, g], IN),
+                   LabelledArgument([p], IN),
+                   LabelledArgument(t, IN),
+                  ])
+
+Func([out, u, [p], t], [],
+     Block([
+            wf
+            SetArray(false, out, [AtIndex(1, fa), AtIndex(1, fg)])
+            SetArray(false, out, AtIndex.(2:6, u[2:end-1] .+ (1:5)))
+           ])
+    ) |> toexpr
+
+Func([out, u, [p], t], [],
+     Block([
+            SetArray(false, buffer_in, [c, d, f, g])
+            term(cfun, buffer_out, buffer_in, p, t, type=Any)
+            SetArray(false, out, [AtIndex(1, term(getindex, buffer_out, 1, type=Any)), AtIndex(7, term(getindex, buffer_out, 2, type=Any))])
+            SetArray(false, out, AtIndex.(2:6, u[2:end-1] .+ (1:5)))
+           ])
+    ) |> toexpr
+=#
 
 
 ### Code-related utilities

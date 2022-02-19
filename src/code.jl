@@ -11,7 +11,8 @@ export toexpr, Assignment, (←), Block, Let, Func, DestructuredArgs, LiteralExp
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments,
-                      symtype, similarterm, unsorted_arguments, metadata
+                      symtype, similarterm, unsorted_arguments, metadata,
+                      Symbolic
 
 ##== state management ==##
 
@@ -680,16 +681,81 @@ struct LabelledArgument
     arg
     metadata::Vector{Attribute}
 end
-LabelledArgument(arg, metadata::Attribute) = LabelledArgument(arg, [metadata])
+LabelledArgument(arg::Symbolic, metadata::Attribute) = LabelledArgument(arg, [metadata])
 struct ForeignCall
     f
     args::Vector{LabelledArgument}
 end
 
+TermInterface.istree(::ForeignCall) = false
+Base.nameof(fc::ForeignCall) = nameof(fc.f)
+function Base.getindex(fc::ForeignCall, x::Symbolic)
+    found = false
+    for la in fc.args
+        if la.arg isa AbstractArray || any(isin, la.metadata)
+            x in Set(la.arg) && (found = true)
+        end
+        found && break
+    end
+    found || error("$x isn't in an output array of $(nameof(fc))")
+    return Term{symtype(x)}(getindex, Any[fc, x])
+end
+
+Base.show(io::IO, fc::ForeignCall) = show(io::IO, MIME"text/plain"(), fc::ForeignCall)
+function Base.show(io::IO, ::MIME"text/plain", fc::ForeignCall)
+    print(io, nameof(fc), "(")
+    nargs = length(fc.args)
+    for (i, la) in enumerate(fc.args)
+        if la.arg isa AbstractArray
+            limited_array_print(io, la.arg)
+            print(io, ": <", join(la.metadata, ", "), ">")
+        else
+            Base.print(io, la.arg)
+        end
+        i == nargs || print(io, ", ")
+    end
+    print(io, ")")
+end
+
+"""
+    limited_array_print(io::IO, array, limit=3)
+
+Print array in limited space
+```julia-repl
+julia> SymbolicUtils.Code.limited_array_print(stdout, rand(100))
+[0.0467899, 0.746265, 0.626383  …  0.829749, 0.651534, 0.595756]
+```
+"""
+function limited_array_print(io::IO, array, limit=3)
+    nele = length(array)
+    io = IOContext(io, :compact=>true, :limit=>true)
+    print(io, "[")
+    if nele <= 2limit
+        for (i, e) in enumerate(array)
+            print(io, e)
+            i == nele || print(io, ", ")
+        end
+    else
+        for i in 1:limit
+            e = array[i]
+            print(io, e)
+            i == limit || print(io, ", ")
+        end
+        print(io, "  …  ")
+        for j in limit:-1:1
+            i = nele - j + 1
+            e = array[i]
+            print(io, e)
+            i == nele || print(io, ", ")
+        end
+    end
+    print(io, "]")
+end
+
 function toexpr(fc::ForeignCall, st)
+    fc_buffers = get!(()->[], get(st).rewrites, ForeignCall)
     # I'm sorry if you get a hash collision here lol
     num = hash(fc)
-    #TODO: commutate the buffer info to Func
     buffers = [Sym{Any}(Symbol(:buffer_, (any(isin, a.metadata) ? :in_ : :out_), i, :_, num))
                for (i, a) in enumerate(fc.args)]
     calling_args = Vector{Any}(undef, length(fc.args))
@@ -700,6 +766,7 @@ function toexpr(fc::ForeignCall, st)
         if any(isin, a.metadata)
             if a.arg isa AbstractArray
                 buffer = buffers[i]
+                push!(fc_buffers, buffers => a.arg)
                 push!(stmts, toexpr(SetArray(false, buffer, a.arg), st))
                 calling_args[i] = buffers[i]
                 push!(dargs, DestructuredArgs(a.arg, nameof(buffer)))
@@ -723,7 +790,7 @@ end
 #=
 using SymbolicUtils
 using SymbolicUtils.Code
-@syms out::Any fa fg buffer_out::Any buffer_in::Any p t dummy::Any
+@syms out::Any fa fg p t
 utup = @syms a b c d e f g
 u = collect(utup)
 
@@ -738,16 +805,7 @@ wf = ForeignCall(cfun, [
 Func([out, u, [p], t], [],
      Block([
             wf
-            SetArray(false, out, [AtIndex(1, fa), AtIndex(1, fg)])
-            SetArray(false, out, AtIndex.(2:6, u[2:end-1] .+ (1:5)))
-           ])
-    ) |> toexpr
-
-Func([out, u, [p], t], [],
-     Block([
-            SetArray(false, buffer_in, [c, d, f, g])
-            term(cfun, buffer_out, buffer_in, p, t, type=Any)
-            SetArray(false, out, [AtIndex(1, term(getindex, buffer_out, 1, type=Any)), AtIndex(7, term(getindex, buffer_out, 2, type=Any))])
+            SetArray(false, out, [AtIndex(1, fa), AtIndex(7, fg)])
             SetArray(false, out, AtIndex.(2:6, u[2:end-1] .+ (1:5)))
            ])
     ) |> toexpr

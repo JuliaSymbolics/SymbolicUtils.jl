@@ -395,7 +395,7 @@ end
 
 function toterm(t::BasicSymbolic{T}) where T
     E = exprtype(t)
-    if E === TERM
+    if E === SYM || E === TERM
         return t
     elseif E === ADD || E === MUL
         args = []

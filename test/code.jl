@@ -18,7 +18,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     @test toexpr(a+b) == :($(+)(a, b))
     @test toexpr(a^b) == :($(^)(a, b))
     @test toexpr(a^2) == :($(^)(a, 2))
-    @test toexpr(a^-2) == :($(^)($(inv)(a), 2))
+    @test toexpr(a^-2) == :($(/)(1, $(^)(a, 2)))
     @test toexpr(x(t)+y(t)) == :($(+)(x(t), y(t)))
     @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)($(+)(x(t), y(t)), x($(+)(1, t))))
     s = LazyState()

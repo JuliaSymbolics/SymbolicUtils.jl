@@ -4,4 +4,6 @@
 Manifest.toml
 /docs/build/
 benchmark/tune.json
-
+scratch.jl
+profile.*
+statprof/

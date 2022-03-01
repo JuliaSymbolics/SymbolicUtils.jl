@@ -1,1 +1,1 @@
-nothing
+2cos(w - z)*sin(w - z)

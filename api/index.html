@@ -103,8 +103,9 @@
       <h2 class="doc-header" id="Sym">
         <a href="#Sym">Sym</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Sym{T}(name::<span class="hljs-built_in">Symbol</span>)</code></pre>
-<p>A named variable of type <code>T</code>. Type <code>T</code> can be <code>FnType&#123;X,Y&#125;</code> which means the variable is a function with the type signature X -&gt; Y where <code>X</code> is a tuple type of arguments and <code>Y</code> is any type.</p>
+      <div class="doc-content"><p>No documentation found.</p>
+<h1 id="summary"><a href="#summary" class="header-anchor">Summary</a></h1>
+<pre><code class="julia hljs"><span class="hljs-keyword">struct</span> SymbolicUtils.Sym{T}</code></pre>
 </div>
   </div>
 
@@ -121,19 +122,9 @@
       <h2 class="doc-header" id="Term">
         <a href="#Term">Term</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Term{T}(f, args::<span class="hljs-built_in">AbstractArray</span>)</code></pre>
-<p>or     Term&#40;f, args::AbstractArray&#41;</p>
-<p>Symbolic expression representing the result of calling <code>f&#40;args...&#41;</code>.</p>
-<ul>
-<li><p><code>operation&#40;t::Term&#41;</code> returns <code>f</code></p>
-</li>
-<li><p><code>arguments&#40;t::Term&#41;</code> returns <code>args</code></p>
-</li>
-<li><p><code>symtype&#40;t::Term&#41;</code> returns <code>T</code></p>
-</li>
-</ul>
-<p>If <code>T</code> is not provided during construction, it is queried by calling <code>SymbolicUtils.promote_symtype&#40;f, map&#40;symtype, args&#41;...&#41;</code>.</p>
-<p>See <a href="#promote_symtype">promote_symtype</a></p>
+      <div class="doc-content"><p>No documentation found.</p>
+<h1 id="summary__2"><a href="#summary__2" class="header-anchor">Summary</a></h1>
+<pre><code class="julia hljs"><span class="hljs-keyword">struct</span> SymbolicUtils.Term{T}</code></pre>
 </div>
   </div>
 
@@ -141,17 +132,9 @@
       <h2 class="doc-header" id="Add">
         <a href="#Add">Add</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Add(T, coeff, dict::<span class="hljs-built_in">Dict</span>)</code></pre>
-<p>Represents <code>coeff &#43; &#40;key1 * val1&#41; &#43; &#40;key2 * val2&#41; &#43; ...</code></p>
-<p>where keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
-<ul>
-<li><p><code>operation&#40;::Add&#41;</code> – returns <code>&#43;</code>.</p>
-</li>
-<li><p><code>symtype&#40;::Add&#41;</code> – returns <code>T</code>.</p>
-</li>
-<li><p><code>arguments&#40;::Add&#41;</code> – returns a totally ordered vector of arguments. i.e. <code>&#91;coeff, keyM*valM, keyN*valN...&#93;</code></p>
-</li>
-</ul>
+      <div class="doc-content"><p>No documentation found.</p>
+<h1 id="summary__3"><a href="#summary__3" class="header-anchor">Summary</a></h1>
+<pre><code class="julia hljs"><span class="hljs-keyword">struct</span> SymbolicUtils.Add{T}</code></pre>
 </div>
   </div>
 
@@ -159,17 +142,9 @@
       <h2 class="doc-header" id="Mul">
         <a href="#Mul">Mul</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Mul(T, coeff, dict)</code></pre>
-<p>Represents coeff * &#40;key1 ^ val1&#41; * &#40;key2 ^ val2&#41; * ....</p>
-<p>where coeff is a &lt;:Number and keys and values come from the dictionary &#40;<code>dict</code>&#41;. where <code>coeff</code> and the vals are <code>&lt;:Number</code> and keys are symbolic.</p>
-<ul>
-<li><p><code>symtype&#40;::Mul&#41;</code> – returns <code>T</code>.</p>
-</li>
-<li><p><code>operation&#40;::Mul&#41;</code> – returns <code>*</code>.</p>
-</li>
-<li><p><code>arguments&#40;::Mul&#41;</code> – returns a totally ordered vector of arguments. i.e. <code>&#91;coeff, keyM^valM, keyN^valN...&#93;</code></p>
-</li>
-</ul>
+      <div class="doc-content"><p>No documentation found.</p>
+<h1 id="summary__4"><a href="#summary__4" class="header-anchor">Summary</a></h1>
+<pre><code class="julia hljs"><span class="hljs-keyword">struct</span> SymbolicUtils.Mul{T}</code></pre>
 </div>
   </div>
 
@@ -177,8 +152,9 @@
       <h2 class="doc-header" id="Pow">
         <a href="#Pow">Pow</a>
         <div class="doc-type">type</div></h2>
-      <div class="doc-content"><pre><code class="julia hljs">Pow(base, exp)</code></pre>
-<p>Represents <code>base^exp</code>, a lighter version of <code>Mul&#40;1, Dict&#40;base&#61;&gt;exp&#41;&#41;</code></p>
+      <div class="doc-content"><p>No documentation found.</p>
+<h1 id="summary__5"><a href="#summary__5" class="header-anchor">Summary</a></h1>
+<pre><code class="julia hljs"><span class="hljs-keyword">struct</span> SymbolicUtils.Pow{T}</code></pre>
 </div>
   </div>
 
@@ -200,7 +176,7 @@ julia&gt; <span class="hljs-meta">@syms</span> f(x)::<span class="hljs-built_in"
 julia&gt; promote_symtype(f, <span class="hljs-built_in">Number</span>)
 <span class="hljs-built_in">Complex</span></code></pre>
 <p>When constructing <a href="#Term"><code>Term</code></a>s without an explicit symtype, <code>promote_symtype</code> is used to figure out the symtype of the Term.</p>
-<pre><code class="julia hljs">promote_symtype(f::Sym{FnType{X,Y}}, arg_symtypes...)</code></pre>
+<pre><code class="julia hljs">promote_symtype(f::FnType{X,Y}, arg_symtypes...)</code></pre>
 <p>The output symtype of applying variable <code>f</code> to arugments of symtype <code>arg_symtypes...</code>. if the arguments are of the wrong type then this function will error.</p>
 </div>
   </div>
@@ -462,7 +438,7 @@ julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: January 24, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 01, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

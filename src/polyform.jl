@@ -300,6 +300,11 @@ function frac_similarterm(x, f, args; kw...)
     end
 end
 
+function cancel_and_simplify(x) 
+    a = quick_cancel(x)
+    isdiv(a) ? simplify_div(a) : a
+end
+
 """
     simplify_fractions(x; polyform=false)
 
@@ -314,9 +319,9 @@ function simplify_fractions(x; polyform=false)
 
     !needs_div_rules(x) && return x
 
-    sdiv(a) = isdiv(a) ? simplify_div(a) : a
+    # sdiv(a) = isdiv(a) ? simplify_div(a) : a
 
-    expr = Postwalk(sdiv ∘ quick_cancel,
+    expr = Postwalk(cancel_and_simplify,
                     similarterm=frac_similarterm)(Postwalk(add_with_div,
                                                            similarterm=frac_similarterm)(x))
 

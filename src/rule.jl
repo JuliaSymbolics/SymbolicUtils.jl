@@ -60,7 +60,7 @@ function (acr::ACRule)(term::Y) where {Y}
             if result !== nothing
                 # Assumption: inds are unique
                 length(args) == length(inds) && return result
-                return similarterm(Y, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], T; exprhead = head)
+                return similarterm(term, f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], T; exprhead = head)
             end
         end
     end

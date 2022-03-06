@@ -1,5 +1,7 @@
 using Metatheory.Rewriters
 
+using SymbolicUtils: <ₑ
+
 function EGraphs.preprocess(t::Symbolic)
     toterm(unflatten(t))
 end
@@ -7,7 +9,7 @@ end
 function symbolicegraph(ex)
     g = EGraph(ex)
     analyze!(g, SymbolicUtils.SymtypeAnalysis)
-    settermtype!(g, Term{symtype(ex)})
+    settermtype!(g, BasicSymbolic{symtype(ex)})
     return g
 end
 
@@ -78,23 +80,16 @@ end
 
 costfun(n::ENodeLiteral, g::EGraph, an) = 0
 
-egraph_simterm(x, head, args, symtype=nothing; metadata=nothing, exprhead=exprhead(x)) =
-    TermInterface.similarterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
-
 # Custom similarterm to use in EGraphs on <:Symbolic types that treats everything as a Term
-function egraph_simterm(x::Type{<:BasicSymbolic}, f, args, symtype=nothing; metadata=nothing, exprhead=:call)
-    T = symtype
-    if T === nothing
-        T = _promote_symtype(f, args)
-    end
-    res = Term{T}(f isa Symbol ? eval(f) : f, args; metadata=metadata)
-    return res
+function EGraphs.egraph_reconstruct_expression(::Type{<:BasicSymbolic}, f, args; metadata=nothing, exprhead=:call)
+    op = f isa Symbol ? eval(f) : f
+    T = _promote_symtype(op, args)
+    Term{T}(op, args; metadata=metadata)
 end
 
 function optimize(ex; params=SaturationParams(timeout=20))
     # @show ex
     g = symbolicegraph(ex)
-    params.simterm = egraph_simterm
     saturate!(g, opt_theory, params)
     return extract!(g, costfun)
 end

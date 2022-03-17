@@ -85,11 +85,10 @@ const SIMPLIFIED = 0x01 << 0
 #@inline is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
 #@inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
 
-# TODO
-function ConstructionBase.constructorof(s::Type{<:BasicSymbolic{T}}) where {T}
-    function (args...)
-        BasicSymbolic{T}(args...)
-    end
+function ConstructionBase.setproperties_object(obj::BasicSymbolic{T}, patch)::BasicSymbolic{T} where T
+    nt = getproperties(obj)
+    nt_new = merge(nt, patch)
+    Unityper.rt_constructor(obj){T}(;nt_new...)
 end
 
 ###
@@ -607,14 +606,6 @@ end
 ###
 ### Metadata
 ###
-@generated function Setfield.getproperties(obj::BasicSymbolic)
-    fnames = fieldnames(obj)
-    fvals = map(fnames) do fname
-        Expr(:call, :getfield, :obj, QuoteNode(fname))
-    end
-    fvals = Expr(:tuple, fvals...)
-    :(NamedTuple{$fnames}($fvals))
-end
 TermInterface.metadata(s::Symbolic) = s.metadata
 TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 

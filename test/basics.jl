@@ -1,6 +1,7 @@
 using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic
 using SymbolicUtils
 using IfElse: ifelse
+using Setfield
 using Test
 
 @testset "@syms" begin
@@ -132,6 +133,10 @@ end
     @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
     @eqtest 5 // x == 5 / x
     @eqtest x // a == x / a
+
+    # rename
+    @set! x.name = :oof
+    @test nameof(x) === :oof
 end
 
 @testset "array-like operations" begin

@@ -9,7 +9,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
-import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments,
+import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, istree, operation, arguments,
                       symtype, similarterm, unsorted_arguments, metadata
 
 ##== state management ==##
@@ -75,11 +75,6 @@ when `y(t)` is itself the argument of a function rather than `y`.
 
 """
 toexpr(x) = toexpr(x, LazyState())
-function toexpr(s::Sym, st)
-    s′ = substitute_name(s, st)
-    s′ isa Sym ? nameof(s′) : toexpr(s′, st)
-end
-
 
 @matchable struct Assignment
     lhs
@@ -125,9 +120,9 @@ function function_to_expr(::typeof(^), O, st)
     if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
-            return toexpr(Term{Any}(inv, [ex]), st)
+            return toexpr(Term(inv, Any[ex]), st)
         else
-            return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
+            return toexpr(Term(^, Any[Term(inv, Any[ex]), -args[2]]), st)
         end
     end
     return nothing
@@ -138,7 +133,9 @@ function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end
 
-function_to_expr(::Sym, O, st) = get(st.rewrites, O, nothing)
+function function_to_expr(x::BasicSymbolic, O, st)
+    TermInterface.issym(x) ? get(st.symbolify, O, nothing) : nothing
+end
 
 toexpr(O::Expr, st) = O
 
@@ -151,7 +148,12 @@ function substitute_name(O, st)
 end
 
 function toexpr(O, st)
+    if issym(O)
+        O = substitute_name(O, st)
+        return issym(O) ? nameof(O) : toexpr(O, st)
+    end
     O = substitute_name(O, st)
+
     !istree(O) && return O
     op = operation(O)
     expr′ = function_to_expr(op, O, st)
@@ -746,7 +748,7 @@ end
 function cse_block(state, t, name=Symbol("var-", hash(t)))
     assignments = Assignment[]
     counter = Ref{Int}(1)
-    names = Dict{Any, Sym}()
+    names = Dict{Any, BasicSymbolic}()
     Let(assignments, cse_block!(assignments, counter, names, name, state, t))
 end
 

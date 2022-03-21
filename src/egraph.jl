@@ -1,13 +1,13 @@
 using Metatheory.Rewriters
 
 function EGraphs.preprocess(t::Symbolic)
-    toterm(unflatten(t)) 
+    toterm(unflatten(t))
 end
 
 function symbolicegraph(ex)
     g = EGraph(ex)
     analyze!(g, SymbolicUtils.SymtypeAnalysis)
-    settermtype!(g, Term{symtype(ex), Any})
+    settermtype!(g, Term{symtype(ex)})
     return g
 end
 
@@ -21,9 +21,9 @@ opt_theory = @theory a b x y  begin
     a * x + a * y == a*(x+y)
     -1 * a == -a
     a + (-1 * b) == a - b
-    x^-1 == 1/x 
+    x^-1 == 1/x
     1/x * a == a/x
-    # fraction rules 
+    # fraction rules
     # (a/b) + (c/b) => (a+c)/b
     # trig functions
     sin(x)/cos(x) == tan(x)
@@ -34,10 +34,10 @@ end
 
 
 """
-Approximation of costs of operators in number 
+Approximation of costs of operators in number
 of CPU cycles required for the numerical computation
 
-See 
+See
  * https://latkin.org/blog/2014/11/09/a-simple-benchmark-of-various-math-operations/
  * https://streamhpc.com/blog/2012-07-16/how-expensive-is-an-operation-on-a-cpu/
  * https://github.com/triscale-innov/GFlops.jl
@@ -78,19 +78,18 @@ end
 
 costfun(n::ENodeLiteral, g::EGraph, an) = 0
 
-egraph_simterm(x, head, args, symtype=nothing; metadata=nothing, exprhead=exprhead(x)) = 
-TermInterface.similarterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
+egraph_simterm(x, head, args, symtype=nothing; metadata=nothing, exprhead=exprhead(x)) =
+    TermInterface.similarterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
 
-
-# Custom similarterm to use in EGraphs on <:Symbolic types that treats everything as a Term 
-function egraph_simterm(x::Type{<:Term}, f, args, symtype=nothing; metadata=nothing, exprhead=:call)
+# Custom similarterm to use in EGraphs on <:Symbolic types that treats everything as a Term
+function egraph_simterm(x::Type{<:BasicSymbolic}, f, args, symtype=nothing; metadata=nothing, exprhead=:call)
     T = symtype
     if T === nothing
         T = _promote_symtype(f, args)
     end
-    res = Term{T}(f isa Symbol ? eval(f) : f, args; metadata=metadata);
+    res = Term{T}(f isa Symbol ? eval(f) : f, args; metadata=metadata)
     return res
-end 
+end
 
 function optimize(ex; params=SaturationParams(timeout=20))
     # @show ex

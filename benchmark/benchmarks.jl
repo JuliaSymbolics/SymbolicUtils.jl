@@ -48,10 +48,10 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
     ex1 = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[+, *])
     ex2 = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[/, *])
 
-    overhead["simplify"]["randterm (+, *):serial"] = @benchmarkable simplify($ex1, threaded=false)
-    overhead["simplify"]["randterm (/, *):serial"] = @benchmarkable simplify($ex2, threaded=false)
-    overhead["simplify"]["randterm (+, *):thread"] = @benchmarkable simplify($ex1, threaded=true)
-    overhead["simplify"]["randterm (/, *):thread"] = @benchmarkable simplify($ex2, threaded=true)
+    overhead["simplify"]["randterm (+, *):serial"] = @benchmarkable simplify($ex1, simplify_fractions=false, threaded=false)
+    overhead["simplify"]["randterm (/, *):serial"] = @benchmarkable simplify($ex2, simplify_fractions=false, threaded=false)
+    overhead["simplify"]["randterm (+, *):thread"] = @benchmarkable simplify($ex1, simplify_fractions=false, threaded=true)
+    overhead["simplify"]["randterm (/, *):thread"] = @benchmarkable simplify($ex2, simplify_fractions=false, threaded=true)
 
     overhead["substitute"] = BenchmarkGroup()
 

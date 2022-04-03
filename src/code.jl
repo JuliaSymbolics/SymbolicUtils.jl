@@ -102,7 +102,19 @@ Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 
 toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 
-function_to_expr(op, args, st) = nothing
+function function_to_expr(f, O, st)
+    if issym(f) || istree(f)
+        rw = get(st.rewrites, O, nothing)
+        if rw === nothing
+            f = get(st.rewrites, f, f)
+            return get(st.rewrites, O, nothing)
+        else
+            return rw
+        end
+    else
+        return nothing
+    end
+end
 
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.rewrites, O, nothing)
@@ -138,8 +150,6 @@ function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end
 
-function_to_expr(::Sym, O, st) = get(st.rewrites, O, nothing)
-
 toexpr(O::Expr, st) = O
 
 function substitute_name(O, st)
@@ -154,6 +164,7 @@ function toexpr(O, st)
     O = substitute_name(O, st)
     !istree(O) && return O
     op = operation(O)
+    op = get(st.rewrites, op, op)
     expr′ = function_to_expr(op, O, st)
     if expr′ !== nothing
         return expr′

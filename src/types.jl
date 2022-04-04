@@ -12,6 +12,9 @@ TermInterface.symtype(::Symbolic{T}) where {T} = T
 TermInterface.metadata(s::Symbolic) = s.metadata
 TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
+function hasmetadata(s, ctx)
+    false
+end
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end

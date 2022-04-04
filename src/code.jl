@@ -677,22 +677,28 @@ end
 @enum Attribute IN OUT INOUT
 
 isin(x::Attribute) = x === IN || x === INOUT
+isout(x::Attribute) = x === OUT || x === INOUT
 struct LabelledArgument
     arg
     metadata::Vector{Attribute}
+    LabelledArgument(arg::Union{Vector{<:Symbolic}, Symbolic}, metadata) = new(arg, metadata isa AbstractArray ? metadata : [metadata])
 end
-LabelledArgument(arg::Symbolic, metadata::Attribute) = LabelledArgument(arg, [metadata])
-struct ForeignCall
+
+# TODO: make substitute work as well
+@matchable struct ForeignCall
     f
     args::Vector{LabelledArgument}
 end
 
-TermInterface.istree(::ForeignCall) = false
+function Base.:(==)(fc1::ForeignCall, fc2::ForeignCall)
+    fc1 === fc2 || (fc1.f === fc2.f && fc1.args == fc2.args)
+end
+
 Base.nameof(fc::ForeignCall) = nameof(fc.f)
 function Base.getindex(fc::ForeignCall, x::Symbolic)
     found = false
     for la in fc.args
-        if la.arg isa AbstractArray || any(isin, la.metadata)
+        if la.arg isa AbstractArray && any(isout, la.metadata)
             x in Set(la.arg) && (found = true)
         end
         found && break
@@ -752,10 +758,19 @@ function limited_array_print(io::IO, array, limit=3)
     print(io, "]")
 end
 
+function function_to_expr(::typeof(getindex), O::ForeignCall, st)
+    @show O
+end
+
 function toexpr(fc::ForeignCall, st)
-    fc_buffers = get!(()->[], get(st).rewrites, ForeignCall)
+    fc_buffer_map = get!(()->Dict{ForeignCall,Any}(), get(st).rewrites, ForeignCall)
+    if haskey(fc_buffer_map, fc)
+        return :()
+    else
+        fc_buffers = fc_buffer_map[fc] = []
+    end
     # I'm sorry if you get a hash collision here lol
-    num = hash(fc)
+    num = repr(hash(fc))
     buffers = [Sym{Any}(Symbol(:buffer_, (any(isin, a.metadata) ? :in_ : :out_), i, :_, num))
                for (i, a) in enumerate(fc.args)]
     calling_args = Vector{Any}(undef, length(fc.args))
@@ -763,10 +778,9 @@ function toexpr(fc::ForeignCall, st)
     stmts = blk.args
     dargs = []
     for (i, a) in enumerate(fc.args)
+        buffer = buffers[i]
         if any(isin, a.metadata)
             if a.arg isa AbstractArray
-                buffer = buffers[i]
-                push!(fc_buffers, buffers => a.arg)
                 push!(stmts, toexpr(SetArray(false, buffer, a.arg), st))
                 calling_args[i] = buffers[i]
                 push!(dargs, DestructuredArgs(a.arg, nameof(buffer)))
@@ -774,6 +788,9 @@ function toexpr(fc::ForeignCall, st)
                 calling_args[i] = a.arg
             end
         else
+            if a.arg isa AbstractArray && any(isout, a.metadata)
+                push!(fc_buffers, buffer => Dict(reverse(tup) for tup in enumerate(a.arg)))
+            end
             calling_args[i] = buffers[i]
         end
     end

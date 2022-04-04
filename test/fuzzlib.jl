@@ -1,5 +1,6 @@
 using SymbolicUtils
 using SymbolicUtils: Term
+using TermInterface
 using SpecialFunctions
 using Test
 import IfElse: ifelse
@@ -78,7 +79,7 @@ function gen_rand_expr(inputs;
 
     if depth > max_depth  || (min_depth <= depth && rand() < leaf_prob)
         leaf = rand(spec.leaves)()
-        if leaf isa SymbolicUtils.Sym
+        if issym(leaf)
             push!(inputs, leaf)
         elseif leaf isa Pair
             foreach(i->push!(inputs, i), leaf[1])
@@ -124,7 +125,6 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     code = try
         SymbolicUtils.Code.toexpr(expr)
     catch err
-        @show expr
         rethrow(err)
     end
     unsimplifiedstr = """

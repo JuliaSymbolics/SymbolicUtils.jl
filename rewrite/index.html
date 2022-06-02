@@ -78,79 +78,79 @@
 <p>Rewrite rules match and transform an expression. A rule is written using either the <code>@rule</code> macro or the <code>@acrule</code> macro. It creates a callable <code>Rule</code> object.</p>
 <h3 id="basics_of_rule-based_term_rewriting_in_symbolicutils"><a href="#basics_of_rule-based_term_rewriting_in_symbolicutils" class="header-anchor">Basics of rule-based term rewriting in SymbolicUtils</a></h3>
 <p>Here is a simple rewrite rule, that uses formula for the double angle of the sine function:</p>
-<pre><code class="language-julia">using SymbolicUtils
+<pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
 
-@syms w z α::Real β::Real
+<span class="hljs-meta">@syms</span> w z α::<span class="hljs-built_in">Real</span> β::<span class="hljs-built_in">Real</span>
 
 
-r1 &#61; @rule sin&#40;2&#40;~x&#41;&#41; &#61;&gt; 2sin&#40;~x&#41;*cos&#40;~x&#41;
+r1 = <span class="hljs-meta">@rule</span> sin(<span class="hljs-number">2</span>(~x)) =&gt; <span class="hljs-number">2</span>sin(~x)*cos(~x)
 
-r1&#40;sin&#40;2z&#41;&#41;</code></pre><pre><code class="plaintext code-output">2cos(z)*sin(z)</code></pre>
+r1(sin(<span class="hljs-number">2</span>z))</code></pre><pre><code class="plaintext hljs">2cos(z)*sin(z)</code></pre>
 <p>The <code>@rule</code> macro takes a pair of patterns – the <em>matcher</em> and the <em>consequent</em> &#40;<code>@rule matcher &#61;&gt; consequent</code>&#41;. If an expression matches the matcher pattern, it is rewritten to the consequent pattern. <code>@rule</code> returns a callable object that applies the rule to an expression.</p>
 <p><code>~x</code> in the example is what is a <strong>slot variable</strong> named <code>x</code>. In a matcher pattern, slot variables are placeholders that match exactly one expression. When used on the consequent side, they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, all corresponding matches must be equal &#40;as tested by <code>Base.isequal</code> function&#41;. Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.</p>
 <p>If you try to apply this rule to an expression with triple angle, it will return <code>nothing</code> – this is the way a rule signifies failure to match.</p>
-<pre><code class="language-julia">r1&#40;sin&#40;3z&#41;&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">true</code></pre>
+<pre><code class="julia hljs">r1(sin(<span class="hljs-number">3</span>z)) === <span class="hljs-literal">nothing</span></code></pre><pre><code class="plaintext hljs">true</code></pre>
 <p>Slot variable &#40;matcher&#41; is not necessary a single variable</p>
-<pre><code class="language-julia">r1&#40;sin&#40;2*&#40;w-z&#41;&#41;&#41;</code></pre><pre><code class="plaintext code-output">2cos(w - z)*sin(w - z)</code></pre>
+<pre><code class="julia hljs">r1(sin(<span class="hljs-number">2</span>*(w-z)))</code></pre><pre><code class="plaintext hljs">2cos(w - z)*sin(w - z)</code></pre>
 <p>but it must be a single expression</p>
-<pre><code class="language-julia">r1&#40;sin&#40;2*&#40;w&#43;z&#41;*&#40;α&#43;β&#41;&#41;&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">true</code></pre>
+<pre><code class="julia hljs">r1(sin(<span class="hljs-number">2</span>*(w+z)*(α+β))) === <span class="hljs-literal">nothing</span></code></pre><pre><code class="plaintext hljs">true</code></pre>
 <p>Rules are of course not limited to single slot variable</p>
-<pre><code class="language-julia">r2 &#61; @rule sin&#40;~x &#43; ~y&#41; &#61;&gt; sin&#40;~x&#41;*cos&#40;~y&#41; &#43; cos&#40;~x&#41;*sin&#40;~y&#41;;
+<pre><code class="julia hljs">r2 = <span class="hljs-meta">@rule</span> sin(~x + ~y) =&gt; sin(~x)*cos(~y) + cos(~x)*sin(~y);
 
-r2&#40;sin&#40;α&#43;β&#41;&#41;</code></pre><pre><code class="plaintext code-output">sin(α)*cos(β) + cos(α)*sin(β)</code></pre>
+r2(sin(α+β))</code></pre><pre><code class="plaintext hljs">sin(α)*cos(β) + cos(α)*sin(β)</code></pre>
 <p>If you want to match a variable number of subexpressions at once, you will need a <strong>segment variable</strong>. <code>~~xs</code> in the following example is a segment variable:</p>
-<pre><code class="language-julia">@syms x y z
-@rule&#40;&#43;&#40;~~xs&#41; &#61;&gt; ~~xs&#41;&#40;x &#43; y &#43; z&#41;</code></pre><pre><code class="plaintext code-output">3-element view(::Vector{Any}, 1:3) with eltype Any:
+<pre><code class="julia hljs"><span class="hljs-meta">@syms</span> x y z
+<span class="hljs-meta">@rule</span>(+(~~xs) =&gt; ~~xs)(x + y + z)</code></pre><pre><code class="plaintext hljs">3-element view(::Vector{Any}, 1:3) with eltype Any:
  x
  y
  z</code></pre>
 <p><code>~~xs</code> is a vector of subexpressions matched. You can use it to construct something more useful:</p>
-<pre><code class="language-julia">r3 &#61; @rule ~x * &#43;&#40;~~ys&#41; &#61;&gt; sum&#40;map&#40;y-&gt; ~x * y, ~~ys&#41;&#41;;
+<pre><code class="julia hljs">r3 = <span class="hljs-meta">@rule</span> ~x * +(~~ys) =&gt; sum(map(y-&gt; ~x * y, ~~ys));
 
-r3&#40;2 * &#40;w&#43;w&#43;α&#43;β&#41;&#41;</code></pre><pre><code class="plaintext code-output">4w + 2α + 2β</code></pre>
+r3(<span class="hljs-number">2</span> * (w+w+α+β))</code></pre><pre><code class="plaintext hljs">4w + 2α + 2β</code></pre>
 <p>Notice that the expression was autosimplified before application of the rule.</p>
-<pre><code class="language-julia">2 * &#40;w&#43;w&#43;α&#43;β&#41;</code></pre><pre><code class="plaintext code-output">2(α + β + 2w)</code></pre>
+<pre><code class="julia hljs"><span class="hljs-number">2</span> * (w+w+α+β)</code></pre><pre><code class="plaintext hljs">2(α + β + 2w)</code></pre>
 <h3 id="predicates_for_matching"><a href="#predicates_for_matching" class="header-anchor">Predicates for matching</a></h3>
 <p>Matcher pattern may contain slot variables with attached predicates, written as <code>~x::f</code> where <code>f</code> is a function that takes a matched expression and returns a boolean value. Such a slot will be considered a match only if <code>f</code> returns true.</p>
 <p>Similarly <code>~~x::g</code> is a way of attaching a predicate <code>g</code> to a segment variable. In the case of segment variables <code>g</code> gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate.</p>
 <p>For example,</p>
-<pre><code class="language-julia">@syms a b c d
+<pre><code class="julia hljs"><span class="hljs-meta">@syms</span> a b c d
 
-r &#61; @rule ~x &#43; ~~y::&#40;ys-&gt;iseven&#40;length&#40;ys&#41;&#41;&#41; &#61;&gt; &quot;odd terms&quot;;
+r = <span class="hljs-meta">@rule</span> ~x + ~~y::(ys-&gt;iseven(length(ys))) =&gt; <span class="hljs-string">&quot;odd terms&quot;</span>;
 
-@show r&#40;a &#43; b &#43; c &#43; d&#41;
-@show r&#40;b &#43; c &#43; d&#41;
-@show r&#40;b &#43; c &#43; b&#41;
-@show r&#40;a &#43; b&#41;</code></pre><pre><code class="plaintext code-output">r(a + b + c + d) = nothing
-r(b + c + d) = "odd terms"
+<span class="hljs-meta">@show</span> r(a + b + c + d)
+<span class="hljs-meta">@show</span> r(b + c + d)
+<span class="hljs-meta">@show</span> r(b + c + b)
+<span class="hljs-meta">@show</span> r(a + b)</code></pre><pre><code class="plaintext hljs">r(a + b + c + d) = nothing
+r(b + c + d) = &quot;odd terms&quot;
 r(b + c + b) = nothing
 r(a + b) = nothing
 </code></pre>
 <h3 id="associative-commutative_rules"><a href="#associative-commutative_rules" class="header-anchor">Associative-Commutative Rules</a></h3>
 <p>Given an expression <code>f&#40;x, f&#40;y, z, u&#41;, v, w&#41;</code>, a <code>f</code> is said to be associative if the expression is equivalent to <code>f&#40;x, y, z, u, v, w&#41;</code> and commutative if the order of arguments does not matter.  SymbolicUtils has a special <code>@acrule</code> macro meant for rules on functions which are associate and commutative such as addition and multiplication of real and complex numbers.</p>
-<pre><code class="language-julia">@syms x y z
+<pre><code class="julia hljs"><span class="hljs-meta">@syms</span> x y z
 
-acr &#61; @acrule&#40;&#40;~a&#41;^&#40;~x&#41; * &#40;~a&#41;^&#40;~y&#41; &#61;&gt; &#40;~a&#41;^&#40;~x &#43; ~y&#41;&#41;
+acr = <span class="hljs-meta">@acrule</span>((~a)^(~x) * (~a)^(~y) =&gt; (~a)^(~x + ~y))
 
-acr&#40;x^y * x^z&#41;</code></pre><pre><code class="plaintext code-output">x^(y + z)</code></pre>
+acr(x^y * x^z)</code></pre><pre><code class="plaintext hljs">x^(y + z)</code></pre>
 <p>although in case of <code>Number</code> it also works the same way with regular <code>@rule</code> since autosimplification orders and applies associativity and commutativity to the expression.</p>
 <h3 id="example_of_applying_the_rules_to_simplify_expression"><a href="#example_of_applying_the_rules_to_simplify_expression" class="header-anchor">Example of applying the rules to simplify expression</a></h3>
 <p>Consider expression <code>&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2</code> that we would like simplify by applying some trigonometric rules. First, we need rule to expand square of <code>cos&#40;x&#41; &#43; sin&#40;x&#41;</code>. First we try the simplest rule to expand square of the sum and try it on simple expression</p>
-<pre><code class="language-julia">using SymbolicUtils
+<pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
 
-@syms x::Real y::Real
+<span class="hljs-meta">@syms</span> x::<span class="hljs-built_in">Real</span> y::<span class="hljs-built_in">Real</span>
 
-sqexpand &#61; @rule &#40;~x &#43; ~y&#41;^2 &#61;&gt; &#40;~x&#41;^2 &#43; &#40;~y&#41;^2 &#43; 2 * ~x * ~y
+sqexpand = <span class="hljs-meta">@rule</span> (~x + ~y)^<span class="hljs-number">2</span> =&gt; (~x)^<span class="hljs-number">2</span> + (~y)^<span class="hljs-number">2</span> + <span class="hljs-number">2</span> * ~x * ~y
 
-sqexpand&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x)</code></pre>
+sqexpand((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x)</code></pre>
 <p>It works. This can be further simplified using Pythagorean identity and check it</p>
-<pre><code class="language-julia">pyid &#61; @rule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1
+<pre><code class="julia hljs">pyid = <span class="hljs-meta">@rule</span> sin(~x)^<span class="hljs-number">2</span> + cos(~x)^<span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>
 
-pyid&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2&#41; &#61;&#61;&#61; nothing</code></pre><pre><code class="plaintext code-output">true</code></pre>
+pyid(cos(x)^<span class="hljs-number">2</span> + sin(x)^<span class="hljs-number">2</span>) === <span class="hljs-literal">nothing</span></code></pre><pre><code class="plaintext hljs">true</code></pre>
 <p>Why does it return <code>nothing</code>? If we look at the rule, we see that the order of <code>sin&#40;x&#41;</code> and <code>cos&#40;x&#41;</code> is different. Therefore, in order to work, the rule needs to be associative-commutative.</p>
-<pre><code class="language-julia">acpyid &#61; @acrule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1
+<pre><code class="julia hljs">acpyid = <span class="hljs-meta">@acrule</span> sin(~x)^<span class="hljs-number">2</span> + cos(~x)^<span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>
 
-acpyid&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2 &#43; 2cos&#40;x&#41;*sin&#40;x&#41;&#41;</code></pre><pre><code class="plaintext code-output">1 + 2cos(x)*sin(x)</code></pre>
+acpyid(cos(x)^<span class="hljs-number">2</span> + sin(x)^<span class="hljs-number">2</span> + <span class="hljs-number">2</span>cos(x)*sin(x))</code></pre><pre><code class="plaintext hljs">1 + 2cos(x)*sin(x)</code></pre>
 <p>It has been some work. Fortunately rules may be <a href="#chaining rewriters">chained together</a> into more sophisticated rewirters to avoid manual application of the rules.</p>
 <h2 id="composing_rewriters"><a href="#composing_rewriters" class="header-anchor">Composing rewriters</a></h2>
 <p>A rewriter is any callable object which takes an expression and returns an expression or <code>nothing</code>. If <code>nothing</code> is returned that means there was no changes applicable to the input expression. The Rules we created above are rewriters.</p>
@@ -178,34 +178,34 @@ acpyid&#40;cos&#40;x&#41;^2 &#43; sin&#40;x&#41;^2 &#43; 2cos&#40;x&#41;*sin&#40
 <h3 id="chaining_rewriters"><a href="#chaining_rewriters" class="header-anchor">Chaining rewriters</a></h3>
 <p>Several rules may be chained to give chain of rules. Chain is an array of rules which are subsequently applied to the expression.</p>
 <p>To check that, we will combine rules from <a href="#example of applying the rules to simplify expression">previous example</a> into a chain</p>
-<pre><code class="language-julia">using SymbolicUtils
-using SymbolicUtils.Rewriters
+<pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
+<span class="hljs-keyword">using</span> SymbolicUtils.Rewriters
 
-sqexpand &#61; @rule &#40;~x &#43; ~y&#41;^2 &#61;&gt; &#40;~x&#41;^2 &#43; &#40;~y&#41;^2 &#43; 2 * ~x * ~y
-acpyid &#61; @acrule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1
+sqexpand = <span class="hljs-meta">@rule</span> (~x + ~y)^<span class="hljs-number">2</span> =&gt; (~x)^<span class="hljs-number">2</span> + (~y)^<span class="hljs-number">2</span> + <span class="hljs-number">2</span> * ~x * ~y
+acpyid = <span class="hljs-meta">@acrule</span> sin(~x)^<span class="hljs-number">2</span> + cos(~x)^<span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>
 
-csa &#61; Chain&#40;&#91;sqexpand, acpyid&#93;&#41;
+csa = Chain([sqexpand, acpyid])
 
-csa&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">1 + 2cos(x)*sin(x)</code></pre>
+csa((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">1 + 2cos(x)*sin(x)</code></pre>
 <p>Important feature of <code>Chain</code> is that it returns the expressiona instead of <code>nothing</code> if it doesn&#39;t change the expression</p>
-<pre><code class="language-julia">Chain&#40;&#91;@acrule sin&#40;~x&#41;^2 &#43; cos&#40;~x&#41;^2 &#61;&gt; 1&#93;&#41;&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">(cos(x) + sin(x))^2</code></pre>
+<pre><code class="julia hljs">Chain([<span class="hljs-meta">@acrule</span> sin(~x)^<span class="hljs-number">2</span> + cos(~x)^<span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>])((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">(cos(x) + sin(x))^2</code></pre>
 <p>its important to notice, that chain is ordered, so if rules are in different order it wouldn&#39;t work the same as in earlier example</p>
-<pre><code class="language-julia">cas &#61; Chain&#40;&#91;acpyid, sqexpand&#93;&#41;
+<pre><code class="julia hljs">cas = Chain([acpyid, sqexpand])
 
-cas&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x)</code></pre>
+cas((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x)</code></pre>
 <p>since Pythagorean identity is applied before square expansion, so it is unable to match squares of sine and cosine.</p>
 <p>One way to circumvent the problem of order of applying rules in chain is to use <code>RestartedChain</code></p>
-<pre><code class="language-julia">using SymbolicUtils.Rewriters: RestartedChain
+<pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils.Rewriters: RestartedChain
 
-rcas &#61; RestartedChain&#40;&#91;acpyid, sqexpand&#93;&#41;
+rcas = RestartedChain([acpyid, sqexpand])
 
-rcas&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">1 + 2cos(x)*sin(x)</code></pre>
+rcas((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">1 + 2cos(x)*sin(x)</code></pre>
 <p>It restarts the chain after each successful application of a rule, so after <code>sqexpand</code> is hit it &#40;re&#41;starts again and successfully applies <code>acpyid</code> to resulting expression.</p>
 <p>You can also use <code>Fixpoint</code> to apply the rules until there are no changes.</p>
-<pre><code class="language-julia">Fixpoint&#40;cas&#41;&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><code class="plaintext code-output">1 + 2cos(x)*sin(x)</code></pre>
+<pre><code class="julia hljs">Fixpoint(cas)((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">1 + 2cos(x)*sin(x)</code></pre>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 21, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: June 02, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->
@@ -222,8 +222,8 @@ rcas&#40;&#40;cos&#40;x&#41; &#43; sin&#40;x&#41;&#41;^2&#41;</code></pre><pre><
         }
     </script>
     
-        <script src="/libs/highlight/highlight.pack.js"></script>
-<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+        
+
 
     
   </body>

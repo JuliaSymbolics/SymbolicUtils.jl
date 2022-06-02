@@ -112,47 +112,47 @@
 <p><div class="franklin-toc"><ol><li><a href="#creating_symbolic_expressions">Creating symbolic expressions</a></li><li><a href="#expression_interface">Expression interface</a></li><li><a href="#term_rewriting">Term rewriting</a></li><li><a href="#simplification">Simplification</a></li><li><a href="#code_generation">Code generation</a></li><li><a href="#learn_more">Learn more</a></li></ol></div> </p>
 <h2 id="creating_symbolic_expressions"><a href="#creating_symbolic_expressions" class="header-anchor">Creating symbolic expressions</a></h2>
 <p>First, let&#39;s use the <code>@syms</code> macro to create a few symbols.</p>
-<pre><code class="language-julia">using SymbolicUtils
+<pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
 
-@syms w z α::Real β::Real</code></pre><pre><code class="plaintext code-output">(w, z, α, β)</code></pre>
+<span class="hljs-meta">@syms</span> w z α::<span class="hljs-built_in">Real</span> β::<span class="hljs-built_in">Real</span></code></pre><pre><code class="plaintext hljs">(w, z, α, β)</code></pre>
 <p>Type annotations are optional when creating symbols. Here <code>α</code>, <code>β</code> behave like Real numbers. <code>w</code> and <code>z</code> behave like <code>Number</code>, which is the default. You can use the <code>symtype</code> function to find the type of a symbol.</p>
-<pre><code class="language-julia">using SymbolicUtils: symtype
+<pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils: symtype
 
-symtype&#40;w&#41;, symtype&#40;z&#41;,  symtype&#40;α&#41;, symtype&#40;β&#41;</code></pre><pre><code class="plaintext code-output">(Number, Number, Real, Real)</code></pre>
+symtype(w), symtype(z),  symtype(α), symtype(β)</code></pre><pre><code class="plaintext hljs">(Number, Number, Real, Real)</code></pre>
 <p>Note however that they are not subtypes of these types&#33;</p>
-<pre><code class="language-julia">@show w isa Number
-@show α isa Real</code></pre><pre><code class="plaintext code-output">w isa Number = false
+<pre><code class="julia hljs"><span class="hljs-meta">@show</span> w <span class="hljs-keyword">isa</span> <span class="hljs-built_in">Number</span>
+<span class="hljs-meta">@show</span> α <span class="hljs-keyword">isa</span> <span class="hljs-built_in">Real</span></code></pre><pre><code class="plaintext hljs">w isa Number = false
 α isa Real = false
 </code></pre>
 <p>As their types are different:</p>
-<pre><code class="language-julia">@show typeof&#40;w&#41;
-@show typeof&#40;α&#41;</code></pre><pre><code class="plaintext code-output">typeof(w) = SymbolicUtils.BasicSymbolic{Number}
+<pre><code class="julia hljs"><span class="hljs-meta">@show</span> typeof(w)
+<span class="hljs-meta">@show</span> typeof(α)</code></pre><pre><code class="plaintext hljs">typeof(w) = SymbolicUtils.BasicSymbolic{Number}
 typeof(α) = SymbolicUtils.BasicSymbolic{Real}
 </code></pre>
 <p>&#40;see <a href="https://discourse.julialang.org/t/ann-symbolicutils-jl-groundwork-for-a-symbolic-ecosystem-in-julia/38455/13?u&#61;shashi">this post</a> for why they are all not just subtypes of <code>Number</code>&#41;</p>
 <p>You can do basic arithmetic on symbols to get symbolic expressions:</p>
-<pre><code class="language-julia">expr1 &#61; α*sin&#40;w&#41;^2 &#43; β*cos&#40;z&#41;^2
-expr2 &#61; α*cos&#40;z&#41;^2 &#43; β*sin&#40;w&#41;^2
+<pre><code class="julia hljs">expr1 = α*sin(w)^<span class="hljs-number">2</span> + β*cos(z)^<span class="hljs-number">2</span>
+expr2 = α*cos(z)^<span class="hljs-number">2</span> + β*sin(w)^<span class="hljs-number">2</span>
 
-expr1 &#43; expr2</code></pre><pre><code class="plaintext code-output">α*(sin(w)^2) + β*(sin(w)^2) + α*(cos(z)^2) + β*(cos(z)^2)</code></pre>
+expr1 + expr2</code></pre><pre><code class="plaintext hljs">α*(sin(w)^2) + β*(sin(w)^2) + α*(cos(z)^2) + β*(cos(z)^2)</code></pre>
 <p>SymbolicUtils automatically simplifies</p>
-<pre><code class="language-julia">2w &#43; 3w - 3z &#43; α</code></pre><pre><code class="plaintext code-output">α + 5w - 3z</code></pre>
+<pre><code class="julia hljs"><span class="hljs-number">2</span>w + <span class="hljs-number">3</span>w - <span class="hljs-number">3</span>z + α</code></pre><pre><code class="plaintext hljs">α + 5w - 3z</code></pre>
 <p>and reorders</p>
-<pre><code class="language-julia">&#40;z &#43; w&#41;*&#40;α &#43; β&#41;</code></pre><pre><code class="plaintext code-output">(w + z)*(α + β)</code></pre>
+<pre><code class="julia hljs">(z + w)*(α + β)</code></pre><pre><code class="plaintext hljs">(w + z)*(α + β)</code></pre>
 <p>expressions of type <code>Symbolic&#123;&lt;:Number&#125;</code> &#40;which includes <code>Sym&#123;Real&#125;</code>&#41; when they are created. It also does constant elimination &#40;including rational numbers&#41;</p>
-<pre><code class="language-julia">5 &#43; 2w - 3z &#43; α - &#40;β &#43; 5//3&#41; &#43; 3w - 2 &#43; 3//2 * β</code></pre><pre><code class="plaintext code-output">(4//3) + α + 5w + (1//2)*β - 3z</code></pre>
+<pre><code class="julia hljs"><span class="hljs-number">5</span> + <span class="hljs-number">2</span>w - <span class="hljs-number">3</span>z + α - (β + <span class="hljs-number">5</span>//<span class="hljs-number">3</span>) + <span class="hljs-number">3</span>w - <span class="hljs-number">2</span> + <span class="hljs-number">3</span>//<span class="hljs-number">2</span> * β</code></pre><pre><code class="plaintext hljs">(4//3) + α + 5w + (1//2)*β - 3z</code></pre>
 <p>It&#39;s worth remembering that the expression may be transformed with respect to the input when it&#39;s created.</p>
 <p><strong>Function-like symbols</strong></p>
 <p>Symbols can be defined to behave like functions. Both the input and output types for the function can be specified. Any application to that function will only admit either values of those types or symbols of the same <code>symtype</code>.</p>
-<pre><code class="language-julia">using SymbolicUtils
-@syms f&#40;x&#41; g&#40;x::Real, y::Real&#41;::Real
+<pre><code class="julia hljs"><span class="hljs-keyword">using</span> SymbolicUtils
+<span class="hljs-meta">@syms</span> f(x) g(x::<span class="hljs-built_in">Real</span>, y::<span class="hljs-built_in">Real</span>)::<span class="hljs-built_in">Real</span>
 
-f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre><pre><code class="plaintext code-output">sin(w) + f(z) + g(1, α)</code></pre>
+f(z) + g(<span class="hljs-number">1</span>, α) + sin(w)</code></pre><pre><code class="plaintext hljs">sin(w) + f(z) + g(1, α)</code></pre>
 <p>This does not work since <code>z</code> is a <code>Number</code>, not a <code>Real</code>.</p>
-<pre><code class="language-julia">g&#40;1, z&#41;</code></pre><pre><code class="plaintext code-output">Tuple{Int64, Number} is not a subtype of Tuple{Real, Real}.
+<pre><code class="julia hljs">g(<span class="hljs-number">1</span>, z)</code></pre><pre><code class="plaintext hljs">Tuple{Int64, Number} is not a subtype of Tuple{Real, Real}.
 </code></pre>
 <p>This works because <code>g</code> &quot;returns&quot; a <code>Real</code>.</p>
-<pre><code class="language-julia">g&#40;2//5, g&#40;1, β&#41;&#41;</code></pre><pre><code class="plaintext code-output">g(2//5, g(1, β))</code></pre>
+<pre><code class="julia hljs">g(<span class="hljs-number">2</span>//<span class="hljs-number">5</span>, g(<span class="hljs-number">1</span>, β))</code></pre><pre><code class="plaintext hljs">g(2//5, g(1, β))</code></pre>
 <h2 id="expression_interface"><a href="#expression_interface" class="header-anchor">Expression interface</a></h2>
 <p>Symbolic expressions are of type <code>Term&#123;T&#125;</code>, <code>Add&#123;T&#125;</code>, <code>Mul&#123;T&#125;</code>, <code>Pow&#123;T&#125;</code> or <code>Div&#123;T&#125;</code> and denote some function call where one or more arguments are themselves such expressions or <code>Sym</code>s. See more about the representation <a href="/representation/">here</a>.</p>
 <p>All the expression types support the following:</p>
@@ -201,9 +201,9 @@ f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre><pre><code 
 </li>
 </ul>
 <p>Here is an example of this</p>
-<pre><code class="language-julia">2 * &#40;w&#43;w&#43;α&#43;β &#43; sin&#40;z&#41;^2 &#43; cos&#40;z&#41;^2 - 1&#41;</code></pre><pre><code class="plaintext code-output">2(α + β + 2w + cos(z)^2 + sin(z)^2 - 1)</code></pre>
+<pre><code class="julia hljs"><span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>)</code></pre><pre><code class="plaintext hljs">2(α + β + 2w + cos(z)^2 + sin(z)^2 - 1)</code></pre>
 <p>The <code>simplify</code> function applies a built-in set of rules to rewrite expressions in order to simplify it.</p>
-<pre><code class="language-julia">simplify&#40;2 * &#40;w&#43;w&#43;α&#43;β &#43; sin&#40;z&#41;^2 &#43; cos&#40;z&#41;^2 - 1&#41;&#41;</code></pre><pre><code class="plaintext code-output">2(α + β + 2w)</code></pre>
+<pre><code class="julia hljs">simplify(<span class="hljs-number">2</span> * (w+w+α+β + sin(z)^<span class="hljs-number">2</span> + cos(z)^<span class="hljs-number">2</span> - <span class="hljs-number">1</span>))</code></pre><pre><code class="plaintext hljs">2(α + β + 2w)</code></pre>
 <p>The rules in the default simplify applies simple constant elimination and trigonometric identities.</p>
 <p>If you read the previous section on the rules DSL, you should be able to read and understand the <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/master/src/simplify_rules.jl">rules</a> that are used by <code>simplify</code>.</p>
 <h2 id="code_generation"><a href="#code_generation" class="header-anchor">Code generation</a></h2>
@@ -215,7 +215,7 @@ f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre><pre><code 
 <p>Head over to the github repository to ask questions and <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">report problems</a>&#33; Join the <a href="https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming">Zulip stream</a> to chat&#33;</p>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: March 21, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: June 02, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->
@@ -232,8 +232,8 @@ f&#40;z&#41; &#43; g&#40;1, α&#41; &#43; sin&#40;w&#41;</code></pre><pre><code 
         }
     </script>
     
-        <script src="/libs/highlight/highlight.pack.js"></script>
-<script>hljs.initHighlightingOnLoad();hljs.configure({tabReplace: '    '});</script>
+        
+
 
     
   </body>

@@ -140,7 +140,7 @@ struct Sym{T, M} <: Symbolic{T}
     metadata::M
 end
 
-TermInterface.issym(s::Sym) = true
+issym(s::Sym) = true
 Base.nameof(s::Sym) = s.name
 
 ConstructionBase.constructorof(s::Type{<:Sym{T}}) where {T} = (n,m) -> Sym{T}(n, metadata=m)
@@ -1165,3 +1165,10 @@ end
 
 TermInterface.istree(t::Type{<:Sym}) = false
 TermInterface.istree(t::Type{<:Symbolic}) = true
+
+# Compat
+isterm(s) = s isa Term
+ismul(s) = s isa Mul
+isadd(s) = s isa Add
+ispow(s) = s isa Pow
+isdiv(s) = s isa Div

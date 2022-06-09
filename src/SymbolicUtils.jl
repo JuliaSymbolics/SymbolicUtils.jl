@@ -8,6 +8,7 @@ export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 using TermInterface
 using TermInterface: node_count
+import TermInterface: issym
 using Metatheory
 using Metatheory.Rules
 using Metatheory.Rewriters

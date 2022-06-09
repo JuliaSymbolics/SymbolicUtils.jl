@@ -1172,3 +1172,4 @@ ismul(s) = s isa Mul
 isadd(s) = s isa Add
 ispow(s) = s isa Pow
 isdiv(s) = s isa Div
+const BasicSymbolic = Union{Sym, Term, Mul, Add, Pow, Div}

@@ -397,6 +397,8 @@ Has optimized processes for `Mul` and `Pow` terms.
 function quick_cancel(d)
     if ispow(d) && isdiv(d.base)
         return quick_cancel((d.base.num^d.exp) / (d.base.den^d.exp))
+    elseif ismul(d) && any(isdiv, unsorted_arguments(d))
+        return prod(unsorted_arguments(d))
     elseif isdiv(d)
         num, den = quick_cancel(d.num, d.den)
         return Div(num, den)

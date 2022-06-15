@@ -395,8 +395,8 @@ But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
 function quick_cancel(d)
-    if ispow(x) && isdiv(x.base)
-        return quick_cancel((x.base.num^x.exp) / (x.base.den^x.exp))
+    if ispow(d) && isdiv(d.base)
+        return quick_cancel((d.base.num^d.exp) / (d.base.den^d.exp))
     elseif isdiv(d)
         num, den = quick_cancel(d.num, d.den)
         return Div(num, den)

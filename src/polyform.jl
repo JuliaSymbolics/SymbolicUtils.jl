@@ -310,6 +310,7 @@ Note that since PolyForms have different `hash`es than SymbolicUtils expressions
 `substitute` may not work if `polyform=true`
 """
 function simplify_fractions(x; polyform=false)
+
     x = Postwalk(quick_cancel)(x)
 
     !needs_div_rules(x) && return x
@@ -394,7 +395,11 @@ But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
 function quick_cancel(d)
-    if isdiv(d)
+    if ispow(d) && isdiv(d.base)
+        return quick_cancel((d.base.num^d.exp) / (d.base.den^d.exp))
+    elseif ismul(d) && any(isdiv, unsorted_arguments(d))
+        return prod(unsorted_arguments(d))
+    elseif isdiv(d)
         num, den = quick_cancel(d.num, d.den)
         return Div(num, den)
     else

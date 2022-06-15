@@ -1,21 +1,24 @@
 module Code
 
 using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra
+using TermInterface
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       SpawnFetch, Multithreaded
+       SpawnFetch, Multithreaded, cse
 
 import ..SymbolicUtils
-import SymbolicUtils: @matchable, Sym, Term, istree, operation, arguments
+import ..SymbolicUtils.Rewriters
+import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, istree, operation, arguments,
+                      symtype, similarterm, unsorted_arguments, metadata
 
 ##== state management ==##
 
 struct NameState
-    symbolify::Dict{Any, Symbol}
+    rewrites::Dict{Any, Any}
 end
-NameState() = NameState(Dict{Any, Symbol}())
-function union_symbolify!(n, ts)
+NameState() = NameState(Dict{Any, Any}())
+function union_rewrites!(n, ts)
     for t in ts
         n[t] = Symbol(string(t))
     end
@@ -31,7 +34,7 @@ function Base.get(st::LazyState)
     s === nothing ? getfield(st, :ref)[] = NameState() : s
 end
 
-@inline Base.getproperty(st::LazyState, f::Symbol) = getproperty(get(st), f)
+@inline Base.getproperty(st::LazyState, f::Symbol) = f==:symbolify ?  getproperty(st, :rewrites) : getproperty(get(st), f)
 
 ##========================##
 
@@ -72,8 +75,6 @@ when `y(t)` is itself the argument of a function rather than `y`.
 
 """
 toexpr(x) = toexpr(x, LazyState())
-toexpr(s::Sym, st) = nameof(s)
-
 
 @matchable struct Assignment
     lhs
@@ -98,14 +99,30 @@ toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 
 function_to_expr(op, args, st) = nothing
 
+function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
+    out = get(st.rewrites, O, nothing)
+    out === nothing || return out
+    args = map(Base.Fix2(toexpr, st), arguments(O))
+    if length(args) >= 3 && symtype(O) <: Number
+        x, xs = Iterators.peel(args)
+        foldl(xs, init=x) do a, b
+            Expr(:call, op, a, b)
+        end
+    else
+        expr = Expr(:call, op)
+        append!(expr.args, args)
+        expr
+    end
+end
+
 function function_to_expr(::typeof(^), O, st)
     args = arguments(O)
     if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
-            return toexpr(Term{Any}(inv, [ex]), st)
+            return toexpr(Term(inv, Any[ex]), st)
         else
-            return toexpr(Term{Any}(^, [Term{Any}(inv, [ex]), -args[2]]), st)
+            return toexpr(Term(^, Any[Term(inv, Any[ex]), -args[2]]), st)
         end
     end
     return nothing
@@ -116,18 +133,34 @@ function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end
 
-function_to_expr(::Sym, O, st) = get(st.symbolify, O, nothing)
+function function_to_expr(x::BasicSymbolic, O, st)
+    TermInterface.issym(x) ? get(st.symbolify, O, nothing) : nothing
+end
 
 toexpr(O::Expr, st) = O
 
+function substitute_name(O, st)
+    if (issym(O) || istree(O)) && haskey(st.rewrites, O)
+        st.rewrites[O]
+    else
+        O
+    end
+end
+
 function toexpr(O, st)
+    if issym(O)
+        O = substitute_name(O, st)
+        return issym(O) ? nameof(O) : toexpr(O, st)
+    end
+    O = substitute_name(O, st)
+
     !istree(O) && return O
     op = operation(O)
     expr′ = function_to_expr(op, O, st)
     if expr′ !== nothing
         return expr′
     else
-        haskey(st.symbolify, O) && return st.symbolify[O]
+        !istree(O) && return O
         args = arguments(O)
         return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
     end
@@ -139,10 +172,15 @@ end
     inds
     name
     inbounds::Bool
+    create_bindings::Bool
 end
 
-function DestructuredArgs(elems, name=gensym("arg"); inds=eachindex(elems), inbounds=false)
-    DestructuredArgs(elems, inds, name, inbounds)
+function DestructuredArgs(elems, name=nothing; inds=eachindex(elems), inbounds=false, create_bindings=true)
+    if name === nothing
+        # I'm sorry if you get a hash collision here lol
+        name = Symbol("##arg#", hash((elems, inds, inbounds, create_bindings)))
+    end
+    DestructuredArgs(elems, inds, name, inbounds, create_bindings)
 end
 
 """
@@ -157,18 +195,21 @@ components. See example in `Func` for more information.
 DestructuredArgs
 
 toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
-get_symbolify(args::DestructuredArgs) = ()
-function get_symbolify(args::Union{AbstractArray, Tuple})
-    cflatten(map(get_symbolify, args))
+get_rewrites(args::DestructuredArgs) = ()
+function get_rewrites(args::Union{AbstractArray, Tuple})
+    cflatten(map(get_rewrites, args))
 end
-get_symbolify(x) = istree(x) ? (x,) : ()
+get_rewrites(x) = istree(x) ? (x,) : ()
 cflatten(x) = Iterators.flatten(x) |> collect
+
+# Used in Symbolics
+Base.@deprecate_binding get_symbolify get_rewrites
 
 function get_assignments(d::DestructuredArgs, st)
     name = toexpr(d, st)
     map(d.inds, d.elems) do i, a
         ex = (i isa Symbol ? :($name.$i) : :($name[$i]))
-        ex = d.inbounds ? :(@inbounds($ex)) : ex
+        ex = d.inbounds && d.create_bindings ? :(@inbounds($ex)) : ex
         a ← ex
     end
 end
@@ -176,57 +217,83 @@ end
 @matchable struct Let
     pairs::Vector{Union{Assignment,DestructuredArgs}} # an iterator of pairs, ordered
     body
+    let_block::Bool
 end
 
 """
-    Let(assignments, body)
+    Let(assignments, body[, let_block])
 
 A Let block.
 
 - `assignments` is a vector of `Assignment`s
 - `body` is the body of the let block
+- `let_block` boolean (default=true) -- do not create a let block if false.
 """
-Let
+Let(assignments, body) = Let(assignments, body, true)
 
 function toexpr(l::Let, st)
     if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
         dargs = l.pairs
     else
-        dargs = map(l.pairs) do x
+        assignments = []
+        for x in l.pairs
             if x isa DestructuredArgs
-                get_assignments(x, st)
+                if x.create_bindings
+                    append!(assignments, get_assignments(x, st))
+                else
+                    for a in get_assignments(x, st)
+                        st.rewrites[a.lhs] = a.rhs
+                    end
+                end
             elseif x isa Assignment && x.lhs isa DestructuredArgs
-                [x.lhs.name ← x.rhs, get_assignments(x.lhs, st)...]
+                if x.lhs.create_bindings
+                    push!(assignments, x.lhs.name ← x.rhs)
+                    append!(assignments, get_assignments(x.lhs, st))
+                else
+                    push!(assignments, x.lhs.name ← x.rhs)
+                    for a in get_assignments(x.lhs, st)
+                        st.rewrites[a.lhs] = a.rhs
+                    end
+                end
             else
-                (x,)
+                push!(assignments, x)
             end
-        end |> cflatten
+        end
         # expand and come back
-        return toexpr(Let(dargs, l.body), st)
+        return toexpr(Let(assignments, l.body, l.let_block), st)
     end
 
-    funkyargs = get_symbolify(map(lhs, dargs))
-    union_symbolify!(st.symbolify, funkyargs)
+    funkyargs = get_rewrites(map(lhs, dargs))
+    union_rewrites!(st.rewrites, funkyargs)
 
-    Expr(:let,
-         Expr(:block, map(p->toexpr(p, st), dargs)...),
-         toexpr(l.body, st))
+    bindings = map(p->toexpr(p, st), dargs)
+    l.let_block ? Expr(:let,
+                       Expr(:block, bindings...),
+                       toexpr(l.body, st)) : Expr(:block,
+                                                  bindings...,
+                                                  toexpr(l.body, st))
 end
 
 @matchable struct Func
     args::Vector
     kwargs
     body
+    pre::Vector
 end
 
+Func(args, kwargs, body) = Func(args, kwargs, body, [])
+
 """
-    Func(args, kwargs, body)
+    Func(args, kwargs, body[, pre])
 
 A function.
 
 - `args` is a vector of expressions
 - `kwargs` is a vector of `Assignment`s
 - `body` is the body of the function
+- `pre` a vector of expressions to be prepended to the function body,
+   for example, it could be `[Expr(:meta, :inline), Expr(:meta, :propagate_inbounds)]`
+   to create an `@inline @propagate_inbounds` function definition.
 
 **Special features in `args`**:
 
@@ -252,7 +319,7 @@ julia> toexpr(func)
   end)
 ```
 
-- the second argument is a `DestructuredArgs`, in the `Expr` form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of `c` and `y(t)`. The let block that is automatically generated "destructures" these arguments.
+- the second argument is a `DestructuredArgs`, in the `Expr` form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of `b` and `y(t)`. The let block that is automatically generated "destructures" these arguments.
 - `x(t)` and `y(t)` have been replaced with `var"x(t)"` and `var"y(t)"` symbols throughout
 the generated Expr. This makes sure that we are not actually calling the expressions `x(t)` or `y(t)` but instead passing the right values in place of the whole expression.
 - `f` is also a function-like symbol, same as `x` and `y`, but since the `args` array contains `f` as itself rather than as say, `f(t)`, it does not become a `var"f(t)"`. The generated function expects a function of one argument to be passed in the position of `f`.
@@ -263,7 +330,7 @@ An example invocation of this function is:
 julia> executable = eval(toexpr(func))
 #10 (generic function with 1 method)
 
-julia> exec(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
+julia> executable(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
 "11.98074069840786"
 ```
 """
@@ -272,21 +339,23 @@ Func
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 function toexpr(f::Func, st)
-    funkyargs = get_symbolify(vcat(f.args, map(lhs, f.kwargs)))
-    union_symbolify!(st.symbolify, funkyargs)
+    funkyargs = get_rewrites(vcat(f.args, map(lhs, f.kwargs)))
+    union_rewrites!(st.rewrites, funkyargs)
     dargs = filter(x->x isa DestructuredArgs, f.args)
     if !isempty(dargs)
-        body = Let(dargs, f.body)
+        body = Let(dargs, f.body, false)
     else
         body = f.body
     end
     if isempty(f.kwargs)
         :(function ($(map(x->toexpr(x, st), f.args)...),)
+              $(f.pre...)
               $(toexpr(body, st))
           end)
     else
         :(function ($(map(x->toexpr(x, st), f.args)...),;
                     $(map(x->toexpr_kw(x, st), f.kwargs)...))
+              $(f.pre...)
               $(toexpr(body, st))
           end)
     end
@@ -590,6 +659,97 @@ recurse_expr(ex, st) = toexpr(ex, st)
 
 function toexpr(exp::LiteralExpr, st)
     recurse_expr(exp.ex, st)
+end
+
+
+### Code-related utilities
+
+### Common subexprssion evaluation
+
+@inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
+
+function _cse!(mem, expr)
+    istree(expr) || return expr
+    op = _cse!(mem, operation(expr))
+    args = map(Base.Fix1(_cse!, mem), arguments(expr))
+    t = similarterm(expr, op, args)
+
+    v, dict = mem
+    update! = let v=v, t=t
+        () -> begin
+            var = newsym(symtype(t))
+            push!(v, var ← t)
+            length(v)
+        end
+    end
+    v[get!(update!, dict, t)].lhs
+end
+
+function cse(expr)
+    state = Dict{Any, Int}()
+    cse_state!(state, expr)
+    cse_block(state, expr)
+end
+
+
+function _cse(exprs::AbstractArray)
+    letblock = cse(Term{Any}(tuple, exprs))
+    letblock.pairs, arguments(letblock.body)
+end
+
+function cse(x::MakeArray)
+    assigns, expr = _cse(x.elems)
+    Let(assigns, MakeArray(expr, x.similarto, x.output_eltype))
+end
+
+function cse(x::SetArray)
+    assigns, expr = _cse(x.elems)
+    Let(assigns, SetArray(x.inbounds, x.arr, expr))
+end
+
+function cse(x::MakeSparseArray)
+    sp = x.array
+    assigns, expr = _cse(sp.nzval)
+    if sp isa SparseMatrixCSC
+        Let(assigns, MakeSparseArray(SparseMatrixCSC(sp.m, sp.n,
+                                                     sp.colptr, sp.rowval, exprs)))
+    else
+        Let(assigns, MakeSparseArray(SparseVector(sp.n, sp.nzinds, exprs)))
+    end
+end
+
+
+function cse_state!(state, t)
+    !istree(t) && return t
+    state[t] = Base.get!(state, t, 0) + 1
+    foreach(x->cse_state!(state, x), unsorted_arguments(t))
+end
+
+function cse_block!(assignments, counter, names, name, state, x)
+    if get(state, x, 0) > 1
+        if haskey(names, x)
+            return names[x]
+        else
+            sym = Sym{symtype(x)}(Symbol(name, counter[]))
+            names[x] = sym
+            push!(assignments, sym ← x)
+            counter[] += 1
+            return sym
+        end
+    elseif istree(x)
+        args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
+        return similarterm(x, operation(x), args, symtype(x),
+                    metadata=metadata(x))
+    else
+        return x
+    end
+end
+
+function cse_block(state, t, name=Symbol("var-", hash(t)))
+    assignments = Assignment[]
+    counter = Ref{Int}(1)
+    names = Dict{Any, BasicSymbolic}()
+    Let(assignments, cse_block!(assignments, counter, names, name, state, t))
 end
 
 end

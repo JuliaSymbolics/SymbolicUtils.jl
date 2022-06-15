@@ -19,9 +19,22 @@ const diadic = [max, min, hypot, atan, mod, rem, copysign,
                 polygamma, beta, logbeta]
 const previously_declared_for = Set([])
 
-# TODO: it's not possible to dispatch on the symtype! (only problem is Parameter{})
+const basic_monadic = [-, +]
+const basic_diadic = [+, -, *, /, //, \, ^]
+#################### SafeReal #########################
+export SafeReal, LiteralReal
+
+# ideally the relationship should be the other way around
+abstract type SafeReal <: Real end
+
+################### LiteralReal #######################
+
+abstract type LiteralReal <: Real end
+
+#######################################################
 
 assert_like(f, T) = nothing
+# a and b are objects, arguments gets recursively checked
 function assert_like(f, T, a, b...)
     islike(a, T) || throw(ArgumentError("The function $f cannot be applied to $a which is not a $T-like object." *
                                         "Define `islike(::$(typeof(a)), ::Type{$T}) = true` to enable this."))
@@ -35,14 +48,13 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     exprs = []
 
     skip_basics = options !== nothing ? options == :skipbasics : false
+    only_basics = options !== nothing ? options == :onlybasics : false
     skips = Meta.isexpr(options, [:vcat, :hcat, :vect]) ? Set(options.args) : []
-    basic_monadic = [-, +]
-    basic_diadic = [+, -, *, /, //, \, ^]
 
     rhs2 = :($assert_like(f, Number, a, b); $rhs2)
     rhs1 = :($assert_like(f, Number, a); $rhs1)
 
-    for f in (skip_basics ? diadic : vcat(basic_diadic, diadic))
+    for f in (skip_basics ? diadic : only_basics ? basic_diadic : vcat(basic_diadic, diadic))
         nameof(f) in skips && continue
         for S in previously_declared_for
             push!(exprs, quote
@@ -63,7 +75,7 @@ function number_methods(T, rhs1, rhs2, options=nothing)
         push!(exprs, expr)
     end
 
-    for f in (skip_basics ? monadic : vcat(basic_monadic, monadic))
+    for f in (skip_basics ? monadic : only_basics ? basic_monadic : vcat(basic_monadic, monadic))
         nameof(f) in skips && continue
         push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
     end
@@ -75,30 +87,58 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
 
-@number_methods(Sym, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Term, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Add, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Mul, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Pow, term(f, a), term(f, a, b), skipbasics)
-@number_methods(Div, term(f, a), term(f, a, b), skipbasics)
+@number_methods(BasicSymbolic, term(f, a), term(f, a, b), skipbasics)
+@number_methods(BasicSymbolic{<:LiteralReal}, term(f, a), term(f, a, b), onlybasics)
 
-for f in diadic
+for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
-end
-
-for f in [+, -, *, \, /, ^]
-    @eval promote_symtype(::$(typeof(f)),
-                   T::Type{<:Number},
-                   S::Type{<:Number}) = promote_type(T, S)
+    for R in [SafeReal, LiteralReal]
+        @eval function promote_symtype(::$(typeof(f)),
+                T::Type{<:$R},
+                S::Type{<:Real})
+            X = promote_type(T, Real)
+            X == Real ? $R : X
+        end
+        @eval function promote_symtype(::$(typeof(f)),
+                T::Type{<:Real},
+                S::Type{<:$R})
+            X = promote_type(Real, S)
+            X == Real ? $R : X
+        end
+        @eval function promote_symtype(::$(typeof(f)),
+                T::Type{<:$R},
+                S::Type{<:$R})
+            $R
+        end
+    end
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
-Base.rem2pi(x::Symbolic{<:Number}, mode::Base.RoundingMode) = term(rem2pi, x, mode)
 
+error_f_symbolic(f, T) = error("$f is not defined for T.")
+
+function Base.rem2pi(x::Symbolic, mode::Base.RoundingMode)
+    T = symtype(x)
+    T <: Number ? term(rem2pi, x, mode) : error_f_symbolic(rem2pi, T)
+end
+
+# Specially handle inv and literal pow
+function Base.inv(x::Symbolic)
+    T = symtype(x)
+    T <: Number ? Base.:^(x, -1) : error_f_symbolic(rem2pi, T)
+end
+function Base.literal_pow(::typeof(^), x::Symbolic, ::Val{p}) where {p}
+    T = symtype(x)
+    T <: Number ? Base.:^(x, p) : error_f_symbolic(rem2pi, T)
+end
+
+promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralReal}) = LiteralReal
     @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 
@@ -148,11 +188,9 @@ function ifelse(_if::Symbolic{Bool}, _then, _else)
 end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
 
-# Specially handle inv and literal pow
-Base.inv(x::Symbolic{<:Number}) = Base.:^(x, -1)
-Base.literal_pow(::typeof(^), x::Symbolic{<:Number}, ::Val{p}) where {p} = Base.:^(x, p)
-
 # Array-like operations
 Base.size(x::Symbolic{<:Number}) = ()
 Base.length(x::Symbolic{<:Number}) = 1
-Base.ndims(x::Symbolic{<:Number}) = 0
+Base.ndims(x::Symbolic{T}) where {T} = Base.ndims(T)
+Base.ndims(::Type{<:Symbolic{T}}) where {T} = Base.ndims(T)
+Base.broadcastable(x::Symbolic{T}) where {T<:Number} = Ref(x)

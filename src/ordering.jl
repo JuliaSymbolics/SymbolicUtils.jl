@@ -10,19 +10,21 @@
 
 arglength(a) = length(arguments(a))
 function <ₑ(a, b)
-    if a isa Term && (b isa Symbolic && !(b isa Term))
+    if isterm(a) && (b isa Symbolic && !isterm(b))
         return false
-    elseif b isa Term && (a isa Symbolic && !(a isa Term))
+    elseif isterm(b) && (a isa Symbolic && !isterm(a))
         return true
-    elseif (a isa Union{Add,Mul}) && (b isa Union{Add,Mul})
+    elseif (isadd(a) || ismul(a)) && (isadd(b) || ismul(b))
         return cmp_mul_adds(a, b)
-    elseif !istree(a) && !istree(b)
+    elseif TermInterface.issym(a) && TermInterface.issym(b)
+        a.name < b.name
+    elseif !TermInterface.istree(a) && !TermInterface.istree(b)
         T = typeof(a)
         S = typeof(b)
         return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)
-    elseif istree(b) && !istree(a)
+    elseif TermInterface.istree(b) && !TermInterface.istree(a)
         return true
-    elseif istree(a) && istree(b)
+    elseif TermInterface.istree(a) && TermInterface.istree(b)
         return cmp_term_term(a,b)
     else
         return !(b <ₑ a)
@@ -30,8 +32,8 @@ function <ₑ(a, b)
 end
 
 function cmp_mul_adds(a, b)
-    (a isa Add && b isa Mul) && return true
-    (a isa Mul && b isa Add) && return false
+    (isadd(a) && ismul(b)) && return true
+    (ismul(a) && isadd(b)) && return false
     a_args = unsorted_arguments(a)
     b_args = unsorted_arguments(b)
     length(a_args) < length(b_args) && return true
@@ -43,8 +45,6 @@ function cmp_mul_adds(a, b)
     end
     return false
 end
-
-<ₑ(a::Symbolic, b::Sym) = !(b <ₑ a)
 
 function <ₑ(a::Symbol, b::Symbol)
     # Enforce the order [+,-,\,/,^,*]
@@ -65,9 +65,9 @@ function <ₑ(a::Symbol, b::Symbol)
     end
 end
 
-<ₑ(a::Sym, b::Sym) = a.name < b.name
-
 <ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
+
+<ₑ(a::Type, b::Type) = nameof(a) <ₑ nameof(b)
 
 function cmp_term_term(a, b)
     la = arglength(a)
@@ -125,4 +125,3 @@ function cmp_term_term(a, b)
         return na <ₑ nb # all args are equal, compare the name
     end
 end
-

@@ -8,6 +8,10 @@ export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 using TermInterface
 using TermInterface: node_count
+using Metatheory
+using Metatheory.Rules
+using Metatheory.Rewriters
+using Unityper
 
 # Sym, Term,
 # Add, Mul and Pow
@@ -30,25 +34,18 @@ include("utils.jl")
 export Rewriters
 
 # A library for composing together expr -> expr functions
-include("rewriters.jl")
-
-using .Rewriters
 
 using Combinatorics: permutations, combinations
-export @rule, @acrule, RuleSet, @capture
+export @rule, @acrule, RuleSet
 
 # Rule type and @rule macro
 include("rule.jl")
-
-# Matching a Rule
-include("matchers.jl")
 
 # Convert to an efficient multi-variate polynomial representation
 import MultivariatePolynomials
 const MP = MultivariatePolynomials
 import DynamicPolynomials
 export expand
-include("abstractalgebra.jl")
 include("polyform.jl")
 
 # Term ordering
@@ -58,10 +55,18 @@ include("ordering.jl")
 include("simplify_rules.jl")
 
 # API = simplify + substitute
-export simplify, substitute
-include("api.jl")
+export simplify
+include("simplify.jl")
+
+export substitute
+include("substitute.jl")
+
+# EGraph rewriting
+include("egraph.jl")
+export optimize
 
 include("code.jl")
+
 
 # ADjoints
 include("adjoints.jl")

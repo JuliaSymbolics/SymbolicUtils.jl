@@ -13,15 +13,17 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     @test toexpr(Assignment(a, b)) == :(a = b)
     @test toexpr(a ← b) == :(a = b)
     @test toexpr(a+b) == :($(+)(a, b))
+    @test toexpr(a*b*c*d*e) == :($(*)($(*)($(*)($(*)(a, b), c), d), e))
+    @test toexpr(a+b+c+d+e) == :($(+)($(+)($(+)($(+)(a, b), c), d), e))
     @test toexpr(a+b) == :($(+)(a, b))
     @test toexpr(a^b) == :($(^)(a, b))
     @test toexpr(a^2) == :($(^)(a, 2))
-    @test toexpr(a^-2) == :($(^)($(inv)(a), 2))
+    @test toexpr(a^-2) == :($(/)(1, $(^)(a, 2)))
     @test toexpr(x(t)+y(t)) == :($(+)(x(t), y(t)))
-    @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)(x(t), y(t), x($(+)(1, t))))
+    @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)($(+)(x(t), y(t)), x($(+)(1, t))))
     s = LazyState()
-    Code.union_symbolify!(s.symbolify, [x(t), y(t)])
-    @test toexpr(x(t)+y(t)+x(t+1), s) == :($(+)(var"x(t)", var"y(t)", x($(+)(1, t))))
+    Code.union_rewrites!(s.rewrites, [x(t), y(t)])
+    @test toexpr(x(t)+y(t)+x(t+1), s) == :($(+)($(+)(var"x(t)", var"y(t)"), x($(+)(1, t))))
 
     ex = :(let a = 3, b = $(+)(1,a)
                $(+)(a, b)
@@ -35,19 +37,40 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     test_repr(toexpr(Func([x(t), x],[b ← a+2, y(t) ← b], x(t)+x(t+1)+b+y(t))),
               :(function (var"x(t)", x; b = $(+)(2, a), var"y(t)" = b)
-                    $(+)(b, var"x(t)", var"y(t)", x($(+)(1, t)))
+                    $(+)($(+)($(+)(b, var"x(t)"), var"y(t)"), x($(+)(1, t)))
                 end))
     test_repr(toexpr(Func([DestructuredArgs([x, x(t)], :state),
                            DestructuredArgs((a, b), :params)], [],
                           x(t+1) + x(t) + a  + b)),
               :(function (state, params)
-                    let x = state[1], var"x(t)" = state[2], a = params[1], b = params[2]
-                        $(+)(a, b, var"x(t)", x($(+)(1, t)))
+                    begin
+                        x = state[1]
+                        var"x(t)" = state[2]
+                        a = params[1]
+                        b = params[2]
+                        $(+)($(+)($(+)(a, b), var"x(t)"), x($(+)(1, t)))
                     end
                 end))
 
+    test_repr(toexpr(Func([DestructuredArgs([x, x(t)], :state, create_bindings=false),
+                           DestructuredArgs((a, b), :params, create_bindings=false)], [],
+                          x(t+1) + x(t) + a  + b)),
+              :(function (state, params)
+                    begin
+                        $(+)($(+)($(+)(params[1], params[2]), $getindex(state, 2)), state[1]($(+)(1, t)))
+                    end
+                end))
+
+
+    test_repr(toexpr(Func([],[],:(rand()), [Expr(:meta, :inline)])),
+              :(function ()
+                    $(Expr(:meta, :inline))
+                    rand()
+                end))
+
     ex = toexpr(Func([DestructuredArgs([x, x(t)], :state, inbounds=true)], [], x(t+1) + x(t)))
-    for e ∈ ex.args[2].args[3].args[1].args
+    ex = Base.remove_linenums!(ex)
+    for e ∈ ex.args[2].args[1].args[1:2]
         @test e.args[2].head == :macrocall
     end
 
@@ -81,13 +104,15 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
               :(let foo = Any[3, 3, [1, 4]],
                     var"x(t)" = foo[1], b = foo[2], c = foo[3],
                     p = c[1], q = c[2]
-                    $(+)(a, b, c, var"x(t)")
+                    $(+)($(+)($(+)(a, b), c), var"x(t)")
                 end))
 
     test_repr(toexpr(Func([DestructuredArgs([a,b],c,inds=[:a, :b])], [],
                           a + b)),
               :(function (c,)
-                    let a = c.a, b = c.b
+                    begin
+                        a = c.a
+                        b = c.b
                         $(+)(a, b)
                     end
                 end))
@@ -119,7 +144,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SLVector((:a, :b))(@SVector[1,2])],
                           MakeArray([a+b,a/b], arr)))) === @SLVector((:a, :b))(@SVector [3, 1/2])
-    
+
     R1 = eval(toexpr(Let([a ← 1, b ← 2, arr ← @MVector([1,2])],MakeArray([a,b,a+b,a/b], arr))))
     @test R1 == (@MVector [1, 2, 3, 1/2]) && R1 isa MVector
 
@@ -166,4 +191,3 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         @test f(2) == 2
     end
 end
-

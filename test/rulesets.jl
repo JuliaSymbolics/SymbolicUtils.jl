@@ -86,6 +86,29 @@ end
 
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
+    @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
+    @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
+end
+
+@testset "Double angle formulas" begin
+    @syms r x
+    @eqtest simplify(r*cos(x/2)^2 - r*sin(x/2)^2) == r*cos(x)
+    @eqtest simplify(r*sin(x/2)^2 - r*cos(x/2)^2) == -r*cos(x)
+    @eqtest simplify(2cos(x)*sin(x)) == sin(2x)
+end
+
+@testset "Exponentials" begin
+    @syms a::Real b::Real
+    @eqtest simplify(exp(a)*exp(b)) == simplify(exp(a+b))
+    @eqtest simplify(exp(a)*exp(a)) == simplify(exp(2a))
+    @test simplify(exp(a)*exp(-a)) == 1
+    @eqtest simplify(exp(a)^2) == simplify(exp(2a))
+    @eqtest simplify(exp(a) * a * exp(b)) == simplify(a*exp(a+b))
+end
+
+@testset "simplify_fractions" begin
+    @syms x y z
+    @eqtest simplify(2*((y + z)/x) - 2*y/x - z/x*2) == 0
 end
 
 @testset "Depth" begin
@@ -96,13 +119,13 @@ end
     #@eqtest R(sin(sin(sin(x + 1))), depth=2) == cos(cos(sin(x + 1)))
 end
 
+pred(x) = error("Fail")
 @testset "RuleRewriteError" begin
-    pred(x) = error("Fail")
-
+    using Metatheory
     @syms a b
 
     rs = Rewriters.Postwalk(Rewriters.Chain(([@rule ~x + ~y::pred => ~x])))
-    @test_throws SymbolicUtils.RuleRewriteError rs(a+b)
+    @test_throws Metatheory.Rules.RuleRewriteError rs(a+b)
     err = try rs(a+b) catch err; err; end
     @test sprint(io->Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
 end
@@ -124,25 +147,26 @@ end
 end
 
 
+_g(y) = sin
 @testset "interpolation" begin
-    f(y) = sin
     @syms a
 
-    @test isnothing(@rule(f(1)(a) => 2)(sin(a)))
-    @test @rule($(f(1))(a) => 2)(sin(a)) == 2
+    @test isnothing(@rule(_g(1)(a) => 2)(sin(a)))
+    @test @rule($(_g(1))(a) => 2)(sin(a)) == 2
 end
 
+_f(x) = x === a
 @testset "where" begin
-    expected = :(f(~x) ? ~x + ~y : nothing)
-    @test SymbolicUtils.rewrite_rhs(:((~x + ~y) where f(~x))) == expected
+    using Metatheory
+    expected = :(_f(~x) ? ~x + ~y : nothing)
+    @test Metatheory.Syntax.rewrite_rhs(:((~x + ~y) where _f(~x))) == expected
 
     @syms a b
-    f(x) = x === a
-    r = @rule ~x => ~x where f(~x)
+    r = @rule ~x => ~x where _f(~x)
     @eqtest r(a) == a
     @test isnothing(r(b))
 
-    r = @acrule ~x => ~x where f(~x)
+    r = @acrule ~x => ~x where _f(~x)
     @eqtest r(a) == a
     @test r(b) === nothing
 end

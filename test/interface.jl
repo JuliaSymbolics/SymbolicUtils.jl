@@ -1,12 +1,6 @@
 using SymbolicUtils, Test
 using TermInterface
 
-TermInterface.istree(ex::Expr) = ex.head == :call
-TermInterface.operation(ex::Expr) = ex.args[1]
-TermInterface.arguments(ex::Expr) = ex.args[2:end]
-TermInterface.similarterm(x::Type{Expr}, head, args, symtype=nothing; metadata=nothing) = 
-    Expr(:call, head, args...)
-
 TermInterface.issym(s::Symbol) = true
 Base.nameof(s::Symbol) = s
 

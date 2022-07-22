@@ -202,7 +202,7 @@ function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     if E === SYM
         nameof(a) === nameof(b)
     elseif E === ADD || E === MUL
-        a.coeff == b.coeff && isequal(a.dict, b.dict)
+        isequal(a.coeff, b.coeff) && isequal(a.dict, b.dict)
     elseif E === DIV
         isequal(a.num, b.num) && isequal(a.den, b.den)
     elseif E === POW

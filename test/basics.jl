@@ -233,6 +233,7 @@ end
 @testset "isequal" begin
     @syms a b c
     @test isequal(a + b, a + b + 0.01 - 0.01)
+    @test isequal(a + NaN, a + NaN)
 end
 
 @testset "subtyping" begin

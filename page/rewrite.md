@@ -187,7 +187,7 @@ csa = Chain([sqexpand, acpyid])
 csa((cos(x) + sin(x))^2)
 ```
 
-Important feature of `Chain` is that it returns the expressiona instead of `nothing` if it doesn't change the expression
+Important feature of `Chain` is that it returns the expression instead of `nothing` if it doesn't change the expression
 
 ```julia:composing2
 Chain([@acrule sin(~x)^2 + cos(~x)^2 => 1])((cos(x) + sin(x))^2)

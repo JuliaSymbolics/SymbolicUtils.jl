@@ -193,7 +193,7 @@ Important feature of `Chain` is that it returns the expression instead of `nothi
 Chain([@acrule sin(~x)^2 + cos(~x)^2 => 1])((cos(x) + sin(x))^2)
 ```
 
-its important to notice, that chain is ordered, so if rules are in different order it wouldn't work the same as in earlier example
+it's important to notice, that chain is ordered, so if rules are in different order it wouldn't work the same as in earlier example
 
 ```julia:composing3
 cas = Chain([acpyid, sqexpand])

@@ -187,9 +187,9 @@ acpyid = <span class="hljs-meta">@acrule</span> sin(~x)^<span class="hljs-number
 csa = Chain([sqexpand, acpyid])
 
 csa((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">1 + 2cos(x)*sin(x)</code></pre>
-<p>Important feature of <code>Chain</code> is that it returns the expressiona instead of <code>nothing</code> if it doesn&#39;t change the expression</p>
+<p>Important feature of <code>Chain</code> is that it returns the expression instead of <code>nothing</code> if it doesn&#39;t change the expression</p>
 <pre><code class="julia hljs">Chain([<span class="hljs-meta">@acrule</span> sin(~x)^<span class="hljs-number">2</span> + cos(~x)^<span class="hljs-number">2</span> =&gt; <span class="hljs-number">1</span>])((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">(cos(x) + sin(x))^2</code></pre>
-<p>its important to notice, that chain is ordered, so if rules are in different order it wouldn&#39;t work the same as in earlier example</p>
+<p>it&#39;s important to notice, that chain is ordered, so if rules are in different order it wouldn&#39;t work the same as in earlier example</p>
 <pre><code class="julia hljs">cas = Chain([acpyid, sqexpand])
 
 cas((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x)</code></pre>
@@ -205,7 +205,7 @@ rcas((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><cod
 <pre><code class="julia hljs">Fixpoint(cas)((cos(x) + sin(x))^<span class="hljs-number">2</span>)</code></pre><pre><code class="plaintext hljs">1 + 2cos(x)*sin(x)</code></pre>
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: July 22, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: July 28, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

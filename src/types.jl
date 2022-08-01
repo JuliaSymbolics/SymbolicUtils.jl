@@ -845,7 +845,7 @@ function show_term(io::IO, t)
         show_pow(io, args)
     elseif f === (getindex)
         show_ref(io, f, args)
-    elseif f === (identity) && !issym(args[1])  && !istree(args[1]]
+    elseif f === (identity) && !issym(args[1]) && !istree(args[1])
         show(io, args[1])
     else
         show_call(io, f, args)

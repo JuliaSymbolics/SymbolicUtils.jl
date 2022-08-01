@@ -190,4 +190,16 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         @test f(1) == 1
         @test f(2) == 2
     end
+
+    let
+        io = IOBuffer()
+        twoπ = Base.Irrational{:twoπ}()
+        for q ∈ Base.Irrational[Base.MathConstants.catalan, Base.MathConstants.γ, π, Base.MathConstants.φ, ℯ, twoπ]
+            Base.show(io, q)
+            s1 = String(take!(io))
+            SymbolicUtils.show_term(io, SymbolicUtils.Term(identity, [q]))
+            s2 = String(take!(io))
+            @test s1 == s2
+        end
+    end
 end

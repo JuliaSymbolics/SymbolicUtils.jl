@@ -69,6 +69,7 @@ Base.isequal(::Symbolic, ::Symbolic) = false
 
 ### Metatheory.jl e-graph rewriting integration 
 
+#=
 """
     SymtypeAnalysis
 
@@ -84,6 +85,7 @@ EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeTerm{T}) where {T} = 
 EGraphs.join(an::Type{SymtypeAnalysis}, A, B) = Union{A, B}
 
 # TODO JOIN egraph analysis
+=#
 TermInterface.symtype(ec::EClass) = getdata(ec, SymtypeAnalysis, Any)
 
 function to_symbolic(x)

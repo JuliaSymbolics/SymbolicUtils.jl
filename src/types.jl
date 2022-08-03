@@ -254,7 +254,6 @@ function Base.hash(s::BasicSymbolic, salt::UInt)
         error_on_type()
     end
 end
-
 ###
 ### Constructors
 ###
@@ -660,6 +659,7 @@ end
 
 ### Metatheory.jl e-graph rewriting integration
 
+#=
 """
     SymtypeAnalysis
 
@@ -676,6 +676,7 @@ EGraphs.join(an::Type{SymtypeAnalysis}, A, B) = Union{A, B}
 
 # TODO JOIN egraph analysis
 TermInterface.symtype(ec::EClass) = getdata(ec, SymtypeAnalysis, Any)
+=#
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *

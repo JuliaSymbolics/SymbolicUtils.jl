@@ -40,6 +40,7 @@ let
         @rule(^(~x, ~z::_iszero) => 1)
         @rule(^(~x, ~z::_isone) => ~x)
         @rule(inv(~x) => 1/(~x))
+        @rule(^(~x::SymbolicUtils._isone, ~z) => 1)
     ]
 
     ASSORTED_RULES = [

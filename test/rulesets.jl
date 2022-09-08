@@ -105,7 +105,7 @@ end
     @eqtest simplify(exp(a)^2) == simplify(exp(2a))
     @eqtest simplify(exp(a) * a * exp(b)) == simplify(a * exp(a + b))
     @eqtest simplify(one(Int)^a) == 1
-    @eqtest simplify(one{Complex{Float64}}^a) == 1
+    @eqtest simplify(one(Complex{Float64})^a) == 1
     @eqtest simplify(a^b * 1^a) == a^b
 end
 

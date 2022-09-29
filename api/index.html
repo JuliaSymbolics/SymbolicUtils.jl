@@ -370,7 +370,6 @@ julia&gt; r(b) === <span class="hljs-literal">nothing</span>
       <div class="doc-content"><pre><code class="julia hljs">simplify(x; expand=<span class="hljs-literal">false</span>,
             threaded=<span class="hljs-literal">false</span>,
             thread_subtree_cutoff=<span class="hljs-number">100</span>,
-            nonzero_denominators=<span class="hljs-literal">true</span>,
             rewriter=<span class="hljs-literal">nothing</span>)</code></pre>
 <p>Simplify an expression &#40;<code>x</code>&#41; by applying <code>rewriter</code> until there are no changes. <code>expand&#61;true</code> applies <a href="/api/#expand"><code>expand</code></a> in the beginning of each fixpoint iteration.</p>
 <p>By default, simplify will assume denominators are not zero and allow cancellation in fractions. Pass <code>simplify_fractions&#61;false</code> to prevent this.</p>
@@ -438,7 +437,7 @@ julia&gt; <span class="hljs-meta">@timerewrite</span> simplify(expr)
 
 <div class="page-foot">
   <div class="copyright">
-    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: August 23, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
+    &copy; Shashi Gowda, Yingbo Ma, Mason Protter. Last modified: September 29, 2022. Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a> and <a href="https://github.com/tlienart/PkgPage.jl">PkgPage.jl</a>.
   </div>
 </div>
 </div><!-- CONTENT ENDS HERE -->

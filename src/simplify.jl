@@ -4,7 +4,6 @@
 simplify(x; expand=false,
             threaded=false,
             thread_subtree_cutoff=100,
-            nonzero_denominators=true,
             rewriter=nothing)
 ```
 

@@ -169,6 +169,7 @@ function PolyForm(x,
 end
 
 TermInterface.istree(x::Type{<:PolyForm}) = true
+TermInterface.istree(x::PolyForm) = true
 
 TermInterface.operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 

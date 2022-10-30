@@ -197,6 +197,12 @@ end
     @test isequal(SymbolicUtils.similarterm(a / b, *, [a / b, c]), (a / b) * c)
     @test isequal(SymbolicUtils.similarterm(a * b, *, [0, c]), 0)
     @test isequal(SymbolicUtils.similarterm(a^b, ^, [a * b, 3]), (a * b)^3)
+
+    # test that similarterm sets metadata correctly
+    metadata = Base.ImmutableDict{DataType, Any}(Ctx1, "meta_1")
+    s = SymbolicUtils.similarterm(a^b, ^, [a * b, 3]; metadata = metadata)
+    @test hasmetadata(s, Ctx1)
+    @test getmetadata(s, Ctx1) == "meta_1"
 end
 
 toterm(t) = Term{symtype(t)}(operation(t), arguments(t))

@@ -535,15 +535,12 @@ function TermInterface.similarterm(t::Type{<:BasicSymbolic{<:Number}}, f, args, 
     if T === nothing
         T = _promote_symtype(f, args)
     end
-    if f === (+)
-        Add(T, makeadd(1, 0, args...)...; metadata=metadata)
-    elseif f == (*)
-        Mul(T, makemul(1, args...)...; metadata=metadata)
-    elseif f == (/)
-        @assert length(args) == 2
-        Div{T}(args...; metadata=metadata)
-    elseif f == (^) && length(args) == 2
-        Pow{T}(makepow(args...)...; metadata=metadata)
+    if f in (+, *) || (f in (/, ^) && length(args) == 2)
+        res = f(args...)
+        if res isa Symbolic
+            @set! res.metadata = metadata
+        end
+        return res
     else
         Term{T}(f, args, metadata=metadata)
     end

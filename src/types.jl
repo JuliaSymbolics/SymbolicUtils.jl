@@ -397,7 +397,8 @@ function toterm(t::BasicSymbolic{T}) where T
     if E === SYM || E === TERM
         return t
     elseif E === ADD || E === MUL
-        args = []
+        args = Any[]
+        push!(args, t.coeff)
         for (k, coeff) in t.dict
             push!(args, coeff == 1 ? k : Term{T}(E === MUL ? (^) : (*), Any[coeff, k]))
         end

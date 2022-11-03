@@ -190,7 +190,7 @@ isdiv(x)  = isa_SymType(Val(:Div), x)
 Base.isequal(::Symbolic, x) = false
 Base.isequal(x, ::Symbolic) = false
 Base.isequal(::Symbolic, ::Symbolic) = false
-coeff_isequal(a, b) = isequal(a, b) || ((a isa AbstractFloat && b isa AbstractFloat) && (a==b))
+coeff_isequal(a, b) = isequal(a, b) || ((a isa AbstractFloat || b isa AbstractFloat) && (a==b))
 function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     a === b && return true
 

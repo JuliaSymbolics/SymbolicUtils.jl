@@ -191,6 +191,18 @@ end
     @syms a b c
     @test isequal(SymbolicUtils.similarterm((b + c), +, [a,  (b+c)]).dict, Dict(a=>1,b=>1,c=>1))
     @test isequal(SymbolicUtils.similarterm(b^2, ^, [b^2,  1//2]), b)
+
+    # test that similarterm doesn't hard-code BasicSymbolic subtype
+    # and is consistent with BasicSymbolic arithmetic operations
+    @test isequal(SymbolicUtils.similarterm(a / b, *, [a / b, c]), (a / b) * c)
+    @test isequal(SymbolicUtils.similarterm(a * b, *, [0, c]), 0)
+    @test isequal(SymbolicUtils.similarterm(a^b, ^, [a * b, 3]), (a * b)^3)
+
+    # test that similarterm sets metadata correctly
+    metadata = Base.ImmutableDict{DataType, Any}(Ctx1, "meta_1")
+    s = SymbolicUtils.similarterm(a^b, ^, [a * b, 3]; metadata = metadata)
+    @test hasmetadata(s, Ctx1)
+    @test getmetadata(s, Ctx1) == "meta_1"
 end
 
 toterm(t) = Term{symtype(t)}(operation(t), arguments(t))

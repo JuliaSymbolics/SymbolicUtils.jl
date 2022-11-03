@@ -16,15 +16,15 @@ function <ₑ(a, b)
         return true
     elseif (isadd(a) || ismul(a)) && (isadd(b) || ismul(b))
         return cmp_mul_adds(a, b)
-    elseif TermInterface.issym(a) && TermInterface.issym(b)
+    elseif issym(a) && issym(b)
         a.name < b.name
-    elseif !TermInterface.istree(a) && !TermInterface.istree(b)
+    elseif !istree(a) && !istree(b)
         T = typeof(a)
         S = typeof(b)
         return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)
-    elseif TermInterface.istree(b) && !TermInterface.istree(a)
+    elseif istree(b) && !istree(a)
         return true
-    elseif TermInterface.istree(a) && TermInterface.istree(b)
+    elseif istree(a) && istree(b)
         return cmp_term_term(a,b)
     else
         return !(b <ₑ a)

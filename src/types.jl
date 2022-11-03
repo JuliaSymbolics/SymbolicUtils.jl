@@ -1,4 +1,4 @@
-#--------------------
+#-------------------
 #--------------------
 #### Symbolic
 #--------------------
@@ -92,16 +92,13 @@ function ConstructionBase.setproperties_object(obj::BasicSymbolic{T}, patch)::Ba
 end
 
 ###
-### TermInterface
+### Term interface
 ###
-using TermInterface
-
-TermInterface.exprhead(x::Symbolic) = :call
-TermInterface.symtype(x::Number) = typeof(x)
-@inline TermInterface.symtype(::Symbolic{T}) where T = T
+symtype(x::Number) = typeof(x)
+@inline symtype(::Symbolic{T}) where T = T
 
 # We're returning a function pointer
-@inline function TermInterface.operation(x::BasicSymbolic)
+@inline function operation(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => x.f
         Add  => (+)
@@ -113,7 +110,7 @@ TermInterface.symtype(x::Number) = typeof(x)
     end
 end
 
-function TermInterface.arguments(x::BasicSymbolic)
+function arguments(x::BasicSymbolic)
     args = unsorted_arguments(x)
     @compactified x::BasicSymbolic begin
         Add => @goto ADDMUL
@@ -127,7 +124,7 @@ function TermInterface.arguments(x::BasicSymbolic)
     end
     return args
 end
-function TermInterface.unsorted_arguments(x::BasicSymbolic)
+function unsorted_arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
         Add  => @goto ADDMUL
@@ -174,9 +171,9 @@ function TermInterface.unsorted_arguments(x::BasicSymbolic)
     return args
 end
 
-TermInterface.istree(s::BasicSymbolic) = !issym(s)
+istree(s::BasicSymbolic) = !issym(s)
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
-TermInterface.issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
+issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
 isterm(x) = isa_SymType(Val(:Term), x)
 ismul(x)  = isa_SymType(Val(:Mul), x)
 isadd(x)  = isa_SymType(Val(:Add), x)
@@ -521,13 +518,10 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing, exprhead=:call) =
-    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata, exprhead=exprhead)
+similarterm(t::Symbolic, f, args; metadata=nothing) =
+    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
 
-TermInterface.similarterm(t::Type{<:Symbolic}, f::Symbol, args; metadata=nothing, exprhead=:call) =
-    TermInterface.similarterm(t, eval(f), args; metadata=metadata, exprhead=exprhead)
-
-function TermInterface.similarterm(t::Type{<:BasicSymbolic{<:Number}}, f, args, symtype; metadata=nothing, exprhead=:call)
+function similarterm(t::BasicSymbolic{<:Number}, f, args, symtype; metadata=nothing)
     if f isa Symbol
         return Term{_promote_symtype(eval(f), args)}(eval(f), args; metadata=metadata)
     end
@@ -597,18 +591,11 @@ function print_tree(_io::IO, x::BasicSymbolic; show_type=false, kw...)
     end
 end
 
-# I think we already have this defined on 201?
-#=
-function TermInterface.istree(t::Type{<:Symbolic})
-    TermInterface.issym(t) ? false : true
-end
-=#
-
 ###
 ### Metadata
 ###
-TermInterface.metadata(s::Symbolic) = s.metadata
-TermInterface.metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
+metadata(s::Symbolic) = s.metadata
+metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
@@ -659,24 +646,6 @@ function setmetadata(s::Symbolic, ctx::DataType, val)
     end
 end
 
-### Metatheory.jl e-graph rewriting integration
-
-"""
-    SymtypeAnalysis
-
-This abstract type is used to identify the EGraph analysis
-that keeps track of symtype through an EGraph. This must
-be added to every EGraph that is used in SymbolicUtils.
-"""
-abstract type SymtypeAnalysis <: AbstractAnalysis end
-_getsymtype(T::Type{<:Symbolic{X}}) where X = X
-_getsymtype(T::Type{X}) where {X} = X
-EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeLiteral) = symtype(n.value)
-EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeTerm{T}) where {T} = _getsymtype(T)
-EGraphs.join(an::Type{SymtypeAnalysis}, A, B) = Union{A, B}
-
-# TODO JOIN egraph analysis
-TermInterface.symtype(ec::EClass) = getdata(ec, SymtypeAnalysis, Any)
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
@@ -859,7 +828,7 @@ showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)
 showraw(t) = showraw(stdout, t)
 
 function Base.show(io::IO, v::BasicSymbolic)
-    if TermInterface.issym(v)
+    if issym(v)
         Base.show_unquoted(io, v.name)
     else
         show_term(io, v)
@@ -940,7 +909,7 @@ end
 @inline isassociative(op) = op === (+) || op === (*)
 
 function _promote_symtype(f, args)
-    if TermInterface.issym(f)
+    if issym(f)
         promote_symtype(f, map(symtype, args)...)
     else
         if length(args) == 0
@@ -1031,10 +1000,7 @@ end
 ### Arithmetic
 ###
 const SN = Symbolic{<:Number}
-# TODO Reviewme this is necessary for Metatheory.jl egraph rewriting
 # integration. Constructors of `Add, Mul, Pow...` from Base (+, *, ^, ...)
-# Should now accepts EClasses as arguments.
-const SN_EC = Union{SN, EClass}
 
 _merge(f::F, d, others...; filter=x->false) where F = _merge!(f, Dict{Any,Any}(d), others...; filter=filter)
 
@@ -1071,7 +1037,7 @@ sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
 sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
-function +(a::SN_EC, b::SN_EC)
+function +(a::SN, b::SN)
     if isadd(a) && isadd(b)
         return Add(add_t(a,b),
                    a.coeff + b.coeff,
@@ -1086,7 +1052,7 @@ function +(a::SN_EC, b::SN_EC)
     Add(add_t(a,b), coeff, dict)
 end
 
-function +(a::Number, b::SN_EC)
+function +(a::Number, b::SN)
     iszero(a) && return b
     if isadd(b)
         Add(add_t(a,b), a + b.coeff, b.dict)
@@ -1095,16 +1061,16 @@ function +(a::Number, b::SN_EC)
     end
 end
 
-+(a::SN_EC, b::Number) = b + a
++(a::SN, b::Number) = b + a
 
-+(a::SN_EC) = a
++(a::SN) = a
 
-function -(a::SN_EC)
+function -(a::SN)
     isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
     Add(sub_t(a), makeadd(-1, 0, a)...)
 end
 
-function -(a::SN_EC, b::SN_EC)
+function -(a::SN, b::SN)
     isadd(a) && isadd(b) ? Add(sub_t(a,b),
                                a.coeff - b.coeff,
                                _merge(-, a.dict,
@@ -1112,16 +1078,16 @@ function -(a::SN_EC, b::SN_EC)
                                       filter=_iszero)) : a + (-b)
 end
 
--(a::Number, b::SN_EC) = a + (-b)
--(a::SN_EC, b::Number) = a + (-b)
+-(a::Number, b::SN) = a + (-b)
+-(a::SN, b::Number) = a + (-b)
 
 
 mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
 mul_t(a) = promote_symtype(*, symtype(a))
 
-*(a::SN_EC) = a
+*(a::SN) = a
 
-function *(a::SN_EC, b::SN_EC)
+function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
     if isdiv(a) && isdiv(b)
         Div(a.num * b.num, a.den * b.den)
@@ -1148,7 +1114,7 @@ function *(a::SN_EC, b::SN_EC)
     end
 end
 
-function *(a::Number, b::SN_EC)
+function *(a::Number, b::SN)
     if iszero(a)
         a
     elseif isone(a)
@@ -1168,26 +1134,26 @@ end
 ### Div
 ###
 
-/(a::Union{SN_EC,Number}, b::SN_EC) = Div(a, b)
+/(a::Union{SN,Number}, b::SN) = Div(a, b)
 
-*(a::SN_EC, b::Number) = b * a
+*(a::SN, b::Number) = b * a
 
-\(a::SN_EC, b::Union{Number, SN_EC}) = b / a
+\(a::SN, b::Union{Number, SN}) = b / a
 
-\(a::Number, b::SN_EC) = b / a
+\(a::Number, b::SN) = b / a
 
-/(a::SN_EC, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
+/(a::SN, b::Number) = (b isa Integer ? 1//b : inv(b)) * a
 
-//(a::Union{SN_EC, Number}, b::SN_EC) = a / b
+//(a::Union{SN, Number}, b::SN) = a / b
 
-//(a::SN_EC, b::T) where {T <: Number} = (one(T) // b) * a
+//(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
 
 
 ###
 ### Pow
 ###
 
-function ^(a::SN_EC, b)
+function ^(a::SN, b)
     if b isa Number && iszero(b)
         # fast path
         1
@@ -1202,4 +1168,4 @@ function ^(a::SN_EC, b)
     end
 end
 
-^(a::Number, b::SN_EC) = Pow(a, b)
+^(a::Number, b::SN) = Pow(a, b)

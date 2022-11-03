@@ -1,7 +1,6 @@
 using SymbolicUtils, Test
-using TermInterface
 
-TermInterface.issym(s::Symbol) = true
+issym(s::Symbol) = true
 Base.nameof(s::Symbol) = s
 
 for f ∈ [:+, :-, :*, :/, :^]
@@ -13,8 +12,8 @@ for f ∈ [:+, :-, :*, :/, :^]
 end
 
 Base.zero(t::Expr) = 0
-TermInterface.symtype(::Expr) = Real
-TermInterface.symtype(::Symbol) = Real
+symtype(::Expr) = Real
+symtype(::Symbol) = Real
 
 ex = 1 + (:x - 2)
 

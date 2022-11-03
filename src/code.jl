@@ -10,7 +10,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, istree, operation, arguments,
-                      symtype, similarterm, unsorted_arguments, metadata
+                      symtype, similarterm, unsorted_arguments, metadata, isterm, term
 
 ##== state management ==##
 
@@ -738,8 +738,12 @@ function cse_block!(assignments, counter, names, name, state, x)
         end
     elseif istree(x)
         args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
-        return similarterm(x, operation(x), args, symtype(x),
-                    metadata=metadata(x))
+        if isterm(x)
+            return term(operation(x), args...)
+        else
+            return similarterm(x, operation(x), args, symtype(x),
+                        metadata=metadata(x))
+        end
     else
         return x
     end

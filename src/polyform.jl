@@ -39,6 +39,8 @@ struct PolyForm{T} <: Symbolic{T}
     end
 end
 
+@number_methods(PolyForm{<:Number}, term(f, a), term(f, a, b))
+
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
 

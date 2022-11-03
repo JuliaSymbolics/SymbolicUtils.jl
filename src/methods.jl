@@ -87,7 +87,7 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
 
-@number_methods(BasicSymbolic, term(f, a), term(f, a, b), skipbasics)
+@number_methods(BasicSymbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
 @number_methods(BasicSymbolic{<:LiteralReal}, term(f, a), term(f, a, b), onlybasics)
 
 for f in vcat(diadic, [+, -, *, \, /, ^])
@@ -139,7 +139,6 @@ for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
     @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
     @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralReal}) = LiteralReal
-    @eval (::$(typeof(f)))(a::Symbolic{<:Number})   = term($f, a)
 end
 
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)

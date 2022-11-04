@@ -1,10 +1,4 @@
 """
-  node_count(t)
-Count the nodes in a symbolic expression tree satisfying `istree` and `arguments`.
-"""
-node_count(t) = istree(t) ? reduce(+, node_count(x) for x in arguments(t), init = 0) + 1 : 1
-
-"""
 A rewriter is any function which takes an expression and returns an expression
 or `nothing`. If `nothing` is returned that means there was no changes applicable
 to the input expression.
@@ -38,6 +32,7 @@ rewriters.
 module Rewriters
 using SymbolicUtils: @timer
 
+import SymbolicUtils: similarterm, istree, operation, arguments, unsorted_arguments, node_count
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -200,7 +195,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if istree(x)
-            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)); exprhead=exprhead(x))
+            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)))
         end
         return ord === :post ? p.rw(x) : x
     else

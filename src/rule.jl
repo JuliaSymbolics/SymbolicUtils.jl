@@ -120,7 +120,7 @@ end
 getdepth(r::Rule) = r.depth
 
 function rule_depth(rule, d=0, maxdepth=0)
-    if rule isa Term
+    if istree(rule)
         maxdepth = reduce(max, (rule_depth(r, d+1, maxdepth) for r in arguments(rule)), init=1)
     elseif rule isa Slot || rule isa Segment
         maxdepth = max(d, maxdepth)
@@ -402,7 +402,6 @@ function (acr::ACRule)(term)
         args = unsorted_arguments(term)
 
         itr = acr.sets(eachindex(args), acr.arity)
-        @show term
 
         for inds in itr
             result = r(Term{T}(f, @views args[inds]))

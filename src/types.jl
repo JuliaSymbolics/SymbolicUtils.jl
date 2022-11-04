@@ -520,8 +520,10 @@ different type than `t`, because `f` also influences the result.
 """
 similarterm(t::Symbolic, f, args; metadata=nothing) =
     similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
+similarterm(t::BasicSymbolic{<:Number}, f, args,
+            symtype; metadata=nothing) = basic_similarterm(t, f, args, symtype; metadata=metadata)
 
-function similarterm(t::BasicSymbolic{<:Number}, f, args, symtype; metadata=nothing)
+function basic_similarterm(t, f, args, symtype; metadata=nothing)
     if f isa Symbol
         return Term{_promote_symtype(eval(f), args)}(eval(f), args; metadata=metadata)
     end

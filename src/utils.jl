@@ -225,3 +225,10 @@ macro matchable(expr)
         Base.length(x::$name) = $(length(fields) + 1)
     end |> esc
 end
+
+"""
+  node_count(t)
+Count the nodes in a symbolic expression tree satisfying `istree` and `arguments`.
+"""
+node_count(t) = istree(t) ? reduce(+, node_count(x) for x in arguments(t), init = 0) + 1 : 1
+

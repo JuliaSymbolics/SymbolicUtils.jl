@@ -124,11 +124,10 @@ end
 
 pred(x) = error("Fail")
 @testset "RuleRewriteError" begin
-    using Metatheory
     @syms a b
 
     rs = Rewriters.Postwalk(Rewriters.Chain(([@rule ~x + ~y::pred => ~x])))
-    @test_throws Metatheory.Rules.RuleRewriteError rs(a + b)
+    @test_throws SymbolicUtils.RuleRewriteError rs(a + b)
     err = try
         rs(a + b)
     catch err
@@ -162,11 +161,9 @@ _g(y) = sin
     @test @rule($(_g(1))(a) => 2)(sin(a)) == 2
 end
 
+@syms a
 _f(x) = x === a
 @testset "where" begin
-    using Metatheory
-    expected = :(_f(~x) ? ~x + ~y : nothing)
-    @test Metatheory.Syntax.rewrite_rhs(:((~x + ~y) where {_f(~x)})) == expected
 
     @syms a b
     r = @rule ~x => ~x where {_f(~x)}

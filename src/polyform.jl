@@ -173,6 +173,10 @@ end
 istree(x::Type{<:PolyForm}) = true
 istree(x::PolyForm) = true
 
+function similarterm(t::PolyForm, f, args, symtype; metadata=nothing)
+    basic_similarterm(t, f, args, symtype; metadata=metadata)
+end
+
 operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
 function arguments(x::PolyForm{T}) where {T}

@@ -63,23 +63,19 @@ const op_costs = Dict(
 )
 # TODO some operator costs are in FLOP and not in cycles!!
 
-function costfun(n::ENodeTerm, g::EGraph, an)
+function costfun(n::ENodeTerm, g::EGraph)
     op = operation(n)
-    cost = 0
-    cost += get(op_costs, op, 1)
+    cost = get(op_costs, op, 1)
 
-    for id ∈ n.args
-        eclass = g[id]
-        !hasdata(eclass, an) && (cost += Inf; break)
-        cost += last(getdata(eclass, an))
+    for id in arguments(n)
+      eclass = g[id]
+      !hasdata(eclass, costfun) && (cost += Inf; break)
+      cost += last(getdata(eclass, costfun))
     end
-    cost
+    return cost
 end
-
-costfun(n::ENodeLiteral, g::EGraph, an) = 0
-
-egraph_simterm(x, head, args, symtype=nothing; metadata=nothing, exprhead=exprhead(x)) =
-    TermInterface.similarterm(typeof(x), head, args, symtype; metadata=metadata, exprhead=exprhead)
+  
+costfun(n::ENodeLiteral, g::EGraph) = 0
 
 # Custom similarterm to use in EGraphs on <:Symbolic types that treats everything as a Term
 function egraph_simterm(x::Type{<:BasicSymbolic}, f, args, symtype=nothing; metadata=nothing, exprhead=:call)
@@ -91,10 +87,18 @@ function egraph_simterm(x::Type{<:BasicSymbolic}, f, args, symtype=nothing; meta
     return res
 end
 
+function EGraphs.egraph_reconstruct_expression(T::Type{<:Symbolic}, op, args; metadata = nothing, exprhead = nothing)
+    Term(op, args)
+end
+
+
+function EGraphs.egraph_reconstruct_expression(T::Type{<:Term}, op, args; metadata = nothing, exprhead = nothing)
+    Term(op, args)
+end
+
 function optimize(ex; params=SaturationParams(timeout=20))
     # @show ex
     g = symbolicegraph(ex)
-    params.simterm = egraph_simterm
     saturate!(g, opt_theory, params)
     return extract!(g, costfun)
 end

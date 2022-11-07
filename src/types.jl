@@ -672,7 +672,7 @@ EGraphs.make(an::Val{SYMTYPE_ANALYSIS}, g::EGraph, n::ENodeLiteral) = symtype(n.
 EGraphs.make(an::Val{SYMTYPE_ANALYSIS}, g::EGraph, n::ENodeTerm{T}) where {T} = _getsymtype(T)
 EGraphs.join(an::Val{SYMTYPE_ANALYSIS}, A, B) = Union{A,B}
 
-TermInterface.symtype(ec::EClass) = getdata(ec, SymtypeAnalysis, Any)
+TermInterface.symtype(ec::EClass) = getdata(ec, SYMTYPE_ANALYSIS, Any)
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *

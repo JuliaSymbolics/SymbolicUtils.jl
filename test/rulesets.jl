@@ -134,7 +134,7 @@ pred(x) = error("Fail")
     catch err
         err
     end
-    @test sprint(io -> Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
+    @test sprint(io -> Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => x on expression a + b"
 end
 
 @testset "Threading" begin

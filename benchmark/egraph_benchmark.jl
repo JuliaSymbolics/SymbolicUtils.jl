@@ -1,5 +1,6 @@
 using SymbolicUtils 
 using Metatheory
+using BenchmarkTools
 using SymbolicUtils: is_literal_number, isnotflat, needs_sorting, hasrepeats, egraph_simterm
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
@@ -55,14 +56,13 @@ o = (d + (e*((c*(g + (-d*g) / d)) / (i + (-c*(h + (-e*g) / d)) / b + (-f*g) / d)
 
 optimize(ex)
 
-egraph = SymbolicUtils.symbolicegraph(o)
+egraph = SymbolicUtils.symbolicegraph(ex)
 params = SaturationParams(
     timeout=7, 
-    simterm=egraph_simterm, 
     eclasslimit=300_000,
     printiter = true
 )
 @btime saturate!(egraph, theory, params)
-@btime extract!(egraph, astsize; simterm=egraph_simterm)
+@btime extract!(egraph, astsize)
 
 

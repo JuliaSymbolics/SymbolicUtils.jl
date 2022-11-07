@@ -82,7 +82,6 @@ struct Ctx2 end
 
     # In substitute #283
     #
-    struct Ctx1 end
     @syms f(t) t
     f = setmetadata(f(t), Ctx1, "yes")
     hasmetadata(f, Ctx1) # true

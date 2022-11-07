@@ -15,19 +15,19 @@ end
 """
 Equational rewrite rules for optimizing expressions
 """
-opt_theory = @theory a b x y  begin
+opt_theory = @theory a b x y begin
     a + b == b + a
     a * b == b * a
-    a * x + a * y == a*(x+y)
+    a * x + a * y == a * (x + y)
     -1 * a == -a
     a + (-1 * b) == a - b
-    x^-1 == 1/x
-    1/x * a == a/x
+    x^-1 == 1 / x
+    1 / x * a == a / x
     # fraction rules
     # (a/b) + (c/b) => (a+c)/b
     # trig functions
-    sin(x)/cos(x) == tan(x)
-    cos(x)/sin(x) == cot(x)
+    sin(x) / cos(x) == tan(x)
+    cos(x) / sin(x) == cot(x)
     sin(x)^2 + cos(x)^2 --> 1
     sin(2a) == 2sin(a)cos(a)
 end
@@ -43,23 +43,23 @@ See
  * https://github.com/triscale-innov/GFlops.jl
 """
 const op_costs = Dict(
-    (+)     => 1,
-    (-)     => 1,
-    abs     => 2,
-    (*)     => 3,
-    exp     => 18,
-    (/)     => 24,
-    (^)     => 100,
-    log1p   => 124,
+    (+) => 1,
+    (-) => 1,
+    abs => 2,
+    (*) => 3,
+    exp => 18,
+    (/) => 24,
+    (^) => 100,
+    log1p => 124,
     deg2rad => 125,
     rad2deg => 125,
-    acos    => 127,
-    asind   => 128,
-    acsch   => 133,
-    sin     => 134,
-    cos     => 134,
-    atan    => 135,
-    tan     => 156,
+    acos => 127,
+    asind => 128,
+    acsch => 133,
+    sin => 134,
+    cos => 134,
+    atan => 135,
+    tan => 156,
 )
 # TODO some operator costs are in FLOP and not in cycles!!
 
@@ -68,13 +68,13 @@ function costfun(n::ENodeTerm, g::EGraph)
     cost = get(op_costs, op, 1)
 
     for id in arguments(n)
-      eclass = g[id]
-      !hasdata(eclass, costfun) && (cost += Inf; break)
-      cost += last(getdata(eclass, costfun))
+        eclass = g[id]
+        !hasdata(eclass, costfun) && (cost += Inf; break)
+        cost += last(getdata(eclass, costfun))
     end
     return cost
 end
-  
+
 costfun(n::ENodeLiteral, g::EGraph) = 0
 
 # Custom similarterm to use in EGraphs on <:Symbolic types that treats everything as a Term
@@ -87,12 +87,12 @@ function egraph_simterm(x::Type{<:BasicSymbolic}, f, args, symtype=nothing; meta
     return res
 end
 
-function EGraphs.egraph_reconstruct_expression(T::Type{<:Symbolic}, op, args; metadata = nothing, exprhead = nothing)
+function EGraphs.egraph_reconstruct_expression(T::Type{<:Symbolic}, op, args; metadata=nothing, exprhead=nothing)
     Term(op, args)
 end
 
 
-function EGraphs.egraph_reconstruct_expression(T::Type{<:Term}, op, args; metadata = nothing, exprhead = nothing)
+function EGraphs.egraph_reconstruct_expression(T::Type{<:Term}, op, args; metadata=nothing, exprhead=nothing)
     Term(op, args)
 end
 

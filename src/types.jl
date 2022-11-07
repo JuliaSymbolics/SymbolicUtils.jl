@@ -521,13 +521,13 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-TermInterface.similarterm(t::Type{<:Symbolic}, f, args; metadata=nothing, exprhead=:call) =
+TermInterface.similarterm(t::Symbolic, f, args; metadata=nothing, exprhead=:call) =
     similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata, exprhead=exprhead)
 
-TermInterface.similarterm(t::Type{<:Symbolic}, f::Symbol, args; metadata=nothing, exprhead=:call) =
+TermInterface.similarterm(t::Symbolic, f::Symbol, args; metadata=nothing, exprhead=:call) =
     TermInterface.similarterm(t, eval(f), args; metadata=metadata, exprhead=exprhead)
 
-function TermInterface.similarterm(t::Type{<:BasicSymbolic{<:Number}}, f, args, symtype; metadata=nothing, exprhead=:call)
+function TermInterface.similarterm(t::BasicSymbolic{<:Number}, f, args, symtype; metadata=nothing, exprhead=:call)
     if f isa Symbol
         return Term{_promote_symtype(eval(f), args)}(eval(f), args; metadata=metadata)
     end

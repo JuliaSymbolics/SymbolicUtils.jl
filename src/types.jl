@@ -659,20 +659,19 @@ end
 ### Metatheory.jl e-graph rewriting integration
 
 """
-    SymtypeAnalysis
+    SYMTYPE_ANALYSIS
 
-This abstract type is used to identify the EGraph analysis
+This symbol is used to identify the EGraph analysis
 that keeps track of symtype through an EGraph. This must
 be added to every EGraph that is used in SymbolicUtils.
 """
-abstract type SymtypeAnalysis <: AbstractAnalysis end
-_getsymtype(T::Type{<:Symbolic{X}}) where X = X
+const SYMTYPE_ANALYSIS = :SYMTYPE_ANALYSIS
+_getsymtype(T::Type{<:Symbolic{X}}) where {X} = X
 _getsymtype(T::Type{X}) where {X} = X
-EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeLiteral) = symtype(n.value)
-EGraphs.make(an::Type{SymtypeAnalysis}, g::EGraph, n::ENodeTerm{T}) where {T} = _getsymtype(T)
-EGraphs.join(an::Type{SymtypeAnalysis}, A, B) = Union{A, B}
+EGraphs.make(an::Val{SYMTYPE_ANALYSIS}, g::EGraph, n::ENodeLiteral) = symtype(n.value)
+EGraphs.make(an::Val{SYMTYPE_ANALYSIS}, g::EGraph, n::ENodeTerm{T}) where {T} = _getsymtype(T)
+EGraphs.join(an::Val{SYMTYPE_ANALYSIS}, A, B) = Union{A,B}
 
-# TODO JOIN egraph analysis
 TermInterface.symtype(ec::EClass) = getdata(ec, SymtypeAnalysis, Any)
 
 function to_symbolic(x)

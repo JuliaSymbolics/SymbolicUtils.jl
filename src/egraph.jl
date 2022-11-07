@@ -6,7 +6,7 @@ end
 
 function symbolicegraph(ex)
     g = EGraph(ex)
-    analyze!(g, SymbolicUtils.SymtypeAnalysis)
+    analyze!(g, SymbolicUtils.SYMTYPE_ANALYSIS)
     settermtype!(g, Term{symtype(ex)})
     return g
 end

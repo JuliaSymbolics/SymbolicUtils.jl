@@ -526,7 +526,7 @@ similarterm(t::BasicSymbolic, f, args,
 
 function basic_similarterm(t, f, args, symtype; metadata=nothing)
     if f isa Symbol
-        return Term{_promote_symtype(eval(f), args)}(eval(f), args; metadata=metadata)
+        error("$f must not be a Symbol")
     end
     T = symtype
     if T === nothing

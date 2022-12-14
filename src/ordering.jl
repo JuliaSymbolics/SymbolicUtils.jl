@@ -17,7 +17,7 @@ function <ₑ(a, b)
     elseif (isadd(a) || ismul(a)) && (isadd(b) || ismul(b))
         return cmp_mul_adds(a, b)
     elseif issym(a) && issym(b)
-        a.name < b.name
+        nameof(a) < nameof(b)
     elseif !istree(a) && !istree(b)
         T = typeof(a)
         S = typeof(b)

@@ -145,7 +145,8 @@ function unsorted_arguments(x::BasicSymbolic)
     idcoeff || push!(args, x.coeff)
     if isadd(x)
         for (k, v) in x.dict
-            push!(args, k * v)
+            push!(args, applicable(*,k,v) ? k*v :
+                    similarterm(k, *, [k, v]))
         end
     else # MUL
         for (k, v) in x.dict
@@ -520,7 +521,7 @@ different type than `t`, because `f` also influences the result.
 """
 similarterm(t::Symbolic, f, args; metadata=nothing) =
     similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
-similarterm(t::BasicSymbolic{<:Number}, f, args,
+similarterm(t::BasicSymbolic, f, args,
             symtype; metadata=nothing) = basic_similarterm(t, f, args, symtype; metadata=metadata)
 
 function basic_similarterm(t, f, args, symtype; metadata=nothing)

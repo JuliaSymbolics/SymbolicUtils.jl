@@ -36,7 +36,7 @@ export Rewriters
 # A library for composing together expr -> expr functions
 
 using Combinatorics: permutations, combinations
-export @rule, @acrule, RuleSet
+export @rule, @acrule, @numrule, RuleSet
 
 # Rule type and @rule macro
 include("rule.jl")

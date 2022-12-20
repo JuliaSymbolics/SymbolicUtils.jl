@@ -740,8 +740,9 @@ function cse_block!(assignments, counter, names, name, state, x)
         if isterm(x)
             return term(operation(x), args...)
         else
-            return similarterm(x, operation(x), args, symtype(x),
-                        metadata=metadata(x))
+            return similarterm(x, operation(x),
+                               args, symtype(x),
+                               metadata=metadata(x))
         end
     else
         return x

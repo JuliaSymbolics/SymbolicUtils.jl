@@ -223,6 +223,7 @@ macro matchable(expr)
         SymbolicUtils.operation(::$name) = $name
         SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         Base.length(x::$name) = $(length(fields) + 1)
+        SymbolicUtils.similarterm(x::$name, f, args, type; kw...) = f(args...)
     end |> esc
 end
 

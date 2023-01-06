@@ -194,3 +194,9 @@ Base.length(x::Symbolic{<:Number}) = 1
 Base.ndims(x::Symbolic{T}) where {T} = Base.ndims(T)
 Base.ndims(::Type{<:Symbolic{T}}) where {T} = Base.ndims(T)
 Base.broadcastable(x::Symbolic{T}) where {T<:Number} = Ref(x)
+function Base.broadcastable(x::Symbolic)
+    if istree(x) && operation(x) == Ref && length(arguments(x)) == 1
+        return Ref(first(arguments(x)))
+    end
+    return Base.invoke(Base.broadcastable, Tuple{Any}, x)
+end

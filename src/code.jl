@@ -1,7 +1,6 @@
 module Code
 
 using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra
-using TermInterface
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -9,8 +8,8 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
-import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, istree, operation, arguments,
-                      symtype, similarterm, unsorted_arguments, metadata
+import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, istree, operation, arguments, issym,
+                      symtype, similarterm, unsorted_arguments, metadata, isterm, term
 
 ##== state management ==##
 
@@ -134,7 +133,7 @@ function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
 end
 
 function function_to_expr(x::BasicSymbolic, O, st)
-    TermInterface.issym(x) ? get(st.symbolify, O, nothing) : nothing
+    issym(x) ? get(st.symbolify, O, nothing) : nothing
 end
 
 toexpr(O::Expr, st) = O
@@ -693,8 +692,8 @@ end
 
 
 function _cse(exprs::AbstractArray)
-    letblock = cse(Term{Any}(tuple, exprs))
-    letblock.pairs, arguments(letblock.body)
+    letblock = cse(Term{Any}(tuple, vec(exprs)))
+    letblock.pairs, reshape(arguments(letblock.body), size(exprs))
 end
 
 function cse(x::MakeArray)
@@ -738,8 +737,13 @@ function cse_block!(assignments, counter, names, name, state, x)
         end
     elseif istree(x)
         args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
-        return similarterm(x, operation(x), args, symtype(x),
-                    metadata=metadata(x))
+        if isterm(x)
+            return term(operation(x), args...)
+        else
+            return similarterm(x, operation(x),
+                               args, symtype(x),
+                               metadata=metadata(x))
+        end
     else
         return x
     end

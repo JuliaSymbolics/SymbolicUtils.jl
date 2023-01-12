@@ -1,6 +1,5 @@
 using SymbolicUtils
 using SymbolicUtils: Term
-using TermInterface
 using SpecialFunctions
 using Test
 import IfElse: ifelse

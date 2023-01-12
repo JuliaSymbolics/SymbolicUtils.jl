@@ -1,4 +1,10 @@
 using .Rewriters
+"""
+  is_operation(f)
+Returns a single argument anonymous function predicate, that returns `true` if and only if
+the argument to the predicate satisfies `istree` and `operation(x) == f` 
+"""
+is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
 
 let
     PLUS_RULES = [

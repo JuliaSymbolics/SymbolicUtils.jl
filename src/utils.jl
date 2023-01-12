@@ -161,3 +161,75 @@ function sort_args(f, t)
     args = args isa Tuple ? [args...] : args
     similarterm(t, f, sort(args, lt=<ₑ))
 end
+
+# Linked List interface
+@inline assoc(d::ImmutableDict, k, v) = ImmutableDict(d, k=>v)
+
+struct LL{V}
+    v::V
+    i::Int
+end
+
+islist(x) = istree(x) || !isempty(x)
+
+Base.empty(l::LL) = empty(l.v)
+Base.isempty(l::LL) = l.i > length(l.v)
+
+Base.length(l::LL) = length(l.v)-l.i+1
+@inline car(l::LL) = l.v[l.i]
+@inline cdr(l::LL) = isempty(l) ? empty(l) : LL(l.v, l.i+1)
+
+Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
+Base.isempty(t::Term) = false
+@inline car(t::Term) = operation(t)
+@inline cdr(t::Term) = arguments(t)
+
+@inline car(v) = istree(v) ? operation(v) : first(v)
+@inline function cdr(v)
+    if istree(v)
+        arguments(v)
+    else
+        islist(v) ? LL(v, 2) : error("asked cdr of empty")
+    end
+end
+
+@inline take_n(ll::LL, n) = isempty(ll) || n == 0 ? empty(ll) : @views ll.v[ll.i:n+ll.i-1] # @views handles Tuple
+@inline take_n(ll, n) = @views ll[1:n]
+
+@inline function drop_n(ll, n)
+    if n === 0
+        return ll
+    else
+        istree(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
+    end
+end
+@inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)
+@inline drop_n(ll::LL, n) = LL(ll.v, ll.i+n)
+
+# Take a struct definition and make it be able to match in `@rule`
+macro matchable(expr)
+    @assert expr.head == :struct
+    name = expr.args[2]
+    if name isa Expr && name.head === :curly
+        name = name.args[1]
+    end
+    fields = filter(x-> !(x isa LineNumberNode), expr.args[3].args)
+    get_name(s::Symbol) = s
+    get_name(e::Expr) = (@assert(e.head == :(::)); e.args[1])
+    fields = map(get_name, fields)
+    quote
+        $expr
+        SymbolicUtils.istree(::$name) = true
+        SymbolicUtils.operation(::$name) = $name
+        SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
+        Base.length(x::$name) = $(length(fields) + 1)
+        SymbolicUtils.similarterm(x::$name, f, args, type; kw...) = f(args...)
+    end |> esc
+end
+
+"""
+  node_count(t)
+Count the nodes in a symbolic expression tree satisfying `istree` and `arguments`.
+"""
+node_count(t) = istree(t) ? reduce(+, node_count(x) for x in arguments(t), init = 0) + 1 : 1
+

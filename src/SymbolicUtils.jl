@@ -6,11 +6,6 @@ module SymbolicUtils
 using DocStringExtensions
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
-using TermInterface
-using TermInterface: node_count
-using Metatheory
-using Metatheory.Rules
-using Metatheory.Rewriters
 using Unityper
 
 # Sym, Term,
@@ -20,6 +15,7 @@ using Setfield
 import Setfield: PropertyLens
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
+include("interface.jl")
 include("types.jl")
 export istree, operation, arguments, similarterm
 
@@ -40,6 +36,8 @@ export @rule, @acrule, RuleSet
 
 # Rule type and @rule macro
 include("rule.jl")
+include("matchers.jl")
+include("rewriters.jl")
 
 # Convert to an efficient multi-variate polynomial representation
 import MultivariatePolynomials
@@ -60,10 +58,6 @@ include("simplify.jl")
 
 export substitute
 include("substitute.jl")
-
-# EGraph rewriting
-include("egraph.jl")
-export optimize
 
 include("code.jl")
 

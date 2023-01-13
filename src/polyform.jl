@@ -39,6 +39,8 @@ struct PolyForm{T} <: Symbolic{T}
     end
 end
 
+@number_methods(PolyForm{<:Number}, term(f, a), term(f, a, b))
+
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
 
@@ -168,11 +170,20 @@ function PolyForm(x,
     PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)
 end
 
-TermInterface.istree(x::Type{<:PolyForm}) = true
+istree(x::Type{<:PolyForm}) = true
+istree(x::PolyForm) = true
 
-TermInterface.operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
+function similarterm(t::PolyForm, f, args, symtype; metadata=nothing)
+    basic_similarterm(t, f, args, symtype; metadata=metadata)
+end
+function similarterm(::PolyForm, f::Union{typeof(*), typeof(+), typeof(^)},
+                     args, symtype; metadata=nothing)
+    f(args...)
+end
 
-function TermInterface.arguments(x::PolyForm{T}) where {T}
+operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
+
+function arguments(x::PolyForm{T}) where {T}
 
     function is_var(v)
         MP.nterms(v) == 1 &&

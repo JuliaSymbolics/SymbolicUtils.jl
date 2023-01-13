@@ -57,7 +57,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                           x(t+1) + x(t) + a  + b)),
               :(function (state, params)
                     begin
-                        $(+)($(+)($(+)(params[1], params[2]), $getindex(state, 2)), state[1]($(+)(1, t)))
+                        $(+)($(+)($(+)(params[1], params[2]), state[2]), state[1]($(+)(1, t)))
                     end
                 end))
 

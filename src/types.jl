@@ -524,15 +524,15 @@ similarterm(t::Symbolic, f, args; metadata=nothing) =
 similarterm(t::BasicSymbolic, f, args,
             symtype; metadata=nothing) = basic_similarterm(t, f, args, symtype; metadata=metadata)
 
-function basic_similarterm(t, f, args, symtype; metadata=nothing)
+function basic_similarterm(t, f, args, stype; metadata=nothing)
     if f isa Symbol
         error("$f must not be a Symbol")
     end
-    T = symtype
+    T = stype
     if T === nothing
         T = _promote_symtype(f, args)
     end
-    if f in (+, *) || (f in (/, ^) && length(args) == 2)
+    if stype <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
         res = f(args...)
         if res isa Symbolic
             @set! res.metadata = metadata

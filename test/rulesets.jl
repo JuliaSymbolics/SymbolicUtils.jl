@@ -60,7 +60,7 @@ end
     @eqtest s == cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2
 
     # Prevents automatic simplification:
-    @eqtest s != cos(x1 * 3.2) - x2 * 4.6
+    @eqtest s != cos(3.2(x1^1)) - 4.6x2
 
     # However, manual simplification should still work:
     @eqtest simplify(s) == cos(3.2(x1^1)) - 4.6x2

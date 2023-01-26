@@ -12,7 +12,7 @@ const monadic = [deg2rad, rad2deg, transpose, asind, log1p, acsch,
                  atand, sec, acscd, cot, exp2, expm1, atanh, gamma,
                  loggamma, erf, erfc, erfcinv, erfi, erfcx, dawson, digamma,
                  trigamma, invdigamma, polygamma, airyai, airyaiprime, airybi,
-                 airybiprime, besselj0, besselj1, bessely0, bessely1]
+                 airybiprime, besselj0, besselj1, bessely0, bessely1, isfinite]
 
 const diadic = [max, min, hypot, atan, mod, rem, copysign,
                 besselj, bessely, besseli, besselk, hankelh1, hankelh2,
@@ -78,6 +78,9 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     for f in (skip_basics ? monadic : only_basics ? basic_monadic : vcat(basic_monadic, monadic))
         nameof(f) in skips && continue
         push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
+        if f === isfinite
+            push!(exprs, :((f::$(typeof(f)))(a::$T) = true))
+        end
     end
     push!(exprs, :(push!($previously_declared_for, $T)))
     Expr(:block, exprs...)

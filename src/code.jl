@@ -133,7 +133,7 @@ function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
 end
 
 function function_to_expr(x::BasicSymbolic, O, st)
-    issym(x) ? get(st.symbolify, O, nothing) : nothing
+    issym(x) ? get(st.rewrites, O, nothing) : nothing
 end
 
 toexpr(O::Expr, st) = O

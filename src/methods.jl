@@ -77,9 +77,10 @@ function number_methods(T, rhs1, rhs2, options=nothing)
 
     for f in (skip_basics ? monadic : only_basics ? basic_monadic : vcat(basic_monadic, monadic))
         nameof(f) in skips && continue
-        push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
         if f === isfinite
             push!(exprs, :((f::$(typeof(f)))(a::$T) = true))
+        else
+            push!(exprs, :((f::$(typeof(f)))(a::$T)   = $rhs1))
         end
     end
     push!(exprs, :(push!($previously_declared_for, $T)))

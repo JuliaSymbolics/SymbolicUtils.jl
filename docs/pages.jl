@@ -3,5 +3,6 @@ pages = Any["index.md",
                             "manual/rewrite.md",
                             "manual/interface.md",
                             "manual/codegen.md"],
-            "api.md"
+            "api.md",
+            "upgrade.md"
             ]

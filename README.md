@@ -1,15 +1,22 @@
-<h1 align="center"><a href="https://juliasymbolics.github.io/SymbolicUtils.jl/">SymbolicUtils.jl</a></h1>
+# SymbolicUtils.jl 
 
-<p align="center">
-  <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl/actions">
-    <img src="https://github.com/JuliaSymbolics/SymbolicUtils.jl/workflows/CI/badge.svg"
-         alt="CI">
-  </a>
-  </a>
-  <a href="https://codecov.io/gh/JuliaSymbolics/SymbolicUtils.jl">
-    <img src="https://codecov.io/gh/JuliaSymbolics/SymbolicUtils.jl/branch/master/graph/badge.svg?token=UL72EBCQRW"/>
-  </a>
-</p>
+[![Join the chat at https://julialang.zulipchat.com #sciml-bridged](https://img.shields.io/static/v1?label=Zulip&message=chat&color=9558b2&labelColor=389826)](https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged)
+[![Global Docs](https://img.shields.io/badge/docs-SciML-blue.svg)](https://docs.sciml.ai/SymbolicUtils/stable/)
+
+[![codecov](https://codecov.io/gh/JuliaSymbolics/SymbolicUtils.jl/branch/master/graph/badge.svg)](https://app.codecov.io/gh/JuliaSymbolics/SymbolicUtils.jl)
+[![Build Status](https://github.com/JuliaSymbolics/SymbolicUtils.jl/workflows/CI/badge.svg)](https://github.com/JuliaSymbolics/SymbolicUtils.jl/actions?query=workflow%3ACI)
+[![Build status](https://badge.buildkite.com/3db222e469784b365e4b45f2b0155d252cf0ae70fef708bfa1.svg?branch=master)](https://buildkite.com/julialang/symbolicutils-dot-jl)
+
+[![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor%27s%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
+[![SciML Code Style](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
+
+
+## Tutorials and Documentation
+
+For information on using the package,
+[see the stable documentation](https://symbolicutils.juliasymbolics.org/stable/). Use the
+[in-development documentation](https://symbolicutils.juliasymbolics.org/dev/) for the version of
+the documentation, which contains the unreleased features.
 
 SymbolicUtils.jl provides various utilities for symbolic computing. SymbolicUtils.jl is what one would use to build
 a Computer Algebra System (CAS). If you're looking for a complete CAS, similar to SymPy or Mathematica, see
@@ -18,19 +25,8 @@ Octonian algebras, you've come to the right place.
 
 [Symbols in SymbolicUtils](https://symbolicutils.juliasymbolics.org/#creating_symbolic_expressions) carry type information. Operations on them propagate this information. [A rule-based rewriting language](https://symbolicutils.juliasymbolics.org/rewrite/#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification](https://juliasymbolics.github.io/SymbolicUtils.jl/#simplification) rules for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
 
-
 If you are a Julia package develper in need of a rule rewriting system for your own types, have a look at the [interfacing guide](https://symbolicutils.juliasymbolics.org/interface/).
 
-[**Go to the manual**](https://juliasymbolics.github.io/SymbolicUtils.jl/)
-
-SymbolicUtils.jl is on the general registry and can be added the usual way:
-```julia
-pkg> add SymbolicUtils
-```
-or
-```julia
-julia> using Pkg; Pkg.add("SymbolicUtils")
-```
 
 ### "I don't want to read your manual, just show me some cool code"
 ```julia

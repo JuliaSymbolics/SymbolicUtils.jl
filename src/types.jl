@@ -778,12 +778,14 @@ end
 
 function show_call(io, f, args)
     fname = istree(f) ? Symbol(repr(f)) : nameof(f)
-    binary = Base.isbinaryoperator(fname)
-    if binary
-        for (i, t) in enumerate(args)
-            i != 1 && print(io, " $fname ")
-            print_arg(io, t, paren=true)
-        end
+    len_args = length(args)
+    if Base.isunaryoperator(fname) && len_args == 1
+        print(io, "$fname")
+        print_arg(io, first(args), paren=true)
+    elseif Base.isbinaryoperator(fname) && len_args == 2
+        print_arg(io, first(args), paren=true)
+        print(io, " $fname ")
+        print_arg(io, last(args), paren=true)
     else
         if issym(f)
             Base.show_unquoted(io, nameof(f))

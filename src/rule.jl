@@ -117,6 +117,20 @@ struct Rule{L, M, R} <: AbstractRule
     depth::Int               # number of levels of expr this rule touches
 end
 
+# A matcher is a closure that takes a success, data, bindings
+
+struct BiDirectional <: AbstractRule
+    ltr::Rule
+    rtl::Rule
+end
+
+function Base.show(io::IO, b::BiDirectional)
+    ex = b.ltr.expr
+    @assert ex.head == :call
+    ex′ = Expr(:call, :(<-->), ex.args[2:end]...)
+    Base.print(io, ex′)
+end
+
 getdepth(r::Rule) = r.depth
 
 function rule_depth(rule, d=0, maxdepth=0)
@@ -299,7 +313,14 @@ _In the consequent pattern_: Use `(@ctx)` to access the context object on the ri
 of an expression.
 """
 macro rule(expr)
-    @assert expr.head == :call && expr.args[1] == :(=>)
+    @assert expr.head == :call
+
+    if expr.args[1] == :(<-->)
+        return :(BiDirectional(@rule($(Expr(:call, :(=>), expr.args[2], expr.args[3]))),
+                               @rule($(Expr(:call, :(=>), expr.args[3], expr.args[2])))))
+    end
+
+    @assert expr.args[1] == :(=>)
     lhs = expr.args[2]
     rhs = rewrite_rhs(expr.args[3])
     keys = Symbol[]

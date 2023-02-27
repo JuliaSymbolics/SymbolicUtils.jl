@@ -1,5 +1,4 @@
-# A matcher is a closure that takes a success, data, bindings
-function ematch(l, r, expr)
+function ematch(rule, expr)
     matches = instantiate(l, expr)
     c = get_class(substitute(l, matches))
     if !isnothing(matches)

@@ -37,6 +37,7 @@ export @rule, @acrule, RuleSet
 # Rule type and @rule macro
 include("rule.jl")
 include("matchers.jl")
+include("equality-saturation.jl")
 include("rewriters.jl")
 
 # Convert to an efficient multi-variate polynomial representation

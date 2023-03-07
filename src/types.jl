@@ -777,7 +777,14 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
-    fname = istree(f) ? Symbol(repr(f)) : nameof(f)
+    fname = if istree(f)
+        Symbol(repr(f))
+    elseif f isa Function
+        nameof(f)
+    else
+        # Dummy for callable structs
+        Symbol()
+    end
     binary = Base.isbinaryoperator(fname)
     if binary
         for (i, t) in enumerate(args)

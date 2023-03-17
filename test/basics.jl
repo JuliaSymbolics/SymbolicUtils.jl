@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield
@@ -173,6 +173,7 @@ end
     @syms a b c
     @test repr(a+b) == "a + b"
     @test repr(-a) == "-a"
+    @test repr(term(-, a; type = Real)) == "-(a)"
     @test repr(-a + 3) == "3 - a"
     @test repr(-(a + b)) == "-a - b"
     @test repr((2a)^(-2a)) == "(2a)^(-2a)"

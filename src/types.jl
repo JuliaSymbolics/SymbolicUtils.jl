@@ -785,7 +785,7 @@ function show_call(io, f, args)
         # Dummy for callable structs
         Symbol()
     end
-    binary = Base.isbinaryoperator(fname)
+    binary = Base.isbinaryoperator(fname) && length(args) > 1
     if binary
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")

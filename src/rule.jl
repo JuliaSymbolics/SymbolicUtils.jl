@@ -503,3 +503,47 @@ macro timerewrite(expr)
 end
 
 Base.@deprecate RuleSet(x) Postwalk(Chain(x))
+
+
+#=
+
+#### Arithmetic rule
+#
+
+struct ArithRule <: AbstractRule
+    rule::R
+end
+
+macro acrule(expr)
+    quote
+        ArithRule($(esc(:(@rule($(expr))))))
+    end
+end
+
+function (ar::ArithRule)(term)
+    match_arithmetic(ar.rule, term)
+end
+
+is_commutative(T, +) = false
+is_associative(T, +) = false
+is_commutative(T, *) = false
+is_associative(T, *) = false
+
+is_commutative(::Type{<:Number}, +) = false
+is_associative(::Type{<:Number}, +) = false
+is_commutative(::Type{<:Number}, *) = false
+is_associative(::Type{<:Number}, *) = false
+
+function match_arithmetic(rule, term)
+    match_arithmetic(operation(rule.expr), rule, term)
+end
+function match_arithmetic(::typeof(+), rule, term)
+    if operation(term) != (+)
+        return nothing # for now.
+    end
+    rargs = arguments(rule.expr)
+    targs = arguments(term)
+    if match_arithmetic(first(rargs), first(targs))
+    end
+end
+=#

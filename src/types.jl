@@ -782,10 +782,11 @@ function show_call(io, f, args)
     if Base.isunaryoperator(fname) && len_args == 1
         print(io, "$fname")
         print_arg(io, first(args), paren=true)
-    elseif Base.isbinaryoperator(fname) && len_args == 2
-        print_arg(io, first(args), paren=true)
-        print(io, " $fname ")
-        print_arg(io, last(args), paren=true)
+    elseif Base.isbinaryoperator(fname) && len_args > 1
+        for (i, t) in enumerate(args)
+            i != 1 && print(io, " $fname ")
+            print_arg(io, t, paren=true)
+        end
     else
         if issym(f)
             Base.show_unquoted(io, nameof(f))

@@ -532,7 +532,9 @@ function basic_similarterm(t, f, args, stype; metadata=nothing)
     if T === nothing
         T = _promote_symtype(f, args)
     end
-    if stype <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
+    if T <: LiteralReal
+        Term{T}(f, args, metadata=metadata)
+    elseif stype <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
         res = f(args...)
         if res isa Symbolic
             @set! res.metadata = metadata
@@ -785,8 +787,12 @@ function show_call(io, f, args)
         # Dummy for callable structs
         Symbol()
     end
-    binary = Base.isbinaryoperator(fname) && length(args) > 1
-    if binary
+    fname = istree(f) ? Symbol(repr(f)) : nameof(f)
+    len_args = length(args)
+    if Base.isunaryoperator(fname) && len_args == 1
+        print(io, "$fname")
+        print_arg(io, first(args), paren=true)
+    elseif Base.isbinaryoperator(fname) && len_args > 1
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")
             print_arg(io, t, paren=true)

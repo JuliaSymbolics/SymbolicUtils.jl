@@ -532,7 +532,7 @@ function basic_similarterm(t, f, args, stype; metadata=nothing)
     if T === nothing
         T = _promote_symtype(f, args)
     end
-    if isterm(t)
+    if T <: LiteralReal
         Term{T}(f, args, metadata=metadata)
     elseif stype <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
         res = f(args...)

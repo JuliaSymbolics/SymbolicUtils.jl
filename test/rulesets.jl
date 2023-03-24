@@ -63,7 +63,7 @@ end
     @eqtest s != cos(3.2(x1^1)) - 4.6x2
 
     # However, manual simplification should still work:
-    @eqtest simplify(s) == cos(3.2(x1^1)) - 4.6x2
+    @eqtest simplify(s) == simplify(cos(3.2x1) - 4.6x2)
 end
 
 @testset "boolean" begin

@@ -61,6 +61,7 @@ let
         @rule(real(~x::_isreal) => ~x)
         @rule(imag(~x::_isreal) => zero(symtype(~x)))
         @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
+        @rule(ifelse(~x, ~y, ~y) => ~y)
     ]
 
     TRIG_EXP_RULES = [

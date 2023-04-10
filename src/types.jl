@@ -811,8 +811,9 @@ function show_term(io::IO, t)
 
     f = operation(t)
     args = arguments(t)
-
-    if f === (+)
+    if symtype(t) <: LiteralReal
+        show_call(io, f, args)
+    elseif f === (+)
         show_add(io, args)
     elseif f === (*)
         show_mul(io, args)

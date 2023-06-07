@@ -5,6 +5,7 @@ export EGraph, add_enode!, rebuild!, saturate!
 # TODO: make this a type pls
 id_term(id, T=Real) = term(id_term, id, type=T)
 is_eid(t) = istree(t) && operation(t) === id_term
+show_call(io, ::typeof(id_term), n) = print(io, "~", Int(first(n)))
 
 # ids are just UInt64
 const Id = UInt64
@@ -14,24 +15,34 @@ struct EID{T} <: Symbolic{T}
     istree::Bool
     id::Id
 end
-
-function gen_id(graph)
-    eid = rand(Id)
-
-    while haskey(graph.eclasses, eid)
-        eid = gen_id()
-    end
-    return eid
-end
+gen_id(graph) = graph.node_counter[] += 1
 
 struct EGraph
+    node_counter::Ref{Id}
     union::Dict{Id, MutableBinaryMinHeap{Id}} # Equivalent eclass Ids
     eclasses::Dict{Id, Set} # Id -> eclasses;
                 # Here many Ids can map to the same Set, but `union` should give the canonical id
-    hashcons::Dict{Any, Id} # e-node -> Eclass Id
+    nodes::Dict{Any, Id} # e-node -> Eclass Id
 end
 
-EGraph() = EGraph(Dict(), Dict(), Dict())
+EGraph() = EGraph(Ref{Id}(0), Dict(), Dict(), Dict())
+
+function Base.show(io::IO, g::EGraph)
+    eclasses = Dict{Id, Set}()
+    for (n, id) in g.nodes
+        set = Base.@get! eclasses first(g.union[id]) Set()
+        push!(set, n)
+    end
+    ks = sort(collect(keys(eclasses)))
+    for k in ks
+        print(io, Int(k), ": ")
+        for n in eclasses[k]
+            show(io, n)
+            print(io, "; ")
+        end
+        println(io)
+    end
+end
 
 # modifies the `graph` to add an expr to
 # to the egraph as an e-node, creating the required eclasses
@@ -40,17 +51,17 @@ EGraph() = EGraph(Dict(), Dict(), Dict())
 # XXX: Returns: eid, and boolean flag denoting if the node is actually new
 function add_enode!(graph, expr, iscanonical=false)
     is_eid(expr) && return (first(arguments(expr)), false)
-    haskey(graph.hashcons, expr) && return (graph.hashcons[expr], false)
+    haskey(graph.nodes, expr) && return (graph.nodes[expr], false)
 
     if !iscanonical && istree(expr)
         args = map(a->id_term(first(add_enode!(graph, a))), arguments(expr))
         expr = term(operation(expr), args..., type=symtype(expr))
-        add_enode!(graph, expr, true)
+        return add_enode!(graph, expr, true)
     end
 
     # new id
     eid = gen_id(graph)
-    graph.hashcons[expr] = eid
+    graph.nodes[expr] = eid
     graph.union[eid] = MutableBinaryMinHeap([eid])
     graph.eclasses[eid] = Set([expr])
     return (eid, true)
@@ -84,7 +95,7 @@ end
 
 # match a single node with rule, assume we are not looking at equivalent
 # nodes at this point. Just one path of the graph
-function saturate!(graph, rules; nodes=graph.hashcons)
+function saturate!(graph, rules; nodes=graph.nodes)
     # XXX: use rule.depth for recursively evaluating
 
     saturated = false
@@ -111,9 +122,7 @@ function saturate!(graph, rules; nodes=graph.hashcons)
     graph
 end
 
-function rebuild!(graph)
-    println("OK")
-end
+rebuild!(egraph) = nothing
 
 #=
 # This function must be called only after `node` is canonicalized!
@@ -122,7 +131,7 @@ function touch(graph, node)
     if !canonical
         node = canonicalize(node)
     end
-    haskey(graph.hashcons, node) ? graph.hashcons[node] : add!(graph, node)
+    haskey(graph.nodes, node) ? graph.nodes[node] : add!(graph, node)
 end
 
 # add a node to egraph
@@ -160,8 +169,8 @@ function canonical_id(graph, id) # find
 end
 
 function add(graph, expr) # return Id
-    if haskey(graph.hashcons, expr)
-        return graph.hashcons[expr]
+    if haskey(graph.nodes, expr)
+        return graph.nodes[expr]
     else
         id = new_class(graph, expr)
         graph.hascons[expr] = id

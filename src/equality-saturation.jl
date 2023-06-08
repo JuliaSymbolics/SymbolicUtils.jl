@@ -17,9 +17,32 @@ struct EID{T} <: Symbolic{T}
 end
 gen_id(graph) = graph.node_counter[] += 1
 
+# ID Set maintains a canonical Id, and a set of equivalent ids
+mutable struct IdSet
+    canonical_id::Id
+    set::Set{Id}
+end
+IdSet(set) = IdSet(minimum(set), Set(set))
+canonical_id(set::IdSet) = set.canonical_id
+function Base.union(set1::IdSet, set2::IdSet)
+    IdSet(min(set1.canonical_id, set2.canonical_id), union(set1.set, set2.set))
+end
+
+function Base.union!(set1::IdSet, set2::IdSet)
+    set1.canonical_id = min(set1.canonical_id, set2.canonical_id)
+    set1.set = union!(set1.set, set2.set)
+end
+
+function Base.push!(set::IdSet, x)
+    set1.canonical_id = min(set.canonical_id, x)
+    push!(set1.set, x)
+end
+
+# TODO: MutableBinaryMinHeap can be replaced by a Min value + a Set
+# then the Union is also easy -- always chose the lowest as the min value and merge the sets
 struct EGraph
     node_counter::Ref{Id}
-    union::Dict{Id, MutableBinaryMinHeap{Id}} # Equivalent eclass Ids
+    union::Dict{Id, IdSet} # Equivalent eclass Ids
     eclasses::Dict{Id, Set} # Id -> eclasses;
                 # Here many Ids can map to the same Set, but `union` should give the canonical id
     nodes::Dict{Any, Id} # e-node -> Eclass Id
@@ -29,8 +52,11 @@ EGraph() = EGraph(Ref{Id}(0), Dict(), Dict(), Dict())
 
 function Base.show(io::IO, g::EGraph)
     eclasses = Dict{Id, Set}()
+    if isempty(g.nodes)
+        return print(io, "Empty EGraph")
+    end
     for (n, id) in g.nodes
-        set = Base.@get! eclasses first(g.union[id]) Set()
+        set = Base.get!(Set, eclasses, canonical_id(g.union[id]))
         push!(set, n)
     end
     ks = sort(collect(keys(eclasses)))
@@ -62,7 +88,7 @@ function add_enode!(graph, expr, iscanonical=false)
     # new id
     eid = gen_id(graph)
     graph.nodes[expr] = eid
-    graph.union[eid] = MutableBinaryMinHeap([eid])
+    graph.union[eid] = IdSet([eid])
     graph.eclasses[eid] = Set([expr])
     return (eid, true)
 end
@@ -73,15 +99,13 @@ function merge_eids!(graph, eid1, eid2)
 
     # they are the same
     if has1 && has2 && graph.union[eid1] === graph.union[eid2]
-        return first(graph.union[eid1])
+        return canonical_id(graph.union[eid1])
     end
 
     if !has1 && !has2
-        graph.union[eid1] = graph.union[eid2] = MutableBinaryMinHeap([eid1, eid2])
+        graph.union[eid1] = graph.union[eid2] = IdSet([eid1, eid2])
     elseif has1 && has2
-        while has2 && !isempty(graph.union[eid2])
-            push!(graph.union[eid1], pop!(graph.union[eid2]))
-        end
+        union!(graph.union[eid1], graph.union[eid2])
         graph.union[eid2] = graph.union[eid1]
     elseif has1
         set = graph.union[eid2] = graph.union[eid1]
@@ -90,7 +114,7 @@ function merge_eids!(graph, eid1, eid2)
         set = graph.union[eid1] = graph.union[eid2]
         push!(set, eid1)
     end
-    first(graph.union[eid1])
+    canonical_id(graph.union[eid1])
 end
 
 # match a single node with rule, assume we are not looking at equivalent

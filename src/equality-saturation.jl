@@ -1,27 +1,27 @@
 using DataStructures
 export EGraph, add_enode!, rebuild!, saturate!
 
-# make an eclass_id be a SymbolicUtils node
-# TODO: make this a type pls
-id_term(id, T=Real) = term(id_term, id, type=T)
-is_eid(t) = istree(t) && operation(t) === id_term
-show_call(io, ::typeof(id_term), n) = print(io, "~", Int(first(n)))
-
 # ids are just UInt64
 const Id = UInt64
 
-# UNDER CONSTRUCTION
+# An Id as a Symbolic node
 struct EID{T} <: Symbolic{T}
-    istree::Bool
     id::Id
+    dependents::Set # All the enodes who have this as their children
 end
+Base.hash(e::EID, u::UInt) = hash(xor(e.id, 0xe1de1de1de1de1de), u)
+Base.isequal(a::EID, b::EID) = a.id == b.id
 gen_id(graph) = graph.node_counter[] += 1
+EID(graph, node) = EID{symtype(node)}(gen_id(graph), Set([]))
+is_eid(t) = t isa EID
+Base.show(io::IO, n::EID) = print(io, "~", Int(n.id))
 
 # ID Set maintains a canonical Id, and a set of equivalent ids
 mutable struct IdSet
-    canonical_id::Id
-    set::Set{Id}
+    canonical_id::EID
+    set::Set{EID}
 end
+Base.isless(eid1, eid2) = isless(eid1.id, eid2.id)
 IdSet(set) = IdSet(minimum(set), Set(set))
 canonical_id(set::IdSet) = set.canonical_id
 function Base.union(set1::IdSet, set2::IdSet)
@@ -42,16 +42,16 @@ end
 # then the Union is also easy -- always chose the lowest as the min value and merge the sets
 struct EGraph
     node_counter::Ref{Id}
-    union::Dict{Id, IdSet} # Equivalent eclass Ids
-    eclasses::Dict{Id, Set} # Id -> eclasses;
+    union::Dict{EID, IdSet} # Equivalent eclass Ids
+    eclasses::Dict{EID, Set} # Id -> eclasses;
                 # Here many Ids can map to the same Set, but `union` should give the canonical id
-    nodes::Dict{Any, Id} # e-node -> Eclass Id
+    nodes::Dict{Any, EID} # e-node -> Eclass Id
 end
 
 EGraph() = EGraph(Ref{Id}(0), Dict(), Dict(), Dict())
 
 function Base.show(io::IO, g::EGraph)
-    eclasses = Dict{Id, Set}()
+    eclasses = Dict{EID, Set}()
     if isempty(g.nodes)
         return print(io, "Empty EGraph")
     end
@@ -61,7 +61,7 @@ function Base.show(io::IO, g::EGraph)
     end
     ks = sort(collect(keys(eclasses)))
     for k in ks
-        print(io, Int(k), ": ")
+        print(io, Int(k.id), ": ")
         for n in eclasses[k]
             show(io, n)
             print(io, "; ")
@@ -71,22 +71,29 @@ function Base.show(io::IO, g::EGraph)
 end
 
 # modifies the `graph` to add an expr to
-# to the egraph as an e-node, creating the required eclasses
+# to the egraph as an e-node creating the required eclasses
 # returns the eclass id and enode
 # XXX: Just write the fully unrolled version here
 # XXX: Returns: eid, and boolean flag denoting if the node is actually new
 function add_enode!(graph, expr, iscanonical=false)
-    is_eid(expr) && return (first(arguments(expr)), false)
-    haskey(graph.nodes, expr) && return (graph.nodes[expr], false)
+    is_eid(expr) && return (expr, false)
+    haskey(graph.nodes, expr) && return (graph.nodes[expr], false) # This requires that the nodes have canonical ids as children
 
     if !iscanonical && istree(expr)
-        args = map(a->id_term(first(add_enode!(graph, a))), arguments(expr))
+        # canonicalize and try again
+        args = map(arguments(expr)) do a
+            first(add_enode!(graph, a))
+        end
         expr = term(operation(expr), args..., type=symtype(expr))
+        args = foreach(arguments(expr)) do a
+            # expr is a parent of
+            push!(a.dependents, expr)
+        end
         return add_enode!(graph, expr, true)
     end
 
     # new id
-    eid = gen_id(graph)
+    eid = EID(graph, expr)
     graph.nodes[expr] = eid
     graph.union[eid] = IdSet([eid])
     graph.eclasses[eid] = Set([expr])

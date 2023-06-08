@@ -125,6 +125,7 @@ function saturate!(graph, rules; nodes=graph.nodes)
     saturated = false
     while !saturated
         matches = []
+        merge_worklist = []
         saturated = true
         for (node, eid) in nodes
             for rule in rules
@@ -139,14 +140,24 @@ function saturate!(graph, rules; nodes=graph.nodes)
             if isnew
                 saturated = false
             end
-            merge_eids!(graph, eid, eid′)
+            push!(merge_worklist, (eid, eid′))
         end
-        rebuild!(graph)
+        rebuild!(graph, merge_worklist)
     end
     graph
 end
 
-rebuild!(egraph) = nothing
+function rebuild!(egraph, worklist)
+    while !isempty(worklist)
+        (id1, id2) = pop!(worklist)
+        # find Ids that are not already equivalent to the left-hand set
+        # because we are merging the right-hand into the left hand, and in the process
+        # replacing the right hand with the new set
+        more_work = setdiff(egraph.union[id2].set, egraph.union[id1].set)
+        merge_eids!(egraph, id1, id2)
+        append!(worklist, ((id1, w) for w in more_work))
+    end
+end
 
 #=
 # This function must be called only after `node` is canonicalized!

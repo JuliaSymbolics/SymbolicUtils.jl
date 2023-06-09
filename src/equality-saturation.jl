@@ -41,12 +41,10 @@ end
 struct EGraph
     node_counter::Ref{Id}
     union::Dict{EID, IdSet} # Equivalent eclass Ids
-    eclasses::Dict{EID, Set} # Id -> eclasses;
-                # Here many Ids can map to the same Set, but `union` should give the canonical id
     nodes::Dict{Any, EID} # e-node -> Eclass Id
 end
 
-EGraph() = EGraph(Ref{Id}(0), Dict(), Dict(), Dict())
+EGraph() = EGraph(Ref{Id}(0), Dict{EID, IdSet}(), Dict{Any, EID}())
 
 function Base.show(io::IO, g::EGraph)
     eclasses = Dict{EID, Set}()
@@ -101,7 +99,6 @@ function touch!(graph, expr, iscanonical=false)
     graph.nodes[expr] = eid
     push!(eid.dependents, expr)
     graph.union[eid] = IdSet([eid])
-    graph.eclasses[eid] = Set([expr])
     return (eid, true)
 end
 

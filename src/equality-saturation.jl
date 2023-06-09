@@ -70,6 +70,10 @@ function Base.show(io::IO, g::EGraph)
     end
 end
 
+function term_similarterm(t, f, args, type; metadata=nothing)
+    Term{type}(f, args; metadata=metadata)
+end
+
 # modifies the `graph` to add an expr to
 # to the egraph as an e-node creating the required eclasses
 # returns the eclass id and enode

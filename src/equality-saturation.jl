@@ -1,5 +1,5 @@
 using DataStructures
-export EGraph, add_enode!, rebuild!, saturate!
+export EGraph, touch!, rebuild!, saturate!
 
 # ids are just UInt64
 const Id = UInt64
@@ -79,21 +79,23 @@ end
 # returns the eclass id and enode
 # XXX: Just write the fully unrolled version here
 # XXX: Returns: eid, and boolean flag denoting if the node is actually new
-function add_enode!(graph, expr, iscanonical=false)
+function touch!(graph, expr, iscanonical=false)
+    # Here we assume all `nodes` in `graph.nodes` map to their canonical ids
     is_eid(expr) && return (expr, false)
     haskey(graph.nodes, expr) && return (graph.nodes[expr], false) # This requires that the nodes have canonical ids as children
 
     if !iscanonical && istree(expr)
         # canonicalize and try again
         args = map(arguments(expr)) do a
-            first(add_enode!(graph, a))
+            first(touch!(graph, a))
         end
         expr = term(operation(expr), args..., type=symtype(expr))
         args = foreach(arguments(expr)) do a
             # expr is a parent of
             push!(a.dependents, expr)
         end
-        return add_enode!(graph, expr, true)
+        # Check again after canonicalizing
+        return touch!(graph, expr, true)
     end
 
     # new id
@@ -105,27 +107,30 @@ function add_enode!(graph, expr, iscanonical=false)
 end
 
 function merge_eids!(graph, eid1, eid2)
-    has1 = haskey(graph.union, eid1)
-    has2 = haskey(graph.union, eid2)
+    u1, u2 = graph.union[eid1], graph.union[eid2]
 
     # they are the same
-    if has1 && has2 && graph.union[eid1] === graph.union[eid2]
-        return canonical_id(graph.union[eid1])
+    if u1 === u2 || isequal(canonical_id(u1), canonical_id(u2))
+        return canonical_id(u1)
     end
 
-    if !has1 && !has2
-        graph.union[eid1] = graph.union[eid2] = IdSet([eid1, eid2])
-    elseif has1 && has2
-        union!(graph.union[eid1], graph.union[eid2])
-        graph.union[eid2] = graph.union[eid1]
-    elseif has1
-        set = graph.union[eid2] = graph.union[eid1]
-        push!(set, eid2)
-    elseif has2
-        set = graph.union[eid1] = graph.union[eid2]
-        push!(set, eid1)
+    c_id = min(canonical_id(u1), canonical_id(u2))
+    fwd_update = Set{EID}()
+    if !isequal(c_id, u1)
+        union!(fwd_update, u1.set)
     end
-    canonical_id(graph.union[eid1])
+    if !isequal(c_id, u2)
+        union!(fwd_update, u2.set)
+    end
+    setdiff!(fwd_update, [eid1, eid2])
+
+    union!(u1, u2)
+    graph.union[eid2] = u1
+
+    for id in fwd_update
+        merge_eids!(graph, id, c_id)
+    end
+    return canonical_id(u1)
 end
 
 # match a single node with rule, assume we are not looking at equivalent
@@ -147,8 +152,10 @@ function saturate!(graph, rules; nodes=graph.nodes)
             end
         end
         for (eid, node′) in matches
-            eid′, isnew = add_enode!(graph, node′)
+            eid′, isnew = touch!(graph, node′)
             if isnew
+                # XXX: What when an eid′ is an already available node
+                # but is not equivalent in class yet to `eid`?
                 saturated = false
             end
             push!(merge_worklist, (eid, eid′))
@@ -164,9 +171,17 @@ function rebuild!(egraph, worklist)
         # find Ids that are not already equivalent to the left-hand set
         # because we are merging the right-hand into the left hand, and in the process
         # replacing the right hand with the new set
-        more_work = setdiff(egraph.union[id2].set, egraph.union[id1].set)
-        merge_eids!(egraph, id1, id2)
-        append!(worklist, ((id1, w) for w in more_work))
+        c_id = merge_eids!(egraph, id1, id2)
+
+        for id in (id1, id2)
+            isequal(id, c_id) && continue
+            while !isempty(id.dependents)
+                node = pop!(id.dependents)
+                new_node = substitute(node, Dict(id => c_id))
+                push!(c_id.dependents, new_node)
+                ## TODO: update `node` to `new_node` everywhere!
+            end
+        end
     end
 end
 

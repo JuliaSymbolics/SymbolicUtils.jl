@@ -38,8 +38,6 @@ function Base.push!(set::IdSet, x)
     push!(set1.set, x)
 end
 
-# TODO: MutableBinaryMinHeap can be replaced by a Min value + a Set
-# then the Union is also easy -- always chose the lowest as the min value and merge the sets
 struct EGraph
     node_counter::Ref{Id}
     union::Dict{EID, IdSet} # Equivalent eclass Ids
@@ -101,6 +99,7 @@ function touch!(graph, expr, iscanonical=false)
     # new id
     eid = EID(graph, expr)
     graph.nodes[expr] = eid
+    push!(eid.dependents, expr)
     graph.union[eid] = IdSet([eid])
     graph.eclasses[eid] = Set([expr])
     return (eid, true)
@@ -166,22 +165,37 @@ function saturate!(graph, rules; nodes=graph.nodes)
 end
 
 function rebuild!(egraph, worklist)
-    while !isempty(worklist)
-        (id1, id2) = pop!(worklist)
+    for (id1, id2) in worklist
         # find Ids that are not already equivalent to the left-hand set
         # because we are merging the right-hand into the left hand, and in the process
         # replacing the right hand with the new set
-        c_id = merge_eids!(egraph, id1, id2)
+        merge_eids!(egraph, id1, id2)
 
+    end
+
+    # Update dependent nodes
+    delete_nodes = []
+    for (id1, id2) in worklist
+        c_id = canonical_id(egraph.union[id1])
         for id in (id1, id2)
             isequal(id, c_id) && continue
             while !isempty(id.dependents)
                 node = pop!(id.dependents)
-                new_node = substitute(node, Dict(id => c_id))
+                if isequal(egraph.nodes[node], id) # is itself
+                    egraph.nodes[node] = c_id
+                    push!(c_id.dependents, node)
+                    continue
+                end
+                new_node = substitute(node, Dict(id => c_id), similarterm=term_similarterm)
                 push!(c_id.dependents, new_node)
                 ## TODO: update `node` to `new_node` everywhere!
+                egraph.nodes[new_node] = canonical_id(egraph.union[egraph.nodes[node]])
+                push!(delete_nodes, node)
             end
         end
+    end
+    for n in delete_nodes
+        delete!(egraph.nodes, n)
     end
 end
 

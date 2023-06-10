@@ -47,19 +47,19 @@ end
 EGraph() = EGraph(Ref{Id}(0), Dict{EID, IdSet}(), Dict{Any, EID}())
 
 function Base.show(io::IO, g::EGraph)
-    eclasses = Dict{EID, Set}()
+    eclasses = Dict{Id, Set}()
     if isempty(g.nodes)
         return print(io, "Empty EGraph")
     end
     for (n, id) in g.nodes
-        set = Base.get!(Set, eclasses, canonical_id(g.union[id]))
+        set = Base.get!(Set, eclasses, canonical_id(g.union[id]).id)
         push!(set, n)
     end
     ks = sort(collect(keys(eclasses)))
     for k in ks
-        print(io, Int(k.id), ": ")
+        print(io, Int(k), ": ")
         for n in eclasses[k]
-            show(io, n)
+            print(io, n)
             print(io, "; ")
         end
         println(io)
@@ -183,7 +183,16 @@ function rebuild!(egraph, worklist)
                     push!(c_id.dependents, node)
                     continue
                 end
-                new_node = substitute(node, Dict(id => c_id), similarterm=term_similarterm)
+                if istree(node)
+                    new_node = substitute(node, Dict(id => c_id), similarterm=term_similarterm)
+                    other_eids = filter(x->is_eid(x) && !isequal(x, id), arguments(node))
+                    for eid in other_eids
+                        delete!(eid.dependents, node)
+                        push!(eid.dependents, new_node)
+                    end
+                else
+                    new_node = isequal(node, id) ? c_id : node
+                end
                 push!(c_id.dependents, new_node)
                 ## TODO: update `node` to `new_node` everywhere!
                 egraph.nodes[new_node] = canonical_id(egraph.union[egraph.nodes[node]])

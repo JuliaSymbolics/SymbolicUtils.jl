@@ -6,8 +6,7 @@ the argument to the predicate satisfies `istree` and `operation(x) == f`
 """
 is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
 
-let
-    PLUS_RULES = [
+const PLUS_RULES = [
         @rule(~x::isnotflat(+) => flatten_term(+, ~x))
         @rule(~x::needs_sorting(+) => sort_args(+, ~x))
         @ordered_acrule(~a::is_literal_number + ~b::is_literal_number => ~a + ~b)
@@ -40,7 +39,7 @@ let
     ]
 
 
-    POW_RULES = [
+const POW_RULES = [
         @rule(^(*(~~x), ~y::_isinteger) => *(map(a->pow(a, ~y), ~~x)...))
         @rule((((~x)^(~p::_isinteger))^(~q::_isinteger)) => (~x)^((~p)*(~q)))
         @rule(^(~x, ~z::_iszero) => 1)
@@ -63,7 +62,7 @@ let
         @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
     ]
 
-    TRIG_EXP_RULES = [
+const TRIG_EXP_RULES = [
         @acrule(~r*~x::has_trig_exp + ~r*~y => ~r*(~x + ~y))
         @acrule(~r*~x::has_trig_exp + -1*~r*~y => ~r*(~x - ~y))
         @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
@@ -87,7 +86,7 @@ let
         @rule(exp(~x)^(~y) => exp(~x * ~y))
     ]
 
-    BOOLEAN_RULES = [
+const BOOLEAN_RULES = [
         @rule((true | (~x)) => true)
         @rule(((~x) | true) => true)
         @rule((false | (~x)) => ~x)
@@ -117,6 +116,7 @@ let
         @rule((~f)(~x::is_literal_number, ~y::is_literal_number) => (~f)(~x, ~y))
     ]
 
+let
     function number_simplifier()
         rule_tree = [If(istree, Chain(ASSORTED_RULES)),
                      If(is_operation(+),

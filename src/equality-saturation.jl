@@ -74,7 +74,6 @@ function term_similarterm(t, f, args, type; metadata=nothing)
 end
 
 # simplifying analysis
-node_count(t) = istree(t) ? 1 + sum(node_count, unsorted_arguments(t)) : 1
 simple_cost(x) = (x, node_count(x))
 simplest_of(a, b) = b[2] < a[2] ? b : a
 simple_analysis = (make=simple_cost, join=simplest_of)
@@ -144,21 +143,31 @@ end
 # match a single node with rule, assume we are not looking at equivalent
 # nodes at this point. Just one path of the graph
 function saturate!(graph, rules; nodes=graph.nodes, analysis=simple_analysis)
-    # XXX: use rule.depth for recursively evaluating
-
     saturated = false
+
+    if rules isa AbstractArray
+        rules = Chain(rules)
+    end
+
     while !saturated
         matches = []
         merge_worklist = []
         saturated = true
         for (node, eid) in nodes
-            for rule in rules
-                node′ = rule(node)
-                if node′ !== nothing && !isequal(node, node′)
-                    push!(matches, (eid, node′))
-                end
-            end
+            instr_rule = Rewriters.instrument(rules, function (rule)
+                                                  function (x)
+                                                      x′ = rule(x)
+                                                      if x′ !== nothing && !isequal(x, x′)
+                                                          push!(matches, (eid, x′))
+                                                      end
+                                                      nothing
+                                                  end
+                                              end)
+            # Try to use Rewrites library here
+            # to structure rules rather than a for loop
+            instr_rule(node)
         end
+
         for (eid, node′) in matches
             eid′, isnew = touch!(graph, node′, analysis)
             if isnew

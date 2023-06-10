@@ -1,5 +1,5 @@
 using DataStructures
-export EGraph, touch!, rebuild!, saturate!
+export EGraph, touch!, rebuild!, saturate!, simplify_egraph
 
 # ids are just UInt64
 const Id = UInt64
@@ -25,6 +25,8 @@ end
 Base.isless(eid1, eid2) = isless(eid1.id, eid2.id)
 IdSet(set) = IdSet(minimum(set), Set(set))
 canonical_id(set::IdSet) = set.canonical_id
+canonicalize(egraph, eid::EID) = canonical_id(egraph.union[eid])
+
 function Base.union(set1::IdSet, set2::IdSet)
     IdSet(min(set1.canonical_id, set2.canonical_id), union(set1.set, set2.set))
 end
@@ -71,12 +73,18 @@ function term_similarterm(t, f, args, type; metadata=nothing)
     Term{type}(f, args; metadata=metadata)
 end
 
+# simplifying analysis
+node_count(t) = istree(t) ? 1 + sum(node_count, unsorted_arguments(t)) : 1
+simple_cost(x) = (x, node_count(x))
+simplest_of(a, b) = b[2] < a[2] ? b : a
+simple_analysis = (make=simple_cost, join=simplest_of)
+
 # modifies the `graph` to add an expr to
 # to the egraph as an e-node creating the required eclasses
 # returns the eclass id and enode
 # XXX: Just write the fully unrolled version here
 # XXX: Returns: eid, and boolean flag denoting if the node is actually new
-function touch!(graph, expr, analysis=(make=x->1, join=+), iscanonical=false)
+function touch!(graph, expr, analysis=simple_analysis, iscanonical=false)
     # Here we assume all `nodes` in `graph.nodes` map to their canonical ids
     is_eid(expr) && return (expr, false)
     haskey(graph.nodes, expr) && return (graph.nodes[expr], false) # This requires that the nodes have canonical ids as children
@@ -96,7 +104,7 @@ function touch!(graph, expr, analysis=(make=x->1, join=+), iscanonical=false)
     end
 
     # new id
-    eid = EID(graph, expr, analysis.make(graph))
+    eid = EID(graph, expr, analysis.make(expr))
     graph.nodes[expr] = eid
     push!(eid.dependents, expr)
     graph.union[eid] = IdSet([eid])
@@ -135,7 +143,7 @@ end
 
 # match a single node with rule, assume we are not looking at equivalent
 # nodes at this point. Just one path of the graph
-function saturate!(graph, rules; nodes=graph.nodes, analysis=(make=x->1, join=+))
+function saturate!(graph, rules; nodes=graph.nodes, analysis=simple_analysis)
     # XXX: use rule.depth for recursively evaluating
 
     saturated = false
@@ -164,6 +172,7 @@ function saturate!(graph, rules; nodes=graph.nodes, analysis=(make=x->1, join=+)
     end
     graph
 end
+
 
 function rebuild!(egraph, worklist, analysis)
     for (id1, id2) in worklist
@@ -209,3 +218,17 @@ function rebuild!(egraph, worklist, analysis)
     end
 end
 
+function simplify_egraph(expr, rules, analysis=simple_analysis)
+    egraph = EGraph()
+    eid, _ = touch!(egraph, expr, analysis)
+    saturate!(egraph, rules; analysis)
+
+    function find_best(node)
+        is_eid(node) && return find_best(node.data[1])
+        istree(node) && return similarterm(node, operation(node), map(find_best, arguments(node)))
+        return node
+    end
+
+    find_best(canonicalize(egraph, eid))
+
+end

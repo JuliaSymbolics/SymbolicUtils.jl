@@ -5,14 +5,15 @@ export EGraph, touch!, rebuild!, saturate!
 const Id = UInt64
 
 # An Id as a Symbolic node
-struct EID{T} <: Symbolic{T}
-    id::Id
-    dependents::Set # All the enodes who have this as their children
+mutable struct EID{T} <: Symbolic{T}
+    const id::Id
+    const dependents::Set # All the enodes who have this as their children
+    data::Any
 end
 Base.hash(e::EID, u::UInt) = hash(xor(e.id, 0xe1de1de1de1de1de), u)
 Base.isequal(a::EID, b::EID) = a.id == b.id
 gen_id(graph) = graph.node_counter[] += 1
-EID(graph, node) = EID{symtype(node)}(gen_id(graph), Set([]))
+EID(graph, node, data) = EID{symtype(node)}(gen_id(graph), Set([]), data)
 is_eid(t) = t isa EID
 Base.show(io::IO, n::EID) = print(io, "~", Int(n.id))
 
@@ -75,7 +76,7 @@ end
 # returns the eclass id and enode
 # XXX: Just write the fully unrolled version here
 # XXX: Returns: eid, and boolean flag denoting if the node is actually new
-function touch!(graph, expr, iscanonical=false)
+function touch!(graph, expr, analysis=(make=x->1, join=+), iscanonical=false)
     # Here we assume all `nodes` in `graph.nodes` map to their canonical ids
     is_eid(expr) && return (expr, false)
     haskey(graph.nodes, expr) && return (graph.nodes[expr], false) # This requires that the nodes have canonical ids as children
@@ -83,7 +84,7 @@ function touch!(graph, expr, iscanonical=false)
     if !iscanonical && istree(expr)
         # canonicalize and try again
         args = map(arguments(expr)) do a
-            first(touch!(graph, a))
+            first(touch!(graph, a, analysis))
         end
         expr = term(operation(expr), args..., type=symtype(expr))
         args = foreach(arguments(expr)) do a
@@ -91,18 +92,18 @@ function touch!(graph, expr, iscanonical=false)
             push!(a.dependents, expr)
         end
         # Check again after canonicalizing
-        return touch!(graph, expr, true)
+        return touch!(graph, expr, analysis, true)
     end
 
     # new id
-    eid = EID(graph, expr)
+    eid = EID(graph, expr, analysis.make(graph))
     graph.nodes[expr] = eid
     push!(eid.dependents, expr)
     graph.union[eid] = IdSet([eid])
     return (eid, true)
 end
 
-function merge_eids!(graph, eid1, eid2)
+function merge_eids!(graph, eid1, eid2, analysis)
     u1, u2 = graph.union[eid1], graph.union[eid2]
 
     # they are the same
@@ -110,12 +111,15 @@ function merge_eids!(graph, eid1, eid2)
         return canonical_id(u1)
     end
 
-    c_id = min(canonical_id(u1), canonical_id(u2))
+    c1, c2 = (canonical_id(u1), canonical_id(u2))
+    c_id = min(c1, c2)
+    c_id.data = analysis.join(c2.data, c1.data)
+
     fwd_update = Set{EID}()
-    if !isequal(c_id, u1)
+    if !isequal(c_id, c1)
         union!(fwd_update, u1.set)
     end
-    if !isequal(c_id, u2)
+    if !isequal(c_id, c2)
         union!(fwd_update, u2.set)
     end
     setdiff!(fwd_update, [eid1, eid2])
@@ -124,14 +128,14 @@ function merge_eids!(graph, eid1, eid2)
     graph.union[eid2] = u1
 
     for id in fwd_update
-        merge_eids!(graph, id, c_id)
+        merge_eids!(graph, id, c_id, analysis)
     end
     return canonical_id(u1)
 end
 
 # match a single node with rule, assume we are not looking at equivalent
 # nodes at this point. Just one path of the graph
-function saturate!(graph, rules; nodes=graph.nodes)
+function saturate!(graph, rules; nodes=graph.nodes, analysis=(make=x->1, join=+))
     # XXX: use rule.depth for recursively evaluating
 
     saturated = false
@@ -148,7 +152,7 @@ function saturate!(graph, rules; nodes=graph.nodes)
             end
         end
         for (eid, node′) in matches
-            eid′, isnew = touch!(graph, node′)
+            eid′, isnew = touch!(graph, node′, analysis)
             if isnew
                 # XXX: What when an eid′ is an already available node
                 # but is not equivalent in class yet to `eid`?
@@ -156,17 +160,17 @@ function saturate!(graph, rules; nodes=graph.nodes)
             end
             push!(merge_worklist, (eid, eid′))
         end
-        rebuild!(graph, merge_worklist)
+        rebuild!(graph, merge_worklist, analysis)
     end
     graph
 end
 
-function rebuild!(egraph, worklist)
+function rebuild!(egraph, worklist, analysis)
     for (id1, id2) in worklist
         # find Ids that are not already equivalent to the left-hand set
         # because we are merging the right-hand into the left hand, and in the process
         # replacing the right hand with the new set
-        merge_eids!(egraph, id1, id2)
+        merge_eids!(egraph, id1, id2, analysis)
 
     end
 

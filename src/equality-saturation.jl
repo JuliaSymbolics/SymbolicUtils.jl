@@ -154,6 +154,11 @@ function saturate!(graph, rules; nodes=graph.nodes, analysis=simple_analysis)
         merge_worklist = []
         saturated = true
         for (node, eid) in nodes
+            # For every rule and every sub-rule, instrument transforms the rule functor
+            # here we use this to get the control flow of the Rewrites library (e.g. IfElse)
+            # but also add every single valid rule application into the e-graph
+            # the rule returns "nothing" indicating no change should be carried forward
+            # into the application of other rules in a structure like `Chain` for example.
             instr_rule = Rewriters.instrument(rules, function (rule)
                                                   function (x)
                                                       x′ = rule(x)
@@ -163,8 +168,6 @@ function saturate!(graph, rules; nodes=graph.nodes, analysis=simple_analysis)
                                                       nothing
                                                   end
                                               end)
-            # Try to use Rewrites library here
-            # to structure rules rather than a for loop
             instr_rule(node)
         end
 

@@ -10,8 +10,8 @@ mutable struct EID{T} <: Symbolic{T}
     const dependents::Set # All the enodes who have this as their children
     data::Any
 end
-Base.hash(e::EID, u::UInt) = hash(xor(e.id, 0xe1de1de1de1de1de), u)
-Base.isequal(a::EID, b::EID) = a.id == b.id
+@inline Base.hash(e::EID, u::UInt) = hash(xor(e.id, 0xe1de1de1de1de1de), u)
+@inline Base.isequal(a::EID, b::EID) = a.id == b.id
 gen_id(graph) = graph.node_counter[] += 1
 EID(graph, node, data) = EID{symtype(node)}(gen_id(graph), Set([]), data)
 is_eid(t) = t isa EID
@@ -27,16 +27,12 @@ IdSet(set) = IdSet(minimum(set), Set(set))
 canonical_id(set::IdSet) = set.canonical_id
 canonicalize(egraph, eid::EID) = canonical_id(egraph.union[eid])
 
-function Base.union(set1::IdSet, set2::IdSet)
-    IdSet(min(set1.canonical_id, set2.canonical_id), union(set1.set, set2.set))
-end
-
-function Base.union!(set1::IdSet, set2::IdSet)
+@inline function Base.union!(set1::IdSet, set2::IdSet)
     set1.canonical_id = min(set1.canonical_id, set2.canonical_id)
     set1.set = union!(set1.set, set2.set)
 end
 
-function Base.push!(set::IdSet, x)
+@inline function Base.push!(set::IdSet, x)
     set1.canonical_id = min(set.canonical_id, x)
     push!(set1.set, x)
 end
@@ -76,13 +72,12 @@ end
 # simplifying analysis
 simple_cost(x) = (x, node_count(x))
 simplest_of(a, b) = b[2] < a[2] ? b : a
-simple_analysis = (make=simple_cost, join=simplest_of)
+const simple_analysis = (make=simple_cost, join=simplest_of)
 
 # modifies the `graph` to add an expr to
 # to the egraph as an e-node creating the required eclasses
 # returns the eclass id and enode
-# XXX: Just write the fully unrolled version here
-# XXX: Returns: eid, and boolean flag denoting if the node is actually new
+# Returns: eid, and boolean flag denoting if the node is actually new
 function touch!(graph, expr, analysis=simple_analysis, iscanonical=false)
     # Here we assume all `nodes` in `graph.nodes` map to their canonical ids
     is_eid(expr) && return (expr, false)
@@ -90,11 +85,11 @@ function touch!(graph, expr, analysis=simple_analysis, iscanonical=false)
 
     if !iscanonical && istree(expr)
         # canonicalize and try again
-        args = map(arguments(expr)) do a
+        args = map(unsorted_arguments(expr)) do a
             first(touch!(graph, a, analysis))
         end
         expr = term(operation(expr), args..., type=symtype(expr))
-        args = foreach(arguments(expr)) do a
+        args = foreach(unsorted_arguments(expr)) do a
             # expr is a parent of
             push!(a.dependents, expr)
         end
@@ -140,46 +135,48 @@ function merge_eids!(graph, eid1, eid2, analysis)
     return canonical_id(u1)
 end
 
-# match a single node with rule, assume we are not looking at equivalent
-# nodes at this point. Just one path of the graph
-function saturate!(graph, rules; nodes=graph.nodes, analysis=simple_analysis)
-    saturated = false
+function saturate!(graph, rules; analysis=simple_analysis)
+    saturated = Ref{Bool}(false)
 
-    if rules isa AbstractArray
-        rules = Chain(rules)
+    if rules isa Union{AbstractArray, Tuple}
+        rules′ = Chain(rules)
+    else
+        rules′ = rules
     end
 
-    while !saturated
-        matches = []
-        merge_worklist = []
-        saturated = true
-        for (node, eid) in nodes
-            # For every rule and every sub-rule, instrument transforms the rule functor
-            # here we use this to get the control flow of the Rewrites library (e.g. IfElse)
-            # but also add every single valid rule application into the e-graph
-            # the rule returns "nothing" indicating no change should be carried forward
-            # into the application of other rules in a structure like `Chain` for example.
-            instr_rule = Rewriters.instrument(rules, function (rule)
-                                                  function (x)
-                                                      x′ = rule(x)
-                                                      if x′ !== nothing && !isequal(x, x′)
-                                                          push!(matches, (eid, x′))
-                                                      end
-                                                      nothing
+    merge_worklist = Tuple{EID, EID}[]
+
+    # XXX: This adds about a 10% overhead over using a for loop when we have
+    # a list of rules, but it allows control flow for complicated cases
+    #
+    # For every rule and every sub-rule, instrument transforms the rule functor
+    # here we use this to get the control flow of the Rewrites library (e.g. IfElse)
+    # but also add every single valid rule application into the e-graph
+    # the rule returns "nothing" indicating no change should be carried forward
+    # into the application of other rules in a structure like `Chain` for example.
+    instr_rule! = Rewriters.instrument(rules′, @inline function (rule)
+                                          @inline function (node)
+                                              eid = graph.nodes[node]
+                                              node′ = rule(node)
+                                              if node′ !== nothing && !isequal(node, node′)
+                                                  eid′, isnew = touch!(graph, node′, analysis)
+                                                  if isnew
+                                                      saturated[] = false
                                                   end
-                                              end)
-            instr_rule(node)
+                                                  !isequal(eid, eid′) && push!(merge_worklist, (eid, eid′))
+                                              end
+                                              nothing
+                                          end
+                                      end)
+
+    while !saturated[]
+        empty!(merge_worklist)
+        saturated[] = true
+
+        for (node, eid) in graph.nodes
+            instr_rule!(node)
         end
 
-        for (eid, node′) in matches
-            eid′, isnew = touch!(graph, node′, analysis)
-            if isnew
-                # XXX: What when an eid′ is an already available node
-                # but is not equivalent in class yet to `eid`?
-                saturated = false
-            end
-            push!(merge_worklist, (eid, eid′))
-        end
         rebuild!(graph, merge_worklist, analysis)
     end
     graph
@@ -210,7 +207,7 @@ function rebuild!(egraph, worklist, analysis)
                 end
                 if istree(node)
                     new_node = substitute(node, Dict(id => c_id), similarterm=term_similarterm)
-                    other_eids = filter(x->is_eid(x) && !isequal(x, id), arguments(node))
+                    other_eids = filter(x->is_eid(x) && !isequal(x, id), unsorted_arguments(node))
                     for eid in other_eids
                         delete!(eid.dependents, node)
                         push!(eid.dependents, new_node)

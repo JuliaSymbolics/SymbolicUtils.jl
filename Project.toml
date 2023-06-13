@@ -23,6 +23,7 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 Unityper = "a7c27f48-0311-42f6-a7f8-2c11e75eb415"
+Z3 = "06b161dc-0161-11ea-0f74-41f836f4024b"
 
 [compat]
 AbstractTrees = "0.3, 0.4"

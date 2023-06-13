@@ -61,6 +61,7 @@ include("substitute.jl")
 
 include("code.jl")
 
+include("satisfiability.jl")
 
 # ADjoints
 include("adjoints.jl")

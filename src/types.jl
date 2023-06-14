@@ -224,12 +224,12 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymboli
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
 
-const csym = typemax(UInt)
-const cadd = typemax(UInt) - 1
-const csub = typemax(UInt) - 2
-const cdiv = typemax(UInt) - 3
-const cpow = typemax(UInt) - 4
-function Base.hash(s::BasicSymbolic, salt::UInt)
+const SYM_SALT = 0x4de7d7c66d41da43 % UInt
+const ADD_SALT = 0xaddaddaddaddadda % UInt
+const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
+const DIV_SALT = 0x334b218e73bbba53 % UInt
+const POW_SALT = 0x2b55b97a6efb080c % UInt
+function Base.hash(s::BasiSYM_SALTbolic, salt::UInt)
     E = exprtype(s)
     if E === SYM
         hash(nameof(s), salt ⊻ csym)
@@ -237,14 +237,14 @@ function Base.hash(s::BasicSymbolic, salt::UInt)
         !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]
         !iszero(h) && return h
-        hashoffset = isadd(s) ? cadd : csub
+        hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
         h′ = hash(hashoffset, hash(s.coeff, hash(s.dict, salt)))
         s.hash[] = h′
         return h′
     elseif E === DIV
-        return hash(s.num, hash(s.den, salt ⊻ cdiv))
+        return hash(s.num, hash(s.den, salt ⊻ DIV_SALT))
     elseif E === POW
-        hash(s.exp, hash(s.base, salt ⊻ cpow))
+        hash(s.exp, hash(s.base, salt ⊻ POW_SALT))
     elseif E === TERM
         !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]

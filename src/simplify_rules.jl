@@ -35,12 +35,13 @@ let
         @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))
 
         @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
-        @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
 
         @ordered_acrule((~z::_isone  * ~x) => ~x)
         @ordered_acrule((~z::_iszero *  ~x) => ~z)
         @rule(*(~x) => ~x)
     ]
+
+    MUL_DISTRIBUTE = @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
 
 
     CANONICALIZE_POW = [
@@ -126,6 +127,7 @@ let
                      If(x -> !isadd(x) && is_operation(+)(x),
                         Chain(CANONICALIZE_PLUS)),
                      If(is_operation(+), Chain(PLUS_DISTRIBUTE)), # This would be useful even if isadd
+                     If(is_operation(*), MUL_DISTRIBUTE), # Same
                      If(x -> !ismul(x) && is_operation(*)(x),
                         Chain(CANONICALIZE_TIMES)),
                      If(x -> !ispow(x) && is_operation(^)(x),

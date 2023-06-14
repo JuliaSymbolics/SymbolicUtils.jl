@@ -7,14 +7,12 @@ the argument to the predicate satisfies `istree` and `operation(x) == f`
 is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
 
 let
-    PLUS_RULES = [
+    CANONICALIZE_PLUS = [
         @rule(~x::isnotflat(+) => flatten_term(+, ~x))
         @rule(~x::needs_sorting(+) => sort_args(+, ~x))
         @ordered_acrule(~a::is_literal_number + ~b::is_literal_number => ~a + ~b)
 
         @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
-        @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α + ~β, (~~x)...))
-        @acrule(*(~~x, ~α) + *(~~x, ~β) => *(~α + ~β, (~~x)...))
 
         @acrule(~x + *(~β, ~x) => *(1 + ~β, ~x))
         @acrule(*(~α::is_literal_number, ~x) + ~x => *(~α + 1, ~x))
@@ -24,7 +22,12 @@ let
         @rule(+(~x) => ~x)
     ]
 
-    TIMES_RULES = [
+    PLUS_DISTRIBUTE = [
+        @acrule(*(~α, ~~x) + *(~β, ~~x) => *(~α + ~β, (~~x)...))
+        @acrule(*(~~x, ~α) + *(~~x, ~β) => *(~α + ~β, (~~x)...))
+    ]
+
+    CANONICALIZE_TIMES = [
         @rule(~x::isnotflat(*) => flatten_term(*, ~x))
         @rule(~x::needs_sorting(*) => sort_args(*, ~x))
 
@@ -32,20 +35,24 @@ let
         @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))
 
         @acrule((~y)^(~n) * ~y => (~y)^(~n+1))
-        @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
 
         @ordered_acrule((~z::_isone  * ~x) => ~x)
         @ordered_acrule((~z::_iszero *  ~x) => ~z)
         @rule(*(~x) => ~x)
     ]
 
+    MUL_DISTRIBUTE = @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
 
-    POW_RULES = [
+
+    CANONICALIZE_POW = [
         @rule(^(*(~~x), ~y::_isinteger) => *(map(a->pow(a, ~y), ~~x)...))
         @rule((((~x)^(~p::_isinteger))^(~q::_isinteger)) => (~x)^((~p)*(~q)))
         @rule(^(~x, ~z::_iszero) => 1)
         @rule(^(~x, ~z::_isone) => ~x)
         @rule(inv(~x) => 1/(~x))
+    ]
+
+    POW_RULES = [
         @rule(^(~x::_isone, ~z) => 1)
     ]
 
@@ -120,12 +127,16 @@ let
 
     function number_simplifier()
         rule_tree = [If(istree, Chain(ASSORTED_RULES)),
-                     If(is_operation(+),
-                        Chain(PLUS_RULES)),
-                     If(is_operation(*),
-                        Chain(TIMES_RULES)),
-                     If(is_operation(^),
-                        Chain(POW_RULES))] |> RestartedChain
+                     If(x -> !isadd(x) && is_operation(+)(x),
+                        Chain(CANONICALIZE_PLUS)),
+                     If(is_operation(+), Chain(PLUS_DISTRIBUTE)), # This would be useful even if isadd
+                     If(x -> !ismul(x) && is_operation(*)(x),
+                        Chain(CANONICALIZE_TIMES)),
+                     If(is_operation(*), MUL_DISTRIBUTE),
+                     If(x -> !ispow(x) && is_operation(^)(x),
+                        Chain(CANONICALIZE_POW)),
+                     If(is_operation(^), Chain(POW_RULES)),
+                    ] |> RestartedChain
 
         rule_tree
     end

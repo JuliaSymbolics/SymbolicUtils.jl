@@ -229,10 +229,10 @@ const ADD_SALT = 0xaddaddaddaddadda % UInt
 const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
-function Base.hash(s::BasiSYM_SALTbolic, salt::UInt)
+function Base.hash(s::BasicSymbolic, salt::UInt)
     E = exprtype(s)
     if E === SYM
-        hash(nameof(s), salt ⊻ csym)
+        hash(nameof(s), salt ⊻ SYM_SALT)
     elseif E === ADD || E === MUL
         !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]

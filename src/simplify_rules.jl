@@ -50,6 +50,9 @@ let
         @rule(^(~x, ~z::_iszero) => 1)
         @rule(^(~x, ~z::_isone) => ~x)
         @rule(inv(~x) => 1/(~x))
+    ]
+
+    POW_RULES = [
         @rule(^(~x::_isone, ~z) => 1)
     ]
 
@@ -127,11 +130,13 @@ let
                      If(x -> !isadd(x) && is_operation(+)(x),
                         Chain(CANONICALIZE_PLUS)),
                      If(is_operation(+), Chain(PLUS_DISTRIBUTE)), # This would be useful even if isadd
-                     If(is_operation(*), MUL_DISTRIBUTE), # Same
                      If(x -> !ismul(x) && is_operation(*)(x),
                         Chain(CANONICALIZE_TIMES)),
+                     If(is_operation(*), MUL_DISTRIBUTE),
                      If(x -> !ispow(x) && is_operation(^)(x),
-                        Chain(CANONICALIZE_POW))] |> RestartedChain
+                        Chain(CANONICALIZE_POW)),
+                     If(is_operation(^), Chain(POW_RULES)),
+                    ] |> RestartedChain
 
         rule_tree
     end

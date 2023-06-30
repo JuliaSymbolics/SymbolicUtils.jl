@@ -25,8 +25,8 @@ end
     @eqtest simplify(y + conj(y)) == 2 * real(y)
     @eqtest simplify(y - conj(y)) == 2im * imag(y)
     @eqtest simplify(real(y) + imag(y)) == y
-    @eqtest simplify(Term{Real}(x + conj(x), [x])) == 2x
-    @eqtest simplify(Term{Real}(x - conj(x), [x])) == 2x
+    @eqtest simplify(x + conj(x)) == 2x
+    @eqtest simplify(x - conj(x)) == 0
     @eqtest simplify(x - y) == x + -1 * y
     @eqtest simplify(x - sin(y)) == x + -1 * sin(y)
     @eqtest simplify(-sin(x)) == -1 * sin(x)

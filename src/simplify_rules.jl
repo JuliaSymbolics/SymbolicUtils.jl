@@ -69,6 +69,7 @@ let
         @rule(~x + conj(~x) => 2 * real(~x))
         @rule(~x - conj(~x) => 2im * imag(~x))
         @rule(real(~x) + imag(~x) => x)
+        @rule(imag(~x) + real(~x) => x)
         @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
         @rule(ifelse(~x, ~y, ~y) => ~y)
     ]

@@ -43,7 +43,6 @@ let
 
     MUL_DISTRIBUTE = @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
 
-
     CANONICALIZE_POW = [
         @rule(^(*(~~x), ~y::_isinteger) => *(map(a->pow(a, ~y), ~~x)...))
         @rule((((~x)^(~p::_isinteger))^(~q::_isinteger)) => (~x)^((~p)*(~q)))
@@ -90,6 +89,13 @@ let
         @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
         @acrule(cot(~x)^2 +  1 => csc(~x)^2)
         @acrule(csc(~x)^2 + -1 => cot(~x)^2)
+
+        @acrule(cosh(~x)^2 + -1*sinh(~x)^2 => one(~x))
+        @acrule(cosh(~x)^2 + -1            => sinh(~x)^2)
+        @acrule(sinh(~x)^2 +  1            => cosh(~x)^2)
+
+        @acrule(cosh(~x)^2 + sinh(~x)^2 => cosh(2 * ~x))
+        @acrule(cosh(~x) * sinh(~x) => sinh(2 * ~x)/2)
 
         @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y))
         @rule(exp(~x)^(~y) => exp(~x * ~y))

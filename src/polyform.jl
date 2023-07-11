@@ -155,7 +155,7 @@ end
 function PolyForm(x,
         pvar2sym=get_pvar2sym(),
         sym2term=get_sym2term(),
-        vtype=MP.AbstractVariable;
+        vtype=DynamicPolynomials.Variable{ DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder},DynamicPolynomials.Graded{MP.LexOrder}};
         Fs = Union{typeof(+), typeof(*), typeof(^)},
         recurse=false,
         metadata=metadata(x))

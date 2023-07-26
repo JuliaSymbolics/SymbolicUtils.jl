@@ -1,6 +1,6 @@
 module Code
 
-using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra, NaNMath
+using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -97,22 +97,23 @@ Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
 
 const NaNMathFuns = (
-    :sin,
-    :cos,
-    :tan,
-    :asin,
-    :acos,
-    :acosh,
-    :atanh,
-    :log,
-    :log2,
-    :log10,
-    :lgamma,
-    :log1p,
-    :sqrt,
+    sin,
+    cos,
+    tan,
+    asin,
+    acos,
+    acosh,
+    atanh,
+    log,
+    log2,
+    log10,
+    lgamma,
+    log1p,
+    sqrt,
 )
 function function_to_expr(op, O, st)
-    (op isa Function && (name = nameof(op)) in NaNMathFuns) || return nothing
+    op in NaNMathFuns || return nothing
+    name = nameof(op)
     fun = GlobalRef(NaNMath, name)
     args = map(Base.Fix2(toexpr, st), arguments(O))
     expr = Expr(:call, fun)

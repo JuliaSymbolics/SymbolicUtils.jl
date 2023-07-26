@@ -111,12 +111,12 @@ const NaNMathFuns = (
     :log1p,
     :sqrt,
 )
-function function_to_expr(op, args, st)
-    (op isa Function && (name = nameof(op)) in NaNMathFuns) && return nothing
+function function_to_expr(op, O, st)
+    (op isa Function && (name = nameof(op)) in NaNMathFuns) || return nothing
     fun = GlobalRef(NaNMath, name)
     args = map(Base.Fix2(toexpr, st), arguments(O))
     expr = Expr(:call, fun)
-    expr.args = args
+    append!(expr.args, args)
     return expr
 end
 

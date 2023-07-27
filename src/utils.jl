@@ -36,7 +36,7 @@ pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
 # Simplification utilities
 function has_trig_exp(term)
     !istree(term) && return false
-    fns = (sin, cos, tan, cot, sec, csc, exp)
+    fns = (sin, cos, tan, cot, sec, csc, exp, cosh, sinh)
     op = operation(term)
 
     if Base.@nany 7 i->fns[i] === op

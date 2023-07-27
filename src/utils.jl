@@ -39,7 +39,7 @@ function has_trig_exp(term)
     fns = (sin, cos, tan, cot, sec, csc, exp, cosh, sinh)
     op = operation(term)
 
-    if Base.@nany 7 i->fns[i] === op
+    if Base.@nany 9 i->fns[i] === op
         return true
     else
         return any(has_trig_exp, arguments(term))

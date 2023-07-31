@@ -1,4 +1,5 @@
 using Test, SymbolicUtils
+using NaNMath
 using SymbolicUtils.Code
 using SymbolicUtils.Code: LazyState
 using StaticArrays
@@ -84,10 +85,10 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     @test toexpr(SetArray(true, a, [x(t), AtIndex(9, b), c])).head == :macrocall
 
     test_repr(toexpr(LiteralExpr(:(let x=1, y=2
-                                       $(sin(a+b))
+                                       $(NaNMath.sin(a+b))
                                    end))),
               :(let x = 1, y = 2
-                    $(sin)($(+)(a, b))
+                    $(NaNMath.sin)($(+)(a, b))
                 end))
 
     test_repr(toexpr(MakeArray([a,b,a+b], :arr)),

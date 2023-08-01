@@ -112,7 +112,7 @@ const NaNMathFuns = (
     sqrt,
 )
 function function_to_expr(op, O, st)
-    op in NaNMathFuns || return nothing
+    (get(st.rewrites, :nanmath, false) && op in NaNMathFuns) || return nothing
     name = nameof(op)
     fun = GlobalRef(NaNMath, name)
     args = map(Base.Fix2(toexpr, st), arguments(O))

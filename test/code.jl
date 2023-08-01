@@ -8,6 +8,8 @@ using SparseArrays
 using LinearAlgebra
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
+nanmath_st = Code.NameState()
+nanmath_st.rewrites[:nanmath] = true
 
 @testset "Code" begin
     @syms a b c d e p q t x(t) y(t) z(t)
@@ -84,11 +86,18 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
               end)
     @test toexpr(SetArray(true, a, [x(t), AtIndex(9, b), c])).head == :macrocall
 
+    f = GlobalRef(NaNMath, :sin)
     test_repr(toexpr(LiteralExpr(:(let x=1, y=2
-                                       $(NaNMath.sin(a+b))
+                                       $(sin(a+b))
+                                   end)), nanmath_st),
+              :(let x = 1, y = 2
+                    $(f)($(+)(a, b))
+                end))
+    test_repr(toexpr(LiteralExpr(:(let x=1, y=2
+                                       $(sin(a+b))
                                    end))),
               :(let x = 1, y = 2
-                    $(NaNMath.sin)($(+)(a, b))
+                    $(sin)($(+)(a, b))
                 end))
 
     test_repr(toexpr(MakeArray([a,b,a+b], :arr)),
@@ -191,7 +200,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         @test f(1) == 1
         @test f(2) == 2
 
-        f = eval(toexpr(Func([a, b], [], sqrt(a - b))))
+        f = eval(toexpr(Func([a, b], [], sqrt(a - b)), nanmath_st))
         @test isnan(f(0, 10))
         @test f(10, 2) ≈ sqrt(8)
     end

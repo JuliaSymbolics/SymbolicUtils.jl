@@ -100,13 +100,25 @@ end
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
+
+    @eqtest simplify(cosh(x)^2 + 1 - sinh(x)^2) == 2
+    @eqtest simplify(cosh(y)^2 + 1 - sinh(y)^2) == 2
+    @eqtest simplify(-sinh(y)^2 + cosh(y)^2 + 1) == 2
+
+    @eqtest simplify(cosh(x)^2 - 1) == sinh(x)^2
+    @eqtest simplify(sinh(x)^2 + 1) == cosh(x)^2
 end
 
 @testset "Double angle formulas" begin
     @syms r x
+
     @eqtest simplify(r * cos(x / 2)^2 - r * sin(x / 2)^2) == r * cos(x)
     @eqtest simplify(r * sin(x / 2)^2 - r * cos(x / 2)^2) == -r * cos(x)
     @eqtest simplify(2cos(x) * sin(x)) == sin(2x)
+
+    @eqtest simplify(r * cosh(x / 2)^2 + r * sinh(x / 2)^2) == r * cosh(x)
+    @eqtest simplify(r * sinh(x / 2)^2 + r * cosh(x / 2)^2) == r * cosh(x)
+    @eqtest simplify(2cosh(x) * sinh(x)) == sinh(2x)
 end
 
 @testset "Exponentials" begin

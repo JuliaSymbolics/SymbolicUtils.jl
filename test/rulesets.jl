@@ -54,6 +54,18 @@ end
     @test simplify(Term(zero, [x + 2])) == 0
 end
 
+@testset "LiteralReal" begin
+    @syms x1::LiteralReal x2::LiteralReal
+    s = cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2
+    @eqtest s == cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2
+
+    # Prevents automatic simplification:
+    @eqtest s != cos(3.2(x1^1)) - 4.6x2
+
+    # However, manual simplification should still work:
+    @eqtest simplify(s) == simplify(cos(3.2x1) - 4.6x2)
+end
+
 @testset "boolean" begin
     @syms a::Real b c
 

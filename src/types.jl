@@ -189,6 +189,15 @@ Base.isequal(::Symbolic, x) = false
 Base.isequal(x, ::Symbolic) = false
 Base.isequal(::Symbolic, ::Symbolic) = false
 coeff_isequal(a, b) = isequal(a, b) || ((a isa AbstractFloat || b isa AbstractFloat) && (a==b))
+function _allarequal(xs, ys)::Bool
+    N = length(xs)
+    length(ys) == N || return false
+    for n = 1:N
+        isequal(xs[n], ys[n]) || return false
+    end
+    return true
+end
+
 function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     a === b && return true
 
@@ -196,7 +205,9 @@ function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     E === exprtype(b) || return false
 
     T === S || return false
-
+    return _isequal(a, b, E)::Bool
+end
+function _isequal(a, b, E)
     if E === SYM
         nameof(a) === nameof(b)
     elseif E === ADD || E === MUL
@@ -208,9 +219,7 @@ function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     elseif E === TERM
         a1 = arguments(a)
         a2 = arguments(b)
-        isequal(operation(a), operation(b)) &&
-            length(a1) == length(a2) &&
-            all(isequal(l, r) for (l, r) in zip(a1, a2))
+        isequal(operation(a), operation(b)) && _allarequal(a1, a2)
     else
         error_on_type()
     end
@@ -223,22 +232,27 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymboli
 
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
-function Base.hash(s::BasicSymbolic, salt::UInt)
+const SYM_SALT = 0x4de7d7c66d41da43 % UInt
+const ADD_SALT = 0xaddaddaddaddadda % UInt
+const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
+const DIV_SALT = 0x334b218e73bbba53 % UInt
+const POW_SALT = 0x2b55b97a6efb080c % UInt
+function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
     E = exprtype(s)
     if E === SYM
-        hash(nameof(s), salt ⊻ 0x4de7d7c66d41da43)
+        hash(nameof(s), salt ⊻ SYM_SALT)
     elseif E === ADD || E === MUL
-        !iszero(salt) && return hash(hash(s, zero(UInt64)), salt)
+        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]
         !iszero(h) && return h
-        hashoffset = isadd(s) ? 0xaddaddaddaddadda : 0xaaaaaaaaaaaaaaaa
-        h′= hash(hashoffset, hash(s.coeff, hash(s.dict, salt)))
+        hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
+        h′ = hash(hashoffset, hash(s.coeff, hash(s.dict, salt)))
         s.hash[] = h′
         return h′
     elseif E === DIV
-        return hash(s.num, hash(s.den, salt ⊻ 0x334b218e73bbba53))
+        return hash(s.num, hash(s.den, salt ⊻ DIV_SALT))
     elseif E === POW
-        hash(s.exp, hash(s.base, salt ⊻ 0x2b55b97a6efb080c))
+        hash(s.exp, hash(s.base, salt ⊻ POW_SALT))
     elseif E === TERM
         !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]
@@ -532,7 +546,9 @@ function basic_similarterm(t, f, args, stype; metadata=nothing)
     if T === nothing
         T = _promote_symtype(f, args)
     end
-    if stype <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
+    if T <: LiteralReal
+        Term{T}(f, args, metadata=metadata)
+    elseif stype <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
         res = f(args...)
         if res isa Symbolic
             @set! res.metadata = metadata
@@ -778,8 +794,11 @@ end
 
 function show_call(io, f, args)
     fname = istree(f) ? Symbol(repr(f)) : nameof(f)
-    binary = Base.isbinaryoperator(fname)
-    if binary
+    len_args = length(args)
+    if Base.isunaryoperator(fname) && len_args == 1
+        print(io, "$fname")
+        print_arg(io, first(args), paren=true)
+    elseif Base.isbinaryoperator(fname) && len_args > 1
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")
             print_arg(io, t, paren=true)
@@ -806,8 +825,9 @@ function show_term(io::IO, t)
 
     f = operation(t)
     args = arguments(t)
-
-    if f === (+)
+    if symtype(t) <: LiteralReal
+        show_call(io, f, args)
+    elseif f === (+)
         show_add(io, args)
     elseif f === (*)
         show_mul(io, args)

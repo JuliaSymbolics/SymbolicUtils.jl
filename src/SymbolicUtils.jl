@@ -41,8 +41,7 @@ include("equality-saturation.jl")
 include("rewriters.jl")
 
 # Convert to an efficient multi-variate polynomial representation
-import MultivariatePolynomials
-const MP = MultivariatePolynomials
+import MultivariatePolynomials as MP
 import DynamicPolynomials
 export expand
 include("polyform.jl")

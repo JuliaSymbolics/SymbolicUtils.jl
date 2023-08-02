@@ -1,3 +1,4 @@
+import NaNMath
 import SpecialFunctions: gamma, loggamma, erf, erfc, erfcinv, erfi, erfcx,
                          dawson, digamma, trigamma, invdigamma, polygamma,
                          airyai, airyaiprime, airybi, airybiprime, besselj0,
@@ -12,9 +13,12 @@ const monadic = [deg2rad, rad2deg, transpose, asind, log1p, acsch,
                  atand, sec, acscd, cot, exp2, expm1, atanh, gamma,
                  loggamma, erf, erfc, erfcinv, erfi, erfcx, dawson, digamma,
                  trigamma, invdigamma, polygamma, airyai, airyaiprime, airybi,
-                 airybiprime, besselj0, besselj1, bessely0, bessely1, isfinite]
+                 airybiprime, besselj0, besselj1, bessely0, bessely1, isfinite,
+                 NaNMath.sin, NaNMath.cos, NaNMath.tan, NaNMath.asin, NaNMath.acos,
+                 NaNMath.acosh, NaNMath.atanh, NaNMath.log, NaNMath.log2,
+                 NaNMath.log10, NaNMath.lgamma, NaNMath.log1p, NaNMath.sqrt]
 
-const diadic = [max, min, hypot, atan, mod, rem, copysign,
+const diadic = [max, min, hypot, atan, NaNMath.atanh, mod, rem, copysign,
                 besselj, bessely, besseli, besselk, hankelh1, hankelh2,
                 polygamma, beta, logbeta]
 const previously_declared_for = Set([])
@@ -136,6 +140,9 @@ end
 function Base.literal_pow(::typeof(^), x::Symbolic, ::Val{p}) where {p}
     T = symtype(x)
     T <: Number ? Base.:^(x, p) : error_f_symbolic(rem2pi, T)
+end
+function promote_symtype(::typeof(Base.literal_pow), _, ::Type{T}, ::Type{Val{S}}) where{T<:Number,S}
+    return promote_symtype(^, T, typeof(S))
 end
 
 promote_symtype(::Any, T) = promote_type(T, Real)

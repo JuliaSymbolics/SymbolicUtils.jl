@@ -1,6 +1,5 @@
 export PolyForm, simplify_fractions, quick_cancel, flatten_fractions
 using Bijections
-using DynamicPolynomials: PolyVar
 
 """
     PolyForm{T} <: Symbolic
@@ -44,7 +43,7 @@ end
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
 
-# We use the same PVAR2SYM bijection to maintain the PolyVar <-> Sym mapping,
+# We use the same PVAR2SYM bijection to maintain the MP.AbstractVariable <-> Sym mapping,
 # When all PolyForms go out of scope in a session, we allow it to free up memory and
 # start over if necessary
 const PVAR2SYM = Ref(WeakRef())
@@ -156,7 +155,7 @@ end
 function PolyForm(x,
         pvar2sym=get_pvar2sym(),
         sym2term=get_sym2term(),
-        vtype=DynamicPolynomials.PolyVar{true};
+        vtype=DynamicPolynomials.Variable{ DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder},DynamicPolynomials.Graded{MP.LexOrder}};
         Fs = Union{typeof(+), typeof(*), typeof(^)},
         recurse=false,
         metadata=metadata(x))

@@ -31,14 +31,16 @@ function AbstractTrees.children(x::Symbolic)
 end
 
 """
-    inspect([io::IO=stdout], expr; hint=true)
+    inspect([io::IO=stdout], expr; hint=true, metadata=false)
 
 Inspect an expression tree `expr`. Uses AbstractTrees to print out an expression.
 
-BasicSymbolic expressions will print the Unityper type (ADD, MUL, DIV, POW, SYM, TERM) and the relevant internals as the head, and the children in the subsequent lines as accessed by `arguments`. Other types will get printed as subtrees.
+BasicSymbolic expressions will print the Unityper type (ADD, MUL, DIV, POW, SYM, TERM) and the relevant internals as the head, and the children in the subsequent lines as accessed by `arguments`. Other types will get printed as subtrees. Set `metadata=true` to print any metadata carried by the nodes.
 
 Line numbers will be shown, use `pluck(expr, line_number)` to get the sub expression or leafnode starting at line_number.
 """
+function inspect end
+
 function inspect(io::IO, x::Symbolic;
         hint=true,
         metadata=inspect_metadata[])

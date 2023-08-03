@@ -9,7 +9,7 @@
  9 │     │  │  └─ SYM(x)
 10 │     │  └─ MUL(scalar = 3, powers = (y => 1,))
 11 │     │     ├─ 3
-12 │     │     └─ SYM(y)
+12 │     │     └─ SYM(y) metadata=(Integer => 42,)
 13 │     └─ 2
 14 └─ ADD(scalar = 0, coeffs = (z => 1, x => 2))
 15    ├─ SYM(z)

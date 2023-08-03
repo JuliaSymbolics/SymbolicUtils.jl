@@ -16,5 +16,3 @@
 16    └─ MUL(scalar = 2, powers = (x => 1,))
 17       ├─ 2
 18       └─ SYM(x)
-
-Hint: call SymbolicUtils.pluck(expr, line_number) to get the subexpression starting at line_number

@@ -1,18 +1,29 @@
 import AbstractTrees
 
+const inspect_metadata = Ref{Bool}(false)
 function AbstractTrees.nodevalue(x::Symbolic)
     istree(x) ? operation(x) : x
 end
+
 function AbstractTrees.nodevalue(x::BasicSymbolic)
-    if !istree(x)
-        exprtype(x) => x
+    str = if !istree(x)
+        string(exprtype(x), "(", x, ")")
     elseif isadd(x)
-        exprtype(x) => (scalar=x.coeff, coeffs=Tuple(k=>v for (k,v) in x.dict))
+        string(exprtype(x), 
+            (scalar=x.coeff, coeffs=Tuple(k=>v for (k,v) in x.dict)))
     elseif ismul(x)
-        exprtype(x) => (scalar=x.coeff, powers=Tuple(k=>v for (k,v) in x.dict))
+        string(exprtype(x),
+            (scalar=x.coeff, powers=Tuple(k=>v for (k,v) in x.dict)))
+    elseif isdiv(x) || ispow(x)
+        string(exprtype(x))
     else
-        exprtype(x) => operation(x)
+        string(exprtype(x),"{", operation(x), "}")
     end
+
+    if inspect_metadata[] && !isnothing(metadata(x))
+        str *= string(" metadata=", Tuple(k=>v for (k, v) in metadata(x)))
+    end
+    Text(str)
 end
 
 function AbstractTrees.children(x::Symbolic)
@@ -28,15 +39,23 @@ BasicSymbolic expressions will print the Unityper type (ADD, MUL, DIV, POW, SYM,
 
 Line numbers will be shown, use `pluck(expr, line_number)` to get the sub expression or leafnode starting at line_number.
 """
-function inspect(io::IO, x::Symbolic; hint=true)
+function inspect(io::IO, x::Symbolic;
+        hint=true,
+        metadata=inspect_metadata[])
+
+    prev_state = inspect_metadata[]
+    inspect_metadata[] = metadata
     lines = readlines(IOBuffer(sprint(io->AbstractTrees.print_tree(io, x))))
+    inspect_metadata[] = prev_state
     digits = ceil(Int, log10(length(lines)))
     line_numbers = lpad.(string.(1:length(lines)), digits)
     print(io, join(string.(line_numbers, " ", lines), "\n"))
     hint && print(io, "\n\nHint: call SymbolicUtils.pluck(expr, line_number) to get the subexpression starting at line_number")
 end
 
-inspect(x::Symbolic; hint) = inspect(stdout, x; hint)
+function inspect(x::Symbolic; hint=true, metadata=inspect_metadata[])
+    inspect(stdout, x; hint=hint, metadata=metadata)
+end
 
 """
     pluck(expr, n)

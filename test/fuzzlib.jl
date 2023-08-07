@@ -142,7 +142,8 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     """
     f = include_string(Main, unsimplifiedstr)
     g = include_string(Main, simplifiedstr)
-    @show g
+    @show unsimplifiedstr
+    @show simplifiedstr
 
     for i=1:ntrials
         args = [spec.input(i) for i in inputs]

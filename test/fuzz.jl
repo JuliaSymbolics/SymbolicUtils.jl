@@ -2,7 +2,7 @@ include("fuzzlib.jl")
 
 using Random: seed!
 
-seed!(6175)
+seed!(6174)
     @time @testset "expand fuzz" begin
         for i=1:500
             i % 100 == 0 && @info "expand fuzz" iter=i

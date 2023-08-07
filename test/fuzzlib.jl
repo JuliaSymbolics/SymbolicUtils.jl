@@ -93,6 +93,8 @@ function gen_rand_expr(inputs;
                           depth=depth+1,
                           min_depth=min_depth,
                           max_depth=max_depth) for i in 1:arity]
+    @show f
+    @show args
     try
         return f(args...)
     catch err
@@ -121,6 +123,7 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
     expr = gen_rand_expr(inputs; spec=spec, kwargs...)
     inputs = collect(inputs)
+    @show expr
     code = try
         SymbolicUtils.Code.toexpr(expr)
     catch err

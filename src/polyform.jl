@@ -146,7 +146,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end
-        pvar = MP.similarvariable(vtype, nameof(x))
+        pvar = MP.similar_variable(vtype, nameof(x))
         pvar2sym[pvar] = x
         return pvar
     end

@@ -2,6 +2,7 @@ using Documenter
 using Pkg
 using Test
 using SymbolicUtils
+using ReferenceTests
 import IfElse: ifelse
 
 DocMeta.setdocmeta!(

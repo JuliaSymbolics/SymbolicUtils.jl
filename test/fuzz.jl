@@ -3,7 +3,6 @@ include("fuzzlib.jl")
 using Random: seed!
 
 seed!(6174)
-@testset "Fuzz test" begin
     @time @testset "expand fuzz" begin
         for i=1:500
             i % 100 == 0 && @info "expand fuzz" iter=i
@@ -45,4 +44,3 @@ seed!(6174)
             fuzz_addmulpow(4)
         end
     end
-end

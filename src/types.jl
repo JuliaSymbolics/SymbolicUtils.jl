@@ -560,54 +560,6 @@ function basic_similarterm(t, f, args, stype; metadata=nothing)
 end
 
 ###
-### Tree print
-###
-
-import AbstractTrees
-
-struct TreePrint
-    op
-    x
-end
-
-function AbstractTrees.children(x::BasicSymbolic)
-    if isterm(x) || ispow(x)
-        return arguments(x)
-    elseif isadd(x) || ismul(x)
-        children = Any[x.coeff]
-        for (key, coeff) in pairs(x.dict)
-            if coeff == 1
-                push!(children, key)
-            else
-                push!(children, TreePrint(isadd(x) ? (:*) : (:^), (key, coeff)))
-            end
-        end
-        return children
-    end
-end
-
-AbstractTrees.children(x::TreePrint) = [x.x[1], x.x[2]]
-
-print_tree(x; show_type=false, maxdepth=Inf, kw...) = print_tree(stdout, x; show_type=show_type, maxdepth=maxdepth, kw...)
-
-function print_tree(_io::IO, x::BasicSymbolic; show_type=false, kw...)
-    if isterm(x) || isadd(x) || ismul(x) || ispow(x) || isdiv(x)
-        AbstractTrees.print_tree(_io, x; withinds=true, kw...) do io, y, inds
-            if istree(y)
-                print(io, operation(y))
-            elseif y isa TreePrint
-                print(io, "(", y.op, ")")
-            else
-                print(io, y)
-            end
-            if !(y isa TreePrint) && show_type
-                print(io, " [", typeof(y), "]")
-            end
-        end
-    end
-end
-
-###
 ### Metadata
 ###
 metadata(s::Symbolic) = s.metadata

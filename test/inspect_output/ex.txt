@@ -1,0 +1,20 @@
+ 1 DIV
+ 2 ├─ MUL(scalar = 1, powers = (z => 1, 1 + 2x + 3y => 2))
+ 3 │  ├─ SYM(z)
+ 4 │  └─ POW
+ 5 │     ├─ ADD(scalar = 1, coeffs = (y => 3, x => 2))
+ 6 │     │  ├─ 1
+ 7 │     │  ├─ MUL(scalar = 2, powers = (x => 1,))
+ 8 │     │  │  ├─ 2
+ 9 │     │  │  └─ SYM(x)
+10 │     │  └─ MUL(scalar = 3, powers = (y => 1,))
+11 │     │     ├─ 3
+12 │     │     └─ SYM(y)
+13 │     └─ 2
+14 └─ ADD(scalar = 0, coeffs = (z => 1, x => 2))
+15    ├─ SYM(z)
+16    └─ MUL(scalar = 2, powers = (x => 1,))
+17       ├─ 2
+18       └─ SYM(x)
+
+Hint: call SymbolicUtils.pluck(expr, line_number) to get the subexpression starting at line_number

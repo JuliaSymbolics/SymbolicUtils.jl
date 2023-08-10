@@ -62,18 +62,24 @@ If(f, x) = IfElse(f, x, Empty())
 
 struct Chain
     rws
+    stop_on_match::Bool
 end
+Chain(rws) = Chain(rws, false)
 
 function (rw::Chain)(x)
     for f in rw.rws
         y = @timer cached_repr(f) f(x)
+        if rw.stop_on_match && !isnothing(y) && !isequal(y, x)
+            return y
+        end
+
         if y !== nothing
             x = y
         end
     end
     return x
-end
 
+end
 instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
 
 struct RestartedChain{Cs}

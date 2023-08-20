@@ -183,6 +183,8 @@ nanmath_st.rewrites[:nanmath] = true
               :(SparseVector(10, $(spvec.nzind), [a])))
     test_repr(toexpr(MakeTuple((a, b, a+b))),
               :((a,b,$(+)(a,b))))
+    test_repr(toexpr((a, b, a+b)),
+              :((a,b,$(+)(a,b))))
 
     @test SpawnFetch{Multithreaded}([()->1,()->2],vcat)|>toexpr|>eval == [1,2]
     @test @elapsed(SpawnFetch{Multithreaded}([:(()->sleep(2)),

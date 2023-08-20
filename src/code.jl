@@ -188,10 +188,6 @@ function toexpr(O, st)
     end
 end
 
-function toexpr(O::Tuple, st)
-    :(($(toexpr.(O, (st,))...),))
-end
-
 # Call elements of vector arguments by their name.
 @matchable struct DestructuredArgs
     elems

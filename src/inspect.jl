@@ -55,9 +55,11 @@ function inspect(io::IO, x::Symbolic;
     hint && print(io, "\n\nHint: call SymbolicUtils.pluck(expr, line_number) to get the subexpression starting at line_number")
 end
 
-function inspect(x::Symbolic; hint=true, metadata=inspect_metadata[])
+function inspect(x; hint=true, metadata=inspect_metadata[])
     inspect(stdout, x; hint=hint, metadata=metadata)
 end
+
+inspect(io::IO, x; kw...) = println(io, "Not Symbolic: $x")
 
 """
     pluck(expr, n)

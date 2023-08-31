@@ -592,6 +592,8 @@ _issafecanon(::typeof(+), s) = !istree(s) || !(operation(s) in (+,*))
 _issafecanon(::typeof(^), s) = !istree(s) || !(operation(s) in (*, ^))
 
 issafecanon(f, ss...) = all(x->issafecanon(f, x), ss)
+nometa(s) = isnothing(metadata(s))
+nometa(ss...) = all(nometa, ss)
 
 function getmetadata(s::Symbolic, ctx)
     md = metadata(s)
@@ -1034,6 +1036,7 @@ sub_t(a) = promote_symtype(-, symtype(a))
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
     !issafecanon(+, a,b) && return term(+, a, b) # Don't flatten if args have metadata
+    !nometa(a,b) && term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
         return Add(add_t(a,b),
                    a.coeff + b.coeff,
@@ -1050,6 +1053,7 @@ end
 
 function +(a::Number, b::SN)
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
+    !nometa(b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
     if isadd(b)
         Add(add_t(a,b), a + b.coeff, b.dict)
@@ -1064,12 +1068,14 @@ end
 
 function -(a::SN)
     !issafecanon(*, a) && return term(-, a)
+    !nometa(b) && return term(-, a)
     isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
     Add(sub_t(a), makeadd(-1, 0, a)...)
 end
 
 function -(a::SN, b::SN)
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
+    !nometa(a, b) && return term(-, a, b)
     isadd(a) && isadd(b) ? Add(sub_t(a,b),
                                a.coeff - b.coeff,
                                _merge(-, a.dict,
@@ -1089,6 +1095,7 @@ mul_t(a) = promote_symtype(*, symtype(a))
 function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
     !issafecanon(*, a, b) && return term(*, a, b)
+    !nometa(a, b) && return term(*, a, b)
     if isdiv(a) && isdiv(b)
         Div(a.num * b.num, a.den * b.den)
     elseif isdiv(a)
@@ -1116,6 +1123,7 @@ end
 
 function *(a::Number, b::SN)
     !issafecanon(*, b) && return term(*, a, b)
+    !nometa(b) && return term(*, a, b)
     if iszero(a)
         a
     elseif isone(a)
@@ -1156,6 +1164,7 @@ end
 
 function ^(a::SN, b)
     !issafecanon(^, a,b) && return Pow(a, b)
+    !nometa(a,b) && return Pow(a, b)
     if b isa Number && iszero(b)
         # fast path
         1

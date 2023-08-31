@@ -576,6 +576,9 @@ function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
+nometa(s) = isnothing(metadata(s))
+nometa(ss...) = all(nometa, ss)
+
 function getmetadata(s::Symbolic, ctx)
     md = metadata(s)
     if md isa AbstractDict
@@ -1016,6 +1019,7 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
+    !nometa(a,b) && term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
         return Add(add_t(a,b),
                    a.coeff + b.coeff,
@@ -1031,6 +1035,7 @@ function +(a::SN, b::SN)
 end
 
 function +(a::Number, b::SN)
+    !nometa(b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
     if isadd(b)
         Add(add_t(a,b), a + b.coeff, b.dict)
@@ -1044,11 +1049,13 @@ end
 +(a::SN) = a
 
 function -(a::SN)
+    !nometa(b) && return term(-, a)
     isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
     Add(sub_t(a), makeadd(-1, 0, a)...)
 end
 
 function -(a::SN, b::SN)
+    !nometa(a, b) && return term(-, a, b)
     isadd(a) && isadd(b) ? Add(sub_t(a,b),
                                a.coeff - b.coeff,
                                _merge(-, a.dict,
@@ -1067,6 +1074,7 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
+    !nometa(a, b) && return term(*, a, b)
     if isdiv(a) && isdiv(b)
         Div(a.num * b.num, a.den * b.den)
     elseif isdiv(a)
@@ -1093,6 +1101,7 @@ function *(a::SN, b::SN)
 end
 
 function *(a::Number, b::SN)
+    !nometa(b) && return term(*, a, b)
     if iszero(a)
         a
     elseif isone(a)
@@ -1132,6 +1141,7 @@ end
 ###
 
 function ^(a::SN, b)
+    !nometa(a,b) && return Pow(a, b)
     if b isa Number && iszero(b)
         # fast path
         1

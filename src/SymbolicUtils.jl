@@ -27,6 +27,8 @@ include("methods.jl")
 # LinkedList, simplification utilities
 include("utils.jl")
 
+# Tree inspection
+include("inspect.jl")
 export Rewriters
 
 # A library for composing together expr -> expr functions

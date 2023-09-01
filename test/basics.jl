@@ -188,6 +188,18 @@ end
     @test repr((-1)^a) == "(-1)^a"
 end
 
+@testset "inspect" begin
+    @syms x y z
+    y = SymbolicUtils.setmetadata(y, Integer, 42) # Set some metadata
+    ex = z*(2x + 3y + 1)^2/(z+2x)
+    @test_reference "inspect_output/ex.txt" sprint(io->SymbolicUtils.inspect(io, ex))
+    @test_reference "inspect_output/ex-md.txt" sprint(io->SymbolicUtils.inspect(io, ex, metadata=true))
+    @test_reference "inspect_output/ex-nohint.txt" sprint(io->SymbolicUtils.inspect(io, ex, hint=false))
+    @test SymbolicUtils.pluck(ex, 8) == 2
+    @test_reference "inspect_output/sub10.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 10)))
+    @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
+end
+
 @testset "similarterm" begin
     @syms a b c
     @test isequal(SymbolicUtils.similarterm((b + c), +, [a,  (b+c)]).dict, Dict(a=>1,b=>1,c=>1))

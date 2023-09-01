@@ -1,0 +1,5 @@
+1 MUL(scalar = 3, powers = (y => 1,))
+2 ├─ 3
+3 └─ SYM(y)
+
+Hint: call SymbolicUtils.pluck(expr, line_number) to get the subexpression starting at line_number

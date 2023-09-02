@@ -1013,7 +1013,7 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
-    !nometa(a,b) && term(+, a, b) # Don't flatten if args have metadata
+    !nometa(a,b) && return term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
         return Add(add_t(a,b),
                    a.coeff + b.coeff,

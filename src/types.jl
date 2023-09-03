@@ -1065,7 +1065,7 @@ function -(a::SN)
 end
 
 function -(a::SN, b::SN)
-    (!issafecanon(+, a) || issafecanon(*, b)) && return term(-, a, b)
+    (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
     isadd(a) && isadd(b) ? Add(sub_t(a,b),
                                a.coeff - b.coeff,
                                _merge(-, a.dict,

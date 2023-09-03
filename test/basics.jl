@@ -188,6 +188,14 @@ end
     @test repr((-1)^a) == "(-1)^a"
 end
 
+@testset "polynomial printing" begin
+    @syms a b c
+    @test repr(b+a) == "a + b"
+    @test repr(b-a) == "-a + b"
+    @test repr(2a+1+3a^2) == "1 + 2a + 3(a^2)"
+    @test repr(2a+1+3a^2+2b+3b^2+4a*b) == "1 + 2a + 2b + 4a*b + 3(a^2) + 3(b^2)"
+end
+
 @testset "inspect" begin
     @syms x y z
     y = SymbolicUtils.setmetadata(y, Integer, 42) # Set some metadata

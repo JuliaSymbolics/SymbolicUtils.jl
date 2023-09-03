@@ -684,22 +684,28 @@ function get_degrees(expr)
                                   (x,y)->(x...,y...,), args))
         elseif operation(expr) == (+)
             ds = map(get_degrees, args)
-            _, idx = findmax(x->sum(last.(x)), ds)
+            _, idx = findmax(x->sum(last.(x), init=0), ds)
             return ds[idx]
         else
             return (Symbol("zzzzzzz", objectid(expr)) => typemax(Int),)
         end
     else
-        return (Symbol("") => 0,)
+        return ()
     end
 end
 
 function lt_deglex(degs1, degs2)
-    d1 = sum(last, degs1)
-    d2 = sum(last, degs2)
+    d1 = sum(last, degs1, init=0)
+    d2 = sum(last, degs2, init=0)
     d1 != d2 ? d1 < d2 : degs1 < degs2
 end
 
+"""
+Decides whether printing of polynomial expressions should sort
+the arguments by degree-lexical order.
+
+Set `SymbolicUtils.sorted_pretty_print[] = false` to disable.
+"""
 const sorted_pretty_print = Ref{Bool}(true)
 
 function show_add(io, args)

@@ -668,20 +668,56 @@ function remove_minus(t)
     Any[-args[1], args[2:end]...]
 end
 
+# find symbols and their corresponding degrees
+function get_degrees(expr)
+    if issym(expr)
+        (nameof(expr) => 1,)
+    elseif istree(expr)
+        op = operation(expr)
+        args = arguments(expr)
+        if operation(expr) == (^) && args[2] isa Number
+            return map(get_degrees(args[1])) do (base, pow)
+                (base => pow * args[2])
+            end
+        elseif operation(expr) == (*)
+            return sort(mapreduce(get_degrees,
+                                  (x,y)->(x...,y...,), args))
+        elseif operation(expr) == (+)
+            ds = map(get_degrees, args)
+            _, idx = findmax(x->sum(last.(x)), ds)
+            return ds[idx]
+        else
+            return (Symbol("zzzzzzzzzzzzzzzz") => Inf,)
+        end
+    else
+        return (Symbol("") => 0,)
+    end
+end
+
+function lt_deglex(degs1, degs2)
+    d1 = sum(last, degs1)
+    d2 = sum(last, degs2)
+    d1 != d2 ? d1 < d2 : degs1 < degs2
+end
+
+const sorted_pretty_print = Ref{Bool}(true)
+
 function show_add(io, args)
-    negs = filter(isnegative, args)
-    nnegs = filter(!isnegative, args)
-    for (i, t) in enumerate(nnegs)
-        i != 1 && print(io, " + ")
-        print_arg(io, +,  t)
+    if sorted_pretty_print[]
+        args = args[sortperm(map(get_degrees, args), lt=lt_deglex)]
     end
 
-    for (i, t) in enumerate(negs)
-        if i==1 && isempty(nnegs)
-            print_arg(io, -, t)
-        else
-            print(io, " - ")
+    for (i, t) in enumerate(args)
+        neg = isnegative(t)
+        if i != 1
+            print(io, neg ? " - " : " + ")
+        elseif isnegative(t)
+            print(io, "-")
+        end
+        if neg
             show_mul(io, remove_minus(t))
+        else
+            print_arg(io, +, t)
         end
     end
 end

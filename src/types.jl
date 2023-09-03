@@ -687,7 +687,7 @@ function get_degrees(expr)
             _, idx = findmax(x->sum(last.(x)), ds)
             return ds[idx]
         else
-            return (Symbol("zzzzzzzzzzzzzzzz") => Inf,)
+            return (Symbol("zzzzzzz", objectid(expr)) => typemax(Int),)
         end
     else
         return (Symbol("") => 0,)

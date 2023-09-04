@@ -113,13 +113,20 @@ end
 function arguments(x::BasicSymbolic)
     args = unsorted_arguments(x)
     @compactified x::BasicSymbolic begin
-        Add => @goto ADDMUL
-        Mul => @goto ADDMUL
+        Add => @goto ADD
+        Mul => @goto MUL
         _   => return args
     end
-    @label ADDMUL
+    @label MUL
     if !x.issorted[]
-        sort!(args, lt = <ₑ)
+        sort!(args, by=get_degrees)
+        x.issorted[] = true
+    end
+    return args
+
+    @label ADD
+    if !x.issorted[]
+        sort!(args, lt = monomial_lt, by=get_degrees)
         x.issorted[] = true
     end
     return args
@@ -680,39 +687,38 @@ function get_degrees(expr)
                 (base => pow * args[2])
             end
         elseif operation(expr) == (*)
-            return sort(mapreduce(get_degrees,
-                                  (x,y)->(x...,y...,), args))
+            return mapreduce(get_degrees,
+                             (x,y)->(x...,y...,), args)
         elseif operation(expr) == (+)
             ds = map(get_degrees, args)
             _, idx = findmax(x->sum(last.(x), init=0), ds)
             return ds[idx]
         else
-            return (Symbol("zzzzzzz", objectid(expr)) => typemax(Int),)
+            return (Symbol("zzzzzzz", hash(expr)) => 1,)
         end
     else
         return ()
     end
 end
 
-function lt_deglex(degs1, degs2)
+function monomial_lt(degs1, degs2)
     d1 = sum(last, degs1, init=0)
     d2 = sum(last, degs2, init=0)
-    d1 != d2 ? d1 < d2 : degs1 < degs2
+    d1 != d2 ? d1 < d2 : lexlt(degs1, degs2)
 end
 
-"""
-Decides whether printing of polynomial expressions should sort
-the arguments by degree-lexical order.
-
-Set `SymbolicUtils.sorted_pretty_print[] = false` to disable.
-"""
-const sorted_pretty_print = Ref{Bool}(true)
+function lexlt(degs1, degs2)
+    for (a, b) in zip(degs1, degs2)
+        if a[1] == b[1] && a[2] != b[2]
+            return a[2] > b[2]
+        elseif a[1] != b[1]
+            return a < b
+        end
+    end
+    return false # they are equal
+end
 
 function show_add(io, args)
-    if sorted_pretty_print[]
-        args = args[sortperm(map(get_degrees, args), lt=lt_deglex)]
-    end
-
     for (i, t) in enumerate(args)
         neg = isnegative(t)
         if i != 1

@@ -8,6 +8,13 @@
 <ₑ(a::Symbolic, b::Number) = false
 <ₑ(a::Number,   b::Symbolic) = true
 
+<ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
+
+<ₑ(a::Type, b::Type) = nameof(a) <ₑ nameof(b)
+<ₑ(a::T, b::S) where{T,S} = T<S
+<ₑ(a::T, b::T) where{T} = a < b
+
+
 ###### A variation on degree lexicographic order ########
 # find symbols and their corresponding degrees
 function get_degrees(expr)
@@ -53,13 +60,25 @@ function lexlt(degs1, degs2)
 end
 
 _arglen(a) = istree(a) ? length(unsorted_arguments(a)) : 0
+
+function <ₑ(a::Tuple, b::Tuple)
+    for (x, y) in zip(a, b)
+        if x <ₑ y
+            return true
+        elseif y <ₑ x
+            return false
+        end
+    end
+    return length(a) < length(b)
+end
+
 function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
     da, db = get_degrees(a), get_degrees(b)
     fw = monomial_lt(da, db)
     bw = monomial_lt(db, da)
     if fw === bw && !isequal(a, b)
         if _arglen(a) == _arglen(b)
-            return hash(a) < hash(b)
+            return (operation(a), arguments(a)...,) <ₑ (operation(b), arguments(b)...,)
         else
             return _arglen(a) < _arglen(b)
         end

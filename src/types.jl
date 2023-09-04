@@ -113,13 +113,20 @@ end
 function arguments(x::BasicSymbolic)
     args = unsorted_arguments(x)
     @compactified x::BasicSymbolic begin
-        Add => @goto ADDMUL
-        Mul => @goto ADDMUL
+        Add => @goto ADD
+        Mul => @goto MUL
         _   => return args
     end
-    @label ADDMUL
+    @label MUL
     if !x.issorted[]
-        sort!(args, lt = <ₑ)
+        sort!(args, by=get_degrees)
+        x.issorted[] = true
+    end
+    return args
+
+    @label ADD
+    if !x.issorted[]
+        sort!(args, lt = monomial_lt, by=get_degrees)
         x.issorted[] = true
     end
     return args
@@ -668,20 +675,19 @@ function remove_minus(t)
     Any[-args[1], args[2:end]...]
 end
 
-function show_add(io, args)
-    negs = filter(isnegative, args)
-    nnegs = filter(!isnegative, args)
-    for (i, t) in enumerate(nnegs)
-        i != 1 && print(io, " + ")
-        print_arg(io, +,  t)
-    end
 
-    for (i, t) in enumerate(negs)
-        if i==1 && isempty(nnegs)
-            print_arg(io, -, t)
-        else
-            print(io, " - ")
+function show_add(io, args)
+    for (i, t) in enumerate(args)
+        neg = isnegative(t)
+        if i != 1
+            print(io, neg ? " - " : " + ")
+        elseif isnegative(t)
+            print(io, "-")
+        end
+        if neg
             show_mul(io, remove_minus(t))
+        else
+            print_arg(io, +, t)
         end
     end
 end

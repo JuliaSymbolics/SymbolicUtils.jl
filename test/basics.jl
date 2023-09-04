@@ -188,6 +188,20 @@ end
     @test repr((-1)^a) == "(-1)^a"
 end
 
+@testset "polynomial printing" begin
+    @syms a b c x[1:3]
+    @test repr(b+a) == "a + b"
+    @test repr(b-a) == "-a + b"
+    @test repr(2a+1+3a^2) == "1 + 2a + 3(a^2)"
+    @test repr(2a+1+3a^2+2b+3b^2+4a*b) == "1 + 2a + 2b + 3(a^2) + 4a*b + 3(b^2)"
+
+    @syms a b[1:3] c d[1:3]
+    get(x, i) = term(getindex, x, i, type=Number)
+    b1, b3, d1, d2 = get(b,1),get(b,3), get(d,1), get(d,2)
+    @test repr(a + b3 + b1 + d2 + c) == "a + b[1] + b[3] + c + d[2]"
+    @test repr(expand((c + b3 - d1)^3)) == "b[3]^3 + 3(b[3]^2)*c - 3(b[3]^2)*d[1] + 3b[3]*(c^2) - 6b[3]*c*d[1] + 3b[3]*(d[1]^2) + c^3 - 3(c^2)*d[1] + 3c*(d[1]^2) - (d[1]^3)"
+end
+
 @testset "inspect" begin
     @syms x y z
     y = SymbolicUtils.setmetadata(y, Integer, 42) # Set some metadata
@@ -195,8 +209,8 @@ end
     @test_reference "inspect_output/ex.txt" sprint(io->SymbolicUtils.inspect(io, ex))
     @test_reference "inspect_output/ex-md.txt" sprint(io->SymbolicUtils.inspect(io, ex, metadata=true))
     @test_reference "inspect_output/ex-nohint.txt" sprint(io->SymbolicUtils.inspect(io, ex, hint=false))
-    @test SymbolicUtils.pluck(ex, 8) == 2
-    @test_reference "inspect_output/sub10.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 10)))
+    @test SymbolicUtils.pluck(ex, 12) == 2
+    @test_reference "inspect_output/sub10.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 9)))
     @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
 end
 

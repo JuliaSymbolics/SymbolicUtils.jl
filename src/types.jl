@@ -675,48 +675,6 @@ function remove_minus(t)
     Any[-args[1], args[2:end]...]
 end
 
-# find symbols and their corresponding degrees
-function get_degrees(expr)
-    if issym(expr)
-        (nameof(expr) => 1,)
-    elseif istree(expr)
-        op = operation(expr)
-        args = arguments(expr)
-        if operation(expr) == (^) && args[2] isa Number
-            return map(get_degrees(args[1])) do (base, pow)
-                (base => pow * args[2])
-            end
-        elseif operation(expr) == (*)
-            return mapreduce(get_degrees,
-                             (x,y)->(x...,y...,), args)
-        elseif operation(expr) == (+)
-            ds = map(get_degrees, args)
-            _, idx = findmax(x->sum(last.(x), init=0), ds)
-            return ds[idx]
-        else
-            return (Symbol("zzzzzzz", hash(expr)) => 1,)
-        end
-    else
-        return ()
-    end
-end
-
-function monomial_lt(degs1, degs2)
-    d1 = sum(last, degs1, init=0)
-    d2 = sum(last, degs2, init=0)
-    d1 != d2 ? d1 < d2 : lexlt(degs1, degs2)
-end
-
-function lexlt(degs1, degs2)
-    for (a, b) in zip(degs1, degs2)
-        if a[1] == b[1] && a[2] != b[2]
-            return a[2] > b[2]
-        elseif a[1] != b[1]
-            return a < b
-        end
-    end
-    return false # they are equal
-end
 
 function show_add(io, args)
     for (i, t) in enumerate(args)

@@ -52,5 +52,18 @@ function lexlt(degs1, degs2)
     return false # they are equal
 end
 
-<ₑ(a::BasicSymbolic, b::BasicSymbolic) = monomial_lt(get_degrees(a),
-                                                     get_degrees(b))
+_arglen(a) = istree(a) ? length(unsorted_arguments(a)) : 0
+function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
+    da, db = get_degrees(a), get_degrees(b)
+    fw = monomial_lt(da, db)
+    bw = monomial_lt(db, da)
+    if fw === bw && !isequal(a, b)
+        if _arglen(a) == _arglen(b)
+            return hash(a) < hash(b)
+        else
+            return _arglen(a) < _arglen(b)
+        end
+    else
+        return fw
+    end
+end

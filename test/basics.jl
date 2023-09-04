@@ -193,7 +193,7 @@ end
     @test repr(b+a) == "a + b"
     @test repr(b-a) == "-a + b"
     @test repr(2a+1+3a^2) == "1 + 2a + 3(a^2)"
-    @test repr(2a+1+3a^2+2b+3b^2+4a*b) == "1 + 2a + 2b + 4a*b + 3(a^2) + 3(b^2)"
+    @test repr(2a+1+3a^2+2b+3b^2+4a*b) == "1 + 2a + 2b + 3(a^2) + 4a*b + 3(b^2)"
 end
 
 @testset "inspect" begin
@@ -203,8 +203,8 @@ end
     @test_reference "inspect_output/ex.txt" sprint(io->SymbolicUtils.inspect(io, ex))
     @test_reference "inspect_output/ex-md.txt" sprint(io->SymbolicUtils.inspect(io, ex, metadata=true))
     @test_reference "inspect_output/ex-nohint.txt" sprint(io->SymbolicUtils.inspect(io, ex, hint=false))
-    @test SymbolicUtils.pluck(ex, 8) == 2
-    @test_reference "inspect_output/sub10.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 10)))
+    @test SymbolicUtils.pluck(ex, 12) == 2
+    @test_reference "inspect_output/sub10.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 9)))
     @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
 end
 

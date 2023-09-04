@@ -19,7 +19,7 @@
 # find symbols and their corresponding degrees
 function get_degrees(expr)
     if issym(expr)
-        (nameof(expr) => 1,)
+        ((Symbol(expr),) => 1,)
     elseif istree(expr)
         op = operation(expr)
         args = arguments(expr)
@@ -34,8 +34,11 @@ function get_degrees(expr)
             ds = map(get_degrees, args)
             _, idx = findmax(x->sum(last.(x), init=0), ds)
             return ds[idx]
+        elseif operation(expr) == (getindex)
+            args = arguments(expr)
+            return ((Symbol.(args)...,) => 1,)
         else
-            return (Symbol("zzzzzzz", hash(expr)) => 1,)
+            return ((Symbol("zzzzzzz", hash(expr)),) => 1,)
         end
     else
         return ()

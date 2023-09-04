@@ -189,11 +189,15 @@ end
 end
 
 @testset "polynomial printing" begin
-    @syms a b c
+    @syms a b c x[1:3]
     @test repr(b+a) == "a + b"
     @test repr(b-a) == "-a + b"
     @test repr(2a+1+3a^2) == "1 + 2a + 3(a^2)"
     @test repr(2a+1+3a^2+2b+3b^2+4a*b) == "1 + 2a + 2b + 3(a^2) + 4a*b + 3(b^2)"
+
+    @syms a b[1:3] c d[1:3]
+    @test repr(a + b[3] + b[1] + d[2] + c) == "a + b[1] + b[3] + c + d[2]"
+    @test repr(expand((c + b[3] - d[1])^3)) == "b[3]^3 + 3(b[3]^2)*c - 3(b[3]^2)*d[1] + 3b[3]*(c^2) - 6b[3]*c*d[1] + 3b[3]*(d[1]^2) + c^3 - 3(c^2)*d[1] + 3c*(d[1]^2) - (d[1]^3)"
 end
 
 @testset "inspect" begin

@@ -1043,7 +1043,7 @@ end
 +(a::SN) = a
 
 function -(a::SN)
-    !nometa(b) && return term(-, a)
+    !nometa(a) && return term(-, a)
     isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
     Add(sub_t(a), makeadd(-1, 0, a)...)
 end

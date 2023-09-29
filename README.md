@@ -25,7 +25,7 @@ Octonian algebras, you've come to the right place.
 
 [Symbols in SymbolicUtils](https://symbolicutils.juliasymbolics.org/#creating_symbolic_expressions) carry type information. Operations on them propagate this information. [A rule-based rewriting language](https://symbolicutils.juliasymbolics.org/rewrite/#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification](https://juliasymbolics.github.io/SymbolicUtils.jl/#simplification) rules for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
 
-If you are a Julia package develper in need of a rule rewriting system for your own types, have a look at the [interfacing guide](https://symbolicutils.juliasymbolics.org/interface/).
+If you are a Julia package developer in need of a rule rewriting system for your own types, have a look at the [interfacing guide](https://symbolicutils.juliasymbolics.org/interface/).
 
 
 ### "I don't want to read your manual, just show me some cool code"

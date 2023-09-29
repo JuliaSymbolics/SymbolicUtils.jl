@@ -45,8 +45,8 @@ function arguments end
 """
   unsorted_arguments(x::T)
 
-If x is a term satisfying `istree(x)` and your term type `T` orovides
-and optimized implementation for storing the arguments, this function can 
+If x is a term satisfying `istree(x)` and your term type `T` provides
+an optimized implementation for storing the arguments, this function can
 be used to retrieve the arguments when the order of arguments does not matter 
 but the speed of the operation does.
 """

@@ -22,7 +22,7 @@ with SymbolicUtils.jl
 
 Check if `x` represents an expression tree. If returns true,
 it will be assumed that `operation(::T)` and `arguments(::T)`
-methods are defined. Definining these three should allow use
+methods are defined. Defining these three should allow use
 of `simplify` on custom types. Optionally `symtype(x)` can be
 defined to return the expected type of the symbolic expression.
 

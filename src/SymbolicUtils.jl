@@ -63,7 +63,7 @@ include("substitute.jl")
 include("code.jl")
 
 
-# ADjoints
+# Adjoints
 include("adjoints.jl")
 
 end # module

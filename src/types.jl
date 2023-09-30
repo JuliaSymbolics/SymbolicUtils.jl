@@ -871,7 +871,7 @@ end
 """
     promote_symtype(f::FnType{X,Y}, arg_symtypes...)
 
-The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
+The output symtype of applying variable `f` to arguments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
 function promote_symtype(f::BasicSymbolic{<:FnType{X,Y}}, args...) where {X, Y}

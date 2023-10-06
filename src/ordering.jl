@@ -8,120 +8,84 @@
 <ₑ(a::Symbolic, b::Number) = false
 <ₑ(a::Number,   b::Symbolic) = true
 
-arglength(a) = length(arguments(a))
-function <ₑ(a, b)
-    if isterm(a) && (b isa Symbolic && !isterm(b))
-        return false
-    elseif isterm(b) && (a isa Symbolic && !isterm(a))
-        return true
-    elseif (isadd(a) || ismul(a)) && (isadd(b) || ismul(b))
-        return cmp_mul_adds(a, b)
-    elseif issym(a) && issym(b)
-        nameof(a) < nameof(b)
-    elseif !istree(a) && !istree(b)
-        T = typeof(a)
-        S = typeof(b)
-        return T===S ? (T <: Number ? isless(a, b) : hash(a) < hash(b)) : nameof(T) < nameof(S)
-    elseif istree(b) && !istree(a)
-        return true
-    elseif istree(a) && istree(b)
-        return cmp_term_term(a,b)
-    else
-        return !(b <ₑ a)
-    end
-end
-
-function cmp_mul_adds(a, b)
-    (isadd(a) && ismul(b)) && return true
-    (ismul(a) && isadd(b)) && return false
-    a_args = unsorted_arguments(a)
-    b_args = unsorted_arguments(b)
-    length(a_args) < length(b_args) && return true
-    length(a_args) > length(b_args) && return false
-    a_args = arguments(a)
-    b_args = arguments(b)
-    for (x, y) in zip(a_args, b_args)
-        x <ₑ y && return true
-    end
-    return false
-end
-
-function <ₑ(a::Symbol, b::Symbol)
-    # Enforce the order [+,-,\,/,^,*]
-    if b === :*
-        a in (:^, :/, :\, :-, :+)
-    elseif b === :^
-        a in (:/, :\, :-, :+) && return true
-    elseif b === :/
-        a in (:\, :-, :+) && return true
-    elseif b === :\
-        a in (:-, :+) && return true
-    elseif b === :-
-        a === :+ && return true
-    elseif a in (:*, :^, :/, :-, :+)
-        false
-    else
-        a < b
-    end
-end
-
 <ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
 
 <ₑ(a::Type, b::Type) = nameof(a) <ₑ nameof(b)
+<ₑ(a::T, b::S) where{T,S} = T<S
+<ₑ(a::T, b::T) where{T} = a < b
 
-function cmp_term_term(a, b)
-    la = arglength(a)
-    lb = arglength(b)
 
-    if la == 0 && lb == 0
-        return operation(a) <ₑ operation(b)
-    elseif la === 0
-        return operation(a) <ₑ b
-    elseif lb === 0
-        return a <ₑ operation(b)
-    end
-
-    na = operation(a)
-    nb = operation(b)
-
-    if 0 < arglength(a) <= 2 && 0 < arglength(b) <= 2
-        # e.g. a < sin(a) < b ^ 2 < b
-        @goto compare_args
-    end
-
-    if na !== nb
-        return na <ₑ nb
-    elseif arglength(a) != arglength(b)
-        return arglength(a) < arglength(b)
-    else
-        @label compare_args
-        aa, ab = arguments(a), arguments(b)
-        if length(aa) !== length(ab)
-            return length(aa) < length(ab)
+###### A variation on degree lexicographic order ########
+# find symbols and their corresponding degrees
+function get_degrees(expr)
+    if issym(expr)
+        ((Symbol(expr),) => 1,)
+    elseif istree(expr)
+        op = operation(expr)
+        args = arguments(expr)
+        if operation(expr) == (^) && args[2] isa Number
+            return map(get_degrees(args[1])) do (base, pow)
+                (base => pow * args[2])
+            end
+        elseif operation(expr) == (*)
+            return mapreduce(get_degrees,
+                             (x,y)->(x...,y...,), args)
+        elseif operation(expr) == (+)
+            ds = map(get_degrees, args)
+            _, idx = findmax(x->sum(last.(x), init=0), ds)
+            return ds[idx]
+        elseif operation(expr) == (getindex)
+            args = arguments(expr)
+            return ((Symbol.(args)...,) => 1,)
         else
-            terms = zip(Iterators.filter(!is_literal_number, aa), Iterators.filter(!is_literal_number, ab))
-
-            for (x,y) in terms
-                if x <ₑ y
-                    return true
-                elseif y <ₑ x
-                    return false
-                end
-            end
-
-            # compare the numbers
-            nums = zip(Iterators.filter(is_literal_number, aa),
-                       Iterators.filter(is_literal_number, ab))
-
-            for (x,y) in nums
-                if x <ₑ y
-                    return true
-                elseif y <ₑ x
-                    return false
-                end
-            end
-
+            return ((Symbol("zzzzzzz", hash(expr)),) => 1,)
         end
-        return na <ₑ nb # all args are equal, compare the name
+    else
+        return ()
+    end
+end
+
+function monomial_lt(degs1, degs2)
+    d1 = sum(last, degs1, init=0)
+    d2 = sum(last, degs2, init=0)
+    d1 != d2 ? d1 < d2 : lexlt(degs1, degs2)
+end
+
+function lexlt(degs1, degs2)
+    for (a, b) in zip(degs1, degs2)
+        if a[1] == b[1] && a[2] != b[2]
+            return a[2] > b[2]
+        elseif a[1] != b[1]
+            return a < b
+        end
+    end
+    return false # they are equal
+end
+
+_arglen(a) = istree(a) ? length(unsorted_arguments(a)) : 0
+
+function <ₑ(a::Tuple, b::Tuple)
+    for (x, y) in zip(a, b)
+        if x <ₑ y
+            return true
+        elseif y <ₑ x
+            return false
+        end
+    end
+    return length(a) < length(b)
+end
+
+function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
+    da, db = get_degrees(a), get_degrees(b)
+    fw = monomial_lt(da, db)
+    bw = monomial_lt(db, da)
+    if fw === bw && !isequal(a, b)
+        if _arglen(a) == _arglen(b)
+            return (operation(a), arguments(a)...,) <ₑ (operation(b), arguments(b)...,)
+        else
+            return _arglen(a) < _arglen(b)
+        end
+    else
+        return fw
     end
 end

@@ -169,7 +169,7 @@ Creates a `Rule` object. A rule object is callable, and  takes an expression and
 it if it matches the LHS pattern to the RHS pattern, returns `nothing` otherwise.
 The rule language is described below.
 
-LHS can be any possibly nested function call expression where any of the arugments can
+LHS can be any possibly nested function call expression where any of the arguments can
 optionally be a Slot (`~x`) or a Segment (`~~x`) (described below).
 
 If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS

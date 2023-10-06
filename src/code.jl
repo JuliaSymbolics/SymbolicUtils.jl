@@ -448,7 +448,7 @@ You can define:
 
 # and
 
-@inlline function create_array(::Type{<:MyArray}, T, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:MyArray}, T, ::Val{dims}, elems...) where dims
 ```
 
 which creates an array of size `dims` using the elements `elems` and eltype `T`, to allow

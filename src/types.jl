@@ -113,13 +113,20 @@ end
 function arguments(x::BasicSymbolic)
     args = unsorted_arguments(x)
     @compactified x::BasicSymbolic begin
-        Add => @goto ADDMUL
-        Mul => @goto ADDMUL
+        Add => @goto ADD
+        Mul => @goto MUL
         _   => return args
     end
-    @label ADDMUL
+    @label MUL
     if !x.issorted[]
-        sort!(args, lt = <ₑ)
+        sort!(args, by=get_degrees)
+        x.issorted[] = true
+    end
+    return args
+
+    @label ADD
+    if !x.issorted[]
+        sort!(args, lt = monomial_lt, by=get_degrees)
         x.issorted[] = true
     end
     return args
@@ -569,8 +576,18 @@ function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
-nometa(s) = isnothing(metadata(s))
-nometa(ss...) = all(nometa, ss)
+function issafecanon(f, s)
+    if isnothing(metadata(s)) || issym(s)
+        return true
+    else
+        _issafecanon(f, s)
+    end
+end
+_issafecanon(::typeof(*), s) = !istree(s) || !(operation(s) in (+,*,^))
+_issafecanon(::typeof(+), s) = !istree(s) || !(operation(s) in (+,*))
+_issafecanon(::typeof(^), s) = !istree(s) || !(operation(s) in (*, ^))
+
+issafecanon(f, ss...) = all(x->issafecanon(f, x), ss)
 
 function getmetadata(s::Symbolic, ctx)
     md = metadata(s)
@@ -671,20 +688,19 @@ function remove_minus(t)
     Any[-args[1], args[2:end]...]
 end
 
-function show_add(io, args)
-    negs = filter(isnegative, args)
-    nnegs = filter(!isnegative, args)
-    for (i, t) in enumerate(nnegs)
-        i != 1 && print(io, " + ")
-        print_arg(io, +,  t)
-    end
 
-    for (i, t) in enumerate(negs)
-        if i==1 && isempty(nnegs)
-            print_arg(io, -, t)
-        else
-            print(io, " - ")
+function show_add(io, args)
+    for (i, t) in enumerate(args)
+        neg = isnegative(t)
+        if i != 1
+            print(io, neg ? " - " : " + ")
+        elseif isnegative(t)
+            print(io, "-")
+        end
+        if neg
             show_mul(io, remove_minus(t))
+        else
+            print_arg(io, +, t)
         end
     end
 end
@@ -855,7 +871,7 @@ end
 """
     promote_symtype(f::FnType{X,Y}, arg_symtypes...)
 
-The output symtype of applying variable `f` to arugments of symtype `arg_symtypes...`.
+The output symtype of applying variable `f` to arguments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
 function promote_symtype(f::BasicSymbolic{<:FnType{X,Y}}, args...) where {X, Y}
@@ -1013,7 +1029,7 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
-    !nometa(a,b) && return term(+, a, b) # Don't flatten if args have metadata
+    !issafecanon(+, a,b) && return term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
         return Add(add_t(a,b),
                    a.coeff + b.coeff,
@@ -1029,7 +1045,7 @@ function +(a::SN, b::SN)
 end
 
 function +(a::Number, b::SN)
-    !nometa(b) && return term(+, a, b) # Don't flatten if args have metadata
+    !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
     if isadd(b)
         Add(add_t(a,b), a + b.coeff, b.dict)
@@ -1043,13 +1059,13 @@ end
 +(a::SN) = a
 
 function -(a::SN)
-    !nometa(a) && return term(-, a)
+    !issafecanon(*, a) && return term(-, a)
     isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
     Add(sub_t(a), makeadd(-1, 0, a)...)
 end
 
 function -(a::SN, b::SN)
-    !nometa(a, b) && return term(-, a, b)
+    (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
     isadd(a) && isadd(b) ? Add(sub_t(a,b),
                                a.coeff - b.coeff,
                                _merge(-, a.dict,
@@ -1068,7 +1084,7 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
-    !nometa(a, b) && return term(*, a, b)
+    !issafecanon(*, a, b) && return term(*, a, b)
     if isdiv(a) && isdiv(b)
         Div(a.num * b.num, a.den * b.den)
     elseif isdiv(a)
@@ -1095,7 +1111,7 @@ function *(a::SN, b::SN)
 end
 
 function *(a::Number, b::SN)
-    !nometa(b) && return term(*, a, b)
+    !issafecanon(*, b) && return term(*, a, b)
     if iszero(a)
         a
     elseif isone(a)
@@ -1135,7 +1151,7 @@ end
 ###
 
 function ^(a::SN, b)
-    !nometa(a,b) && return Pow(a, b)
+    !issafecanon(^, a,b) && return Pow(a, b)
     if b isa Number && iszero(b)
         # fast path
         1

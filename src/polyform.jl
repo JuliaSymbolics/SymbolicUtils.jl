@@ -81,14 +81,15 @@ end
 # forward gcd
 
 PF = :(PolyForm{promote_symtype(/, symtype(x), symtype(y))})
+const FriendlyCoeffType = Union{Integer, Rational}
 @eval begin
     Base.div(x::PolyForm, y::PolyForm) = $PF(div(x.p, y.p), mix_dicts(x, y)...)
-    Base.div(x::Integer, y::PolyForm)  = $PF(div(x, y.p), y.pvar2sym, y.sym2term)
-    Base.div(x::PolyForm, y::Integer)  = $PF(div(x.p, y), x.pvar2sym, x.sym2term)
+    Base.div(x::FriendlyCoeffType, y::PolyForm)  = $PF(div(x, y.p), y.pvar2sym, y.sym2term)
+    Base.div(x::PolyForm, y::FriendlyCoeffType)  = $PF(div(x.p, y), x.pvar2sym, x.sym2term)
 
     Base.gcd(x::PolyForm, y::PolyForm) = $PF(_gcd(x.p, y.p), mix_dicts(x, y)...)
-    Base.gcd(x::Integer, y::PolyForm)  = $PF(_gcd(x, y.p), y.pvar2sym, y.sym2term)
-    Base.gcd(x::PolyForm, y::Integer)  = $PF(_gcd(x.p, y), x.pvar2sym, x.sym2term)
+    Base.gcd(x::FriendlyCoeffType, y::PolyForm)  = $PF(_gcd(x, y.p), y.pvar2sym, y.sym2term)
+    Base.gcd(x::PolyForm, y::FriendlyCoeffType)  = $PF(_gcd(x.p, y), x.pvar2sym, x.sym2term)
 end
 
 _isone(p::PolyForm) = isone(p.p)
@@ -146,7 +147,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end
-        pvar = MP.similarvariable(vtype, nameof(x))
+        pvar = MP.similar_variable(vtype, nameof(x))
         pvar2sym[pvar] = x
         return pvar
     end

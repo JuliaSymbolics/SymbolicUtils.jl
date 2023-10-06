@@ -114,7 +114,7 @@ NOTE:
                         "github" or "atom-one-dark"; use lower case and replace
                         spaces with `-`.
   - code_border_radius: how rounded the corners of code blocks should be
-  - code_output_indent: how much left-identation to add for "output blocks"
+  - code_output_indent: how much left-indentation to add for "output blocks"
                         (results of the evaluation of code blocks), use 0 if
                         you don't want indentation.
 -->

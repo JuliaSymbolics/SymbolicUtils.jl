@@ -20,7 +20,7 @@ const monadic = [deg2rad, rad2deg, transpose, asind, log1p, acsch,
 
 const diadic = [max, min, hypot, atan, NaNMath.atanh, mod, rem, copysign,
                 besselj, bessely, besseli, besselk, hankelh1, hankelh2,
-                polygamma, beta, logbeta]
+                polygamma, beta, logbeta, NaNMath.pow]
 const previously_declared_for = Set([])
 
 const basic_monadic = [-, +]

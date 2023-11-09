@@ -86,6 +86,9 @@ nanmath_st.rewrites[:nanmath] = true
               end)
     @test toexpr(SetArray(true, a, [x(t), AtIndex(9, b), c])).head == :macrocall
 
+
+    @test toexpr(NaNMath.pow(a, b)) == :($(NaNMath.pow)(a, b))
+
     f = GlobalRef(NaNMath, :sin)
     test_repr(toexpr(LiteralExpr(:(let x=1, y=2
                                        $(sin(a+b))

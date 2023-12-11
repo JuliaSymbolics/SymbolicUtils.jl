@@ -13,6 +13,7 @@ using Unityper
 using DataStructures
 using Setfield
 import Setfield: PropertyLens
+using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 include("interface.jl")

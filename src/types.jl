@@ -61,6 +61,10 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
     end
 end
 
+function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
+    ScalarSymbolic()
+end
+
 function exprtype(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => TERM

@@ -67,9 +67,9 @@ Note that in this case `recurse=true` was necessary as otherwise the polynomiali
 
 ### Simplifying fractions
 
-`simplify_fractions(expr)` recurses through `expr` finding `Div`s and simplifying them using polynomial divison.
+`simplify_fractions(expr)` recurses through `expr` finding `Div`s and simplifying them using polynomial division.
 
-First the factors of the numerators and the denominators are converted into PolyForm objects, then numerators and denominators are divided by their respective pairwise GCDs. The conversion of the numerator and denominator into PolyForm is set up so that `simplify_fractions` does not result in increase in the expression size due to polynomial expansion. Specifically, the factors are individually converted into PolyForm objects, and any powers of polynomial is not expanded, but the divison process repeatedly divides them as many times as the power.
+First the factors of the numerators and the denominators are converted into PolyForm objects, then numerators and denominators are divided by their respective pairwise GCDs. The conversion of the numerator and denominator into PolyForm is set up so that `simplify_fractions` does not result in increase in the expression size due to polynomial expansion. Specifically, the factors are individually converted into PolyForm objects, and any powers of polynomial is not expanded, but the division process repeatedly divides them as many times as the power.
 
 
 ```julia

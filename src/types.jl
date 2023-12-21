@@ -1111,11 +1111,12 @@ function *(a::SN, b::SN)
 end
 
 function *(a::Number, b::SN)
-    !issafecanon(*, b) && return term(*, a, b)
-    if iszero(a)
-        a
-    elseif isone(a)
+    if isone(a)
         b
+    elseif !issafecanon(*, b)
+        term(*, a, b)
+    elseif iszero(a)
+        a
     elseif isdiv(b)
         Div(a*b.num, b.den)
     elseif isone(-a) && isadd(b)

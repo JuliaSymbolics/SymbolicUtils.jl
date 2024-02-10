@@ -32,7 +32,7 @@ rewriters.
 module Rewriters
 using SymbolicUtils: @timer
 
-import SymbolicUtils: similarterm, istree, operation, arguments, unsorted_arguments, node_count
+import SymbolicUtils: similarterm, iscall, operation, arguments, unsorted_arguments, node_count
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -190,11 +190,11 @@ instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 passthrough(x, default) = x === nothing ? default : x
 function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
-    if istree(x)
+    if iscall(x)
         if ord === :pre
             x = p.rw(x)
         end
-        if istree(x)
+        if iscall(x)
             x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)))
         end
         return ord === :post ? p.rw(x) : x
@@ -205,11 +205,11 @@ end
 
 function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
-    if istree(x)
+    if iscall(x)
         if ord === :pre
             x = p.rw(x)
         end
-        if istree(x)
+        if iscall(x)
             _args = map(arguments(x)) do arg
                 if node_count(arg) > p.thread_cutoff
                     Threads.@spawn p(arg)

@@ -6,7 +6,7 @@ using Bijections
 
 Abstracts a [MultivariatePolynomials.jl](https://juliaalgebra.github.io/MultivariatePolynomials.jl/stable/) as a SymbolicUtils expression and vice-versa.
 
-The SymbolicUtils term interface (`istree`, `operation, and `arguments`) works on PolyForm lazily:
+The SymbolicUtils term interface (`iscall`, `operation, and `arguments`) works on PolyForm lazily:
 the `operation` and `arguments` are created by converting one level of arguments into SymbolicUtils expressions. They may further contain PolyForm within them.
 We use this to hold polynomials in memory while doing `simplify_fractions`.
 
@@ -97,7 +97,7 @@ _isone(p::PolyForm) = isone(p.p)
 function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     if x isa Number
         return x
-    elseif istree(x)
+    elseif iscall(x)
         if !(symtype(x) <: Number)
             error("Cannot convert $x of symtype $(symtype(x)) into a PolyForm")
         end
@@ -170,8 +170,8 @@ function PolyForm(x,
     PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)
 end
 
-istree(x::Type{<:PolyForm}) = true
-istree(x::PolyForm) = true
+iscall(x::Type{<:PolyForm}) = true
+iscall(x::PolyForm) = true
 
 function similarterm(t::PolyForm, f, args, symtype; metadata=nothing)
     basic_similarterm(t, f, args, symtype; metadata=metadata)
@@ -336,7 +336,7 @@ function simplify_fractions(x; polyform=false)
 end
 
 function add_with_div(x, flatten=true)
-    (!istree(x) || operation(x) != (+)) && return x
+    (!iscall(x) || operation(x) != (+)) && return x
     aa = unsorted_arguments(x)
     !any(a->isdiv(a), aa) && return x # no rewrite necessary
 
@@ -361,7 +361,7 @@ function flatten_fractions(x)
 end
 
 function fraction_iszero(x)
-    !istree(x) && return _iszero(x)
+    !iscall(x) && return _iszero(x)
     ff = flatten_fractions(x)
     # fast path and then slow path
     any(_iszero, numerators(ff)) ||
@@ -369,18 +369,18 @@ function fraction_iszero(x)
 end
 
 function fraction_isone(x)
-    !istree(x) && return _isone(x)
+    !iscall(x) && return _isone(x)
     _isone(simplify_fractions(flatten_fractions(x)))
 end
 
 function needs_div_rules(x)
     (isdiv(x) && !(x.num isa Number) && !(x.den isa Number)) ||
-    (istree(x) && operation(x) === (+) && count(has_div, unsorted_arguments(x)) > 1) ||
-    (istree(x) && any(needs_div_rules, unsorted_arguments(x)))
+    (iscall(x) && operation(x) === (+) && count(has_div, unsorted_arguments(x)) > 1) ||
+    (iscall(x) && any(needs_div_rules, unsorted_arguments(x)))
 end
 
 function has_div(x)
-    return isdiv(x) || (istree(x) && any(has_div, unsorted_arguments(x)))
+    return isdiv(x) || (iscall(x) && any(has_div, unsorted_arguments(x)))
 end
 
 flatten_pows(xs) = map(xs) do x

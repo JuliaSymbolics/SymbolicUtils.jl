@@ -183,7 +183,7 @@ function unsorted_arguments(x::BasicSymbolic)
     return args
 end
 
-istree(s::BasicSymbolic) = !issym(s)
+iscall(s::BasicSymbolic) = !issym(s)
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
 issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
 isterm(x) = isa_SymType(Val(:Term), x)
@@ -400,7 +400,7 @@ end
 
 @inline function numerators(x)
     isdiv(x) && return numerators(x.num)
-    istree(x) && operation(x) === (*) ? arguments(x) : Any[x]
+    iscall(x) && operation(x) === (*) ? arguments(x) : Any[x]
 end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
@@ -516,7 +516,7 @@ end
 Binarizes `Term`s with n-ary operations
 """
 function unflatten(t::Symbolic{T}) where{T}
-    if istree(t)
+    if iscall(t)
         f = operation(t)
         if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops
             a = arguments(t)
@@ -587,9 +587,9 @@ function issafecanon(f, s)
         _issafecanon(f, s)
     end
 end
-_issafecanon(::typeof(*), s) = !istree(s) || !(operation(s) in (+,*,^))
-_issafecanon(::typeof(+), s) = !istree(s) || !(operation(s) in (+,*))
-_issafecanon(::typeof(^), s) = !istree(s) || !(operation(s) in (*, ^))
+_issafecanon(::typeof(*), s) = !iscall(s) || !(operation(s) in (+,*,^))
+_issafecanon(::typeof(+), s) = !iscall(s) || !(operation(s) in (+,*))
+_issafecanon(::typeof(^), s) = !iscall(s) || !(operation(s) in (*, ^))
 
 issafecanon(f, ss...) = all(x->issafecanon(f, x), ss)
 
@@ -641,7 +641,7 @@ end
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
-                 "symbolic structure using `istree(x)`, `operation(x)`, `arguments(x)` " *
+                 "symbolic structure using `iscall(x)`, `operation(x)`, `arguments(x)` " *
                  "and `similarterm(::YourType, f, args, symtype)`", :to_symbolic, force=true)
 
     x
@@ -654,7 +654,7 @@ const show_simplified = Ref(false)
 
 isnegative(t::Real) = t < 0
 function isnegative(t)
-    if istree(t) && operation(t) === (*)
+    if iscall(t) && operation(t) === (*)
         coeff = first(arguments(t))
         return isnegative(coeff)
     end
@@ -666,7 +666,7 @@ setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
-isbinop(f) = istree(f) && !istree(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
+isbinop(f) = iscall(f) && !iscall(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")
@@ -685,7 +685,7 @@ function print_arg(io, f, x)
 end
 
 function remove_minus(t)
-    !istree(t) && return -t
+    !iscall(t) && return -t
     @assert operation(t) == (*)
     args = arguments(t)
     @assert args[1] < 0
@@ -756,9 +756,9 @@ function show_ref(io, f, args)
     x = args[1]
     idx = args[2:end]
 
-    istree(x) && print(io, "(")
+    iscall(x) && print(io, "(")
     print(io, x)
-    istree(x) && print(io, ")")
+    iscall(x) && print(io, ")")
     print(io, "[")
     for i=1:length(idx)
         print_arg(io, idx[i])
@@ -768,7 +768,7 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
-    fname = istree(f) ? Symbol(repr(f)) : nameof(f)
+    fname = iscall(f) ? Symbol(repr(f)) : nameof(f)
     len_args = length(args)
     if Base.isunaryoperator(fname) && len_args == 1
         print(io, "$fname")
@@ -810,7 +810,7 @@ function show_term(io::IO, t)
         show_pow(io, args)
     elseif f === (getindex)
         show_ref(io, f, args)
-    elseif f === (identity) && !issym(args[1]) && !istree(args[1])
+    elseif f === (identity) && !issym(args[1]) && !iscall(args[1])
         show(io, args[1])
     else
         show_call(io, f, args)

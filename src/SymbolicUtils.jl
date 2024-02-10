@@ -4,12 +4,11 @@ $(DocStringExtensions.README)
 module SymbolicUtils
 
 using DocStringExtensions
+
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 using Unityper
-
-# Sym, Term,
-# Add, Mul and Pow
+using TermInterface
 using DataStructures
 using Setfield
 import Setfield: PropertyLens
@@ -17,8 +16,11 @@ using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 include("interface.jl")
+
+# Sym, Term,
+# Add, Mul and Pow
 include("types.jl")
-export istree, operation, arguments, similarterm
+export iscall, operation, arguments, similarterm
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath

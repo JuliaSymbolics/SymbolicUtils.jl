@@ -669,7 +669,7 @@ setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
-isbinop(f) = iscall(f) && iscall(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
+isbinop(f) = iscall(f) && !iscall(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")
@@ -688,7 +688,7 @@ function print_arg(io, f, x)
 end
 
 function remove_minus(t)
-    iscall(t) && return -t
+    !iscall(t) && return -t
     @assert operation(t) == (*)
     args = arguments(t)
     @assert args[1] < 0

@@ -185,7 +185,7 @@ function unsorted_arguments(x::BasicSymbolic)
 end
 
 isexpr(s::BasicSymbolic) = !issym(s)
-iscall(s::BasicSymbolic) = true
+iscall(s::BasicSymbolic) = isexpr(s)
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
 issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
 isterm(x) = isa_SymType(Val(:Term), x)

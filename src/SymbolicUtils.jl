@@ -16,9 +16,12 @@ import Setfield: PropertyLens
 using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
-include("interface.jl")
+using TermInterface
+import TermInterface: iscall, isexpr, issym, symtype, head, children, operation, arguments
+
+function similarterm end
 include("types.jl")
-export istree, operation, arguments, similarterm
+export similarterm
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath

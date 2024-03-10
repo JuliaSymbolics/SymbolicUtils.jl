@@ -120,7 +120,7 @@ end
 getdepth(r::Rule) = r.depth
 
 function rule_depth(rule, d=0, maxdepth=0)
-    if istree(rule)
+    if isexpr(rule)
         maxdepth = reduce(max, (rule_depth(r, d+1, maxdepth) for r in arguments(rule)), init=1)
     elseif rule isa Slot || rule isa Segment
         maxdepth = max(d, maxdepth)
@@ -389,7 +389,7 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if !istree(term)
+    if !isexpr(term)
         r(term)
     else
         f =  operation(term)

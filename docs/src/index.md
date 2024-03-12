@@ -9,7 +9,7 @@
 - Type promotion:
   - Symbols (`Sym`s) carry type information. ([read more](#creating_symbolic_expressions))
   - Compound expressions composed of `Sym`s propagate type information. ([read more](#expression_interface))
-- Set of extendable [simplification rules](#simplification).
+- Set of extendable [simplification rules](#Simplification).
 
 
 ## Creating symbolic expressions

@@ -13,7 +13,7 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 1 + sqrt(2)
 ```
 """
-function substitute(expr, dict; fold=true)
+function substitute(expr, dict; fold=true, similarterm=similarterm)
     haskey(dict, expr) && return dict[expr]
 
     if istree(expr)

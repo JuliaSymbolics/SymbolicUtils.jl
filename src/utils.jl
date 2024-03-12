@@ -79,10 +79,12 @@ needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
 # are there nested ⋆ terms?
 function isnotflat(⋆)
     function (x)
-        args = arguments(x)
-        for t in args
-            if istree(t) && operation(t) === (⋆)
-                return true
+        if istree(x)
+            args = arguments(x)
+            for t in args
+                if istree(t) && operation(t) === (⋆)
+                    return true
+                end
             end
         end
         return false
@@ -231,5 +233,5 @@ end
   node_count(t)
 Count the nodes in a symbolic expression tree satisfying `istree` and `arguments`.
 """
-node_count(t) = istree(t) ? reduce(+, node_count(x) for x in arguments(t), init = 0) + 1 : 1
+node_count(t) = istree(t) ? reduce(+, node_count(x) for x in unsorted_arguments(t), init = 0) + 1 : 1
 

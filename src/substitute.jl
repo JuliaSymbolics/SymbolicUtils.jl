@@ -1,45 +1,52 @@
+function _substitute(expr, dict; fold)
+    haskey(dict, expr) && return dict[expr]
+    istree(expr) || return expr    
+
+    op = _substitute(operation(expr), dict; fold=fold)
+    if fold
+        canfold = !(op isa Symbolic)
+        args = map(unsorted_arguments(expr)) do x
+            x′ = _substitute(x, dict; fold=fold)
+            canfold = canfold && !(x′ isa Symbolic)
+            x′
+        end
+        canfold && return op(args...)
+    else
+        args = map(x->_substitute(x, dict, fold=fold), unsorted_arguments(expr))
+    end
+
+    similarterm(expr,
+                op,
+                args,
+                symtype(expr);
+                metadata=metadata(expr))
+end
 
 """
-    substitute(expr, dict; fold=true)
+    substitute(expr, dict)
 
 substitute any subexpression that matches a key in `dict` with
-the corresponding value. If `fold=false`,
-expressions which can be evaluated won't be evaluated.
+the corresponding value. 
 
 ```julia
-julia> substitute(1+sqrt(y), Dict(y => 2), fold=true)
-2.414213562373095
-julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
+julia> substitute(1+sqrt(y), Dict(y => 2))
 1 + sqrt(2)
 ```
 """
-function substitute(expr, dict; fold=true)
-    haskey(dict, expr) && return dict[expr]
+substitute(expr, dict) = _substitute(expr, dict; fold=false)
 
-    if istree(expr)
-        op = substitute(operation(expr), dict; fold=fold)
-        if fold
-            canfold = !(op isa Symbolic)
-            args = map(unsorted_arguments(expr)) do x
-                x′ = substitute(x, dict; fold=fold)
-                canfold = canfold && !(x′ isa Symbolic)
-                x′
-            end
-            canfold && return op(args...)
-            args
-        else
-            args = map(x->substitute(x, dict, fold=fold), unsorted_arguments(expr))
-        end
+"""
+    evaluate(expr, dict)
 
-        similarterm(expr,
-                    op,
-                    args,
-                    symtype(expr);
-                    metadata=metadata(expr))
-    else
-        expr
-    end
-end
+Evaluate the expression, substituting any subexpression that matches a key in `dict` 
+with the corresponding value. 
+
+```julia
+julia> evaluate(1+sqrt(y), Dict(y => 2))
+2.414213562373095
+"""
+evaluate(expr, dict) = _substitute(expr, dict, fold=true)
+
 
 """
     occursin(needle::Symbolic, haystack::Symbolic)

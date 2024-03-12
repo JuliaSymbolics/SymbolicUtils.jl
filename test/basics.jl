@@ -90,9 +90,9 @@ struct Ctx2 end
     @test getmetadata(newf, Ctx1) == "yes"
 
 
-    @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
+    @test isequal(substitute(1+sqrt(a), Dict(a => 2)),
                   1 + term(sqrt, 2, type=Number))
-    @test substitute(1+sqrt(a), Dict(a => 2), fold=true) isa Float64
+    @test substitute(1+sqrt(a), Dict(a => 2)) isa Float64
 end
 
 @testset "Base methods" begin
@@ -155,11 +155,29 @@ end
 end
 
 @testset "substitute" begin
-    @syms a b
+    @syms a
     @test substitute(a, Dict(a=>1)) == 1
-    @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(b+1))
-    @test substitute(a+b, Dict(a=>1, b=>3)) == 4
-    @test substitute(exp(a), Dict(a=>2)) ≈ exp(2)
+    @test substitute(sqrt(a), Dict(a=>2)) isa Expr    
+end
+
+@testset "substitute on LiteralReal" begin
+    @syms a::LiteralReal 
+    @test substitute(a, Dict(a=>1)) == 1
+    @test substitute(sqrt(a), Dict(a=>2)) isa Expr
+end
+
+@testset "evaluate" begin
+    @syms a b
+    @test evaluate(a, Dict(a=>1)) == 1
+    @test isequal(evaluate(sin(a+b), Dict(a=>1)), sin(b+1))
+    @test evaluate(a+b, Dict(a=>1, b=>3)) == 4
+    @test evaluate(exp(a), Dict(a=>2)) ≈ exp(2)
+end
+
+@testset "evaluate on LiteralReal" begin
+    @syms a::LiteralReal 
+    @test evaluate(a, Dict(a=>1)) == 1
+    @test evaluate(sqrt(a), Dict(a=>2)) == 2
 end
 
 @testset "occursin" begin

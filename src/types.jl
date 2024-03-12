@@ -768,6 +768,14 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
+    fname = if istree(f)
+        Symbol(repr(f))
+    elseif f isa Function
+        nameof(f)
+    else
+        # Dummy for callable structs
+        Symbol()
+    end
     fname = istree(f) ? Symbol(repr(f)) : nameof(f)
     len_args = length(args)
     if Base.isunaryoperator(fname) && len_args == 1

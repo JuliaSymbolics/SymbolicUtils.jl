@@ -222,6 +222,7 @@ macro matchable(expr)
         SymbolicUtils.iscall(::$name) = true
         SymbolicUtils.operation(::$name) = $name
         SymbolicUtils.children(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
+        SymbolicUtils.arguments(x::$name) = SymbolicUtils.children(x)
         Base.length(x::$name) = $(length(fields) + 1)
         SymbolicUtils.similarterm(x::$name, f, args, type; kw...) = f(args...)
     end |> esc

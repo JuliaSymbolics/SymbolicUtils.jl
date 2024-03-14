@@ -220,6 +220,7 @@ macro matchable(expr)
     quote
         $expr
         SymbolicUtils.iscall(::$name) = true
+        SymbolicUtils.head(::$name) = $name
         SymbolicUtils.operation(::$name) = $name
         SymbolicUtils.children(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         SymbolicUtils.arguments(x::$name) = SymbolicUtils.children(x)

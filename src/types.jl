@@ -136,6 +136,7 @@ function arguments(x::BasicSymbolic)
     end
     return args
 end
+children(x::BasicSymbolic) = arguments(x)
 function unsorted_arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments

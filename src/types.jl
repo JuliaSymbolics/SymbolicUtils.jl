@@ -1096,6 +1096,7 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
+
     !issafecanon(*, a, b) && return term(*, a, b)
     !nometa(a, b) && return term(*, a, b)
     if isdiv(a) && isdiv(b)
@@ -1124,6 +1125,7 @@ function *(a::SN, b::SN)
 end
 
 function *(a::Number, b::SN)
+
     !issafecanon(*, b) && return term(*, a, b)
     !nometa(b) && return term(*, a, b)
     if iszero(a)
@@ -1165,6 +1167,10 @@ end
 ###
 
 function ^(a::SN, b)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 037c25b (remove redundant and wrpng nometa check)
     !issafecanon(^, a,b) && return Pow(a, b)
     !nometa(a,b) && return Pow(a, b)
     if b isa Number && iszero(b)

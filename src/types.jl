@@ -580,9 +580,6 @@ function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
-nometa(s) = isnothing(metadata(s))
-nometa(ss...) = all(nometa, ss)
-
 function issafecanon(f, s)
     if isnothing(metadata(s)) || issym(s)
         return true
@@ -1036,8 +1033,6 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
-    !nometa(a,b) && return term(+, a, b) # Don't flatten if args have metadata
-
     !issafecanon(+, a,b) && return term(+, a, b) # Don't flatten if args have metadata
 
     if isadd(a) && isadd(b)
@@ -1055,8 +1050,6 @@ function +(a::SN, b::SN)
 end
 
 function +(a::Number, b::SN)
-    !nometa(b) && return term(+, a, b) # Don't flatten if args have metadata
-
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
                                 
     iszero(a) && return b
@@ -1072,8 +1065,6 @@ end
 +(a::SN) = a
 
 function -(a::SN)
-    !nometa(a) && return term(-, a)
-
     !issafecanon(*, a) && return term(-, a)
 
     isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
@@ -1081,8 +1072,6 @@ function -(a::SN)
 end
 
 function -(a::SN, b::SN)
-    !nometa(a, b) && return term(-, a, b)
-                                
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
 
     isadd(a) && isadd(b) ? Add(sub_t(a,b),
@@ -1103,8 +1092,6 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
-
-    !nometa(a, b) && return term(*, a, b)
 
     !issafecanon(*, a, b) && return term(*, a, b)
 
@@ -1134,8 +1121,6 @@ function *(a::SN, b::SN)
 end
 
 function *(a::Number, b::SN)
-
-    !nometa(b) && return term(*, a, b)
 
     !issafecanon(*, b) && return term(*, a, b)
 
@@ -1178,8 +1163,6 @@ end
 ###
 
 function ^(a::SN, b)
-
-    !nometa(a,b) && return Pow(a, b)
 
     !issafecanon(^, a,b) && return Pow(a, b)
 

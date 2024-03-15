@@ -157,7 +157,7 @@ function unsorted_arguments(x::BasicSymbolic)
     if isadd(x)
         for (k, v) in x.dict
             push!(args, applicable(*,k,v) ? k*v :
-                    similarterm(k, *, [k, v]))
+                    maketerm(k, *, [k, v]))
         end
     else # MUL
         for (k, v) in x.dict
@@ -191,6 +191,9 @@ ismul(x)  = isa_SymType(Val(:Mul), x)
 isadd(x)  = isa_SymType(Val(:Add), x)
 ispow(x)  = isa_SymType(Val(:Pow), x)
 isdiv(x)  = isa_SymType(Val(:Div), x)
+
+TermInterface.head(::BasicSymbolic) = basicsymbolic
+TermInterface.children(t::BasicSymbolic) = cons(operation(t), arguments(t))
 
 ###
 ### Base interface
@@ -528,28 +531,11 @@ end
 
 unflatten(t) = t
 
-"""
-    similarterm(t, f, args, symtype; metadata=nothing)
+function TermInterface.maketerm(::Type{<:BasicSymbolic}, head, args, type, metadata)
+    basicsymbolic(first(args), args[2:end], type, metadata)
+end
 
-Create a term that is similar in type to `t`. Extending this function allows packages
-using their own expression types with SymbolicUtils to define how new terms should
-be created. Note that `similarterm` may return an object that has a
-different type than `t`, because `f` also influences the result.
-
-## Arguments
-
-- `t` the reference term to use to create similar terms
-- `f` is the operation of the term
-- `args` is the arguments
-- The `symtype` of the resulting term. Best effort will be made to set the symtype of the
-  resulting similar term to this type.
-"""
-similarterm(t::Symbolic, f, args; metadata=nothing) =
-    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
-similarterm(t::BasicSymbolic, f, args,
-            symtype; metadata=nothing) = basic_similarterm(t, f, args, symtype; metadata=metadata)
-
-function basic_similarterm(t, f, args, stype; metadata=nothing)
+function basicsymbolic(f, args, stype, metadata)
     if f isa Symbol
         error("$f must not be a Symbol")
     end
@@ -646,6 +632,36 @@ function to_symbolic(x)
 
     x
 end
+
+"""
+    similarterm(x, op, args, symtype=nothing; metadata=nothing)
+
+"""
+function similarterm(x, op, args, symtype=nothing; metadata=nothing)
+  Base.depwarn("""`similarterm` is deprecated, use `maketerm` instead.
+                  See https://github.com/JuliaSymbolics/TermInterface.jl for details.
+                  The present call can be replaced by
+                  `maketerm(typeof(x), $(head(x)), [op, args...], symtype, metadata)`""", :similarterm)
+
+  TermInterface.maketerm(typeof(x), callhead(x), [op, args...], symtype, metadata)
+end
+
+# Old fallback
+function similarterm(T::Type, op, args, symtype=nothing; metadata=nothing)
+  Base.depwarn("`similarterm` is deprecated, use `maketerm` instead." *
+               "See https://github.com/JuliaSymbolics/TermInterface.jl for details.", :similarterm)
+  op(args...)
+end
+
+export similarterm
+
+
+"""
+    callhead(x)
+Used in this deprecation cycle of `similarterm` to find the `head` argument to
+`maketerm`. Do not implement this, or use `similarterm` if you're using this package.
+"""
+callhead(x) = typeof(x)
 
 ###
 ###  Pretty printing

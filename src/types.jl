@@ -136,6 +136,7 @@ function arguments(x::BasicSymbolic)
     end
     return args
 end
+children(x::BasicSymbolic) = arguments(x)
 function unsorted_arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
@@ -546,10 +547,12 @@ different type than `t`, because `f` also influences the result.
 - The `symtype` of the resulting term. Best effort will be made to set the symtype of the
   resulting similar term to this type.
 """
-similarterm(t::Symbolic, f, args, symtype; metadata=nothing) =
-    maketerm(typeof(t), f, args, _promote_symtype(f, args), metadata)
-similarterm(t::BasicSymbolic, f, args,
-            symtype; metadata=nothing) = basic_similarterm(t, f, args, symtype; metadata=metadata)
+similarterm(t::Symbolic, f, args; metadata=nothing) =
+    maketerm(typeof(t), f, args, _promote_symtype(f, args); metadata)
+similarterm(t::BasicSymbolic, f, args, symtype; metadata=nothing) =
+    maketerm(typeof(t), f, args, symtype; metadata=metadata)
+maketerm(T::Type{<:Symbolic}, f, args, symtype; metadata=nothing) =
+    basic_similarterm(T, f, args, symtype; metadata=metadata)
 
 function basic_similarterm(t, f, args, stype; metadata=nothing)
     if f isa Symbol
@@ -813,7 +816,7 @@ function show_term(io::IO, t)
         show_pow(io, args)
     elseif f === (getindex)
         show_ref(io, f, args)
-    elseif f === (identity) && !issym(args[1]) && iscall(args[1])
+    elseif f === (identity) && !issym(args[1]) && !iscall(args[1])
         show(io, args[1])
     else
         show_call(io, f, args)

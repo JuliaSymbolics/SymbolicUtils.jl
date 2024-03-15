@@ -17,7 +17,7 @@ using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 using TermInterface
-import TermInterface: iscall, isexpr, issym, symtype, head, children, operation, arguments
+import TermInterface: iscall, isexpr, issym, symtype, head, children, operation, arguments, metadata
 
 function similarterm end
 include("types.jl")

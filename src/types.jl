@@ -1034,6 +1034,7 @@ sub_t(a) = promote_symtype(-, symtype(a))
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
     !issafecanon(+, a,b) && return term(+, a, b) # Don't flatten if args have metadata
+
     if isadd(a) && isadd(b)
         return Add(add_t(a,b),
                    a.coeff + b.coeff,
@@ -1050,6 +1051,7 @@ end
 
 function +(a::Number, b::SN)
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
+                                
     iszero(a) && return b
     if isadd(b)
         Add(add_t(a,b), a + b.coeff, b.dict)
@@ -1064,12 +1066,14 @@ end
 
 function -(a::SN)
     !issafecanon(*, a) && return term(-, a)
+
     isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
     Add(sub_t(a), makeadd(-1, 0, a)...)
 end
 
 function -(a::SN, b::SN)
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
+
     isadd(a) && isadd(b) ? Add(sub_t(a,b),
                                a.coeff - b.coeff,
                                _merge(-, a.dict,
@@ -1088,7 +1092,9 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
+
     !issafecanon(*, a, b) && return term(*, a, b)
+
     if isdiv(a) && isdiv(b)
         Div(a.num * b.num, a.den * b.den)
     elseif isdiv(a)
@@ -1115,7 +1121,9 @@ function *(a::SN, b::SN)
 end
 
 function *(a::Number, b::SN)
+
     !issafecanon(*, b) && return term(*, a, b)
+
     if iszero(a)
         a
     elseif isone(a)
@@ -1155,7 +1163,9 @@ end
 ###
 
 function ^(a::SN, b)
+
     !issafecanon(^, a,b) && return Pow(a, b)
+
     if b isa Number && iszero(b)
         # fast path
         1

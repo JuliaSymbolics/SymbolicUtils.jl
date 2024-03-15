@@ -32,7 +32,7 @@ rewriters.
 module Rewriters
 using SymbolicUtils: @timer
 
-import SymbolicUtils: similarterm, istree, operation, arguments, unsorted_arguments, node_count
+import SymbolicUtils: similarterm, istree, operation, arguments, unsorted_arguments, metadata, node_count
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -62,18 +62,24 @@ If(f, x) = IfElse(f, x, Empty())
 
 struct Chain
     rws
+    stop_on_match::Bool
 end
+Chain(rws) = Chain(rws, false)
 
 function (rw::Chain)(x)
     for f in rw.rws
         y = @timer cached_repr(f) f(x)
+        if rw.stop_on_match && !isnothing(y) && !isequal(y, x)
+            return y
+        end
+
         if y !== nothing
             x = y
         end
     end
     return x
-end
 
+end
 instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
 
 struct RestartedChain{Cs}
@@ -195,7 +201,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if istree(x)
-            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)))
+            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)), metadata=metadata(x))
         end
         return ord === :post ? p.rw(x) : x
     else
@@ -218,7 +224,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
                 end
             end
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
-            t = p.similarterm(x, operation(x), args)
+            t = p.similarterm(x, operation(x), args, metadata=metadata(x))
         end
         return ord === :post ? p.rw(t) : t
     else

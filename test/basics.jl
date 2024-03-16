@@ -301,6 +301,8 @@ end
     @test (2.5x/3x).num == 2.5
     @test (2.5x/3x).den == 3
     @test (x/3x) == 1//3
+    @test isequal(x / 1, x)
+    @test isequal(x / -1, -x)
 end
 
 @testset "LiteralReal" begin

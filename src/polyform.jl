@@ -184,8 +184,8 @@ function similarterm(::PolyForm, f::Union{typeof(*), typeof(+), typeof(^)},
     f(args...)
 end
 
-head(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
-operation(x::PolyForm) = head(x)
+head(::PolyForm) = PolyForm
+operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
 function arguments(x::PolyForm{T}) where {T}
 
@@ -231,6 +231,7 @@ function arguments(x::PolyForm{T}) where {T}
                  PolyForm{T}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
+children(x::PolyForm) = [operation(x); arguments(x)]
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
 

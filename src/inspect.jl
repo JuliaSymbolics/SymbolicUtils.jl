@@ -27,7 +27,7 @@ function AbstractTrees.nodevalue(x::BasicSymbolic)
 end
 
 function AbstractTrees.children(x::Symbolic)
-    isexpr(x) ? children(x) : ()
+    isexpr(x) ? arguments(x) : ()
 end
 
 """

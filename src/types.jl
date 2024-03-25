@@ -102,7 +102,7 @@ symtype(x::Number) = typeof(x)
 @inline symtype(::Symbolic{T}) where T = T
 
 # We're returning a function pointer
-@inline function head(x::BasicSymbolic)
+@inline function operation(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => x.f
         Add  => (+)
@@ -113,7 +113,7 @@ symtype(x::Number) = typeof(x)
         _    => error_on_type()
     end
 end
-@inline operation(x) = head(x)
+@inline head(x::BasicSymbolic) = BasicSymbolic
 
 function arguments(x::BasicSymbolic)
     args = unsorted_arguments(x)
@@ -136,7 +136,7 @@ function arguments(x::BasicSymbolic)
     end
     return args
 end
-children(x::BasicSymbolic) = arguments(x)
+children(x::BasicSymbolic) = [operation(x); arguments(x)]
 function unsorted_arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments

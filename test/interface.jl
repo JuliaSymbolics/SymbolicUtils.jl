@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-import SymbolicUtils: istree, issym, operation, arguments, symtype
+import SymbolicUtils: iscall, issym, operation, arguments, symtype
 
 issym(s::Symbol) = true
 Base.nameof(s::Symbol) = s

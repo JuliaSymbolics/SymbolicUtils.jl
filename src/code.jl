@@ -8,7 +8,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
-import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, istree, operation, arguments, issym,
+import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
                       symtype, similarterm, unsorted_arguments, metadata, isterm, term
 
 ##== state management ==##
@@ -162,7 +162,7 @@ end
 toexpr(O::Expr, st) = O
 
 function substitute_name(O, st)
-    if (issym(O) || istree(O)) && haskey(st.rewrites, O)
+    if (issym(O) || iscall(O)) && haskey(st.rewrites, O)
         st.rewrites[O]
     else
         O
@@ -176,13 +176,13 @@ function toexpr(O, st)
     end
     O = substitute_name(O, st)
 
-    !istree(O) && return O
+    !iscall(O) && return O
     op = operation(O)
     expr′ = function_to_expr(op, O, st)
     if expr′ !== nothing
         return expr′
     else
-        !istree(O) && return O
+        !iscall(O) && return O
         args = arguments(O)
         return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
     end
@@ -221,7 +221,7 @@ get_rewrites(args::DestructuredArgs) = ()
 function get_rewrites(args::Union{AbstractArray, Tuple})
     cflatten(map(get_rewrites, args))
 end
-get_rewrites(x) = istree(x) ? (x,) : ()
+get_rewrites(x) = iscall(x) ? (x,) : ()
 cflatten(x) = Iterators.flatten(x) |> collect
 
 # Used in Symbolics
@@ -691,7 +691,7 @@ end
 @inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
 
 function _cse!(mem, expr)
-    istree(expr) || return expr
+    iscall(expr) || return expr
     op = _cse!(mem, operation(expr))
     args = map(Base.Fix1(_cse!, mem), arguments(expr))
     t = similarterm(expr, op, args)
@@ -742,7 +742,7 @@ end
 
 
 function cse_state!(state, t)
-    !istree(t) && return t
+    !iscall(t) && return t
     state[t] = Base.get!(state, t, 0) + 1
     foreach(x->cse_state!(state, x), unsorted_arguments(t))
 end
@@ -758,7 +758,7 @@ function cse_block!(assignments, counter, names, name, state, x)
             counter[] += 1
             return sym
         end
-    elseif istree(x)
+    elseif iscall(x)
         args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
         if isterm(x)
             return term(operation(x), args...)

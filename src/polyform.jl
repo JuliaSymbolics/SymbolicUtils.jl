@@ -6,7 +6,7 @@ using Bijections
 
 Abstracts a [MultivariatePolynomials.jl](https://juliaalgebra.github.io/MultivariatePolynomials.jl/stable/) as a SymbolicUtils expression and vice-versa.
 
-The SymbolicUtils term interface (`isexpr`, `operation, and `arguments`) works on PolyForm lazily:
+The SymbolicUtils term interface (`isexpr`/`iscall`, `operation, and `arguments`) works on PolyForm lazily:
 the `operation` and `arguments` are created by converting one level of arguments into SymbolicUtils expressions. They may further contain PolyForm within them.
 We use this to hold polynomials in memory while doing `simplify_fractions`.
 
@@ -174,7 +174,6 @@ isexpr(x::Type{<:PolyForm}) = true
 isexpr(x::PolyForm) = true
 iscall(x::Type{<:PolyForm}) = true
 iscall(x::PolyForm) = true
-
 
 function similarterm(t::PolyForm, f, args, symtype; metadata=nothing)
     basic_similarterm(t, f, args, symtype; metadata=metadata)

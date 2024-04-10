@@ -218,8 +218,8 @@ macro matchable(expr)
     get_name(e::Expr) = (@assert(e.head == :(::)); e.args[1])
     fields = map(get_name, fields)
     quote
+        # TODO: fix this to be not a call. Make pattern matcher work for these
         $expr
-        SymbolicUtils.iscall(::$name) = true
         SymbolicUtils.head(::$name) = $name
         SymbolicUtils.operation(::$name) = $name
         SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))

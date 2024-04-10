@@ -2,7 +2,7 @@ import AbstractTrees
 
 const inspect_metadata = Ref{Bool}(false)
 function AbstractTrees.nodevalue(x::Symbolic)
-    iscall(x) ? operation(x) : x
+    iscall(x) ? operation(x) : isexpr(x) ? head(x) : x
 end
 
 function AbstractTrees.nodevalue(x::BasicSymbolic)
@@ -27,7 +27,7 @@ function AbstractTrees.nodevalue(x::BasicSymbolic)
 end
 
 function AbstractTrees.children(x::Symbolic)
-    isexpr(x) ? arguments(x) : ()
+    iscall(x) ? arguments(x) : isexpr(x) ? children(x) : ()
 end
 
 """

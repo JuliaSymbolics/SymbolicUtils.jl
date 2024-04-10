@@ -6,7 +6,7 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 function matcher(val::Any)
-    isexpr(val) && return term_matcher(val)
+    iscall(val) && return term_matcher(val)
     function literal_matcher(next, data, bindings)
         islist(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
     end

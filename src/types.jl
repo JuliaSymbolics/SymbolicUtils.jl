@@ -1167,10 +1167,7 @@ end
 ###
 
 function ^(a::SN, b)
-<<<<<<< HEAD
-=======
 
->>>>>>> 037c25b (remove redundant and wrpng nometa check)
     !issafecanon(^, a,b) && return Pow(a, b)
     !nometa(a,b) && return Pow(a, b)
     if b isa Number && iszero(b)

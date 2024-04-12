@@ -23,6 +23,7 @@ import TermInterface: iscall, isexpr, issym, symtype, head, children,
 # Add, Mul and Pow
 include("types.jl")
 export similarterm
+Base.@deprecate_binding istree iscall
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath

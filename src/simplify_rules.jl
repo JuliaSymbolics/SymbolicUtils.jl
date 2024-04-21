@@ -2,9 +2,9 @@ using .Rewriters
 """
   is_operation(f)
 Returns a single argument anonymous function predicate, that returns `true` if and only if
-the argument to the predicate satisfies `istree` and `operation(x) == f` 
+the argument to the predicate satisfies `iscall` and `operation(x) == f` 
 """
-is_operation(f) = @nospecialize(x) -> istree(x) && (operation(x) == f)
+is_operation(f) = @nospecialize(x) -> iscall(x) && (operation(x) == f)
 
 let
     CANONICALIZE_PLUS = [
@@ -132,7 +132,7 @@ let
     ]
 
     function number_simplifier()
-        rule_tree = [If(istree, Chain(ASSORTED_RULES)),
+        rule_tree = [If(iscall, Chain(ASSORTED_RULES)),
                      If(x -> !isadd(x) && is_operation(+)(x),
                         Chain(CANONICALIZE_PLUS)),
                      If(is_operation(+), Chain(PLUS_DISTRIBUTE)), # This would be useful even if isadd
@@ -173,12 +173,12 @@ let
     end
 
     # reduce overhead of simplify by defining these as constant
-    serial_simplifier = If(istree, Fixpoint(default_simplifier()))
+    serial_simplifier = If(iscall, Fixpoint(default_simplifier()))
 
     threaded_simplifier(cutoff) = Fixpoint(default_simplifier(threaded=true,
                                                               thread_cutoff=cutoff))
 
-    serial_expand_simplifier = If(istree,
+    serial_expand_simplifier = If(iscall,
                                   Fixpoint(Chain((expand,
                                                   Fixpoint(default_simplifier())))))
 

@@ -35,7 +35,7 @@ pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
 
 # Simplification utilities
 function has_trig_exp(term)
-    !istree(term) && return false
+    !iscall(term) && return false
     fns = (sin, cos, tan, cot, sec, csc, exp, cosh, sinh)
     op = operation(term)
 
@@ -47,7 +47,7 @@ function has_trig_exp(term)
 end
 
 function fold(t)
-    if istree(t)
+    if iscall(t)
         tt = map(fold, arguments(t))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
@@ -81,7 +81,7 @@ function isnotflat(⋆)
     function (x)
         args = arguments(x)
         for t in args
-            if istree(t) && operation(t) === (⋆)
+            if iscall(t) && operation(t) === (⋆)
                 return true
             end
         end
@@ -141,7 +141,7 @@ function flatten_term(⋆, x)
     # flatten nested ⋆
     flattened_args = []
     for t in args
-        if istree(t) && operation(t) === (⋆)
+        if iscall(t) && operation(t) === (⋆)
             append!(flattened_args, arguments(t))
         else
             push!(flattened_args, t)
@@ -170,7 +170,7 @@ struct LL{V}
     i::Int
 end
 
-islist(x) = istree(x) || !isempty(x)
+islist(x) = iscall(x) || !isempty(x)
 
 Base.empty(l::LL) = empty(l.v)
 Base.isempty(l::LL) = l.i > length(l.v)
@@ -184,9 +184,9 @@ Base.isempty(t::Term) = false
 @inline car(t::Term) = operation(t)
 @inline cdr(t::Term) = arguments(t)
 
-@inline car(v) = istree(v) ? operation(v) : first(v)
+@inline car(v) = iscall(v) ? operation(v) : first(v)
 @inline function cdr(v)
-    if istree(v)
+    if iscall(v)
         arguments(v)
     else
         islist(v) ? LL(v, 2) : error("asked cdr of empty")
@@ -200,7 +200,7 @@ end
     if n === 0
         return ll
     else
-        istree(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
+        iscall(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
     end
 end
 @inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)
@@ -218,10 +218,12 @@ macro matchable(expr)
     get_name(e::Expr) = (@assert(e.head == :(::)); e.args[1])
     fields = map(get_name, fields)
     quote
+        # TODO: fix this to be not a call. Make pattern matcher work for these
         $expr
-        SymbolicUtils.istree(::$name) = true
+        SymbolicUtils.head(::$name) = $name
         SymbolicUtils.operation(::$name) = $name
         SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
+        SymbolicUtils.children(x::$name) = [SymbolicUtils.operation(x); SymbolicUtils.children(x)]
         Base.length(x::$name) = $(length(fields) + 1)
         SymbolicUtils.similarterm(x::$name, f, args, type; kw...) = f(args...)
     end |> esc
@@ -229,7 +231,7 @@ end
 
 """
   node_count(t)
-Count the nodes in a symbolic expression tree satisfying `istree` and `arguments`.
+Count the nodes in a symbolic expression tree satisfying `iscall` and `arguments`.
 """
-node_count(t) = istree(t) ? reduce(+, node_count(x) for x in arguments(t), init = 0) + 1 : 1
+node_count(t) = iscall(t) ? reduce(+, node_count(x) for x in arguments(t), init = 0) + 1 : 1
 

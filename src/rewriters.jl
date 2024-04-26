@@ -13,7 +13,7 @@ rewriters.
 - `RestartedChain(itr)` like `Chain(itr)` but restarts from the first rewriter once on the
    first successful application of one of the chained rewriters.
 - `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
-   returns true, `rw2` if it retuns false
+   returns true, `rw2` if it returns false
 - `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
 - `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
    traversal of a given expression and applies the rewriter `rw`. Note that if
@@ -31,6 +31,7 @@ rewriters.
 """
 module Rewriters
 using SymbolicUtils: @timer
+using TermInterface
 
 import SymbolicUtils: similarterm, istree, operation, arguments, unsorted_arguments, metadata, node_count
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
@@ -196,11 +197,12 @@ instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 passthrough(x, default) = x === nothing ? default : x
 function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
-    if istree(x)
+    if iscall(x)
         if ord === :pre
             x = p.rw(x)
         end
         if istree(x)
+        elseif iscall(x)
             x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)), metadata=metadata(x))
         end
         return ord === :post ? p.rw(x) : x
@@ -211,11 +213,11 @@ end
 
 function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
-    if istree(x)
+    if iscall(x)
         if ord === :pre
             x = p.rw(x)
         end
-        if istree(x)
+        if iscall(x)
             _args = map(arguments(x)) do arg
                 if node_count(arg) > p.thread_cutoff
                     Threads.@spawn p(arg)

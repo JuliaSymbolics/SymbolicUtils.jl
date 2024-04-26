@@ -6,7 +6,7 @@ using Bijections
 
 Abstracts a [MultivariatePolynomials.jl](https://juliaalgebra.github.io/MultivariatePolynomials.jl/stable/) as a SymbolicUtils expression and vice-versa.
 
-The SymbolicUtils term interface (`istree`, `operation, and `arguments`) works on PolyForm lazily:
+The SymbolicUtils term interface (`isexpr`/`iscall`, `operation, and `arguments`) works on PolyForm lazily:
 the `operation` and `arguments` are created by converting one level of arguments into SymbolicUtils expressions. They may further contain PolyForm within them.
 We use this to hold polynomials in memory while doing `simplify_fractions`.
 
@@ -81,14 +81,15 @@ end
 # forward gcd
 
 PF = :(PolyForm{promote_symtype(/, symtype(x), symtype(y))})
+const FriendlyCoeffType = Union{Integer, Rational}
 @eval begin
     Base.div(x::PolyForm, y::PolyForm) = $PF(div(x.p, y.p), mix_dicts(x, y)...)
-    Base.div(x::Integer, y::PolyForm)  = $PF(div(x, y.p), y.pvar2sym, y.sym2term)
-    Base.div(x::PolyForm, y::Integer)  = $PF(div(x.p, y), x.pvar2sym, x.sym2term)
+    Base.div(x::FriendlyCoeffType, y::PolyForm)  = $PF(div(x, y.p), y.pvar2sym, y.sym2term)
+    Base.div(x::PolyForm, y::FriendlyCoeffType)  = $PF(div(x.p, y), x.pvar2sym, x.sym2term)
 
     Base.gcd(x::PolyForm, y::PolyForm) = $PF(_gcd(x.p, y.p), mix_dicts(x, y)...)
-    Base.gcd(x::Integer, y::PolyForm)  = $PF(_gcd(x, y.p), y.pvar2sym, y.sym2term)
-    Base.gcd(x::PolyForm, y::Integer)  = $PF(_gcd(x.p, y), x.pvar2sym, x.sym2term)
+    Base.gcd(x::FriendlyCoeffType, y::PolyForm)  = $PF(_gcd(x, y.p), y.pvar2sym, y.sym2term)
+    Base.gcd(x::PolyForm, y::FriendlyCoeffType)  = $PF(_gcd(x.p, y), x.pvar2sym, x.sym2term)
 end
 
 _isone(p::PolyForm) = isone(p.p)
@@ -96,7 +97,7 @@ _isone(p::PolyForm) = isone(p.p)
 function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     if x isa Number
         return x
-    elseif istree(x)
+    elseif iscall(x)
         if !(symtype(x) <: Number)
             error("Cannot convert $x of symtype $(symtype(x)) into a PolyForm")
         end
@@ -146,7 +147,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         if haskey(active_inv(pvar2sym), x)
             return pvar2sym(x)
         end
-        pvar = MP.similarvariable(vtype, nameof(x))
+        pvar = MP.similar_variable(vtype, nameof(x))
         pvar2sym[pvar] = x
         return pvar
     end
@@ -169,8 +170,10 @@ function PolyForm(x,
     PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)
 end
 
-istree(x::Type{<:PolyForm}) = true
-istree(x::PolyForm) = true
+isexpr(x::Type{<:PolyForm}) = true
+isexpr(x::PolyForm) = true
+iscall(x::Type{<:PolyForm}) = true
+iscall(x::PolyForm) = true
 
 function similarterm(t::PolyForm, f, args, symtype; metadata=nothing)
     basic_similarterm(t, f, args, symtype; metadata=metadata)
@@ -180,6 +183,7 @@ function similarterm(::PolyForm, f::Union{typeof(*), typeof(+), typeof(^)},
     f(args...)
 end
 
+head(::PolyForm) = PolyForm
 operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
 function arguments(x::PolyForm{T}) where {T}
@@ -226,6 +230,7 @@ function arguments(x::PolyForm{T}) where {T}
                  PolyForm{T}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
+children(x::PolyForm) = [operation(x); arguments(x)]
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
 
@@ -335,7 +340,7 @@ function simplify_fractions(x; polyform=false)
 end
 
 function add_with_div(x, flatten=true)
-    (!istree(x) || operation(x) != (+)) && return x
+    (!iscall(x) || operation(x) != (+)) && return x
     aa = unsorted_arguments(x)
     !any(a->isdiv(a), aa) && return x # no rewrite necessary
 
@@ -360,7 +365,7 @@ function flatten_fractions(x)
 end
 
 function fraction_iszero(x)
-    !istree(x) && return _iszero(x)
+    !iscall(x) && return _iszero(x)
     ff = flatten_fractions(x)
     # fast path and then slow path
     any(_iszero, numerators(ff)) ||
@@ -368,18 +373,18 @@ function fraction_iszero(x)
 end
 
 function fraction_isone(x)
-    !istree(x) && return _isone(x)
+    !iscall(x) && return _isone(x)
     _isone(simplify_fractions(flatten_fractions(x)))
 end
 
 function needs_div_rules(x)
     (isdiv(x) && !(x.num isa Number) && !(x.den isa Number)) ||
-    (istree(x) && operation(x) === (+) && count(has_div, unsorted_arguments(x)) > 1) ||
-    (istree(x) && any(needs_div_rules, unsorted_arguments(x)))
+    (iscall(x) && operation(x) === (+) && count(has_div, unsorted_arguments(x)) > 1) ||
+    (iscall(x) && any(needs_div_rules, unsorted_arguments(x)))
 end
 
 function has_div(x)
-    return isdiv(x) || (istree(x) && any(has_div, unsorted_arguments(x)))
+    return isdiv(x) || (iscall(x) && any(has_div, unsorted_arguments(x)))
 end
 
 flatten_pows(xs) = map(xs) do x

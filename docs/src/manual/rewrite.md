@@ -74,7 +74,7 @@ Notice that the expression was autosimplified before application of the rule.
 
 Matcher pattern may contain slot variables with attached predicates, written as `~x::f` where `f` is a function that takes a matched expression and returns a boolean value. Such a slot will be considered a match only if `f` returns true.
 
-Similarly `~~x::g` is a way of attaching a predicate `g` to a segment variable. In the case of segment variables `g` gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurance should have a predicate.
+Similarly `~~x::g` is a way of attaching a predicate `g` to a segment variable. In the case of segment variables `g` gets a vector of 0 or more expressions and must return a boolean value. If the same slot or segment variable appears twice in the matcher pattern, then at most one of the occurrence should have a predicate.
 
 For example,
 
@@ -133,7 +133,7 @@ acpyid = @acrule sin(~x)^2 + cos(~x)^2 => 1
 acpyid(cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x))
 ```
 
-It has been some work. Fortunately rules may be [chained together](#chaining rewriters) into more sophisticated rewirters to avoid manual application of the rules.
+It has been some work. Fortunately rules may be [chained together](#chaining rewriters) into more sophisticated rewriters to avoid manual application of the rules.
 
 
 ## Composing rewriters
@@ -152,7 +152,7 @@ rewriters.
 - `RestartedChain(itr)` like `Chain(itr)` but restarts from the first rewriter once on the
    first successful application of one of the chained rewriters.
 - `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
-   returns true, `rw2` if it retuns false
+   returns true, `rw2` if it returns false
 - `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
 - `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order 
    (*from top to bottom and from left to right*) traversal of a given expression and applies 

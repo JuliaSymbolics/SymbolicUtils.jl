@@ -4,20 +4,26 @@ $(DocStringExtensions.README)
 module SymbolicUtils
 
 using DocStringExtensions
+
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
 using Unityper
-
-# Sym, Term,
-# Add, Mul and Pow
+using TermInterface
 using DataStructures
 using Setfield
 import Setfield: PropertyLens
+using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
-include("interface.jl")
+using TermInterface
+import TermInterface: iscall, isexpr, issym, symtype, head, children,
+                      operation, arguments, metadata, maketerm
+
+Base.@deprecate_binding istree iscall
+export istree, operation, arguments, unsorted_arguments, similarterm
+# Sym, Term,
+# Add, Mul and Pow
 include("types.jl")
-export istree, operation, arguments, similarterm
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
@@ -63,7 +69,7 @@ include("substitute.jl")
 include("code.jl")
 
 
-# ADjoints
+# Adjoints
 include("adjoints.jl")
 
 end # module

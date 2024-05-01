@@ -254,25 +254,42 @@ const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
 function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
+    zero_salt = iszero(salt)
+    h = s.hash[]
+    # for any type, if hash has been computed and stored, then just return it
+    if zero_salt && h != EMPTY_HASH
+        return h
+    end
     E = exprtype(s)
     if E === SYM
+        if zero_salt
+            h_new = hash(nameof(s), SYM_SALT)
+            s.hash[] = h_new
+            return h_new
+        end
         hash(nameof(s), salt ⊻ SYM_SALT)
     elseif E === ADD || E === MUL
-        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
-        h = s.hash[]
-        !iszero(h) && return h
+        !zero_salt && return hash(hash(s, zero(UInt)), salt)
         hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
         h′ = hash(hashoffset, hash(s.coeff, hash(s.dict, salt)))
         s.hash[] = h′
         return h′
     elseif E === DIV
+        if zero_salt
+            h_new = hash(s.num, hash(s.den, DIV_SALT))
+            s.hash[] = h_new
+            return h_new
+        end
         return hash(s.num, hash(s.den, salt ⊻ DIV_SALT))
     elseif E === POW
+        if zero_salt
+            h_new = hash(s.exp, hash(s.base, POW_SALT))
+            s.hash[] = h_new
+            return h_new
+        end
         hash(s.exp, hash(s.base, salt ⊻ POW_SALT))
     elseif E === TERM
-        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
-        h = s.hash[]
-        !iszero(h) && return h
+        !zero_salt && return hash(hash(s, zero(UInt)), salt)
         op = operation(s)
         oph = op isa Function ? nameof(op) : op
         h′ = hashvec(arguments(s), hash(oph, salt))

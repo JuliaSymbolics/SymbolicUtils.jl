@@ -17,7 +17,7 @@ sdict(kv...) = Dict{Any, Any}(kv...)
 
 using Base: RefValue
 const EMPTY_ARGS = []
-const EMPTY_HASH = RefValue(UInt(0))
+const EMPTY_HASH = UInt(0) # zero indicating that hash has not been computed
 const NOT_SORTED = RefValue(false)
 const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
@@ -25,6 +25,7 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
 @compactify show_methods=false begin
     @abstract struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
+        hash::RefValue{UInt}   = Ref(EMPTY_HASH) # create a RefValue object whenever creating a new BasicSymbolic
     end
     struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
@@ -32,19 +33,16 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
     struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
-        hash::RefValue{UInt}   = EMPTY_HASH
     end
     struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
-        hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
     struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
-        hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
@@ -298,7 +296,7 @@ function Term{T}(f, args; kw...) where T
         args = convert(Vector{Any}, args)
     end
 
-    Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    Term{T}(;f=f, arguments=args, kw...)
 end
 
 function Term(f, args; metadata=NO_METADATA)
@@ -318,7 +316,7 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    Add{T}(; coeff, dict, metadata, arguments=[], issorted=RefValue(false), kw...)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
@@ -333,7 +331,7 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        Mul{T}(; coeff, dict, metadata, arguments=[], issorted=RefValue(false), kw...)
     end
 end
 

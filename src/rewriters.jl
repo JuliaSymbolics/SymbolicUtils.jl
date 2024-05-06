@@ -201,9 +201,9 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
         if ord === :pre
             x = p.rw(x)
         end
-        # if istree(x)
-        #     x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)), metadata=metadata(x))
-        # end
+        if istree(x)
+            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)), metadata=metadata(x))
+        end
         return ord === :post ? p.rw(x) : x
     else
         return p.rw(x)

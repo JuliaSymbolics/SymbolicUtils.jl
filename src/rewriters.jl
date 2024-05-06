@@ -151,8 +151,8 @@ function (rw::FixpointNoCycle)(x)
     f = rw.rw
     push!(rw.hist, hash(x))
     y = @timer cached_repr(f) f(x)
-    while x !== y && hash(x) ∉ hist
-        if y === nothing 
+    while x !== y && hash(x) ∉ rw.hist
+        if y === nothing
             empty!(rw.hist)
             return x
         end
@@ -201,9 +201,10 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
         if ord === :pre
             x = p.rw(x)
         end
-        if istree(x)
-            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)), metadata=metadata(x))
-        end
+
+        x = p.similarterm(x, operation(x), map(PassThrough(p),
+                        unsorted_arguments(x)), metadata=metadata(x))
+
         return ord === :post ? p.rw(x) : x
     else
         return p.rw(x)

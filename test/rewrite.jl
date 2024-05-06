@@ -76,3 +76,19 @@ using SymbolicUtils: @capture
     @eqtest f(b^b) == b
     @test f(b+b) == nothing
 end
+
+@testset "Rewriter tweaks #548" begin
+    struct MetaData end
+    ex = a + b
+    ex = setmetadata(ex, MetaData, :metadata)
+    ex1 = ex + c
+
+    @test SymbolicUtils.isterm(ex1)
+    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+
+    ex = a
+    ex = setmetadata(ex, MetaData, :metadata)
+    ex1 = ex + b
+
+    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+end

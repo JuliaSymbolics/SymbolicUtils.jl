@@ -743,7 +743,7 @@ end
 
 function cse_state!(state, t)
     !iscall(t) && return t
-    state[t] = Base.get!(state, t, 0) + 1
+    state[t] = Base.get(state, t, 0) + 1
     foreach(x->cse_state!(state, x), unsorted_arguments(t))
 end
 

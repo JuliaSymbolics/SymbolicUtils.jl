@@ -535,8 +535,8 @@ end
 
 unflatten(t) = t
 
-function TermInterface.maketerm(::Type{<:BasicSymbolic}, head, args, type, metadata)
-    basicsymbolic(first(args), args[2:end], type, metadata)
+function TermInterface.maketerm(::Type{<:BasicSymbolic}, op, args, type=nothing, metadata=nothing)
+    basicsymbolic(op, args, type, metadata)
 end
 
 
@@ -649,7 +649,7 @@ function similarterm(x, op, args, symtype=nothing; metadata=nothing)
                   The present call can be replaced by
                   `maketerm(typeof(x), $(head(x)), [op, args...], symtype, metadata)`""", :similarterm)
 
-  TermInterface.maketerm(typeof(x), callhead(x), [op, args...], symtype, metadata)
+  TermInterface.maketerm(typeof(x), op, args, symtype, metadata)
 end
 
 # Old fallback

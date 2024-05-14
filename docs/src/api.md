@@ -12,6 +12,15 @@ SymbolicUtils.Pow
 SymbolicUtils.promote_symtype
 ```
 
+## Interfacing
+
+```@docs
+SymbolicUtils.istree
+SymbolicUtils.operation
+SymbolicUtils.arguments
+SymbolicUtils.similarterm
+```
+
 ## Rewriters
 
 ```@docs

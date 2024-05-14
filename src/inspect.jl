@@ -2,11 +2,11 @@ import AbstractTrees
 
 const inspect_metadata = Ref{Bool}(false)
 function AbstractTrees.nodevalue(x::Symbolic)
-    iscall(x) ? operation(x) : isexpr(x) ? head(x) : x
+    istree(x) ? operation(x) : x
 end
 
 function AbstractTrees.nodevalue(x::BasicSymbolic)
-    str = if !iscall(x)
+    str = if !istree(x)
         string(exprtype(x), "(", x, ")")
     elseif isadd(x)
         string(exprtype(x), 
@@ -27,7 +27,7 @@ function AbstractTrees.nodevalue(x::BasicSymbolic)
 end
 
 function AbstractTrees.children(x::Symbolic)
-    iscall(x) ? arguments(x) : isexpr(x) ? children(x) : ()
+    istree(x) ? arguments(x) : ()
 end
 
 """

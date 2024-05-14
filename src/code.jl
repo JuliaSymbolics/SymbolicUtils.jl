@@ -748,27 +748,21 @@ function cse_state!(state, t)
 end
 
 function cse_block!(assignments, counter, names, name, state, x)
+    !iscall(x) && return x
+    haskey(names, x) && return names[x]
+
+    args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
+    op = operation(x)
+    x_new = isterm(x) ? term(op, args...) : similarterm(x, op, args, symtype(x), metadata=metadata(x))
+
     if get(state, x, 0) > 1
-        if haskey(names, x)
-            return names[x]
-        else
-            sym = Sym{symtype(x)}(Symbol(name, counter[]))
-            names[x] = sym
-            push!(assignments, sym ← x)
-            counter[] += 1
-            return sym
-        end
-    elseif iscall(x)
-        args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
-        if isterm(x)
-            return term(operation(x), args...)
-        else
-            return similarterm(x, operation(x),
-                               args, symtype(x),
-                               metadata=metadata(x))
-        end
+        sym = Sym{symtype(x)}(Symbol(name, counter[]))
+        names[x] = sym
+        push!(assignments, sym ← x_new)
+        counter[] += 1
+        return sym
     else
-        return x
+        return x_new
     end
 end
 

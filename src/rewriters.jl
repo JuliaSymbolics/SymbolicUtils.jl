@@ -200,16 +200,12 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
         if ord === :pre
             x = p.rw(x)
         end
-<<<<<<< HEAD
 
-        x = p.similarterm(x, operation(x), map(PassThrough(p),
-                        unsorted_arguments(x)), metadata=metadata(x))
-
-=======
         if istree(x)
-            x = p.similarterm(x, operation(x), map(PassThrough(p), unsorted_arguments(x)))
+            x = p.similarterm(x, operation(x), map(PassThrough(p),
+                            unsorted_arguments(x)), metadata=metadata(x))
         end
->>>>>>> parent of 6713fa0 (Merge pull request #584 from JuliaSymbolics/ale/terminterface-new)
+
         return ord === :post ? p.rw(x) : x
     else
         return p.rw(x)

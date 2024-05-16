@@ -16,7 +16,7 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 function substitute(expr, dict; fold=true)
     haskey(dict, expr) && return dict[expr]
 
-    if iscall(expr)
+    if istree(expr)
         op = substitute(operation(expr), dict; fold=fold)
         if fold
             canfold = !(op isa Symbolic)
@@ -53,7 +53,7 @@ Base.occursin(needle::Symbolic, haystack) = _occursin(needle, haystack)
 function _occursin(needle, haystack)
     isequal(needle, haystack) && return true
 
-    if iscall(haystack)
+    if istree(haystack)
         args = arguments(haystack)
         for arg in args
             occursin(needle, arg) && return true

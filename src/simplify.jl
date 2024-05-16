@@ -43,7 +43,7 @@ function simplify(x;
         SymbolicUtils.simplify_fractions(x) : x
 end
 
-has_operation(x, op) = (iscall(x) && (operation(x) == op ||
+has_operation(x, op) = (istree(x) && (operation(x) == op ||
                                       any(a->has_operation(a, op),
                                           unsorted_arguments(x))))
 

@@ -114,8 +114,6 @@ symtype(x::Number) = typeof(x)
     end
 end
 
-@inline head(x::BasicSymbolic) = BasicSymbolic
-
 function arguments(x::BasicSymbolic)
     args = unsorted_arguments(x)
     @compactified x::BasicSymbolic begin
@@ -137,9 +135,6 @@ function arguments(x::BasicSymbolic)
     end
     return args
 end
-
-unsorted_arguments(x) = arguments(x)
-children(x::BasicSymbolic) = [operation(x); arguments(x)]
 function unsorted_arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
@@ -162,7 +157,7 @@ function unsorted_arguments(x::BasicSymbolic)
     if isadd(x)
         for (k, v) in x.dict
             push!(args, applicable(*,k,v) ? k*v :
-                    maketerm(k, *, [k, v]))
+                    similarterm(k, *, [k, v]))
         end
     else # MUL
         for (k, v) in x.dict
@@ -188,9 +183,7 @@ function unsorted_arguments(x::BasicSymbolic)
     return args
 end
 
-isexpr(s::BasicSymbolic) = !issym(s)
-iscall(s::BasicSymbolic) = isexpr(s)
-
+istree(s::BasicSymbolic) = !issym(s)
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
 issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
 isterm(x) = isa_SymType(Val(:Term), x)
@@ -407,7 +400,7 @@ end
 
 @inline function numerators(x)
     isdiv(x) && return numerators(x.num)
-    iscall(x) && operation(x) === (*) ? arguments(x) : Any[x]
+    istree(x) && operation(x) === (*) ? arguments(x) : Any[x]
 end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
@@ -523,7 +516,7 @@ end
 Binarizes `Term`s with n-ary operations
 """
 function unflatten(t::Symbolic{T}) where{T}
-    if iscall(t)
+    if istree(t)
         f = operation(t)
         if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops
             a = arguments(t)
@@ -535,12 +528,28 @@ end
 
 unflatten(t) = t
 
-function TermInterface.maketerm(::Type{<:BasicSymbolic}, head, args, type, metadata)
-    basicsymbolic(first(args), args[2:end], type, metadata)
-end
+"""
+    similarterm(t, f, args, symtype; metadata=nothing)
 
+Create a term that is similar in type to `t`. Extending this function allows packages
+using their own expression types with SymbolicUtils to define how new terms should
+be created. Note that `similarterm` may return an object that has a
+different type than `t`, because `f` also influences the result.
 
-function basicsymbolic(f, args, stype, metadata)
+## Arguments
+
+- `t` the reference term to use to create similar terms
+- `f` is the operation of the term
+- `args` is the arguments
+- The `symtype` of the resulting term. Best effort will be made to set the symtype of the
+  resulting similar term to this type.
+"""
+similarterm(t::Symbolic, f, args; metadata=nothing) =
+    similarterm(t, f, args, _promote_symtype(f, args); metadata=metadata)
+similarterm(t::BasicSymbolic, f, args,
+            symtype; metadata=nothing) = basic_similarterm(t, f, args, symtype; metadata=metadata)
+
+function basic_similarterm(t, f, args, stype; metadata=nothing)
     if f isa Symbol
         error("$f must not be a Symbol")
     end
@@ -550,7 +559,7 @@ function basicsymbolic(f, args, stype, metadata)
     end
     if T <: LiteralReal
         Term{T}(f, args, metadata=metadata)
-    elseif T <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
+    elseif stype <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
         res = f(args...)
         if res isa Symbolic
             @set! res.metadata = metadata
@@ -571,17 +580,16 @@ function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
-issafecanon(f, s) = true
-function issafecanon(f, s::Symbolic)
+function issafecanon(f, s)
     if isnothing(metadata(s)) || issym(s)
         return true
     else
         _issafecanon(f, s)
     end
 end
-_issafecanon(::typeof(*), s) = !iscall(s) || !(operation(s) in (+,*,^))
-_issafecanon(::typeof(+), s) = !iscall(s) || !(operation(s) in (+,*))
-_issafecanon(::typeof(^), s) = !iscall(s) || !(operation(s) in (*, ^))
+_issafecanon(::typeof(*), s) = !istree(s) || !(operation(s) in (+,*,^))
+_issafecanon(::typeof(+), s) = !istree(s) || !(operation(s) in (+,*))
+_issafecanon(::typeof(^), s) = !istree(s) || !(operation(s) in (*, ^))
 
 issafecanon(f, ss...) = all(x->issafecanon(f, x), ss)
 
@@ -633,41 +641,11 @@ end
 
 function to_symbolic(x)
     Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
-                 "symbolic structure using `iscall(x)`, `operation(x)`, `arguments(x)` " *
+                 "symbolic structure using `istree(x)`, `operation(x)`, `arguments(x)` " *
                  "and `similarterm(::YourType, f, args, symtype)`", :to_symbolic, force=true)
 
     x
 end
-
-"""
-    similarterm(x, op, args, symtype=nothing; metadata=nothing)
-
-"""
-function similarterm(x, op, args, symtype=nothing; metadata=nothing)
-  Base.depwarn("""`similarterm` is deprecated, use `maketerm` instead.
-                  See https://github.com/JuliaSymbolics/TermInterface.jl for details.
-                  The present call can be replaced by
-                  `maketerm(typeof(x), $(head(x)), [op, args...], symtype, metadata)`""", :similarterm)
-
-  TermInterface.maketerm(typeof(x), callhead(x), [op, args...], symtype, metadata)
-end
-
-# Old fallback
-function similarterm(T::Type, op, args, symtype=nothing; metadata=nothing)
-  Base.depwarn("`similarterm` is deprecated, use `maketerm` instead." *
-               "See https://github.com/JuliaSymbolics/TermInterface.jl for details.", :similarterm)
-  op(args...)
-end
-
-export similarterm
-
-
-"""
-    callhead(x)
-Used in this deprecation cycle of `similarterm` to find the `head` argument to
-`maketerm`. Do not implement this, or use `similarterm` if you're using this package.
-"""
-callhead(x) = typeof(x)
 
 ###
 ###  Pretty printing
@@ -676,7 +654,7 @@ const show_simplified = Ref(false)
 
 isnegative(t::Real) = t < 0
 function isnegative(t)
-    if iscall(t) && operation(t) === (*)
+    if istree(t) && operation(t) === (*)
         coeff = first(arguments(t))
         return isnegative(coeff)
     end
@@ -688,7 +666,7 @@ setargs(t, args) = Term{symtype(t)}(operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
-isbinop(f) = iscall(f) && !iscall(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
+isbinop(f) = istree(f) && !istree(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")
@@ -707,7 +685,7 @@ function print_arg(io, f, x)
 end
 
 function remove_minus(t)
-    !iscall(t) && return -t
+    !istree(t) && return -t
     @assert operation(t) == (*)
     args = arguments(t)
     @assert args[1] < 0
@@ -778,9 +756,9 @@ function show_ref(io, f, args)
     x = args[1]
     idx = args[2:end]
 
-    iscall(x) && print(io, "(")
+    istree(x) && print(io, "(")
     print(io, x)
-    iscall(x) && print(io, ")")
+    istree(x) && print(io, ")")
     print(io, "[")
     for i=1:length(idx)
         print_arg(io, idx[i])
@@ -790,7 +768,7 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
-    fname = iscall(f) ? Symbol(repr(f)) : nameof(f)
+    fname = istree(f) ? Symbol(repr(f)) : nameof(f)
     len_args = length(args)
     if Base.isunaryoperator(fname) && len_args == 1
         print(io, "$fname")
@@ -832,7 +810,7 @@ function show_term(io::IO, t)
         show_pow(io, args)
     elseif f === (getindex)
         show_ref(io, f, args)
-    elseif f === (identity) && !issym(args[1]) && !iscall(args[1])
+    elseif f === (identity) && !issym(args[1]) && !istree(args[1])
         show(io, args[1])
     else
         show_call(io, f, args)

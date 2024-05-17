@@ -632,10 +632,6 @@ end
 
 
 function to_symbolic(x)
-    Base.depwarn("`to_symbolic(x)` is deprecated, define the interface for your " *
-                 "symbolic structure using `iscall(x)`, `operation(x)`, `arguments(x)` " *
-                 "and `similarterm(::YourType, f, args, symtype)`", :to_symbolic, force=true)
-
     x
 end
 
@@ -644,18 +640,11 @@ end
 
 """
 function similarterm(x, op, args, symtype=nothing; metadata=nothing)
-  Base.depwarn("""`similarterm` is deprecated, use `maketerm` instead.
-                  See https://github.com/JuliaSymbolics/TermInterface.jl for details.
-                  The present call can be replaced by
-                  `maketerm(typeof(x), $(head(x)), [op, args...], symtype, metadata)`""", :similarterm)
-
   TermInterface.maketerm(typeof(x), callhead(x), [op, args...], symtype, metadata)
 end
 
 # Old fallback
 function similarterm(T::Type, op, args, symtype=nothing; metadata=nothing)
-  Base.depwarn("`similarterm` is deprecated, use `maketerm` instead." *
-               "See https://github.com/JuliaSymbolics/TermInterface.jl for details.", :similarterm)
   op(args...)
 end
 

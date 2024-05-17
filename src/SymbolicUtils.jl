@@ -19,7 +19,7 @@ using TermInterface
 import TermInterface: iscall, isexpr, issym, symtype, head, children,
                       operation, arguments, metadata, maketerm
 
-Base.@deprecate_binding istree iscall
+const istree = iscall
 export istree, operation, arguments, unsorted_arguments, similarterm
 # Sym, Term,
 # Add, Mul and Pow

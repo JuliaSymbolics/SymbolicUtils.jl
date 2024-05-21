@@ -951,8 +951,6 @@ macro syms(xs...)
     defs = map(xs) do x
         n, t = _name_type(x)
         T = esc(t)
-        nt = _name_type(x)
-        n, t = nt.name, nt.type
         :($(esc(n)) = Sym{$T}($(Expr(:quote, n))))
     end
     Expr(:block, defs...,

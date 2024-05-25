@@ -315,3 +315,44 @@ end
     end
     @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
 end
+
+@testset "Symbolic Number Constructor and Conversion" begin
+    @testset "Int" begin
+        @test Symbolic(1) isa Symbolic{Int}
+        expected = Term{Int}(identity, [1])
+        @test isequal(Symbolic(1), expected)
+        @test isequal(convert(Symbolic{Int}, 1), expected)
+        @test isequal(convert(BasicSymbolic{Int}, 1), expected)
+    end
+
+    @testset "Float64" begin
+        @test Symbolic(1.0) isa Symbolic{Float64}
+        expected = Term{Float64}(identity, [1.0])
+        @test isequal(Symbolic(1.0), expected)
+        @test isequal(convert(Symbolic{Float64}, 1.0), expected)
+        @test isequal(convert(BasicSymbolic{Float64}, 1.0), expected)
+    end
+
+    @testset "Rational" begin
+        @test Symbolic(1//2) isa Symbolic{Rational{Int}}
+        expected = Term{Rational{Int}}(identity, [1//2])
+        @test isequal(Symbolic(1//2), expected)
+        @test isequal(convert(Symbolic{Rational{Int}}, 1//2), expected)
+        @test isequal(convert(BasicSymbolic{Rational{Int}}, 1//2), expected)
+    end
+
+    @testset "Complex" begin
+        @test Symbolic(1 + 2im) isa Symbolic{Complex{Int}}
+        expected = Term{Complex{Int}}(identity, [1 + 2im])
+        @test isequal(Symbolic(1 + 2im), expected)
+        @test isequal(convert(Symbolic{Complex{Int}}, 1 + 2im), expected)
+        @test isequal(convert(BasicSymbolic{Complex{Int}}, 1 + 2im), expected)
+    end
+
+    @testset "Assigning Number to Array" begin
+        @syms x y
+        arr = [x, y]
+        @test_nowarn arr[1] = 2
+        @test_nowarn arr[2] = 1.0
+    end
+end

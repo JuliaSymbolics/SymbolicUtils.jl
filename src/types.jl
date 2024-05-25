@@ -570,6 +570,57 @@ function basic_similarterm(t, f, args, stype; metadata=nothing)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Construct a [`Symbolic`](@ref) object from a number `x`.
+
+This function is used to create a symbolic representation of a number.
+
+```jldoctest
+julia> a = SymbolicUtils.Symbolic(3.14)
+3.14
+
+julia> typeof(a)
+SymbolicUtils.BasicSymbolic{Float64}
+
+julia> b = SymbolicUtils.Symbolic{Real}(6.28)
+6.28
+
+julia> typeof(b)
+SymbolicUtils.BasicSymbolic{Real}
+```
+"""
+function Symbolic{T}(x::Number) where {T}
+    Term{T}(identity, [convert(T, x)])
+end
+function Symbolic(x::T) where {T<:Number}
+    Symbolic{T}(x)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Convert a number `x` to a [`Symbolic`](@ref) object.
+
+This function is used to convert a number to a symbolic representation.
+It is called, for example, when assigning to an array (converts to the array's
+element type) or assigning to a field of an object (converts to the declared type
+of the field).
+
+# Examples
+```jldoctest
+julia> a = convert(SymbolicUtils.BasicSymbolic{Real}, 3.14)
+3.14
+
+julia> typeof(a)
+SymbolicUtils.BasicSymbolic{Real}
+```
+"""
+function Base.convert(::Type{<:Symbolic{T}}, x::Number) where {T}
+    Symbolic{T}(x)
+end
+
 ###
 ### Metadata
 ###

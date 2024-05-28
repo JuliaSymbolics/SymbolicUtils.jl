@@ -108,15 +108,8 @@ g(2//5, g(1, β))
 
 Symbolic expressions are of type `Term{T}`, `Add{T}`, `Mul{T}`, `Pow{T}` or `Div{T}` and denote some function call where one or more arguments are themselves such expressions or `Sym`s. See more about the representation [here](/representation/).
 
-All the expression types support the following:
-
-- `istree(x)` -- always returns `true` denoting, `x` is not a leaf node like Sym or a literal.
-- `operation(x)` -- the function being called
-- `arguments(x)` -- a vector of arguments
-- `symtype(x)` -- the "inferred" type (`T`)
-
-See more on the interface [here](/interface)
-
+All the expression types support the [TermInterface.jl](https://github.com/0x0f0f0f/TermInterface.jl) interface.
+Please refer to the package for the complete reference of the interface.
 
 ## Term rewriting
 

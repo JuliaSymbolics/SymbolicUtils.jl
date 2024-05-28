@@ -1,10 +1,10 @@
 """
-  istree(x)
+  iscall(x)
 
 Returns `true` if `x` is a term. If true, `operation`, `arguments`
 must also be defined for `x` appropriately.
 """
-istree(x) = false
+iscall(x) = false
 
 """
   symtype(x)
@@ -29,7 +29,7 @@ issym(x) = false
 """
   operation(x)
 
-If `x` is a term as defined by `istree(x)`, `operation(x)` returns the
+If `x` is a term as defined by `iscall(x)`, `operation(x)` returns the
 head of the term if `x` represents a function call, for example, the head
 is the function being called.
 """
@@ -38,14 +38,14 @@ function operation end
 """
   arguments(x)
 
-Get the arguments of `x`, must be defined if `istree(x)` is `true`.
+Get the arguments of `x`, must be defined if `iscall(x)` is `true`.
 """
 function arguments end
 
 """
   unsorted_arguments(x::T)
 
-If x is a term satisfying `istree(x)` and your term type `T` provides
+If x is a term satisfying `iscall(x)` and your term type `T` provides
 an optimized implementation for storing the arguments, this function can
 be used to retrieve the arguments when the order of arguments does not matter 
 but the speed of the operation does.

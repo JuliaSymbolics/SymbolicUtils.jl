@@ -536,7 +536,7 @@ end
 unflatten(t) = t
 
 function TermInterface.maketerm(::Type{<:BasicSymbolic}, head, args, type, metadata)
-    basicsymbolic(first(args), args[2:end], type, metadata)
+    basicsymbolic(head, args, type, metadata)
 end
 
 
@@ -640,23 +640,22 @@ end
 
 """
 function similarterm(x, op, args, symtype=nothing; metadata=nothing)
-  TermInterface.maketerm(typeof(x), callhead(x), [op, args...], symtype, metadata)
+    Base.depwarn("""`similarterm` is deprecated, use `maketerm` instead.
+                 `similarterm(x, op, args, symtype; metadata)` is now
+                 `maketerm(typeof(x), op, args, symtype, metadata)`""", :similarterm)
+  TermInterface.maketerm(typeof(x), op, args, symtype, metadata)
 end
 
 # Old fallback
 function similarterm(T::Type, op, args, symtype=nothing; metadata=nothing)
+
+  Base.depwarn("`similarterm` is deprecated, use `maketerm` instead." *
+               "See https://github.com/JuliaSymbolics/TermInterface.jl for details.", :similarterm)
   op(args...)
 end
 
 export similarterm
 
-
-"""
-    callhead(x)
-Used in this deprecation cycle of `similarterm` to find the `head` argument to
-`maketerm`. Do not implement this, or use `similarterm` if you're using this package.
-"""
-callhead(x) = typeof(x)
 
 ###
 ###  Pretty printing

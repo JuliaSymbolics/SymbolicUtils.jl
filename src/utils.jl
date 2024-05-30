@@ -53,7 +53,7 @@ function fold(t)
             # evaluate it
             return operation(t)(tt...)
         else
-            return similarterm(t, operation(t), tt)
+            return maketerm(typeof(t), operation(t), tt, symtype(t), metadata(t))
         end
     else
         return t
@@ -147,19 +147,19 @@ function flatten_term(⋆, x)
             push!(flattened_args, t)
         end
     end
-    similarterm(x, ⋆, flattened_args)
+    maketerm(typeof(x), ⋆, flattened_args, symtype(x), metadata(x))
 end
 
 function sort_args(f, t)
     args = arguments(t)
     if length(args) < 2
-        return similarterm(t, f, args)
+        return maketerm(typeof(t), f, args, symtype(t), metadata(t))
     elseif length(args) == 2
         x, y = args
-        return similarterm(t, f, x <ₑ y ? [x,y] : [y,x])
+        return maketerm(typeof(t), f, x <ₑ y ? [x,y] : [y,x], symtype(t), metadata(t))
     end
     args = args isa Tuple ? [args...] : args
-    similarterm(t, f, sort(args, lt=<ₑ))
+    maketerm(typeof(t), f, sort(args, lt=<ₑ), symtype(t), metadata(t))
 end
 
 # Linked List interface
@@ -225,7 +225,7 @@ macro matchable(expr)
         SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         SymbolicUtils.children(x::$name) = [SymbolicUtils.operation(x); SymbolicUtils.children(x)]
         Base.length(x::$name) = $(length(fields) + 1)
-        SymbolicUtils.similarterm(x::$name, f, args, type; kw...) = f(args...)
+        SymbolicUtils.maketerm(x::$name, f, args, type, metadata) = f(args...)
     end |> esc
 end
 

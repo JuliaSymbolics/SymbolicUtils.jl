@@ -34,6 +34,6 @@ else
     include("cse.jl")
     include("interface.jl")
     # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed
-    # include("fuzz.jl")
+    include("fuzz.jl")
     include("adjoints.jl")
 end

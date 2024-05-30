@@ -31,11 +31,11 @@ function substitute(expr, dict; fold=true)
             args = map(x->substitute(x, dict, fold=fold), unsorted_arguments(expr))
         end
 
-        similarterm(expr,
-                    op,
-                    args,
-                    symtype(expr);
-                    metadata=metadata(expr))
+        maketerm(typeof(expr),
+                 op,
+                 args,
+                 symtype(expr),
+                 metadata(expr))
     else
         expr
     end

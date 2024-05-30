@@ -33,7 +33,7 @@ module Rewriters
 using SymbolicUtils: @timer
 using TermInterface
 
-import SymbolicUtils: similarterm, istree, operation, arguments, unsorted_arguments, metadata, node_count
+import SymbolicUtils: iscall, operation, arguments, unsorted_arguments, metadata, node_count, _promote_symtype
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -167,24 +167,41 @@ end
 struct Walk{ord, C, F, threaded}
     rw::C
     thread_cutoff::Int
-    similarterm::F
+    maketerm::F # XXX: for the 2.0 deprecation cycle, we actually store a function
+                # that behaves like `similarterm` here, we use `compatmaker` to wrap
+                # maketerm-like input to do this, with a warning if similarterm provided
+                # we need this workaround to deprecate because similarterm takes value
+                # but maketerm only knows the type.
 end
 
 function instrument(x::Walk{ord, C,F,threaded}, f) where {ord,C,F,threaded}
     irw = instrument(x.rw, f)
-    Walk{ord, typeof(irw), typeof(x.similarterm), threaded}(irw,
+    Walk{ord, typeof(irw), typeof(x.maketerm), threaded}(irw,
                                                             x.thread_cutoff,
-                                                            x.similarterm)
+                                                            x.maketerm)
 end
 
 using .Threads
 
-function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
-    Walk{:post, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
+function compatmaker(similarterm, maketerm)
+    # XXX: delete this and only use maketerm in a future release.
+    if similarterm isa Nothing
+        function (x, f, args, type=_promote_symtype(f, args); metadata)
+            maketerm(typeof(x), f, args, type, metadata)
+        end
+    else
+        Base.depwarn("Prewalk and Postwalk now take maketerm instead of similarterm keyword argument. similarterm(x, f, args, type; metadata) is now maketerm(typeof(x), f, args, type, metadata)", :similarterm)
+        similarterm
+    end
+end
+function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm, similarterm=nothing)
+    maker = compatmaker(similarterm, maketerm)
+    Walk{:post, typeof(rw), typeof(maker), threaded}(rw, thread_cutoff, maker)
 end
 
-function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
-    Walk{:pre, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
+function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm, similarterm=nothing)
+    maker = compatmaker(similarterm, maketerm)
+    Walk{:pre, typeof(rw), typeof(maker), threaded}(rw, thread_cutoff, maker)
 end
 
 struct PassThrough{C}
@@ -202,8 +219,8 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
             x = p.rw(x)
         end
 
-        if istree(x)
-            x = p.similarterm(x, operation(x), map(PassThrough(p),
+        if iscall(x)
+            x = p.maketerm(x, operation(x), map(PassThrough(p),
                             unsorted_arguments(x)), metadata=metadata(x))
         end
 
@@ -228,7 +245,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
                 end
             end
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
-            t = p.similarterm(x, operation(x), args, metadata=metadata(x))
+            t = p.maketerm(x, operation(x), args, metadata=metadata(x))
         end
         return ord === :post ? p.rw(t) : t
     else

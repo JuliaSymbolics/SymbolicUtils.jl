@@ -78,5 +78,7 @@ with `head` as the head and `args` as the arguments, `type` as the symtype
 and `metadata` as the metadata. By default this will execute `head(args...)`.
 `x` parameter can also be a `Type`. The `exprhead` keyword argument is useful 
 when manipulating `Expr`s.
+
+`similarterm` is deprecated see help for `maketerm` instead.
 """
 function similarterm end

@@ -175,11 +175,11 @@ isexpr(x::PolyForm) = true
 iscall(x::Type{<:PolyForm}) = true
 iscall(x::PolyForm) = true
 
-function similarterm(t::PolyForm, f, args, symtype; metadata=nothing)
-    basic_similarterm(t, f, args, symtype; metadata=metadata)
+function similarterm(::Type{<:PolyForm}, f, args, symtype, metadata)
+    basicsymbolic(t, f, args, symtype, metadata)
 end
-function similarterm(::PolyForm, f::Union{typeof(*), typeof(+), typeof(^)},
-                     args, symtype; metadata=nothing)
+function maketerm(::Type{<:PolyForm}, f::Union{typeof(*), typeof(+), typeof(^)},
+                     args, symtype, metadata)
     f(args...)
 end
 

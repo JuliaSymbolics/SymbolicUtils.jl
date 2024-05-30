@@ -167,7 +167,11 @@ end
 struct Walk{ord, C, F, threaded}
     rw::C
     thread_cutoff::Int
-    maketerm::F
+    maketerm::F # XXX: for the 2.0 deprecation cycle, we actually store a function
+                # that behaves like `similarterm` here, we use `compatmaker` to wrap
+                # maketerm-like input to do this, with a warning if similarterm provided
+                # we need this workaround to deprecate because similarterm takes value
+                # but maketerm only knows the type.
 end
 
 function instrument(x::Walk{ord, C,F,threaded}, f) where {ord,C,F,threaded}
@@ -180,6 +184,7 @@ end
 using .Threads
 
 function compatmaker(similarterm, maketerm)
+    # XXX: delete this and only use maketerm in a future release.
     if similarterm isa Nothing
         function (x, f, args, type=_promote_symtype(f, args); metadata)
             maketerm(typeof(x), f, args, type, metadata)

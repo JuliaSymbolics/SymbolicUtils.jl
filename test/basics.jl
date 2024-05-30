@@ -214,20 +214,20 @@ end
     @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
 end
 
-@testset "similarterm" begin
+@testset "maketerm" begin
     @syms a b c
-    @test isequal(SymbolicUtils.similarterm((b + c), +, [a,  (b+c)]).dict, Dict(a=>1,b=>1,c=>1))
-    @test isequal(SymbolicUtils.similarterm(b^2, ^, [b^2,  1//2]), b)
+    @test isequal(SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], Number, nothing).dict, Dict(a=>1,b=>1,c=>1))
+    @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  1//2], Number, nothing), b)
 
-    # test that similarterm doesn't hard-code BasicSymbolic subtype
+    # test that maketerm doesn't hard-code BasicSymbolic subtype
     # and is consistent with BasicSymbolic arithmetic operations
-    @test isequal(SymbolicUtils.similarterm(a / b, *, [a / b, c]), (a / b) * c)
-    @test isequal(SymbolicUtils.similarterm(a * b, *, [0, c]), 0)
-    @test isequal(SymbolicUtils.similarterm(a^b, ^, [a * b, 3]), (a * b)^3)
+    @test isequal(SymbolicUtils.maketerm(typeof(a / b), *, [a / b, c], Number, nothing), (a / b) * c)
+    @test isequal(SymbolicUtils.maketerm(typeof(a * b), *, [0, c], Number, nothing), 0)
+    @test isequal(SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3], Number, nothing), (a * b)^3)
 
-    # test that similarterm sets metadata correctly
+    # test that maketerm sets metadata correctly
     metadata = Base.ImmutableDict{DataType, Any}(Ctx1, "meta_1")
-    s = SymbolicUtils.similarterm(a^b, ^, [a * b, 3]; metadata = metadata)
+    s = SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3], Number, metadata)
     @test hasmetadata(s, Ctx1)
     @test getmetadata(s, Ctx1) == "meta_1"
 end

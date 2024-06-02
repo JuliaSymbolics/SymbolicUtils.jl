@@ -221,7 +221,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
 
         if iscall(x)
             x = p.maketerm(x, operation(x), map(PassThrough(p),
-                            unsorted_arguments(x)), metadata=metadata(x))
+                            unsorted_arguments(x)), metadata(x))
         end
 
         return ord === :post ? p.rw(x) : x
@@ -245,7 +245,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
                 end
             end
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
-            t = p.maketerm(x, operation(x), args, metadata=metadata(x))
+            t = p.maketerm(x, operation(x), args, metadata(x))
         end
         return ord === :post ? p.rw(t) : t
     else

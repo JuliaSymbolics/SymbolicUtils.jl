@@ -114,7 +114,7 @@ symtype(x::Number) = typeof(x)
     end
 end
 
-@inline head(x::BasicSymbolic) = BasicSymbolic
+@inline head(x::BasicSymbolic) = operation(x)
 
 function arguments(x::BasicSymbolic)
     args = unsorted_arguments(x)
@@ -139,7 +139,7 @@ function arguments(x::BasicSymbolic)
 end
 
 unsorted_arguments(x) = arguments(x)
-children(x::BasicSymbolic) = [operation(x); arguments(x)]
+children(x::BasicSymbolic) = arguments(x)
 function unsorted_arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments

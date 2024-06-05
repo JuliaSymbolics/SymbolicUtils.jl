@@ -189,7 +189,7 @@ end
 _f(x) = x === a
 @testset "where" begin
 
-    @syms a b
+    @syms b
     r = @rule ~x => ~x where {_f(~x)}
     @eqtest r(a) == a
     @test isnothing(r(b))

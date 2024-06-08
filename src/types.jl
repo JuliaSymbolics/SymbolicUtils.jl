@@ -539,7 +539,7 @@ function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
     basicsymbolic(head, args, symtype(T), metadata)
 end
 
-symtype(T::Type{<:Symbolic{T}}) where T = T
+symtype(::Type{<:Symbolic{T}}) where T = T
 
 
 function basicsymbolic(f, args, stype, metadata)

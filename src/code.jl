@@ -9,7 +9,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, similarterm, unsorted_arguments, metadata, isterm, term
+                      symtype, unsorted_arguments, metadata, isterm, term
 
 ##== state management ==##
 
@@ -694,7 +694,7 @@ function _cse!(mem, expr)
     iscall(expr) || return expr
     op = _cse!(mem, operation(expr))
     args = map(Base.Fix1(_cse!, mem), arguments(expr))
-    t = similarterm(expr, op, args)
+    t = maketerm(typeof(expr), op, args, nothing)
 
     v, dict = mem
     update! = let v=v, t=t

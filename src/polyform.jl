@@ -250,7 +250,7 @@ function unpolyize(x)
     # we need a special makterm here because the default one used in Postwalk will call
     # promote_symtype to get the new type, but we just want to forward that in case
     # promote_symtype is not defined for some of the expressions here.
-    Postwalk(identity, maketerm=(T,f,args,sT,m) -> maketerm(T, f, args, m))(x)
+    Postwalk(identity, maketerm=(T,f,args,m) -> maketerm(T, f, args, m))(x)
 end
 
 function toterm(x::PolyForm)
@@ -302,7 +302,7 @@ function add_divs(x, y)
     end
 end
 
-function frac_maketerm(T, f, args, stype, metadata)
+function frac_maketerm(T, f, args, metadata)
     # TODO add stype to T?
     if f in (*, /, \, +, -)
         f(args...)

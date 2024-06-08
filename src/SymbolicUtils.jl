@@ -16,12 +16,10 @@ using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 using TermInterface
-import TermInterface: iscall, isexpr, issym, symtype, head, children,
+import TermInterface: iscall, isexpr, head, children,
                       operation, arguments, metadata, maketerm
 
-const istree = iscall
-Base.@deprecate_binding istree iscall
-export istree, operation, arguments, unsorted_arguments, similarterm, iscall
+export operation, arguments, unsorted_arguments, iscall
 # Sym, Term,
 # Add, Mul and Pow
 include("types.jl")

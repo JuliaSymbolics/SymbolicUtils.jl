@@ -162,7 +162,7 @@ function unsorted_arguments(x::BasicSymbolic)
     if isadd(x)
         for (k, v) in x.dict
             push!(args, applicable(*,k,v) ? k*v :
-                    maketerm(k, *, [k, v]))
+                    maketerm(k, *, [k, v], nothing))
         end
     else # MUL
         for (k, v) in x.dict
@@ -535,9 +535,11 @@ end
 
 unflatten(t) = t
 
-function TermInterface.maketerm(::Type{<:BasicSymbolic}, head, args, type, metadata)
-    basicsymbolic(head, args, type, metadata)
+function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
+    basicsymbolic(head, args, symtype(T), metadata)
 end
+
+symtype(T::Type{<:Symbolic{T}}) where T = T
 
 
 function basicsymbolic(f, args, stype, metadata)
@@ -634,28 +636,6 @@ end
 function to_symbolic(x)
     x
 end
-
-"""
-    similarterm(x, op, args, symtype=nothing; metadata=nothing)
-
-"""
-function similarterm(x, op, args, symtype=nothing; metadata=nothing)
-    Base.depwarn("""`similarterm` is deprecated, use `maketerm` instead.
-                 `similarterm(x, op, args, symtype; metadata)` is now
-                 `maketerm(typeof(x), op, args, symtype, metadata)`""", :similarterm)
-  TermInterface.maketerm(typeof(x), op, args, symtype, metadata)
-end
-
-# Old fallback
-function similarterm(T::Type, op, args, symtype=nothing; metadata=nothing)
-
-  Base.depwarn("`similarterm` is deprecated, use `maketerm` instead." *
-               "See https://github.com/JuliaSymbolics/TermInterface.jl for details.", :similarterm)
-  op(args...)
-end
-
-export similarterm
-
 
 ###
 ###  Pretty printing

@@ -408,7 +408,7 @@ function (acr::ACRule)(term)
             if result !== nothing
                 # Assumption: inds are unique
                 length(args) == length(inds) && return result
-                return maketerm(typeof(term), f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], symtype(term), metadata(term))
+                return maketerm(typeof(term), f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], metadata(term))
             end
         end
     end

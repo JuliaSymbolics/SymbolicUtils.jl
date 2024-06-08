@@ -763,9 +763,7 @@ function cse_block!(assignments, counter, names, name, state, x)
         if isterm(x)
             return term(operation(x), args...)
         else
-            return maketerm(typeof(x), operation(x),
-                               args, symtype(x),
-                               metadata(x))
+            return maketerm(typeof(x), operation(x), args, metadata(x))
         end
     else
         return x

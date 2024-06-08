@@ -98,6 +98,7 @@ end
 ###
 ### Term interface
 ###
+symtype(x) = typeof(x)
 symtype(x::Number) = typeof(x)
 @inline symtype(::Symbolic{T}) where T = T
 
@@ -192,6 +193,7 @@ isexpr(s::BasicSymbolic) = !issym(s)
 iscall(s::BasicSymbolic) = isexpr(s)
 
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
+issym(x) = false
 issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
 isterm(x) = isa_SymType(Val(:Term), x)
 ismul(x)  = isa_SymType(Val(:Mul), x)

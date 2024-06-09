@@ -13,6 +13,18 @@ You can read the documentation of [TermInterface.jl](https://github.com/JuliaSym
 
 ## SymbolicUtils.jl only methods
 
-`promote_symtype(f, arg_symtypes...)`
+### `symtype(x)`
+
+Returns the symbolic type of `x`. By default this is just `typeof(x)`.
+Define this for your symbolic types if you want `SymbolicUtils.simplify` to apply rules
+specific to numbers (such as commutativity of multiplication). Or such
+rules that may be implemented in the future.
+
+### `issym(x)`
+
+Returns `true` if `x` is a symbol. If true, `nameof` must be defined
+on `x` and must return a Symbol.
+
+### `promote_symtype(f, arg_symtypes...)`
 
 Returns the appropriate output type of applying `f` on arguments of type `arg_symtypes`.

@@ -98,6 +98,15 @@ end
 ###
 ### Term interface
 ###
+
+"""
+  symtype(x)
+
+Returns the symbolic type of `x`. By default this is just `typeof(x)`.
+Define this for your symbolic types if you want `SymbolicUtils.simplify` to apply rules
+specific to numbers (such as commutativity of multiplication). Or such
+rules that may be implemented in the future.
+"""
 symtype(x) = typeof(x)
 symtype(x::Number) = typeof(x)
 @inline symtype(::Symbolic{T}) where T = T
@@ -193,8 +202,16 @@ isexpr(s::BasicSymbolic) = !issym(s)
 iscall(s::BasicSymbolic) = isexpr(s)
 
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
+
+"""
+  issym(x)
+
+Returns `true` if `x` is a symbol. If true, `nameof` must be defined
+on `x` and must return a Symbol.
+"""
 issym(x) = false
 issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
+
 isterm(x) = isa_SymType(Val(:Term), x)
 ismul(x)  = isa_SymType(Val(:Mul), x)
 isadd(x)  = isa_SymType(Val(:Add), x)

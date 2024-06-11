@@ -22,8 +22,8 @@ rules that may be implemented in the future.
 
 ### `issym(x)`
 
-Returns `true` if `x` is a symbol. If true, `nameof` must be defined
-on `x` and must return a Symbol.
+Returns `true` if `x` is a `Sym`. If `true`, `nameof` must be defined
+on `x` and must return a `Symbol`.
 
 ### `promote_symtype(f, arg_symtypes...)`
 

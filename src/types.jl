@@ -100,10 +100,10 @@ end
 ###
 
 """
-  symtype(x)
+    symtype(x)
 
-Returns the symbolic type of `x`. By default this is just `typeof(x)`.
-Define this for your symbolic types if you want `SymbolicUtils.simplify` to apply rules
+Returns the numeric type of `x`. By default this is just `typeof(x)`.
+Define this for your symbolic types if you want [`SymbolicUtils.simplify`](@ref) to apply rules
 specific to numbers (such as commutativity of multiplication). Or such
 rules that may be implemented in the future.
 """

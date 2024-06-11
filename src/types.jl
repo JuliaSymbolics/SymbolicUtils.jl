@@ -204,10 +204,10 @@ iscall(s::BasicSymbolic) = isexpr(s)
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
 
 """
-  issym(x)
+    issym(x)
 
-Returns `true` if `x` is a symbol. If true, `nameof` must be defined
-on `x` and must return a Symbol.
+Returns `true` if `x` is a `Sym`. If true, `nameof` must be defined
+on `x` and must return a `Symbol`.
 """
 issym(x) = false
 issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)

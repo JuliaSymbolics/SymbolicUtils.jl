@@ -108,8 +108,8 @@ specific to numbers (such as commutativity of multiplication). Or such
 rules that may be implemented in the future.
 """
 symtype(x) = typeof(x)
-symtype(x::Number) = typeof(x)
 @inline symtype(::Symbolic{T}) where T = T
+@inline symtype(::Type{<:Symbolic{T}}) where T = T
 
 # We're returning a function pointer
 @inline function operation(x::BasicSymbolic)
@@ -557,8 +557,6 @@ unflatten(t) = t
 function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
     basicsymbolic(head, args, symtype(T), metadata)
 end
-
-symtype(::Type{<:Symbolic{T}}) where T = T
 
 
 function basicsymbolic(f, args, stype, metadata)

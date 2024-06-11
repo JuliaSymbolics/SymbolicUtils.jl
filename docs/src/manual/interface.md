@@ -15,7 +15,9 @@ You can read the documentation of [TermInterface.jl](https://github.com/JuliaSym
 
 ### `symtype(x)`
 
-Returns the symbolic type of `x`. By default this is just `typeof(x)`.
+Returns the 
+[numeric type](https://docs.julialang.org/en/v1/base/numbers/#Standard-Numeric-Types) 
+of `x`. By default this is just `typeof(x)`.
 Define this for your symbolic types if you want `SymbolicUtils.simplify` to apply rules
 specific to numbers (such as commutativity of multiplication). Or such
 rules that may be implemented in the future.

@@ -790,7 +790,8 @@ function show_call(io, f, args)
         end
     else
         if issym(f)
-            Base.show_unquoted(io, nameof(f))
+            print(io, string(nameof(f)))
+            return
         else
             Base.show(io, f)
         end
@@ -834,7 +835,7 @@ showraw(t) = showraw(stdout, t)
 
 function Base.show(io::IO, v::BasicSymbolic)
     if issym(v)
-        Base.show_unquoted(io, v.name)
+        print(io, v.name)
     else
         show_term(io, v)
     end

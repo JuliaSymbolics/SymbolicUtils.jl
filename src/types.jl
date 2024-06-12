@@ -791,7 +791,6 @@ function show_call(io, f, args)
     else
         if issym(f)
             print(io, string(nameof(f)))
-            return
         else
             Base.show(io, f)
         end

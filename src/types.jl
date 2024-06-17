@@ -116,8 +116,11 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-function arguments(x::BasicSymbolic)
+function arguments(x::BasicSymbolic, sort::Bool = false)
     args = unsorted_arguments(x)
+    if !sort
+        return args
+    end
     @compactified x::BasicSymbolic begin
         Add => @goto ADD
         Mul => @goto MUL
@@ -809,7 +812,7 @@ function show_term(io::IO, t)
     end
 
     f = operation(t)
-    args = arguments(t)
+    args = arguments(t, true)
     if symtype(t) <: LiteralReal
         show_call(io, f, args)
     elseif f === (+)

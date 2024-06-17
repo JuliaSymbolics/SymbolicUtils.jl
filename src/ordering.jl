@@ -14,15 +14,19 @@
 <ₑ(a::T, b::S) where{T,S} = T<S
 <ₑ(a::T, b::T) where{T} = a < b
 
+"""
+$(SIGNATURES)
 
-###### A variation on degree lexicographic order ########
-# find symbols and their corresponding degrees
+Internal function used for printing symbolic expressions. This function determines
+the degrees of symbols within a given expression, implementing a variation on 
+degree lexicographic order.
+"""
 function get_degrees(expr)
     if issym(expr)
         ((Symbol(expr),) => 1,)
     elseif iscall(expr)
         op = operation(expr)
-        args = arguments(expr)
+        args = arguments(expr, true)
         if operation(expr) == (^) && args[2] isa Number
             return map(get_degrees(args[1])) do (base, pow)
                 (base => pow * args[2])

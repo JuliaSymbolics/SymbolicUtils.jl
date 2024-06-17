@@ -116,7 +116,7 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-function arguments(x::BasicSymbolic, sort::Bool = false)
+function arguments(x::BasicSymbolic; sort::Bool = false)
     args = unsorted_arguments(x)
     if !sort
         return args
@@ -812,7 +812,7 @@ function show_term(io::IO, t)
     end
 
     f = operation(t)
-    args = arguments(t, true)
+    args = arguments(t; sort = true)
     if symtype(t) <: LiteralReal
         show_call(io, f, args)
     elseif f === (+)

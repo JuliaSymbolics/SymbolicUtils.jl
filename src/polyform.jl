@@ -187,7 +187,7 @@ end
 head(::PolyForm) = PolyForm
 operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
-function arguments(x::PolyForm{T}) where {T}
+function arguments(x::PolyForm{T}; kwargs...) where {T}
 
     function is_var(v)
         MP.nterms(v) == 1 &&

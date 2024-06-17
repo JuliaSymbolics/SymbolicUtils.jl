@@ -27,19 +27,18 @@ function get_degrees(expr)
     elseif iscall(expr)
         op = operation(expr)
         args = arguments(expr, true)
-        if operation(expr) == (^) && args[2] isa Number
+        if op == (^) && args[2] isa Number
             return map(get_degrees(args[1])) do (base, pow)
                 (base => pow * args[2])
             end
-        elseif operation(expr) == (*)
+        elseif op == (*)
             return mapreduce(get_degrees,
                              (x,y)->(x...,y...,), args)
-        elseif operation(expr) == (+)
+        elseif op == (+)
             ds = map(get_degrees, args)
             _, idx = findmax(x->sum(last.(x), init=0), ds)
             return ds[idx]
-        elseif operation(expr) == (getindex)
-            args = arguments(expr)
+        elseif op == (getindex)
             return ((Symbol.(args)...,) => 1,)
         else
             return ((Symbol("zzzzzzz", hash(expr)),) => 1,)

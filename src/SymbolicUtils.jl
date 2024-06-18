@@ -24,6 +24,7 @@ export istree, operation, arguments, unsorted_arguments, similarterm, iscall
 
 using Base: RefValue
 using Expronicon.ADT: @adt
+using MLStyle: @match
 # Sym, Term,
 # Add, Mul and Pow
 include("types.jl")

@@ -7,7 +7,6 @@ using DocStringExtensions
 
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
-using Unityper
 using TermInterface
 using DataStructures
 using Setfield

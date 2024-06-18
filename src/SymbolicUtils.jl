@@ -21,6 +21,9 @@ import TermInterface: iscall, isexpr, issym, symtype, head, children,
 const istree = iscall
 Base.@deprecate_binding istree iscall
 export istree, operation, arguments, unsorted_arguments, similarterm, iscall
+
+using Base: RefValue
+using Expronicon.ADT: @adt
 # Sym, Term,
 # Add, Mul and Pow
 include("types.jl")

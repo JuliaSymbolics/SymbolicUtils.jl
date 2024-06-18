@@ -1,64 +1,54 @@
-#-------------------
-#--------------------
-#### Symbolic
-#--------------------
 abstract type Symbolic{T} end
-
-###
-### Uni-type design
-###
 
 @enum ExprType::UInt8 SYM TERM ADD MUL POW DIV CONST
 
-const Metadata = Union{Nothing,Base.ImmutableDict{DataType,Any}}
+const Metadata = Union{Nothing, Base.ImmutableDict{DataType, Any}}
 const NO_METADATA = nothing
+const EMPTY_HASH = UInt(0)
 
-sdict(kv...) = Dict{Any, Any}(kv...)
+sdict(kv...) = Dict{BasicSymbolic, Any}(kv...)
 
-using Base: RefValue
-const EMPTY_ARGS = []
-const EMPTY_HASH = RefValue(UInt(0))
-const NOT_SORTED = RefValue(false)
-const EMPTY_DICT = sdict()
-const EMPTY_DICT_T = typeof(EMPTY_DICT)
 
-@compactify show_methods=false begin
-    @abstract struct BasicSymbolic{T} <: Symbolic{T}
-        metadata::Metadata     = NO_METADATA
+@adt BasicSymbolicImpl begin
+    struct Sym
+        name::Symbol = :OOF
     end
-    struct Sym{T} <: BasicSymbolic{T}
-        name::Symbol           = :OOF
+    struct Term
+        f::Any = identity
+        arguments::Vector{BasicSymbolic} = BasicSymbolic[]
     end
-    struct Term{T} <: BasicSymbolic{T}
-        f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
-        arguments::Vector{Any} = EMPTY_ARGS
-        hash::RefValue{UInt}   = EMPTY_HASH
+    struct Add
+        coeff::BasicSymbolic
+        dict::Dict{BasicSymbolic, Any} = sdict()
+        arguments::Vector{BasicSymbolic} = BasicSymbolic[]
+        issorted::RefValue{Bool} = Ref(false)
     end
-    struct Mul{T} <: BasicSymbolic{T}
-        coeff::Any             = 0         # exp/den if Pow
-        dict::EMPTY_DICT_T     = EMPTY_DICT
-        hash::RefValue{UInt}   = EMPTY_HASH
-        arguments::Vector{Any} = EMPTY_ARGS
-        issorted::RefValue{Bool} = NOT_SORTED
+    struct Mul
+        coeff::BasicSymbolic
+        dict::Dict{BasicSymbolic, Any}
+        arguments::Vector{BasicSymbolic} = BasicSymbolic[]
+        issorted::RefValue{Bool} = Ref(false)
     end
-    struct Add{T} <: BasicSymbolic{T}
-        coeff::Any             = 0         # exp/den if Pow
-        dict::EMPTY_DICT_T     = EMPTY_DICT
-        hash::RefValue{UInt}   = EMPTY_HASH
-        arguments::Vector{Any} = EMPTY_ARGS
-        issorted::RefValue{Bool} = NOT_SORTED
+    struct Div
+        num::BasicSymbolic
+        den::BasicSymbolic
+        simplified::RefValue{Bool} = Ref(false)
+        arguments::Vector{BasicSymbolic} = BasicSymbolic[]
     end
-    struct Div{T} <: BasicSymbolic{T}
-        num::Any               = 1
-        den::Any               = 1
-        simplified::Bool       = false
-        arguments::Vector{Any} = EMPTY_ARGS
+    struct Pow
+        base::BasicSymbolic
+        exp::BasicSymbolic
+        arguments::Vector{BasicSymbolic} = BasicSymbolic[]
     end
-    struct Pow{T} <: BasicSymbolic{T}
-        base::Any              = 1
-        exp::Any               = 1
-        arguments::Vector{Any} = EMPTY_ARGS
+    struct Const
+        val::Any
     end
+end
+
+Base.@kwdef struct BasicSymbolic{T} <: Symbolic{T}
+    x::BasicSymbolicImpl
+    metadata::Metadata = NO_METADATA
+    hash::RefValue{UInt} = Ref(EMPTY_HASH)
 end
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})

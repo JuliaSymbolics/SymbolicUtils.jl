@@ -8,7 +8,7 @@ abstract type Symbolic{T} end
 ### Uni-type design
 ###
 
-@enum ExprType::UInt8  SYM TERM ADD MUL POW DIV
+@enum ExprType::UInt8 SYM TERM ADD MUL POW DIV CONST
 
 const Metadata = Union{Nothing,Base.ImmutableDict{DataType,Any}}
 const NO_METADATA = nothing

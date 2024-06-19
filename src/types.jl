@@ -915,18 +915,16 @@ end
 function _promote_symtype(f, args)
     if issym(f)
         promote_symtype(f, map(symtype, args)...)
+    elseif length(args) == 0
+        promote_symtype(f)
+    elseif length(args) == 1
+        promote_symtype(f, symtype(args[1]))
+    elseif length(args) == 2
+        promote_symtype(f, symtype(args[1]), symtype(args[2]))
+    elseif isassociative(f)
+        mapfoldl(symtype, (x, y) -> promote_symtype(f, x, y), args)
     else
-        if length(args) == 0
-            promote_symtype(f)
-        elseif length(args) == 1
-            promote_symtype(f, symtype(args[1]))
-        elseif length(args) == 2
-            promote_symtype(f, symtype(args[1]), symtype(args[2]))
-        elseif isassociative(f)
-            mapfoldl(symtype, (x,y) -> promote_symtype(f, x, y), args)
-        else
-            promote_symtype(f, map(symtype, args)...)
-        end
+        promote_symtype(f, map(symtype, args)...)
     end
 end
 

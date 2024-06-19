@@ -6,9 +6,6 @@ const Metadata = Union{Nothing, Base.ImmutableDict{DataType, Any}}
 const NO_METADATA = nothing
 const EMPTY_HASH = UInt(0)
 
-sdict(kv...) = Dict{BasicSymbolic, Any}(kv...)
-
-
 @adt BasicSymbolicImpl begin
     struct Sym
         name::Symbol
@@ -19,7 +16,7 @@ sdict(kv...) = Dict{BasicSymbolic, Any}(kv...)
     end
     struct Add
         coeff::BasicSymbolic
-        dict::Dict{BasicSymbolic, Any} = sdict()
+        dict::Dict{BasicSymbolic, Any}
         arguments::Vector{BasicSymbolic} = BasicSymbolic[]
         issorted::RefValue{Bool} = Ref(false)
     end

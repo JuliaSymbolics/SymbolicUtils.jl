@@ -304,20 +304,20 @@ function _Term(f, args; kwargs...)
     _Term(_promote_symtype(f, args), f, args; kwargs...)
 end
 
-function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
+function _Add(::Type{T}, coeff, dict; kwargs...) where {T}
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
-        k,v = first(dict)
+        k, v = first(dict)
         if _isone(v)
             return k
         else
             coeff, dict = makemul(v, k)
-            return Mul(T, coeff, dict)
+            return _Mul(T, coeff, dict)
         end
     end
-
-    Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    impl = Add(; coeff, dict)
+    BasicSymbolic{T}(; impl, kwargs...)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)

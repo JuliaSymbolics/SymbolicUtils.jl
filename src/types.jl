@@ -11,7 +11,7 @@ sdict(kv...) = Dict{BasicSymbolic, Any}(kv...)
 
 @adt BasicSymbolicImpl begin
     struct Sym
-        name::Symbol = :OOF
+        name::Symbol
     end
     struct Term
         f::Any = identity

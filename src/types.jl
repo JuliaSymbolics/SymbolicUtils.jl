@@ -11,8 +11,8 @@ const EMPTY_HASH = UInt(0)
         name::Symbol
     end
     struct Term
-        f::Any = identity
-        arguments::Vector{BasicSymbolic} = BasicSymbolic[]
+        f::Any
+        arguments::Vector{BasicSymbolic}
     end
     struct Add
         coeff::BasicSymbolic

@@ -30,12 +30,12 @@ const EMPTY_HASH = UInt(0)
         num::BasicSymbolic
         den::BasicSymbolic
         simplified::RefValue{Bool} = Ref(false)
-        arguments::Vector{BasicSymbolic} = BasicSymbolic[]
+        arguments::Vector{BasicSymbolic} = [num, den]
     end
     struct Pow
         base::BasicSymbolic
         exp::BasicSymbolic
-        arguments::Vector{BasicSymbolic} = BasicSymbolic[]
+        arguments::Vector{BasicSymbolic} = [base, exp]
     end
     struct Const
         val::Any
@@ -135,8 +135,8 @@ function unsorted_arguments(x::BasicSymbolic)
         Term => return x.arguments
         Add  => @goto ADDMUL
         Mul  => @goto ADDMUL
-        Div  => @goto DIV
-        Pow  => @goto POW
+        Div  => @goto DIVPOW
+        Pow  => @goto DIVPOW
         Sym  => error_sym()
         Const => error_const()
         _    => error_on_type()
@@ -162,20 +162,8 @@ function unsorted_arguments(x::BasicSymbolic)
     end
     return args
 
-    @label DIV
+    @label DIVPOW
     args = x.impl.arguments
-    isempty(args) || return args
-    sizehint!(args, 2)
-    push!(args, x.impl.num)
-    push!(args, x.impl.den)
-    return args
-
-    @label POW
-    args = x.impl.arguments
-    isempty(args) || return args
-    sizehint!(args, 2)
-    push!(args, x.impl.base)
-    push!(args, x.impl.exp)
     return args
 end
 

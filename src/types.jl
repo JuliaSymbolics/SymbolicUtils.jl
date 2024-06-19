@@ -288,8 +288,9 @@ end
 ### Constructors
 ###
 
-function Sym{T}(name::Symbol; kw...) where T
-    Sym{T}(; name=name, kw...)
+function _Sym(::Type{T}, name::Symbol; kwargs...) where {T}
+    impl = Sym(name)
+    BasicSymbolic{T}(; impl, kwargs...)
 end
 
 function Term{T}(f, args; kw...) where T

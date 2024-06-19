@@ -293,16 +293,15 @@ function _Sym(::Type{T}, name::Symbol; kwargs...) where {T}
     BasicSymbolic{T}(; impl, kwargs...)
 end
 
-function Term{T}(f, args; kw...) where T
-    if eltype(args) !== Any
-        args = convert(Vector{Any}, args)
+function _Term(::Type{T}, f, args; kwargs...) where {T}
+    if eltype(args) !== BasicSymbolic
+        args = convert(Vector{BasicSymbolic}, args)
     end
-
-    Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    impl = Term(f, args)
+    BasicSymbolic{T}(; impl, kwargs...)
 end
-
-function Term(f, args; metadata=NO_METADATA)
-    Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
+function _Term(f, args; kwargs...)
+    _Term(_promote_symtype(f, args), f, args; kwargs...)
 end
 
 function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T

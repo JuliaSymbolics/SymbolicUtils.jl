@@ -45,7 +45,7 @@ sdict(kv...) = Dict{BasicSymbolic, Any}(kv...)
     end
 end
 
-Base.@kwdef struct BasicSymbolic{T} <: Symbolic{T}
+@kwdef struct BasicSymbolic{T} <: Symbolic{T}
     impl::BasicSymbolicImpl
     metadata::Metadata = NO_METADATA
     hash::RefValue{UInt} = Ref(EMPTY_HASH)

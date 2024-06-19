@@ -320,20 +320,18 @@ function _Add(::Type{T}, coeff, dict; kwargs...) where {T}
     BasicSymbolic{T}(; impl, kwargs...)
 end
 
-function Mul(T, a, b; metadata=NO_METADATA, kw...)
-    isempty(b) && return a
-    if _isone(a) && length(b) == 1
-        pair = first(b)
+function _Mul(::Type{T}, coeff, dict; kwargs...) where {T}
+    isempty(dict) && return coeff
+    if _isone(coeff) && length(dict) == 1
+        pair = first(dict)
         if _isone(last(pair)) # first value
             return first(pair)
         else
             return unstable_pow(first(pair), last(pair))
         end
-    else
-        coeff = a
-        dict = b
-        Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
     end
+    impl = Mul(; coeff, dict)
+    BasicSymbolic{T}(; impl, kwargs...)
 end
 
 const Rat = Union{Rational, Integer}

@@ -9,7 +9,9 @@ using SymbolicUtils: BasicSymbolic
     impl = s2
     bs2 = BasicSymbolic{Int64}(; impl)
     @testset "Sym" begin
+        @test_nowarn Sym(Symbol(""))
         @test s1.name == :abc
+        @test typeof(s2.name) == Symbol
         @test typeof(s1) == BasicSymbolicImpl
         @test s2.name == :def
         @test s3.name == :ghi

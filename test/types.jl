@@ -62,4 +62,20 @@ using SymbolicUtils: BasicSymbolic
         @test_throws MethodError Pow(base = bs1, exp = s2)
         @test_throws MethodError Pow(base = s1, exp = s2)
     end
+    c1 = Const(1)
+    bc1 = BasicSymbolic{Int}(impl = c1)
+    c2 = Const(val = 3.14)
+    bc2 = BasicSymbolic{Float64}(impl = c2)
+    @testset "Const" begin
+        @test typeof(c1.val) == Int
+        @test c1.val == 1
+        @test typeof(c2.val) == Float64
+        @test c2.val == 3.14
+        c3 = Const(big"123456789012345678901234567890")
+        @test typeof(c3.val) == BigInt
+        @test c3.val == big"123456789012345678901234567890"
+        c4 = Const(big"1.23456789012345678901")
+        @test typeof(c4.val) == BigFloat
+        @test c4.val == big"1.23456789012345678901"
+    end
 end

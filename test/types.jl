@@ -9,6 +9,7 @@ using SymbolicUtils: BasicSymbolic
     impl = s2
     bs2 = BasicSymbolic{Int64}(; impl)
     @testset "Sym" begin
+        @test typeof(s1) == BasicSymbolicImpl
         @test_nowarn Sym(Symbol(""))
         @test s1.name == :abc
         @test typeof(s2.name) == Symbol
@@ -18,6 +19,7 @@ using SymbolicUtils: BasicSymbolic
     end
     @testset "Term" begin
         t1 = Term(sin, [bs1])
+        @test typeof(t1) == BasicSymbolicImpl
         @test t1.f == sin
         @test t1.arguments == [bs1]
         @test typeof(t1.arguments) == Vector{BasicSymbolic}
@@ -27,6 +29,7 @@ using SymbolicUtils: BasicSymbolic
     end
     @testset "Div" begin
         d1 = Div(num = bs1, den = bs2)
+        @test typeof(d1) == BasicSymbolicImpl
         @test typeof(d1.num) == BasicSymbolic{Float64}
         @test typeof(d1.den) == BasicSymbolic{Int64}
         @test d1.num == bs1
@@ -47,6 +50,7 @@ using SymbolicUtils: BasicSymbolic
     end
     @testset "Pow" begin
         p1 = Pow(base = bs1, exp = bs2)
+        @test typeof(p1) == BasicSymbolicImpl
         @test typeof(p1.base) == BasicSymbolic{Float64}
         @test typeof(p1.exp) == BasicSymbolic{Int64}
         @test p1.base == bs1
@@ -67,6 +71,7 @@ using SymbolicUtils: BasicSymbolic
     c2 = Const(val = 3.14)
     bc2 = BasicSymbolic{Float64}(impl = c2)
     @testset "Const" begin
+        @test typeof(c1) == BasicSymbolicImpl
         @test typeof(c1.val) == Int
         @test c1.val == 1
         @test typeof(c2.val) == Float64

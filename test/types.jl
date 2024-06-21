@@ -109,4 +109,13 @@ using SymbolicUtils: BasicSymbolic
         @test typeof(m1.issorted) == Base.RefValue{Bool}
         @test !m1.issorted[]
     end
+    @testset "BasicSymbolic" begin
+        @test typeof(bs1) == BasicSymbolic{Float64}
+        @test bs1 isa BasicSymbolic
+        @test bs1 isa SymbolicUtils.Symbolic
+        @test bs1.metadata isa SymbolicUtils.Metadata
+        @test bs1.metadata == SymbolicUtils.NO_METADATA
+        @test typeof(bs1.hash) == Base.RefValue{UInt}
+        @test bs1.hash[] == SymbolicUtils.EMPTY_HASH
+    end
 end

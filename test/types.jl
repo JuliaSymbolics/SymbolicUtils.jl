@@ -83,4 +83,30 @@ using SymbolicUtils: BasicSymbolic
         @test typeof(c4.val) == BigFloat
         @test c4.val == big"1.23456789012345678901"
     end
+    coeff = bc1
+    dict = Dict(bs1 => 3, bs2 => 5)
+    @testset "Add" begin
+        a1 = Add(; coeff, dict)
+        @test typeof(a1) == BasicSymbolicImpl
+        @test a1.coeff isa BasicSymbolic
+        @test isequal(a1.coeff, bc1)
+        @test typeof(a1.dict) == Dict{BasicSymbolic, Any}
+        @test a1.dict == dict
+        @test typeof(a1.arguments) == Vector{BasicSymbolic}
+        @test isempty(a1.arguments)
+        @test typeof(a1.issorted) == Base.RefValue{Bool}
+        @test !a1.issorted[]
+    end
+    @testset "Mul" begin
+        m1 = Mul(; coeff, dict)
+        @test typeof(m1) == BasicSymbolicImpl
+        @test m1.coeff isa BasicSymbolic
+        @test isequal(m1.coeff, bc1)
+        @test typeof(m1.dict) == Dict{BasicSymbolic, Any}
+        @test m1.dict == dict
+        @test typeof(m1.arguments) == Vector{BasicSymbolic}
+        @test isempty(m1.arguments)
+        @test typeof(m1.issorted) == Base.RefValue{Bool}
+        @test !m1.issorted[]
+    end
 end

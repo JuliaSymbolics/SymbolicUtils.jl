@@ -45,4 +45,21 @@ using SymbolicUtils: BasicSymbolic
         @test_throws MethodError Div(num = bs1, den = s2)
         @test_throws MethodError Div(num = s1, den = s2)
     end
+    @testset "Pow" begin
+        p1 = Pow(base = bs1, exp = bs2)
+        @test typeof(p1.base) == BasicSymbolic{Float64}
+        @test typeof(p1.exp) == BasicSymbolic{Int64}
+        @test p1.base == bs1
+        @test p1.exp == bs2
+        @test typeof(p1.arguments) == Vector{BasicSymbolic}
+        @test p1.arguments == [bs1, bs2]
+        base = bs1
+        exp = bs2
+        p2 =  Pow(; base, exp)
+        @test p2.base == bs1
+        @test p2.exp == bs2
+        @test_throws MethodError Pow(base = s1, exp = bs2)
+        @test_throws MethodError Pow(base = bs1, exp = s2)
+        @test_throws MethodError Pow(base = s1, exp = s2)
+    end
 end

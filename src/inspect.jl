@@ -35,7 +35,7 @@ the expression.
 This function is used internally for printing via AbstractTrees.
 """
 function AbstractTrees.children(x::Symbolic)
-    iscall(x) ? arguments(x; sort = true) : isexpr(x) ? children(x; sort = true) : ()
+    iscall(x) ? sorted_arguments(x) : isexpr(x) ? sorted_children(x) : ()
 end
 
 """

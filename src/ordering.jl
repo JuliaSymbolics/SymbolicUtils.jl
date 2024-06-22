@@ -26,7 +26,7 @@ function get_degrees(expr)
         ((Symbol(expr),) => 1,)
     elseif iscall(expr)
         op = operation(expr)
-        args = arguments(expr; sort = true)
+        args = sorted_arguments(expr)
         if op == (^) && args[2] isa Number
             return map(get_degrees(args[1])) do (base, pow)
                 (base => pow * args[2])

@@ -116,11 +116,8 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-function arguments(x::BasicSymbolic; sort::Bool = false)
-    args = unsorted_arguments(x)
-    if !sort
-        return args
-    end
+function sorted_arguments(x::BasicSymbolic)
+    args = arguments(x)
     @compactified x::BasicSymbolic begin
         Add => @goto ADD
         Mul => @goto MUL
@@ -141,9 +138,11 @@ function arguments(x::BasicSymbolic; sort::Bool = false)
     return args
 end
 
-unsorted_arguments(x) = arguments(x)
-children(x::BasicSymbolic; kwargs...) = arguments(x; kwargs...)
-function unsorted_arguments(x::BasicSymbolic)
+children(x::BasicSymbolic) = arguments(x)
+
+sorted_children(x::BasicSymbolic) = sorted_arguments(x)
+
+function arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
         Add  => @goto ADDMUL
@@ -812,7 +811,7 @@ function show_term(io::IO, t)
     end
 
     f = operation(t)
-    args = arguments(t; sort = true)
+    args = sorted_arguments(t)
     if symtype(t) <: LiteralReal
         show_call(io, f, args)
     elseif f === (+)

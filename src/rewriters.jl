@@ -221,7 +221,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
 
         if iscall(x)
             x = p.maketerm(x, operation(x), map(PassThrough(p),
-                            unsorted_arguments(x)), metadata=metadata(x))
+                            arguments(x)), metadata=metadata(x))
         end
 
         return ord === :post ? p.rw(x) : x

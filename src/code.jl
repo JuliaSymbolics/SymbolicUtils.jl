@@ -744,7 +744,7 @@ end
 function cse_state!(state, t)
     !iscall(t) && return t
     state[t] = Base.get(state, t, 0) + 1
-    foreach(x->cse_state!(state, x), unsorted_arguments(t))
+    foreach(x->cse_state!(state, x), arguments(t))
 end
 
 function cse_block!(assignments, counter, names, name, state, x)
@@ -759,7 +759,7 @@ function cse_block!(assignments, counter, names, name, state, x)
             return sym
         end
     elseif iscall(x)
-        args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
+        args = map(a->cse_block!(assignments, counter, names, name, state,a), arguments(x))
         if isterm(x)
             return term(operation(x), args...)
         else

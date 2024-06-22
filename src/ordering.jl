@@ -65,7 +65,7 @@ function lexlt(degs1, degs2)
     return false # they are equal
 end
 
-_arglen(a) = iscall(a) ? length(unsorted_arguments(a)) : 0
+_arglen(a) = iscall(a) ? length(arguments(a)) : 0
 
 function <ₑ(a::Tuple, b::Tuple)
     for (x, y) in zip(a, b)

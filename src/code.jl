@@ -9,7 +9,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, similarterm, unsorted_arguments, metadata, isterm, term
+                      symtype, similarterm, sorted_arguments, metadata, isterm, term
 
 ##== state management ==##
 

@@ -142,6 +142,8 @@ children(x::BasicSymbolic) = arguments(x)
 
 sorted_children(x::BasicSymbolic) = sorted_arguments(x)
 
+@deprecate unsorted_arguments(x) arguments(x)
+
 function arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments

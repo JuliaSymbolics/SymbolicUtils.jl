@@ -33,7 +33,7 @@ module Rewriters
 using SymbolicUtils: @timer
 using TermInterface
 
-import SymbolicUtils: iscall, operation, arguments, unsorted_arguments, metadata, node_count, _promote_symtype
+import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -205,7 +205,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
 
         if iscall(x)
             x = p.maketerm(typeof(x), operation(x), map(PassThrough(p),
-                            unsorted_arguments(x)), metadata(x))
+                            arguments(x)), metadata(x))
         end
 
         return ord === :post ? p.rw(x) : x
@@ -221,14 +221,14 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if iscall(x)
-            _args = map(arguments(x)) do arg
+            _args = map(sorted_arguments(x)) do arg
                 if node_count(arg) > p.thread_cutoff
                     Threads.@spawn p(arg)
                 else
                     p(arg)
                 end
             end
-            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
+            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, sorted_arguments(x))
             t = p.maketerm(typeof(x), operation(x), args, metadata(x))
         end
         return ord === :post ? p.rw(t) : t

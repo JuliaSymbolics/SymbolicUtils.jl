@@ -22,7 +22,7 @@ function get_degrees(expr)
         ((Symbol(expr),) => 1,)
     elseif iscall(expr)
         op = operation(expr)
-        args = arguments(expr)
+        args = sorted_arguments(expr)
         if operation(expr) == (^) && args[2] isa Number
             return map(get_degrees(args[1])) do (base, pow)
                 (base => pow * args[2])
@@ -35,7 +35,7 @@ function get_degrees(expr)
             _, idx = findmax(x->sum(last.(x), init=0), ds)
             return ds[idx]
         elseif operation(expr) == (getindex)
-            args = arguments(expr)
+            args = sorted_arguments(expr)
             return ((Symbol.(args)...,) => 1,)
         else
             return ((Symbol("zzzzzzz", hash(expr)),) => 1,)
@@ -62,7 +62,7 @@ function lexlt(degs1, degs2)
     return false # they are equal
 end
 
-_arglen(a) = iscall(a) ? length(unsorted_arguments(a)) : 0
+_arglen(a) = iscall(a) ? length(arguments(a)) : 0
 
 function <ₑ(a::Tuple, b::Tuple)
     for (x, y) in zip(a, b)
@@ -81,7 +81,7 @@ function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
     bw = monomial_lt(db, da)
     if fw === bw && !isequal(a, b)
         if _arglen(a) == _arglen(b)
-            return (operation(a), arguments(a)...,) <ₑ (operation(b), arguments(b)...,)
+            return (operation(a), sorted_arguments(a)...,) <ₑ (operation(b), sorted_arguments(b)...,)
         else
             return _arglen(a) < _arglen(b)
         end

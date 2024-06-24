@@ -19,7 +19,7 @@ using TermInterface
 import TermInterface: iscall, isexpr, head, children,
                       operation, arguments, metadata, maketerm
 
-export operation, arguments, unsorted_arguments, iscall
+export operation, arguments, sorted_arguments, iscall
 # Sym, Term,
 # Add, Mul and Pow
 include("types.jl")

@@ -20,7 +20,7 @@ function substitute(expr, dict; fold=true)
         op = substitute(operation(expr), dict; fold=fold)
         if fold
             canfold = !(op isa Symbolic)
-            args = map(unsorted_arguments(expr)) do x
+            args = map(arguments(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
                 canfold = canfold && !(x′ isa Symbolic)
                 x′
@@ -28,7 +28,7 @@ function substitute(expr, dict; fold=true)
             canfold && return op(args...)
             args
         else
-            args = map(x->substitute(x, dict, fold=fold), unsorted_arguments(expr))
+            args = map(x->substitute(x, dict, fold=fold), arguments(expr))
         end
 
         maketerm(typeof(expr),

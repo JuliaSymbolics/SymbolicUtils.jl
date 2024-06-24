@@ -185,7 +185,6 @@ end
 head(::PolyForm) = PolyForm
 operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
-TermInterface.sorted_arguments(x::PolyForm{T}) = arguments(t) 
 function TermInterface.arguments(x::PolyForm{T}) where {T}
 
     function is_var(v)

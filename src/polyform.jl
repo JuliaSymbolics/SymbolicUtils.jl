@@ -176,7 +176,8 @@ iscall(x::Type{<:PolyForm}) = true
 iscall(x::PolyForm) = true
 
 function maketerm(t::Type{<:PolyForm}, f, args, metadata)
-    basicsymbolic(t, f, args, metadata)
+    # TODO: this looks uncovered.
+    basicsymbolic(f, args, nothing, metadata)
 end
 function maketerm(::Type{<:PolyForm}, f::Union{typeof(*), typeof(+), typeof(^)}, args, metadata)
     f(args...)

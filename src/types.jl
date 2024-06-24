@@ -554,7 +554,15 @@ end
 unflatten(t) = t
 
 function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
-    basicsymbolic(head, args, symtype(T), metadata)
+    st = symtype(T)
+    pst = _promote_symtype(head, args)
+    # Use promoted symtype only if not a subtype of the existing symtype of T.
+    # This is useful when calling `maketerm(BasicSymbolic{Number}, (==), [true, false])` 
+    # Where the result would have a symtype of Bool. 
+    # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609 
+    # TODO this should be optimized.
+    new_st = (pst === Any || pst <: st) ? st : pst 
+    basicsymbolic(head, args, new_st, metadata)
 end
 
 

@@ -561,7 +561,13 @@ function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
     # Where the result would have a symtype of Bool. 
     # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609 
     # TODO this should be optimized.
-    new_st = (pst === Any || pst <: st) ? st : pst 
+    new_st = if pst === Bool 
+        pst 
+    elseif pst === Any || (st === Number && pst <: st) 
+        st
+    else 
+        pst 
+    end 
     basicsymbolic(head, args, new_st, metadata)
 end
 

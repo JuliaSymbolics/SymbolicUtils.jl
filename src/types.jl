@@ -126,7 +126,7 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-function sorted_arguments(x::BasicSymbolic)
+function TermInterface.sorted_arguments(x::BasicSymbolic)
     args = arguments(x)
     @compactified x::BasicSymbolic begin
         Add => @goto ADD
@@ -148,8 +148,8 @@ function sorted_arguments(x::BasicSymbolic)
     return args
 end
 
-children(x::BasicSymbolic) = arguments(x)
-function arguments(x::BasicSymbolic)
+TermInterface.children(x::BasicSymbolic) = arguments(x)
+function TermInterface.arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
         Add  => @goto ADDMUL

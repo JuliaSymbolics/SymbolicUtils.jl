@@ -17,7 +17,7 @@ import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 using TermInterface
 import TermInterface: iscall, isexpr, head, children,
-                      operation, arguments, metadata, maketerm
+                      operation, arguments, metadata, maketerm, sorted_arguments
 
 export operation, arguments, sorted_arguments, iscall
 # Sym, Term,

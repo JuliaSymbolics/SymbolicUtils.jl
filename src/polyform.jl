@@ -185,7 +185,8 @@ end
 head(::PolyForm) = PolyForm
 operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
-function arguments(x::PolyForm{T}) where {T}
+TermInterface.sorted_arguments(x::PolyForm{T}) = arguments(t) 
+function TermInterface.arguments(x::PolyForm{T}) where {T}
 
     function is_var(v)
         MP.nterms(v) == 1 &&
@@ -229,7 +230,7 @@ function arguments(x::PolyForm{T}) where {T}
                  PolyForm{T}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
-children(x::PolyForm) = [operation(x); arguments(x)]
+children(x::PolyForm) = arguments(x)
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
 

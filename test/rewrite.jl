@@ -1,7 +1,5 @@
 @syms a b c
 
-using Metatheory
-
 @testset "Equality" begin
     @eqtest a == a
     @eqtest a != b

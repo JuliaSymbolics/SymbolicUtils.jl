@@ -26,8 +26,16 @@ function AbstractTrees.nodevalue(x::BasicSymbolic)
     Text(str)
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Return the children of the symbolic expression `x`, sorted by their order in
+the expression.
+
+This function is used internally for printing via AbstractTrees.
+"""
 function AbstractTrees.children(x::Symbolic)
-    iscall(x) ? sorted_arguments(x) : isexpr(x) ? children(x) : ()
+    iscall(x) ? sorted_arguments(x) : isexpr(x) ? sorted_children(x) : ()
 end
 
 """

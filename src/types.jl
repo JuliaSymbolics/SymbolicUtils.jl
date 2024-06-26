@@ -148,7 +148,10 @@ function TermInterface.sorted_arguments(x::BasicSymbolic)
     return args
 end
 
+@deprecate unsorted_arguments(x) arguments(x)
+
 TermInterface.children(x::BasicSymbolic) = arguments(x)
+TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
 function TermInterface.arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments

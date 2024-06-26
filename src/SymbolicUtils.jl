@@ -19,7 +19,9 @@ using TermInterface
 import TermInterface: iscall, isexpr, head, children,
                       operation, arguments, metadata, maketerm, sorted_arguments
 
-export operation, arguments, sorted_arguments, iscall
+const istree = iscalls
+Base.@deprecate_binding istree iscall
+export istree, operation, arguments, sorted_arguments, similarterm, iscall
 # Sym, Term,
 # Add, Mul and Pow
 include("types.jl")

@@ -126,8 +126,8 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-function arguments(x::BasicSymbolic)
-    args = unsorted_arguments(x)
+function TermInterface.sorted_arguments(x::BasicSymbolic)
+    args = arguments(x)
     @compactified x::BasicSymbolic begin
         Add => @goto ADD
         Mul => @goto MUL
@@ -148,9 +148,11 @@ function arguments(x::BasicSymbolic)
     return args
 end
 
-unsorted_arguments(x) = arguments(x)
-children(x::BasicSymbolic) = arguments(x)
-function unsorted_arguments(x::BasicSymbolic)
+@deprecate unsorted_arguments(x) arguments(x)
+
+TermInterface.children(x::BasicSymbolic) = arguments(x)
+TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
+function TermInterface.arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
         Add  => @goto ADDMUL
@@ -254,8 +256,8 @@ function _isequal(a, b, E)
     elseif E === POW
         isequal(a.exp, b.exp) && isequal(a.base, b.base)
     elseif E === TERM
-        a1 = arguments(a)
-        a2 = arguments(b)
+        a1 = sorted_arguments(a)
+        a2 = sorted_arguments(b)
         isequal(operation(a), operation(b)) && _allarequal(a1, a2)
     else
         error_on_type()
@@ -296,7 +298,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
         !iszero(h) && return h
         op = operation(s)
         oph = op isa Function ? nameof(op) : op
-        h′ = hashvec(arguments(s), hash(oph, salt))
+        h′ = hashvec(sorted_arguments(s), hash(oph, salt))
         s.hash[] = h′
         return h′
     else
@@ -426,7 +428,7 @@ end
 
 @inline function numerators(x)
     isdiv(x) && return numerators(x.num)
-    iscall(x) && operation(x) === (*) ? arguments(x) : Any[x]
+    iscall(x) && operation(x) === (*) ? sorted_arguments(x) : Any[x]
 end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
@@ -545,7 +547,7 @@ function unflatten(t::Symbolic{T}) where{T}
     if iscall(t)
         f = operation(t)
         if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops
-            a = arguments(t)
+            a = sorted_arguments(t)
             return foldl((x,y) -> Term{T}(f, Any[x, y]), a)
         end
     end
@@ -555,7 +557,21 @@ end
 unflatten(t) = t
 
 function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
-    basicsymbolic(head, args, symtype(T), metadata)
+    st = symtype(T)
+    pst = _promote_symtype(head, args)
+    # Use promoted symtype only if not a subtype of the existing symtype of T.
+    # This is useful when calling `maketerm(BasicSymbolic{Number}, (==), [true, false])` 
+    # Where the result would have a symtype of Bool. 
+    # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609 
+    # TODO this should be optimized.
+    new_st = if pst === Bool 
+        pst 
+    elseif pst === Any || (st === Number && pst <: st) 
+        st
+    else 
+        pst 
+    end 
+    basicsymbolic(head, args, new_st, metadata)
 end
 
 
@@ -662,7 +678,7 @@ const show_simplified = Ref(false)
 isnegative(t::Real) = t < 0
 function isnegative(t)
     if iscall(t) && operation(t) === (*)
-        coeff = first(arguments(t))
+        coeff = first(sorted_arguments(t))
         return isnegative(coeff)
     end
     return false
@@ -694,7 +710,7 @@ end
 function remove_minus(t)
     !iscall(t) && return -t
     @assert operation(t) == (*)
-    args = arguments(t)
+    args = sorted_arguments(t)
     @assert args[1] < 0
     Any[-args[1], args[2:end]...]
 end
@@ -806,7 +822,7 @@ function show_term(io::IO, t)
     end
 
     f = operation(t)
-    args = arguments(t)
+    args = sorted_arguments(t)
     if symtype(t) <: LiteralReal
         show_call(io, f, args)
     elseif f === (+)

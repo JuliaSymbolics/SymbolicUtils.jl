@@ -65,7 +65,7 @@ using SymbolicUtils: @capture
     ret = @capture (a + b) (+)(~~z)
     @test ret
     @test @isdefined z
-    @test all(z .=== arguments(a + b))
+    @test all(z .=== sorted_arguments(a + b))
 
     #a more typical way to use the @capture macro
 
@@ -84,24 +84,24 @@ end
     ex1 = ex + c
 
     @test SymbolicUtils.isterm(ex1)
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(sorted_arguments(ex1)[1], MetaData) == :metadata
 
     ex = a
     ex = setmetadata(ex, MetaData, :metadata)
     ex1 = ex + b
 
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(sorted_arguments(ex1)[1], MetaData) == :metadata
 
     ex = a * b
     ex = setmetadata(ex, MetaData, :metadata)
     ex1 = ex * c
 
     @test SymbolicUtils.isterm(ex1)
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(sorted_arguments(ex1)[1], MetaData) == :metadata
 
     ex = a
     ex = setmetadata(ex, MetaData, :metadata)
     ex1 = ex * b
 
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(sorted_arguments(ex1)[1], MetaData) == :metadata
 end

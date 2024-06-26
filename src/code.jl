@@ -9,7 +9,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, unsorted_arguments, metadata, isterm, term
+                      symtype, sorted_arguments, metadata, isterm, term, maketerm
 
 ##== state management ==##
 
@@ -115,7 +115,7 @@ function function_to_expr(op, O, st)
     (get(st.rewrites, :nanmath, false) && op in NaNMathFuns) || return nothing
     name = nameof(op)
     fun = GlobalRef(NaNMath, name)
-    args = map(Base.Fix2(toexpr, st), arguments(O))
+    args = map(Base.Fix2(toexpr, st), sorted_arguments(O))
     expr = Expr(:call, fun)
     append!(expr.args, args)
     return expr
@@ -124,7 +124,7 @@ end
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
-    args = map(Base.Fix2(toexpr, st), arguments(O))
+    args = map(Base.Fix2(toexpr, st), sorted_arguments(O))
     if length(args) >= 3 && symtype(O) <: Number
         x, xs = Iterators.peel(args)
         foldl(xs, init=x) do a, b
@@ -138,7 +138,7 @@ function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
 end
 
 function function_to_expr(::typeof(^), O, st)
-    args = arguments(O)
+    args = sorted_arguments(O)
     if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
@@ -151,7 +151,7 @@ function function_to_expr(::typeof(^), O, st)
 end
 
 function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
-    args = arguments(O)
+    args = sorted_arguments(O)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end
 
@@ -183,7 +183,7 @@ function toexpr(O, st)
         return expr′
     else
         !iscall(O) && return O
-        args = arguments(O)
+        args = sorted_arguments(O)
         return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
     end
 end
@@ -693,7 +693,7 @@ end
 function _cse!(mem, expr)
     iscall(expr) || return expr
     op = _cse!(mem, operation(expr))
-    args = map(Base.Fix1(_cse!, mem), arguments(expr))
+    args = map(Base.Fix1(_cse!, mem), sorted_arguments(expr))
     t = maketerm(typeof(expr), op, args, nothing)
 
     v, dict = mem
@@ -716,7 +716,7 @@ end
 
 function _cse(exprs::AbstractArray)
     letblock = cse(Term{Any}(tuple, vec(exprs)))
-    letblock.pairs, reshape(arguments(letblock.body), size(exprs))
+    letblock.pairs, reshape(sorted_arguments(letblock.body), size(exprs))
 end
 
 function cse(x::MakeArray)
@@ -744,7 +744,7 @@ end
 function cse_state!(state, t)
     !iscall(t) && return t
     state[t] = Base.get(state, t, 0) + 1
-    foreach(x->cse_state!(state, x), unsorted_arguments(t))
+    foreach(x->cse_state!(state, x), arguments(t))
 end
 
 function cse_block!(assignments, counter, names, name, state, x)
@@ -759,7 +759,7 @@ function cse_block!(assignments, counter, names, name, state, x)
             return sym
         end
     elseif iscall(x)
-        args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
+        args = map(a->cse_block!(assignments, counter, names, name, state,a), arguments(x))
         if isterm(x)
             return term(operation(x), args...)
         else

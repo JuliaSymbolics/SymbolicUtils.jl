@@ -231,6 +231,9 @@ function arguments(x::PolyForm{T}) where {T}
                  PolyForm{T}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
+
+sorted_arguments(x::PolyForm) = arguments(x)
+
 children(x::PolyForm) = [operation(x); arguments(x)]
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
@@ -344,7 +347,7 @@ end
 
 function add_with_div(x, flatten=true)
     (!iscall(x) || operation(x) != (+)) && return x
-    aa = unsorted_arguments(x)
+    aa = arguments(x)
     !any(a->isdiv(a), aa) && return x # no rewrite necessary
 
     divs = filter(a->isdiv(a), aa)
@@ -382,12 +385,12 @@ end
 
 function needs_div_rules(x)
     (isdiv(x) && !(x.num isa Number) && !(x.den isa Number)) ||
-    (iscall(x) && operation(x) === (+) && count(has_div, unsorted_arguments(x)) > 1) ||
-    (iscall(x) && any(needs_div_rules, unsorted_arguments(x)))
+    (iscall(x) && operation(x) === (+) && count(has_div, arguments(x)) > 1) ||
+    (iscall(x) && any(needs_div_rules, arguments(x)))
 end
 
 function has_div(x)
-    return isdiv(x) || (iscall(x) && any(has_div, unsorted_arguments(x)))
+    return isdiv(x) || (iscall(x) && any(has_div, arguments(x)))
 end
 
 flatten_pows(xs) = map(xs) do x
@@ -415,8 +418,8 @@ Has optimized processes for `Mul` and `Pow` terms.
 function quick_cancel(d)
     if ispow(d) && isdiv(d.base)
         return quick_cancel((d.base.num^d.exp) / (d.base.den^d.exp))
-    elseif ismul(d) && any(isdiv, unsorted_arguments(d))
-        return prod(unsorted_arguments(d))
+    elseif ismul(d) && any(isdiv, arguments(d))
+        return prod(arguments(d))
     elseif isdiv(d)
         num, den = quick_cancel(d.num, d.den)
         return Div(num, den)

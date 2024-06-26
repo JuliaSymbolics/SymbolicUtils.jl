@@ -36,22 +36,22 @@ is the function being called.
 function operation end
 
 """
-  arguments(x)
+    sorted_arguments(x)
 
 Get the arguments of `x`, must be defined if `iscall(x)` is `true`.
 """
-function arguments end
+function sorted_arguments end
 
 """
-  unsorted_arguments(x::T)
+    sorted_arguments(x::T)
 
 If x is a term satisfying `iscall(x)` and your term type `T` provides
 an optimized implementation for storing the arguments, this function can
 be used to retrieve the arguments when the order of arguments does not matter 
 but the speed of the operation does.
 """
-unsorted_arguments(x) = arguments(x)
-arity(x) = length(unsorted_arguments(x))
+function arguments end
+arity(x) = length(arguments(x))
 
 """
   metadata(x)

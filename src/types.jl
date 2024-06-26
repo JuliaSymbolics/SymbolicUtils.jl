@@ -106,8 +106,8 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-function arguments(x::BasicSymbolic)
-    args = unsorted_arguments(x)
+function sorted_arguments(x::BasicSymbolic)
+    args = arguments(x)
     @match x.impl begin
         Add => @goto ADD
         Mul => @goto MUL
@@ -128,9 +128,13 @@ function arguments(x::BasicSymbolic)
     return args
 end
 
-unsorted_arguments(x) = arguments(x)
 children(x::BasicSymbolic) = arguments(x)
-function unsorted_arguments(x::BasicSymbolic)
+
+sorted_children(x::BasicSymbolic) = sorted_arguments(x)
+
+@deprecate unsorted_arguments(x) arguments(x)
+
+function arguments(x::BasicSymbolic)
     @match x.impl begin
         Term => return x.arguments
         Add  => @goto ADDMUL
@@ -791,7 +795,7 @@ function show_term(io::IO, t)
     end
 
     f = operation(t)
-    args = arguments(t)
+    args = sorted_arguments(t)
     if symtype(t) <: LiteralReal
         show_call(io, f, args)
     elseif f === (+)

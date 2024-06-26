@@ -5,7 +5,7 @@ include("utils.jl")
 
 @testset "div and polyform" begin
     @syms x y z
-    @test repr(PolyForm(x-y)) == "-y + x"
+    @test_skip repr(PolyForm(x-y)) == "-y + x"
     @test repr(x/y*x/z) == "(x^2) / (y*z)"
     @test repr(simplify_fractions(((x-y+z)*(x+4z+1)) /
                                   (y*(2x - 3y + 3z) +

@@ -9,7 +9,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, similarterm, unsorted_arguments, metadata, isterm, term
+                      symtype, similarterm, sorted_arguments, metadata, isterm, term, maketerm
 
 ##== state management ==##
 
@@ -124,7 +124,7 @@ end
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
-    args = map(Base.Fix2(toexpr, st), arguments(O))
+    args = map(Base.Fix2(toexpr, st), sorted_arguments(O))
     if length(args) >= 3 && symtype(O) <: Number
         x, xs = Iterators.peel(args)
         foldl(xs, init=x) do a, b
@@ -744,7 +744,7 @@ end
 function cse_state!(state, t)
     !iscall(t) && return t
     state[t] = Base.get(state, t, 0) + 1
-    foreach(x->cse_state!(state, x), unsorted_arguments(t))
+    foreach(x->cse_state!(state, x), arguments(t))
 end
 
 function cse_block!(assignments, counter, names, name, state, x)
@@ -759,7 +759,7 @@ function cse_block!(assignments, counter, names, name, state, x)
             return sym
         end
     elseif iscall(x)
-        args = map(a->cse_block!(assignments, counter, names, name, state,a), unsorted_arguments(x))
+        args = map(a->cse_block!(assignments, counter, names, name, state,a), arguments(x))
         if isterm(x)
             return term(operation(x), args...)
         else

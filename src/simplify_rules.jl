@@ -1,4 +1,6 @@
 using .Rewriters
+using Metatheory: @rule
+
 """
   is_operation(f)
 Returns a single argument anonymous function predicate, that returns `true` if and only if
@@ -6,10 +8,15 @@ the argument to the predicate satisfies `iscall` and `operation(x) == f`
 """
 is_operation(f) = @nospecialize(x) -> iscall(x) && (operation(x) == f)
 
+const isnotflatplus = isnotflat(+)
+const isnotflattimes = isnotflat(*)
+const needs_sorting_plus = needs_sorting(+)
+const needs_sorting_times = needs_sorting(*)
+
 let
     CANONICALIZE_PLUS = [
-        @rule(~x::isnotflat(+) => flatten_term(+, ~x))
-        @rule(~x::needs_sorting(+) => sort_args(+, ~x))
+        @rule(~x::isnotflatplus => flatten_term(+, ~x))
+        @rule(~x::needs_sorting_plus => sort_args(+, ~x))
         @ordered_acrule(~a::is_literal_number + ~b::is_literal_number => ~a + ~b)
 
         @acrule(*(~~x) + *(~β, ~~x) => *(1 + ~β, (~~x)...))
@@ -28,8 +35,8 @@ let
     ]
 
     CANONICALIZE_TIMES = [
-        @rule(~x::isnotflat(*) => flatten_term(*, ~x))
-        @rule(~x::needs_sorting(*) => sort_args(*, ~x))
+        @rule(~x::isnotflattimes => flatten_term(*, ~x))
+        @rule(~x::needs_sorting_times => sort_args(*, ~x))
 
         @ordered_acrule(~a::is_literal_number * ~b::is_literal_number => ~a * ~b)
         @rule(*(~~x::hasrepeats) => *(merge_repeats(^, ~~x)...))

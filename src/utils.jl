@@ -48,12 +48,12 @@ end
 
 function fold(t)
     if iscall(t)
-        tt = map(fold, arguments(t))
+        tt = map(fold, sorted_arguments(t))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
             return operation(t)(tt...)
         else
-            return maketerm(typeof(t), operation(t), tt, symtype(t), metadata(t))
+            return maketerm(typeof(t), operation(t), tt, metadata(t))
         end
     else
         return t
@@ -74,12 +74,12 @@ _isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) 
 _isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
-needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
+needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(sorted_arguments(x))
 
 # are there nested ⋆ terms?
 function isnotflat(⋆)
     function (x)
-        args = arguments(x)
+        args = sorted_arguments(x)
         for t in args
             if iscall(t) && operation(t) === (⋆)
                 return true
@@ -137,29 +137,29 @@ x + 2y
 ```
 """
 function flatten_term(⋆, x)
-    args = arguments(x)
+    args = sorted_arguments(x)
     # flatten nested ⋆
     flattened_args = []
     for t in args
         if iscall(t) && operation(t) === (⋆)
-            append!(flattened_args, arguments(t))
+            append!(flattened_args, sorted_arguments(t))
         else
             push!(flattened_args, t)
         end
     end
-    maketerm(typeof(x), ⋆, flattened_args, symtype(x), metadata(x))
+    maketerm(typeof(x), ⋆, flattened_args, metadata(x))
 end
 
 function sort_args(f, t)
-    args = arguments(t)
+    args = sorted_arguments(t)
     if length(args) < 2
-        return maketerm(typeof(t), f, args, symtype(t), metadata(t))
+        return maketerm(typeof(t), f, args, metadata(t))
     elseif length(args) == 2
         x, y = args
-        return maketerm(typeof(t), f, x <ₑ y ? [x,y] : [y,x], symtype(t), metadata(t))
+        return maketerm(typeof(t), f, x <ₑ y ? [x,y] : [y,x], metadata(t))
     end
     args = args isa Tuple ? [args...] : args
-    maketerm(typeof(t), f, sort(args, lt=<ₑ), symtype(t), metadata(t))
+    maketerm(typeof(t), f, sort(args, lt=<ₑ), metadata(t))
 end
 
 # Linked List interface
@@ -182,12 +182,12 @@ Base.length(l::LL) = length(l.v)-l.i+1
 Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
 Base.isempty(t::Term) = false
 @inline car(t::Term) = operation(t)
-@inline cdr(t::Term) = arguments(t)
+@inline cdr(t::Term) = sorted_arguments(t)
 
 @inline car(v) = iscall(v) ? operation(v) : first(v)
 @inline function cdr(v)
     if iscall(v)
-        arguments(v)
+        sorted_arguments(v)
     else
         islist(v) ? LL(v, 2) : error("asked cdr of empty")
     end
@@ -200,7 +200,7 @@ end
     if n === 0
         return ll
     else
-        iscall(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
+        iscall(ll) ? drop_n(sorted_arguments(ll), n-1) : drop_n(cdr(ll), n-1)
     end
 end
 @inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)
@@ -225,7 +225,7 @@ macro matchable(expr)
         SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         SymbolicUtils.children(x::$name) = [SymbolicUtils.operation(x); SymbolicUtils.children(x)]
         Base.length(x::$name) = $(length(fields) + 1)
-        SymbolicUtils.maketerm(x::$name, f, args, type, metadata) = f(args...)
+        SymbolicUtils.maketerm(x::$name, f, args, metadata) = f(args...)
     end |> esc
 end
 

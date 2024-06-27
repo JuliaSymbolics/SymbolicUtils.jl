@@ -16,8 +16,8 @@ using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 using TermInterface
-import TermInterface: iscall, isexpr, issym, symtype, head, children,
-                      operation, arguments, metadata, maketerm
+import TermInterface: iscall, isexpr, head, children,
+                      operation, arguments, metadata, maketerm, sorted_arguments
 
 const istree = iscall
 Base.@deprecate_binding istree iscall

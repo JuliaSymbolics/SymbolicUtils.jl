@@ -84,7 +84,7 @@ function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
     bw = monomial_lt(db, da)
     if fw === bw && !isequal(a, b)
         if _arglen(a) == _arglen(b)
-            return (operation(a), sorted_arguments(a)...,) <ₑ (operation(b), sorted_arguments(b)...,)
+            return (operation(a), arguments(a)...,) <ₑ (operation(b), arguments(b)...,)
         else
             return _arglen(a) < _arglen(b)
         end

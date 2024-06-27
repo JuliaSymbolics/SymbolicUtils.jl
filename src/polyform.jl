@@ -103,7 +103,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         end
 
         op = operation(x)
-        args = sorted_arguments(x)
+        args = arguments(x)
 
         local_polyize(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
 
@@ -391,7 +391,7 @@ function has_div(x)
 end
 
 flatten_pows(xs) = map(xs) do x
-    ispow(x) ? Iterators.repeated(sorted_arguments(x)...) : (x,)
+    ispow(x) ? Iterators.repeated(arguments(x)...) : (x,)
 end |> Iterators.flatten |> a->collect(Any,a)
 
 coefftype(x::PolyForm) = coefftype(x.p)

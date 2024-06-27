@@ -221,14 +221,14 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if iscall(x)
-            _args = map(sorted_arguments(x)) do arg
+            _args = map(arguments(x)) do arg
                 if node_count(arg) > p.thread_cutoff
                     Threads.@spawn p(arg)
                 else
                     p(arg)
                 end
             end
-            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, sorted_arguments(x))
+            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
             t = p.maketerm(typeof(x), operation(x), args, metadata(x))
         end
         return ord === :post ? p.rw(t) : t

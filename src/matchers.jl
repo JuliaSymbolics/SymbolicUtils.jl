@@ -85,7 +85,7 @@ function matcher(segment::Segment)
 end
 
 function term_matcher(term)
-    matchers = (matcher(operation(term)), map(matcher, sorted_arguments(term))...,)
+    matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
     function term_matcher(success, data, bindings)
 
         !islist(data) && return nothing

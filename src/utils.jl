@@ -48,7 +48,7 @@ end
 
 function fold(t)
     if iscall(t)
-        tt = map(fold, sorted_arguments(t))
+        tt = map(fold, arguments(t))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
             return operation(t)(tt...)
@@ -74,12 +74,12 @@ _isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) 
 _isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
-needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(sorted_arguments(x))
+needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
 
 # are there nested ⋆ terms?
 function isnotflat(⋆)
     function (x)
-        args = sorted_arguments(x)
+        args = arguments(x)
         for t in args
             if iscall(t) && operation(t) === (⋆)
                 return true
@@ -137,12 +137,12 @@ x + 2y
 ```
 """
 function flatten_term(⋆, x)
-    args = sorted_arguments(x)
+    args = arguments(x)
     # flatten nested ⋆
     flattened_args = []
     for t in args
         if iscall(t) && operation(t) === (⋆)
-            append!(flattened_args, sorted_arguments(t))
+            append!(flattened_args, arguments(t))
         else
             push!(flattened_args, t)
         end
@@ -151,7 +151,7 @@ function flatten_term(⋆, x)
 end
 
 function sort_args(f, t)
-    args = sorted_arguments(t)
+    args = arguments(t)
     if length(args) < 2
         return maketerm(typeof(t), f, args, metadata(t))
     elseif length(args) == 2
@@ -182,12 +182,12 @@ Base.length(l::LL) = length(l.v)-l.i+1
 Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
 Base.isempty(t::Term) = false
 @inline car(t::Term) = operation(t)
-@inline cdr(t::Term) = sorted_arguments(t)
+@inline cdr(t::Term) = arguments(t)
 
 @inline car(v) = iscall(v) ? operation(v) : first(v)
 @inline function cdr(v)
     if iscall(v)
-        sorted_arguments(v)
+        arguments(v)
     else
         islist(v) ? LL(v, 2) : error("asked cdr of empty")
     end
@@ -200,7 +200,7 @@ end
     if n === 0
         return ll
     else
-        iscall(ll) ? drop_n(sorted_arguments(ll), n-1) : drop_n(cdr(ll), n-1)
+        iscall(ll) ? drop_n(arguments(ll), n-1) : drop_n(cdr(ll), n-1)
     end
 end
 @inline drop_n(ll::Union{Tuple, AbstractArray}, n) = drop_n(LL(ll, 1), n)

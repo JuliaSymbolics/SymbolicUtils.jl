@@ -256,8 +256,8 @@ function _isequal(a, b, E)
     elseif E === POW
         isequal(a.exp, b.exp) && isequal(a.base, b.base)
     elseif E === TERM
-        a1 = sorted_arguments(a)
-        a2 = sorted_arguments(b)
+        a1 = arguments(a)
+        a2 = arguments(b)
         isequal(operation(a), operation(b)) && _allarequal(a1, a2)
     else
         error_on_type()
@@ -678,7 +678,7 @@ const show_simplified = Ref(false)
 isnegative(t::Real) = t < 0
 function isnegative(t)
     if iscall(t) && operation(t) === (*)
-        coeff = first(sorted_arguments(t))
+        coeff = first(arguments(t))
         return isnegative(coeff)
     end
     return false
@@ -710,7 +710,7 @@ end
 function remove_minus(t)
     !iscall(t) && return -t
     @assert operation(t) == (*)
-    args = sorted_arguments(t)
+    args = arguments(t)
     @assert args[1] < 0
     Any[-args[1], args[2:end]...]
 end

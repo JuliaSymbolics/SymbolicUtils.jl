@@ -298,7 +298,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
         !iszero(h) && return h
         op = operation(s)
         oph = op isa Function ? nameof(op) : op
-        h′ = hashvec(sorted_arguments(s), hash(oph, salt))
+        h′ = hashvec(arguments(s), hash(oph, salt))
         s.hash[] = h′
         return h′
     else
@@ -428,7 +428,7 @@ end
 
 @inline function numerators(x)
     isdiv(x) && return numerators(x.num)
-    iscall(x) && operation(x) === (*) ? sorted_arguments(x) : Any[x]
+    iscall(x) && operation(x) === (*) ? arguments(x) : Any[x]
 end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
@@ -547,7 +547,7 @@ function unflatten(t::Symbolic{T}) where{T}
     if iscall(t)
         f = operation(t)
         if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops
-            a = sorted_arguments(t)
+            a = arguments(t)
             return foldl((x,y) -> Term{T}(f, Any[x, y]), a)
         end
     end

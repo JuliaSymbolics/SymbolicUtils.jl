@@ -232,7 +232,7 @@ end
     @test getmetadata(s, Ctx1) == "meta_1"
 end
 
-toterm(t) = Term{symtype(t)}(operation(t), sorted_arguments(t))
+toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
 
 @testset "diffs" begin
     @syms a b c
@@ -279,7 +279,7 @@ end
     T = FnType{Tuple{T,S,Int} where {T,S}, Real}
     s = Sym{T}(:t)
     @syms a b c::Int
-    @test isequal(sorted_arguments(s(a, b, c)), [a, b, c])
+    @test isequal(arguments(s(a, b, c)), [a, b, c])
 end
 
 @testset "div" begin

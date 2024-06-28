@@ -586,15 +586,16 @@ function basicsymbolic(f, args, stype, metadata)
         T = _promote_symtype(f, args)
     end
     if T <: LiteralReal
-        Term{T}(f, args, metadata=metadata)
-    elseif T <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) && all(x->symtype(x) <: Number, args)
+        _Term(T, f, args; metadata)
+    elseif T <: Number && (f in (+, *) || (f in (/, ^) && length(args) == 2)) &&
+           all(x -> symtype(x) <: Number, args)
         res = f(args...)
         if res isa Symbolic
             @set! res.metadata = metadata
         end
         return res
     else
-        Term{T}(f, args, metadata=metadata)
+        _Term(T, f, args; metadata)
     end
 end
 

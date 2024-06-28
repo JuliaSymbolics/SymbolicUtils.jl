@@ -871,7 +871,7 @@ showraw(t) = showraw(stdout, t)
 
 function Base.show(io::IO, v::BasicSymbolic)
     if issym(v)
-        Base.show_unquoted(io, v.name)
+        Base.show_unquoted(io, v.impl.name)
     else
         show_term(io, v)
     end

@@ -41,7 +41,7 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         @test d1.arguments == [bs1, bs2]
         num = bs1
         den = bs2
-        d2 =  Div(; num, den)
+        d2 = Div(; num, den)
         @test d2.num == bs1
         @test d2.den == bs2
         @test_throws MethodError Div(num = s1, den = bs2)
@@ -59,7 +59,7 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         @test p1.arguments == [bs1, bs2]
         base = bs1
         exp = bs2
-        p2 =  Pow(; base, exp)
+        p2 = Pow(; base, exp)
         @test p2.base == bs1
         @test p2.exp == bs2
         @test_throws MethodError Pow(base = s1, exp = bs2)
@@ -117,6 +117,48 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         @test bs1.metadata == SymbolicUtils.NO_METADATA
         @test typeof(bs1.hash) == Base.RefValue{UInt}
         @test bs1.hash[] == SymbolicUtils.EMPTY_HASH
+    end
+end
+
+@testset "Custom constructors" begin
+    @testset "Sym" begin
+        s1 = _Sym(Int64, :x)
+        s2 = _Sym(Float64, :y)
+        @test typeof(s1) == BasicSymbolic{Int64}
+        @test s1.metadata == SymbolicUtils.NO_METADATA
+        @test s1.hash[] == SymbolicUtils.EMPTY_HASH
+        @test s1.impl.name == :x
+        @test typeof(s2) == BasicSymbolic{Float64}
+        @test s2.metadata == SymbolicUtils.NO_METADATA
+        @test s2.hash[] == SymbolicUtils.EMPTY_HASH
+        @test s2.impl.name == :y
+    end
+    @testset "Term" begin
+        s1 = _Sym(Float64, :x)
+        s2 = _Sym(Float64, :y)
+        t = _Term(Float64, mod, [s1, s2])
+        @test typeof(t) == BasicSymbolic{Float64}
+        @test t.metadata == SymbolicUtils.NO_METADATA
+        @test t.hash[] == SymbolicUtils.EMPTY_HASH
+        @test t.impl.f == mod
+        @test t.impl.arguments == [s1, s2]
+    end
+    @testset "Const" begin
+        c1 = _Const(1.0)
+        @test typeof(c1) == BasicSymbolic{Float64}
+        @test c1.metadata == SymbolicUtils.NO_METADATA
+        @test c1.hash[] == SymbolicUtils.EMPTY_HASH
+        @test c1.impl.val == 1.0
+        c2 = _Const(big"123456789012345678901234567890")
+        @test typeof(c2) == BasicSymbolic{BigInt}
+        @test c2.metadata == SymbolicUtils.NO_METADATA
+        @test c2.hash[] == SymbolicUtils.EMPTY_HASH
+        @test c2.impl.val == big"123456789012345678901234567890"
+        c3 = _Const(big"1.23456789012345678901")
+        @test typeof(c3) == BasicSymbolic{BigFloat}
+        @test c3.metadata == SymbolicUtils.NO_METADATA
+        @test c3.hash[] == SymbolicUtils.EMPTY_HASH
+        @test c3.impl.val == big"1.23456789012345678901"
     end
 end
 

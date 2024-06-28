@@ -444,11 +444,11 @@ function _Div(num, den; kwargs...)
 end
 
 @inline function numerators(x)
-    isdiv(x) && return numerators(x.num)
+    isdiv(x) && return numerators(x.impl.num)
     iscall(x) && operation(x) === (*) ? arguments(x) : Any[x]
 end
 
-@inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
+@inline denominators(x) = isdiv(x) ? numerators(x.impl.den) : Any[1]
 
 function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
     _iszero(b) && return 1

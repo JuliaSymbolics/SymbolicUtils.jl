@@ -175,13 +175,54 @@ end
 isexpr(s::BasicSymbolic) = !issym(s)
 iscall(s::BasicSymbolic) = isexpr(s)
 
-@inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
-issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
-isterm(x) = isa_SymType(Val(:Term), x)
-ismul(x)  = isa_SymType(Val(:Mul), x)
-isadd(x)  = isa_SymType(Val(:Add), x)
-ispow(x)  = isa_SymType(Val(:Pow), x)
-isdiv(x)  = isa_SymType(Val(:Div), x)
+function issym(x)
+    isa(x, BasicSymbolic) && @match x.impl begin
+        Sym(_...) => true
+        _ => false
+    end
+end
+
+function isterm(x)
+    isa(x, BasicSymbolic) && @match x.impl begin
+        Term(_...) => true
+        _ => false
+    end
+end
+
+function isadd(x)
+    isa(x, BasicSymbolic) && @match x.impl begin
+        Add(_...) => true
+        _ => false
+    end
+end
+
+function ismul(x)
+    isa(x, BasicSymbolic) && @match x.impl begin
+        Mul(_...) => true
+        _ => false
+    end
+end
+
+function ispow(x)
+    isa(x, BasicSymbolic) && @match x.impl begin
+        Pow(_...) => true
+        _ => false
+    end
+end
+
+function isdiv(x)
+    isa(x, BasicSymbolic) && @match x.impl begin
+        Div(_...) => true
+        _ => false
+    end
+end
+
+function isconst(x)
+    isa(x, BasicSymbolic) && @match x.impl begin
+        Const(_...) => true
+        _ => false
+    end
+end
 
 ###
 ### Base interface

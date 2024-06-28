@@ -273,7 +273,7 @@ end
 Base.one( s::Symbolic) = one( symtype(s))
 Base.zero(s::Symbolic) = zero(symtype(s))
 
-Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymbolic doesn't have a name")
+Base.nameof(s::BasicSymbolic) = issym(s) ? s.impl.name : error("None Sym BasicSymbolic doesn't have a name")
 
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)

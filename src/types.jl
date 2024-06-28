@@ -293,6 +293,11 @@ function _Term(f, args; kwargs...)
     _Term(_promote_symtype(f, args), f, args; kwargs...)
 end
 
+function _Const(val::T; kwargs...) where {T}
+    impl = Const(val)
+    BasicSymbolic{T}(; impl, kwargs...)
+end
+
 function _Add(::Type{T}, coeff, dict; kwargs...) where {T}
     if isempty(dict)
         return coeff

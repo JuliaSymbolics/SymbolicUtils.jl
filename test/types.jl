@@ -1,4 +1,4 @@
-using SymbolicUtils: BasicSymbolic
+using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
 
 @testset "Expronicon generated constructors" begin
     s1 = Sym(:abc)
@@ -118,4 +118,21 @@ using SymbolicUtils: BasicSymbolic
         @test typeof(bs1.hash) == Base.RefValue{UInt}
         @test bs1.hash[] == SymbolicUtils.EMPTY_HASH
     end
+end
+
+@testset "BasicSymbolic iszero" begin
+    c1 = _Const(0)
+    @test SymbolicUtils._iszero(c1)
+    c2 = _Const(1)
+    @test !SymbolicUtils._iszero(c2)
+    c3 = _Const(0.0)
+    @test SymbolicUtils._iszero(c3)
+    c4 = _Const(0.00000000000000000000000001)
+    @test !SymbolicUtils._iszero(c4)
+    c5 = _Const(big"326264532521352634435352152")
+    @test !SymbolicUtils._iszero(c5)
+    c6 = _Const(big"0.314654523452")
+    @test !SymbolicUtils._iszero(c6)
+    s = _Sym(Real, :y)
+    @test !SymbolicUtils._iszero(s)
 end

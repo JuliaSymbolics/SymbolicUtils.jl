@@ -108,22 +108,23 @@ end
 
 function sorted_arguments(x::BasicSymbolic)
     args = arguments(x)
-    @match x.impl begin
-        Add => @goto ADD
-        Mul => @goto MUL
-        _   => return args
+    impl = x.impl
+    @match impl begin
+        Add(_...) => @goto ADD
+        Mul(_...) => @goto MUL
+        _ => return args
     end
     @label MUL
-    if !x.issorted[]
-        sort!(args, by=get_degrees)
-        x.issorted[] = true
+    if !impl.issorted[]
+        sort!(args, by = get_degrees)
+        impl.issorted[] = true
     end
     return args
 
     @label ADD
-    if !x.issorted[]
-        sort!(args, lt = monomial_lt, by=get_degrees)
-        x.issorted[] = true
+    if !impl.issorted[]
+        sort!(args, lt = monomial_lt, by = get_degrees)
+        impl.issorted[] = true
     end
     return args
 end

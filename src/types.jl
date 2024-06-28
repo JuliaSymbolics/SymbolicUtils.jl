@@ -404,21 +404,19 @@ function maybe_intcoeff(x)
     end
 end
 
-function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
-    if T<:Number && !(T<:SafeReal)
-        n, d = quick_cancel(n, d)
+function _Div(::Type{T}, num, den; kwargs...) where {T}
+    if T <: Number && !(T <: SafeReal)
+        num, den = quick_cancel(num, den)
     end
-    _iszero(n) && return zero(typeof(n))
-    _isone(d) && return n
-
-    if isdiv(n) && isdiv(d)
-        return Div{T}(n.num * d.den, n.den * d.num)
-    elseif isdiv(n)
-        return Div{T}(n.num, n.den * d)
+    _iszero(num) && return zero(typeof(num))
+    _isone(den) && return den
+    if isdiv(num) && isdiv(den)
+        return _Div(T, num.impl.num * den.impl.den, num.impl.den * den.impl.num)
+    elseif isdiv(num)
+        return _Div(T, num.impl.num, num.impl.den * den)
     elseif isdiv(d)
-        return Div{T}(n * d.den, d.num)
+        return _Div(T, num * den.impl.den, den.impl.num)
     end
-
     d isa Number && _isone(-d) && return -1 * n
     n isa Rat && d isa Rat && return n // d # maybe called by oblivious code in simplify
 
@@ -438,11 +436,11 @@ function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
         end
     end
 
-    Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    impl = Div(; num, den)
+    BasicSymbolic{T}(; impl, kwargs...)
 end
-
-function Div(n,d, simplified=false; kw...)
-    Div{promote_symtype((/), symtype(n), symtype(d))}(n, d, simplified; kw...)
+function _Div(num, den; kwargs...)
+    Div{promote_symtype((/), symtype(num), symtype(den))}(num, den; kwargs...)
 end
 
 @inline function numerators(x)

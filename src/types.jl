@@ -211,9 +211,7 @@ iscall(s::BasicSymbolic) = isexpr(s)
 Returns `true` if `x` is a `Sym`. If true, `nameof` must be defined
 on `x` and must return a `Symbol`.
 """
-issym(x) = false
-issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
-
+issym(x) = isa_SymType(Val(:Sym), x)
 isterm(x) = isa_SymType(Val(:Term), x)
 ismul(x)  = isa_SymType(Val(:Mul), x)
 isadd(x)  = isa_SymType(Val(:Add), x)

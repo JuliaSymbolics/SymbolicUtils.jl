@@ -481,18 +481,18 @@ function toterm(t::BasicSymbolic{T}) where {T}
     end
 end
 
-"""
-    makeadd(sign, coeff::Number, xs...)
+""""
+$(SIGNATURES)
 
 Any Muls inside an Add should always have a coeff of 1
 and the key (in Add) should instead be used to store the actual coefficient
 """
 function makeadd(sign, coeff, xs...)
-    d = sdict()
+    d = Dict{BasicSymbolic, Any}()
     for x in xs
         if isadd(x)
-            coeff += x.coeff
-            _merge!(+, d, x.dict, filter=_iszero)
+            coeff += x.impl.coeff
+            _merge!(+, d, x.impl.dict, filter = _iszero)
             continue
         end
         if x isa Number
@@ -500,8 +500,8 @@ function makeadd(sign, coeff, xs...)
             continue
         end
         if ismul(x)
-            k = Mul(symtype(x), 1, x.dict)
-            v = sign * x.coeff + get(d, k, 0)
+            k = _Mul(symtype(x), 1, x.dict)
+            v = sign * x.impl.coeff + get(d, k, 0)
         else
             k = x
             v = sign + get(d, x, 0)
@@ -515,15 +515,15 @@ function makeadd(sign, coeff, xs...)
     coeff, d
 end
 
-function makemul(coeff, xs...; d=sdict())
+function makemul(coeff, xs...; d = Dict{BasicSymbolic, Any}())
     for x in xs
-        if ispow(x) && x.exp isa Number
-            d[x.base] = x.exp + get(d, x.base, 0)
+        if ispow(x) && x.impl.exp isa Number
+            d[x.impl.base] = x.impl.exp + get(d, x.impl.base, 0)
         elseif x isa Number
             coeff *= x
         elseif ismul(x)
-            coeff *= x.coeff
-            _merge!(+, d, x.dict, filter=_iszero)
+            coeff *= x.impl.coeff
+            _merge!(+, d, x.impl.dict, filter = _iszero)
         else
             v = 1 + get(d, x, 0)
             if _iszero(v)
@@ -533,19 +533,19 @@ function makemul(coeff, xs...; d=sdict())
             end
         end
     end
-    (coeff, d)
+    coeff, d
 end
 
-unstable_pow(a, b) = a isa Integer && b isa Integer ? (a//1) ^ b : a ^ b
+unstable_pow(a, b) = a isa Integer && b isa Integer ? (a // 1)^b : a^b
 
 function makepow(a, b)
     base = a
     exp = b
     if ispow(a)
-        base = a.base
-        exp = a.exp * b
+        base = a.impl.base
+        exp = a.impl.exp * b
     end
-    return (base, exp)
+    base, exp
 end
 
 function term(f, args...; type = nothing)

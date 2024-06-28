@@ -136,39 +136,39 @@ sorted_children(x::BasicSymbolic) = sorted_arguments(x)
 @deprecate unsorted_arguments(x) arguments(x)
 
 function arguments(x::BasicSymbolic)
-    @match x.impl begin
-        Term => return x.arguments
-        Add  => @goto ADDMUL
-        Mul  => @goto ADDMUL
-        Div  => @goto DIVPOW
-        Pow  => @goto DIVPOW
-        Sym  => error_sym()
-        Const => error_const()
-        _    => error_on_type()
+    impl = x.impl
+    @match impl begin
+        Term(_...) => return impl.arguments
+        Add(_...) => @goto ADDMUL
+        Mul(_...) => @goto ADDMUL
+        Div(_...) => @goto DIVPOW
+        Pow(_...) => @goto DIVPOW
+        Sym(_...) => error_sym()
+        Const(_...) => error_const()
+        _ => error_on_type()
     end
 
     @label ADDMUL
     E = exprtype(x)
-    args = x.impl.arguments
+    args = impl.arguments
     isempty(args) || return args
-    siz = length(x.impl.dict)
-    idcoeff = E === ADD ? iszero(x.impl.coeff) : isone(x.impl.coeff)
+    siz = length(impl.dict)
+    idcoeff = E === ADD ? iszero(impl.coeff) : isone(impl.coeff)
     sizehint!(args, idcoeff ? siz : siz + 1)
-    idcoeff || push!(args, x.impl.coeff)
+    idcoeff || push!(args, impl.coeff)
     if isadd(x)
-        for (k, v) in x.impl.dict
-            push!(args, applicable(*,k,v) ? k*v :
-                    maketerm(k, *, [k, v]))
+        for (k, v) in impl.dict
+            push!(args, applicable(*, k, v) ? k * v : maketerm(k, *, [k, v]))
         end
     else # MUL
-        for (k, v) in x.impl.dict
+        for (k, v) in impl.dict
             push!(args, unstable_pow(k, v))
         end
     end
     return args
 
     @label DIVPOW
-    args = x.impl.arguments
+    args = impl.arguments
     return args
 end
 

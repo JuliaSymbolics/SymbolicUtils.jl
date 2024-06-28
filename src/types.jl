@@ -450,14 +450,14 @@ end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.impl.den) : Any[1]
 
-function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
-    _iszero(b) && return 1
-    _isone(b) && return a
-    Pow{T}(; base=a, exp=b, arguments=[], metadata)
+function _Pow(::Type{T}, base, exp; kwargs...) where {T}
+    _iszero(exp) && return 1
+    _isone(exp) && return a
+    impl = (; base, exp)
+    BasicSymbolic{T}(; impl, kwargs...)
 end
-
-function Pow(a, b; metadata=NO_METADATA)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
+function _Pow(base, exp; kwargs...)
+    Pow{promote_symtype(^, symtype(base), symtype(b))}(makepow(base, exp)..., kwargs...)
 end
 
 function toterm(t::BasicSymbolic{T}) where T

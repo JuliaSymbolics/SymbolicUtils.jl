@@ -54,14 +54,14 @@ end
 
 function exprtype(x::BasicSymbolic)
     @match x.impl begin
-        Term => TERM
-        Add  => ADD
-        Mul  => MUL
-        Div  => DIV
-        Pow  => POW
-        Sym  => SYM
-        Const => CONST
-        _    => error_on_type()
+        Sym(_...) => SYM
+        Term(_...) => TERM
+        Add(_...) => ADD
+        Mul(_...) => MUL
+        Div(_...) => DIV
+        Pow(_...) => POW
+        Const(_...) => CONST
+        _ => error_on_type()
     end
 end
 

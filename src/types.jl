@@ -1076,87 +1076,78 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
-    !issafecanon(+, a,b) && return term(+, a, b) # Don't flatten if args have metadata
+    !issafecanon(+, a, b) && return term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
-        return Add(add_t(a,b),
-                   a.coeff + b.coeff,
-                   _merge(+, a.dict, b.dict, filter=_iszero))
+        return _Add(
+            add_t(a, b), a.coeff + b.coeff, _merge(+, a.dict, b.dict, filter = _iszero))
     elseif isadd(a)
         coeff, dict = makeadd(1, 0, b)
-        return Add(add_t(a,b), a.coeff + coeff, _merge(+, a.dict, dict, filter=_iszero))
+        return _Add(add_t(a, b), a.coeff + coeff, _merge(+, a.dict, dict, filter = _iszero))
     elseif isadd(b)
         return b + a
     end
     coeff, dict = makeadd(1, 0, a, b)
-    Add(add_t(a,b), coeff, dict)
+    _Add(add_t(a, b), coeff, dict)
 end
-
 function +(a::Number, b::SN)
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
     if isadd(b)
-        Add(add_t(a,b), a + b.coeff, b.dict)
+        _Add(add_t(a, b), a + b.coeff, b.dict)
     else
-        Add(add_t(a,b), makeadd(1, a, b)...)
+        _Add(add_t(a, b), makeadd(1, a, b)...)
     end
 end
-
 +(a::SN, b::Number) = b + a
-
 +(a::SN) = a
 
 function -(a::SN)
     !issafecanon(*, a) && return term(-, a)
-    isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
-    Add(sub_t(a), makeadd(-1, 0, a)...)
+    isadd(a) ? _Add(sub_t(a), -a.coeff, mapvalues((_, v) -> -v, a.dict)) :
+    _Add(sub_t(a), makeadd(-1, 0, a)...)
 end
-
 function -(a::SN, b::SN)
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
-    isadd(a) && isadd(b) ? Add(sub_t(a,b),
-                               a.coeff - b.coeff,
-                               _merge(-, a.dict,
-                                      b.dict,
-                                      filter=_iszero)) : a + (-b)
+    if isadd(a) && isadd(b)
+        _Add(sub_t(a, b), a.coeff - b.coeff, _merge(-, a.dict, b.dict, filter = _iszero))
+    else
+        a + (-b)
+    end
 end
-
 -(a::Number, b::SN) = a + (-b)
 -(a::SN, b::Number) = a + (-b)
 
-
-mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
+mul_t(a, b) = promote_symtype(*, symtype(a), symtype(b))
 mul_t(a) = promote_symtype(*, symtype(a))
-
-*(a::SN) = a
 
 function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
     !issafecanon(*, a, b) && return term(*, a, b)
     if isdiv(a) && isdiv(b)
-        Div(a.num * b.num, a.den * b.den)
+        _Div(a.impl.num * b.impl.num, a.impl.den * b.impl.den)
     elseif isdiv(a)
-        Div(a.num * b, a.den)
+        _Div(a.impl.num * b, a.impl.den)
     elseif isdiv(b)
-        Div(a * b.num, b.den)
+        _Div(a * b.impl.num, b.impl.den)
     elseif ismul(a) && ismul(b)
-        Mul(mul_t(a, b),
-            a.coeff * b.coeff,
-            _merge(+, a.dict, b.dict, filter=_iszero))
+        _Mul(mul_t(a, b), a.impl.coeff * b.impl.coeff,
+            _merge(+, a.impl.dict, b.impl.dict, filter = _iszero))
     elseif ismul(a) && ispow(b)
         if b.exp isa Number
-            Mul(mul_t(a, b),
-                a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
+            _Mul(mul_t(a, b),
+                a.impl.coeff,
+                _merge(+, a.impl.dict, Base.ImmutableDict(b.impl.base => b.impl.exp),
+                    filter = _iszero))
         else
-            Mul(mul_t(a, b),
-                a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
+            _Mul(mul_t(a, b), a.impl.coeff,
+                _merge(+, a.impl.dict, Base.ImmutableDict(b => 1), filter = _iszero))
         end
     elseif ispow(a) && ismul(b)
         b * a
     else
-        Mul(mul_t(a,b), makemul(1, a, b)...)
+        _Mul(mul_t(a, b), makemul(1, a, b)...)
     end
 end
-
 function *(a::Number, b::SN)
     !issafecanon(*, b) && return term(*, a, b)
     if iszero(a)
@@ -1164,53 +1155,40 @@ function *(a::Number, b::SN)
     elseif isone(a)
         b
     elseif isdiv(b)
-        Div(a*b.num, b.den)
+        Div(a * b.impl.num, b.impl.den)
     elseif isone(-a) && isadd(b)
         # -1(a+b) -> -a - b
         T = promote_symtype(+, typeof(a), symtype(b))
-        Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
+        _Add(T, b.impl.coeff * a,
+            Dict{BasicSymbolic, Any}(k => v * a for (k, v) in b.impl.dict))
     else
-        Mul(mul_t(a, b), makemul(a, b)...)
+        _Mul(mul_t(a, b), makemul(a, b)...)
     end
 end
-
-###
-### Div
-###
-
-/(a::Union{SN,Number}, b::SN) = Div(a, b)
-
 *(a::SN, b::Number) = b * a
+*(a::SN) = a
 
-\(a::SN, b::Union{Number, SN}) = b / a
-
-\(a::Number, b::SN) = b / a
-
-/(a::SN, b::Number) = (isone(abs(b)) ? b : (b isa Integer ? 1//b : inv(b))) * a
+/(a::Union{SN, Number}, b::SN) = _Div(a, b)
+/(a::SN, b::Number) = (isone(abs(b)) ? b : (b isa Integer ? 1 // b : inv(b))) * a
 
 //(a::Union{SN, Number}, b::SN) = a / b
-
 //(a::SN, b::T) where {T <: Number} = (one(T) // b) * a
 
-
-###
-### Pow
-###
+\(a::SN, b::Union{Number, SN}) = b / a
+\(a::Number, b::SN) = b / a
 
 function ^(a::SN, b)
-    !issafecanon(^, a,b) && return Pow(a, b)
+    !issafecanon(^, a, b) && return Pow(a, b)
     if b isa Number && iszero(b)
-        # fast path
         1
     elseif b isa Number && b < 0
-        Div(1, a ^ (-b))
+        _Div(1, a^(-b))
     elseif ismul(a) && b isa Number
         coeff = unstable_pow(a.coeff, b)
-        Mul(promote_symtype(^, symtype(a), symtype(b)),
-            coeff, mapvalues((k, v) -> b*v, a.dict))
+        _Mul(promote_symtype(^, symtype(a), symtype(b)),
+            coeff, mapvalues((k, v) -> b * v, a.dict))
     else
         Pow(a, b)
     end
 end
-
-^(a::Number, b::SN) = Pow(a, b)
+^(a::Number, b::SN) = _Pow(a, b)

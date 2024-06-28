@@ -576,7 +576,6 @@ function TermInterface.maketerm(::Type{<:BasicSymbolic}, head, args, type, metad
     basicsymbolic(head, args, type, metadata)
 end
 
-
 function basicsymbolic(f, args, stype, metadata)
     if f isa Symbol
         error("$f must not be a Symbol")
@@ -710,7 +709,7 @@ function isnegative(t)
 end
 
 # Term{}
-setargs(t, args) = Term{symtype(t)}(operation(t), args)
+setargs(t, args) = _Term(symtype(t), operation(t), args)
 cdrargs(args) = setargs(t, cdr(args))
 
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")

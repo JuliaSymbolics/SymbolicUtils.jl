@@ -93,14 +93,14 @@ symtype(x::Number) = typeof(x)
 # We're returning a function pointer
 @inline function operation(x::BasicSymbolic)
     @match x.impl begin
-        Term => x.f
-        Add  => (+)
-        Mul  => (*)
-        Div  => (/)
-        Pow  => (^)
-        Sym  => error_sym()
-        Const => error_const()
-        _    => error_on_type()
+        Term(_...) => x.impl.f
+        Add(_...) => (+)
+        Mul(_...) => (*)
+        Div(_...) => (/)
+        Pow(_...) => (^)
+        Sym(_...) => error_sym()
+        Const(_...) => error_const()
+        _ => error_on_type()
     end
 end
 

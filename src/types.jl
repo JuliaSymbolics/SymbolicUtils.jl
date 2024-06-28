@@ -460,21 +460,22 @@ function _Pow(base, exp; kwargs...)
     Pow{promote_symtype(^, symtype(base), symtype(b))}(makepow(base, exp)..., kwargs...)
 end
 
-function toterm(t::BasicSymbolic{T}) where T
+function toterm(t::BasicSymbolic{T}) where {T}
     E = exprtype(t)
     if E === SYM || E === TERM
         return t
     elseif E === ADD || E === MUL
-        args = Any[]
-        push!(args, t.coeff)
-        for (k, coeff) in t.dict
-            push!(args, coeff == 1 ? k : Term{T}(E === MUL ? (^) : (*), Any[coeff, k]))
+        args = BasicSymbolic[]
+        push!(args, t.impl.coeff)
+        for (k, coeff) in t.impl.dict
+            push!(
+                args, coeff == 1 ? k : _Term(T, E === MUL ? (^) : (*), [_Const(coeff), k]))
         end
-        Term{T}(operation(t), args)
+        _Term(T, operation(t), args)
     elseif E === DIV
-        Term{T}(/, Any[t.num, t.den])
+        _Term(T, /, [t.impl.num, t.impl.den])
     elseif E === POW
-        Term{T}(^, [t.base, t.exp])
+        _Term(T, ^, [t.impl.base, t.impl.exp])
     else
         error_on_type()
     end

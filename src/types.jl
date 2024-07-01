@@ -891,10 +891,10 @@ showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)
 showraw(t) = showraw(stdout, t)
 
 function Base.show(io::IO, v::BasicSymbolic)
-    if issym(v)
-        Base.show_unquoted(io, v.impl.name)
-    else
-        show_term(io, v)
+    @match v.impl begin
+        Sym(_...) => Base.show_unquoted(io, v.impl.name)
+        Const(_...) => print(io, v.impl.val)
+        _ => show_term(io, v)
     end
 end
 

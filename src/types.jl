@@ -340,6 +340,13 @@ function _Const(val::T; kwargs...) where {T}
     BasicSymbolic{T}(; impl, kwargs...)
 end
 
+function Base.convert(::Type{BasicSymbolic}, x)
+    _Const(x)
+end
+function Base.convert(::Type{BasicSymbolic}, x::BasicSymbolic)
+    x
+end
+
 function _Add(::Type{T}, coeff, dict; kwargs...) where {T}
     if isempty(dict)
         return coeff

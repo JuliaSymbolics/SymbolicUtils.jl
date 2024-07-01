@@ -7,7 +7,6 @@ using DocStringExtensions
 
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
-using Unityper
 using TermInterface
 using DataStructures
 using Setfield
@@ -22,6 +21,10 @@ import TermInterface: iscall, isexpr, issym, symtype, head, children,
 const istree = iscall
 Base.@deprecate_binding istree iscall
 export istree, operation, arguments, sorted_arguments, similarterm, iscall
+
+using Base: RefValue
+using Expronicon.ADT: @adt
+using MLStyle: @match
 # Sym, Term,
 # Add, Mul and Pow
 include("types.jl")

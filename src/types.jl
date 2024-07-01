@@ -629,19 +629,38 @@ function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
-issafecanon(f, s) = true
-function issafecanon(f, s::Symbolic)
-    if isnothing(metadata(s)) || issym(s)
-        return true
-    else
-        _issafecanon(f, s)
+"""
+$(TYPEDSIGNATURES)
+
+Check if the symbolic expression(s) is/are safe to canonicalize with respect to the function `f`.
+
+This function determines if applying the canonicalization rules associated with function `f`
+to the symbolic expression `s` is safe and won't lead to incorrect simplifications. It handles various cases
+depending on the type of `s` and the function `f`.
+
+For multiple arguments, `issafecanon(f, ss...)`, it checks if canonicalization is safe for all expressions in `ss`.
+
+# Arguments
+- `f`: The function for which canonicalization safety is being checked.
+- `s`: The symbolic expression to check.
+- `ss...`: A variable number of symbolic expressions to check.
+
+# Returns
+- `true` if canonicalization is safe, `false` otherwise.
+"""
+function issafecanon(f, s::BasicSymbolic)
+    isnothing(metadata(s)) || @match s.impl begin
+        Sym(_...) => true
+        Const(_...) => true
+        _ => _issafecanon(f, s)
     end
 end
-_issafecanon(::typeof(*), s) = !iscall(s) || !(operation(s) in (+,*,^))
-_issafecanon(::typeof(+), s) = !iscall(s) || !(operation(s) in (+,*))
-_issafecanon(::typeof(^), s) = !iscall(s) || !(operation(s) in (*, ^))
+issafecanon(f, s) = true
+issafecanon(f, ss...) = all(x -> issafecanon(f, x), ss)
 
-issafecanon(f, ss...) = all(x->issafecanon(f, x), ss)
+_issafecanon(::typeof(*), s) = !iscall(s) || !(operation(s) in (+, *, ^))
+_issafecanon(::typeof(+), s) = !iscall(s) || !(operation(s) in (+, *))
+_issafecanon(::typeof(^), s) = !iscall(s) || !(operation(s) in (*, ^))
 
 function getmetadata(s::Symbolic, ctx)
     md = metadata(s)

@@ -1107,7 +1107,7 @@ function +(a::Number, b::SN)
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
     if isadd(b)
-        _Add(add_t(a, b), a + b.coeff, b.dict)
+        _Add(add_t(a, b), a + b.impl.coeff, b.impl.dict)
     else
         _Add(add_t(a, b), makeadd(1, a, b)...)
     end

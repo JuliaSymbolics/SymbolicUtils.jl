@@ -1130,6 +1130,9 @@ function +(a::SN, b::SN)
     _Add(add_t(a, b), coeff, dict)
 end
 function +(a::Number, b::SN)
+    if isconst(b)
+        return _Const(a + b.impl.val)
+    end
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
     if isadd(b)

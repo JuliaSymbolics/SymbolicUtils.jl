@@ -153,7 +153,7 @@ function arguments(x::BasicSymbolic)
     args = impl.arguments
     isempty(args) || return args
     siz = length(impl.dict)
-    idcoeff = E === ADD ? iszero(impl.coeff) : isone(impl.coeff)
+    idcoeff = E === ADD ? _iszero(impl.coeff) : _isone(impl.coeff)
     sizehint!(args, idcoeff ? siz : siz + 1)
     idcoeff || push!(args, impl.coeff)
     if isadd(x)
@@ -373,6 +373,13 @@ end
 function _iszero(x::BasicSymbolic)
     @match x.impl begin
         Const(_...) => iszero(x.impl.val)
+        _ => false
+    end
+end
+
+function _isone(x::BasicSymbolic)
+    @match x.impl begin
+        Const(_...) => isone(x.impl.val)
         _ => false
     end
 end

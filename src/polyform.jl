@@ -248,7 +248,7 @@ multivariate polynomials implementation.
 expand(expr) = unpolyize(PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
 
 function unpolyize(x)
-    # we need a special makterm here because the default one used in Postwalk will call
+    # we need a special maketerm here because the default one used in Postwalk will call
     # promote_symtype to get the new type, but we just want to forward that in case
     # promote_symtype is not defined for some of the expressions here.
     Postwalk(identity, maketerm=(T,f,args,m) -> maketerm(T, f, args, m))(x)

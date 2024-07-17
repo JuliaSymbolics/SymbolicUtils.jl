@@ -18,8 +18,7 @@ using TermInterface
 import TermInterface: iscall, isexpr, issym, symtype, head, children,
                       operation, arguments, metadata, maketerm
 
-const istree = iscall
-Base.@deprecate_binding istree iscall
+Base.@deprecate istree iscall
 export istree, operation, arguments, sorted_arguments, similarterm, iscall
 
 using Base: RefValue

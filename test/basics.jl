@@ -227,7 +227,10 @@ end
 
     # test that maketerm sets metadata correctly
     metadata = Base.ImmutableDict{DataType, Any}(Ctx1, "meta_1")
-    s = SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3],  metadata)
+    s = SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3], metadata)
+    @test !hasmetadata(s, Ctx1)
+
+    s = SymbolicUtils.maketerm(typeof(a^b), *, [a * b, 3], metadata)
     @test hasmetadata(s, Ctx1)
     @test getmetadata(s, Ctx1) == "meta_1"
 end

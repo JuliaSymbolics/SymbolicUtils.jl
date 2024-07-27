@@ -233,6 +233,22 @@ end
     s = SymbolicUtils.maketerm(typeof(a^b), *, [a * b, 3], metadata)
     @test hasmetadata(s, Ctx1)
     @test getmetadata(s, Ctx1) == "meta_1"
+
+    # Correct symtype propagation
+    ref_expr = a * b
+    @test symtype(ref_expr) == Number
+    new_expr = SymbolicUtils.maketerm(typeof(ref_expr), (==), [a, b], nothing)
+    @test symtype(new_expr) == Bool
+
+    # Doesn't know return type, promoted symtype is Any
+    foo(x,y) = x^2 + x 
+    new_expr = SymbolicUtils.maketerm(typeof(ref_expr), foo, [a, b], nothing)
+    @test symtype(new_expr) == Number
+
+    # Promoted symtype is a subtype of referred
+    @syms x::Int y::Int 
+    new_expr = SymbolicUtils.maketerm(typeof(ref_expr), (+), [x, y], nothing)
+    @test symtype(new_expr) == Int64
 end
 
 toterm(t) = Term{symtype(t)}(operation(t), arguments(t))

@@ -98,8 +98,19 @@ end
 ###
 ### Term interface
 ###
-symtype(x::Number) = typeof(x)
+
+"""
+$(SIGNATURES)
+
+Returns the [numeric type](https://docs.julialang.org/en/v1/base/numbers/#Standard-Numeric-Types) 
+of `x`. By default this is just `typeof(x)`.
+Define this for your symbolic types if you want [`SymbolicUtils.simplify`](@ref) to apply rules
+specific to numbers (such as commutativity of multiplication). Or such
+rules that may be implemented in the future.
+"""
+symtype(x) = typeof(x)
 @inline symtype(::Symbolic{T}) where T = T
+@inline symtype(::Type{<:Symbolic{T}}) where T = T
 
 # We're returning a function pointer
 @inline function operation(x::BasicSymbolic)
@@ -116,7 +127,7 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-function sorted_arguments(x::BasicSymbolic)
+function TermInterface.sorted_arguments(x::BasicSymbolic)
     args = arguments(x)
     @compactified x::BasicSymbolic begin
         Add => @goto ADD
@@ -138,13 +149,11 @@ function sorted_arguments(x::BasicSymbolic)
     return args
 end
 
-children(x::BasicSymbolic) = arguments(x)
-
-sorted_children(x::BasicSymbolic) = sorted_arguments(x)
-
 @deprecate unsorted_arguments(x) arguments(x)
 
-function arguments(x::BasicSymbolic)
+TermInterface.children(x::BasicSymbolic) = arguments(x)
+TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
+function TermInterface.arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
         Add  => @goto ADDMUL
@@ -166,7 +175,7 @@ function arguments(x::BasicSymbolic)
     if isadd(x)
         for (k, v) in x.dict
             push!(args, applicable(*,k,v) ? k*v :
-                    maketerm(k, *, [k, v]))
+                    maketerm(k, *, [k, v], nothing))
         end
     else # MUL
         for (k, v) in x.dict
@@ -196,7 +205,14 @@ isexpr(s::BasicSymbolic) = !issym(s)
 iscall(s::BasicSymbolic) = isexpr(s)
 
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
-issym(x::BasicSymbolic) = isa_SymType(Val(:Sym), x)
+
+"""
+    issym(x)
+
+Returns `true` if `x` is a `Sym`. If true, `nameof` must be defined
+on `x` and must return a `Symbol`.
+"""
+issym(x) = isa_SymType(Val(:Sym), x)
 isterm(x) = isa_SymType(Val(:Term), x)
 ismul(x)  = isa_SymType(Val(:Mul), x)
 isadd(x)  = isa_SymType(Val(:Add), x)
@@ -539,8 +555,22 @@ end
 
 unflatten(t) = t
 
-function TermInterface.maketerm(::Type{<:BasicSymbolic}, head, args, type, metadata)
-    basicsymbolic(head, args, type, metadata)
+function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
+    st = symtype(T)
+    pst = _promote_symtype(head, args)
+    # Use promoted symtype only if not a subtype of the existing symtype of T.
+    # This is useful when calling `maketerm(BasicSymbolic{Number}, (==), [true, false])` 
+    # Where the result would have a symtype of Bool. 
+    # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609 
+    # TODO this should be optimized.
+    new_st = if pst === Bool 
+        pst 
+    elseif pst === Any || (st === Number && pst <: st) 
+        st
+    else 
+        pst 
+    end 
+    basicsymbolic(head, args, new_st, metadata)
 end
 
 
@@ -662,28 +692,6 @@ end
 function to_symbolic(x)
     x
 end
-
-"""
-    similarterm(x, op, args, symtype=nothing; metadata=nothing)
-
-"""
-function similarterm(x, op, args, symtype=nothing; metadata=nothing)
-    Base.depwarn("""`similarterm` is deprecated, use `maketerm` instead.
-                 `similarterm(x, op, args, symtype; metadata)` is now
-                 `maketerm(typeof(x), op, args, symtype, metadata)`""", :similarterm)
-  TermInterface.maketerm(typeof(x), op, args, symtype, metadata)
-end
-
-# Old fallback
-function similarterm(T::Type, op, args, symtype=nothing; metadata=nothing)
-
-  Base.depwarn("`similarterm` is deprecated, use `maketerm` instead." *
-               "See https://github.com/JuliaSymbolics/TermInterface.jl for details.", :similarterm)
-  op(args...)
-end
-
-export similarterm
-
 
 ###
 ###  Pretty printing

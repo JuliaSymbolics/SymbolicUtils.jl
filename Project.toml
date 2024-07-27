@@ -1,7 +1,7 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "2.1.2"
+version = "3.0.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -43,7 +43,7 @@ Setfield = "0.7, 0.8, 1"
 SpecialFunctions = "0.10, 1.0, 2"
 StaticArrays = "0.12, 1.0"
 SymbolicIndexingInterface = "0.3"
-TermInterface = "0.4"
+TermInterface = "2.0"
 TimerOutputs = "0.5"
 Unityper = "0.1.2"
 julia = "1.3"

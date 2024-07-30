@@ -219,4 +219,12 @@ nanmath_st.rewrites[:nanmath] = true
             @test s1 == s2
         end
     end
+
+    let
+        @syms a b
+
+        t = term(sum, [a, b, a + b, 3a + 2b, sqrt(b)]; type = Number)
+        f = eval(toexpr(Func([a, b], [], t)))
+        @test f(1.0, 2.0) ≈ 13.0 + sqrt(2)
+    end
 end

@@ -13,6 +13,8 @@ You can read the documentation of [TermInterface.jl](https://github.com/JuliaSym
 
 ## SymbolicUtils.jl only methods
 
-`promote_symtype(f, arg_symtypes...)`
-
-Returns the appropriate output type of applying `f` on arguments of type `arg_symtypes`.
+```@docs
+symtype
+issym
+promote_symtype
+```

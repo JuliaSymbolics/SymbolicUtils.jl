@@ -34,7 +34,6 @@ function substitute(expr, dict; fold=true)
         maketerm(typeof(expr),
                  op,
                  args,
-                 symtype(expr),
                  metadata(expr))
     else
         expr

@@ -15,8 +15,8 @@ using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 using TermInterface
-import TermInterface: iscall, isexpr, issym, symtype, head, children,
-                      operation, arguments, metadata, maketerm
+import TermInterface: iscall, isexpr, head, children,
+                      operation, arguments, metadata, maketerm, sorted_arguments
 
 Base.@deprecate istree iscall
 export istree, operation, arguments, sorted_arguments, similarterm, iscall

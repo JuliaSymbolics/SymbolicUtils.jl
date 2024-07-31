@@ -9,7 +9,8 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, similarterm, sorted_arguments, metadata, isterm, term, maketerm
+                      symtype, sorted_arguments, metadata, isterm, term, maketerm
+import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
 
@@ -169,6 +170,14 @@ function substitute_name(O, st)
     end
 end
 
+function _is_array_of_symbolics(O)
+    # O is an array, not a symbolic array, and either has a non-symbolic eltype or contains elements that are
+    # symbolic or arrays of symbolics
+    return O isa AbstractArray && symbolic_type(O) == NotSymbolic() &&
+        (symbolic_type(eltype(O)) != NotSymbolic() ||
+        any(x -> symbolic_type(x) != NotSymbolic() || _is_array_of_symbolics(x), O))
+end
+
 function toexpr(O, st)
     if issym(O)
         O = substitute_name(O, st)
@@ -176,6 +185,9 @@ function toexpr(O, st)
     end
     O = substitute_name(O, st)
 
+    if _is_array_of_symbolics(O)
+        return toexpr(MakeArray(O, typeof(O)), st)
+    end
     !iscall(O) && return O
     op = operation(O)
     expr′ = function_to_expr(op, O, st)
@@ -694,7 +706,7 @@ function _cse!(mem, expr)
     iscall(expr) || return expr
     op = _cse!(mem, operation(expr))
     args = map(Base.Fix1(_cse!, mem), arguments(expr))
-    t = similarterm(expr, op, args)
+    t = maketerm(typeof(expr), op, args, nothing)
 
     v, dict = mem
     update! = let v=v, t=t
@@ -763,9 +775,7 @@ function cse_block!(assignments, counter, names, name, state, x)
         if isterm(x)
             return term(operation(x), args...)
         else
-            return maketerm(typeof(x), operation(x),
-                               args, symtype(x),
-                               metadata(x))
+            return maketerm(typeof(x), operation(x), args, metadata(x))
         end
     else
         return x

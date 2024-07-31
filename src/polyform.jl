@@ -121,7 +121,6 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
                 maketerm(typeof(x),
                          op,
                          map(a->PolyForm(a, pvar2sym, sym2term, vtype; Fs, recurse), args),
-                         symtype(x),
                          metadata(x))
             else
                 x
@@ -176,18 +175,18 @@ isexpr(x::PolyForm) = true
 iscall(x::Type{<:PolyForm}) = true
 iscall(x::PolyForm) = true
 
-function maketerm(::Type{<:PolyForm}, f, args, symtype, metadata)
-    basicsymbolic(t, f, args, symtype, metadata)
+function maketerm(t::Type{<:PolyForm}, f, args, metadata)
+    # TODO: this looks uncovered.
+    basicsymbolic(f, args, nothing, metadata)
 end
-function maketerm(::Type{<:PolyForm}, f::Union{typeof(*), typeof(+), typeof(^)},
-                     args, symtype, metadata)
+function maketerm(::Type{<:PolyForm}, f::Union{typeof(*), typeof(+), typeof(^)}, args, metadata)
     f(args...)
 end
 
 head(::PolyForm) = PolyForm
 operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
-function arguments(x::PolyForm{T}) where {T}
+function TermInterface.arguments(x::PolyForm{T}) where {T}
 
     function is_var(v)
         MP.nterms(v) == 1 &&
@@ -231,10 +230,7 @@ function arguments(x::PolyForm{T}) where {T}
                  PolyForm{T}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
-
-sorted_arguments(x::PolyForm) = arguments(x)
-
-children(x::PolyForm) = [operation(x); arguments(x)]
+children(x::PolyForm) = arguments(x)
 
 Base.show(io::IO, x::PolyForm) = show_term(io, x)
 
@@ -255,7 +251,7 @@ function unpolyize(x)
     # we need a special maketerm here because the default one used in Postwalk will call
     # promote_symtype to get the new type, but we just want to forward that in case
     # promote_symtype is not defined for some of the expressions here.
-    Postwalk(identity, maketerm=(T,f,args,sT,m) -> maketerm(T, f, args, symtype(x), m))(x)
+    Postwalk(identity, maketerm=(T,f,args,m) -> maketerm(T, f, args, m))(x)
 end
 
 function toterm(x::PolyForm)
@@ -307,7 +303,8 @@ function add_divs(x, y)
     end
 end
 
-function frac_maketerm(T, f, args, stype, metadata)
+function frac_maketerm(T, f, args, metadata)
+    # TODO add stype to T?
     if f in (*, /, \, +, -)
         f(args...)
     elseif f == (^)
@@ -317,7 +314,7 @@ function frac_maketerm(T, f, args, stype, metadata)
             args[1]^args[2]
         end
     else
-        maketerm(T, f, args, stype, metadata)
+        maketerm(T, f, args, metadata)
     end
 end
 

@@ -167,11 +167,7 @@ end
 struct Walk{ord, C, F, threaded}
     rw::C
     thread_cutoff::Int
-    maketerm::F # XXX: for the 2.0 deprecation cycle, we actually store a function
-                # that behaves like `similarterm` here, we use `compatmaker` to wrap
-                # maketerm-like input to do this, with a warning if similarterm provided
-                # we need this workaround to deprecate because similarterm takes value
-                # but maketerm only knows the type.
+    maketerm::F
 end
 
 function instrument(x::Walk{ord, C,F,threaded}, f) where {ord,C,F,threaded}
@@ -183,25 +179,13 @@ end
 
 using .Threads
 
-function compatmaker(similarterm, maketerm)
-    # XXX: delete this and only use maketerm in a future release.
-    if similarterm isa Nothing
-        function (x, f, args, type=_promote_symtype(f, args); metadata)
-            maketerm(typeof(x), f, args, type, metadata)
-        end
-    else
-        Base.depwarn("Prewalk and Postwalk now take maketerm instead of similarterm keyword argument. similarterm(x, f, args, type; metadata) is now maketerm(typeof(x), f, args, type, metadata)", :similarterm)
-        similarterm
-    end
-end
-function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm, similarterm=nothing)
-    maker = compatmaker(similarterm, maketerm)
-    Walk{:post, typeof(rw), typeof(maker), threaded}(rw, thread_cutoff, maker)
+
+function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm)
+    Walk{:post, typeof(rw), typeof(maketerm), threaded}(rw, thread_cutoff, maketerm)
 end
 
-function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm, similarterm=nothing)
-    maker = compatmaker(similarterm, maketerm)
-    Walk{:pre, typeof(rw), typeof(maker), threaded}(rw, thread_cutoff, maker)
+function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm)
+    Walk{:pre, typeof(rw), typeof(maketerm), threaded}(rw, thread_cutoff, maketerm)
 end
 
 struct PassThrough{C}
@@ -220,8 +204,8 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
         end
 
         if iscall(x)
-            x = p.maketerm(x, operation(x), map(PassThrough(p),
-                            arguments(x)), metadata=metadata(x))
+            x = p.maketerm(typeof(x), operation(x), map(PassThrough(p),
+                            arguments(x)), metadata(x))
         end
 
         return ord === :post ? p.rw(x) : x
@@ -245,7 +229,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
                 end
             end
             args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
-            t = p.maketerm(x, operation(x), args, metadata=metadata(x))
+            t = p.maketerm(typeof(x), operation(x), args, metadata(x))
         end
         return ord === :post ? p.rw(t) : t
     else

@@ -45,6 +45,6 @@ end
 
 has_operation(x, op) = (iscall(x) && (operation(x) == op ||
                                       any(a->has_operation(a, op),
-                                          arguments(x))))
+                                        arguments(x))))
 
 Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)

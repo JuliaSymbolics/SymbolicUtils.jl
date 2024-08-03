@@ -139,7 +139,7 @@ function Base.inv(x::Symbolic)
 end
 function Base.literal_pow(::typeof(^), x::Symbolic, ::Val{p}) where {p}
     T = symtype(x)
-    T <: Number ? Base.:^(x, p) : error_f_symbolic(rem2pi, T)
+    T <: Number ? Base.:^(x, p) : error_f_symbolic(^, T)
 end
 function promote_symtype(::typeof(Base.literal_pow), _, ::Type{T}, ::Type{Val{S}}) where{T<:Number,S}
     return promote_symtype(^, T, typeof(S))

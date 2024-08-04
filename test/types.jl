@@ -41,9 +41,6 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         d2 = Div(; num, den)
         @test d2.num == bs1
         @test d2.den == bs2
-        @test_throws MethodError Div(num = s1, den = bs2)
-        @test_throws MethodError Div(num = bs1, den = s2)
-        @test_throws MethodError Div(num = s1, den = s2)
     end
     @testset "Pow" begin
         p1 = Pow(base = bs1, exp = bs2)

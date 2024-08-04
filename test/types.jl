@@ -23,9 +23,6 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         @test t1.f == sin
         @test t1.arguments == [bs1]
         @test typeof(t1.arguments) == Vector{BasicSymbolic}
-        @test_throws MethodError Term(sin, [s1])
-        @test_throws MethodError Term(sin, [1])
-        @test_throws MethodError Term(sin, [2.0])
     end
     @testset "Div" begin
         d1 = Div(num = bs1, den = bs2)

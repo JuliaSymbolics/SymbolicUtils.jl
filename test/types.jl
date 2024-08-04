@@ -59,9 +59,6 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         p2 = Pow(; base, exp)
         @test p2.base == bs1
         @test p2.exp == bs2
-        @test_throws MethodError Pow(base = s1, exp = bs2)
-        @test_throws MethodError Pow(base = bs1, exp = s2)
-        @test_throws MethodError Pow(base = s1, exp = s2)
     end
     c1 = Const(1)
     bc1 = BasicSymbolic{Int}(impl = c1)

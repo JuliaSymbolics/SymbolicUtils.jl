@@ -186,7 +186,7 @@ end
 for f in [!, ~]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:Bool}) = Bool
-        (::$(typeof(f)))(s::Symbolic{Bool}) = Term{Bool}(!, [s])
+        (::$(typeof(f)))(s::Symbolic{Bool}) = _Term(Bool, !, [s])
     end
 end
 

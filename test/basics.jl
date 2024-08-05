@@ -9,16 +9,16 @@ using Test
         @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
 
         @test issym(a) && symtype(a) == Number
-        @test a.name === :a
+        @test a.impl.name === :a
 
         @test issym(b) && symtype(b) == Float64
         @test nameof(b) === :b
 
         @test issym(f)
-        @test f.name === :f
+        @test f.impl.name === :f
 
         @test issym(g)
-        @test g.name === :g
+        @test g.impl.name === :g
 
         @test isterm(f(b))
         @test symtype(f(b)) === Number

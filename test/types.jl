@@ -21,7 +21,7 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         t1 = Term(sin, [bs1])
         @test typeof(t1) == BasicSymbolicImpl
         @test t1.f == sin
-        @test t1.arguments == [bs1]
+        @test isequal(t1.arguments, [bs1])
         @test typeof(t1.arguments) == Vector{BasicSymbolic}
     end
     @testset "Div" begin
@@ -29,33 +29,33 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         @test typeof(d1) == BasicSymbolicImpl
         @test typeof(d1.num) == BasicSymbolic{Float64}
         @test typeof(d1.den) == BasicSymbolic{Int64}
-        @test d1.num == bs1
-        @test d1.den == bs2
+        @test isequal(d1.num, bs1)
+        @test isequal(d1.den, bs2)
         @test typeof(d1.simplified) == Base.RefValue{Bool}
         @test isassigned(d1.simplified)
         @test !d1.simplified[]
         @test typeof(d1.arguments) == Vector{BasicSymbolic}
-        @test d1.arguments == [bs1, bs2]
+        @test isequal(d1.arguments, [bs1, bs2])
         num = bs1
         den = bs2
         d2 = Div(; num, den)
-        @test d2.num == bs1
-        @test d2.den == bs2
+        @test isequal(d2.num, bs1)
+        @test isequal(d2.den, bs2)
     end
     @testset "Pow" begin
         p1 = Pow(base = bs1, exp = bs2)
         @test typeof(p1) == BasicSymbolicImpl
         @test typeof(p1.base) == BasicSymbolic{Float64}
         @test typeof(p1.exp) == BasicSymbolic{Int64}
-        @test p1.base == bs1
-        @test p1.exp == bs2
+        @test isequal(p1.base, bs1)
+        @test isequal(p1.exp, bs2)
         @test typeof(p1.arguments) == Vector{BasicSymbolic}
-        @test p1.arguments == [bs1, bs2]
+        @test isequal(p1.arguments, [bs1, bs2])
         base = bs1
         exp = bs2
         p2 = Pow(; base, exp)
-        @test p2.base == bs1
-        @test p2.exp == bs2
+        @test isequal(p2.base, bs1)
+        @test isequal(p2.exp, bs2)
     end
     c1 = Const(1)
     bc1 = BasicSymbolic{Int}(impl = c1)
@@ -132,7 +132,7 @@ end
         @test t.metadata == SymbolicUtils.NO_METADATA
         @test t.hash[] == SymbolicUtils.EMPTY_HASH
         @test t.impl.f == mod
-        @test t.impl.arguments == [s1, s2]
+        @test isequal(t.impl.arguments, [s1, s2])
     end
     @testset "Const" begin
         c1 = _Const(1.0)

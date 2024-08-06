@@ -80,7 +80,7 @@ const SIMPLIFIED = 0x01 << 0
 function ConstructionBase.setproperties_object(obj::BasicSymbolic{T}, patch)::BasicSymbolic{T} where T
     nt = getproperties(obj)
     nt_new = merge(nt, patch)
-    Unityper.rt_constructor(obj){T}(;nt_new...)
+    BasicSymbolic{T}(; nt_new...)
 end
 
 ###

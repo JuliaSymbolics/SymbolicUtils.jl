@@ -27,15 +27,15 @@ const EMPTY_HASH = UInt(0)
         issorted::RefValue{Bool} = Ref(false)
     end
     struct Div
-        num::BasicSymbolic
-        den::BasicSymbolic
+        num::Any
+        den::Any
         simplified::RefValue{Bool} = Ref(false)
-        arguments::Vector{BasicSymbolic} = [num, den]
+        arguments::Vector{Any} = [num, den]
     end
     struct Pow
-        base::BasicSymbolic
-        exp::BasicSymbolic
-        arguments::Vector{BasicSymbolic} = [base, exp]
+        base::Any
+        exp::Any
+        arguments::Vector{Any} = [base, exp]
     end
     struct Const
         val::Any

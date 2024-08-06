@@ -27,14 +27,11 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
     @testset "Div" begin
         d1 = Div(num = bs1, den = bs2)
         @test typeof(d1) == BasicSymbolicImpl
-        @test typeof(d1.num) == BasicSymbolic{Float64}
-        @test typeof(d1.den) == BasicSymbolic{Int64}
         @test isequal(d1.num, bs1)
         @test isequal(d1.den, bs2)
         @test typeof(d1.simplified) == Base.RefValue{Bool}
         @test isassigned(d1.simplified)
         @test !d1.simplified[]
-        @test typeof(d1.arguments) == Vector{BasicSymbolic}
         @test isequal(d1.arguments, [bs1, bs2])
         num = bs1
         den = bs2
@@ -45,11 +42,8 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
     @testset "Pow" begin
         p1 = Pow(base = bs1, exp = bs2)
         @test typeof(p1) == BasicSymbolicImpl
-        @test typeof(p1.base) == BasicSymbolic{Float64}
-        @test typeof(p1.exp) == BasicSymbolic{Int64}
         @test isequal(p1.base, bs1)
         @test isequal(p1.exp, bs2)
-        @test typeof(p1.arguments) == Vector{BasicSymbolic}
         @test isequal(p1.arguments, [bs1, bs2])
         base = bs1
         exp = bs2

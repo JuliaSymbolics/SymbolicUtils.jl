@@ -1260,7 +1260,7 @@ function ^(a::SN, b)
         _Mul(promote_symtype(^, symtype(a), symtype(b)),
             coeff, mapvalues((k, v) -> b * v, a.dict))
     else
-        Pow(a, b)
+        Pow(base = a, exp = b)
     end
 end
 ^(a::Number, b::SN) = _Pow(a, b)

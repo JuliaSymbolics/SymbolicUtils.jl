@@ -1145,6 +1145,12 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
+    if isconst(a)
+        return a.impl.val + b
+    end
+    if isconst(b)
+        return b.impl.val + a
+    end
     !issafecanon(+, a, b) && return term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
         return _Add(
@@ -1160,7 +1166,7 @@ function +(a::SN, b::SN)
 end
 function +(a::Number, b::SN)
     if isconst(b)
-        return _Const(a + b.impl.val)
+        return a + b.impl.val
     end
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b

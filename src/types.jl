@@ -488,11 +488,11 @@ end
 function _Pow(::Type{T}, base, exp; kwargs...) where {T}
     _iszero(exp) && return 1
     _isone(exp) && return a
-    impl = (; base, exp)
+    impl = Pow(; base, exp)
     BasicSymbolic{T}(; impl, kwargs...)
 end
 function _Pow(base, exp; kwargs...)
-    Pow{promote_symtype(^, symtype(base), symtype(exp))}(makepow(base, exp)..., kwargs...)
+    _Pow(promote_symtype(^, symtype(base), symtype(exp)), makepow(base, exp)..., kwargs...)
 end
 
 function toterm(t::BasicSymbolic{T}) where {T}

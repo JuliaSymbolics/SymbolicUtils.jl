@@ -15,13 +15,13 @@ const EMPTY_HASH = UInt(0)
         arguments::Vector{BasicSymbolic}
     end
     struct Add
-        coeff::BasicSymbolic
+        coeff::Any
         dict::Dict{BasicSymbolic, Any}
         arguments::Vector{BasicSymbolic} = BasicSymbolic[]
         issorted::RefValue{Bool} = Ref(false)
     end
     struct Mul
-        coeff::BasicSymbolic
+        coeff::Any
         dict::Dict{BasicSymbolic, Any}
         arguments::Vector{BasicSymbolic} = BasicSymbolic[]
         issorted::RefValue{Bool} = Ref(false)

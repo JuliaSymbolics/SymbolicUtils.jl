@@ -109,24 +109,24 @@ end
     @test SymbolicUtils._promote_symtype(foo, (w, z, a, b,)) === Real
 
     # promote_symtype of identity
-    @test isequal(Term(identity, [w]), Term{Complex}(identity, [w]))
+    @test isequal(_Term(identity, [w]), _Term(Complex, identity, [w]))
     @test isequal(+(w), w)
     @test isequal(+(a), a)
 
-    @test isequal(rem2pi(a, RoundNearest), Term{Real}(rem2pi, [a, RoundNearest]))
+    @test isequal(rem2pi(a, RoundNearest), _Term(Real, rem2pi, [a, RoundNearest]))
 
     # bool
     for f in [(==), (!=), (<=), (>=), (<), (>)]
-        @test isequal(f(a, 0), Term{Bool}(f, [a, 0]))
-        @test isequal(f(0, a), Term{Bool}(f, [0, a]))
-        @test isequal(f(a, a), Term{Bool}(f, [a, a]))
+        @test isequal(f(a, 0), _Term(Bool, f, [a, 0]))
+        @test isequal(f(0, a), _Term(Bool, f, [0, a]))
+        @test isequal(f(a, a), _Term(Bool, f, [a, a]))
     end
 
     @test symtype(ifelse(true, 4, 5)) == Int
     @test symtype(ifelse(a < 0, b, w)) == Union{Real, Complex}
     @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
     @test_throws MethodError w < 0
-    @test isequal(w == 0, Term{Bool}(==, [w, 0]))
+    @test isequal(w == 0, _Term(Bool, ==, [w, 0]))
 
     @eqtest x // 5 == (1 // 5) * x
     @eqtest (1//2 * x) / 5 == (1 // 10) * x

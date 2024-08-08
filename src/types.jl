@@ -449,28 +449,35 @@ function _Div(::Type{T}, num, den; kwargs...) where {T}
         return _Div(T, num.impl.num * den.impl.den, num.impl.den * den.impl.num)
     elseif isdiv(num)
         return _Div(T, num.impl.num, num.impl.den * den)
-    elseif isdiv(d)
+    elseif isdiv(den)
         return _Div(T, num * den.impl.den, den.impl.num)
     end
-    d isa Number && _isone(-d) && return -1 * n
-    n isa Rat && d isa Rat && return n // d # maybe called by oblivious code in simplify
+    if den isa Number && _isone(-den)
+        return -1 * num
+    end
+    if num isa Rat && den isa Rat
+        return num // den # maybe called by oblivious code in simplify
+    end
 
     # GCD coefficient upon construction
-    rat, nc = ratcoeff(n)
+    rat, nc = ratcoeff(num)
     if rat
-        rat, dc = ratcoeff(d)
+        rat, dc = ratcoeff(den)
         if rat
             g = gcd(nc, dc) * sign(dc) # make denominator positive
             invdc = ratio(1, g)
-            n = maybe_intcoeff(invdc * n)
-            d = maybe_intcoeff(invdc * d)
-            if d isa Number
-                _isone(d) && return n
-                _isone(-d) && return -1 * n
+            num = maybe_intcoeff(invdc * num)
+            den = maybe_intcoeff(invdc * den)
+            if den isa Number
+                if _isone(den)
+                    return num
+                end
+                if _isone(-den)
+                    return -1 * num
+                end
             end
         end
     end
-
     impl = Div(; num, den)
     BasicSymbolic{T}(; impl, kwargs...)
 end

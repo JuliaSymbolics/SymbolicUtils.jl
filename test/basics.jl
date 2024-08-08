@@ -98,11 +98,11 @@ end
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test isequal(w + z, Add(Complex, 0, Dict(w=>1, z=>1)))
-    @test isequal(z + a, Add(Number, 0, Dict(z=>1, a=>1)))
-    @test isequal(a + b, Add(Real, 0, Dict(a=>1, b=>1)))
-    @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
-    @test isequal(a + z, Add(Number, 0, Dict(a=>1, z=>1)))
+    @test isequal(w + z, _Add(Complex, 0, Dict(w => 1, z => 1)))
+    @test isequal(z + a, _Add(Number, 0, Dict(z => 1, a => 1)))
+    @test isequal(a + b, _Add(Real, 0, Dict(a => 1, b => 1)))
+    @test isequal(a + x, _Add(Number, 0, Dict(a => 1, x => 1)))
+    @test isequal(a + z, _Add(Number, 0, Dict(a => 1, z => 1)))    
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real

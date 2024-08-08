@@ -9,16 +9,16 @@ using Test
         @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
 
         @test issym(a) && symtype(a) == Number
-        @test a.name === :a
+        @test a.impl.name === :a
 
         @test issym(b) && symtype(b) == Float64
         @test nameof(b) === :b
 
         @test issym(f)
-        @test f.name === :f
+        @test f.impl.name === :f
 
         @test issym(g)
-        @test g.name === :g
+        @test g.impl.name === :g
 
         @test isterm(f(b))
         @test symtype(f(b)) === Number
@@ -91,42 +91,42 @@ struct Ctx2 end
 
 
     @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
-                  1 + term(sqrt, 2, type=Number))
+                  1 + term(sqrt, 2, T=Number))
     @test substitute(1+sqrt(a), Dict(a => 2), fold=true) isa Float64
 end
 
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test isequal(w + z, Add(Complex, 0, Dict(w=>1, z=>1)))
-    @test isequal(z + a, Add(Number, 0, Dict(z=>1, a=>1)))
-    @test isequal(a + b, Add(Real, 0, Dict(a=>1, b=>1)))
-    @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
-    @test isequal(a + z, Add(Number, 0, Dict(a=>1, z=>1)))
+    @test isequal(w + z, _Add(Complex, 0, Dict(w => 1, z => 1)))
+    @test isequal(z + a, _Add(Number, 0, Dict(z => 1, a => 1)))
+    @test isequal(a + b, _Add(Real, 0, Dict(a => 1, b => 1)))
+    @test isequal(a + x, _Add(Number, 0, Dict(a => 1, x => 1)))
+    @test isequal(a + z, _Add(Number, 0, Dict(a => 1, z => 1)))    
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
     @test SymbolicUtils._promote_symtype(foo, (w, z, a, b,)) === Real
 
     # promote_symtype of identity
-    @test isequal(Term(identity, [w]), Term{Complex}(identity, [w]))
+    @test isequal(_Term(identity, [w]), _Term(Complex, identity, [w]))
     @test isequal(+(w), w)
     @test isequal(+(a), a)
 
-    @test isequal(rem2pi(a, RoundNearest), Term{Real}(rem2pi, [a, RoundNearest]))
+    @test isequal(rem2pi(a, RoundNearest), _Term(Real, rem2pi, [a, RoundNearest]))
 
     # bool
     for f in [(==), (!=), (<=), (>=), (<), (>)]
-        @test isequal(f(a, 0), Term{Bool}(f, [a, 0]))
-        @test isequal(f(0, a), Term{Bool}(f, [0, a]))
-        @test isequal(f(a, a), Term{Bool}(f, [a, a]))
+        @test isequal(f(a, 0), _Term(Bool, f, [a, 0]))
+        @test isequal(f(0, a), _Term(Bool, f, [0, a]))
+        @test isequal(f(a, a), _Term(Bool, f, [a, a]))
     end
 
     @test symtype(ifelse(true, 4, 5)) == Int
     @test symtype(ifelse(a < 0, b, w)) == Union{Real, Complex}
     @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
     @test_throws MethodError w < 0
-    @test isequal(w == 0, Term{Bool}(==, [w, 0]))
+    @test isequal(w == 0, _Term(Bool, ==, [w, 0]))
 
     @eqtest x // 5 == (1 // 5) * x
     @eqtest (1//2 * x) / 5 == (1 // 10) * x

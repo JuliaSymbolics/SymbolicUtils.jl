@@ -67,10 +67,10 @@ function makepattern(expr, keys)
                     makeslot(expr.args[2], keys)
                 end
             else
-                :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
+                :(term($(map(x -> makepattern(x, keys), expr.args)...); T = Any))
             end
         elseif expr.head === :ref
-            :(term(getindex, $(map(x->makepattern(x, keys), expr.args)...); type=Any))
+            :(term(getindex, $(map(x -> makepattern(x, keys), expr.args)...); T = Any))
         elseif expr.head === :$
             return esc(expr.args[1])
         else

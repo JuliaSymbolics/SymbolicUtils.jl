@@ -177,16 +177,16 @@ for (f, Domain) in [(==) => Number, (!=) => Number,
                     xor => Bool]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:$Domain}, ::Type{<:$Domain}) = Bool
-        (::$(typeof(f)))(a::Symbolic{<:$Domain}, b::$Domain) = term($f, a, b, type=Bool)
-        (::$(typeof(f)))(a::Symbolic{<:$Domain}, b::Symbolic{<:$Domain}) = term($f, a, b, type=Bool)
-        (::$(typeof(f)))(a::$Domain, b::Symbolic{<:$Domain}) = term($f, a, b, type=Bool)
+        (::$(typeof(f)))(a::Symbolic{<:$Domain}, b::$Domain) = term($f, a, b; T = Bool)
+        (::$(typeof(f)))(a::Symbolic{<:$Domain}, b::Symbolic{<:$Domain}) = term($f, a, b; T = Bool)
+        (::$(typeof(f)))(a::$Domain, b::Symbolic{<:$Domain}) = term($f, a, b; T = Bool)
     end
 end
 
 for f in [!, ~]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:Bool}) = Bool
-        (::$(typeof(f)))(s::Symbolic{Bool}) = Term{Bool}(!, [s])
+        (::$(typeof(f)))(s::Symbolic{Bool}) = _Term(Bool, !, [s])
     end
 end
 
@@ -194,7 +194,7 @@ end
 # An ifelse node, ifelse is a built-in unfortunately
 # So this uses IfElse.jl's ifelse that we imported
 function ifelse(_if::Symbolic{Bool}, _then, _else)
-    Term{Union{symtype(_then), symtype(_else)}}(ifelse, Any[_if, _then, _else])
+    _Term(Union{symtype(_then), symtype(_else)}, ifelse, Any[_if, _then, _else])
 end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
 

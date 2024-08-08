@@ -475,7 +475,7 @@ function _Div(::Type{T}, num, den; kwargs...) where {T}
     BasicSymbolic{T}(; impl, kwargs...)
 end
 function _Div(num, den; kwargs...)
-    Div{promote_symtype((/), symtype(num), symtype(den))}(num, den; kwargs...)
+    _Div(promote_symtype((/), symtype(num), symtype(den)), num, den; kwargs...)
 end
 
 @inline function numerators(x)

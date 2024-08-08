@@ -77,10 +77,22 @@ const SIMPLIFIED = 0x01 << 0
 #@inline is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
 #@inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
 
-function ConstructionBase.setproperties_object(obj::BasicSymbolic{T}, patch)::BasicSymbolic{T} where T
-    nt = getproperties(obj)
-    nt_new = merge(nt, patch)
-    BasicSymbolic{T}(; nt_new...)
+function ConstructionBase.setproperties_object(
+        obj::BasicSymbolic{T}, patch)::BasicSymbolic{T} where {T}
+    nt1 = getproperties(obj)
+    nt2 = getproperties(obj.impl)
+    nt1 = merge(nt1, patch)
+    nt2 = merge(nt2, patch)
+    metadata = nt1.metadata
+    @match obj.impl begin
+        Sym(_...) => _Sym(T, nt2.name; metadata)
+        Term(_...) => _Term(T, nt2.f, nt2.arguments; metadata)
+        Add(_...) => _Add(T, nt2.coeff, nt2.dict; metadata)
+        Mul(_...) => _Mul(T, nt2.coeff, nt2.dict; metadata)
+        Div(_...) => _Div(T, nt2.num, nt2.den; metadata)
+        Pow(_...) => _Pow(T, nt2.base, nt2.exp; metadata)
+        Const(_...) => _Const(nt2.val; metadata)
+    end
 end
 
 ###

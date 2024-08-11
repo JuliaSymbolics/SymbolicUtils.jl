@@ -95,6 +95,9 @@ end
 _isone(p::PolyForm) = isone(p.p)
 
 function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
+    if isconst(x)
+        x = x.impl.val
+    end
     if x isa Number
         return x
     elseif iscall(x)

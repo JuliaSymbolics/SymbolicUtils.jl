@@ -506,7 +506,7 @@ end
 
 function _Pow(::Type{T}, base, exp; kwargs...) where {T}
     _iszero(exp) && return 1
-    _isone(exp) && return a
+    _isone(exp) && return base
     impl = Pow(; base, exp)
     BasicSymbolic{T}(; impl, kwargs...)
 end

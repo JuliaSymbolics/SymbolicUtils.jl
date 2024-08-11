@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
+using SymbolicUtils: Symbolic, FnType, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield

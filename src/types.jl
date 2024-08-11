@@ -1200,13 +1200,13 @@ end
 
 function -(a::SN)
     !issafecanon(*, a) && return term(-, a)
-    isadd(a) ? _Add(sub_t(a), -a.coeff, mapvalues((_, v) -> -v, a.dict)) :
+    isadd(a) ? _Add(sub_t(a), -a.impl.coeff, mapvalues((_, v) -> -v, a.impl.dict)) :
     _Add(sub_t(a), makeadd(-1, 0, a)...)
 end
 function -(a::SN, b::SN)
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
     if isadd(a) && isadd(b)
-        _Add(sub_t(a, b), a.coeff - b.coeff, _merge(-, a.dict, b.dict, filter = _iszero))
+        _Add(sub_t(a, b), a.impl.coeff - b.impl.coeff, _merge(-, a.impl.dict, b.impl.dict, filter = _iszero))
     else
         a + (-b)
     end

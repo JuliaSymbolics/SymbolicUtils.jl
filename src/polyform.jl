@@ -470,7 +470,7 @@ end
 
 # ismul(x)
 function quick_mul(x, y)
-    if haskey(x.dict, y) && x.dict[y] >= 1
+    if haskey(x.impl.dict, y) && x.dict[y] >= 1
         d = copy(x.dict)
         if d[y] > 1
             d[y] -= 1

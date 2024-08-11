@@ -439,13 +439,14 @@ ratio(x::Integer,y::Integer) = iszero(rem(x,y)) ? div(x,y) : x//y
 ratio(x::Rat,y::Rat) = x//y
 function maybe_intcoeff(x)
     if ismul(x)
-        if x.coeff isa Rational && isone(x.coeff.den)
-            Mul{symtype(x)}(; coeff=x.coeff.num, dict=x.dict, x.metadata, arguments=[], issorted=RefValue(false))
+        coeff = x.impl.coeff
+        if coeff isa Rational && isone(denominator(coeff))
+            _Mul(symtype(x), coeff.num, x.impl.dict; metadata = x.metadata)
         else
             x
         end
     elseif x isa Rational
-        isone(x.den) ? x.num : x
+        isone(denominator(x)) ? numerator(x) : x
     else
         x
     end

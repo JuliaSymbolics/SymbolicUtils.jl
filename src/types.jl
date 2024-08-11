@@ -428,7 +428,7 @@ const Rat = Union{Rational, Integer}
 
 function ratcoeff(x)
     if ismul(x)
-        ratcoeff(x.coeff)
+        ratcoeff(x.impl.coeff)
     elseif x isa Rat
         (true, x)
     else

@@ -554,7 +554,7 @@ function makeadd(sign, coeff, xs...)
             continue
         end
         if ismul(x)
-            k = _Mul(symtype(x), 1, x.dict)
+            k = _Mul(symtype(x), 1, x.impl.dict)
             v = sign * x.impl.coeff + get(d, k, 0)
         else
             k = x
@@ -1173,10 +1173,10 @@ function +(a::SN, b::SN)
     !issafecanon(+, a, b) && return term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
         return _Add(
-            add_t(a, b), a.coeff + b.coeff, _merge(+, a.dict, b.dict, filter = _iszero))
+            add_t(a, b), a.impl.coeff + b.impl.coeff, _merge(+, a.impl.dict, b.impl.dict, filter = _iszero))
     elseif isadd(a)
         coeff, dict = makeadd(1, 0, b)
-        return _Add(add_t(a, b), a.coeff + coeff, _merge(+, a.dict, dict, filter = _iszero))
+        return _Add(add_t(a, b), a.impl.coeff + coeff, _merge(+, a.impl.dict, dict, filter = _iszero))
     elseif isadd(b)
         return b + a
     end

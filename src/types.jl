@@ -789,6 +789,10 @@ const show_simplified = Ref(false)
 
 isnegative(t::Real) = t < 0
 function isnegative(t)
+    if isconst(t)
+        val = t.impl.val
+        return isnegative(val)
+    end
     if iscall(t) && operation(t) === (*)
         coeff = first(arguments(t))
         return isnegative(coeff)
@@ -823,8 +827,12 @@ function remove_minus(t)
     !iscall(t) && return -t
     @assert operation(t) == (*)
     args = arguments(t)
-    @assert args[1] < 0
-    Any[-args[1], args[2:end]...]
+    arg1 = args[1]
+    if isconst(arg1)
+        arg1 = arg1.impl.val
+    end
+    @assert arg1 < 0
+    Any[-arg1, args[2:end]...]
 end
 
 

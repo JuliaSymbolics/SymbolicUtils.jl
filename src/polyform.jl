@@ -132,7 +132,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
             name = Symbol(string(op), "_", hash(y))
 
             @label lookup
-            sym = Sym{symtype(x)}(name)
+            sym = _Sym(symtype(x), name)
             if haskey(sym2term, sym)
                 if isequal(sym2term[sym][1], x)
                     return local_polyize(sym)

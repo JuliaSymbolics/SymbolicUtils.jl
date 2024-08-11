@@ -861,15 +861,21 @@ end
 function show_mul(io, args)
     length(args) == 1 && return print_arg(io, *, args[1])
 
-    minus = args[1] isa Number && args[1] == -1
-    unit = args[1] isa Number && args[1] == 1
+    arg1 = args[1]
+    if isconst(arg1)
+        arg1 = arg1.impl.val
+    end
 
-    paren_scalar = (args[1] isa Complex && !_iszero(imag(args[1]))) ||
+    minus = arg1 isa Number && arg1 == -1
+    unit = arg1 isa Number && arg1 == 1
+
+    paren_scalar = (arg1 isa Complex && !_iszero(imag(arg1))) ||
                    args[1] isa Rational ||
-                   (args[1] isa Number && !isfinite(args[1]))
+                   (arg1 isa Number && !isfinite(arg1))
 
     nostar = minus || unit ||
-            (!paren_scalar && args[1] isa Number && !(args[2] isa Number))
+             (!paren_scalar && arg1 isa Number &&
+              !(isconst(args[2]) && args[2].impl.val isa Number))
 
     for (i, t) in enumerate(args)
         if i != 1

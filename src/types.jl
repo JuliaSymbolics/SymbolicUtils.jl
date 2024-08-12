@@ -588,13 +588,13 @@ function basicsymbolic(f, args, stype, metadata)
     elseif all(x->symtype(x) <: Number, args)
         if f === (+)
             res = +(args...)
-            if isadd(res)
+            if isadd(res) || isterm(res)
                 @set! res.metadata = metadata
             end
             res
         elseif f == (*)
             res = *(args...)
-            if ismul(res)
+            if ismul(res) || isterm(res)
                 @set! res.metadata = metadata
             end
             res

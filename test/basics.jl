@@ -295,8 +295,8 @@ end
 end
 
 @testset "subtyping" begin
-    T = FnType{Tuple{T,S,Int} where {T,S}, Real}
-    s = Sym{T}(:t)
+    T = FnType{Tuple{T, S, Int} where {T, S}, Real}
+    s = _Sym(T, :t)
     @syms a b c::Int
     @test isequal(arguments(s(a, b, c)), [a, b, c])
 end

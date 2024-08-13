@@ -452,20 +452,29 @@ end
 
 # ispow(x) case
 function quick_pow(x, y)
-    x.exp isa Number || return (x, y)
-    isequal(x.base, y) && x.exp >= 1 ? (Pow{symtype(x)}(x.base, x.exp - 1),1) : (x, y)
+    ximpl = x.impl
+    if !isa(ximpl.exp, Number)
+        x, y
+    elseif isequal(ximpl.base, y) && ximpl.exp >= 1
+        _Pow(symtype(x), ximpl.base, ximpl.exp - 1), 1
+    else
+        x, y
+    end
 end
 
 # Double Pow case
 function quick_powpow(x, y)
-    if isequal(x.base, y.base)
-        !(x.exp isa Number && y.exp isa Number) && return (x, y)
-        if x.exp > y.exp
-            return Pow{symtype(x)}(x.base, x.exp-y.exp), 1
-        elseif x.exp == y.exp
+    ximpl = x.impl
+    yimpl = y.impl
+    if isequal(ximpl.base, yimpl.base)
+        if !(ximpl.exp isa Number && yimpl.exp isa Number)
+            return x, y
+        elseif ximpl.exp > yimpl.exp
+            return _Pow(symtype(x), ximpl.base, ximpl.exp - yimpl.exp), 1
+        elseif ximpl.exp == yimpl.exp
             return 1, 1
         else # x.exp < y.exp
-            return 1, Pow{symtype(y)}(y.base, y.exp-x.exp)
+            return 1, _Pow(symtype(y), yimpl.base, yimpl.exp - ximpl.exp)
         end
     end
     return x, y
@@ -473,8 +482,10 @@ end
 
 # ismul(x)
 function quick_mul(x, y)
-    if haskey(x.impl.dict, y) && x.dict[y] >= 1
-        d = copy(x.dict)
+    ximpl = x.impl
+    xdict = ximpl.dict
+    if haskey(xdict, y) && xdict[y] >= 1
+        d = copy(xdict)
         if d[y] > 1
             d[y] -= 1
         elseif d[y] == 1
@@ -482,8 +493,7 @@ function quick_mul(x, y)
         else
             error("Can't reach")
         end
-
-        return Mul(symtype(x), x.coeff, d), 1
+        return _Mul(symtype(x), ximpl.coeff, d), 1
     else
         return x, y
     end
@@ -512,8 +522,10 @@ end
 
 # Double mul case
 function quick_mulmul(x, y)
-    num_dict, den_dict = _merge_div(x.dict, y.dict)
-    Mul(symtype(x), x.coeff, num_dict), Mul(symtype(y), y.coeff, den_dict)
+    ximpl = x.impl
+    yimpl = y.impl
+    num_dict, den_dict = _merge_div(ximpl.dict, yimpl.dict)
+    _Mul(symtype(x), ximpl.coeff, num_dict), _Mul(symtype(y), yimpl.coeff, den_dict)
 end
 
 function _merge_div(ndict, ddict)

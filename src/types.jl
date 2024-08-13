@@ -1296,9 +1296,9 @@ function ^(a::SN, b)
     elseif b isa Number && b < 0
         _Div(1, a^(-b))
     elseif ismul(a) && b isa Number
-        coeff = unstable_pow(a.coeff, b)
+        coeff = unstable_pow(a.impl.coeff, b)
         _Mul(promote_symtype(^, symtype(a), symtype(b)),
-            coeff, mapvalues((k, v) -> b * v, a.dict))
+            coeff, mapvalues((k, v) -> b * v, a.impl.dict))
     else
         _Pow(a, b)
     end

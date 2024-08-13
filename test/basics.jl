@@ -216,7 +216,7 @@ end
 
 @testset "maketerm" begin
     @syms a b c
-    @test isequal(SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing).dict, Dict(a=>1,b=>1,c=>1))
+    @test isequal(SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing).impl.dict, Dict(a=>1,b=>1,c=>1))
     @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  1//2],  nothing), b)
 
     # test that maketerm doesn't hard-code BasicSymbolic subtype

@@ -1245,7 +1245,7 @@ function *(a::SN, b::SN)
         _Mul(mul_t(a, b), a.impl.coeff * b.impl.coeff,
             _merge(+, a.impl.dict, b.impl.dict, filter = _iszero))
     elseif ismul(a) && ispow(b)
-        if b.exp isa Number
+        if b.impl.exp isa Number
             _Mul(mul_t(a, b),
                 a.impl.coeff,
                 _merge(+, a.impl.dict, Base.ImmutableDict(b.impl.base => b.impl.exp),

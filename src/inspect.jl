@@ -6,22 +6,23 @@ function AbstractTrees.nodevalue(x::Symbolic)
 end
 
 function AbstractTrees.nodevalue(x::BasicSymbolic)
-    str = if !iscall(x)
+    str = if issym(x)
         string(exprtype(x), "(", x, ")")
+    elseif isconst(x)
+        string(x.impl.val)
     elseif isadd(x)
-        string(exprtype(x), 
-            (scalar=x.coeff, coeffs=Tuple(k=>v for (k,v) in x.dict)))
+        string(exprtype(x),
+            (scalar = x.impl.coeff, coeffs = Tuple(k => v for (k, v) in x.impl.dict)))
     elseif ismul(x)
         string(exprtype(x),
-            (scalar=x.coeff, powers=Tuple(k=>v for (k,v) in x.dict)))
+            (scalar = x.impl.coeff, powers = Tuple(k => v for (k, v) in x.impl.dict)))
     elseif isdiv(x) || ispow(x)
         string(exprtype(x))
     else
-        string(exprtype(x),"{", operation(x), "}")
+        string(exprtype(x), "{", operation(x), "}")
     end
-
     if inspect_metadata[] && !isnothing(metadata(x))
-        str *= string(" metadata=", Tuple(k=>v for (k, v) in metadata(x)))
+        str *= string(" metadata=", Tuple(k => v for (k, v) in metadata(x)))
     end
     Text(str)
 end

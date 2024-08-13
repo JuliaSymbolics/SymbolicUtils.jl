@@ -303,23 +303,23 @@ end
 
 @testset "div" begin
     @syms x::SafeReal y::Real
-    @test issym((2x/2y).num)
-    @test (2x/3y).num.coeff == 2
-    @test (2x/3y).den.coeff == 3
-    @test (2x/-3x).num.coeff == -2
-    @test (2x/-3x).den.coeff == 3
-    @test (2.5x/3x).num.coeff == 2.5
-    @test (2.5x/3x).den.coeff == 3
-    @test (x/3x).den.coeff == 3
+    @test issym((2x / 2y).impl.num)
+    @test (2x / 3y).impl.num.impl.coeff == 2
+    @test (2x / 3y).impl.den.impl.coeff == 3
+    @test (2x / -3x).impl.num.impl.coeff == -2
+    @test (2x / -3x).impl.den.impl.coeff == 3
+    @test (2.5x / 3x).impl.num.impl.coeff == 2.5
+    @test (2.5x / 3x).impl.den.impl.coeff == 3
+    @test (x / 3x).impl.den.impl.coeff == 3
 
     @syms x y
-    @test issym((2x/2y).num)
-    @test (2x/3y).num.coeff == 2
-    @test (2x/3y).den.coeff == 3
-    @test (2x/-3x) == -2//3
-    @test (2.5x/3x).num == 2.5
-    @test (2.5x/3x).den == 3
-    @test (x/3x) == 1//3
+    @test issym((2x / 2y).impl.num)
+    @test (2x / 3y).impl.num.impl.coeff == 2
+    @test (2x / 3y).impl.den.impl.coeff == 3
+    @test (2x / -3x) == -2 // 3
+    @test (2.5x / 3x).impl.num == 2.5
+    @test (2.5x / 3x).impl.den == 3
+    @test (x / 3x) == 1 // 3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)
 end

@@ -457,7 +457,7 @@ function _Div(::Type{T}, num, den; kwargs...) where {T}
         num, den = quick_cancel(num, den)
     end
     _iszero(num) && return zero(typeof(num))
-    _isone(den) && return den
+    _isone(den) && return num
     if isdiv(num) && isdiv(den)
         return _Div(T, num.impl.num * den.impl.den, num.impl.den * den.impl.num)
     elseif isdiv(num)

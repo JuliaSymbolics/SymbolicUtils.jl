@@ -27,7 +27,7 @@ function get_degrees(expr)
     elseif iscall(expr)
         op = operation(expr)
         args = sorted_arguments(expr)
-        if op == (^) && args[2] isa Number
+        if op == (^) && (args[2] isa Number || (isconst(args[2]) && args[2].impl.val isa Number))
             return map(get_degrees(args[1])) do (base, pow)
                 (base => pow * args[2])
             end
@@ -79,12 +79,23 @@ function <ₑ(a::Tuple, b::Tuple)
 end
 
 function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
+    aisconst = isconst(a)
+    if aisconst
+        a = a.impl.val
+    end
+    bisconst = isconst(b)
+    if bisconst
+        b = b.impl.val
+    end
+    if aisconst || bisconst
+        return a <ₑ b
+    end
     da, db = get_degrees(a), get_degrees(b)
     fw = monomial_lt(da, db)
     bw = monomial_lt(db, da)
     if fw === bw && !isequal(a, b)
         if _arglen(a) == _arglen(b)
-            return (operation(a), arguments(a)...,) <ₑ (operation(b), arguments(b)...,)
+            return (operation(a), arguments(a)...) <ₑ (operation(b), arguments(b)...)
         else
             return _arglen(a) < _arglen(b)
         end

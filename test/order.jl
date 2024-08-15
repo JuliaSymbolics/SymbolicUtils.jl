@@ -77,7 +77,7 @@ end
 @testset "small terms" begin
     # this failing was a cause of a nasty stackoverflow #82
     @syms a
-    istotal(Term(^, [a, -1]), (a + 2))
+    istotal(_Term(^, [a, -1]), (a + 2))
 end
 
 @testset "transitivity" begin

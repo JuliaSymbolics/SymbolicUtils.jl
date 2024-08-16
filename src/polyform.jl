@@ -265,10 +265,10 @@ end
 
 function polyform_factors(d, pvar2sym, sym2term)
     make(xs) = map(xs) do x
-        if ispow(x) && x.exp isa Integer && x.exp > 0
+        if ispow(x) && x.impl.exp isa Integer && x.impl.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(PolyForm(x.base, pvar2sym, sym2term), x.exp)
+            _Pow(PolyForm(x.impl.base, pvar2sym, sym2term), x.impl.exp)
         else
             PolyForm(x, pvar2sym, sym2term)
         end
@@ -280,13 +280,13 @@ end
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
 function simplify_div(d)
-    d.simplified && return d
+    d.impl.simplified[] && return d
     ns, ds = polyform_factors(d, get_pvar2sym(), get_sym2term())
     ns, ds = rm_gcds(ns, ds)
     if all(_isone, ds)
         return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
     else
-        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)))
+        _Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)))
     end
 end
 
@@ -296,11 +296,11 @@ end
 #add_divs(x, y) = x + y
 function add_divs(x, y)
     if isdiv(x) && isdiv(y)
-        return (x.num * y.den + y.num * x.den) / (x.den * y.den)
+        return (x.impl.num * y.impl.den + y.impl.num * x.impl.den) / (x.impl.den * y.impl.den)
     elseif isdiv(x)
-        return (x.num + y * x.den) / x.den
+        return (x.impl.num + y * x.impl.den) / x.impl.den
     elseif isdiv(y)
-        return (x * y.den + y.num) / y.den
+        return (x * y.impl.den + y.impl.num) / y.impl.den
     else
         x + y
     end
@@ -384,7 +384,7 @@ function fraction_isone(x)
 end
 
 function needs_div_rules(x)
-    (isdiv(x) && !(x.num isa Number) && !(x.den isa Number)) ||
+    (isdiv(x) && !(x.impl.num isa Number) && !(x.impl.den isa Number)) ||
     (iscall(x) && operation(x) === (+) && count(has_div, arguments(x)) > 1) ||
     (iscall(x) && any(needs_div_rules, arguments(x)))
 end
@@ -416,13 +416,13 @@ But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
 function quick_cancel(d)
-    if ispow(d) && isdiv(d.base)
-        return quick_cancel((d.base.num^d.exp) / (d.base.den^d.exp))
+    if ispow(d) && isdiv(d.impl.base)
+        return quick_cancel((d.impl.base.impl.num^d.impl.exp) / (d.impl.base.impl.den^d.impl.exp))
     elseif ismul(d) && any(isdiv, arguments(d))
         return prod(arguments(d))
     elseif isdiv(d)
-        num, den = quick_cancel(d.num, d.den)
-        return Div(num, den)
+        num, den = quick_cancel(d.impl.num, d.impl.den)
+        return _Div(num, den)
     else
         return d
     end
@@ -501,20 +501,20 @@ end
 
 # mul, pow case
 function quick_mulpow(x, y)
-    y.exp isa Number || return (x, y)
-    if haskey(x.dict, y.base)
-        d = copy(x.dict)
-        if x.dict[y.base] > y.exp
-            d[y.base] -= y.exp
+    y.impl.exp isa Number || return (x, y)
+    if haskey(x.impl.dict, y.impl.base)
+        d = copy(x.impl.dict)
+        if x.impl.dict[y.impl.base] > y.impl.exp
+            d[y.impl.base] -= y.impl.exp
             den = 1
-        elseif x.dict[y.base] == y.exp
-            delete!(d, y.base)
+        elseif x.impl.dict[y.impl.base] == y.impl.exp
+            delete!(d, y.impl.base)
             den = 1
         else
-            den = Pow{symtype(y)}(y.base, y.exp-d[y.base])
-            delete!(d, y.base)
+            den = _Pow(symtype(y), y.impl.base, y.impl.exp-d[y.impl.base])
+            delete!(d, y.impl.base)
         end
-        return Mul(symtype(x), x.coeff, d), den
+        return _Mul(symtype(x), x.impl.coeff, d), den
     else
         return x, y
     end

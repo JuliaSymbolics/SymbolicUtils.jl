@@ -85,7 +85,7 @@ const SIMPLIFIED = 0x01 << 0
 #@inline is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
 #@inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
 
-function ConstructionBase.setproperties_object(obj::BasicSymbolic{T}, patch)::BasicSymbolic{T} where T
+function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple)::BasicSymbolic{T} where T
     nt = getproperties(obj)
     nt_new = merge(nt, patch)
     Unityper.rt_constructor(obj){T}(;nt_new...)

@@ -160,36 +160,13 @@ for f in [identity, one, zero, *, +, -]
 end
 
 promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
+Base.real(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(real, s)
 promote_symtype(::typeof(Base.conj), T::Type{<:Number}) = T
+Base.conj(s::Symbolic{<:Number}) = islike(s, Real) ? s : term(conj, s)
 promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real
-function Base.real(s::Symbolic{<:Number}) 
-    if iscall(s) 
-        f = operation(s)
-        args = map(real, arguments(s))
-        return f(args...)
-    else
-        islike(s, Real) ? s : term(real, s)
-    end
-end
-function Base.conj(s::Symbolic{<:Number}) 
-    if iscall(s) 
-        f = operation(s)
-        args = map(conj, arguments(s))
-        return f(args...)
-    else
-        islike(s, Real) ? s : term(conj, s)
-    end
-end
-function Base.imag(s::Symbolic{<:Number}) 
-    if iscall(s) 
-        f = operation(s)
-        args = map(imag, arguments(s))
-        return f(args...)
-    else
-        islike(s, Real) ? zero(symtype(s)) : term(imag, s)
-    end
-end
+Base.imag(s::Symbolic{<:Number}) = islike(s, Real) ? zero(symtype(s)) : term(imag, s)
 Base.adjoint(s::Symbolic{<:Number}) = conj(s)
+
 
 ## Booleans
 

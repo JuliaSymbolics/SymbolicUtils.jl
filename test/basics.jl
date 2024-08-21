@@ -354,14 +354,3 @@ end
     end
     @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
 end
-
-@testset "real and complex" begin
-    @syms x y z::Real
-    @test isequal(conj(x*y*z), conj(x)*conj(y)*z)
-    @test isequal(conj(x*y*z + y), conj(x)*conj(y)*z + conj(y))
-    @test isequal(real(x*y*z + y), real(x)*real(y)*z + real(y))
-    @test isequal(imag(x*y*z + y), imag(y))
-    @test isequal(imag(x*y*z + y), imag(y))
-    @test isequal(conj(exp(1im*x)*y), conj(exp(1im*x))*conj(y))
-    @test isequal(adjoint(x*y*z), conj(x)*conj(y)*z)    
-end

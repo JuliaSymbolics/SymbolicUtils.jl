@@ -996,10 +996,9 @@ variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)
     defs = map(xs) do x
-        n, t = _name_type(x)
-        T = esc(t)
         nt = _name_type(x)
         n, t = nt.name, nt.type
+        T = esc(t)
         :($(esc(n)) = Sym{$T}($(Expr(:quote, n))))
     end
     Expr(:block, defs...,

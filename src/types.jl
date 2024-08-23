@@ -77,8 +77,8 @@ const SIMPLIFIED = 0x01 << 0
 #@inline is_of_type(x::BasicSymbolic, type::UInt8) = (x.bitflags & type) != 0x00
 #@inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
 
-function ConstructionBase.setproperties_object(
-        obj::BasicSymbolic{T}, patch)::BasicSymbolic{T} where {T}
+function ConstructionBase.setproperties(
+        obj::BasicSymbolic{T}, patch::NamedTuple)::BasicSymbolic{T} where {T}
     nt1 = getproperties(obj)
     nt2 = getproperties(obj.impl)
     nt1 = merge(nt1, patch)
@@ -635,13 +635,15 @@ function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
     # Where the result would have a symtype of Bool. 
     # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609 
     # TODO this should be optimized.
-    new_st = if pst === Bool 
-        pst 
-    elseif pst === Any || (st === Number && pst <: st) 
+    new_st = if st <: AbstractArray
         st
-    else 
-        pst 
-    end 
+    elseif pst === Bool
+        pst
+    elseif pst === Any || (st === Number && pst <: st)
+        st
+    else
+        pst
+    end
     basicsymbolic(head, args, new_st, metadata)
 end
 
@@ -658,13 +660,13 @@ function basicsymbolic(f, args, stype, metadata)
     elseif all(x -> symtype(x) <: Number, args)
         if f === (+)
             res = +(args...)
-            if isadd(res)
+            if isadd(res) || isterm(res)
                 @set! res.metadata = metadata
             end
             res
         elseif f == (*)
             res = *(args...)
-            if ismul(res)
+            if ismul(res) || isterm(res)
                 @set! res.metadata = metadata
             end
             res

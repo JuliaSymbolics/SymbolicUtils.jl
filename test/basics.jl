@@ -227,6 +227,21 @@ end
 
     # test that maketerm sets metadata correctly
     metadata = Base.ImmutableDict{DataType, Any}(Ctx1, "meta_1")
+    metadata2 = Base.ImmutableDict{DataType, Any}(Ctx2, "meta_2")
+    
+    d = b * c
+    @set! d.metadata = metadata2
+
+    s = SymbolicUtils.maketerm(typeof(a + d), +, [a, d], metadata)
+    @test isterm(s)
+    @test hasmetadata(s, Ctx1)
+    @test getmetadata(s, Ctx1) == "meta_1"
+
+    s = SymbolicUtils.maketerm(typeof(a * d), *, [a, d], metadata)
+    @test isterm(s)
+    @test hasmetadata(s, Ctx1)
+    @test getmetadata(s, Ctx1) == "meta_1"
+
     s = SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3], metadata)
     @test !hasmetadata(s, Ctx1)
 
@@ -249,6 +264,11 @@ end
     @syms x::Int y::Int 
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), (+), [x, y], nothing)
     @test symtype(new_expr) == Int64
+
+    # Check that the Array type does not get changed to AbstractArray
+    new_expr = SymbolicUtils.maketerm(
+        SymbolicUtils.BasicSymbolic{Vector{Float64}}, sin, [1.0, 2.0], nothing)
+    @test symtype(new_expr) == Vector{Float64}
 end
 
 toterm(t) = _Term(symtype(t), operation(t), arguments(t))

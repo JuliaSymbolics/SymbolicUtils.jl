@@ -273,7 +273,7 @@ julia> @syms a b;
 
 julia> predicate(x) = x === a;
 
-julia> r = @rule ~x => ~x where f(~x);
+julia> r = @rule ~x => ~x where predicate(~x);
 
 julia> r(a)
 a

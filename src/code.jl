@@ -1,6 +1,6 @@
 module Code
 
-using StaticArrays, LabelledArrays, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions
+using StaticArrays, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -576,25 +576,6 @@ end
 
 @inline function create_array(::Type{<:MArray}, T, nd::Val, ::Val{dims}, elems...) where dims
     MArray{Tuple{dims...}, T}(elems...)
-end
-
-## LabelledArrays
-@inline function create_array(A::Type{<:SLArray}, T, nd::Val, d::Val{dims}, elems...) where {dims}
-    a = create_array(SArray, T, nd, d, elems...)
-    if nfields(dims) === ndims(A)
-        similar_type(A, eltype(a), Size(dims))(a)
-    else
-        a
-    end
-end
-
-@inline function create_array(A::Type{<:LArray}, T, nd::Val, d::Val{dims}, elems...) where {dims}
-    data = create_array(Array, T, nd, d, elems...)
-    if nfields(dims) === ndims(A)
-        LArray{eltype(data),nfields(dims),typeof(data),LabelledArrays.symnames(A)}(data)
-    else
-        data
-    end
 end
 
 ## We use a separate type for Sparse Arrays to sidestep the need for

@@ -38,7 +38,7 @@ end
 
     @syms A::Vector{Real}
     # test that the following works
-    expand(Term{Real}(getindex, [A, 3]) - 3)
+    expand(_Term(Real, getindex, [A, 3]) - 3)
 end
 
 @testset "simplify_fractions with quick-cancel" begin

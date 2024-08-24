@@ -12,7 +12,7 @@ const EMPTY_HASH = UInt(0)
     end
     struct Term
         f::Any
-        arguments::Vector{BasicSymbolic}
+        arguments::Vector{Symbolic}
     end
     struct Add
         coeff::Any
@@ -358,8 +358,8 @@ function _Sym(::Type{T}, name::Symbol; kwargs...) where {T}
 end
 
 function _Term(::Type{T}, f, args; kwargs...) where {T}
-    if eltype(args) !== BasicSymbolic
-        args = convert(Vector{BasicSymbolic}, args)
+    if eltype(args) !== Symbolic
+        args = convert(Vector{Symbolic}, args)
     end
     impl = Term(f, args)
     BasicSymbolic{T}(; impl, kwargs...)
@@ -371,6 +371,10 @@ end
 function _Const(val::T; kwargs...) where {T}
     impl = Const(val)
     BasicSymbolic{T}(; impl, kwargs...)
+end
+
+function Base.convert(::Type{Symbolic}, x)
+    _Const(x)
 end
 
 function Base.convert(::Type{BasicSymbolic}, x)

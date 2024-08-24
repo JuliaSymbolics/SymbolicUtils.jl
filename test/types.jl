@@ -1,4 +1,4 @@
-using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
+using SymbolicUtils: Symbolic, BasicSymbolic, _Sym, _Term, _Const, _Add
 
 @testset "Expronicon generated constructors" begin
     s1 = Sym(:abc)
@@ -22,7 +22,7 @@ using SymbolicUtils: BasicSymbolic, _Sym, _Term, _Const, _Add
         @test typeof(t1) == BasicSymbolicImpl
         @test t1.f == sin
         @test isequal(t1.arguments, [bs1])
-        @test typeof(t1.arguments) == Vector{BasicSymbolic}
+        @test typeof(t1.arguments) == Vector{Symbolic}
     end
     @testset "Div" begin
         d1 = Div(num = bs1, den = bs2)

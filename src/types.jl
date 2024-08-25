@@ -1239,6 +1239,12 @@ mul_t(a, b) = promote_symtype(*, symtype(a), symtype(b))
 mul_t(a) = promote_symtype(*, symtype(a))
 
 function *(a::SN, b::SN)
+    if isconst(a)
+        return a.impl.val * b
+    end
+    if isconst(b)
+        return b.impl.val * a
+    end
     # Always make sure Div wraps Mul
     !issafecanon(*, a, b) && return term(*, a, b)
     if isdiv(a) && isdiv(b)

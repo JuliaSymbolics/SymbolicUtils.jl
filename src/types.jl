@@ -225,6 +225,8 @@ isdiv(x)  = isa_SymType(Val(:Div), x)
 
 Base.isequal(::Symbolic, x) = false
 Base.isequal(x, ::Symbolic) = false
+Base.isequal(::Symbolic, ::Missing) = false
+Base.isequal(::Missing, ::Symbolic) = false
 Base.isequal(::Symbolic, ::Symbolic) = false
 coeff_isequal(a, b) = isequal(a, b) || ((a isa AbstractFloat || b isa AbstractFloat) && (a==b))
 function _allarequal(xs, ys)::Bool

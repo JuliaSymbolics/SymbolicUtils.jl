@@ -1,7 +1,7 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "3.4.1"
+version = "3.5.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -37,7 +37,7 @@ AbstractTrees = "0.4"
 Bijections = "0.1.2"
 ChainRulesCore = "1"
 Combinatorics = "1.0"
-ConstructionBase = "1.1"
+ConstructionBase = "1.5.7
 DataStructures = "0.18"
 DocStringExtensions = "0.8, 0.9"
 DynamicPolynomials = "0.5, 0.6"

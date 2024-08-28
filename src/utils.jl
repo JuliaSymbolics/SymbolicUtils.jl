@@ -64,8 +64,12 @@ end
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 
-isliteral(::Type{T}) where {T} = x -> x isa T
-is_literal_number(x) = isliteral(Number)(x)
+function is_literal_number(x)
+    if isconst(x)
+        x = x.impl.val
+    end
+    x isa Number
+end
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
 _iszero(x) = x isa Number && iszero(x)

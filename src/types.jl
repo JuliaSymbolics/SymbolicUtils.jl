@@ -263,6 +263,8 @@ end
 
 Base.isequal(::Symbolic, x) = false
 Base.isequal(x, ::Symbolic) = false
+Base.isequal(::Symbolic, ::Missing) = false
+Base.isequal(::Missing, ::Symbolic) = false
 Base.isequal(::Symbolic, ::Symbolic) = false
 coeff_isequal(a, b) = isequal(a, b) || ((a isa AbstractFloat || b isa AbstractFloat) && (a==b))
 function _allarequal(xs, ys)::Bool
@@ -1103,7 +1105,8 @@ variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)
     defs = map(xs) do x
-        n, t = _name_type(x)
+        nt = _name_type(x)
+        n, t = nt.name, nt.type
         T = esc(t)
         :($(esc(n)) = _Sym($T, $(Expr(:quote, n))))
     end

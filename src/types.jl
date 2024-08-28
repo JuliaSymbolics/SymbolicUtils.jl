@@ -1285,7 +1285,7 @@ function *(a::Number, b::SN)
     elseif isone(a)
         b
     elseif isdiv(b)
-        Div(a * b.impl.num, b.impl.den)
+        _Div(a * b.impl.num, b.impl.den)
     elseif isone(-a) && isadd(b)
         # -1(a+b) -> -a - b
         T = promote_symtype(+, typeof(a), symtype(b))

@@ -608,9 +608,17 @@ function basicsymbolic(f, args, stype, metadata)
             end
             res
         elseif f == (^) && length(args) == 2
-            res = args[1] ^ args[2]
-            if ispow(res)
-                @set! res.metadata = metadata
+            if args[2] isa Rational && !(args[1] isa Symbolic)
+                if !isinteger(args[2])
+                    @goto FALLBACK
+                end
+                integer_type = only(typeof(args[2]).parameters)
+                res = args[1] ^ convert(integer_type, args[2])
+            else
+                res = args[1] ^ args[2]
+                if ispow(res)
+                    @set! res.metadata = metadata
+                end
             end
             res
         else
@@ -1210,9 +1218,21 @@ function ^(a::SN, b)
     elseif b isa Number && b < 0
         Div(1, a ^ (-b))
     elseif ismul(a) && b isa Number
-        coeff = unstable_pow(a.coeff, b)
+        new_dict = mapvalues((k, v) -> b*v, a.dict)
+        if b isa Rational
+            if isinteger(b)
+                integer_type = only(typeof(b).parameters)
+                coeff = a.coeff ^ convert(integer_type, b)
+            else
+                coeff = 1
+                merge!(new_dict, Dict(term(^, a.coeff, b) => 1))
+            end
+        else
+            coeff = unstable_pow(a.coeff, b)
+        end
+
         Mul(promote_symtype(^, symtype(a), symtype(b)),
-            coeff, mapvalues((k, v) -> b*v, a.dict))
+            coeff, new_dict)
     else
         Pow(a, b)
     end

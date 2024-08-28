@@ -1276,6 +1276,9 @@ function *(a::SN, b::SN)
     end
 end
 function *(a::Number, b::SN)
+    if isconst(b)
+        return a * b.impl.val
+    end
     !issafecanon(*, b) && return term(*, a, b)
     if iszero(a)
         a

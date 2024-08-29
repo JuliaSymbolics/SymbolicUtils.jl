@@ -117,6 +117,9 @@ function term_matcher(term, fullac_flag = false)
             data_arg_perms = permutations(args)
             result = nothing
             T = symtype(data)
+            if op != operation(term)
+                return nothing
+            end
             for perm in data_arg_perms
                 data_permuted = Term{T}(op, perm)
                 result = loop(data_permuted, bindings, matchers) # Try to eat exactly one term

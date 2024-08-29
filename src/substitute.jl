@@ -22,6 +22,9 @@ function substitute(expr, dict; fold=true)
             canfold = !(op isa Symbolic)
             args = map(arguments(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
+                if isconst(x)
+                    x′ = x′.impl.val
+                end
                 canfold = canfold && !(x′ isa Symbolic)
                 x′
             end

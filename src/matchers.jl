@@ -9,10 +9,20 @@ function matcher(val::Any)
     if isconst(val)
         slot = val.impl.val
         return matcher(slot)
+    elseif iscall(val)
+        return term_matcher(val)
     end
-    iscall(val) && return term_matcher(val)
     function literal_matcher(next, data, bindings)
-        islist(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
+        if islist(data)
+            cd = car(data)
+            if isconst(cd)
+                cd = cd.impl.val
+            end
+            if isequal(cd, val)
+                return next(bindings, 1)
+            end
+        end
+        nothing
     end
 end
 

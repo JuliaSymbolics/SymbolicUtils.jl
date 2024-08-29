@@ -360,6 +360,8 @@ end
 
 @testset "Adjoint" begin
     @syms x::Real y
-    @test isequal(adjoint(x), x)
+    ax = adjoint(x)
+    @test isequal(ax, x)
+    @test ax === x
     @test isequal(adjoint(y), conj(y)) 
 end

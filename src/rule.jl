@@ -297,9 +297,30 @@ whether the predicate holds or not.
 
 _In the consequent pattern_: Use `(@ctx)` to access the context object on the right hand side
 of an expression.
+
+**Full (nested) associative-commutative matching**:
+
+    @rule LHS => RHS fullac
+
+creates a rule that fully respects associative-commutative (AC) operations. Unlike `@acrule LHS => RHS` which only considers AC properties of the top-level function, here we impose AC properties on all subexpressions.
+
+```
+julia> @syms a b;
+
+julia> r = @rule ~a + ~a*~b => ~a * (1+~b) fullac;
+
+julia> r(b + a*b)
+(1 + a)*b
+
+```
 """
-macro rule(expr)
+macro rule(expr, option...)
     @assert expr.head == :call && expr.args[1] == :(=>)
+    fullac = false
+    if length(option) > 0
+        @assert option[1] == :fullac "@rule only accepts one option `fullac` after the rule itself"
+        fullac = true
+    end
     lhs = expr.args[2]
     rhs = rewrite_rhs(expr.args[3])
     keys = Symbol[]
@@ -310,7 +331,7 @@ macro rule(expr)
         lhs_pattern = $(lhs_term)
         Rule($(QuoteNode(expr)),
              lhs_pattern,
-             matcher(lhs_pattern),
+             matcher(lhs_pattern, $fullac),
              __MATCHES__ -> $(makeconsequent(rhs)),
              rule_depth($lhs_term))
     end

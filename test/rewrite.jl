@@ -43,6 +43,14 @@ end
     @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
 end
 
+@testset "Full associative-commutative matching" begin
+    @eqtest (@rule ~a + ~a*~b => ~a * (1+~b) fullac)(a + a*b) == a * (1+b)
+    @eqtest (@rule ~a + ~a*~b => ~a * (1+~b) fullac)(b + a*b) == b * (1+a) # fails with @acrule
+    @eqtest (@rule ~a*~b + ~a => ~a * (1+~b) fullac)(b + a*b) == b * (1+a) # fails with @acrule
+    @eqtest (@rule ~a*~b + ~a*~c => ~a * (~b+~c) fullac)(a*b + a*c) == a * (b+c)
+    @eqtest (@rule ~a*~b + ~a*~c => ~a * (~b+~c) fullac)(a*b + b*c) == b * (a+c) # fails with @acrule
+end
+
 using SymbolicUtils: @capture
 
 @testset "Capture form" begin

@@ -318,7 +318,7 @@ macro rule(expr, option...)
     @assert expr.head == :call && expr.args[1] == :(=>)
     fullac = false
     if length(option) > 0
-        @assert option[1] == :fullac "@rule only accepts one option `fullac` after the rule itself"
+        @assert length(option) == 1 && option[1] == :fullac "@rule only accepts one option `fullac` after the rule itself"
         fullac = true
     end
     lhs = expr.args[2]

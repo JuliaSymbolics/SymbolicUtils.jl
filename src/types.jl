@@ -17,7 +17,7 @@ sdict(kv...) = Dict{Any, Any}(kv...)
 
 using Base: RefValue
 const EMPTY_ARGS = []
-const EMPTY_HASH = RefValue(UInt(0))
+const EMPTY_HASH = UInt(0) # zero indicating that hash has not been computed
 const NOT_SORTED = RefValue(false)
 const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
@@ -25,6 +25,7 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
 @compactify show_methods=false begin
     @abstract struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
+        hash::RefValue{UInt}   = Ref(EMPTY_HASH) # create a RefValue object whenever creating a new BasicSymbolic
     end
     struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
@@ -32,19 +33,16 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
     struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
-        hash::RefValue{UInt}   = EMPTY_HASH
     end
     struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
-        hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
     struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
-        hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
@@ -278,25 +276,42 @@ const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
 function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
+    zero_salt = iszero(salt)
+    h = s.hash[]
+    # for any type, if hash has been computed and stored, then just return it
+    if zero_salt && h != EMPTY_HASH
+        return h
+    end
     E = exprtype(s)
     if E === SYM
+        if zero_salt
+            h_new = hash(nameof(s), SYM_SALT)
+            s.hash[] = h_new
+            return h_new
+        end
         hash(nameof(s), salt ⊻ SYM_SALT)
     elseif E === ADD || E === MUL
-        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
-        h = s.hash[]
-        !iszero(h) && return h
+        !zero_salt && return hash(hash(s, zero(UInt)), salt)
         hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
         h′ = hash(hashoffset, hash(s.coeff, hash(s.dict, salt)))
         s.hash[] = h′
         return h′
     elseif E === DIV
+        if zero_salt
+            h_new = hash(s.num, hash(s.den, DIV_SALT))
+            s.hash[] = h_new
+            return h_new
+        end
         return hash(s.num, hash(s.den, salt ⊻ DIV_SALT))
     elseif E === POW
+        if zero_salt
+            h_new = hash(s.exp, hash(s.base, POW_SALT))
+            s.hash[] = h_new
+            return h_new
+        end
         hash(s.exp, hash(s.base, salt ⊻ POW_SALT))
     elseif E === TERM
-        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
-        h = s.hash[]
-        !iszero(h) && return h
+        !zero_salt && return hash(hash(s, zero(UInt)), salt)
         op = operation(s)
         oph = op isa Function ? nameof(op) : op
         h′ = hashvec(arguments(s), hash(oph, salt))
@@ -320,7 +335,7 @@ function Term{T}(f, args; kw...) where T
         args = convert(Vector{Any}, args)
     end
 
-    Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    Term{T}(;f=f, arguments=args, kw...)
 end
 
 function Term(f, args; metadata=NO_METADATA)
@@ -340,7 +355,7 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    Add{T}(; coeff, dict, metadata, arguments=[], issorted=RefValue(false), kw...)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
@@ -355,7 +370,7 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        Mul{T}(; coeff, dict, metadata, arguments=[], issorted=RefValue(false), kw...)
     end
 end
 

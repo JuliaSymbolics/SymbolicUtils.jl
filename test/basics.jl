@@ -357,3 +357,21 @@ end
     end
     @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
 end
+
+@testset "pow" begin
+    @syms x y
+    @eqtest (2x)^(1//2) == term(^, 2, 1//2) * x^(1//2)
+    @eqtest (2x)^(1//1) == 2x
+    # @eqtest (2x)^1 == 2x ## This currently fails and returns (2//1)*x
+    @eqtest (2x)^(2//1) == 4x^(2//1)
+    @eqtest ((1//3)*x)^(1//4) == term(^, 1//3, 1//4) * x^(1//4)
+
+    @eqtest (x+y)^(1//2) == (x+y)^(1//2)
+    @eqtest (x+y)^(1//1) == x+y
+
+    @eqtest (x^(3//1))^(1//3) == x
+    @eqtest (x^(3//1))^(2//3) == x^(2//1)
+    @eqtest (x^(2//1))^2 ==  x^(4//1)
+
+    @test ((2x)^0.5).coeff ≈ sqrt(2)
+end

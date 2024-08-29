@@ -76,8 +76,8 @@ end
     @eqtest simplify(true & (0 < a)) == (0 < a)
     @eqtest simplify(false & (0 < a)) == false
     @eqtest simplify((0 < a) & false) == false
-    @eqtest simplify(Term{Bool}(!, [true])) == false
-    @eqtest simplify(Term{Bool}(|, [false, true])) == true
+    @eqtest simplify(_Term(Bool, !, [true])) == false
+    @eqtest simplify(_Term(Bool, |, [false, true])) == true
     @eqtest simplify(ifelse(true, a, b)) == a
     @eqtest simplify(ifelse(false, a, b)) == b
 

@@ -186,7 +186,13 @@ end
 for f in [!, ~]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:Bool}) = Bool
-        (::$(typeof(f)))(s::Symbolic{Bool}) = _Term(Bool, !, [s])
+        function (::$(typeof(f)))(s::Symbolic{Bool})
+            if isconst(s)
+                s = s.impl.val
+                return !s
+            end
+            _Term(Bool, !, [s])
+        end
     end
 end
 

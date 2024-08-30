@@ -608,17 +608,17 @@ function basicsymbolic(f, args, stype, metadata)
             end
             res
         elseif f == (^) && length(args) == 2
-            if args[2] isa Rational && !(args[1] isa Symbolic)
-                if !isinteger(args[2])
+            if args[2] isa Rational && !isa(args[1], Symbolic)
+                if isinteger(args[2])
+                    res = args[1] ^ numerator(args[2])
+                else
                     @goto FALLBACK
                 end
-                integer_type = only(typeof(args[2]).parameters)
-                res = args[1] ^ convert(integer_type, args[2])
             else
                 res = args[1] ^ args[2]
-                if ispow(res)
-                    @set! res.metadata = metadata
-                end
+            end
+            if ispow(res)
+                @set! res.metadata = metadata
             end
             res
         else

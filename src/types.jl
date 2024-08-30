@@ -609,11 +609,11 @@ function makepow(a, b)
     base, exp
 end
 
-function term(f, args...; T = nothing)
-    if T === nothing
-        T = _promote_symtype(f, args)
+function term(f, args...; type = nothing)
+    if type === nothing
+        type = _promote_symtype(f, args)
     end
-    _Term(T, f, [args...])
+    _Term(type, f, [args...])
 end
 
 """

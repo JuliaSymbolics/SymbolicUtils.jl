@@ -185,11 +185,10 @@ _g(y) = sin
     @test @rule($(_g(1))(a) => 2)(sin(a)) == 2
 end
 
-@syms a
-_f(x) = x === a
 @testset "where" begin
 
     @syms a b
+    _f(x) = x === a
     r = @rule ~x => ~x where {_f(~x)}
     @eqtest r(a) == a
     @test isnothing(r(b))

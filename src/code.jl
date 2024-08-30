@@ -9,7 +9,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm
+                      isconst, symtype, sorted_arguments, metadata, isterm, term, maketerm
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -182,6 +182,8 @@ function toexpr(O, st)
     if issym(O)
         O = substitute_name(O, st)
         return issym(O) ? nameof(O) : toexpr(O, st)
+    elseif isconst(O)
+        return O.impl.val
     end
     O = substitute_name(O, st)
 

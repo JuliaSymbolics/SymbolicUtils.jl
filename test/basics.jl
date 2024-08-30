@@ -357,3 +357,11 @@ end
     end
     @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
 end
+
+@testset "Adjoint" begin
+    @syms x::Real y
+    ax = adjoint(x)
+    @test isequal(ax, x)
+    @test ax === x
+    @test isequal(adjoint(y), conj(y)) 
+end

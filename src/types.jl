@@ -1221,8 +1221,7 @@ function ^(a::SN, b)
         new_dict = mapvalues((k, v) -> b*v, a.dict)
         if b isa Rational
             if isinteger(b)
-                integer_type = only(typeof(b).parameters)
-                coeff = a.coeff ^ convert(integer_type, b)
+                coeff = a.coeff ^ numerator(b)
             else
                 coeff = 1
                 merge!(new_dict, Dict(term(^, a.coeff, b) => 1))

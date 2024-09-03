@@ -18,6 +18,8 @@ using ConstructionBase
 using TermInterface
 import TermInterface: iscall, isexpr, head, children,
                       operation, arguments, metadata, maketerm, sorted_arguments
+# For ReverseDiffExt
+import ArrayInterface
 
 Base.@deprecate istree iscall
 export istree, operation, arguments, sorted_arguments, similarterm, iscall

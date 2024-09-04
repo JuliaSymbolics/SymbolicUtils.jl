@@ -5,6 +5,7 @@ using SymbolicUtils.Code: LazyState
 using StaticArrays
 using LabelledArrays
 using SparseArrays
+using ReverseDiff
 using LinearAlgebra
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
@@ -157,6 +158,17 @@ nanmath_st.rewrites[:nanmath] = true
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SLVector((:a, :b))(@SVector[1,2])],
                           MakeArray([a+b,a/b], arr)))) === @SLVector((:a, :b))(@SVector [3, 1/2])
+
+    trackedarr = eval(toexpr(Let([a ← ReverseDiff.track(1.0), b ← 2, arr ← ReverseDiff.track(ones(2))],
+                          MakeArray([a+b,a/b], arr))))
+    @test trackedarr isa ReverseDiff.TrackedArray
+    @test trackedarr == [3, 1/2]
+
+    trackedarr = eval(toexpr(Let([a ← ReverseDiff.track(1.0), b ← 2, arr ← ReverseDiff.track(ones(2))],
+                          MakeArray([a b; a+b a/b], arr))))
+    @test trackedarr isa ReverseDiff.TrackedArray
+    @test trackedarr == [1 2; 3 1/2]
+    
 
     R1 = eval(toexpr(Let([a ← 1, b ← 2, arr ← @MVector([1,2])],MakeArray([a,b,a+b,a/b], arr))))
     @test R1 == (@MVector [1, 2, 3, 1/2]) && R1 isa MVector

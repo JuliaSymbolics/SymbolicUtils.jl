@@ -1224,7 +1224,7 @@ function ^(a::SN, b)
                 coeff = a.coeff ^ numerator(b)
             else
                 coeff = 1
-                merge!(new_dict, Dict(term(^, a.coeff, b) => 1))
+                new_dict[term(^, a.coeff, b)] = 1
             end
         else
             coeff = unstable_pow(a.coeff, b)

@@ -183,7 +183,7 @@ function toexpr(O, st)
         O = substitute_name(O, st)
         return issym(O) ? nameof(O) : toexpr(O, st)
     elseif isconst(O)
-        return O.impl.val
+        return toexpr(O.impl.val, st)
     end
     O = substitute_name(O, st)
 

@@ -912,7 +912,7 @@ promote_symtype(f, Ts...) = Any
 #### Function-like variables
 #---------------------------
 
-struct FnType{X<:Tuple,Y} end
+struct FnType{X<:Tuple,Y,Z} end
 
 (f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, Any[args...])
 

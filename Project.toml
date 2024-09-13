@@ -1,10 +1,11 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
 authors = ["Shashi Gowda"]
-version = "3.5.0"
+version = "3.6.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 Bijections = "e2ed5e7c-b2de-5872-ae92-c73ca462fb04"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
@@ -29,12 +30,15 @@ TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [weakdeps]
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
+ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 
 [extensions]
 SymbolicUtilsLabelledArraysExt = "LabelledArrays"
+SymbolicUtilsReverseDiffExt = "ReverseDiff"
 
 [compat]
 AbstractTrees = "0.4"
+ArrayInterface = "7.8"
 Bijections = "0.1.2"
 ChainRulesCore = "1"
 Combinatorics = "1.0"
@@ -48,6 +52,7 @@ LabelledArrays = "1.5"
 MLStyle = "0.4"
 MultivariatePolynomials = "0.5"
 NaNMath = "0.3, 1"
+ReverseDiff = "1"
 Setfield = "0.7, 0.8, 1"
 SpecialFunctions = "0.10, 1.0, 2"
 StaticArrays = "0.12, 1.0"
@@ -64,8 +69,9 @@ Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PkgBenchmark = "32113eaa-f34f-5b0d-bd6c-c81e245fc73d"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ReferenceTests = "324d217c-45ce-50fc-942e-d289b448e8cf"
+ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "Test", "Zygote"]
+test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "Test", "Zygote"]

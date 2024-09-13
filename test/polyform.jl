@@ -1,8 +1,6 @@
 using SymbolicUtils: PolyForm, Term, symtype
 using Test, SymbolicUtils
 
-include("utils.jl")
-
 @testset "div and polyform" begin
     @syms x y z
     @test_skip repr(PolyForm(x-y)) == "-y + x"

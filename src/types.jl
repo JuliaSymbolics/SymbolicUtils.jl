@@ -876,6 +876,10 @@ function show_pow(io, args)
 end
 
 function show_mul(io, args)
+    if isconst(args)
+        print(io, args.impl.val)
+        return
+    end
     length(args) == 1 && return print_arg(io, *, args[1])
 
     arg1 = args[1]

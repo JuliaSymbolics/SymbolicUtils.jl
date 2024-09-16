@@ -6,7 +6,7 @@ using Test
 
 @testset "@syms" begin
     let
-        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
+        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int 
 
         @test issym(a) && symtype(a) == Number
         @test a.impl.name === :a
@@ -16,9 +16,11 @@ using Test
 
         @test issym(f)
         @test f.impl.name === :f
+        @test symtype(f) == FnType{Tuple{Real}, Number, Nothing}
 
         @test issym(g)
         @test g.impl.name === :g
+        @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, Nothing}}, Int, Nothing}
 
         @test isterm(f(b))
         @test symtype(f(b)) === Number
@@ -32,6 +34,21 @@ using Test
         # issue #91
         @syms h(a,b,c)
         @test isequal(h(1,2,3), h(1,2,3))
+
+        @syms (f::typeof(max))(::Real, ::AbstractFloat)::Number a::Real
+        @test issym(f)
+        @test f.name == :f
+        @test symtype(f) == FnType{Tuple{Real, AbstractFloat}, Number, typeof(max)}
+        @test isterm(f(a, b))
+        @test symtype(f(a, b)) == Number
+
+        @syms g(p, (h::typeof(identity))(q::Real)::Number)::Number
+        @test issym(g)
+        @test g.name == :g
+        @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, typeof(identity)}}, Number, Nothing}
+        @test_throws "not a subtype of" g(a, f)
+        @syms (f::typeof(identity))(::Real)::Number
+        @test symtype(g(a, f)) == Number
     end
 end
 

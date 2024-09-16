@@ -1021,7 +1021,7 @@ promote_symtype(f, Ts...) = Any
 #### Function-like variables
 #---------------------------
 
-struct FnType{X<:Tuple,Y} end
+struct FnType{X<:Tuple,Y,Z} end
 
 (f::Symbolic{<:FnType})(args...) = _Term(promote_symtype(f, symtype.(args)...), f, [args...])
 
@@ -1128,8 +1128,16 @@ function _name_type(x)
         lhs, rhs = x.args[1:2]
         if lhs isa Expr && lhs.head === :call
             # e.g. f(::Real)::Unreal
+            if lhs.args[1] isa Expr
+                func_name_and_type = _name_type(lhs.args[1])
+                name = func_name_and_type.name
+                functype = func_name_and_type.type
+            else
+                name = lhs.args[1]
+                functype = Nothing
+            end
             type = map(x->_name_type(x).type, lhs.args[2:end])
-            return (name=lhs.args[1], type=:($FnType{Tuple{$(type...)}, $rhs}))
+            return (name=name, type=:($FnType{Tuple{$(type...)}, $rhs, $functype}))
         else
             return (name=lhs, type=rhs)
         end

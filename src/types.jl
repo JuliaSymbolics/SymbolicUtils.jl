@@ -1231,9 +1231,19 @@ end
 +(a::SN) = a
 
 function -(a::SN)
-    !issafecanon(*, a) && return term(-, a)
-    isadd(a) ? _Add(sub_t(a), -a.impl.coeff, mapvalues((_, v) -> -v, a.impl.dict)) :
-    _Add(sub_t(a), makeadd(-1, 0, a)...)
+    if isconst(a)
+        v = a.impl.val
+        mv = -v
+        return _Const(mv)
+    end
+    if !issafecanon(*, a)
+        return term(-, a)
+    end
+    if isadd(a)
+        _Add(sub_t(a), -a.impl.coeff, mapvalues((_, v) -> -v, a.impl.dict))
+    else
+        _Add(sub_t(a), makeadd(-1, 0, a)...)
+    end
 end
 function -(a::SN, b::SN)
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)

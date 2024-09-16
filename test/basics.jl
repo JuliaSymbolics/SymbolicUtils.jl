@@ -37,14 +37,14 @@ using Test
 
         @syms (f::typeof(max))(::Real, ::AbstractFloat)::Number a::Real
         @test issym(f)
-        @test f.name == :f
+        @test f.impl.name == :f
         @test symtype(f) == FnType{Tuple{Real, AbstractFloat}, Number, typeof(max)}
         @test isterm(f(a, b))
         @test symtype(f(a, b)) == Number
 
         @syms g(p, (h::typeof(identity))(q::Real)::Number)::Number
         @test issym(g)
-        @test g.name == :g
+        @test g.impl.name == :g
         @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, typeof(identity)}}, Number, Nothing}
         @test_throws "not a subtype of" g(a, f)
         @syms (f::typeof(identity))(::Real)::Number

@@ -207,7 +207,7 @@ function gen_expr(lvl=5)
         n = rand(1:5)
         args = [gen_expr(lvl-1) for i in 1:n]
 
-        Term{Number}(f, first.(args)), f(last.(args)...)
+        _Term(Number, f, first.(args)), f(last.(args)...)
     else
         f = rand((-,/))
         l = gen_expr(lvl-1)
@@ -217,7 +217,7 @@ function gen_expr(lvl=5)
         end
         args = [l, r]
 
-        Term{Number}(f, first.(args)), f(last.(args)...)
+        _Term(Number, f, first.(args)), f(last.(args)...)
     end
 end
 

@@ -54,8 +54,8 @@ function _occursin(needle, haystack)
     if iscall(haystack)
         args = arguments(haystack)
         for arg in args
-            if arg isa Integer || arg isa AbstractFloat
-                isequal(arg, haystack)
+            if needle isa Integer || needle isa AbstractFloat
+                isequal(needle, arg) && return true
             else
                occursin(needle, arg) && return true
             end

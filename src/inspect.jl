@@ -12,10 +12,10 @@ function AbstractTrees.nodevalue(x::BasicSymbolic)
         string(x.impl.val)
     elseif isadd(x)
         string(exprtype(x),
-            (scalar = x.impl.coeff, coeffs = Tuple(k => v for (k, v) in x.impl.dict)))
+            (scalar = get_coeff(x), coeffs = Tuple(k => v for (k, v) in x.impl.dict)))
     elseif ismul(x)
         string(exprtype(x),
-            (scalar = x.impl.coeff, powers = Tuple(k => v for (k, v) in x.impl.dict)))
+            (scalar = get_coeff(x), powers = Tuple(k => v for (k, v) in x.impl.dict)))
     elseif isdiv(x) || ispow(x)
         string(exprtype(x))
     else

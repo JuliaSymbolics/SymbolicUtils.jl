@@ -1,4 +1,5 @@
-using SymbolicUtils: Symbolic, FnType, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, get_name
+using SymbolicUtils: Symbolic, FnType, symtype, operation, arguments, issym, isterm,
+                     BasicSymbolic, term, get_name, get_coeff
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield
@@ -344,18 +345,18 @@ end
 @testset "div" begin
     @syms x::SafeReal y::Real
     @test issym((2x / 2y).impl.num)
-    @test (2x / 3y).impl.num.impl.coeff == 2
-    @test (2x / 3y).impl.den.impl.coeff == 3
-    @test (2x / -3x).impl.num.impl.coeff == -2
-    @test (2x / -3x).impl.den.impl.coeff == 3
-    @test (2.5x / 3x).impl.num.impl.coeff == 2.5
-    @test (2.5x / 3x).impl.den.impl.coeff == 3
-    @test (x / 3x).impl.den.impl.coeff == 3
+    @test get_coeff((2x / 3y).impl.num) == 2
+    @test get_coeff((2x / 3y).impl.den) == 3
+    @test get_coeff((2x / -3x).impl.num) == -2
+    @test get_coeff((2x / -3x).impl.den) == 3
+    @test get_coeff((2.5x / 3x).impl.num) == 2.5
+    @test get_coeff((2.5x / 3x).impl.den) == 3
+    @test get_coeff((x / 3x).impl.den) == 3
 
     @syms x y
     @test issym((2x / 2y).impl.num)
-    @test (2x / 3y).impl.num.impl.coeff == 2
-    @test (2x / 3y).impl.den.impl.coeff == 3
+    @test get_coeff((2x / 3y).impl.num) == 2
+    @test get_coeff((2x / 3y).impl.den) == 3
     @test (2x / -3x) == -2 // 3
     @test (2.5x / 3x).impl.num == 2.5
     @test (2.5x / 3x).impl.den == 3

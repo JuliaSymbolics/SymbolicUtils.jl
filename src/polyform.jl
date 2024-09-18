@@ -514,7 +514,7 @@ function quick_mulpow(x, y)
             den = _Pow(symtype(y), y.impl.base, y.impl.exp-d[y.impl.base])
             delete!(d, y.impl.base)
         end
-        return _Mul(symtype(x), x.impl.coeff, d), den
+        return _Mul(symtype(x), get_coeff(x), d), den
     else
         return x, y
     end

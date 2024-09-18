@@ -184,6 +184,8 @@ end
     @test occursin(a, a + b)
     @test !occursin(sin(a), a + b + c)
     @test occursin(sin(a),  a * b + c + sin(a^2 * sin(a)))
+    @test occursin(0.01, 0.01*a)
+    @test occursin(0.01, a * b * c)
 end
 
 @testset "printing" begin

@@ -51,11 +51,14 @@ Base.occursin(needle, haystack::Symbolic) = _occursin(needle, haystack)
 Base.occursin(needle::Symbolic, haystack) = _occursin(needle, haystack)
 function _occursin(needle, haystack)
     isequal(needle, haystack) && return true
-
     if iscall(haystack)
         args = arguments(haystack)
         for arg in args
-            occursin(needle, arg) && return true
+            if arg isa Integer || arg isa AbstractFloat
+                isequal(arg, haystack)
+            else
+               occursin(needle, arg) && return true
+            end
         end
     end
     return false

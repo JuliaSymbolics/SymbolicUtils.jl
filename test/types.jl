@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, BasicSymbolic, _Sym, _Term, _Const, _Add
+using SymbolicUtils: Symbolic, BasicSymbolic, _Sym, _Term, _Const, _Add, get_name
 
 @testset "Expronicon generated constructors" begin
     s1 = Sym(:abc)
@@ -112,11 +112,11 @@ end
         @test typeof(s1) == BasicSymbolic{Int64}
         @test s1.metadata == SymbolicUtils.NO_METADATA
         @test s1.hash[] == SymbolicUtils.EMPTY_HASH
-        @test s1.impl.name == :x
+        @test get_name(s1) == :x
         @test typeof(s2) == BasicSymbolic{Float64}
         @test s2.metadata == SymbolicUtils.NO_METADATA
         @test s2.hash[] == SymbolicUtils.EMPTY_HASH
-        @test s2.impl.name == :y
+        @test get_name(s2) == :y
     end
     @testset "Term" begin
         s1 = _Sym(Float64, :x)

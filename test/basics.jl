@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, FnType, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
+using SymbolicUtils: Symbolic, FnType, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, get_name
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield
@@ -9,17 +9,17 @@ using Test
         @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int 
 
         @test issym(a) && symtype(a) == Number
-        @test a.impl.name === :a
+        @test get_name(a) === :a
 
         @test issym(b) && symtype(b) == Float64
         @test nameof(b) === :b
 
         @test issym(f)
-        @test f.impl.name === :f
+        @test get_name(f) === :f
         @test symtype(f) == FnType{Tuple{Real}, Number, Nothing}
 
         @test issym(g)
-        @test g.impl.name === :g
+        @test get_name(g) === :g
         @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, Nothing}}, Int, Nothing}
 
         @test isterm(f(b))
@@ -37,14 +37,14 @@ using Test
 
         @syms (f::typeof(max))(::Real, ::AbstractFloat)::Number a::Real
         @test issym(f)
-        @test f.impl.name == :f
+        @test get_name(f) == :f
         @test symtype(f) == FnType{Tuple{Real, AbstractFloat}, Number, typeof(max)}
         @test isterm(f(a, b))
         @test symtype(f(a, b)) == Number
 
         @syms g(p, (h::typeof(identity))(q::Real)::Number)::Number
         @test issym(g)
-        @test g.impl.name == :g
+        @test get_name(g) == :g
         @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, typeof(identity)}}, Number, Nothing}
         @test_throws "not a subtype of" g(a, f)
         @syms (f::typeof(identity))(::Real)::Number

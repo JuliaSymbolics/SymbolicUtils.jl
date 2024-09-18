@@ -502,12 +502,12 @@ end
 # mul, pow case
 function quick_mulpow(x, y)
     y.impl.exp isa Number || return (x, y)
-    if haskey(x.impl.dict, y.impl.base)
-        d = copy(x.impl.dict)
-        if x.impl.dict[y.impl.base] > y.impl.exp
+    if haskey(get_dict(x), y.impl.base)
+        d = copy(get_dict(x))
+        if get_dict(x)[y.impl.base] > y.impl.exp
             d[y.impl.base] -= y.impl.exp
             den = 1
-        elseif x.impl.dict[y.impl.base] == y.impl.exp
+        elseif get_dict(x)[y.impl.base] == y.impl.exp
             delete!(d, y.impl.base)
             den = 1
         else

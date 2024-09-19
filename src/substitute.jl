@@ -57,10 +57,13 @@ function _occursin(needle, haystack)
     if iscall(haystack)
         args = arguments(haystack)
         for arg in args
+            if isconst(arg)
+                arg = arg.impl.val
+            end
             if needle isa Integer || needle isa AbstractFloat
                 isequal(needle, arg) && return true
             else
-               occursin(needle, arg) && return true
+                occursin(needle, arg) && return true
             end
         end
     end

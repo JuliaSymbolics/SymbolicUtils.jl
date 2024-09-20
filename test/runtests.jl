@@ -13,7 +13,7 @@ DocMeta.setdocmeta!(
 )
 
 # Only test one Julia version to avoid differences due to changes in printing.
-if v"1.6" ≤ VERSION < v"1.7-beta3.0"
+if v"1.10" ≤ VERSION < v"1.11-"
     doctest(SymbolicUtils)
 else
     @warn "Skipping doctests"

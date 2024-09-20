@@ -12,12 +12,7 @@ DocMeta.setdocmeta!(
     recursive=true
 )
 
-# Only test one Julia version to avoid differences due to changes in printing.
-if v"1.10" ≤ VERSION < v"1.11-"
-    doctest(SymbolicUtils)
-else
-    @warn "Skipping doctests"
-end
+doctest(SymbolicUtils)
 SymbolicUtils.show_simplified[] = false
 
 include("utils.jl")

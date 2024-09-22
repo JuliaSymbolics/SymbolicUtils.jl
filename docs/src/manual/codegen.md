@@ -1,4 +1,4 @@
-# Code generation
+# [Code generation](@id codegen)
 
 **Note: this feature is experimental and the API might change frequently**
 

@@ -1,34 +1,37 @@
 # API Reference
+```@meta
+CurrentModule = SymbolicUtils
+```
 
 ## Symbols and Terms
 ```@docs
-SymbolicUtils.@syms
-SymbolicUtils.Sym
-SymbolicUtils.symtype
-SymbolicUtils.Term
-SymbolicUtils.Add
-SymbolicUtils.Mul
-SymbolicUtils.Pow
-SymbolicUtils.promote_symtype
+@syms
+Sym
+symtype
+Term
+Add
+Mul
+Pow
+promote_symtype
 ```
 
 ## Rewriters
 
 ```@docs
 @rule
-SymbolicUtils.Rewriters
+Rewriters
 ```
 
 ## Simplify
 
 ```@docs
-SymbolicUtils.simplify
-SymbolicUtils.expand
-SymbolicUtils.substitute
+simplify
+expand
+substitute
 ```
 
 ## Utilities
 
 ```@docs
-SymbolicUtils.@timerewrite
+@timerewrite
 ```

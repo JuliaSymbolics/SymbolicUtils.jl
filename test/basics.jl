@@ -1,5 +1,5 @@
 using SymbolicUtils: Symbolic, FnType, symtype, operation, arguments, issym, isterm,
-                     BasicSymbolic, term, get_name, get_coeff, get_dict, get_num
+                     BasicSymbolic, term, get_name, get_coeff, get_dict, get_num, get_den
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield
@@ -348,20 +348,20 @@ end
     @syms x::SafeReal y::Real
     @test issym(get_num(2x / 2y))
     @test get_coeff(get_num(2x / 3y)) == 2
-    @test get_coeff((2x / 3y).impl.den) == 3
+    @test get_coeff(get_den(2x / 3y)) == 3
     @test get_coeff(get_num(2x / -3x)) == -2
-    @test get_coeff((2x / -3x).impl.den) == 3
+    @test get_coeff(get_den(2x / -3x)) == 3
     @test get_coeff(get_num(2.5x / 3x)) == 2.5
-    @test get_coeff((2.5x / 3x).impl.den) == 3
-    @test get_coeff((x / 3x).impl.den) == 3
+    @test get_coeff(get_den(2.5x / 3x)) == 3
+    @test get_coeff(get_den(x / 3x)) == 3
 
     @syms x y
     @test issym(get_num(2x / 2y))
     @test get_coeff(get_num(2x / 3y)) == 2
-    @test get_coeff((2x / 3y).impl.den) == 3
+    @test get_coeff(get_den(2x / 3y)) == 3
     @test (2x / -3x) == -2 // 3
     @test get_num(2.5x / 3x) == 2.5
-    @test (2.5x / 3x).impl.den == 3
+    @test get_den(2.5x / 3x) == 3
     @test (x / 3x) == 1 // 3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)

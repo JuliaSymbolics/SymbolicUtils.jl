@@ -88,6 +88,10 @@ function get_base(x::BasicSymbolic)
     x.impl.base
 end
 
+function get_exp(x::BasicSymbolic)
+    x.impl.exp
+end
+
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
@@ -317,7 +321,7 @@ function _isequal(a, b, E)
     elseif E === DIV
         isequal(get_num(a), get_num(b)) && isequal(get_den(a), get_den(b))
     elseif E === POW
-        isequal(a.impl.exp, b.impl.exp) && isequal(get_base(a), get_base(b))
+        isequal(get_exp(a), get_exp(b)) && isequal(get_base(a), get_base(b))
     elseif E === TERM
         a1 = arguments(a)
         a2 = arguments(b)
@@ -363,7 +367,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
     elseif E === DIV
         return hash(get_num(s), hash(get_den(s), salt ⊻ DIV_SALT))
     elseif E === POW
-        hash(s.impl.exp, hash(get_base(s), salt ⊻ POW_SALT))
+        hash(get_exp(s), hash(get_base(s), salt ⊻ POW_SALT))
     elseif E === TERM
         !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
         h = s.hash[]
@@ -566,7 +570,7 @@ function toterm(t::BasicSymbolic{T}) where {T}
     elseif E === DIV
         _Term(T, /, [get_num(t), get_den(t)])
     elseif E === POW
-        _Term(T, ^, [get_base(t), t.impl.exp])
+        _Term(T, ^, [get_base(t), get_exp(t)])
     else
         error_on_type()
     end
@@ -608,8 +612,8 @@ end
 
 function makemul(coeff, xs...; d = Dict{BasicSymbolic, Any}())
     for x in xs
-        if ispow(x) && x.impl.exp isa Number
-            d[get_base(x)] = x.impl.exp + get(d, get_base(x), 0)
+        if ispow(x) && get_exp(x) isa Number
+            d[get_base(x)] = get_exp(x) + get(d, get_base(x), 0)
         elseif x isa Number
             coeff *= x
         elseif ismul(x)
@@ -634,7 +638,7 @@ function makepow(a, b)
     exp = b
     if ispow(a)
         base = get_base(a)
-        exp = a.impl.exp * b
+        exp = get_exp(a) * b
     end
     base, exp
 end
@@ -1312,10 +1316,10 @@ function *(a::SN, b::SN)
         _Mul(mul_t(a, b), get_coeff(a) * get_coeff(b),
             _merge(+, get_dict(a), get_dict(b), filter = _iszero))
     elseif ismul(a) && ispow(b)
-        if b.impl.exp isa Number
+        if get_exp(b) isa Number
             _Mul(mul_t(a, b),
                 get_coeff(a),
-                _merge(+, get_dict(a), Base.ImmutableDict(get_base(b) => b.impl.exp),
+                _merge(+, get_dict(a), Base.ImmutableDict(get_base(b) => get_exp(b)),
                     filter = _iszero))
         else
             _Mul(mul_t(a, b), get_coeff(a),

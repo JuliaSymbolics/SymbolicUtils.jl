@@ -265,10 +265,10 @@ end
 
 function polyform_factors(d, pvar2sym, sym2term)
     make(xs) = map(xs) do x
-        if ispow(x) && x.impl.exp isa Integer && x.impl.exp > 0
+        if ispow(x) && get_exp(x) isa Integer && get_exp(x) > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
-            _Pow(PolyForm(get_base(x), pvar2sym, sym2term), x.impl.exp)
+            _Pow(PolyForm(get_base(x), pvar2sym, sym2term), get_exp(x))
         else
             PolyForm(x, pvar2sym, sym2term)
         end
@@ -417,7 +417,7 @@ Has optimized processes for `Mul` and `Pow` terms.
 """
 function quick_cancel(d)
     if ispow(d) && isdiv(get_base(d))
-        return quick_cancel((get_num(get_base(d))^d.impl.exp) / (get_den(get_base(d))^d.impl.exp))
+        return quick_cancel((get_num(get_base(d))^get_exp(d)) / (get_den(get_base(d))^get_exp(d)))
     elseif ismul(d) && any(isdiv, arguments(d))
         return prod(arguments(d))
     elseif isdiv(d)
@@ -501,17 +501,17 @@ end
 
 # mul, pow case
 function quick_mulpow(x, y)
-    y.impl.exp isa Number || return (x, y)
+    get_exp(y) isa Number || return (x, y)
     if haskey(get_dict(x), get_base(y))
         d = copy(get_dict(x))
-        if get_dict(x)[get_base(y)] > y.impl.exp
-            d[get_base(y)] -= y.impl.exp
+        if get_dict(x)[get_base(y)] > get_exp(y)
+            d[get_base(y)] -= get_exp(y)
             den = 1
-        elseif get_dict(x)[get_base(y)] == y.impl.exp
+        elseif get_dict(x)[get_base(y)] == get_exp(y)
             delete!(d, get_base(y))
             den = 1
         else
-            den = _Pow(symtype(y), get_base(y), y.impl.exp-d[get_base(y)])
+            den = _Pow(symtype(y), get_base(y), get_exp(y)-d[get_base(y)])
             delete!(d, get_base(y))
         end
         return _Mul(symtype(x), get_coeff(x), d), den

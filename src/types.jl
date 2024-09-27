@@ -76,6 +76,10 @@ function get_dict(x::BasicSymbolic)
     x.impl.dict
 end
 
+function get_num(x::BasicSymbolic)
+    x.impl.num
+end
+
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
@@ -303,7 +307,7 @@ function _isequal(a, b, E)
     elseif E === ADD || E === MUL
         coeff_isequal(get_coeff(a), get_coeff(b)) && isequal(get_dict(a), get_dict(b))
     elseif E === DIV
-        isequal(a.impl.num, b.impl.num) && isequal(a.impl.den, b.impl.den)
+        isequal(get_num(a), get_num(b)) && isequal(a.impl.den, b.impl.den)
     elseif E === POW
         isequal(a.impl.exp, b.impl.exp) && isequal(a.impl.base, b.impl.base)
     elseif E === TERM
@@ -349,7 +353,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
         s.hash[] = h′
         return h′
     elseif E === DIV
-        return hash(s.impl.num, hash(s.impl.den, salt ⊻ DIV_SALT))
+        return hash(get_num(s), hash(s.impl.den, salt ⊻ DIV_SALT))
     elseif E === POW
         hash(s.impl.exp, hash(s.impl.base, salt ⊻ POW_SALT))
     elseif E === TERM
@@ -483,11 +487,11 @@ function _Div(::Type{T}, num, den; kwargs...) where {T}
     _iszero(num) && return zero(typeof(num))
     _isone(den) && return num
     if isdiv(num) && isdiv(den)
-        return _Div(T, num.impl.num * den.impl.den, num.impl.den * den.impl.num)
+        return _Div(T, get_num(num) * den.impl.den, num.impl.den * get_num(den))
     elseif isdiv(num)
-        return _Div(T, num.impl.num, num.impl.den * den)
+        return _Div(T, get_num(num), num.impl.den * den)
     elseif isdiv(den)
-        return _Div(T, num * den.impl.den, den.impl.num)
+        return _Div(T, num * den.impl.den, get_num(den))
     end
     if den isa Number && _isone(-den)
         return -1 * num
@@ -523,7 +527,7 @@ function _Div(num, den; kwargs...)
 end
 
 @inline function numerators(x)
-    isdiv(x) && return numerators(x.impl.num)
+    isdiv(x) && return numerators(get_num(x))
     iscall(x) && operation(x) === (*) ? arguments(x) : Any[x]
 end
 
@@ -552,7 +556,7 @@ function toterm(t::BasicSymbolic{T}) where {T}
         end
         _Term(T, operation(t), args)
     elseif E === DIV
-        _Term(T, /, [t.impl.num, t.impl.den])
+        _Term(T, /, [get_num(t), t.impl.den])
     elseif E === POW
         _Term(T, ^, [t.impl.base, t.impl.exp])
     else
@@ -1291,11 +1295,11 @@ function *(a::SN, b::SN)
     # Always make sure Div wraps Mul
     !issafecanon(*, a, b) && return term(*, a, b)
     if isdiv(a) && isdiv(b)
-        _Div(a.impl.num * b.impl.num, a.impl.den * b.impl.den)
+        _Div(get_num(a) * get_num(b), a.impl.den * b.impl.den)
     elseif isdiv(a)
-        _Div(a.impl.num * b, a.impl.den)
+        _Div(get_num(a) * b, a.impl.den)
     elseif isdiv(b)
-        _Div(a * b.impl.num, b.impl.den)
+        _Div(a * get_num(b), b.impl.den)
     elseif ismul(a) && ismul(b)
         _Mul(mul_t(a, b), get_coeff(a) * get_coeff(b),
             _merge(+, get_dict(a), get_dict(b), filter = _iszero))
@@ -1325,7 +1329,7 @@ function *(a::Number, b::SN)
     elseif isone(a)
         b
     elseif isdiv(b)
-        _Div(a * b.impl.num, b.impl.den)
+        _Div(a * get_num(b), b.impl.den)
     elseif isone(-a) && isadd(b)
         # -1(a+b) -> -a - b
         T = promote_symtype(+, typeof(a), symtype(b))

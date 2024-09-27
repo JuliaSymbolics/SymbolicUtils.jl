@@ -296,11 +296,11 @@ end
 #add_divs(x, y) = x + y
 function add_divs(x, y)
     if isdiv(x) && isdiv(y)
-        return (x.impl.num * y.impl.den + y.impl.num * x.impl.den) / (x.impl.den * y.impl.den)
+        return (get_num(x) * y.impl.den + get_num(y) * x.impl.den) / (x.impl.den * y.impl.den)
     elseif isdiv(x)
-        return (x.impl.num + y * x.impl.den) / x.impl.den
+        return (get_num(x) + y * x.impl.den) / x.impl.den
     elseif isdiv(y)
-        return (x * y.impl.den + y.impl.num) / y.impl.den
+        return (x * y.impl.den + get_num(y)) / y.impl.den
     else
         x + y
     end
@@ -384,7 +384,7 @@ function fraction_isone(x)
 end
 
 function needs_div_rules(x)
-    (isdiv(x) && !(x.impl.num isa Number) && !(x.impl.den isa Number)) ||
+    (isdiv(x) && !(get_num(x) isa Number) && !(x.impl.den isa Number)) ||
     (iscall(x) && operation(x) === (+) && count(has_div, arguments(x)) > 1) ||
     (iscall(x) && any(needs_div_rules, arguments(x)))
 end
@@ -417,11 +417,11 @@ Has optimized processes for `Mul` and `Pow` terms.
 """
 function quick_cancel(d)
     if ispow(d) && isdiv(d.impl.base)
-        return quick_cancel((d.impl.base.impl.num^d.impl.exp) / (d.impl.base.impl.den^d.impl.exp))
+        return quick_cancel((get_num(d.impl.base)^d.impl.exp) / (d.impl.base.impl.den^d.impl.exp))
     elseif ismul(d) && any(isdiv, arguments(d))
         return prod(arguments(d))
     elseif isdiv(d)
-        num, den = quick_cancel(d.impl.num, d.impl.den)
+        num, den = quick_cancel(get_num(d), d.impl.den)
         return _Div(num, den)
     else
         return d

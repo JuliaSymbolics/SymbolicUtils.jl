@@ -190,7 +190,7 @@ for f in [!, ~]
         promote_symtype(::$(typeof(f)), ::Type{<:Bool}) = Bool
         function (::$(typeof(f)))(s::Symbolic{Bool})
             if isconst(s)
-                s = s.impl.val
+                s = get_val(s)
                 return !s
             end
             _Term(Bool, !, [s])

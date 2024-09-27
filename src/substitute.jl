@@ -23,7 +23,7 @@ function substitute(expr, dict; fold=true)
             args = map(arguments(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
                 if isconst(x)
-                    x′ = x′.impl.val
+                    x′ = get_val(x′)
                 end
                 canfold = canfold && !(x′ isa Symbolic)
                 x′
@@ -58,7 +58,7 @@ function _occursin(needle, haystack)
         args = arguments(haystack)
         for arg in args
             if isconst(arg)
-                arg = arg.impl.val
+                arg = get_val(arg)
             end
             if needle isa Integer || needle isa AbstractFloat
                 isequal(needle, arg) && return true

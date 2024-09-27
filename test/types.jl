@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, BasicSymbolic, _Sym, _Term, _Const, _Add, get_name
+using SymbolicUtils: Symbolic, BasicSymbolic, _Sym, _Term, _Const, _Add, get_name, get_val
 
 @testset "Expronicon generated constructors" begin
     s1 = Sym(:abc)
@@ -133,17 +133,17 @@ end
         @test typeof(c1) == BasicSymbolic{Float64}
         @test c1.metadata == SymbolicUtils.NO_METADATA
         @test c1.hash[] == SymbolicUtils.EMPTY_HASH
-        @test c1.impl.val == 1.0
+        @test get_val(c1) == 1.0
         c2 = _Const(big"123456789012345678901234567890")
         @test typeof(c2) == BasicSymbolic{BigInt}
         @test c2.metadata == SymbolicUtils.NO_METADATA
         @test c2.hash[] == SymbolicUtils.EMPTY_HASH
-        @test c2.impl.val == big"123456789012345678901234567890"
+        @test get_val(c2) == big"123456789012345678901234567890"
         c3 = _Const(big"1.23456789012345678901")
         @test typeof(c3) == BasicSymbolic{BigFloat}
         @test c3.metadata == SymbolicUtils.NO_METADATA
         @test c3.hash[] == SymbolicUtils.EMPTY_HASH
-        @test c3.impl.val == big"1.23456789012345678901"
+        @test get_val(c3) == big"1.23456789012345678901"
     end
 end
 

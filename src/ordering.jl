@@ -27,7 +27,7 @@ function get_degrees(expr)
     elseif iscall(expr)
         op = operation(expr)
         args = sorted_arguments(expr)
-        if op == (^) && (args[2] isa Number || (isconst(args[2]) && args[2].impl.val isa Number))
+        if op == (^) && (args[2] isa Number || (isconst(args[2]) && get_val(args[2]) isa Number))
             return map(get_degrees(args[1])) do (base, pow)
                 (base => pow * args[2])
             end
@@ -81,11 +81,11 @@ end
 function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
     aisconst = isconst(a)
     if aisconst
-        a = a.impl.val
+        a = get_val(a)
     end
     bisconst = isconst(b)
     if bisconst
-        b = b.impl.val
+        b = get_val(b)
     end
     if aisconst || bisconst
         return a <ₑ b

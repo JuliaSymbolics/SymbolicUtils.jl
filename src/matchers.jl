@@ -7,7 +7,7 @@
 #
 function matcher(val::Any)
     if isconst(val)
-        slot = val.impl.val
+        slot = get_val(val)
         return matcher(slot)
     elseif iscall(val)
         return term_matcher(val)
@@ -16,7 +16,7 @@ function matcher(val::Any)
         if islist(data)
             cd = car(data)
             if isconst(cd)
-                cd = cd.impl.val
+                cd = get_val(cd)
             end
             if isequal(cd, val)
                 return next(bindings, 1)

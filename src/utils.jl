@@ -66,7 +66,7 @@ sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 
 function is_literal_number(x)
     if isconst(x)
-        x = x.impl.val
+        x = get_val(x)
     end
     x isa Number
 end

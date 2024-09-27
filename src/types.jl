@@ -92,6 +92,10 @@ function get_exp(x::BasicSymbolic)
     x.impl.exp
 end
 
+function get_val(x::BasicSymbolic)
+    x.impl.val
+end
+
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
@@ -327,7 +331,7 @@ function _isequal(a, b, E)
         a2 = arguments(b)
         isequal(operation(a), operation(b)) && _allarequal(a1, a2)
     elseif E === CONST
-        isequal(a.impl.val, b.impl.val)
+        isequal(get_val(a), get_val(b))
     else
         error_on_type()
     end
@@ -378,7 +382,7 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
         s.hash[] = h′
         return h′
     elseif E === CONST
-        return hash(s.impl.val, salt ⊻ COS_SALT)
+        return hash(get_val(s), salt ⊻ COS_SALT)
     else
         error_on_type()
     end
@@ -452,14 +456,14 @@ end
 
 function _iszero(x::BasicSymbolic)
     @match x.impl begin
-        Const(_...) => iszero(x.impl.val)
+        Const(_...) => iszero(get_val(x))
         _ => false
     end
 end
 
 function _isone(x::BasicSymbolic)
     @match x.impl begin
-        Const(_...) => isone(x.impl.val)
+        Const(_...) => isone(get_val(x))
         _ => false
     end
 end
@@ -833,7 +837,7 @@ const show_simplified = Ref(false)
 isnegative(t::Real) = t < 0
 function isnegative(t)
     if isconst(t)
-        val = t.impl.val
+        val = get_val(t)
         return isnegative(val)
     end
     if iscall(t) && operation(t) === (*)
@@ -872,7 +876,7 @@ function remove_minus(t)
     args = arguments(t)
     arg1 = args[1]
     if isconst(arg1)
-        arg1 = arg1.impl.val
+        arg1 = get_val(arg1)
     end
     @assert arg1 < 0
     Any[-arg1, args[2:end]...]
@@ -911,14 +915,14 @@ end
 
 function show_mul(io, args)
     if isconst(args)
-        print(io, args.impl.val)
+        print(io, get_val(args))
         return
     end
     length(args) == 1 && return print_arg(io, *, args[1])
 
     arg1 = args[1]
     if isconst(arg1)
-        arg1 = arg1.impl.val
+        arg1 = get_val(arg1)
     end
 
     minus = arg1 isa Number && arg1 == -1
@@ -930,7 +934,7 @@ function show_mul(io, args)
 
     nostar = minus || unit ||
              (!paren_scalar && arg1 isa Number &&
-              !(isconst(args[2]) && args[2].impl.val isa Number))
+              !(isconst(args[2]) && get_val(args[2]) isa Number))
 
     for (i, t) in enumerate(args)
         if i != 1
@@ -1021,7 +1025,7 @@ showraw(t) = showraw(stdout, t)
 function Base.show(io::IO, v::BasicSymbolic)
     @match v.impl begin
         Sym(_...) => Base.show_unquoted(io, get_name(v))
-        Const(_...) => print(io, v.impl.val)
+        Const(_...) => print(io, get_val(v))
         _ => show_term(io, v)
     end
 end
@@ -1235,10 +1239,10 @@ sub_t(a) = promote_symtype(-, symtype(a))
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
     if isconst(a)
-        return a.impl.val + b
+        return get_val(a) + b
     end
     if isconst(b)
-        return b.impl.val + a
+        return get_val(b) + a
     end
     !issafecanon(+, a, b) && return term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
@@ -1255,7 +1259,7 @@ function +(a::SN, b::SN)
 end
 function +(a::Number, b::SN)
     if isconst(b)
-        return a + b.impl.val
+        return a + get_val(b)
     end
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
@@ -1270,7 +1274,7 @@ end
 
 function -(a::SN)
     if isconst(a)
-        v = a.impl.val
+        v = get_val(a)
         mv = -v
         return _Const(mv)
     end
@@ -1299,10 +1303,10 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 function *(a::SN, b::SN)
     if isconst(a)
-        return a.impl.val * b
+        return get_val(a) * b
     end
     if isconst(b)
-        return b.impl.val * a
+        return get_val(b) * a
     end
     # Always make sure Div wraps Mul
     !issafecanon(*, a, b) && return term(*, a, b)
@@ -1333,7 +1337,7 @@ function *(a::SN, b::SN)
 end
 function *(a::Number, b::SN)
     if isconst(b)
-        return a * b.impl.val
+        return a * get_val(b)
     end
     !issafecanon(*, b) && return term(*, a, b)
     if iszero(a)

@@ -9,7 +9,7 @@ function AbstractTrees.nodevalue(x::BasicSymbolic)
     str = if issym(x)
         string(exprtype(x), "(", x, ")")
     elseif isconst(x)
-        string(x.impl.val)
+        string(get_val(x))
     elseif isadd(x)
         string(exprtype(x),
             (scalar = get_coeff(x), coeffs = Tuple(k => v for (k, v) in get_dict(x))))

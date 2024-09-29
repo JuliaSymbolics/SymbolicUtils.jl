@@ -1,12 +1,13 @@
 using Documenter, SymbolicUtils
 
 include("pages.jl")
+DocMeta.setdocmeta!(SymbolicUtils, :DocTestSetup, :(using SymbolicUtils); recursive=true)
 
 makedocs(
     sitename="SymbolicUtils.jl",
     authors="Shashi Gowda",
     modules=[SymbolicUtils],
-    clean=true,doctest=false,
+    clean=true, doctest=true,
     warnonly=Documenter.except(
         :doctest,
         :linkcheck,

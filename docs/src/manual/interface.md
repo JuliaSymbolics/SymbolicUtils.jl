@@ -13,8 +13,8 @@ You can read the documentation of [TermInterface.jl](https://github.com/JuliaSym
 
 ## SymbolicUtils.jl only methods
 
-```@docs
-symtype
-issym
-promote_symtype
+```@docs; canonical=false
+SymbolicUtils.symtype
+SymbolicUtils.issym
+SymbolicUtils.promote_symtype
 ```

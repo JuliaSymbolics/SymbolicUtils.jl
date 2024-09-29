@@ -67,10 +67,10 @@ function makepattern(expr, keys)
                     makeslot(expr.args[2], keys)
                 end
             else
-                :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
+                :(term($(map(x -> makepattern(x, keys), expr.args)...); type = Any))
             end
         elseif expr.head === :ref
-            :(term(getindex, $(map(x->makepattern(x, keys), expr.args)...); type=Any))
+            :(term(getindex, $(map(x -> makepattern(x, keys), expr.args)...); type = Any))
         elseif expr.head === :$
             return esc(expr.args[1])
         else
@@ -404,7 +404,7 @@ function (acr::ACRule)(term)
         itr = acr.sets(eachindex(args), acr.arity)
 
         for inds in itr
-            result = r(Term{T}(f, @views args[inds]))
+            result = r(_Term(T, f, @views args[inds]))
             if result !== nothing
                 # Assumption: inds are unique
                 length(args) == length(inds) && return result

@@ -27,8 +27,8 @@ end
 @test istotal(b*a, a)
 @test istotal(a, b*a)
 @test !(b*a <ₑ b+a)
-@test Term(^, [1,-1]) <ₑ a
-@test istotal(a, Term(^, [1,-1]))
+@test _Term(^, [1, -1]) <ₑ a
+@test istotal(a, _Term(^, [1, -1]))
 
 @testset "operator order" begin
     fs = (*, -, +)
@@ -77,7 +77,7 @@ end
 @testset "small terms" begin
     # this failing was a cause of a nasty stackoverflow #82
     @syms a
-    istotal(Term(^, [a, -1]), (a + 2))
+    istotal(_Term(^, [a, -1]), (a + 2))
 end
 
 @testset "transitivity" begin

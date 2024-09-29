@@ -20,6 +20,7 @@ include("utils.jl")
 if haskey(ENV, "SU_BENCHMARK_ONLY")
     include("benchmark.jl")
 else
+    include("types.jl")
     include("basics.jl")
     include("order.jl")
     include("polyform.jl")

@@ -95,6 +95,9 @@ end
 _isone(p::PolyForm) = isone(p.p)
 
 function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
+    if isconst(x)
+        x = get_val(x)
+    end
     if x isa Number
         return x
     elseif iscall(x)
@@ -129,7 +132,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
             name = Symbol(string(op), "_", hash(y))
 
             @label lookup
-            sym = Sym{symtype(x)}(name)
+            sym = _Sym(symtype(x), name)
             if haskey(sym2term, sym)
                 if isequal(sym2term[sym][1], x)
                     return local_polyize(sym)
@@ -262,10 +265,10 @@ end
 
 function polyform_factors(d, pvar2sym, sym2term)
     make(xs) = map(xs) do x
-        if ispow(x) && x.exp isa Integer && x.exp > 0
+        if ispow(x) && get_exp(x) isa Integer && get_exp(x) > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(PolyForm(x.base, pvar2sym, sym2term), x.exp)
+            _Pow(PolyForm(get_base(x), pvar2sym, sym2term), get_exp(x))
         else
             PolyForm(x, pvar2sym, sym2term)
         end
@@ -277,13 +280,13 @@ end
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
 function simplify_div(d)
-    d.simplified && return d
+    d.impl.simplified[] && return d
     ns, ds = polyform_factors(d, get_pvar2sym(), get_sym2term())
     ns, ds = rm_gcds(ns, ds)
     if all(_isone, ds)
         return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
     else
-        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)))
+        _Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)))
     end
 end
 
@@ -293,11 +296,11 @@ end
 #add_divs(x, y) = x + y
 function add_divs(x, y)
     if isdiv(x) && isdiv(y)
-        return (x.num * y.den + y.num * x.den) / (x.den * y.den)
+        return (get_num(x) * get_den(y) + get_num(y) * get_den(x)) / (get_den(x) * get_den(y))
     elseif isdiv(x)
-        return (x.num + y * x.den) / x.den
+        return (get_num(x) + y * get_den(x)) / get_den(x)
     elseif isdiv(y)
-        return (x * y.den + y.num) / y.den
+        return (x * get_den(y) + get_num(y)) / get_den(y)
     else
         x + y
     end
@@ -381,7 +384,7 @@ function fraction_isone(x)
 end
 
 function needs_div_rules(x)
-    (isdiv(x) && !(x.num isa Number) && !(x.den isa Number)) ||
+    (isdiv(x) && !(get_num(x) isa Number) && !(get_den(x) isa Number)) ||
     (iscall(x) && operation(x) === (+) && count(has_div, arguments(x)) > 1) ||
     (iscall(x) && any(needs_div_rules, arguments(x)))
 end
@@ -413,13 +416,13 @@ But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
 function quick_cancel(d)
-    if ispow(d) && isdiv(d.base)
-        return quick_cancel((d.base.num^d.exp) / (d.base.den^d.exp))
+    if ispow(d) && isdiv(get_base(d))
+        return quick_cancel((get_num(get_base(d))^get_exp(d)) / (get_den(get_base(d))^get_exp(d)))
     elseif ismul(d) && any(isdiv, arguments(d))
         return prod(arguments(d))
     elseif isdiv(d)
-        num, den = quick_cancel(d.num, d.den)
-        return Div(num, den)
+        num, den = quick_cancel(get_num(d), get_den(d))
+        return _Div(num, den)
     else
         return d
     end
@@ -449,20 +452,29 @@ end
 
 # ispow(x) case
 function quick_pow(x, y)
-    x.exp isa Number || return (x, y)
-    isequal(x.base, y) && x.exp >= 1 ? (Pow{symtype(x)}(x.base, x.exp - 1),1) : (x, y)
+    ximpl = x.impl
+    if !isa(ximpl.exp, Number)
+        x, y
+    elseif isequal(ximpl.base, y) && ximpl.exp >= 1
+        _Pow(symtype(x), ximpl.base, ximpl.exp - 1), 1
+    else
+        x, y
+    end
 end
 
 # Double Pow case
 function quick_powpow(x, y)
-    if isequal(x.base, y.base)
-        !(x.exp isa Number && y.exp isa Number) && return (x, y)
-        if x.exp > y.exp
-            return Pow{symtype(x)}(x.base, x.exp-y.exp), 1
-        elseif x.exp == y.exp
+    ximpl = x.impl
+    yimpl = y.impl
+    if isequal(ximpl.base, yimpl.base)
+        if !(ximpl.exp isa Number && yimpl.exp isa Number)
+            return x, y
+        elseif ximpl.exp > yimpl.exp
+            return _Pow(symtype(x), ximpl.base, ximpl.exp - yimpl.exp), 1
+        elseif ximpl.exp == yimpl.exp
             return 1, 1
         else # x.exp < y.exp
-            return 1, Pow{symtype(y)}(y.base, y.exp-x.exp)
+            return 1, _Pow(symtype(y), yimpl.base, yimpl.exp - ximpl.exp)
         end
     end
     return x, y
@@ -470,8 +482,10 @@ end
 
 # ismul(x)
 function quick_mul(x, y)
-    if haskey(x.dict, y) && x.dict[y] >= 1
-        d = copy(x.dict)
+    ximpl = x.impl
+    xdict = ximpl.dict
+    if haskey(xdict, y) && xdict[y] >= 1
+        d = copy(xdict)
         if d[y] > 1
             d[y] -= 1
         elseif d[y] == 1
@@ -479,8 +493,7 @@ function quick_mul(x, y)
         else
             error("Can't reach")
         end
-
-        return Mul(symtype(x), x.coeff, d), 1
+        return _Mul(symtype(x), ximpl.coeff, d), 1
     else
         return x, y
     end
@@ -488,20 +501,20 @@ end
 
 # mul, pow case
 function quick_mulpow(x, y)
-    y.exp isa Number || return (x, y)
-    if haskey(x.dict, y.base)
-        d = copy(x.dict)
-        if x.dict[y.base] > y.exp
-            d[y.base] -= y.exp
+    get_exp(y) isa Number || return (x, y)
+    if haskey(get_dict(x), get_base(y))
+        d = copy(get_dict(x))
+        if get_dict(x)[get_base(y)] > get_exp(y)
+            d[get_base(y)] -= get_exp(y)
             den = 1
-        elseif x.dict[y.base] == y.exp
-            delete!(d, y.base)
+        elseif get_dict(x)[get_base(y)] == get_exp(y)
+            delete!(d, get_base(y))
             den = 1
         else
-            den = Pow{symtype(y)}(y.base, y.exp-d[y.base])
-            delete!(d, y.base)
+            den = _Pow(symtype(y), get_base(y), get_exp(y)-d[get_base(y)])
+            delete!(d, get_base(y))
         end
-        return Mul(symtype(x), x.coeff, d), den
+        return _Mul(symtype(x), get_coeff(x), d), den
     else
         return x, y
     end
@@ -509,8 +522,10 @@ end
 
 # Double mul case
 function quick_mulmul(x, y)
-    num_dict, den_dict = _merge_div(x.dict, y.dict)
-    Mul(symtype(x), x.coeff, num_dict), Mul(symtype(y), y.coeff, den_dict)
+    ximpl = x.impl
+    yimpl = y.impl
+    num_dict, den_dict = _merge_div(ximpl.dict, yimpl.dict)
+    _Mul(symtype(x), ximpl.coeff, num_dict), _Mul(symtype(y), yimpl.coeff, den_dict)
 end
 
 function _merge_div(ndict, ddict)

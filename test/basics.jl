@@ -1,4 +1,5 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
+using SymbolicUtils: Symbolic, FnType, symtype, operation, arguments, issym, isterm,
+                     BasicSymbolic, term, get_name, get_coeff, get_dict, get_num, get_den
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield
@@ -9,17 +10,17 @@ using Test
         @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int 
 
         @test issym(a) && symtype(a) == Number
-        @test a.name === :a
+        @test get_name(a) === :a
 
         @test issym(b) && symtype(b) == Float64
         @test nameof(b) === :b
 
         @test issym(f)
-        @test f.name === :f
+        @test get_name(f) === :f
         @test symtype(f) == FnType{Tuple{Real}, Number, Nothing}
 
         @test issym(g)
-        @test g.name === :g
+        @test get_name(g) === :g
         @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, Nothing}}, Int, Nothing}
 
         @test isterm(f(b))
@@ -37,14 +38,14 @@ using Test
 
         @syms (f::typeof(max))(::Real, ::AbstractFloat)::Number a::Real
         @test issym(f)
-        @test f.name == :f
+        @test get_name(f) == :f
         @test symtype(f) == FnType{Tuple{Real, AbstractFloat}, Number, typeof(max)}
         @test isterm(f(a, b))
         @test symtype(f(a, b)) == Number
 
         @syms g(p, (h::typeof(identity))(q::Real)::Number)::Number
         @test issym(g)
-        @test g.name == :g
+        @test get_name(g) == :g
         @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, typeof(identity)}}, Number, Nothing}
         @test_throws "not a subtype of" g(a, f)
         @syms (f::typeof(identity))(::Real)::Number
@@ -108,42 +109,42 @@ struct Ctx2 end
 
 
     @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
-                  1 + term(sqrt, 2, type=Number))
+                  1 + term(sqrt, 2, type = Number))
     @test substitute(1+sqrt(a), Dict(a => 2), fold=true) isa Float64
 end
 
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test isequal(w + z, Add(Complex, 0, Dict(w=>1, z=>1)))
-    @test isequal(z + a, Add(Number, 0, Dict(z=>1, a=>1)))
-    @test isequal(a + b, Add(Real, 0, Dict(a=>1, b=>1)))
-    @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
-    @test isequal(a + z, Add(Number, 0, Dict(a=>1, z=>1)))
+    @test isequal(w + z, _Add(Complex, 0, Dict(w => 1, z => 1)))
+    @test isequal(z + a, _Add(Number, 0, Dict(z => 1, a => 1)))
+    @test isequal(a + b, _Add(Real, 0, Dict(a => 1, b => 1)))
+    @test isequal(a + x, _Add(Number, 0, Dict(a => 1, x => 1)))
+    @test isequal(a + z, _Add(Number, 0, Dict(a => 1, z => 1)))    
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
     @test SymbolicUtils._promote_symtype(foo, (w, z, a, b,)) === Real
 
     # promote_symtype of identity
-    @test isequal(Term(identity, [w]), Term{Complex}(identity, [w]))
+    @test isequal(_Term(identity, [w]), _Term(Complex, identity, [w]))
     @test isequal(+(w), w)
     @test isequal(+(a), a)
 
-    @test isequal(rem2pi(a, RoundNearest), Term{Real}(rem2pi, [a, RoundNearest]))
+    @test isequal(rem2pi(a, RoundNearest), _Term(Real, rem2pi, [a, RoundNearest]))
 
     # bool
     for f in [(==), (!=), (<=), (>=), (<), (>)]
-        @test isequal(f(a, 0), Term{Bool}(f, [a, 0]))
-        @test isequal(f(0, a), Term{Bool}(f, [0, a]))
-        @test isequal(f(a, a), Term{Bool}(f, [a, a]))
+        @test isequal(f(a, 0), _Term(Bool, f, [a, 0]))
+        @test isequal(f(0, a), _Term(Bool, f, [0, a]))
+        @test isequal(f(a, a), _Term(Bool, f, [a, a]))
     end
 
     @test symtype(ifelse(true, 4, 5)) == Int
     @test symtype(ifelse(a < 0, b, w)) == Union{Real, Complex}
     @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
     @test_throws MethodError w < 0
-    @test isequal(w == 0, Term{Bool}(==, [w, 0]))
+    @test isequal(w == 0, _Term(Bool, ==, [w, 0]))
 
     @eqtest x // 5 == (1 // 5) * x
     @eqtest (1//2 * x) / 5 == (1 // 10) * x
@@ -198,8 +199,8 @@ end
     @test repr((2a)^(-2a)) == "(2a)^(-2a)"
     @test repr(1/2a) == "1 / (2a)"
     @test repr(2/(2*a)) == "1 / a"
-    @test repr(Term(*, [1, 1])) == "1"
-    @test repr(Term(*, [2, 1])) == "2*1"
+    @test repr(_Term(*, [1, 1])) == "1"
+    @test repr(_Term(*, [2, 1])) == "2*1"
     @test repr((a + b) - (b + c)) == "a - c"
     @test repr(a + -1*(b + c)) == "a - b - c"
     @test repr(a + -1*b) == "a - b"
@@ -215,7 +216,7 @@ end
     @test repr(2a+1+3a^2+2b+3b^2+4a*b) == "1 + 2a + 2b + 3(a^2) + 4a*b + 3(b^2)"
 
     @syms a b[1:3] c d[1:3]
-    get(x, i) = term(getindex, x, i, type=Number)
+    get(x, i) = term(getindex, x, i; type = Number)
     b1, b3, d1, d2 = get(b,1),get(b,3), get(d,1), get(d,2)
     @test repr(a + b3 + b1 + d2 + c) == "a + b[1] + b[3] + c + d[2]"
     @test repr(expand((c + b3 - d1)^3)) == "b[3]^3 + 3(b[3]^2)*c - 3(b[3]^2)*d[1] + 3b[3]*(c^2) - 6b[3]*c*d[1] + 3b[3]*(d[1]^2) + c^3 - 3(c^2)*d[1] + 3c*(d[1]^2) - (d[1]^3)"
@@ -235,7 +236,7 @@ end
 
 @testset "maketerm" begin
     @syms a b c
-    @test isequal(SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing).dict, Dict(a=>1,b=>1,c=>1))
+    @test isequal(get_dict(SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing)), Dict(a=>1,b=>1,c=>1))
     @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  1//2],  nothing), b)
 
     # test that maketerm doesn't hard-code BasicSymbolic subtype
@@ -290,13 +291,13 @@ end
     @test symtype(new_expr) == Vector{Float64}
 end
 
-toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
+toterm(t) = _Term(symtype(t), operation(t), arguments(t))
 
 @testset "diffs" begin
     @syms a b c
-    @test isequal(toterm(-1c), Term{Number}(*, [-1, c]))
-    @test isequal(toterm(-1(a+b)), Term{Number}(+, [-1a, -b]))
-    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [a, -1c]))
+    @test isequal(toterm(-1c), _Term(Number, *, [-1, c]))
+    @test isequal(toterm(-1(a+b)), _Term(Number, +, [-1a, -b]))
+    @test isequal(toterm((a + b) - (b + c)), _Term(Number, +, [a, -1c]))
 end
 
 @testset "hash" begin
@@ -337,31 +338,31 @@ end
 end
 
 @testset "subtyping" begin
-    T = FnType{Tuple{T,S,Int} where {T,S}, Real}
-    s = Sym{T}(:t)
+    T = FnType{Tuple{T, S, Int} where {T, S}, Real}
+    s = _Sym(T, :t)
     @syms a b c::Int
     @test isequal(arguments(s(a, b, c)), [a, b, c])
 end
 
 @testset "div" begin
     @syms x::SafeReal y::Real
-    @test issym((2x/2y).num)
-    @test (2x/3y).num.coeff == 2
-    @test (2x/3y).den.coeff == 3
-    @test (2x/-3x).num.coeff == -2
-    @test (2x/-3x).den.coeff == 3
-    @test (2.5x/3x).num.coeff == 2.5
-    @test (2.5x/3x).den.coeff == 3
-    @test (x/3x).den.coeff == 3
+    @test issym(get_num(2x / 2y))
+    @test get_coeff(get_num(2x / 3y)) == 2
+    @test get_coeff(get_den(2x / 3y)) == 3
+    @test get_coeff(get_num(2x / -3x)) == -2
+    @test get_coeff(get_den(2x / -3x)) == 3
+    @test get_coeff(get_num(2.5x / 3x)) == 2.5
+    @test get_coeff(get_den(2.5x / 3x)) == 3
+    @test get_coeff(get_den(x / 3x)) == 3
 
     @syms x y
-    @test issym((2x/2y).num)
-    @test (2x/3y).num.coeff == 2
-    @test (2x/3y).den.coeff == 3
-    @test (2x/-3x) == -2//3
-    @test (2.5x/3x).num == 2.5
-    @test (2.5x/3x).den == 3
-    @test (x/3x) == 1//3
+    @test issym(get_num(2x / 2y))
+    @test get_coeff(get_num(2x / 3y)) == 2
+    @test get_coeff(get_den(2x / 3y)) == 3
+    @test (2x / -3x) == -2 // 3
+    @test get_num(2.5x / 3x) == 2.5
+    @test get_den(2.5x / 3x) == 3
+    @test (x / 3x) == 1 // 3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)
 end

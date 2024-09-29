@@ -18,10 +18,10 @@ end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number
-    @eqtest simplify(Term{Real}(conj, [x])) == x
-    @eqtest simplify(Term{Real}(real, [x])) == x
-    @eqtest simplify(Term{Real}(imag, [x])) == 0
-    @eqtest simplify(Term{Real}(imag, [y])) == imag(y)
+    @eqtest simplify(_Term(Real, conj, [x])) == x
+    @eqtest simplify(_Term(Real, real, [x])) == x
+    @eqtest simplify(_Term(Real, imag, [x])) == 0
+    @eqtest simplify(_Term(Real, imag, [y])) == imag(y)
     @eqtest simplify(x - y) == x + -1 * y
     @eqtest simplify(x - sin(y)) == x + -1 * sin(y)
     @eqtest simplify(-sin(x)) == -1 * sin(x)
@@ -44,14 +44,13 @@ end
     @eqtest simplify(a * b * 1 * c * d) == simplify(a * b * c * d)
     @eqtest simplify_fractions(x^2.0 / (x * y)^2.0) == simplify_fractions(1 / (y^2.0))
 
-    @test simplify(Term(one, [a])) == 1
-    @test simplify(Term(one, [b + 1])) == 1
-    @test simplify(Term(one, [x + 2])) == 1
+    @test simplify(_Term(one, [a])) == 1
+    @test simplify(_Term(one, [b + 1])) == 1
+    @test simplify(_Term(one, [x + 2])) == 1
 
-
-    @test simplify(Term(zero, [a])) == 0
-    @test simplify(Term(zero, [b + 1])) == 0
-    @test simplify(Term(zero, [x + 2])) == 0
+    @test simplify(_Term(zero, [a])) == 0
+    @test simplify(_Term(zero, [b + 1])) == 0
+    @test simplify(_Term(zero, [x + 2])) == 0
 end
 
 @testset "LiteralReal" begin
@@ -77,8 +76,8 @@ end
     @eqtest simplify(true & (0 < a)) == (0 < a)
     @eqtest simplify(false & (0 < a)) == false
     @eqtest simplify((0 < a) & false) == false
-    @eqtest simplify(Term{Bool}(!, [true])) == false
-    @eqtest simplify(Term{Bool}(|, [false, true])) == true
+    @eqtest simplify(_Term(Bool, !, [true])) == false
+    @eqtest simplify(_Term(Bool, |, [false, true])) == true
     @eqtest simplify(ifelse(true, a, b)) == a
     @eqtest simplify(ifelse(false, a, b)) == b
 

@@ -8,8 +8,8 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
-import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm
+import SymbolicUtils: @matchable, BasicSymbolic, _Sym, Term, iscall, operation, arguments, issym,
+                      isconst, symtype, sorted_arguments, metadata, isterm, term, maketerm, get_val
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -182,6 +182,8 @@ function toexpr(O, st)
     if issym(O)
         O = substitute_name(O, st)
         return issym(O) ? nameof(O) : toexpr(O, st)
+    elseif isconst(O)
+        return toexpr(get_val(O), st)
     end
     O = substitute_name(O, st)
 
@@ -681,7 +683,7 @@ end
 
 ### Common subexprssion evaluation
 
-@inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
+@inline newsym(::Type{T}) where T = _Sym(T, gensym("cse"))
 
 function _cse!(mem, expr)
     iscall(expr) || return expr
@@ -745,7 +747,7 @@ function cse_block!(assignments, counter, names, name, state, x)
         if haskey(names, x)
             return names[x]
         else
-            sym = Sym{symtype(x)}(Symbol(name, counter[]))
+            sym = _Sym(symtype(x), Symbol(name, counter[]))
             names[x] = sym
             push!(assignments, sym ← x)
             counter[] += 1

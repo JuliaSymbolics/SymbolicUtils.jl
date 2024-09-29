@@ -226,7 +226,7 @@ nanmath_st.rewrites[:nanmath] = true
         for q ∈ Base.Irrational[Base.MathConstants.catalan, Base.MathConstants.γ, π, Base.MathConstants.φ, ℯ, twoπ]
             Base.show(io, q)
             s1 = String(take!(io))
-            SymbolicUtils.show_term(io, SymbolicUtils.Term(identity, [q]))
+            SymbolicUtils.show_term(io, SymbolicUtils._Term(identity, [q]))
             s2 = String(take!(io))
             @test s1 == s2
         end

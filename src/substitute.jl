@@ -18,10 +18,10 @@ function substitute(expr, dict; fold=true)
     if iscall(expr)
         op = substitute(operation(expr), dict; fold=fold)
         if fold
-            canfold = !(op isa SymbolicUtils.Symbolic)
+            canfold = !(op isa Symbolic)
             args = map(arguments(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
-                canfold = canfold && !(x′ isa SymbolicUtils.Symbolic)
+                canfold = canfold && !(x′ isa Symbolic)
                 x′
             end
             canfold && return op(args...)
@@ -30,11 +30,11 @@ function substitute(expr, dict; fold=true)
             args = map(x->substitute(x, dict, fold=fold), arguments(expr))
         end
 
-        Symbolics.maketerm(typeof(expr),
+        maketerm(typeof(expr),
                  op,
                  args,
-                 Symbolics.metadata(expr))
-    elseif expr isa Symbolics.Arr
+                 metadata(expr))
+    elseif expr isa Arr
         return substitute(expr.value, dict; fold=fold)
     elseif expr isa AbstractArray
         res = []

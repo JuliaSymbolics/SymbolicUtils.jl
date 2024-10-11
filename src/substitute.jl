@@ -15,14 +15,13 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 """
 function substitute(expr, dict; fold=true)
     haskey(dict, expr) && return dict[expr]
-
     if iscall(expr)
         op = substitute(operation(expr), dict; fold=fold)
         if fold
-            canfold = !(op isa Symbolic)
+            canfold = !(op isa SymbolicUtils.Symbolic)
             args = map(arguments(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
-                canfold = canfold && !(x′ isa Symbolic)
+                canfold = canfold && !(x′ isa SymbolicUtils.Symbolic)
                 x′
             end
             canfold && return op(args...)
@@ -31,10 +30,18 @@ function substitute(expr, dict; fold=true)
             args = map(x->substitute(x, dict, fold=fold), arguments(expr))
         end
 
-        maketerm(typeof(expr),
+        Symbolics.maketerm(typeof(expr),
                  op,
                  args,
-                 metadata(expr))
+                 Symbolics.metadata(expr))
+    elseif expr isa Symbolics.Arr
+        return substitute(expr.value, dict; fold=fold)
+    elseif expr isa AbstractArray
+        res = []
+        for e in expr
+            push!(res, substitute(e, dict; fold=fold))
+        end
+        return res
     else
         expr
     end

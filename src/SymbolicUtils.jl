@@ -22,7 +22,7 @@ import TermInterface: iscall, isexpr, head, children,
 import ArrayInterface
 
 Base.@deprecate istree iscall
-export istree, operation, arguments, sorted_arguments, similarterm, iscall
+export istree, operation, arguments, sorted_arguments, iscall
 # Sym, Term,
 # Add, Mul and Pow
 include("types.jl")

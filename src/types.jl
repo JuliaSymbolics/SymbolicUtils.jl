@@ -816,13 +816,18 @@ function show_ref(io, f, args)
     print(io, "]")
 end
 
+import Base.nameof
+Base.nameof(f, arg, args...) = nameof(f)
+
 function show_call(io, f, args)
-    fname = iscall(f) ? Symbol(repr(f)) : nameof(f)
+    fname = nameof(f, symtype.(args)...)
+    frep = Symbol(repr(f))
     len_args = length(args)
-    if Base.isunaryoperator(fname) && len_args == 1
+    
+    if Base.isunaryoperator(frep) && len_args == 1
         print(io, "$fname")
         print_arg(io, first(args), paren=true)
-    elseif Base.isbinaryoperator(fname) && len_args > 1
+    elseif Base.isbinaryoperator(frep) && len_args > 1
         for (i, t) in enumerate(args)
             i != 1 && print(io, " $fname ")
             print_arg(io, t, paren=true)
@@ -831,12 +836,12 @@ function show_call(io, f, args)
         if issym(f)
             Base.show_unquoted(io, nameof(f))
         else
-            Base.show(io, f)
+            Base.show_unquoted(io, fname)
         end
         print(io, "(")
-        for i=1:length(args)
+        for i=1:len_args
             print(io, args[i])
-            i != length(args) && print(io, ", ")
+            i != len_args && print(io, ", ")
         end
         print(io, ")")
     end

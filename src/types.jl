@@ -102,7 +102,7 @@ end
 """
 $(SIGNATURES)
 
-Returns the [numeric type](https://docs.julialang.org/en/v1/base/numbers/#Standard-Numeric-Types) 
+Returns the [numeric type](https://docs.julialang.org/en/v1/base/numbers/#Standard-Numeric-Types)
 of `x`. By default this is just `typeof(x)`.
 Define this for your symbolic types if you want [`SymbolicUtils.simplify`](@ref) to apply rules
 specific to numbers (such as commutativity of multiplication). Or such
@@ -561,9 +561,9 @@ function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
     st = symtype(T)
     pst = _promote_symtype(head, args)
     # Use promoted symtype only if not a subtype of the existing symtype of T.
-    # This is useful when calling `maketerm(BasicSymbolic{Number}, (==), [true, false])` 
-    # Where the result would have a symtype of Bool. 
-    # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609 
+    # This is useful when calling `maketerm(BasicSymbolic{Number}, (==), [true, false])`
+    # Where the result would have a symtype of Bool.
+    # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609
     # TODO this should be optimized.
     new_st = if st <: AbstractArray
         st
@@ -817,13 +817,22 @@ function show_ref(io, f, args)
 end
 
 import Base.nameof
+# To fall through the `nameof` in the `show_call` below
 Base.nameof(f, arg, args...) = nameof(f)
 
+"""
+    show_call(io, f, args)
+Displays the function call with given args. There are different outputs if `f`
+is unary, binary or otherwise. `f`'s output can also be decorated using
+`Base.nameof` provided with the function as well as with the `symtype`
+of `f`'s arguments.
+"""
 function show_call(io, f, args)
     fname = nameof(f, symtype.(args)...)
     frep = Symbol(repr(f))
+
     len_args = length(args)
-    
+
     if Base.isunaryoperator(frep) && len_args == 1
         print(io, "$fname")
         print_arg(io, first(args), paren=true)
@@ -833,11 +842,7 @@ function show_call(io, f, args)
             print_arg(io, t, paren=true)
         end
     else
-        if issym(f)
-            Base.show_unquoted(io, nameof(f))
-        else
-            Base.show_unquoted(io, fname)
-        end
+        print(io, "$fname")
         print(io, "(")
         for i=1:len_args
             print(io, args[i])

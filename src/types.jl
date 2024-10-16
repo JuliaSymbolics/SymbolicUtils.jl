@@ -318,8 +318,13 @@ end
 ### Constructors
 ###
 
-function Sym{T}(name::Symbol; kw...) where T
-    Sym{T}(; name=name, kw...)
+function Sym{T}(name::Symbol; metadata = NO_METADATA, kw...) where {T}
+    if metadata==NO_METADATA
+        s = Sym{T}(; name, kw...)
+        get!(wvd, hash2(s), s)
+    else
+        Sym{T}(; name, metadata, kw...)
+    end
 end
 
 function Term{T}(f, args; kw...) where T

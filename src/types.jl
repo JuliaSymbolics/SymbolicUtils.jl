@@ -23,38 +23,38 @@ const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 
 @compactify show_methods=false begin
-    @abstract struct BasicSymbolic{T} <: Symbolic{T}
+    @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
     end
-    struct Sym{T} <: BasicSymbolic{T}
+    mutable struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
     end
-    struct Term{T} <: BasicSymbolic{T}
+    mutable struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
     end
-    struct Mul{T} <: BasicSymbolic{T}
+    mutable struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    struct Add{T} <: BasicSymbolic{T}
+    mutable struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    struct Div{T} <: BasicSymbolic{T}
+    mutable struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
         den::Any               = 1
         simplified::Bool       = false
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    struct Pow{T} <: BasicSymbolic{T}
+    mutable struct Pow{T} <: BasicSymbolic{T}
         base::Any              = 1
         exp::Any               = 1
         arguments::Vector{Any} = EMPTY_ARGS

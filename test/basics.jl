@@ -2,7 +2,9 @@ using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operat
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield
-using Test
+using Test, ReferenceTests
+
+include("utils.jl")
 
 @testset "@syms" begin
     let

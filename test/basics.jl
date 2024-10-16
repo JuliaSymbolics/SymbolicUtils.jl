@@ -234,7 +234,11 @@ end
     @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
 end
 
-function nameof(::typeof(sq), arg)
+let
+
+sq(x) = return SymbolicUtils.Term{Number}(sq, [x])
+
+function Base.nameof(::typeof(sq), arg)
     if arg <: Real
         return :sqrt_R
     elseif arg <: Complex
@@ -243,6 +247,7 @@ function nameof(::typeof(sq), arg)
         return :sqrt
     end
 end
+
 @testset "call printing" begin
     get_print(sym) = begin b = IOBuffer(); print(b, sym); String(take!(b)); end
 
@@ -254,8 +259,11 @@ end
     @test get_print(g(x,y)) == "g(x, y)"
     @test get_print(h(x,y,z)) == "h(x, y, z)"
 
-    @nospecialize
-    sq(x) = return SymbolicUtils.Term{Number}(sq, [x])
+    @test get_print(sq(x)) == "sqrt_R(x)"
+    @test get_print(sq(y)) == "sqrt_C(y)"
+    @test get_print(sq(z)) == "sqrt(z)"
+end
+
 end
 
 @testset "maketerm" begin

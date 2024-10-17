@@ -1,5 +1,8 @@
 using Random: shuffle, seed!
+using SymbolicUtils
 using SymbolicUtils: getdepth, Rewriters, Term
+
+include("utils.jl")
 
 @testset "Chain, Postwalk and Fixpoint" begin
     @syms w z α::Real β::Real

@@ -1,11 +1,10 @@
 using SymbolicUtils
-using SymbolicUtils: Term
+using SymbolicUtils: Term, showraw, Symbolic, issym
 using SpecialFunctions
 using Test
 import IfElse: ifelse
 import IfElse
-
-using SymbolicUtils: showraw, Symbolic
+using NaNMath
 
 function rand_input(T)
     if T == Bool

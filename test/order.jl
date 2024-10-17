@@ -1,6 +1,7 @@
 using Test
 using Combinatorics
-using SymbolicUtils: <ₑ, arguments
+using SymbolicUtils
+using SymbolicUtils: <ₑ, arguments, Term
 SymbolicUtils.show_simplified[] = false
 
 @syms a b c

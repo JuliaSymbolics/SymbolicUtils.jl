@@ -4,6 +4,7 @@
 ```@docs
 SymbolicUtils.@syms
 SymbolicUtils.Sym
+SymbolicUtils.issym
 SymbolicUtils.symtype
 SymbolicUtils.Term
 SymbolicUtils.Add

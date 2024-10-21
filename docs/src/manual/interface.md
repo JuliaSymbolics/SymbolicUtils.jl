@@ -10,11 +10,3 @@ In particular, you should define methods from TermInterface.jl for an expression
 with SymbolicUtils.jl
 
 You can read the documentation of [TermInterface.jl](https://github.com/JuliaSymbolics/TermInterface.jl) on the [Github repository](https://github.com/JuliaSymbolics/TermInterface.jl).
-
-## SymbolicUtils.jl only methods
-
-```@docs
-symtype
-issym
-promote_symtype
-```

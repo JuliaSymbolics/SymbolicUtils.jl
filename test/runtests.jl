@@ -16,5 +16,6 @@ using Pkg, Test, SafeTestsets
         # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed
         @safetestset "Fuzz" begin include("fuzz.jl") end
         @safetestset "Adjoints" begin include("adjoints.jl") end
+        @safetestset "Hash Consing" begin include("hash_consing.jl") end
     end
 end

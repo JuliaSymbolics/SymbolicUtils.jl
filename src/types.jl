@@ -23,38 +23,38 @@ const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 
 @compactify show_methods=false begin
-    @abstract struct BasicSymbolic{T} <: Symbolic{T}
+    @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
     end
-    struct Sym{T} <: BasicSymbolic{T}
+    mutable struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
     end
-    struct Term{T} <: BasicSymbolic{T}
+    mutable struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
     end
-    struct Mul{T} <: BasicSymbolic{T}
+    mutable struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    struct Add{T} <: BasicSymbolic{T}
+    mutable struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    struct Div{T} <: BasicSymbolic{T}
+    mutable struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
         den::Any               = 1
         simplified::Bool       = false
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    struct Pow{T} <: BasicSymbolic{T}
+    mutable struct Pow{T} <: BasicSymbolic{T}
         base::Any              = 1
         exp::Any               = 1
         arguments::Vector{Any} = EMPTY_ARGS
@@ -76,6 +76,8 @@ function exprtype(x::BasicSymbolic)
         _    => error_on_type()
     end
 end
+
+wvd = WeakValueDict{UInt, BasicSymbolic}()
 
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
@@ -307,12 +309,22 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
     end
 end
 
+hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
+function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
+    hash(T, hash(s, salt))
+end
+
 ###
 ### Constructors
 ###
 
-function Sym{T}(name::Symbol; kw...) where T
-    Sym{T}(; name=name, kw...)
+function Sym{T}(name::Symbol; metadata = NO_METADATA, kw...) where {T}
+    if metadata==NO_METADATA
+        s = Sym{T}(; name, kw...)
+        get!(wvd, hash2(s), s)
+    else
+        Sym{T}(; name, metadata, kw...)
+    end
 end
 
 function Term{T}(f, args; kw...) where T

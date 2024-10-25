@@ -318,9 +318,13 @@ end
 ### Constructors
 ###
 
+function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
+    get!(wvd, hash2(s), s)
+end
+
 function Sym{T}(name::Symbol; kw...) where {T}
     s = Sym{T}(; name, kw...)
-    get!(wvd, hash2(s), s)
+    BasicSymbolic(s)
 end
 
 function Term{T}(f, args; kw...) where T

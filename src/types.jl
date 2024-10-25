@@ -311,7 +311,7 @@ end
 
 hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
 function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
-    hash(T, hash(s, salt))
+    hash(metadata(s), hash(T, hash(s, salt)))
 end
 
 ###

@@ -68,13 +68,15 @@ If you want to match a variable number of subexpressions at once, you will need 
 
 ```jldoctest rewrite
 @syms x y z
-@rule(+(~~xs) => ~~xs)(x + y + z)
+r = @rule(+(~~xs) => sort!(~~xs, by=get_degrees))
+expr = x + y + z
+r(expr)
 
 # output
 3-element view(::Vector{Any}, 1:3) with eltype Any:
- z
- y
  x
+ y
+ z
 ```
 
 `~~xs` is a vector of subexpressions matched. You can use it to construct something more useful:

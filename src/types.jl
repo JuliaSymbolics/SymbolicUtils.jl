@@ -245,6 +245,7 @@ function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     E === exprtype(b) || return false
 
     T === S || return false
+    isequal(metadata(a), metadata(b)) || return false
     return _isequal(a, b, E)::Bool
 end
 function _isequal(a, b, E)

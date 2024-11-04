@@ -41,7 +41,7 @@ function get_degrees(expr)
         elseif op == (getindex)
             return ((Symbol.(args)...,) => 1,)
         else
-            return ((Symbol("zzzzzzz", hash(expr)),) => 1,)
+            return ((Symbol("zzzzzzz", hash2(expr)),) => 1,)
         end
     else
         return ()

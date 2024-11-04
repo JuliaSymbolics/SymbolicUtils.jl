@@ -336,6 +336,13 @@ end
 
     @test !isequal(a, missing)
     @test !isequal(missing, b)
+
+    a1 = setmetadata(a, Ctx1, "meta_1")
+    a2 = setmetadata(a, Ctx1, "meta_1")
+    a3 = setmetadata(a, Ctx2, "meta_2")
+    @test !isequal(a, a1)
+    @test isequal(a1, a2)
+    @test !isequal(a1, a3)
 end
 
 @testset "subtyping" begin

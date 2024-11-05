@@ -332,6 +332,18 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Calculates a hash value for a `BasicSymbolic` object, incorporating both its metadata and 
+symtype.
+
+This function provides an alternative hashing strategy to `Base.hash` for `BasicSymbolic` 
+objects. Unlike `Base.hash`, which only considers the expression structure, `hash2` also 
+includes the metadata and symtype in the hash calculation. This can be beneficial for hash 
+consing, allowing for more effective deduplication of symbolically equivalent expressions 
+with different metadata or symtypes.
+"""
 hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
 function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
     hash(metadata(s), hash(T, hash(s, salt)))

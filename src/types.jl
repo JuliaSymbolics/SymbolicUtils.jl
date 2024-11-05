@@ -267,6 +267,26 @@ function _isequal(a, b, E)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Checks for equality between two `BasicSymbolic` objects, considering both their
+values and metadata.
+
+The default `Base.isequal` function for `BasicSymbolic` only compares their expressions
+and ignores metadata. This does not help deal with hash collisions when metadata is 
+relevant for distinguishing expressions, particularly in hashing contexts. This function
+provides a stricter equality check that includes metadata comparison, preventing
+such collisions.
+
+Modifying `Base.isequal` directly breaks numerous tests in `SymbolicUtils.jl` and
+downstream packages like `ModelingToolkit.jl`, hence the need for this separate
+function.
+"""
+function isequal2(a::BasicSymbolic, b::BasicSymbolic)::Bool
+    isequal(a, b) && isequal(metadata(a), metadata(b))
+end
+
 Base.one( s::Symbolic) = one( symtype(s))
 Base.zero(s::Symbolic) = zero(symtype(s))
 

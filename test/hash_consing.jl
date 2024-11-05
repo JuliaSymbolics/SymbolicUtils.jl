@@ -1,5 +1,8 @@
 using SymbolicUtils, Test
 
+struct Ctx1 end
+struct Ctx2 end
+
 @testset "Sym" begin
     x1 = only(@syms x)
     x2 = only(@syms x)
@@ -14,4 +17,10 @@ using SymbolicUtils, Test
     @test x1 !== x5
     @test x3 !== x5
     @test x5 === x6
+
+    xm1 = setmetadata(x1, Ctx1, "meta_1")
+    xm2 = setmetadata(x1, Ctx1, "meta_1")
+    @test xm1 === xm2
+    xm3 = setmetadata(x1, Ctx2, "meta_2")
+    @test xm1 !== xm3
 end

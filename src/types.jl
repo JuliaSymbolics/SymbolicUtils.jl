@@ -339,7 +339,13 @@ end
 ###
 
 function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
-    get!(wvd, hash2(s), s)
+    h = hash2(s)
+    t = get!(wvd, h, s)
+    if t === s || isequal2(t, s)
+        return t
+    else
+        return s
+    end
 end
 
 function Sym{T}(name::Symbol; kw...) where {T}

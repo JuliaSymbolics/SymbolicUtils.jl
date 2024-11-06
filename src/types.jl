@@ -77,7 +77,7 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
-wvd = WeakValueDict{UInt, BasicSymbolic}()
+const wvd = WeakValueDict{UInt, BasicSymbolic}()
 
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")

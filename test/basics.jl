@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, isequal_with_metadata
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield
@@ -336,6 +336,13 @@ end
 
     @test !isequal(a, missing)
     @test !isequal(missing, b)
+
+    a1 = setmetadata(a, Ctx1, "meta_1")
+    a2 = setmetadata(a, Ctx1, "meta_1")
+    a3 = setmetadata(a, Ctx2, "meta_2")
+    @test !isequal_with_metadata(a, a1)
+    @test isequal_with_metadata(a1, a2)
+    @test !isequal_with_metadata(a1, a3)
 end
 
 @testset "subtyping" begin

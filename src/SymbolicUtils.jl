@@ -20,6 +20,7 @@ import TermInterface: iscall, isexpr, head, children,
                       operation, arguments, metadata, maketerm, sorted_arguments
 # For ReverseDiffExt
 import ArrayInterface
+using WeakValueDicts: WeakValueDict
 
 Base.@deprecate istree iscall
 export istree, operation, arguments, sorted_arguments, iscall

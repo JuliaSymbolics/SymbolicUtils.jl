@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term
+using SymbolicUtils: Term, Add
 
 struct Ctx1 end
 struct Ctx2 end
@@ -39,4 +39,18 @@ end
     @test t3 !== t5
     tm1 = setmetadata(t1, Ctx1, "meta_1")
     @test t1 !== tm1
+end
+
+@testset "Add" begin
+    d1 = a + b
+    d2 = b + a
+    @test d1 === d2
+    d3 = b - 2 + a
+    d4 = a + b  - 2
+    @test d3 === d4
+    d5 = Add(Int, 0, Dict(a => 1, b => 1))
+    @test d5 !== d1
+
+    dm1 = setmetadata(d1,Ctx1,"meta_1")
+    @test d1 !== dm1
 end

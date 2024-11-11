@@ -98,6 +98,7 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     @compactified obj::BasicSymbolic begin
         Sym => Sym{T}(nt_new.name; nt_new...)
         Term => Term{T}(nt_new.f, nt_new.arguments; nt_new...)
+        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new...)
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -418,7 +419,8 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    BasicSymbolic(s)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)

@@ -1,4 +1,5 @@
 using SymbolicUtils, Test
+using SymbolicUtils: Term
 
 struct Ctx1 end
 struct Ctx2 end
@@ -23,4 +24,19 @@ struct Ctx2 end
     @test xm1 === xm2
     xm3 = setmetadata(x1, Ctx2, "meta_2")
     @test xm1 !== xm3
+end
+
+@syms a b c
+
+@testset "Term" begin
+    t1 = sin(a)
+    t2 = sin(a)
+    @test t1 === t2
+    t3 = Term(identity,[a])
+    t4 = Term(identity,[a])
+    @test t3 === t4
+    t5 = Term{Int}(identity,[a])
+    @test t3 !== t5
+    tm1 = setmetadata(t1, Ctx1, "meta_1")
+    @test t1 !== tm1
 end

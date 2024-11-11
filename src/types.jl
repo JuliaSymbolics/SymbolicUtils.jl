@@ -97,6 +97,7 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     # Call outer constructor because hash consing cannot be applied in inner constructor
     @compactified obj::BasicSymbolic begin
         Sym => Sym{T}(nt_new.name; nt_new...)
+        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new...)
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -395,11 +396,13 @@ function Term{T}(f, args; kw...) where T
         args = convert(Vector{Any}, args)
     end
 
-    Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    BasicSymbolic(s)
 end
 
 function Term(f, args; metadata=NO_METADATA)
-    Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
+    s = Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
+    BasicSymbolic(s)
 end
 
 function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T

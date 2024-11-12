@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add
+using SymbolicUtils: Term, Add, Mul
 
 struct Ctx1 end
 struct Ctx2 end
@@ -53,4 +53,18 @@ end
 
     dm1 = setmetadata(d1,Ctx1,"meta_1")
     @test d1 !== dm1
+end
+
+@testset "Mul" begin
+    m1 = a*b
+    m2 = b*a
+    @test m1 === m2
+    m3 = 6*a*b
+    m4 = 3*a*2*b
+    @test m3 === m4
+    m5 = Mul(Int, 1, Dict(a => 1, b => 1))
+    @test m5 !== m1
+
+    mm1 = setmetadata(m1, Ctx1, "meta_1")
+    @test m1 !== mm1
 end

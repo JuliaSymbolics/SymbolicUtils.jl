@@ -99,6 +99,7 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
         Sym => Sym{T}(nt_new.name; nt_new...)
         Term => Term{T}(nt_new.f, nt_new.arguments; nt_new...)
         Add => Add(T, nt_new.coeff, nt_new.dict; nt_new...)
+        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new...)
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -435,7 +436,8 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        BasicSymbolic(s)
     end
 end
 

@@ -100,6 +100,7 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
         Term => Term{T}(nt_new.f, nt_new.arguments; nt_new...)
         Add => Add(T, nt_new.coeff, nt_new.dict; nt_new...)
         Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new...)
+        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new...)
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -502,11 +503,13 @@ function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
         end
     end
 
-    Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    s = Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    BasicSymbolic(s)
 end
 
 function Div(n,d, simplified=false; kw...)
-    Div{promote_symtype((/), symtype(n), symtype(d))}(n, d, simplified; kw...)
+    s = Div{promote_symtype((/), symtype(n), symtype(d))}(n, d, simplified; kw...)
+    BasicSymbolic(s)
 end
 
 @inline function numerators(x)

@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul
+using SymbolicUtils: Term, Add, Mul, Div
 
 struct Ctx1 end
 struct Ctx2 end
@@ -67,4 +67,21 @@ end
 
     mm1 = setmetadata(m1, Ctx1, "meta_1")
     @test m1 !== mm1
+end
+
+@testset "Div" begin
+    v1 = a/b
+    v2 = a/b
+    @test v1 === v2
+    v3 = -1/a
+    v4 = -1/a
+    @test v3 === v4
+    v5 = 3a/6
+    v6 = 2a/4
+    @test v5 === v6
+    v7 = Div{Float64}(-1,a)
+    @test v7 !== v3
+
+    vm1 = setmetadata(v1,Ctx1, "meta_1")
+    @test vm1 !== v1
 end

@@ -101,6 +101,7 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
         Add => Add(T, nt_new.coeff, nt_new.dict; nt_new...)
         Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new...)
         Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new...)
+        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new...)
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -520,7 +521,8 @@ end
 function Pow{T}(a, b; metadata=NO_METADATA) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
-    Pow{T}(; base=a, exp=b, arguments=[], metadata)
+    s = Pow{T}(; base=a, exp=b, arguments=[], metadata)
+    BasicSymbolic(s)
 end
 
 function Pow(a, b; metadata=NO_METADATA)

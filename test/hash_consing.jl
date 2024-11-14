@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul, Div
+using SymbolicUtils: Term, Add, Mul, Div, Pow
 
 struct Ctx1 end
 struct Ctx2 end
@@ -84,4 +84,18 @@ end
 
     vm1 = setmetadata(v1,Ctx1, "meta_1")
     @test vm1 !== v1
+end
+
+@testset "Pow" begin
+    p1 = a^b
+    p2 = a^b
+    @test p1 === p2
+    p3 = a^(2^-b)
+    p4 = a^(2^-b)
+    @test p3 === p4
+    p5 = Pow{Float64}(a,b)
+    @test p1 !== p5
+
+    pm1 = setmetadata(p1,Ctx1, "meta_1")
+    @test pm1 !== p1
 end

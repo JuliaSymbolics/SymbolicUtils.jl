@@ -469,7 +469,7 @@ function maybe_intcoeff(x)
     end
 end
 
-function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
+function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
     if T<:Number && !(T<:SafeReal)
         n, d = quick_cancel(n, d)
     end
@@ -518,15 +518,15 @@ end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
 
-function Pow{T}(a, b; metadata=NO_METADATA) where {T}
+function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
     s = Pow{T}(; base=a, exp=b, arguments=[], metadata)
     BasicSymbolic(s)
 end
 
-function Pow(a, b; metadata=NO_METADATA)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
+function Pow(a, b; metadata = NO_METADATA, kwargs...)
+    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)...; metadata, kwargs...)
 end
 
 function toterm(t::BasicSymbolic{T}) where T

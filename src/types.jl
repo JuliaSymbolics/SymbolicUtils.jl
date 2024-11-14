@@ -404,8 +404,7 @@ function Term{T}(f, args; kw...) where T
 end
 
 function Term(f, args; metadata=NO_METADATA)
-    s = Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
-    BasicSymbolic(s)
+    Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
 function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
@@ -508,8 +507,7 @@ function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
 end
 
 function Div(n,d, simplified=false; kw...)
-    s = Div{promote_symtype((/), symtype(n), symtype(d))}(n, d, simplified; kw...)
-    BasicSymbolic(s)
+    Div{promote_symtype((/), symtype(n), symtype(d))}(n, d, simplified; kw...)
 end
 
 @inline function numerators(x)

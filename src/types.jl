@@ -509,7 +509,7 @@ end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
 
-function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
+function Pow{T}(a, b; metadata=NO_METADATA) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
     Pow{T}(; base=a, exp=b, arguments=[], metadata)

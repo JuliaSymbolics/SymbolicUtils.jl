@@ -5,14 +5,14 @@ CurrentModule = SymbolicUtils
 
 ## Symbols and Terms
 ```@docs
-@syms
-Sym
-symtype
-Term
-Add
-Mul
-Pow
-promote_symtype
+SymbolicUtils.@syms
+SymbolicUtils.Sym
+SymbolicUtils.symtype
+SymbolicUtils.Term
+SymbolicUtils.Add
+SymbolicUtils.Mul
+SymbolicUtils.Pow
+SymbolicUtils.promote_symtype
 ```
 
 ## Rewriters

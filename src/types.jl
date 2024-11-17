@@ -23,38 +23,38 @@ const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 
 @compactify show_methods=false begin
-    @abstract struct BasicSymbolic{T} <: Symbolic{T}
+    @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
     end
-    struct Sym{T} <: BasicSymbolic{T}
+    mutable struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
     end
-    struct Term{T} <: BasicSymbolic{T}
+    mutable struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
     end
-    struct Mul{T} <: BasicSymbolic{T}
+    mutable struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    struct Add{T} <: BasicSymbolic{T}
+    mutable struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    struct Div{T} <: BasicSymbolic{T}
+    mutable struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
         den::Any               = 1
         simplified::Bool       = false
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    struct Pow{T} <: BasicSymbolic{T}
+    mutable struct Pow{T} <: BasicSymbolic{T}
         base::Any              = 1
         exp::Any               = 1
         arguments::Vector{Any} = EMPTY_ARGS
@@ -77,6 +77,8 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
+const wvd = WeakValueDict{UInt, BasicSymbolic}()
+
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
@@ -92,7 +94,11 @@ const SIMPLIFIED = 0x01 << 0
 function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple)::BasicSymbolic{T} where T
     nt = getproperties(obj)
     nt_new = merge(nt, patch)
-    Unityper.rt_constructor(obj){T}(;nt_new...)
+    # Call outer constructor because hash consing cannot be applied in inner constructor
+    @compactified obj::BasicSymbolic begin
+        Sym => Sym{T}(nt_new.name; nt_new...)
+        _ => Unityper.rt_constructor(obj){T}(;nt_new...)
+    end
 end
 
 ###
@@ -265,6 +271,26 @@ function _isequal(a, b, E)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Checks for equality between two `BasicSymbolic` objects, considering both their
+values and metadata.
+
+The default `Base.isequal` function for `BasicSymbolic` only compares their expressions
+and ignores metadata. This does not help deal with hash collisions when metadata is 
+relevant for distinguishing expressions, particularly in hashing contexts. This function
+provides a stricter equality check that includes metadata comparison, preventing
+such collisions.
+
+Modifying `Base.isequal` directly breaks numerous tests in `SymbolicUtils.jl` and
+downstream packages like `ModelingToolkit.jl`, hence the need for this separate
+function.
+"""
+function isequal_with_metadata(a::BasicSymbolic, b::BasicSymbolic)::Bool
+    isequal(a, b) && isequal(metadata(a), metadata(b))
+end
+
 Base.one( s::Symbolic) = one( symtype(s))
 Base.zero(s::Symbolic) = zero(symtype(s))
 
@@ -307,12 +333,61 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Calculates a hash value for a `BasicSymbolic` object, incorporating both its metadata and 
+symtype.
+
+This function provides an alternative hashing strategy to `Base.hash` for `BasicSymbolic` 
+objects. Unlike `Base.hash`, which only considers the expression structure, `hash2` also 
+includes the metadata and symtype in the hash calculation. This can be beneficial for hash 
+consing, allowing for more effective deduplication of symbolically equivalent expressions 
+with different metadata or symtypes.
+"""
+hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
+function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
+    hash(metadata(s), hash(T, hash(s, salt)))
+end
+
 ###
 ### Constructors
 ###
 
-function Sym{T}(name::Symbol; kw...) where T
-    Sym{T}(; name=name, kw...)
+"""
+$(TYPEDSIGNATURES)
+
+Implements hash consing (flyweight design pattern) for `BasicSymbolic` objects.
+
+This function checks if an equivalent `BasicSymbolic` object already exists. It uses a 
+custom hash function (`hash2`) incorporating metadata and symtypes to search for existing 
+objects in a `WeakValueDict` (`wvd`).  Due to the possibility of hash collisions (where 
+different objects produce the same hash), a custom equality check (`isequal_with_metadata`) 
+which includes metadata comparison, is used to confirm the equivalence of objects with 
+matching hashes. If an equivalent object is found, the existing object is returned; 
+otherwise, the input `s` is returned. This reduces memory usage, improves compilation time 
+for runtime code generation, and supports built-in common subexpression elimination, 
+particularly when working with symbolic objects with metadata.
+
+Using a `WeakValueDict` ensures that only weak references to `BasicSymbolic` objects are 
+stored, allowing objects that are no longer strongly referenced to be garbage collected. 
+Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and 
+`Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
+original behavior of those functions.
+"""
+function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
+    h = hash2(s)
+    t = get!(wvd, h, s)
+    if t === s || isequal_with_metadata(t, s)
+        return t
+    else
+        return s
+    end
+end
+
+function Sym{T}(name::Symbol; kw...) where {T}
+    s = Sym{T}(; name, kw...)
+    BasicSymbolic(s)
 end
 
 function Term{T}(f, args; kw...) where T
@@ -434,7 +509,7 @@ end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
 
-function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
+function Pow{T}(a, b; metadata=NO_METADATA) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
     Pow{T}(; base=a, exp=b, arguments=[], metadata)

@@ -14,8 +14,8 @@
 ## Tutorials and Documentation
 
 For information on using the package,
-[see the stable documentation](https://symbolicutils.juliasymbolics.org/stable/). Use the
-[in-development documentation](https://symbolicutils.juliasymbolics.org/dev/) for the version of
+[see the stable documentation](https://docs.sciml.ai/SymbolicUtils/stable/). Use the
+[in-development documentation](https://docs.sciml.ai/SymbolicUtils/dev/) for the version of
 the documentation, which contains the unreleased features.
 
 SymbolicUtils.jl provides various utilities for symbolic computing. SymbolicUtils.jl is what one would use to build
@@ -23,9 +23,9 @@ a Computer Algebra System (CAS). If you're looking for a complete CAS, similar t
 [Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl). If you want to build a crazy CAS for your weird
 Octonian algebras, you've come to the right place.
 
-[Symbols in SymbolicUtils](https://symbolicutils.juliasymbolics.org/#creating_symbolic_expressions) carry type information. Operations on them propagate this information. [A rule-based rewriting language](https://symbolicutils.juliasymbolics.org/rewrite/#rule-based_rewriting) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification](https://juliasymbolics.github.io/SymbolicUtils.jl/#simplification) rules for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
+[Symbols in SymbolicUtils](https://docs.sciml.ai/SymbolicUtils/stable/#Creating-symbolic-expressions) carry type information. Operations on them propagate this information. [A rule-based rewriting language](https://docs.sciml.ai/SymbolicUtils/stable/manual/rewrite/) can be used to find subexpressions that satisfy arbitrary conditions and apply arbitrary transformations on the matches. The library also contains a set of useful [simplification](https://docs.sciml.ai/SymbolicUtils/stable/#Simplification) rules for expressions of numeric symbols and numbers. These can be remixed and extended for special purposes.
 
-If you are a Julia package developer in need of a rule rewriting system for your own types, have a look at the [interfacing guide](https://symbolicutils.juliasymbolics.org/interface/).
+If you are a Julia package developer in need of a rule rewriting system for your own types, have a look at the [interfacing guide](https://docs.sciml.ai/SymbolicUtils/stable/manual/interface/#Interfacing-with-SymbolicUtils.jl).
 
 
 ### "I don't want to read your manual, just show me some cool code"

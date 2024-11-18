@@ -7,7 +7,8 @@ using DocStringExtensions
 
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
-using Unityper
+using Moshi.Data: @data, variant_type, variant_name
+using Moshi.Match: @match
 using TermInterface
 using DataStructures
 using Setfield

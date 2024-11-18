@@ -82,10 +82,10 @@ struct Ctx1 end
 struct Ctx2 end
 
 @testset "metadata" begin
-    @syms a b c
-    for a = [a, sin(a), a+b, a*b, a^3]
+    @syms a b
+    for x = [a, sin(a), a+b, a*b, a^3]
 
-        a′ = setmetadata(a, Ctx1, "meta_1")
+        a′ = setmetadata(x, Ctx1, "meta_1")
 
         @test hasmetadata(a′, Ctx1)
         @test !hasmetadata(a′, Ctx2)

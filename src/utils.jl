@@ -64,8 +64,10 @@ end
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 
-isliteral(::Type{T}) where {T} = x -> x isa T
-is_literal_number(x) = isliteral(Number)(x)
+function is_literal_number(x)
+    x = isconst(x) ? x.val : x
+    x isa Number
+end
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
 _iszero(x) = x isa Number && iszero(x)
@@ -179,10 +181,21 @@ Base.length(l::LL) = length(l.v)-l.i+1
 @inline car(l::LL) = l.v[l.i]
 @inline cdr(l::LL) = isempty(l) ? empty(l) : LL(l.v, l.i+1)
 
-Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
-Base.isempty(t::Term) = false
-@inline car(t::Term) = operation(t)
-@inline cdr(t::Term) = arguments(t)
+#Changing type signature to length(t::BasicSymbolic) causes this to method to override the length function for symbolic arrays in Symbolics.jl
+# TODO: is it okay to just remove these? Tests seem to pass just fine
+#Base.length(t::Term) = length(arguments(t)) + 1 # PIRACY
+#Base.isempty(t::Term) = false
+#@inline car(t::Term) = operation(t)
+#@inline cdr(t::Term) = arguments(t)
+#function Base.length(t::BasicSymbolic{<:Number})
+#    @match t begin
+#        Term(_) => length(arguments(t)) + 1
+#        _ => 1
+#    end
+#end
+#Base.isempty(t::BasicSymbolic{<:Number}) = false
+@inline car(t::BasicSymbolic) = operation(t)
+@inline cdr(t::BasicSymbolic) = arguments(t)
 
 @inline car(v) = iscall(v) ? operation(v) : first(v)
 @inline function cdr(v)

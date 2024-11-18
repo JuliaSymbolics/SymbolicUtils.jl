@@ -1,79 +1,82 @@
-#-------------------
-#--------------------
-#### Symbolic
-#--------------------
 abstract type Symbolic{T} end
 
-###
-### Uni-type design
-###
-
-@enum ExprType::UInt8  SYM TERM ADD MUL POW DIV
+@enum ExprType::UInt8  SYM TERM ADD MUL POW DIV CONST
 
 const Metadata = Union{Nothing,Base.ImmutableDict{DataType,Any}}
 const NO_METADATA = nothing
 
-sdict(kv...) = Dict{Any, Any}(kv...)
-
 using Base: RefValue
-const EMPTY_ARGS = []
 const EMPTY_HASH = RefValue(UInt(0))
-const NOT_SORTED = RefValue(false)
-const EMPTY_DICT = sdict()
-const EMPTY_DICT_T = typeof(EMPTY_DICT)
 
-@compactify show_methods=false begin
-    @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
-        metadata::Metadata     = NO_METADATA
+# TODO: Actually close the type system by making everything hold only BasicSymbolicExpr except Const
+@data BasicSymbolicExpr{T} <: Symbolic{T} begin
+    struct Sym
+        metadata::Metadata = NO_METADATA
+        name::Symbol = :OOF
     end
-    mutable struct Sym{T} <: BasicSymbolic{T}
-        name::Symbol           = :OOF
+    struct Term
+        metadata::Metadata = NO_METADATA
+        f::Any = identity
+        arguments::Vector{Symbolic} = Symbolic[]
+        hash::RefValue{UInt} = EMPTY_HASH
     end
-    mutable struct Term{T} <: BasicSymbolic{T}
-        f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
-        arguments::Vector{Any} = EMPTY_ARGS
-        hash::RefValue{UInt}   = EMPTY_HASH
+    struct Mul
+        metadata::Metadata = NO_METADATA
+        coeff::Any = 0
+        dict::Dict{BasicSymbolicExpr.Type, Any} = Dict{BasicSymbolicExpr.Type, Any}()
+        hash::RefValue{UInt} = EMPTY_HASH
+        arguments::Vector{Any} = []
+        issorted::RefValue{Bool} = RefValue(false)
     end
-    mutable struct Mul{T} <: BasicSymbolic{T}
-        coeff::Any             = 0         # exp/den if Pow
-        dict::EMPTY_DICT_T     = EMPTY_DICT
-        hash::RefValue{UInt}   = EMPTY_HASH
-        arguments::Vector{Any} = EMPTY_ARGS
-        issorted::RefValue{Bool} = NOT_SORTED
+    struct Add
+        metadata::Metadata = NO_METADATA
+        coeff::Any = 0
+        dict::Dict{BasicSymbolicExpr.Type, Any} = Dict{BasicSymbolicExpr.Type, Any}()
+        hash::RefValue{UInt} = EMPTY_HASH
+        arguments::Vector{Any} = []
+        issorted::RefValue{Bool} = RefValue(false)
     end
-    mutable struct Add{T} <: BasicSymbolic{T}
-        coeff::Any             = 0         # exp/den if Pow
-        dict::EMPTY_DICT_T     = EMPTY_DICT
-        hash::RefValue{UInt}   = EMPTY_HASH
-        arguments::Vector{Any} = EMPTY_ARGS
-        issorted::RefValue{Bool} = NOT_SORTED
+    struct Div
+        metadata::Metadata = NO_METADATA
+        num::Any = 1
+        den::Any = 1
+        simplified::Bool = false
+        arguments::Vector{Any} = []
     end
-    mutable struct Div{T} <: BasicSymbolic{T}
-        num::Any               = 1
-        den::Any               = 1
-        simplified::Bool       = false
-        arguments::Vector{Any} = EMPTY_ARGS
+    struct Pow
+        metadata::Metadata = NO_METADATA
+        base::Any = 1
+        exp::Any = 1
+        arguments::Vector{Any} = []
     end
-    mutable struct Pow{T} <: BasicSymbolic{T}
-        base::Any              = 1
-        exp::Any               = 1
-        arguments::Vector{Any} = EMPTY_ARGS
+    struct Const
+        metadata::Metadata = NO_METADATA
+        val::Any = 1
     end
 end
+
+const BasicSymbolic = BasicSymbolicExpr.Type
+const Term = BasicSymbolicExpr.Term
+const Sym = BasicSymbolicExpr.Sym
+const Add = BasicSymbolicExpr.Add
+const Mul = BasicSymbolicExpr.Mul
+const Div = BasicSymbolicExpr.Div
+const Pow = BasicSymbolicExpr.Pow
+const Const = BasicSymbolicExpr.Const
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
     ScalarSymbolic()
 end
 
 function exprtype(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
-        Term => TERM
-        Add  => ADD
-        Mul  => MUL
-        Div  => DIV
-        Pow  => POW
-        Sym  => SYM
-        _    => error_on_type()
+    @match x begin
+        Term(_) => TERM
+        Add(_)  => ADD
+        Mul(_)  => MUL
+        Div(_)  => DIV
+        Pow(_)  => POW
+        Sym(_)  => SYM
+        Const(_) => CONST
     end
 end
 
@@ -82,6 +85,7 @@ const wvd = WeakValueDict{UInt, BasicSymbolic}()
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
+@noinline error_const() = error("Const doesn't have a operation or arguments!")
 @noinline error_property(E, s) = error("$E doesn't have field $s")
 
 # We can think about bits later
@@ -94,11 +98,7 @@ const SIMPLIFIED = 0x01 << 0
 function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple)::BasicSymbolic{T} where T
     nt = getproperties(obj)
     nt_new = merge(nt, patch)
-    # Call outer constructor because hash consing cannot be applied in inner constructor
-    @compactified obj::BasicSymbolic begin
-        Sym => Sym{T}(nt_new.name; nt_new...)
-        _ => Unityper.rt_constructor(obj){T}(;nt_new...)
-    end
+    variant_type(obj)(;nt_new...)
 end
 
 ###
@@ -120,14 +120,14 @@ symtype(x) = typeof(x)
 
 # We're returning a function pointer
 @inline function operation(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
-        Term => x.f
-        Add  => (+)
-        Mul  => (*)
-        Div  => (/)
-        Pow  => (^)
-        Sym  => error_sym()
-        _    => error_on_type()
+    @match x begin
+        Term(_) => x.f
+        Add(_)  => (+)
+        Mul(_)  => (*)
+        Div(_)  => (/)
+        Pow(_)  => (^)
+        Sym(_)  => error_sym()
+        Const(_) => error_const()
     end
 end
 
@@ -135,9 +135,9 @@ end
 
 function TermInterface.sorted_arguments(x::BasicSymbolic)
     args = arguments(x)
-    @compactified x::BasicSymbolic begin
-        Add => @goto ADD
-        Mul => @goto MUL
+    @match x begin
+        Add(_) => @goto ADD
+        Mul(_) => @goto MUL
         _   => return args
     end
     @label MUL
@@ -160,14 +160,14 @@ end
 TermInterface.children(x::BasicSymbolic) = arguments(x)
 TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
 function TermInterface.arguments(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
-        Term => return x.arguments
-        Add  => @goto ADDMUL
-        Mul  => @goto ADDMUL
-        Div  => @goto DIV
-        Pow  => @goto POW
-        Sym  => error_sym()
-        _    => error_on_type()
+    @match x begin
+        Term(_) => return x.arguments
+        Add(_)  => @goto ADDMUL
+        Mul(_)  => @goto ADDMUL
+        Div(_)  => @goto DIV
+        Pow(_)  => @goto POW
+        Sym(_)  => error_sym()
+        Const(_) => error_const()
     end
 
     @label ADDMUL
@@ -175,7 +175,7 @@ function TermInterface.arguments(x::BasicSymbolic)
     args = x.arguments
     isempty(args) || return args
     siz = length(x.dict)
-    idcoeff = E === ADD ? iszero(x.coeff) : isone(x.coeff)
+    idcoeff = E === ADD ? _iszero(x.coeff) : _isone(x.coeff)
     sizehint!(args, idcoeff ? siz : siz + 1)
     idcoeff || push!(args, x.coeff)
     if isadd(x)
@@ -207,10 +207,17 @@ function TermInterface.arguments(x::BasicSymbolic)
     return args
 end
 
-isexpr(s::BasicSymbolic) = !issym(s)
+function isexpr(x::BasicSymbolic)
+    @match x begin
+        Sym(_) => false
+        Const(_) => false
+        _ => true
+    end
+end
+
 iscall(s::BasicSymbolic) = isexpr(s)
 
-@inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
+@inline isa_SymType(S, x) = x isa BasicSymbolic ? variant_name(x) == S : false
 
 """
     issym(x)
@@ -218,12 +225,13 @@ iscall(s::BasicSymbolic) = isexpr(s)
 Returns `true` if `x` is a `Sym`. If true, `nameof` must be defined
 on `x` and must return a `Symbol`.
 """
-issym(x) = isa_SymType(Val(:Sym), x)
-isterm(x) = isa_SymType(Val(:Term), x)
-ismul(x)  = isa_SymType(Val(:Mul), x)
-isadd(x)  = isa_SymType(Val(:Add), x)
-ispow(x)  = isa_SymType(Val(:Pow), x)
-isdiv(x)  = isa_SymType(Val(:Div), x)
+issym(x) = isa_SymType(:Sym, x)
+isterm(x) = isa_SymType(:Term, x)
+ismul(x)  = isa_SymType(:Mul, x)
+isadd(x)  = isa_SymType(:Add, x)
+ispow(x)  = isa_SymType(:Pow, x)
+isdiv(x)  = isa_SymType(:Div, x)
+isconst(x)  = isa_SymType(:Const, x)
 
 ###
 ### Base interface
@@ -266,6 +274,8 @@ function _isequal(a, b, E)
         a1 = arguments(a)
         a2 = arguments(b)
         isequal(operation(a), operation(b)) && _allarequal(a1, a2)
+    elseif E === CONST
+        isequal(a.val, b.val)
     else
         error_on_type()
     end
@@ -303,6 +313,7 @@ const ADD_SALT = 0xaddaddaddaddadda % UInt
 const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
+const COS_SALT = 0xdc3d6b8f18b75e3c % UInt
 function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
     E = exprtype(s)
     if E === SYM
@@ -328,6 +339,8 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
         h′ = hashvec(arguments(s), hash(oph, salt))
         s.hash[] = h′
         return h′
+    elseif E === CONST
+        return hash(s.val, salt ⊻ COS_SALT)
     else
         error_on_type()
     end
@@ -375,7 +388,7 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 `Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
 original behavior of those functions.
 """
-function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
+function BasicSymbolicEquivalent(s::BasicSymbolic)::BasicSymbolic
     h = hash2(s)
     t = get!(wvd, h, s)
     if t === s || isequal_with_metadata(t, s)
@@ -385,24 +398,42 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     end
 end
 
+# TODO: figure out how to implement BasicSymbolicEquivalent
 function Sym{T}(name::Symbol; kw...) where {T}
-    s = Sym{T}(; name, kw...)
-    BasicSymbolic(s)
+    #s = Sym{T}(; name=name, kw...)
+    #BasicSymbolicEquivalent(s)
+    Sym{T}(; name=name, kw...)
 end
 
 function Term{T}(f, args; kw...) where T
-    if eltype(args) !== Any
-        args = convert(Vector{Any}, args)
-    end
+    #if eltype(args) !== Symbolic
+    #    args = convert(Vector{Symbolic}, args)
+    #end
 
-    Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    # TODO: revisit convert after https://github.com/Roger-luo/Moshi.jl/issues/32 is resolved
+    Term{T}(;f=f, arguments=convert(Vector{Any}, args), hash=Ref(UInt(0)), kw...)
 end
 
 function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
-function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
+function Const(val::T; kwargs...) where {T}
+    Const{T}(; val=val, kwargs...)
+end
+
+function Base.convert(::Type{Symbolic}, x)
+    Const(x)
+end
+
+function Base.convert(::Type{BasicSymbolic}, x)
+    Const(x)
+end
+function Base.convert(::Type{BasicSymbolic}, x::BasicSymbolic)
+    x
+end
+
+function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where {T}
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
@@ -415,10 +446,12 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    # TODO: revisit convert after https://github.com/Roger-luo/Moshi.jl/issues/32 is resolved
+    Add{T}(; coeff=coeff, dict=convert(Dict{BasicSymbolic, Any}, dict),
+           hash=Ref(UInt(0)), metadata=metadata, arguments=[], issorted=RefValue(false), kw...)
 end
 
-function Mul(T, a, b; metadata=NO_METADATA, kw...)
+function Mul(::Type{T}, a, b; metadata=NO_METADATA, kw...) where {T}
     isempty(b) && return a
     if _isone(a) && length(b) == 1
         pair = first(b)
@@ -430,7 +463,23 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        # TODO: revisit convert after https://github.com/Roger-luo/Moshi.jl/issues/32 is resolved
+        Mul{T}(; coeff=coeff, dict=convert(Dict{BasicSymbolic, Any}, dict),
+               hash=Ref(UInt(0)), metadata=metadata, arguments=[], issorted=RefValue(false), kw...)
+    end
+end
+
+function _iszero(x::BasicSymbolic)
+    @match x begin
+        Const(_) => iszero(x.val)
+        _ => false
+    end
+end
+
+function _isone(x::BasicSymbolic)
+    @match x begin
+        Const(_) => isone(x.val)
+        _ => false
     end
 end
 
@@ -495,7 +544,7 @@ function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
         end
     end
 
-    Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    Div{T}(; num=n, den=d, simplified=simplified, arguments=[], metadata=metadata)
 end
 
 function Div(n,d, simplified=false; kw...)
@@ -512,7 +561,7 @@ end
 function Pow{T}(a, b; metadata=NO_METADATA) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
-    Pow{T}(; base=a, exp=b, arguments=[], metadata)
+    Pow{T}(; base=a, exp=b, arguments=[], metadata=metadata)
 end
 
 function Pow(a, b; metadata=NO_METADATA)
@@ -524,14 +573,14 @@ function toterm(t::BasicSymbolic{T}) where T
     if E === SYM || E === TERM
         return t
     elseif E === ADD || E === MUL
-        args = Any[]
+        args = BasicSymbolic[]
         push!(args, t.coeff)
         for (k, coeff) in t.dict
-            push!(args, coeff == 1 ? k : Term{T}(E === MUL ? (^) : (*), Any[coeff, k]))
+            push!(args, coeff == 1 ? k : Term{T}(E === MUL ? (^) : (*), [Const(coeff), k]))
         end
         Term{T}(operation(t), args)
     elseif E === DIV
-        Term{T}(/, Any[t.num, t.den])
+        Term{T}(/, [t.num, t.den])
     elseif E === POW
         Term{T}(^, [t.base, t.exp])
     else
@@ -546,7 +595,7 @@ Any Muls inside an Add should always have a coeff of 1
 and the key (in Add) should instead be used to store the actual coefficient
 """
 function makeadd(sign, coeff, xs...)
-    d = sdict()
+    d = Dict{BasicSymbolic, Any}()
     for x in xs
         if isadd(x)
             coeff += x.coeff
@@ -573,7 +622,7 @@ function makeadd(sign, coeff, xs...)
     coeff, d
 end
 
-function makemul(coeff, xs...; d=sdict())
+function makemul(coeff, xs...; d=Dict{BasicSymbolic, Any}())
     for x in xs
         if ispow(x) && x.exp isa Number
             d[x.base] = x.exp + get(d, x.base, 0)
@@ -612,7 +661,7 @@ function term(f, args...; type = nothing)
     else
         T = type
     end
-    Term{T}(f, Any[args...])
+    Term{T}(f, [args...])
 end
 
 """
@@ -624,7 +673,7 @@ function unflatten(t::Symbolic{T}) where{T}
         f = operation(t)
         if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops
             a = arguments(t)
-            return foldl((x,y) -> Term{T}(f, Any[x, y]), a)
+            return foldl((x,y) -> Term{T}(f, [x, y]), a)
         end
     end
     return t
@@ -709,10 +758,10 @@ end
 
 issafecanon(f, s) = true
 function issafecanon(f, s::Symbolic)
-    if isnothing(metadata(s)) || issym(s)
-        return true
-    else
-        _issafecanon(f, s)
+    isnothing(metadata(s)) || @match s begin
+        Sym(_) => true
+        Const(_) => true
+        _ => _issafecanon(f, s)
     end
 end
 _issafecanon(::typeof(*), s) = !iscall(s) || !(operation(s) in (+,*,^))
@@ -778,6 +827,10 @@ const show_simplified = Ref(false)
 
 isnegative(t::Real) = t < 0
 function isnegative(t)
+    if isconst(t)
+        val = t.val
+        return isnegative(val)
+    end
     if iscall(t) && operation(t) === (*)
         coeff = first(arguments(t))
         return isnegative(coeff)
@@ -812,8 +865,12 @@ function remove_minus(t)
     !iscall(t) && return -t
     @assert operation(t) == (*)
     args = arguments(t)
-    @assert args[1] < 0
-    Any[-args[1], args[2:end]...]
+    arg1 = args[1]
+    if isconst(arg1)
+        arg1 = arg1.val
+    end
+    @assert arg1 < 0
+    Any[-arg1, args[2:end]...]
 end
 
 
@@ -848,17 +905,27 @@ function show_pow(io, args)
 end
 
 function show_mul(io, args)
+    if isconst(args)
+        print(io, args.val)
+        return
+    end
     length(args) == 1 && return print_arg(io, *, args[1])
 
-    minus = args[1] isa Number && args[1] == -1
-    unit = args[1] isa Number && args[1] == 1
+    arg1 = args[1]
+    if isconst(arg1)
+        arg1 = arg1.val
+    end
 
-    paren_scalar = (args[1] isa Complex && !_iszero(imag(args[1]))) ||
-                   args[1] isa Rational ||
-                   (args[1] isa Number && !isfinite(args[1]))
+    minus = arg1 isa Number && arg1 == -1
+    unit = arg1 isa Number && arg1 == 1
+
+    paren_scalar = (arg1 isa Complex && !_iszero(imag(arg1))) ||
+                   arg1 isa Rational ||
+                   (arg1 isa Number && !isfinite(arg1))
 
     nostar = minus || unit ||
-            (!paren_scalar && args[1] isa Number && !(args[2] isa Number))
+        (!paren_scalar && arg1 isa Number &&
+        !(isconst(args[2]) && args[2].val isa Number))
 
     for (i, t) in enumerate(args)
         if i != 1
@@ -947,10 +1014,10 @@ showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)
 showraw(t) = showraw(stdout, t)
 
 function Base.show(io::IO, v::BasicSymbolic)
-    if issym(v)
-        Base.show_unquoted(io, v.name)
-    else
-        show_term(io, v)
+    @match v begin
+        Sym(_) => Base.show_unquoted(io, v.name)
+        Const(_) => print(io, v.val)
+        _ => show_term(io, v)
     end
 end
 
@@ -1164,6 +1231,12 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 function +(a::SN, b::SN)
+    if isconst(a)
+        return a.val + b
+    end
+    if isconst(b)
+        return b.val + a
+    end
     !issafecanon(+, a,b) && return term(+, a, b) # Don't flatten if args have metadata
     if isadd(a) && isadd(b)
         return Add(add_t(a,b),
@@ -1180,6 +1253,9 @@ function +(a::SN, b::SN)
 end
 
 function +(a::Number, b::SN)
+    if isconst(b)
+        return a + b.val
+    end
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
     if isadd(b)
@@ -1194,6 +1270,7 @@ end
 +(a::SN) = a
 
 function -(a::SN)
+    isconst(a) && return Const(-a.val)
     !issafecanon(*, a) && return term(-, a)
     isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) :
     Add(sub_t(a), makeadd(-1, 0, a)...)
@@ -1218,6 +1295,8 @@ mul_t(a) = promote_symtype(*, symtype(a))
 *(a::SN) = a
 
 function *(a::SN, b::SN)
+    isconst(a) && return a.val * b
+    isconst(b) && return b.val * a
     # Always make sure Div wraps Mul
     !issafecanon(*, a, b) && return term(*, a, b)
     if isdiv(a) && isdiv(b)
@@ -1246,6 +1325,7 @@ function *(a::SN, b::SN)
 end
 
 function *(a::Number, b::SN)
+    isconst(b) && return a * b.val
     !issafecanon(*, b) && return term(*, a, b)
     if iszero(a)
         a
@@ -1256,7 +1336,7 @@ function *(a::Number, b::SN)
     elseif isone(-a) && isadd(b)
         # -1(a+b) -> -a - b
         T = promote_symtype(+, typeof(a), symtype(b))
-        Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
+        Add(T, b.coeff * a, Dict{BasicSymbolic,Any}(k=>v*a for (k, v) in b.dict))
     else
         Mul(mul_t(a, b), makemul(a, b)...)
     end

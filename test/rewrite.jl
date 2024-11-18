@@ -1,3 +1,4 @@
+using SymbolicUtils: Symbolic, Const
 using SymbolicUtils
 
 include("utils.jl")
@@ -42,9 +43,12 @@ end
 
     @eqtest @rule(+(~~x) => ~~x)(a + b) == [a,b]
     @eqtest @rule(+(~~x) => ~~x)(term(+, a, b, c)) == [a,b,c]
-    @eqtest @rule(+(~~x,~y, ~~x) => (~~x, ~y))(term(+,9,8,9,type=Any)) == ([9,],8)
-    @eqtest @rule(+(~~x,~y, ~~x) => (~~x, ~y, ~~x))(term(+,9,8,9,9,8,type=Any)) == ([9,8], 9, [9,8])
-    @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
+    @eqtest @rule(+(~~x, ~y, ~~x)=>(~~x, ~y))(term(+, 9, 8, 9; type = Any)) ==
+            (Symbolic[9], Const(8))
+    @eqtest @rule(+(~~x, ~y, ~~x)=>(~~x, ~y, ~~x))(term(+, 9, 8, 9, 9, 8; type = Any)) ==
+            (Symbolic[9, 8], Const(9), Symbolic[9, 8])
+    @eqtest @rule(+(~~x, ~y, ~~x)=>(~~x, ~y, ~~x))(term(+, 6; type = Any)) ==
+            (Symbolic[], Const(6), Symbolic[])
 end
 
 using SymbolicUtils: @capture

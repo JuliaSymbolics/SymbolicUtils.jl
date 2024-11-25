@@ -297,30 +297,30 @@ Base.zero(s::Symbolic) = zero(symtype(s))
 Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymbolic doesn't have a name")
 
 ## This is much faster than hash of an array of Any
-hashvec(xs, z) = foldr(hash, xs, init=z)
+hashvec(xs, z) = foldr(hash2, xs, init=z)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const ADD_SALT = 0xaddaddaddaddadda % UInt
 const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
-function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
+function hash2(s::BasicSymbolic, salt::UInt)::UInt
     E = exprtype(s)
     if E === SYM
         hash(nameof(s), salt ⊻ SYM_SALT)
     elseif E === ADD || E === MUL
-        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
+        !iszero(salt) && return hash(hash2(s, zero(UInt)), salt)
         h = s.hash[]
         !iszero(h) && return h
         hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
-        h′ = hash(hashoffset, hash(s.coeff, hash(s.dict, salt)))
+        h′ = hash(hashoffset, hash2(s.coeff, hash2(s.dict, salt)))
         s.hash[] = h′
         return h′
     elseif E === DIV
-        return hash(s.num, hash(s.den, salt ⊻ DIV_SALT))
+        return hash2(s.num, hash2(s.den, salt ⊻ DIV_SALT))
     elseif E === POW
-        hash(s.exp, hash(s.base, salt ⊻ POW_SALT))
+        hash2(s.exp, hash2(s.base, salt ⊻ POW_SALT))
     elseif E === TERM
-        !iszero(salt) && return hash(hash(s, zero(UInt)), salt)
+        !iszero(salt) && return hash(hash2(s, zero(UInt)), salt)
         h = s.hash[]
         !iszero(h) && return h
         op = operation(s)
@@ -331,6 +331,19 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
     else
         error_on_type()
     end
+end
+hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
+hash2(s, salt::UInt) = hash(s, salt)
+function hash2(a::EMPTY_DICT_T, h::UInt)
+    hv = Base.hasha_seed
+    for (k, v) in a
+        hv ⊻= hash2(k, hash(v))
+    end
+    hash(hv, h)
+end
+
+function Base.hash(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
+    hash(metadata(s), hash(T, hash2(s, salt)))
 end
 
 """

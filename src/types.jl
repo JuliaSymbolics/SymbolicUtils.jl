@@ -352,6 +352,9 @@ consing, allowing for more effective deduplication of symbolically equivalent ex
 with different metadata or symtypes.
 """
 hash2(s, salt::UInt) = hash(s, salt)
+function hash2(n::T, salt::UInt) where {T <: Number}
+    hash(T, hash(n, salt))
+end
 hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
 function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
     E = exprtype(s)

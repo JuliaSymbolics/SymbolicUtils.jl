@@ -303,6 +303,7 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymboli
 
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
+hashvec2(xs, z) = foldr(hash2, xs, init=z)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const ADD_SALT = 0xaddaddaddaddadda % UInt
 const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
@@ -350,9 +351,33 @@ includes the metadata and symtype in the hash calculation. This can be beneficia
 consing, allowing for more effective deduplication of symbolically equivalent expressions 
 with different metadata or symtypes.
 """
+hash2(s, salt::UInt) = hash(s, salt)
 hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
 function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
-    hash(metadata(s), hash(T, hash(s, salt)))
+    E = exprtype(s)
+    h::UInt = 0
+    if E === SYM
+        h = hash(nameof(s), salt ⊻ SYM_SALT)
+    elseif E === ADD || E === MUL
+        hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
+        hv = Base.hasha_seed
+        for (k, v) in s.dict
+            hv ⊻= hash2(k, hash(v))
+        end
+        h = hash(hv, salt)
+        h = hash(hashoffset, hash(s.coeff, h))
+    elseif E === DIV
+        h = hash2(s.num, hash2(s.den, salt ⊻ DIV_SALT))
+    elseif E === POW
+        h = hash2(s.exp, hash2(s.base, salt ⊻ POW_SALT))
+    elseif E === TERM
+        op = operation(s)
+        oph = op isa Function ? nameof(op) : op
+        h = hashvec2(arguments(s), hash(oph, salt))
+    else
+        error_on_type()
+    end
+    hash(metadata(s), hash(T, h))
 end
 
 ###

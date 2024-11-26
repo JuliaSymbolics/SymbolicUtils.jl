@@ -5,6 +5,7 @@ using Pkg, Test, SafeTestsets
         @safetestset "Benchmark" begin include("benchmark.jl") end
     else
         @safetestset "Doc" begin include("doctest.jl") end
+        @safetestset "Types" begin include("types.jl") end
         @safetestset "Basics" begin include("basics.jl") end
         @safetestset "Order" begin include("order.jl") end
         @safetestset "PolyForm" begin include("polyform.jl") end

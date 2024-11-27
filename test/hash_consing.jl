@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul, Div, Pow
+using SymbolicUtils: Term, Add, Mul, Div, Pow, hash2
 
 struct Ctx1 end
 struct Ctx2 end
@@ -98,4 +98,11 @@ end
 
     pm1 = setmetadata(p1,Ctx1, "meta_1")
     @test pm1 !== p1
+end
+
+@testset "Equivalent numbers" begin
+    f = 0.5
+    r = 1 // 2
+    @test hash(f) == hash(r)
+    @test hash2(f) != hash2(r)
 end

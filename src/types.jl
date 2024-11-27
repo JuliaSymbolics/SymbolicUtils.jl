@@ -368,7 +368,7 @@ function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
             hv ⊻= hash2(k, hash(v))
         end
         h = hash(hv, salt)
-        h = hash(hashoffset, hash(s.coeff, h))
+        h = hash(hashoffset, hash2(s.coeff, h))
     elseif E === DIV
         h = hash2(s.num, hash2(s.den, salt ⊻ DIV_SALT))
     elseif E === POW

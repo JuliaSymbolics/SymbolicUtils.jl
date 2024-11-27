@@ -350,6 +350,12 @@ objects. Unlike `Base.hash`, which only considers the expression structure, `has
 includes the metadata and symtype in the hash calculation. This can be beneficial for hash 
 consing, allowing for more effective deduplication of symbolically equivalent expressions 
 with different metadata or symtypes.
+
+Equivalent numbers of different types, such as `0.5::Float64` and 
+`(1 // 2)::Rational{Int64}`, have the same default `Base.hash` value. The `hash2` function 
+distinguishes these by including their numeric types in the hash calculation to ensure that 
+symbolically equivalent expressions with different numeric types are treated as distinct 
+objects.
 """
 hash2(s, salt::UInt) = hash(s, salt)
 function hash2(n::T, salt::UInt) where {T <: Number}

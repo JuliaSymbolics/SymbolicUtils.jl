@@ -104,5 +104,7 @@ end
     f = 0.5
     r = 1 // 2
     @test hash(f) == hash(r)
-    @test hash2(f) != hash2(r)
+    u0 = zero(UInt)
+    @test hash2(f, u0) != hash2(r, u0)
+    @test f + a !== r + a
 end

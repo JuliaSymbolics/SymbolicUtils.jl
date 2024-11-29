@@ -138,17 +138,20 @@ function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     end
 end
 
-function function_to_expr(::typeof(^), O, st)
+function function_to_expr(op::typeof(^), O, st)
     args = arguments(O)
     if length(args) == 2 && args[2] isa Real && args[2] < 0
         ex = args[1]
         if args[2] == -1
             return toexpr(Term(inv, Any[ex]), st)
         else
-            return toexpr(Term(^, Any[Term(inv, Any[ex]), -args[2]]), st)
+            args = Any[Term(inv, Any[ex]), -args[2]]
+            op = get(st.rewrites, :nanmath, false) ? op : NaNMath.pow
+            return toexpr(Term(op, args), st)
         end
     end
-    return nothing
+    get(st.rewrites, :nanmath, false) === true || return nothing
+    return toexpr(Term(NaNMath.pow, args), st)
 end
 
 function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)

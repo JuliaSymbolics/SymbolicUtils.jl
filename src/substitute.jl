@@ -15,7 +15,6 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 """
 function substitute(expr, dict; fold=true)
     haskey(dict, expr) && return dict[expr]
-
     if iscall(expr)
         op = substitute(operation(expr), dict; fold=fold)
         if fold
@@ -35,6 +34,14 @@ function substitute(expr, dict; fold=true)
                  op,
                  args,
                  metadata(expr))
+    elseif expr isa Arr
+        return substitute(expr.value, dict; fold=fold)
+    elseif expr isa AbstractArray
+        res = []
+        for e in expr
+            push!(res, substitute(e, dict; fold=fold))
+        end
+        return res
     else
         expr
     end

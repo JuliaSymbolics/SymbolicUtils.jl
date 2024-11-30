@@ -97,6 +97,11 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     # Call outer constructor because hash consing cannot be applied in inner constructor
     @compactified obj::BasicSymbolic begin
         Sym => Sym{T}(nt_new.name; nt_new...)
+        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new...)
+        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new...)
+        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new...)
+        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new...)
+        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new...)
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -298,6 +303,7 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymboli
 
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
+hashvec2(xs, z) = foldr(hash2, xs, init=z)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const ADD_SALT = 0xaddaddaddaddadda % UInt
 const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
@@ -344,10 +350,43 @@ objects. Unlike `Base.hash`, which only considers the expression structure, `has
 includes the metadata and symtype in the hash calculation. This can be beneficial for hash 
 consing, allowing for more effective deduplication of symbolically equivalent expressions 
 with different metadata or symtypes.
+
+Equivalent numbers of different types, such as `0.5::Float64` and 
+`(1 // 2)::Rational{Int64}`, have the same default `Base.hash` value. The `hash2` function 
+distinguishes these by including their numeric types in the hash calculation to ensure that 
+symbolically equivalent expressions with different numeric types are treated as distinct 
+objects.
 """
+hash2(s, salt::UInt) = hash(s, salt)
+function hash2(n::T, salt::UInt) where {T <: Number}
+    hash(T, hash(n, salt))
+end
 hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
 function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
-    hash(metadata(s), hash(T, hash(s, salt)))
+    E = exprtype(s)
+    h::UInt = 0
+    if E === SYM
+        h = hash(nameof(s), salt ⊻ SYM_SALT)
+    elseif E === ADD || E === MUL
+        hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
+        hv = Base.hasha_seed
+        for (k, v) in s.dict
+            hv ⊻= hash2(k, hash(v))
+        end
+        h = hash(hv, salt)
+        h = hash(hashoffset, hash2(s.coeff, h))
+    elseif E === DIV
+        h = hash2(s.num, hash2(s.den, salt ⊻ DIV_SALT))
+    elseif E === POW
+        h = hash2(s.exp, hash2(s.base, salt ⊻ POW_SALT))
+    elseif E === TERM
+        op = operation(s)
+        oph = op isa Function ? nameof(op) : op
+        h = hashvec2(arguments(s), hash(oph, salt))
+    else
+        error_on_type()
+    end
+    hash(metadata(s), hash(T, h))
 end
 
 ###
@@ -395,7 +434,8 @@ function Term{T}(f, args; kw...) where T
         args = convert(Vector{Any}, args)
     end
 
-    Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    BasicSymbolic(s)
 end
 
 function Term(f, args; metadata=NO_METADATA)
@@ -415,7 +455,8 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    BasicSymbolic(s)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
@@ -430,7 +471,8 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        BasicSymbolic(s)
     end
 end
 
@@ -461,7 +503,7 @@ function maybe_intcoeff(x)
     end
 end
 
-function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
+function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
     if T<:Number && !(T<:SafeReal)
         n, d = quick_cancel(n, d)
     end
@@ -495,7 +537,8 @@ function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
         end
     end
 
-    Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    s = Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    BasicSymbolic(s)
 end
 
 function Div(n,d, simplified=false; kw...)
@@ -509,14 +552,15 @@ end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
 
-function Pow{T}(a, b; metadata=NO_METADATA) where {T}
+function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
-    Pow{T}(; base=a, exp=b, arguments=[], metadata)
+    s = Pow{T}(; base=a, exp=b, arguments=[], metadata)
+    BasicSymbolic(s)
 end
 
-function Pow(a, b; metadata=NO_METADATA)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
+function Pow(a, b; metadata = NO_METADATA, kwargs...)
+    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)...; metadata, kwargs...)
 end
 
 function toterm(t::BasicSymbolic{T}) where T

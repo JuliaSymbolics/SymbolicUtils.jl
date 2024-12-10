@@ -20,9 +20,6 @@ nanmath_st.rewrites[:nanmath] = true
     @test toexpr(a*b*c*d*e) == :($(*)($(*)($(*)($(*)(a, b), c), d), e))
     @test toexpr(a+b+c+d+e) == :($(+)($(+)($(+)($(+)(a, b), c), d), e))
     @test toexpr(a+b) == :($(+)(a, b))
-    @test toexpr(a^b) == :($(^)(a, b))
-    @test toexpr(a^2) == :($(^)(a, 2))
-    @test toexpr(a^-2) == :($(/)(1, $(^)(a, 2)))
     @test toexpr(x(t)+y(t)) == :($(+)(x(t), y(t)))
     @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)($(+)(x(t), y(t)), x($(+)(1, t))))
     s = LazyState()
@@ -87,8 +84,35 @@ nanmath_st.rewrites[:nanmath] = true
               end)
     @test toexpr(SetArray(true, a, [x(t), AtIndex(9, b), c])).head == :macrocall
 
+    for fname in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :log1p, :sqrt)
+        f = getproperty(Base, fname)
+        @test toexpr(f(a)) == :($f(a))
+        @test toexpr(f(a), nanmath_st) == :($(GlobalRef(NaNMath, fname))(a))
 
+        nanmath_f = getproperty(NaNMath, fname)
+        @test toexpr(nanmath_f(a)) == :($nanmath_f(a))
+        @test toexpr(nanmath_f(a), nanmath_st) == :($nanmath_f(a))
+    end
+
+    @test toexpr(a^b) == :($(^)(a, b))
+    @test toexpr(a^b, nanmath_st) == :($(NaNMath.pow)(a, b))
     @test toexpr(NaNMath.pow(a, b)) == :($(NaNMath.pow)(a, b))
+    @test toexpr(NaNMath.pow(a, b), nanmath_st) == :($(NaNMath.pow)(a, b))
+
+    @test toexpr(a^2) == :($(^)(a, 2))
+    @test toexpr(a^2, nanmath_st) == :($(NaNMath.pow)(a, 2))
+    @test toexpr(NaNMath.pow(a, 2)) == :($(NaNMath.pow)(a, 2))
+    @test toexpr(NaNMath.pow(a, 2), nanmath_st) == :($(NaNMath.pow)(a, 2))
+
+    @test toexpr(a^-1) == :($(/)(1, a))
+    @test toexpr(a^-1, nanmath_st) == :($(/)(1, a))
+    @test toexpr(NaNMath.pow(a, -1)) == :($(NaNMath.pow)(a, -1))
+    @test toexpr(NaNMath.pow(a, -1), nanmath_st) == :($(NaNMath.pow)(a, -1))
+
+    @test toexpr(a^-2) == :($(/)(1, $(^)(a, 2)))
+    @test toexpr(a^-2, nanmath_st) == :($(/)(1, $(NaNMath.pow)(a, 2)))
+    @test toexpr(NaNMath.pow(a, -2)) == :($(NaNMath.pow)(a, -2))
+    @test toexpr(NaNMath.pow(a, -2), nanmath_st) == :($(NaNMath.pow)(a, -2))
 
     f = GlobalRef(NaNMath, :sin)
     test_repr(toexpr(LiteralExpr(:(let x=1, y=2

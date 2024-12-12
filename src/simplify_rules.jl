@@ -63,6 +63,8 @@ let
         @rule(~x \ ~y => ~y / (~x))
         @rule(one(~x) => one(symtype(~x)))
         @rule(zero(~x) => zero(symtype(~x)))
+        @rule(conj(+(~~x)) => sum(conj.(~~x)))
+        @rule(conj(*(~~x)) => prod(conj.(~~x)))
         @rule(conj(~x::_isreal) => ~x)
         @rule(real(~x::_isreal) => ~x)
         @rule(imag(~x::_isreal) => zero(symtype(~x)))

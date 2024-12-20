@@ -486,7 +486,7 @@ function toexpr(a::MakeArray, st)
 end
 
 ## Array
-@inline function _create_array(::Type{<:Array}, T, ::Val{dims}, elems...) where dims
+@inline function _create_array(::Type{<:AbstractArray}, T, ::Val{dims}, elems...) where dims
     arr = Array{T}(undef, dims)
     @assert prod(dims) == nfields(elems)
     @inbounds for i=1:prod(dims)
@@ -495,33 +495,43 @@ end
     arr
 end
 
-@inline function create_array(A::Type{<:Array}, T, ::Val, d::Val, elems...)
+@inline function create_array(A::Type{<:AbstractArray}, T, ::Val, d::Val, elems...)
     _create_array(A, T, d, elems...)
 end
 
-@inline function create_array(A::Type{<:Array}, ::Nothing, ::Val, d::Val{dims}, elems...) where dims
+@inline function create_array(A::Type{<:AbstractArray}, ::Nothing, ::Val, d::Val{dims}, elems...) where dims
     T = promote_type(map(typeof, elems)...)
     _create_array(A, T, d, elems...)
 end
 
 ## Vector
 #
-@inline function create_array(::Type{<:Array}, ::Nothing, ::Val{1}, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:AbstractArray}, ::Nothing, ::Val{1}, ::Val{dims}, elems...) where dims
     [elems...]
 end
 
-@inline function create_array(::Type{<:Array}, T, ::Val{1}, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:AbstractArray}, T, ::Val{1}, ::Val{dims}, elems...) where dims
     T[elems...]
 end
 
 ## Matrix
 
-@inline function create_array(::Type{<:Array}, ::Nothing, ::Val{2}, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:AbstractArray}, ::Nothing, ::Val{2}, ::Val{dims}, elems...) where dims
     vhcat(dims, elems...)
 end
 
-@inline function create_array(::Type{<:Array}, T, ::Val{2}, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{<:AbstractArray}, T, ::Val{2}, ::Val{dims}, elems...) where dims
     typed_vhcat(T, dims, elems...)
+end
+
+@inline function create_array(::Type{<:Base.ReinterpretArray}, ::Nothing,
+        ::Val{1}, ::Val{dims}, elems...) where {dims}
+    [elems...]
+end
+
+@inline function create_array(
+        ::Type{<:Base.ReinterpretArray}, T, ::Val{1}, ::Val{dims}, elems...) where {dims}
+    T[elems...]
 end
 
 

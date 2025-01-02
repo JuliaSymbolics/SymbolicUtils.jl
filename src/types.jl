@@ -23,38 +23,38 @@ const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 
 @compactify show_methods=false begin
-    @abstract struct BasicSymbolic{T} <: Symbolic{T}
+    @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
     end
-    struct Sym{T} <: BasicSymbolic{T}
+    mutable struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
     end
-    struct Term{T} <: BasicSymbolic{T}
+    mutable struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
     end
-    struct Mul{T} <: BasicSymbolic{T}
+    mutable struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    struct Add{T} <: BasicSymbolic{T}
+    mutable struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    struct Div{T} <: BasicSymbolic{T}
+    mutable struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
         den::Any               = 1
         simplified::Bool       = false
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    struct Pow{T} <: BasicSymbolic{T}
+    mutable struct Pow{T} <: BasicSymbolic{T}
         base::Any              = 1
         exp::Any               = 1
         arguments::Vector{Any} = EMPTY_ARGS
@@ -77,6 +77,8 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
+const wvd = WeakValueDict{UInt, BasicSymbolic}()
+
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
@@ -92,7 +94,16 @@ const SIMPLIFIED = 0x01 << 0
 function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple)::BasicSymbolic{T} where T
     nt = getproperties(obj)
     nt_new = merge(nt, patch)
-    Unityper.rt_constructor(obj){T}(;nt_new...)
+    # Call outer constructor because hash consing cannot be applied in inner constructor
+    @compactified obj::BasicSymbolic begin
+        Sym => Sym{T}(nt_new.name; nt_new...)
+        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new...)
+        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new...)
+        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new...)
+        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new...)
+        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new...)
+        _ => Unityper.rt_constructor(obj){T}(;nt_new...)
+    end
 end
 
 ###
@@ -265,6 +276,26 @@ function _isequal(a, b, E)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Checks for equality between two `BasicSymbolic` objects, considering both their
+values and metadata.
+
+The default `Base.isequal` function for `BasicSymbolic` only compares their expressions
+and ignores metadata. This does not help deal with hash collisions when metadata is 
+relevant for distinguishing expressions, particularly in hashing contexts. This function
+provides a stricter equality check that includes metadata comparison, preventing
+such collisions.
+
+Modifying `Base.isequal` directly breaks numerous tests in `SymbolicUtils.jl` and
+downstream packages like `ModelingToolkit.jl`, hence the need for this separate
+function.
+"""
+function isequal_with_metadata(a::BasicSymbolic, b::BasicSymbolic)::Bool
+    isequal(a, b) && isequal(metadata(a), metadata(b))
+end
+
 Base.one( s::Symbolic) = one( symtype(s))
 Base.zero(s::Symbolic) = zero(symtype(s))
 
@@ -272,6 +303,7 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymboli
 
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
+hashvec2(xs, z) = foldr(hash2, xs, init=z)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const ADD_SALT = 0xaddaddaddaddadda % UInt
 const SUB_SALT = 0xaaaaaaaaaaaaaaaa % UInt
@@ -307,12 +339,94 @@ function Base.hash(s::BasicSymbolic, salt::UInt)::UInt
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Calculates a hash value for a `BasicSymbolic` object, incorporating both its metadata and 
+symtype.
+
+This function provides an alternative hashing strategy to `Base.hash` for `BasicSymbolic` 
+objects. Unlike `Base.hash`, which only considers the expression structure, `hash2` also 
+includes the metadata and symtype in the hash calculation. This can be beneficial for hash 
+consing, allowing for more effective deduplication of symbolically equivalent expressions 
+with different metadata or symtypes.
+
+Equivalent numbers of different types, such as `0.5::Float64` and 
+`(1 // 2)::Rational{Int64}`, have the same default `Base.hash` value. The `hash2` function 
+distinguishes these by including their numeric types in the hash calculation to ensure that 
+symbolically equivalent expressions with different numeric types are treated as distinct 
+objects.
+"""
+hash2(s, salt::UInt) = hash(s, salt)
+function hash2(n::T, salt::UInt) where {T <: Number}
+    hash(T, hash(n, salt))
+end
+hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
+function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
+    E = exprtype(s)
+    h::UInt = 0
+    if E === SYM
+        h = hash(nameof(s), salt ⊻ SYM_SALT)
+    elseif E === ADD || E === MUL
+        hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
+        hv = Base.hasha_seed
+        for (k, v) in s.dict
+            hv ⊻= hash2(k, hash(v))
+        end
+        h = hash(hv, salt)
+        h = hash(hashoffset, hash2(s.coeff, h))
+    elseif E === DIV
+        h = hash2(s.num, hash2(s.den, salt ⊻ DIV_SALT))
+    elseif E === POW
+        h = hash2(s.exp, hash2(s.base, salt ⊻ POW_SALT))
+    elseif E === TERM
+        op = operation(s)
+        oph = op isa Function ? nameof(op) : op
+        h = hashvec2(arguments(s), hash(oph, salt))
+    else
+        error_on_type()
+    end
+    hash(metadata(s), hash(T, h))
+end
+
 ###
 ### Constructors
 ###
 
-function Sym{T}(name::Symbol; kw...) where T
-    Sym{T}(; name=name, kw...)
+"""
+$(TYPEDSIGNATURES)
+
+Implements hash consing (flyweight design pattern) for `BasicSymbolic` objects.
+
+This function checks if an equivalent `BasicSymbolic` object already exists. It uses a 
+custom hash function (`hash2`) incorporating metadata and symtypes to search for existing 
+objects in a `WeakValueDict` (`wvd`).  Due to the possibility of hash collisions (where 
+different objects produce the same hash), a custom equality check (`isequal_with_metadata`) 
+which includes metadata comparison, is used to confirm the equivalence of objects with 
+matching hashes. If an equivalent object is found, the existing object is returned; 
+otherwise, the input `s` is returned. This reduces memory usage, improves compilation time 
+for runtime code generation, and supports built-in common subexpression elimination, 
+particularly when working with symbolic objects with metadata.
+
+Using a `WeakValueDict` ensures that only weak references to `BasicSymbolic` objects are 
+stored, allowing objects that are no longer strongly referenced to be garbage collected. 
+Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and 
+`Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
+original behavior of those functions.
+"""
+function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
+    h = hash2(s)
+    t = get!(wvd, h, s)
+    if t === s || isequal_with_metadata(t, s)
+        return t
+    else
+        return s
+    end
+end
+
+function Sym{T}(name::Symbol; kw...) where {T}
+    s = Sym{T}(; name, kw...)
+    BasicSymbolic(s)
 end
 
 function Term{T}(f, args; kw...) where T
@@ -320,7 +434,8 @@ function Term{T}(f, args; kw...) where T
         args = convert(Vector{Any}, args)
     end
 
-    Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    BasicSymbolic(s)
 end
 
 function Term(f, args; metadata=NO_METADATA)
@@ -340,7 +455,8 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    BasicSymbolic(s)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
@@ -355,7 +471,8 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        BasicSymbolic(s)
     end
 end
 
@@ -386,7 +503,7 @@ function maybe_intcoeff(x)
     end
 end
 
-function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
+function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
     if T<:Number && !(T<:SafeReal)
         n, d = quick_cancel(n, d)
     end
@@ -420,7 +537,8 @@ function Div{T}(n, d, simplified=false; metadata=nothing) where {T}
         end
     end
 
-    Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    s = Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    BasicSymbolic(s)
 end
 
 function Div(n,d, simplified=false; kw...)
@@ -434,14 +552,15 @@ end
 
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
 
-function (::Type{<:Pow{T}})(a, b; metadata=NO_METADATA) where {T}
+function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
-    Pow{T}(; base=a, exp=b, arguments=[], metadata)
+    s = Pow{T}(; base=a, exp=b, arguments=[], metadata)
+    BasicSymbolic(s)
 end
 
-function Pow(a, b; metadata=NO_METADATA)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)..., metadata=metadata)
+function Pow(a, b; metadata = NO_METADATA, kwargs...)
+    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)...; metadata, kwargs...)
 end
 
 function toterm(t::BasicSymbolic{T}) where T
@@ -912,7 +1031,7 @@ promote_symtype(f, Ts...) = Any
 #### Function-like variables
 #---------------------------
 
-struct FnType{X<:Tuple,Y} end
+struct FnType{X<:Tuple,Y,Z} end
 
 (f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, Any[args...])
 
@@ -1021,8 +1140,16 @@ function _name_type(x)
         lhs, rhs = x.args[1:2]
         if lhs isa Expr && lhs.head === :call
             # e.g. f(::Real)::Unreal
+            if lhs.args[1] isa Expr
+                func_name_and_type = _name_type(lhs.args[1])
+                name = func_name_and_type.name
+                functype = func_name_and_type.type
+            else
+                name = lhs.args[1]
+                functype = Nothing
+            end
             type = map(x->_name_type(x).type, lhs.args[2:end])
-            return (name=lhs.args[1], type=:($FnType{Tuple{$(type...)}, $rhs}))
+            return (name=name, type=:($FnType{Tuple{$(type...)}, $rhs, $functype}))
         else
             return (name=lhs, type=rhs)
         end

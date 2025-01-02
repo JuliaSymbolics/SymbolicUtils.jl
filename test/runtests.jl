@@ -1,39 +1,21 @@
-using Documenter
-using Pkg
-using Test
-using SymbolicUtils
-using ReferenceTests
-import IfElse: ifelse
+using Pkg, Test, SafeTestsets
 
-DocMeta.setdocmeta!(
-    SymbolicUtils,
-    :DocTestSetup,
-    :(using SymbolicUtils);
-    recursive=true
-)
-
-# Only test one Julia version to avoid differences due to changes in printing.
-if v"1.6" ≤ VERSION < v"1.7-beta3.0"
-    doctest(SymbolicUtils)
-else
-    @warn "Skipping doctests"
-end
-SymbolicUtils.show_simplified[] = false
-
-include("utils.jl")
-
-if haskey(ENV, "SU_BENCHMARK_ONLY")
-    include("benchmark.jl")
-else
-    include("basics.jl")
-    include("order.jl")
-    include("polyform.jl")
-    include("rewrite.jl")
-    include("rulesets.jl")
-    include("code.jl")
-    include("cse.jl")
-    include("interface.jl")
-    # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed
-    include("fuzz.jl")
-    include("adjoints.jl")
+@testset begin
+    if haskey(ENV, "SU_BENCHMARK_ONLY")
+        @safetestset "Benchmark" begin include("benchmark.jl") end
+    else
+        @safetestset "Doc" begin include("doctest.jl") end
+        @safetestset "Basics" begin include("basics.jl") end
+        @safetestset "Order" begin include("order.jl") end
+        @safetestset "PolyForm" begin include("polyform.jl") end
+        @safetestset "Rewrite" begin include("rewrite.jl") end
+        @safetestset "Rulesets" begin include("rulesets.jl") end
+        @safetestset "Code" begin include("code.jl") end
+        @safetestset "CSE" begin include("cse.jl") end
+        @safetestset "Interface" begin include("interface.jl") end
+        # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed
+        @safetestset "Fuzz" begin include("fuzz.jl") end
+        @safetestset "Adjoints" begin include("adjoints.jl") end
+        @safetestset "Hash Consing" begin include("hash_consing.jl") end
+    end
 end

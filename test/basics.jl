@@ -1,12 +1,14 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, isequal_with_metadata
 using SymbolicUtils
 using IfElse: ifelse
 using Setfield
-using Test
+using Test, ReferenceTests
+
+include("utils.jl")
 
 @testset "@syms" begin
     let
-        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
+        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int 
 
         @test issym(a) && symtype(a) == Number
         @test a.name === :a
@@ -16,9 +18,11 @@ using Test
 
         @test issym(f)
         @test f.name === :f
+        @test symtype(f) == FnType{Tuple{Real}, Number, Nothing}
 
         @test issym(g)
         @test g.name === :g
+        @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, Nothing}}, Int, Nothing}
 
         @test isterm(f(b))
         @test symtype(f(b)) === Number
@@ -32,6 +36,21 @@ using Test
         # issue #91
         @syms h(a,b,c)
         @test isequal(h(1,2,3), h(1,2,3))
+
+        @syms (f::typeof(max))(::Real, ::AbstractFloat)::Number a::Real
+        @test issym(f)
+        @test f.name == :f
+        @test symtype(f) == FnType{Tuple{Real, AbstractFloat}, Number, typeof(max)}
+        @test isterm(f(a, b))
+        @test symtype(f(a, b)) == Number
+
+        @syms g(p, (h::typeof(identity))(q::Real)::Number)::Number
+        @test issym(g)
+        @test g.name == :g
+        @test symtype(g) == FnType{Tuple{Number, FnType{Tuple{Real}, Number, typeof(identity)}}, Number, Nothing}
+        @test_throws "not a subtype of" g(a, f)
+        @syms (f::typeof(identity))(::Real)::Number
+        @test symtype(g(a, f)) == Number
     end
 end
 
@@ -167,6 +186,8 @@ end
     @test occursin(a, a + b)
     @test !occursin(sin(a), a + b + c)
     @test occursin(sin(a),  a * b + c + sin(a^2 * sin(a)))
+    @test occursin(0.01, 0.01*a)
+    @test !occursin(0.01, a * b * c)
 end
 
 @testset "printing" begin
@@ -315,6 +336,13 @@ end
 
     @test !isequal(a, missing)
     @test !isequal(missing, b)
+
+    a1 = setmetadata(a, Ctx1, "meta_1")
+    a2 = setmetadata(a, Ctx1, "meta_1")
+    a3 = setmetadata(a, Ctx2, "meta_2")
+    @test !isequal_with_metadata(a, a1)
+    @test isequal_with_metadata(a1, a2)
+    @test !isequal_with_metadata(a1, a3)
 end
 
 @testset "subtyping" begin
@@ -356,4 +384,12 @@ end
         @test typeof(sin(x)) <: BasicSymbolic{LiteralReal}
     end
     @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
+end
+
+@testset "Adjoint" begin
+    @syms x::Real y
+    ax = adjoint(x)
+    @test isequal(ax, x)
+    @test ax === x
+    @test isequal(adjoint(y), conj(y)) 
 end

@@ -26,8 +26,8 @@ jobs:
           - {user: SciML, repo: ModelOrderReduction.jl, group: All}
           
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.julia-version }}
           arch: x64

@@ -1,3 +1,7 @@
+using SymbolicUtils
+
+include("utils.jl")
+
 @syms a b c
 
 @testset "Equality" begin

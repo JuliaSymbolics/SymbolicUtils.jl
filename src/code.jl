@@ -146,7 +146,7 @@ function function_to_expr(op::typeof(^), O, st)
             return toexpr(Term(inv, Any[ex]), st)
         else
             args = Any[Term(inv, Any[ex]), -args[2]]
-            op = get(st.rewrites, :nanmath, false) ? op : pow
+            op = get(st.rewrites, :nanmath, false) === true ? pow : op
             return toexpr(Term(op, args), st)
         end
     end

@@ -146,12 +146,12 @@ function function_to_expr(op::typeof(^), O, st)
             return toexpr(Term(inv, Any[ex]), st)
         else
             args = Any[Term(inv, Any[ex]), -args[2]]
-            op = get(st.rewrites, :nanmath, false) ? op : NaNMath.pow
+            op = get(st.rewrites, :nanmath, false) ? op : pow
             return toexpr(Term(op, args), st)
         end
     end
     get(st.rewrites, :nanmath, false) === true || return nothing
-    return toexpr(Term(NaNMath.pow, args), st)
+    return toexpr(Term(pow, args), st)
 end
 
 function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)

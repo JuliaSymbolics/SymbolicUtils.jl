@@ -30,6 +30,12 @@ include("types.jl")
 
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
+
+# NaNMath.pow does not handle x::Int ^ y::Int -> ::Int
+# Use this instead as a wrapper over NaNMath.pow
+pow(x,y) = NaNMath.pow(x,y)
+pow(x::Int, y::Int) = x^y
+
 import IfElse: ifelse  # need to not bring IfElse name in or it will clash with Rewriters.IfElse
 include("methods.jl")
 

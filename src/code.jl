@@ -527,6 +527,16 @@ end
     typed_vhcat(T, dims, elems...)
 end
 
+@inline function create_array(::Type{<:Base.ReinterpretArray}, ::Nothing,
+        ::Val{1}, ::Val{dims}, elems...) where {dims}
+    [elems...]
+end
+
+@inline function create_array(
+        ::Type{<:Base.ReinterpretArray}, T, ::Val{1}, ::Val{dims}, elems...) where {dims}
+    T[elems...]
+end
+
 
 vhcat(sz::Tuple{Int,Int}, xs::T...) where {T} = typed_vhcat(T, sz, xs...)
 vhcat(sz::Tuple{Int,Int}, xs::Number...) = typed_vhcat(Base.promote_typeof(xs...), sz, xs...)

@@ -696,6 +696,21 @@ end
 
 @inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
 
+"""
+$(SIGNATURES)
+
+Perform a topological sort on a symbolic expression represented as a Directed Acyclic 
+Graph (DAG).
+
+This function takes a symbolic expression `graph` (potentially containing shared common 
+sub-expressions) and returns an array of `Assignment` objects.  Each `Assignment` 
+represents a node in the sorted order, assigning a fresh symbol to its corresponding 
+expression. The order ensures that all dependencies of a node appear before the node itself 
+in the array.
+
+Hash consing is assumed, meaning that structurally identical expressions are represented by 
+the same object in memory. This allows for efficient equality checks using `IdDict`.
+"""
 function topological_sort(graph)
     sorted_nodes = Assignment[]
     visited = IdDict()

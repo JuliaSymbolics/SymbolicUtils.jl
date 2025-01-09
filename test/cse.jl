@@ -16,7 +16,12 @@ end
     expr = sin(a + b) * (a + b)
     sorted_nodes = topological_sort(expr)
     @test length(sorted_nodes) == 3
+    @test isequal(sorted_nodes[1].rhs, a + b)
+    @test isequal(sin(sorted_nodes[1].lhs), sorted_nodes[2].rhs)
     expr = (a + b)^(a + b)
     sorted_nodes = topological_sort(expr)
     @test length(sorted_nodes) == 2
+    @test isequal(sorted_nodes[1].rhs, a + b)
+    ab_node = sorted_nodes[1].lhs
+    @test isequal(ab_node^ab_node, sorted_nodes[2].rhs)
 end

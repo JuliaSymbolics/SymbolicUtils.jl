@@ -739,11 +739,15 @@ function _cse!(mem, expr)
 end
 
 function cse(expr)
-    state = Dict{Any, Int}()
-    cse_state!(state, expr)
-    cse_block(state, expr)
+    sorted_nodes = topological_sort(expr)
+    if isempty(sorted_nodes)
+        return Let(Assignment[], expr)
+    else
+        last_assignment = pop!(sorted_nodes)
+        body = rhs(last_assignment)
+        return Let(sorted_nodes, body)
+    end
 end
-
 
 function _cse(exprs::AbstractArray)
     letblock = cse(Term{Any}(tuple, vec(exprs)))

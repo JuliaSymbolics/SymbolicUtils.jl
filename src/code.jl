@@ -790,41 +790,4 @@ function cse(x::MakeSparseArray)
     end
 end
 
-
-function cse_state!(state, t)
-    !iscall(t) && return t
-    state[t] = Base.get(state, t, 0) + 1
-    foreach(x->cse_state!(state, x), arguments(t))
-end
-
-function cse_block!(assignments, counter, names, name, state, x)
-    if get(state, x, 0) > 1
-        if haskey(names, x)
-            return names[x]
-        else
-            sym = Sym{symtype(x)}(Symbol(name, counter[]))
-            names[x] = sym
-            push!(assignments, sym ← x)
-            counter[] += 1
-            return sym
-        end
-    elseif iscall(x)
-        args = map(a->cse_block!(assignments, counter, names, name, state,a), arguments(x))
-        if isterm(x)
-            return term(operation(x), args...)
-        else
-            return maketerm(typeof(x), operation(x), args, metadata(x))
-        end
-    else
-        return x
-    end
-end
-
-function cse_block(state, t, name=Symbol("var-", hash(t)))
-    assignments = Assignment[]
-    counter = Ref{Int}(1)
-    names = Dict{Any, BasicSymbolic}()
-    Let(assignments, cse_block!(assignments, counter, names, name, state, t))
-end
-
 end

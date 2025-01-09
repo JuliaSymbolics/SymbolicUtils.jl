@@ -98,6 +98,9 @@ end
 @number_methods(BasicSymbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
 @number_methods(BasicSymbolic{<:LiteralReal}, term(f, a), term(f, a, b), onlybasics)
 
+# Fix method ambiguity issue in NaNMath >= 1.0.2
+NaNMath.pow(x::BasicSymbolic{<:Number}, y::Integer) = x^y
+
 for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},

@@ -8,3 +8,13 @@ using SymbolicUtils, SymbolicUtils.Code, Test
     @test occursin(t.pairs[1].lhs, t.body)
     @test occursin(t.pairs[2].lhs, t.body)
 end
+
+@testset "DAG CSE" begin
+    @syms a b
+    expr = sin(a + b) * (a + b)
+    sorted_nodes = topological_sort(expr)
+    @test length(sorted_nodes) == 3
+    expr = (a + b)^(a + b)
+    sorted_nodes = topological_sort(expr)
+    @test length(sorted_nodes) == 2
+end

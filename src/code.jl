@@ -696,6 +696,31 @@ end
 
 @inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
 
+function topological_sort(graph)
+    sorted_nodes = Assignment[]
+    visited = IdDict()
+
+    function dfs(node)
+        if haskey(visited, node)
+            return visited[node]
+        end
+        if iscall(node)
+            args = map(dfs, arguments(node))
+            new_node = maketerm(typeof(node), operation(node), args, metadata(node))
+            sym = newsym(symtype(new_node))
+            push!(sorted_nodes, sym ← new_node)
+            visited[node] = sym
+            return sym
+        else
+            visited[node] = node
+            return node
+        end
+    end
+
+    dfs(graph)
+    return sorted_nodes
+end
+
 function _cse!(mem, expr)
     iscall(expr) || return expr
     op = _cse!(mem, operation(expr))

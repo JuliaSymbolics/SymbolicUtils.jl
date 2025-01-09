@@ -1,4 +1,6 @@
 using SymbolicUtils, SymbolicUtils.Code, Test
+using SymbolicUtils.Code: topological_sort
+
 @testset "CSE" begin
     @syms x
     t = cse(hypot(hypot(cos(x), sin(x)), atan(cos(x), sin(x))))

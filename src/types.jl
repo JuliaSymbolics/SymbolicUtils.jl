@@ -293,7 +293,62 @@ downstream packages like `ModelingToolkit.jl`, hence the need for this separate
 function.
 """
 function isequal_with_metadata(a::BasicSymbolic, b::BasicSymbolic)::Bool
-    isequal(a, b) && isequal(metadata(a), metadata(b))
+    isequal(a, b) && isequal_with_metadata(metadata(a), metadata(b))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Compare the metadata of two `BasicSymbolic`s to ensure it is equal, recursively calling
+`isequal_with_metadata` to ensure symbolic variables in the metadata also have equal
+metadata.
+"""
+function isequal_with_metadata(a::Union{AbstractDict, NamedTuple}, b::Union{AbstractDict, NamedTuple})
+    typeof(a) == typeof(b) || return false
+    length(a) == length(b) || return false
+
+    for (k, v) in pairs(a)
+        haskey(b, k) || return false
+        isequal_with_metadata(v, b[k]) || return false
+    end
+
+    for (k, v) in pairs(b)
+        haskey(a, k) || return false
+        isequal_with_metadata(v, a[k]) || return false
+    end
+
+    return true
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Fallback method which uses `isequal`.
+"""
+isequal_with_metadata(a, b) = isequal(a, b)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Specialized methods to check if two ranges are equal without comparing each element.
+"""
+isequal_with_metadata(a::AbstractRange, b::AbstractRange) = isequal(a, b)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if two arrays/tuples are equal by calling `isequal_with_metadata` on each element.
+This is to ensure true equality of any symbolic elements, if present.
+"""
+function isequal_with_metadata(a::Union{AbstractArray, Tuple}, b::Union{AbstractArray, Tuple})
+    typeof(a) == typeof(b) || return false
+    if a isa AbstractArray
+        size(a) == size(b) || return false
+    end # otherwise they're tuples and type equality also checks length equality
+    for (x, y) in zip(a, b)
+        isequal_with_metadata(x, y) || return false
+    end
+    return true
 end
 
 Base.one( s::Symbolic) = one( symtype(s))

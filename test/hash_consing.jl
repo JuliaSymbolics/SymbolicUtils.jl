@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul, Div, Pow, hash2
+using SymbolicUtils: Term, Add, Mul, Div, Pow, hash2, metadata
 
 struct Ctx1 end
 struct Ctx2 end
@@ -107,4 +107,15 @@ end
     u0 = zero(UInt)
     @test hash2(f, u0) != hash2(r, u0)
     @test f + a !== r + a
+end
+
+@testset "Symbolics in metadata" begin
+    @syms a b
+    a1 = setmetadata(a, Int, b)
+    b1 = setmetadata(b, Int, 3)
+    a2 = setmetadata(a, Int, b1)
+    @test a1 !== a2
+    @test !SymbolicUtils.isequal_with_metadata(a1, a2)
+    @test metadata(metadata(a1)[Int]) === nothing
+    @test metadata(metadata(a2)[Int])[Int] == 3
 end

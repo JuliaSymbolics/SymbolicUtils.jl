@@ -77,6 +77,11 @@ function number_methods(T, rhs1, rhs2, options=nothing)
         end
 
         push!(exprs, expr)
+
+        # Fix method ambiguity error on NaNMath >= 1.0.2 and promotion of `Integer`s on NaNMath < 1.0.2
+        if f === NaNMath.pow
+            push!(exprs, :($(NaNMath.pow)(a::$T, b::Integer) = ($assert_like($(NaNMath.pow), Number, a); $term($(^), a, b))))
+        end
     end
 
     for f in (skip_basics ? monadic : only_basics ? basic_monadic : vcat(basic_monadic, monadic))
@@ -97,9 +102,6 @@ end
 
 @number_methods(BasicSymbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
 @number_methods(BasicSymbolic{<:LiteralReal}, term(f, a), term(f, a, b), onlybasics)
-
-# Fix method ambiguity issue in NaNMath >= 1.0.2
-NaNMath.pow(x::BasicSymbolic{<:Number}, y::Integer) = x^y
 
 for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),

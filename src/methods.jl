@@ -80,7 +80,7 @@ function number_methods(T, rhs1, rhs2, options=nothing)
 
         # Fix method ambiguity error on NaNMath >= 1.0.2 and promotion of `Integer`s on NaNMath < 1.0.2
         if f === NaNMath.pow
-            push!(exprs, :($(NaNMath.pow)(a::$T, b::Integer) = ($assert_like($(NaNMath.pow), Number, a); $term($(^), a, b))))
+            push!(exprs, :((f::$(typeof(f)))(a::$T, b::Integer) = ($assert_like(f, Number, a); $term($(^), a, b))))
         end
     end
 

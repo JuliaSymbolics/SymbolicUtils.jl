@@ -119,3 +119,12 @@ end
     @test metadata(metadata(a1)[Int]) === nothing
     @test metadata(metadata(a2)[Int])[Int] == 3
 end
+
+@testset "Compare metadata of expression tree" begin
+    @syms a b
+    aa = setmetadata(a, Int, b)
+    @test aa !== a
+    @test isequal(a, aa)
+    @test !SymbolicUtils.isequal_with_metadata(a, aa)
+    @test !SymbolicUtils.isequal_with_metadata(2a, 2aa)
+end

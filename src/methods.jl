@@ -77,6 +77,11 @@ function number_methods(T, rhs1, rhs2, options=nothing)
         end
 
         push!(exprs, expr)
+
+        # Fix method ambiguity error on NaNMath >= 1.0.2 and promotion of `Integer`s on NaNMath < 1.0.2
+        if f === NaNMath.pow
+            push!(exprs, :((f::$(typeof(f)))(a::$T, b::Integer) = ($assert_like(f, Number, a); $term($(^), a, b))))
+        end
     end
 
     for f in (skip_basics ? monadic : only_basics ? basic_monadic : vcat(basic_monadic, monadic))

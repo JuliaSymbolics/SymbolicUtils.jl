@@ -100,9 +100,9 @@ nanmath_st.rewrites[:nanmath] = true
     @test toexpr(NaNMath.pow(a, b), nanmath_st) == :($(NaNMath.pow)(a, b))
 
     @test toexpr(a^2) == :($(^)(a, 2))
-    @test toexpr(a^2, nanmath_st) == :($(NaNMath.pow)(a, 2))
+    @test toexpr(a^2, nanmath_st) == :($(^)(a, 2))
     @test toexpr(NaNMath.pow(a, 2)) == :($(^)(a, 2))
-    @test toexpr(NaNMath.pow(a, 2), nanmath_st) == :($(NaNMath.pow)(a, 2))
+    @test toexpr(NaNMath.pow(a, 2), nanmath_st) == :($(^)(a, 2))
 
     @test toexpr(a^-1) == :($(/)(1, a))
     @test toexpr(a^-1, nanmath_st) == :($(/)(1, a))
@@ -110,9 +110,9 @@ nanmath_st.rewrites[:nanmath] = true
     @test toexpr(NaNMath.pow(a, -1), nanmath_st) == :($(inv)(a))
 
     @test toexpr(a^-2) == :($(/)(1, $(^)(a, 2)))
-    @test toexpr(a^-2, nanmath_st) == :($(/)(1, $(NaNMath.pow)(a, 2)))
-    @test toexpr(NaNMath.pow(a, -2)) == :($(NaNMath.pow)($(inv)(a), 2))
-    @test toexpr(NaNMath.pow(a, -2), nanmath_st) == :($(NaNMath.pow)($(inv)(a), 2))
+    @test toexpr(a^-2, nanmath_st) == :($(/)(1, $(^)(a, 2)))
+    @test toexpr(NaNMath.pow(a, -2)) == :($(^)($(inv)(a), 2))
+    @test toexpr(NaNMath.pow(a, -2), nanmath_st) == :($(^)($(inv)(a), 2))
 
     f = GlobalRef(NaNMath, :sin)
     test_repr(toexpr(LiteralExpr(:(let x=1, y=2

@@ -144,10 +144,14 @@ function function_to_expr(op::typeof(^), O, st)
         args[1] = Term(inv, Any[args[1]])
         args[2] = -args[2]
     end
+    if isequal(args[2], 1)
+        return toexpr(args[1], st)
+    end
     if get(st.rewrites, :nanmath, false) === true && !(args[2] isa Integer)
         op = NaNMath.pow
+        return toexpr(Term(op, args), st)
     end
-    return toexpr(Term(op, args), st)
+    return nothing
 end
 
 function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)

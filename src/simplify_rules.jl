@@ -101,6 +101,10 @@ let
         @rule(exp(~x)^(~y) => exp(~x * ~y))
     ]
 
+    TYPE_RULES = [
+        @rule(~x::_isinteger => Int(~x))
+    ]
+
     BOOLEAN_RULES = [
         @rule((true | (~x)) => true)
         @rule(((~x) | true) => true)
@@ -142,6 +146,7 @@ let
                      If(x -> !ispow(x) && is_operation(^)(x),
                         Chain(CANONICALIZE_POW)),
                      If(is_operation(^), Chain(POW_RULES)),
+                     Chain(TYPE_RULES)
                     ] |> RestartedChain
 
         rule_tree

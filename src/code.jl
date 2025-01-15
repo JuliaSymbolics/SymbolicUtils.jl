@@ -140,18 +140,18 @@ end
 
 function function_to_expr(op::typeof(^), O, st)
     args = arguments(O)
-    if length(args) == 2 && args[2] isa Real && args[2] < 0
-        ex = args[1]
-        if args[2] == -1
-            return toexpr(Term(inv, Any[ex]), st)
-        else
-            args = Any[Term(inv, Any[ex]), -args[2]]
-            op = get(st.rewrites, :nanmath, false) ? op : NaNMath.pow
-            return toexpr(Term(op, args), st)
-        end
+    if args[2] isa Real && args[2] < 0
+        args[1] = Term(inv, Any[args[1]])
+        args[2] = -args[2]
     end
-    get(st.rewrites, :nanmath, false) === true || return nothing
-    return toexpr(Term(NaNMath.pow, args), st)
+    if isequal(args[2], 1)
+        return toexpr(args[1], st)
+    end
+    if get(st.rewrites, :nanmath, false) === true && !(args[2] isa Integer)
+        op = NaNMath.pow
+        return toexpr(Term(op, args), st)
+    end
+    return nothing
 end
 
 function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)

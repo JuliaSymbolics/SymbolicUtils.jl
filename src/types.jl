@@ -97,11 +97,11 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     # Call outer constructor because hash consing cannot be applied in inner constructor
     @compactified obj::BasicSymbolic begin
         Sym => Sym{T}(nt_new.name; nt_new...)
-        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new...)
-        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new...)
-        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new...)
-        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new...)
-        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new...)
+        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)))
+        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)))
+        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)))
+        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new..., hash = RefValue(UInt(0)))
+        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new..., hash = RefValue(UInt(0)))
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end

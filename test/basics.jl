@@ -1,5 +1,6 @@
 using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, isequal_with_metadata
 using SymbolicUtils
+using ConstructionBase: setproperties
 using IfElse: ifelse
 using Setfield
 using Test, ReferenceTests
@@ -392,4 +393,29 @@ end
     @test isequal(ax, x)
     @test ax === x
     @test isequal(adjoint(y), conj(y)) 
+end
+
+@testset "`setproperties` clears hash" begin
+    @syms a b c
+    hash(a)
+    hash(b)
+    hash(c)
+    @test hash(a) != hash(setproperties(a; name = :A))
+    function foo end
+    function bar end
+    var = term(foo, [a, b]; type = Real)
+    hash(var)
+    @test hash(var) != hash(setproperties(var; f = bar))
+    var = a + b
+    hash(var)
+    @test hash(var) != hash(setproperties(var; coeff = 2))
+    var = a * b
+    hash(var)
+    @test hash(var) != hash(setproperties(var; coeff = 2))
+    var = a / b
+    hash(var)
+    @test hash(var) != hash(setproperties(var; num = c))
+    var = a ^ b
+    hash(var)
+    @test hash(var) != hash(setproperties(var; exp = c))
 end

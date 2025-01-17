@@ -45,4 +45,12 @@ end
     let_expr = cse(expr)
     @test isempty(let_expr.pairs)
     @test isequal(let_expr.body, a)
+
+    # array symbolics
+    # https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/688#pullrequestreview-2554931739
+    @syms c
+    function foo end
+    ex = term(foo, [a^2 + b^2, b^2 + c], c; type = Real)
+    sorted_nodes = topological_sort(ex)
+    @test length(sorted_nodes) == 6
 end

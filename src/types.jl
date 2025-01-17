@@ -21,6 +21,7 @@ const EMPTY_HASH = RefValue(UInt(0))
 const NOT_SORTED = RefValue(false)
 const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
+const ENABLE_HASHCONSING = Ref(true)
 
 @compactify show_methods=false begin
     @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
@@ -507,6 +508,9 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 original behavior of those functions.
 """
 function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
+    if !ENABLE_HASHCONSING[]
+        return s
+    end
     h = hash2(s)
     t = get!(wvd, h, s)
     if t === s || isequal_with_metadata(t, s)

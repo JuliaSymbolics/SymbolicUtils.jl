@@ -128,3 +128,12 @@ end
     @test !SymbolicUtils.isequal_with_metadata(a, aa)
     @test !SymbolicUtils.isequal_with_metadata(2a, 2aa)
 end
+
+@testset "Hashconsing can be toggled" begin
+    SymbolicUtils.ENABLE_HASHCONSING[] = false
+    name = gensym(:x)
+    x1 = only(@eval @syms $name)
+    x2 = only(@eval @syms $name)
+    @test x1 !== x2
+    SymbolicUtils.ENABLE_HASHCONSING[] = true
+end

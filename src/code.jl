@@ -727,6 +727,12 @@ function topological_sort(graph)
             push!(sorted_nodes, sym ← new_node)
             visited[node] = sym
             return sym
+        elseif _is_array_of_symbolics(node)
+            new_node = map(dfs, node)
+            sym = newsym(typeof(new_node))
+            push!(sorted_nodes, sym ← new_node)
+            visited[node] = sym
+            return sym
         else
             visited[node] = node
             return node

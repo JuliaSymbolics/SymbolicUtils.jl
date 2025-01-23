@@ -1,6 +1,7 @@
 module Code
 
-using StaticArrays, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions
+using StaticArrays, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
+      DocStringExtensions
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -696,6 +697,52 @@ end
 
 @inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
 
+"""
+$(SIGNATURES)
+
+Perform a topological sort on a symbolic expression represented as a Directed Acyclic 
+Graph (DAG).
+
+This function takes a symbolic expression `graph` (potentially containing shared common 
+sub-expressions) and returns an array of `Assignment` objects.  Each `Assignment` 
+represents a node in the sorted order, assigning a fresh symbol to its corresponding 
+expression. The order ensures that all dependencies of a node appear before the node itself 
+in the array.
+
+Hash consing is assumed, meaning that structurally identical expressions are represented by 
+the same object in memory. This allows for efficient equality checks using `IdDict`.
+"""
+function topological_sort(graph)
+    sorted_nodes = Assignment[]
+    visited = IdDict()
+
+    function dfs(node)
+        if haskey(visited, node)
+            return visited[node]
+        end
+        if iscall(node)
+            args = map(dfs, arguments(node))
+            new_node = maketerm(typeof(node), operation(node), args, metadata(node))
+            sym = newsym(symtype(new_node))
+            push!(sorted_nodes, sym ← new_node)
+            visited[node] = sym
+            return sym
+        elseif _is_array_of_symbolics(node)
+            new_node = map(dfs, node)
+            sym = newsym(typeof(new_node))
+            push!(sorted_nodes, sym ← new_node)
+            visited[node] = sym
+            return sym
+        else
+            visited[node] = node
+            return node
+        end
+    end
+
+    dfs(graph)
+    return sorted_nodes
+end
+
 function _cse!(mem, expr)
     iscall(expr) || return expr
     op = _cse!(mem, operation(expr))
@@ -714,11 +761,15 @@ function _cse!(mem, expr)
 end
 
 function cse(expr)
-    state = Dict{Any, Int}()
-    cse_state!(state, expr)
-    cse_block(state, expr)
+    sorted_nodes = topological_sort(expr)
+    if isempty(sorted_nodes)
+        return Let(Assignment[], expr)
+    else
+        last_assignment = pop!(sorted_nodes)
+        body = rhs(last_assignment)
+        return Let(sorted_nodes, body)
+    end
 end
-
 
 function _cse(exprs::AbstractArray)
     letblock = cse(Term{Any}(tuple, vec(exprs)))
@@ -744,43 +795,6 @@ function cse(x::MakeSparseArray)
     else
         Let(assigns, MakeSparseArray(SparseVector(sp.n, sp.nzinds, exprs)))
     end
-end
-
-
-function cse_state!(state, t)
-    !iscall(t) && return t
-    state[t] = Base.get(state, t, 0) + 1
-    foreach(x->cse_state!(state, x), arguments(t))
-end
-
-function cse_block!(assignments, counter, names, name, state, x)
-    if get(state, x, 0) > 1
-        if haskey(names, x)
-            return names[x]
-        else
-            sym = Sym{symtype(x)}(Symbol(name, counter[]))
-            names[x] = sym
-            push!(assignments, sym ← x)
-            counter[] += 1
-            return sym
-        end
-    elseif iscall(x)
-        args = map(a->cse_block!(assignments, counter, names, name, state,a), arguments(x))
-        if isterm(x)
-            return term(operation(x), args...)
-        else
-            return maketerm(typeof(x), operation(x), args, metadata(x))
-        end
-    else
-        return x
-    end
-end
-
-function cse_block(state, t, name=Symbol("var-", hash(t)))
-    assignments = Assignment[]
-    counter = Ref{Int}(1)
-    names = Dict{Any, BasicSymbolic}()
-    Let(assignments, cse_block!(assignments, counter, names, name, state, t))
 end
 
 end

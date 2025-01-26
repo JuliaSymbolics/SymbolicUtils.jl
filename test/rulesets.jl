@@ -57,6 +57,14 @@ end
     @test simplify(Term(zero, [x + 2])) == 0
 end
 
+@testset "Types" begin
+    @syms x
+
+    # should convert to int
+    @test simplify(7.0) === 7
+    @test simplify(7.0*x) === 7*x
+end
+
 @testset "LiteralReal" begin
     @syms x1::LiteralReal x2::LiteralReal
     s = cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2

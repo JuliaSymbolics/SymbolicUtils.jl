@@ -34,11 +34,13 @@ const ENABLE_HASHCONSING = Ref(true)
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
+        hash2::RefValue{UInt} = EMPTY_HASH
     end
     mutable struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
+        hash2::RefValue{UInt} = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
@@ -46,6 +48,7 @@ const ENABLE_HASHCONSING = Ref(true)
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
+        hash2::RefValue{UInt} = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
@@ -98,11 +101,11 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     # Call outer constructor because hash consing cannot be applied in inner constructor
     @compactified obj::BasicSymbolic begin
         Sym => Sym{T}(nt_new.name; nt_new...)
-        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)))
-        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)))
-        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)))
-        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new..., hash = RefValue(UInt(0)))
-        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new..., hash = RefValue(UInt(0)))
+        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
+        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
+        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
+        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
+        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -461,6 +464,9 @@ function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
     if E === SYM
         h = hash(nameof(s), salt ⊻ SYM_SALT)
     elseif E === ADD || E === MUL
+        if !iszero(s.hash2[])
+            return s.hash2[]
+        end 
         hashoffset = isadd(s) ? ADD_SALT : SUB_SALT
         hv = Base.hasha_seed
         for (k, v) in s.dict
@@ -473,13 +479,20 @@ function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
     elseif E === POW
         h = hash2(s.exp, hash2(s.base, salt ⊻ POW_SALT))
     elseif E === TERM
+        if !iszero(s.hash2[])
+            return s.hash2[]
+        end 
         op = operation(s)
         oph = op isa Function ? nameof(op) : op
         h = hashvec2(arguments(s), hash(oph, salt))
     else
         error_on_type()
     end
-    hash(metadata(s), hash(T, h))
+    h = hash(metadata(s), hash(T, h))
+    if hasproperty(s, :hash2)
+        s.hash2[] = h
+    end
+    return h
 end
 
 ###
@@ -530,7 +543,7 @@ function Term{T}(f, args; kw...) where T
         args = convert(Vector{Any}, args)
     end
 
-    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), kw...)
+    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
     BasicSymbolic(s)
 end
 
@@ -551,7 +564,7 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
     BasicSymbolic(s)
 end
 
@@ -567,7 +580,7 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
         BasicSymbolic(s)
     end
 end

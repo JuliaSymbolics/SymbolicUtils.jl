@@ -137,3 +137,13 @@ end
     @test x1 !== x2
     SymbolicUtils.ENABLE_HASHCONSING[] = true
 end
+
+@testset "`hash2` is cached" begin
+    @syms a b f(..)
+    for ex in [a + b, a * b, f(a)]
+        h = SymbolicUtils.hash2(ex)
+        @test h == ex.hash2[]
+        ex2 = setmetadata(ex, Int, 3)
+        @test ex2.hash2[] != h
+    end
+end

@@ -722,7 +722,9 @@ function topological_sort(graph)
         end
         if iscall(node)
             args = map(dfs, arguments(node))
-            new_node = maketerm(typeof(node), operation(node), args, metadata(node))
+            # use `term` instead of `maketerm` because we only care about the operation being performed
+            # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
+            new_node = term(operation(node), args...)
             sym = newsym(symtype(new_node))
             push!(sorted_nodes, sym ← new_node)
             visited[node] = sym

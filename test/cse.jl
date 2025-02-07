@@ -16,28 +16,28 @@ end
     expr = sin(a + b) * (a + b)
     sorted_nodes = topological_sort(expr)
     @test length(sorted_nodes) == 3
-    @test isequal(sorted_nodes[1].rhs, a + b)
+    @test isequal(sorted_nodes[1].rhs, term(+, a, b))
     @test isequal(sin(sorted_nodes[1].lhs), sorted_nodes[2].rhs)
 
     expr = (a + b)^(a + b)
     sorted_nodes = topological_sort(expr)
     @test length(sorted_nodes) == 2
-    @test isequal(sorted_nodes[1].rhs, a + b)
+    @test isequal(sorted_nodes[1].rhs, term(+, a, b))
     ab_node = sorted_nodes[1].lhs
-    @test isequal(ab_node^ab_node, sorted_nodes[2].rhs)
+    @test isequal(term(^, ab_node, ab_node), sorted_nodes[2].rhs)
     let_expr = cse(expr)
     @test length(let_expr.pairs) == 1
-    @test isequal(let_expr.pairs[1].rhs, a + b)
+    @test isequal(let_expr.pairs[1].rhs, term(+, a, b))
     corresponding_sym = let_expr.pairs[1].lhs
-    @test isequal(let_expr.body, corresponding_sym^corresponding_sym)
+    @test isequal(let_expr.body, term(^, corresponding_sym, corresponding_sym))
 
     expr = a + b
     sorted_nodes = topological_sort(expr)
     @test length(sorted_nodes) == 1
-    @test isequal(sorted_nodes[1].rhs, a + b)
+    @test isequal(sorted_nodes[1].rhs, term(+, a, b))
     let_expr = cse(expr)
     @test isempty(let_expr.pairs)
-    @test isequal(let_expr.body, a + b)
+    @test isequal(let_expr.body, term(+, a, b))
     
     expr = a
     sorted_nodes = topological_sort(expr)

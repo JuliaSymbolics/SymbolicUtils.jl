@@ -55,6 +55,14 @@ end
     @test simplify(Term(zero, [a])) == 0
     @test simplify(Term(zero, [b + 1])) == 0
     @test simplify(Term(zero, [x + 2])) == 0
+
+    @eqtest simplify(Term(sqrt, [2])) == Term(sqrt, [2])
+    @eqtest simplify(Term(^, [2, 1//2])) == Term(^, [2, 1//2])
+    @eqtest simplify(Term(^, [2x, 1//2])) == Term(^, [2, 1//2]) * x^(1//2)
+    @test simplify(Term(^, [2, 3])) ≈ 8
+    @test simplify(Term(^, [1//3, 3])) == 1//27
+    @test simplify(Term(^, [2, 0.5])) ≈ 2^0.5
+    @test simplify(Term(^, [2.5, 0.25])) ≈ 2.5^(0.25)
 end
 
 @testset "LiteralReal" begin

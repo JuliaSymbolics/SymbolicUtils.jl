@@ -130,7 +130,7 @@ end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
-error_f_symbolic(f, T) = error("$f is not defined for T.")
+error_f_symbolic(f, T) = error("$f is not defined for $T.")
 
 function Base.rem2pi(x::Symbolic, mode::Base.RoundingMode)
     T = symtype(x)

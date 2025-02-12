@@ -264,3 +264,13 @@ nanmath_st.rewrites[:nanmath] = true
         @test f(1.0, 2.0) ≈ 13.0 + sqrt(2)
     end
 end
+
+@testset "Sparse array CSE" begin
+    @syms x y z
+    arr = [x^2 + y^2 0 0; 0 sin(y^2 + z^2) 0; 0 0 z^2 + x^2]
+    sarr = sparse(arr);
+    fn = eval(toexpr(Func([x, y, z], [], Code.cse(sarr))))
+
+    expected = eval(toexpr(Let([x ← 1, y ← 2, z ← 3], sarr)))
+    @test fn(1, 2, 3) ≈ expected
+end

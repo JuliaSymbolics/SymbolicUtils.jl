@@ -527,7 +527,7 @@ function hash2(s::BasicSymbolicImpl{T}, salt::UInt)::UInt where {T}
     else
         error_on_type()
     end
-    h = hash(metadata(s), hash(T, h))
+    h = hash(T, h)
     if hasproperty(s, :hash2)
         s.hash2[] = h
     end

@@ -717,6 +717,9 @@ function topological_sort(graph)
     visited = IdDict()
 
     function dfs(node)
+        if node isa BasicSymbolic
+            node = node.expr
+        end
         if haskey(visited, node)
             return visited[node]
         end

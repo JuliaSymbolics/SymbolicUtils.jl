@@ -110,10 +110,11 @@ const SIMPLIFIED = 0x01 << 0
 #@inline issimplified(x::BasicSymbolic) = is_of_type(x, SIMPLIFIED)
 
 function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple)::BasicSymbolic{T} where T
-    nt = getproperties(obj)
-    nt_new = merge(nt, patch)
+    expr = obj.expr
+    nt = getproperties(expr)
+    nt_new = merge(nt, (metadata = obj.metadata,), patch)
     # Call outer constructor because hash consing cannot be applied in inner constructor
-    @compactified obj.expr::BasicSymbolicImpl begin
+    @compactified expr::BasicSymbolicImpl begin
         Sym => Sym{T}(nt_new.name; nt_new...)
         Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
         Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))

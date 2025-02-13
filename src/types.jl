@@ -642,7 +642,7 @@ ratio(x::Rat,y::Rat) = x//y
 function maybe_intcoeff(x)
     if ismul(x)
         if x.coeff isa Rational && isone(x.coeff.den)
-            Mul{symtype(x)}(; coeff=x.coeff.num, dict=x.dict, x.metadata, arguments=[], issorted=RefValue(false))
+            Mul(symtype(x), x.coeff.num, x.dict; x.metadata)
         else
             x
         end

@@ -493,7 +493,7 @@ hash2(s, salt::UInt) = hash(s, salt)
 function hash2(n::T, salt::UInt) where {T <: Number}
     hash(T, hash(n, salt))
 end
-hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
+hash2(s::BasicSymbolic) = hash2(s.expr, zero(UInt))
 hash2(s::BasicSymbolicImpl) = hash2(s, zero(UInt))
 function hash2(s::BasicSymbolicImpl{T}, salt::UInt)::UInt where {T}
     E = exprtype(s)

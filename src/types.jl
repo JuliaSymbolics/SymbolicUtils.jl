@@ -602,8 +602,9 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
-    BasicSymbolic(s)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), arguments=[], issorted=RefValue(false), kw...)
+    bsi = BasicSymbolicImpl(s)
+    BasicSymbolic(bsi, metadata)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
@@ -618,8 +619,9 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
-        BasicSymbolic(s)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), arguments=[], issorted=RefValue(false), kw...)
+        bsi = BasicSymbolicImpl(s)
+        BasicSymbolic(bsi, metadata)
     end
 end
 
@@ -650,7 +652,7 @@ function maybe_intcoeff(x)
     end
 end
 
-function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
+function Div{T}(n, d, simplified=false; metadata=NO_METADATA, kwargs...) where {T}
     if T<:Number && !(T<:SafeReal)
         n, d = quick_cancel(n, d)
     end
@@ -684,8 +686,9 @@ function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
         end
     end
 
-    s = Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
-    BasicSymbolic(s)
+    s = Div{T}(; num=n, den=d, simplified, arguments=[])
+    bsi = BasicSymbolicImpl(s)
+    BasicSymbolic(bsi, metadata)
 end
 
 function Div(n,d, simplified=false; kw...)
@@ -702,8 +705,9 @@ end
 function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     _iszero(b) && return 1
     _isone(b) && return a
-    s = Pow{T}(; base=a, exp=b, arguments=[], metadata)
-    BasicSymbolic(s)
+    s = Pow{T}(; base=a, exp=b, arguments=[])
+    bsi = BasicSymbolicImpl(s)
+    BasicSymbolic(bsi, metadata)
 end
 
 function Pow(a, b; metadata = NO_METADATA, kwargs...)

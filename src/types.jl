@@ -24,19 +24,17 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
 const ENABLE_HASHCONSING = Ref(true)
 
 @compactify show_methods=false begin
-    @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
-        metadata::Metadata     = NO_METADATA
-    end
-    mutable struct Sym{T} <: BasicSymbolic{T}
+    @abstract mutable struct BasicSymbolicImpl{T} end
+    mutable struct Sym{T} <: BasicSymbolicImpl{T}
         name::Symbol           = :OOF
     end
-    mutable struct Term{T} <: BasicSymbolic{T}
+    mutable struct Term{T} <: BasicSymbolicImpl{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
     end
-    mutable struct Mul{T} <: BasicSymbolic{T}
+    mutable struct Mul{T} <: BasicSymbolicImpl{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
@@ -44,7 +42,7 @@ const ENABLE_HASHCONSING = Ref(true)
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    mutable struct Add{T} <: BasicSymbolic{T}
+    mutable struct Add{T} <: BasicSymbolicImpl{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
@@ -52,17 +50,22 @@ const ENABLE_HASHCONSING = Ref(true)
         arguments::Vector{Any} = EMPTY_ARGS
         issorted::RefValue{Bool} = NOT_SORTED
     end
-    mutable struct Div{T} <: BasicSymbolic{T}
+    mutable struct Div{T} <: BasicSymbolicImpl{T}
         num::Any               = 1
         den::Any               = 1
         simplified::Bool       = false
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    mutable struct Pow{T} <: BasicSymbolic{T}
+    mutable struct Pow{T} <: BasicSymbolicImpl{T}
         base::Any              = 1
         exp::Any               = 1
         arguments::Vector{Any} = EMPTY_ARGS
     end
+end
+
+@kwdef struct BasicSymbolic{T} <: Symbolic{T}
+    impl::BasicSymbolicImpl{T}
+    metadata::Metadata = NO_METADATA
 end
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
@@ -70,7 +73,10 @@ function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
 end
 
 function exprtype(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
+    exprtype(x.impl)
+end
+function exprtype(impl::BasicSymbolicImpl)
+    @compactified impl::BasicSymbolicImpl begin
         Term => TERM
         Add  => ADD
         Mul  => MUL
@@ -81,7 +87,15 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
-const wvd = WeakValueDict{UInt, BasicSymbolic}()
+function Base.getproperty(x::BasicSymbolic, sym::Symbol)
+    if sym === :metadata || sym === :impl
+        return getfield(x, sym)
+    else
+        return getproperty(x.impl, sym)
+    end
+end
+
+const wvd = WeakValueDict{UInt, BasicSymbolicImpl}()
 
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
@@ -99,7 +113,7 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     nt = getproperties(obj)
     nt_new = merge(nt, patch)
     # Call outer constructor because hash consing cannot be applied in inner constructor
-    @compactified obj::BasicSymbolic begin
+    @compactified obj.impl::BasicSymbolicImpl begin
         Sym => Sym{T}(nt_new.name; nt_new...)
         Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
         Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
@@ -128,9 +142,12 @@ symtype(x) = typeof(x)
 @inline symtype(::Type{<:Symbolic{T}}) where T = T
 
 # We're returning a function pointer
-@inline function operation(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
-        Term => x.f
+function operation(x::BasicSymbolic)
+    operation(x.impl)
+end
+@inline function operation(impl::BasicSymbolicImpl)
+    @compactified impl::BasicSymbolicImpl begin
+        Term => impl.f
         Add  => (+)
         Mul  => (*)
         Div  => (/)
@@ -144,7 +161,7 @@ end
 
 function TermInterface.sorted_arguments(x::BasicSymbolic)
     args = arguments(x)
-    @compactified x::BasicSymbolic begin
+    @compactified x.impl::BasicSymbolicImpl begin
         Add => @goto ADD
         Mul => @goto MUL
         _   => return args
@@ -169,7 +186,10 @@ end
 TermInterface.children(x::BasicSymbolic) = arguments(x)
 TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
 function TermInterface.arguments(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
+    arguments(x.impl)
+end
+function TermInterface.arguments(x::BasicSymbolicImpl)
+    @compactified x::BasicSymbolicImpl begin
         Term => return x.arguments
         Add  => @goto ADDMUL
         Mul  => @goto ADDMUL
@@ -219,7 +239,15 @@ end
 isexpr(s::BasicSymbolic) = !issym(s)
 iscall(s::BasicSymbolic) = isexpr(s)
 
-@inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false
+@inline function isa_SymType(T::Val{S}, x) where {S}
+    if x isa BasicSymbolic
+        Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolicImpl), T, x.impl)
+    elseif x isa BasicSymbolicImpl
+        Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolicImpl), T, x)
+    else
+        false
+    end
+end
 
 """
     issym(x)
@@ -395,7 +423,14 @@ end
 Base.one( s::Symbolic) = one( symtype(s))
 Base.zero(s::Symbolic) = zero(symtype(s))
 
-Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("None Sym BasicSymbolic doesn't have a name")
+Base.nameof(s::BasicSymbolic) = nameof(s.impl)
+function Base.nameof(s::BasicSymbolicImpl)
+    if issym(s)
+        s.name
+    else
+        error("None Sym BasicSymbolic doesn't have a name")
+    end
+end
 
 ## This is much faster than hash of an array of Any
 hashvec(xs, z) = foldr(hash, xs, init=z)
@@ -458,7 +493,8 @@ function hash2(n::T, salt::UInt) where {T <: Number}
     hash(T, hash(n, salt))
 end
 hash2(s::BasicSymbolic) = hash2(s, zero(UInt))
-function hash2(s::BasicSymbolic{T}, salt::UInt)::UInt where {T}
+hash2(s::BasicSymbolicImpl) = hash2(s, zero(UInt))
+function hash2(s::BasicSymbolicImpl{T}, salt::UInt)::UInt where {T}
     E = exprtype(s)
     h::UInt = 0
     if E === SYM
@@ -520,7 +556,7 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 `Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
 original behavior of those functions.
 """
-function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
+function BasicSymbolicImpl(s::BasicSymbolicImpl)::BasicSymbolicImpl
     if !ENABLE_HASHCONSING[]
         return s
     end
@@ -533,18 +569,20 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     end
 end
 
-function Sym{T}(name::Symbol; kw...) where {T}
+function Sym{T}(name::Symbol; metadata = NO_METADATA, kw...) where {T}
     s = Sym{T}(; name, kw...)
-    BasicSymbolic(s)
+    bsi = BasicSymbolicImpl(s)
+    BasicSymbolic(bsi, metadata)
 end
 
-function Term{T}(f, args; kw...) where T
+function Term{T}(f, args; metadata = NO_METADATA, kw...) where T
     if eltype(args) !== Any
         args = convert(Vector{Any}, args)
     end
 
     s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
-    BasicSymbolic(s)
+    bsi = BasicSymbolicImpl(s)
+    BasicSymbolic(bsi, metadata)
 end
 
 function Term(f, args; metadata=NO_METADATA)

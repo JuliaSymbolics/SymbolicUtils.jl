@@ -64,7 +64,7 @@ const ENABLE_HASHCONSING = Ref(true)
 end
 
 @kwdef struct BasicSymbolic{T} <: Symbolic{T}
-    impl::BasicSymbolicImpl{T}
+    expr::BasicSymbolicImpl{T}
     metadata::Metadata = NO_METADATA
 end
 
@@ -73,10 +73,10 @@ function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
 end
 
 function exprtype(x::BasicSymbolic)
-    exprtype(x.impl)
+    exprtype(x.expr)
 end
-function exprtype(impl::BasicSymbolicImpl)
-    @compactified impl::BasicSymbolicImpl begin
+function exprtype(expr::BasicSymbolicImpl)
+    @compactified expr::BasicSymbolicImpl begin
         Term => TERM
         Add  => ADD
         Mul  => MUL
@@ -88,10 +88,10 @@ function exprtype(impl::BasicSymbolicImpl)
 end
 
 function Base.getproperty(x::BasicSymbolic, sym::Symbol)
-    if sym === :metadata || sym === :impl
+    if sym === :metadata || sym === :expr
         return getfield(x, sym)
     else
-        return getproperty(x.impl, sym)
+        return getproperty(x.expr, sym)
     end
 end
 
@@ -113,7 +113,7 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     nt = getproperties(obj)
     nt_new = merge(nt, patch)
     # Call outer constructor because hash consing cannot be applied in inner constructor
-    @compactified obj.impl::BasicSymbolicImpl begin
+    @compactified obj.expr::BasicSymbolicImpl begin
         Sym => Sym{T}(nt_new.name; nt_new...)
         Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
         Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
@@ -143,11 +143,11 @@ symtype(x) = typeof(x)
 
 # We're returning a function pointer
 function operation(x::BasicSymbolic)
-    operation(x.impl)
+    operation(x.expr)
 end
-@inline function operation(impl::BasicSymbolicImpl)
-    @compactified impl::BasicSymbolicImpl begin
-        Term => impl.f
+@inline function operation(expr::BasicSymbolicImpl)
+    @compactified expr::BasicSymbolicImpl begin
+        Term => expr.f
         Add  => (+)
         Mul  => (*)
         Div  => (/)
@@ -161,7 +161,7 @@ end
 
 function TermInterface.sorted_arguments(x::BasicSymbolic)
     args = arguments(x)
-    @compactified x.impl::BasicSymbolicImpl begin
+    @compactified x.expr::BasicSymbolicImpl begin
         Add => @goto ADD
         Mul => @goto MUL
         _   => return args
@@ -186,7 +186,7 @@ end
 TermInterface.children(x::BasicSymbolic) = arguments(x)
 TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
 function TermInterface.arguments(x::BasicSymbolic)
-    arguments(x.impl)
+    arguments(x.expr)
 end
 function TermInterface.arguments(x::BasicSymbolicImpl)
     @compactified x::BasicSymbolicImpl begin
@@ -241,7 +241,7 @@ iscall(s::BasicSymbolic) = isexpr(s)
 
 @inline function isa_SymType(T::Val{S}, x) where {S}
     if x isa BasicSymbolic
-        Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolicImpl), T, x.impl)
+        Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolicImpl), T, x.expr)
     elseif x isa BasicSymbolicImpl
         Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolicImpl), T, x)
     else
@@ -423,7 +423,7 @@ end
 Base.one( s::Symbolic) = one( symtype(s))
 Base.zero(s::Symbolic) = zero(symtype(s))
 
-Base.nameof(s::BasicSymbolic) = nameof(s.impl)
+Base.nameof(s::BasicSymbolic) = nameof(s.expr)
 function Base.nameof(s::BasicSymbolicImpl)
     if issym(s)
         s.name

@@ -237,8 +237,10 @@ function TermInterface.arguments(x::BasicSymbolicImpl)
     return args
 end
 
-isexpr(s::BasicSymbolic) = !issym(s)
-iscall(s::BasicSymbolic) = isexpr(s)
+isexpr(s::BasicSymbolic) = isexpr(s.expr)
+isexpr(expr::BasicSymbolicImpl) = !issym(expr)
+iscall(s::BasicSymbolic) = iscall(s.expr)
+iscall(expr::BasicSymbolicImpl) = isexpr(expr)
 
 @inline function isa_SymType(T::Val{S}, x) where {S}
     if x isa BasicSymbolic

@@ -568,7 +568,7 @@ function BasicSymbolicImpl(s::BasicSymbolicImpl)::BasicSymbolicImpl
     end
     h = hash2(s)
     t = get!(wvd, h, s)
-    if t === s || isequal_with_metadata(t, s)
+    if t === s || isequal(t, s)
         return t
     else
         return s

@@ -284,7 +284,10 @@ function _allarequal(xs, ys; comparator = isequal)::Bool
     return true
 end
 
-function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
+function Base.isequal(a::BasicSymbolic, b::BasicSymbolic)
+    isequal(a.expr, b.expr)
+end
+function Base.isequal(a::BasicSymbolicImpl{T}, b::BasicSymbolicImpl{S}) where {T,S}
     a === b && return true
 
     E = exprtype(a)

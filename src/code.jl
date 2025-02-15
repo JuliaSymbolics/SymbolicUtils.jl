@@ -704,6 +704,16 @@ end
 @inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
 
 """
+    $(TYPEDSIGNATURES)
+
+Return `true` if CSE should descend inside `sym`, which has operation `f` and
+arguments `args...`.
+"""
+function cse_inside_expr(sym, f, args...)
+    return true
+end
+
+"""
 $(SIGNATURES)
 
 Perform a topological sort on a symbolic expression represented as a Directed Acyclic 
@@ -727,10 +737,16 @@ function topological_sort(graph)
             return visited[node]
         end
         if iscall(node)
+            op = operation(node)
+            args = arguments(node)
+            if !cse_inside_expr(node, op, args...)
+                visited[node] = node
+                return node
+            end
             args = map(dfs, arguments(node))
             # use `term` instead of `maketerm` because we only care about the operation being performed
             # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-            new_node = term(operation(node), args...)
+            new_node = term(operation(node), args...; type = symtype(node))
             sym = newsym(symtype(new_node))
             push!(sorted_nodes, sym ← new_node)
             visited[node] = sym

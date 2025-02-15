@@ -274,3 +274,17 @@ end
     expected = eval(toexpr(Let([x ← 1, y ← 2, z ← 3], sarr)))
     @test fn(1, 2, 3) ≈ expected
 end
+
+function foo(args...) end
+
+SymbolicUtils.Code.cse_inside_expr(sym, ::typeof(foo), args...) = false
+
+@testset "`cse_inside_expr`" begin
+    @syms x y
+    ex1 = (x^2 + y^2)
+    exfoo = term(foo, ex1; type = Real)
+    ex2 = ex1 + exfoo
+    letblock = cse(ex2)
+    ex3 = letblock.body
+    @test any(isequal(exfoo), arguments(ex3))
+end

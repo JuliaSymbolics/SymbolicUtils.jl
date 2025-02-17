@@ -350,7 +350,7 @@ function isequal_with_metadata(a::BasicSymbolic{T}, b::BasicSymbolic{S})::Bool w
     E === exprtype(b) || return false
 
     T === S || return false
-    _isequal(a, b, E; comparator = isequal_with_metadata)::Bool && isequal_with_metadata(metadata(a), metadata(b)) || return false
+    _isequal(a, b, E; comparator = isequal_with_metadata)::Bool && isequal(a.meta, b.meta) || return false
 end
 
 """

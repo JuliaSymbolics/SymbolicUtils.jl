@@ -303,6 +303,12 @@ function Base.isequal(a::BasicSymbolicImpl{T}, b::BasicSymbolicImpl{S}) where {T
     T === S || return false
     return _isequal(a, b, E)::Bool
 end
+function Base.isequal(a::MetadataImpl, b::MetadataImpl)
+    (a === b) ||
+        (isequal_with_metadata(a.this, b.this) &&
+         isequal_with_metadata(a.children, b.children))
+end
+
 function _isequal(a, b, E; comparator = isequal)
     if E === SYM
         nameof(a) === nameof(b)

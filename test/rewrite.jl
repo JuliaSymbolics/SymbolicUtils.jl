@@ -1,4 +1,5 @@
 using SymbolicUtils
+using SymbolicUtils: metadata_children
 
 include("utils.jl")
 
@@ -88,24 +89,24 @@ end
     ex1 = ex + c
 
     @test SymbolicUtils.isterm(ex1)
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(metadata_children(ex1)[1], MetaData) == :metadata
 
     ex = a
     ex = setmetadata(ex, MetaData, :metadata)
     ex1 = ex + b
 
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(metadata_children(ex1)[1], MetaData) == :metadata
 
     ex = a * b
     ex = setmetadata(ex, MetaData, :metadata)
     ex1 = ex * c
 
     @test SymbolicUtils.isterm(ex1)
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(metadata_children(ex1)[1], MetaData) == :metadata
 
     ex = a
     ex = setmetadata(ex, MetaData, :metadata)
     ex1 = ex * b
 
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(metadata_children(ex1)[1], MetaData) == :metadata
 end

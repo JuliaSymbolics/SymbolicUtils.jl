@@ -93,7 +93,9 @@ function exprtype(expr::BasicSymbolicImpl)
 end
 
 function Base.getproperty(x::BasicSymbolic, sym::Symbol)
-    if sym === :metadata || sym === :expr
+    if sym === :metadata
+        return getfield(x, :meta).this
+    elseif sym === :expr || sym === :meta
         return getfield(x, sym)
     else
         return getproperty(x.expr, sym)

@@ -591,7 +591,8 @@ end
 function Sym{T}(name::Symbol; metadata = NO_METADATA, kw...) where {T}
     s = Sym{T}(; name, kw...)
     bsi = BasicSymbolicImpl(s)
-    BasicSymbolic(bsi, metadata)
+    mdi = MetadataImpl(metadata, Vector())
+    BasicSymbolic(bsi, mdi)
 end
 
 function Term{T}(f, args; metadata = NO_METADATA, kw...) where T
@@ -601,7 +602,8 @@ function Term{T}(f, args; metadata = NO_METADATA, kw...) where T
 
     s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
     bsi = BasicSymbolicImpl(s)
-    BasicSymbolic(bsi, metadata)
+    mdi = MetadataImpl(metadata, getmetadata.(args))
+    BasicSymbolic(bsi, mdi)
 end
 
 function Term(f, args; metadata=NO_METADATA)
@@ -623,7 +625,8 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
 
     s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), arguments=[], issorted=RefValue(false), kw...)
     bsi = BasicSymbolicImpl(s)
-    BasicSymbolic(bsi, metadata)
+    mdi = MetadataImpl(metadata, getmetadata.(arguments(s)))
+    BasicSymbolic(bsi, mdi)
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
@@ -640,7 +643,8 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
         dict = b
         s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), arguments=[], issorted=RefValue(false), kw...)
         bsi = BasicSymbolicImpl(s)
-        BasicSymbolic(bsi, metadata)
+        mdi = MetadataImpl(metadata, getmetadata.(arguments(s)))
+        BasicSymbolic(bsi, mdi)
     end
 end
 
@@ -707,7 +711,8 @@ function Div{T}(n, d, simplified=false; metadata=NO_METADATA, kwargs...) where {
 
     s = Div{T}(; num=n, den=d, simplified, arguments=[])
     bsi = BasicSymbolicImpl(s)
-    BasicSymbolic(bsi, metadata)
+    mdi = MetadataImpl(metadata, getmetadata.(arguments(s)))
+    BasicSymbolic(bsi, mdi)
 end
 
 function Div(n,d, simplified=false; kw...)
@@ -726,7 +731,8 @@ function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     _isone(b) && return a
     s = Pow{T}(; base=a, exp=b, arguments=[])
     bsi = BasicSymbolicImpl(s)
-    BasicSymbolic(bsi, metadata)
+    mdi = MetadataImpl(metadata, getmetadata.(arguments(s)))
+    BasicSymbolic(bsi, mdi)
 end
 
 function Pow(a, b; metadata = NO_METADATA, kwargs...)

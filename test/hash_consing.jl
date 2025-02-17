@@ -7,23 +7,23 @@ struct Ctx2 end
 @testset "Sym" begin
     x1 = only(@syms x)
     x2 = only(@syms x)
-    @test x1 === x2
+    @test x1.expr === x2.expr
     x3 = only(@syms x::Float64)
-    @test x1 !== x3
+    @test x1.expr !== x3.expr
     x4 = only(@syms x::Float64)
-    @test x1 !== x4
-    @test x3 === x4
+    @test x1.expr !== x4.expr
+    @test x3.expr === x4.expr
     x5 = only(@syms x::Int)
     x6 = only(@syms x::Int)
-    @test x1 !== x5
-    @test x3 !== x5
-    @test x5 === x6
+    @test x1.expr !== x5.expr
+    @test x3.expr !== x5.expr
+    @test x5.expr === x6.expr
 
     xm1 = setmetadata(x1, Ctx1, "meta_1")
     xm2 = setmetadata(x1, Ctx1, "meta_1")
-    @test xm1 === xm2
+    @test xm1.expr === xm2.expr
     xm3 = setmetadata(x1, Ctx2, "meta_2")
-    @test xm1 !== xm3
+    @test xm1.expr === xm3.expr
 end
 
 @syms a b c
@@ -31,73 +31,73 @@ end
 @testset "Term" begin
     t1 = sin(a)
     t2 = sin(a)
-    @test t1 === t2
+    @test t1.expr === t2.expr
     t3 = Term(identity,[a])
     t4 = Term(identity,[a])
-    @test t3 === t4
+    @test t3.expr === t4.expr
     t5 = Term{Int}(identity,[a])
-    @test t3 !== t5
+    @test t3.expr !== t5.expr
     tm1 = setmetadata(t1, Ctx1, "meta_1")
-    @test t1 !== tm1
+    @test t1.expr === tm1.expr
 end
 
 @testset "Add" begin
     d1 = a + b
     d2 = b + a
-    @test d1 === d2
+    @test d1.expr === d2.expr
     d3 = b - 2 + a
     d4 = a + b  - 2
-    @test d3 === d4
+    @test d3.expr === d4.expr
     d5 = Add(Int, 0, Dict(a => 1, b => 1))
-    @test d5 !== d1
+    @test d5.expr !== d1.expr
 
     dm1 = setmetadata(d1,Ctx1,"meta_1")
-    @test d1 !== dm1
+    @test d1.expr === dm1.expr
 end
 
 @testset "Mul" begin
     m1 = a*b
     m2 = b*a
-    @test m1 === m2
+    @test m1.expr === m2.expr
     m3 = 6*a*b
     m4 = 3*a*2*b
-    @test m3 === m4
+    @test m3.expr === m4.expr
     m5 = Mul(Int, 1, Dict(a => 1, b => 1))
-    @test m5 !== m1
+    @test m5.expr !== m1.expr
 
     mm1 = setmetadata(m1, Ctx1, "meta_1")
-    @test m1 !== mm1
+    @test m1.expr === mm1.expr
 end
 
 @testset "Div" begin
     v1 = a/b
     v2 = a/b
-    @test v1 === v2
+    @test v1.expr === v2.expr
     v3 = -1/a
     v4 = -1/a
-    @test v3 === v4
+    @test v3.expr === v4.expr
     v5 = 3a/6
     v6 = 2a/4
-    @test v5 === v6
+    @test v5.expr === v6.expr
     v7 = Div{Float64}(-1,a)
-    @test v7 !== v3
+    @test v7.expr !== v3.expr
 
     vm1 = setmetadata(v1,Ctx1, "meta_1")
-    @test vm1 !== v1
+    @test vm1.expr === v1.expr
 end
 
 @testset "Pow" begin
     p1 = a^b
     p2 = a^b
-    @test p1 === p2
+    @test p1.expr === p2.expr
     p3 = a^(2^-b)
     p4 = a^(2^-b)
-    @test p3 === p4
+    @test p3.expr === p4.expr
     p5 = Pow{Float64}(a,b)
-    @test p1 !== p5
+    @test p1.expr !== p5.expr
 
     pm1 = setmetadata(p1,Ctx1, "meta_1")
-    @test pm1 !== p1
+    @test pm1.expr === p1.expr
 end
 
 @testset "Equivalent numbers" begin
@@ -114,7 +114,7 @@ end
     a1 = setmetadata(a, Int, b)
     b1 = setmetadata(b, Int, 3)
     a2 = setmetadata(a, Int, b1)
-    @test a1 !== a2
+    @test a1.expr === a2.expr
     @test !SymbolicUtils.isequal_with_metadata(a1, a2)
     @test metadata(metadata(a1)[Int]) === nothing
     @test metadata(metadata(a2)[Int])[Int] == 3
@@ -123,7 +123,7 @@ end
 @testset "Compare metadata of expression tree" begin
     @syms a b
     aa = setmetadata(a, Int, b)
-    @test aa !== a
+    @test aa.expr === a.expr
     @test isequal(a, aa)
     @test !SymbolicUtils.isequal_with_metadata(a, aa)
     @test !SymbolicUtils.isequal_with_metadata(2a, 2aa)
@@ -144,6 +144,6 @@ end
         h = SymbolicUtils.hash2(ex)
         @test h == ex.hash2[]
         ex2 = setmetadata(ex, Int, 3)
-        @test ex2.hash2[] != h
+        @test ex2.hash2[] == h
     end
 end

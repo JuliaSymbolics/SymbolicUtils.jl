@@ -182,6 +182,12 @@ function _is_array_of_symbolics(O)
         any(x -> symbolic_type(x) != NotSymbolic() || _is_array_of_symbolics(x), O))
 end
 
+# workaround for https://github.com/JuliaSparse/SparseArrays.jl/issues/599
+function _is_array_of_symbolics(O::SparseMatrixCSC)
+    return symbolic_type(eltype(O)) != NotSymbolic() ||
+        any(x -> symbolic_type(x) != NotSymbolic() || _is_array_of_symbolics(x), findnz(O)[3])
+end
+
 function toexpr(O, st)
     if issym(O)
         O = substitute_name(O, st)
@@ -190,7 +196,7 @@ function toexpr(O, st)
     O = substitute_name(O, st)
 
     if _is_array_of_symbolics(O)
-        return toexpr(MakeArray(O, typeof(O)), st)
+        return issparse(O) ? toexpr(MakeSparseArray(O)) : toexpr(MakeArray(O, typeof(O)), st)
     end
     !iscall(O) && return O
     op = operation(O)
@@ -698,6 +704,16 @@ end
 @inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
 
 """
+    $(TYPEDSIGNATURES)
+
+Return `true` if CSE should descend inside `sym`, which has operation `f` and
+arguments `args...`.
+"""
+function cse_inside_expr(sym, f, args...)
+    return true
+end
+
+"""
 $(SIGNATURES)
 
 Perform a topological sort on a symbolic expression represented as a Directed Acyclic 
@@ -721,16 +737,30 @@ function topological_sort(graph)
             return visited[node]
         end
         if iscall(node)
+            op = operation(node)
+            args = arguments(node)
+            if !cse_inside_expr(node, op, args...)
+                visited[node] = node
+                return node
+            end
             args = map(dfs, arguments(node))
             # use `term` instead of `maketerm` because we only care about the operation being performed
             # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-            new_node = term(operation(node), args...)
+            new_node = term(operation(node), args...; type = symtype(node))
             sym = newsym(symtype(new_node))
             push!(sorted_nodes, sym ← new_node)
             visited[node] = sym
             return sym
         elseif _is_array_of_symbolics(node)
-            new_node = map(dfs, node)
+            # workaround for https://github.com/JuliaSparse/SparseArrays.jl/issues/599
+            if issparse(node)
+                new_node = copy(node)
+                for (i, j, v) in zip(findnz(node)...)
+                    new_node[i, j] = dfs(v)
+                end
+            else
+                new_node = map(dfs, node)
+            end
             sym = newsym(typeof(new_node))
             push!(sorted_nodes, sym ← new_node)
             visited[node] = sym

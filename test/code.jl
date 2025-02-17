@@ -264,3 +264,27 @@ nanmath_st.rewrites[:nanmath] = true
         @test f(1.0, 2.0) ≈ 13.0 + sqrt(2)
     end
 end
+
+@testset "Sparse array CSE" begin
+    @syms x y z
+    arr = [x^2 + y^2 0 0; 0 sin(y^2 + z^2) 0; 0 0 z^2 + x^2]
+    sarr = sparse(arr);
+    fn = eval(toexpr(Func([x, y, z], [], Code.cse(sarr))))
+
+    expected = eval(toexpr(Let([x ← 1, y ← 2, z ← 3], sarr)))
+    @test fn(1, 2, 3) ≈ expected
+end
+
+function foo(args...) end
+
+SymbolicUtils.Code.cse_inside_expr(sym, ::typeof(foo), args...) = false
+
+@testset "`cse_inside_expr`" begin
+    @syms x y
+    ex1 = (x^2 + y^2)
+    exfoo = term(foo, ex1; type = Real)
+    ex2 = ex1 + exfoo
+    letblock = cse(ex2)
+    ex3 = letblock.body
+    @test any(isequal(exfoo), arguments(ex3))
+end

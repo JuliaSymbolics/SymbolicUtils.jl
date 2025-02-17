@@ -935,6 +935,7 @@ _issafecanon(::typeof(^), s) = !iscall(s) || !(operation(s) in (*, ^))
 
 issafecanon(f, ss...) = all(x->issafecanon(f, x), ss)
 
+getmetadata(s) = metadata(s)
 function getmetadata(s::Symbolic, ctx)
     md = metadata(s)
     if md isa AbstractDict
@@ -943,10 +944,12 @@ function getmetadata(s::Symbolic, ctx)
         throw(ArgumentError("$s does not have metadata for $ctx"))
     end
 end
-
 function getmetadata(s::Symbolic, ctx, default)
     md = metadata(s)
     md isa AbstractDict ? get(md, ctx, default) : default
+end
+function getmetadata(d::AbstractDict, ctx)
+    d[ctx]
 end
 
 # pirated for Setfield purposes:

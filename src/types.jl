@@ -63,9 +63,14 @@ const ENABLE_HASHCONSING = Ref(true)
     end
 end
 
+struct MetadataImpl
+    this::Metadata
+    children::Vector{Any}
+end
+
 @kwdef struct BasicSymbolic{T} <: Symbolic{T}
     expr::BasicSymbolicImpl{T}
-    metadata::Metadata = NO_METADATA
+    meta::MetadataImpl
 end
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})

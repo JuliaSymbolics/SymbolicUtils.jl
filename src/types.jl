@@ -97,8 +97,24 @@ function Base.getproperty(x::BasicSymbolic, sym::Symbol)
         return getfield(x, :meta).this
     elseif sym === :expr || sym === :meta
         return getfield(x, sym)
+    elseif sym === :base || sym === :num
+        bsi = getproperty(getfield(x, :expr), sym)
+        if bsi isa BasicSymbolicImpl
+            mdi = getfield(x, :meta).children[1]
+            return BasicSymbolic(bsi, mdi)
+        else
+            return bsi
+        end
+    elseif sym === :exp || sym === :den
+        bsi = getproperty(getfield(x, :expr), sym)
+        if bsi isa BasicSymbolicImpl
+            mdi = getfield(x, :meta).children[2]
+            return BasicSymbolic(bsi, mdi)
+        else
+            return bsi
+        end
     else
-        return getproperty(x.expr, sym)
+        return getproperty(getfield(x, :expr), sym)
     end
 end
 

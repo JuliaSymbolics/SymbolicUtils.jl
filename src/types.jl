@@ -68,10 +68,17 @@ struct MetadataImpl
     children::Vector{Any}
 end
 
+function MetadataImpl()
+    MetadataImpl(nothing, Vector())
+end
+
 @kwdef struct BasicSymbolic{T} <: Symbolic{T}
     expr::BasicSymbolicImpl{T}
     meta::MetadataImpl
 end
+
+getmetaimpl(x::BasicSymbolic) = x.meta
+getmetaimpl(::Any) = nothing
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
     ScalarSymbolic()
@@ -210,7 +217,19 @@ end
 TermInterface.children(x::BasicSymbolic) = arguments(x)
 TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
 function TermInterface.arguments(x::BasicSymbolic)
-    arguments(x.expr)
+    args = arguments(x.expr)
+    args_metadata = x.meta.children
+    res = Vector()
+    for (arg, meta) in zip(args, args_metadata)
+        if arg isa BasicSymbolicImpl
+            if isnothing(meta)
+                meta = MetadataImpl()
+            end
+            arg = BasicSymbolic(arg, meta)
+        end
+        push!(res, arg)
+    end
+    res
 end
 function TermInterface.arguments(x::BasicSymbolicImpl)
     @compactified x::BasicSymbolicImpl begin

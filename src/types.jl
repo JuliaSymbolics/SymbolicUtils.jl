@@ -1427,12 +1427,16 @@ function -(a::SN)
 end
 
 function -(a::SN, b::SN)
-    (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
-    isadd(a) && isadd(b) ? Add(sub_t(a,b),
-                               a.coeff - b.coeff,
-                               _merge(-, a.dict,
-                                      b.dict,
-                                      filter=_iszero)) : a + (-b)
+    if !issafecanon(+, a) || !issafecanon(*, b)
+        return term(-, a, b)
+    elseif isadd(a) && isadd(b)
+        t = sub_t(a, b)
+        c = a.coeff - b.coeff
+        d = _merge(-, a.dict, b.dict, filter = _iszero)
+        return Add(t, c, d)
+    else
+        return a + (-b)
+    end
 end
 
 -(a::Number, b::SN) = a + (-b)

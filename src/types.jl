@@ -1016,10 +1016,6 @@ end
 metadata(s::Symbolic) = s.metadata
 metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
-function metadata_children(s::BasicSymbolic)
-    s.meta.children
-end
-
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end

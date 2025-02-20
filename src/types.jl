@@ -244,6 +244,45 @@ function TermInterface.arguments(x::BasicSymbolicImpl)
     return args
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+For given `coeff` and `dict`, return arguments of type `BasicSymbolicImpl`, children's 
+metadata and a new dictionary with `BasicSymbolicImpl` as key's type for preparation of the 
+construction of either `Add` or `Mul`.
+"""
+function get_arguments_metadata(coeff, dict::AbstractDict, type::ExprType)
+    siz = length(dict)
+    idcoeff = type === ADD ? iszero(coeff) : isone(coeff)
+    args = Vector()
+    sizehint!(args, idcoeff ? siz : siz + 1)
+    idcoeff || push!(args, coeff)
+    if type === ADD
+        for (k, v) in dict
+            if k isa BasicSymbolicImpl
+                k = BasicSymbolic(k, MetadataImpl())
+            end
+            push!(args, applicable(*, k, v) ? k * v : maketerm(k, *, [k, v], nothing))
+        end
+    else # MUL
+        for (k, v) in dict
+            if k isa BasicSymbolicImpl
+                k = BasicSymbolic(k, MetadataImpl())
+            end
+            push!(args, unstable_pow(k, v))
+        end
+    end
+    metadata_children = map(getmetaimpl, args)
+    for i in 1:length(args)
+        if args[i] isa BasicSymbolic
+            args[i] = args[i].expr
+        end
+    end
+    keys = idcoeff ? args : @view args[2:end]
+    bsi_dict = Dict(zip(keys, values(dict)))
+    return args, metadata_children, bsi_dict
+end
+
 isexpr(s::BasicSymbolic) = isexpr(s.expr)
 isexpr(expr::BasicSymbolicImpl) = !issym(expr)
 iscall(s::BasicSymbolic) = iscall(s.expr)
@@ -599,10 +638,15 @@ function Term{T}(f, args; metadata = NO_METADATA, kw...) where T
     if eltype(args) !== Any
         args = convert(Vector{Any}, args)
     end
-
+    metadata_children = map(getmetaimpl, args)
+    for i in 1:length(args)
+        if args[i] isa BasicSymbolic
+            args[i] = args[i].expr
+        end
+    end
     s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
     bsi = BasicSymbolicImpl(s)
-    mdi = MetadataImpl(metadata, getmetadata.(args))
+    mdi = MetadataImpl(metadata, metadata_children)
     BasicSymbolic(bsi, mdi)
 end
 
@@ -622,10 +666,10 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
             return Mul(T, coeff, dict)
         end
     end
-
-    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), arguments=[], issorted=RefValue(false), kw...)
+    arguments, metadata_children, dict = get_arguments_metadata(coeff, dict, ADD)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), arguments, issorted=RefValue(false), kw...)
     bsi = BasicSymbolicImpl(s)
-    mdi = MetadataImpl(metadata, getmetadata.(arguments(s)))
+    mdi = MetadataImpl(metadata, metadata_children)
     BasicSymbolic(bsi, mdi)
 end
 
@@ -641,9 +685,10 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), arguments=[], issorted=RefValue(false), kw...)
+        arguments, metadata_children, dict = get_arguments_metadata(coeff, dict, MUL)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), arguments, issorted=RefValue(false), kw...)
         bsi = BasicSymbolicImpl(s)
-        mdi = MetadataImpl(metadata, getmetadata.(arguments(s)))
+        mdi = MetadataImpl(metadata, metadata_children)
         BasicSymbolic(bsi, mdi)
     end
 end
@@ -708,10 +753,16 @@ function Div{T}(n, d, simplified=false; metadata=NO_METADATA, kwargs...) where {
             end
         end
     end
-
+    metadata_children = [getmetaimpl(n), getmetaimpl(d)]
+    if n isa BasicSymbolic
+        n = n.expr
+    end
+    if d isa BasicSymbolic
+        d = d.expr
+    end
     s = Div{T}(; num=n, den=d, simplified, arguments=[])
     bsi = BasicSymbolicImpl(s)
-    mdi = MetadataImpl(metadata, getmetadata.(arguments(s)))
+    mdi = MetadataImpl(metadata, metadata_children)
     BasicSymbolic(bsi, mdi)
 end
 
@@ -728,10 +779,17 @@ end
 
 function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     _iszero(b) && return 1
-    _isone(b) && return a
+    _isone(b) && return a    
+    metadata_children = [getmetaimpl(a), getmetaimpl(b)]
+    if a isa BasicSymbolic
+        a = a.expr
+    end
+    if b isa BasicSymbolic
+        b = b.expr
+    end
     s = Pow{T}(; base=a, exp=b, arguments=[])
     bsi = BasicSymbolicImpl(s)
-    mdi = MetadataImpl(metadata, getmetadata.(arguments(s)))
+    mdi = MetadataImpl(metadata, metadata_children)
     BasicSymbolic(bsi, mdi)
 end
 

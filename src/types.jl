@@ -4,6 +4,8 @@
 #--------------------
 abstract type Symbolic{T} end
 
+using UUIDs
+
 ###
 ### Uni-type design
 ###
@@ -26,6 +28,7 @@ const ENABLE_HASHCONSING = Ref(true)
 @compactify show_methods=false begin
     @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
+        uuid::Union{Nothing, UUID} = nothing
     end
     mutable struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
@@ -526,11 +529,15 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     end
     h = hash2(s)
     t = get!(wvd, h, s)
-    if t === s || isequal_with_metadata(t, s)
-        return t
+    result = if t === s || isequal_with_metadata(t, s)
+        t
     else
-        return s
+        s
     end
+    if result.uuid === nothing
+        result.uuid = uuid4()
+    end
+    return result
 end
 
 function Sym{T}(name::Symbol; kw...) where {T}

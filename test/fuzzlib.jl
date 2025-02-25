@@ -2,8 +2,6 @@ using SymbolicUtils
 using SymbolicUtils: Term, showraw, Symbolic, issym
 using SpecialFunctions
 using Test
-import IfElse: ifelse
-import IfElse
 using NaNMath
 
 function rand_input(T)

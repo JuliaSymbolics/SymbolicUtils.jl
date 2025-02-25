@@ -155,7 +155,7 @@ function function_to_expr(op::typeof(^), O, st)
     return nothing
 end
 
-function function_to_expr(::typeof(SymbolicUtils.ifelse), O, st)
+function function_to_expr(::typeof(ifelse), O, st)
     args = arguments(O)
     :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
 end

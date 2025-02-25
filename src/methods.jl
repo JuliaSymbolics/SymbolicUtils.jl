@@ -198,9 +198,8 @@ for f in [!, ~]
 end
 
 
-# An ifelse node, ifelse is a built-in unfortunately
-# So this uses IfElse.jl's ifelse that we imported
-function ifelse(_if::Symbolic{Bool}, _then, _else)
+# An ifelse node
+function Base.ifelse(_if::Symbolic{Bool}, _then, _else)
     Term{Union{symtype(_then), symtype(_else)}}(ifelse, Any[_if, _then, _else])
 end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}

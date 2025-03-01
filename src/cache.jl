@@ -148,8 +148,10 @@ end
 Create a cached version of the function `foo`. This is typically useful for recursive
 functions that descend through an expression tree.
 
-Argument types and return type should be annotated to avoid warnings. If any of the
-argument types is a `BasicSymbolic`, uses a special caching for efficiency. The maximum
+The return type of the function should be annotated to avoid warnings. If any of the
+argument types is a `BasicSymbolic`, uses a special caching for efficiency. If an argument
+has `Any` type or a `Union` containing `BasicSymbolic`, a runtime check is performed to
+handle it. This can be avoided if the type is annotated with `BasicSymbolic`. The maximum
 number of entries in the cache can be set using the `limit` option by providing an
 integer size. This defaults to `100_000`. When this limit is hit, a fraction of the
 entries in the cache will be cleared at random. The fraction of entries retained is given
@@ -178,7 +180,7 @@ macro cache(args...)
     configargs = Base.front(args)
 
     # parse configuration options
-    config = Dict(:limit => 100_000, :retain_fraction => 0.5, :allow_any_argument => false, :allow_any_return => false, :enabled => true)
+    config = Dict(:limit => 100_000, :retain_fraction => 0.5, :allow_any_return => false, :enabled => true)
     for carg in configargs
         if !Meta.isexpr(carg, :())
             throw(ArgumentError("Expected `key = value` syntax, got $carg"))
@@ -222,18 +224,30 @@ macro cache(args...)
         if Meta.isexpr(arg, :kw)
             arg = arg.args[1]
         end
-        # We typically don't like `Any` arguments
         if !Meta.isexpr(arg, :(::))
-            if !config[:allow_any_argument]
-                @warn("Argument $arg has type `Any`. If a symbolic value is passed to this argument, it will not be cached properly. Disable this warning by providing `allow_any_argument = true` to `SymbolicUtils.@cache`.")
-            end
-            push!(keyexprs, arg)
+            # if the type is `Any`, branch on it being a `BasicSymbolic`
+            conditions = :($conditions && (!($arg isa BasicSymbolic) || $arg.uuid !== nothing))
+            push!(keyexprs, :($arg isa BasicSymbolic ? $arg.uuid : $arg))
             push!(argexprs, arg)
             push!(keytypes, Any)
             continue
         end
         argname, Texpr = arg.args
         push!(argexprs, argname)
+
+        # handle Union types that may contain a `BasicSymbolic`
+        if Meta.isexpr(Texpr, :curly) && Texpr.args[1] == :Union
+            Texprs = Texpr.args[2:end]
+            Ts = map(Base.Fix1(Base.eval, __module__), Texprs)
+            keyTs = map(x -> x <: BasicSymbolic ? UUID : x, Ts)
+            if any(x -> x <: BasicSymbolic, Ts)
+                conditions = :($conditions && (!($argname isa BasicSymbolic) || $argname.uuid !== nothing))
+            end
+            push!(keytypes, Union{keyTs...})
+            push!(keyexprs, :($argname isa BasicSymbolic ? $argname.uuid : $argname))
+            continue
+        end
+            
         # use `eval` to get the type because we need to know if it's a `BasicSymbolic`
         T = Base.eval(__module__, Texpr)
         if T <: BasicSymbolic
@@ -336,7 +350,7 @@ macro cache(args...)
         const $cachename = $cachector
 
         $(EL.codegen_ast(fn))
-        $(EL.codegen_ast(wrapperfn))
+        Base.@__doc__ $(EL.codegen_ast(wrapperfn))
 
         function (::$(typeof(associated_cache)))(::typeof($name))
             $cachename

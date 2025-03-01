@@ -4,8 +4,6 @@
 #--------------------
 abstract type Symbolic{T} end
 
-using UUIDs
-
 ###
 ### Uni-type design
 ###

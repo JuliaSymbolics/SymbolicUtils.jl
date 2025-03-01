@@ -226,8 +226,7 @@ macro cache(args...)
         end
         if !Meta.isexpr(arg, :(::))
             # if the type is `Any`, branch on it being a `BasicSymbolic`
-            conditions = :($conditions && (!($arg isa BasicSymbolic) || $arg.uuid !== nothing))
-            push!(keyexprs, :($arg isa BasicSymbolic ? $arg.uuid : $arg))
+            push!(keyexprs, :($arg isa BasicSymbolic ? objectid($arg) : $arg))
             push!(argexprs, arg)
             push!(keytypes, Any)
             continue
@@ -239,23 +238,19 @@ macro cache(args...)
         if Meta.isexpr(Texpr, :curly) && Texpr.args[1] == :Union
             Texprs = Texpr.args[2:end]
             Ts = map(Base.Fix1(Base.eval, __module__), Texprs)
-            keyTs = map(x -> x <: BasicSymbolic ? UUID : x, Ts)
+            keyTs = map(x -> x <: BasicSymbolic ? UInt64 : x, Ts)
             if any(x -> x <: BasicSymbolic, Ts)
-                conditions = :($conditions && (!($argname isa BasicSymbolic) || $argname.uuid !== nothing))
             end
             push!(keytypes, Union{keyTs...})
-            push!(keyexprs, :($argname isa BasicSymbolic ? $argname.uuid : $argname))
+            push!(keyexprs, :($argname isa BasicSymbolic ? objectid($argname) : $argname))
             continue
         end
             
         # use `eval` to get the type because we need to know if it's a `BasicSymbolic`
         T = Base.eval(__module__, Texpr)
         if T <: BasicSymbolic
-            # The uuid has to be defined
-            conditions = :($conditions && ($argname).uuid !== nothing)
-            # this key is a uuid
-            push!(keytypes, UUID) 
-            push!(keyexprs, :(($argname).uuid))
+            push!(keytypes, UInt64) 
+            push!(keyexprs, :(objectid($argname)))
         else
             push!(keytypes, T)
             push!(keyexprs, argname)

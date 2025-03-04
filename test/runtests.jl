@@ -17,5 +17,6 @@ using Pkg, Test, SafeTestsets
         @safetestset "Fuzz" begin include("fuzz.jl") end
         @safetestset "Adjoints" begin include("adjoints.jl") end
         @safetestset "Hash Consing" begin include("hash_consing.jl") end
+        @safetestset "Cache macro" begin include("cache_macro.jl") end
     end
 end

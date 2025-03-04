@@ -21,6 +21,8 @@ import TermInterface: iscall, isexpr, head, children,
 # For ReverseDiffExt
 import ArrayInterface
 using WeakValueDicts: WeakValueDict
+import ExproniconLite as EL
+import TaskLocalValues: TaskLocalValue
 
 Base.@deprecate istree iscall
 export istree, operation, arguments, sorted_arguments, iscall
@@ -73,5 +75,7 @@ include("code.jl")
 
 # Adjoints
 include("adjoints.jl")
+
+include("cache.jl")
 
 end # module

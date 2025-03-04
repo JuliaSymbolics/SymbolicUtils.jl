@@ -81,7 +81,7 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
-const wvd = WeakValueDict{UInt, BasicSymbolic}()
+const wvd = TaskLocalValue{WeakValueDict{UInt, BasicSymbolic}}(WeakValueDict{UInt, BasicSymbolic})
 
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
@@ -525,11 +525,11 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
         return s
     end
     h = hash2(s)
-    t = get!(wvd, h, s)
+    t = get!(wvd[], h, s)
     if t === s || isequal_with_metadata(t, s)
-        return t
+        t
     else
-        return s
+        s
     end
 end
 

@@ -100,27 +100,31 @@ end
     return 2x + 1
 end
 
-@testset "::Any" begin
+@cache function f3_2(x::Any)::Union{BasicSymbolic, Int}
+    return 2x + 1
+end
+
+@testset "$name" for (name, fn) in [("implicit ::Any", f3), ("explicit ::Any", f3_2)]
     @syms x
-    val = f3(x)
+    val = fn(x)
     @test isequal(val, 2x + 1)
-    cachestruct = associated_cache(f3)
+    cachestruct = associated_cache(fn)
     cache, stats = cachestruct.tlv[]
     @test cache isa Dict{Tuple{Any}, Union{BasicSymbolic, Int}}
     @test length(cache) == 1
     @test cache[(SymbolicKey(objectid(x)),)] === val
     @test stats.hits == 0
     @test stats.misses == 1
-    f3(x)
+    fn(x)
     @test stats.hits == 1
     @test stats.misses == 1
 
-    val = f3(3)
+    val = fn(3)
     @test val == 7
     @test length(cache) == 2
     @test stats.misses == 2
 
-    clear_cache!(f3)
+    clear_cache!(fn)
     @test length(cache) == 0
     @test stats.hits == stats.misses == stats.clears == 0
 end

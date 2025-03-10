@@ -245,6 +245,13 @@ macro cache(args...)
         argname, Texpr = arg.args
         push!(argexprs, argname)
 
+        if Texpr == :Any
+            # if the type is `Any`, branch on it being a `BasicSymbolic`
+            push!(keyexprs, :($argname isa BasicSymbolic ? $SymbolicKey(objectid($argname)) : $argname))
+            push!(keytypes, Any)
+            continue
+        end
+
         # handle Union types that may contain a `BasicSymbolic`
         if Meta.isexpr(Texpr, :curly) && Texpr.args[1] == :Union
             Texprs = Texpr.args[2:end]

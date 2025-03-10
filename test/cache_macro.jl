@@ -159,3 +159,39 @@ end
     truevals = map(f4, exprs)
     @test isequal(result, truevals)
 end
+
+@cache function f5(x::BasicSymbolic, y::Union{BasicSymbolic, Int}, z)::BasicSymbolic
+    return x + y + z
+end
+
+# temporary defintion to induce objectid collisions
+Base.objectid(x::BasicSymbolic) = 0x42
+
+@testset "`objectid` collision handling" begin
+    @syms x y z
+    @test objectid(x) == objectid(y) == objectid(z) == 0x42
+    cachestruct = associated_cache(f5)
+    cache, stats = cachestruct.tlv[]
+    val = f5(x, 1, 2)
+    @test isequal(val, x + 3)
+    @test length(cache) == 1
+    @test stats.misses == 1
+    val2 = f5(y, 1, 2)
+    @test isequal(val2, y + 3)
+    @test length(cache) == 1
+    @test stats.misses == 2
+
+    clear_cache!(f5)
+    val = f5(x, y, z)
+    @test isequal(val, x + y + z)
+    @test length(cache) == 1
+    @test stats.misses == 1
+    val2 = f5(y, 2z, x)
+    @test isequal(val2, x + y + 2z)
+    @test length(cache) == 1
+    @test stats.misses == 2
+end
+
+Base.delete_method(only(methods(objectid, @__MODULE__)))
+@syms x
+@test objectid(x) != 0x42

@@ -13,9 +13,9 @@ end
     @test isequal(val, 2x + 1)
     cachestruct = associated_cache(f1)
     cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{SymbolicKey}, BasicSymbolic}
+    @test cache isa Dict{Tuple{SymbolicKey}, Tuple{BasicSymbolic, BasicSymbolic}}
     @test length(cache) == 1
-    @test cache[(SymbolicKey(objectid(x)),)] === val
+    @test cache[(SymbolicKey(objectid(x)),)][end] === val
     @test stats.hits == 0
     @test stats.misses == 1
     f1(x)
@@ -75,9 +75,9 @@ end
     @test isequal(val, 2x + 1)
     cachestruct = associated_cache(f2)
     cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{Union{SymbolicKey, UInt}}, Union{BasicSymbolic, UInt}}
+    @test cache isa Dict{Tuple{Union{SymbolicKey, UInt}}, NTuple{2, Union{BasicSymbolic, UInt}}}
     @test length(cache) == 1
-    @test cache[(SymbolicKey(objectid(x)),)] === val
+    @test cache[(SymbolicKey(objectid(x)),)][end] === val
     @test stats.hits == 0
     @test stats.misses == 1
     f2(x)
@@ -88,7 +88,7 @@ end
     val = f2(y)
     @test val == 2y + 1
     @test length(cache) == 2
-    @test cache[(y,)] == val
+    @test cache[(y,)][end] == val
     @test stats.misses == 2
 
     clear_cache!(f2)
@@ -100,27 +100,31 @@ end
     return 2x + 1
 end
 
-@testset "::Any" begin
+@cache function f3_2(x::Any)::Union{BasicSymbolic, Int}
+    return 2x + 1
+end
+
+@testset "$name" for (name, fn) in [("implicit ::Any", f3), ("explicit ::Any", f3_2)]
     @syms x
-    val = f3(x)
+    val = fn(x)
     @test isequal(val, 2x + 1)
-    cachestruct = associated_cache(f3)
+    cachestruct = associated_cache(fn)
     cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{Any}, Union{BasicSymbolic, Int}}
+    @test cache isa Dict{Tuple{Any}, Tuple{Any, Union{BasicSymbolic, Int}}}
     @test length(cache) == 1
-    @test cache[(SymbolicKey(objectid(x)),)] === val
+    @test cache[(SymbolicKey(objectid(x)),)][end] === val
     @test stats.hits == 0
     @test stats.misses == 1
-    f3(x)
+    fn(x)
     @test stats.hits == 1
     @test stats.misses == 1
 
-    val = f3(3)
+    val = fn(3)
     @test val == 7
     @test length(cache) == 2
     @test stats.misses == 2
 
-    clear_cache!(f3)
+    clear_cache!(fn)
     @test length(cache) == 0
     @test stats.hits == stats.misses == stats.clears == 0
 end
@@ -155,3 +159,39 @@ end
     truevals = map(f4, exprs)
     @test isequal(result, truevals)
 end
+
+@cache function f5(x::BasicSymbolic, y::Union{BasicSymbolic, Int}, z)::BasicSymbolic
+    return x + y + z
+end
+
+# temporary defintion to induce objectid collisions
+Base.objectid(x::BasicSymbolic) = 0x42
+
+@testset "`objectid` collision handling" begin
+    @syms x y z
+    @test objectid(x) == objectid(y) == objectid(z) == 0x42
+    cachestruct = associated_cache(f5)
+    cache, stats = cachestruct.tlv[]
+    val = f5(x, 1, 2)
+    @test isequal(val, x + 3)
+    @test length(cache) == 1
+    @test stats.misses == 1
+    val2 = f5(y, 1, 2)
+    @test isequal(val2, y + 3)
+    @test length(cache) == 1
+    @test stats.misses == 2
+
+    clear_cache!(f5)
+    val = f5(x, y, z)
+    @test isequal(val, x + y + z)
+    @test length(cache) == 1
+    @test stats.misses == 1
+    val2 = f5(y, 2z, x)
+    @test isequal(val2, x + y + 2z)
+    @test length(cache) == 1
+    @test stats.misses == 2
+end
+
+Base.delete_method(only(methods(objectid, @__MODULE__)))
+@syms x
+@test objectid(x) != 0x42

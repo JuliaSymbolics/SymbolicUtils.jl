@@ -229,6 +229,14 @@ macro cache(args...)
     keytypes = []
     # The arguments of the workhorse function
     argexprs = []
+    # The name of the variable storing the result of looking up the cache
+    cache_value_name = :val
+    # The condition for a cache hit
+    cache_hit_condition = :(!($cache_value_name isa $CacheSentinel))
+    # Type of additional data stored with cached result. Used to compare
+    # equality of `BasicSymbolic` arguments, since `objectid` is a hash.
+    cache_additional_types = []
+    cache_additional_values = []
 
     for arg in fn.args
         # handle arguments with defaults
@@ -240,18 +248,39 @@ macro cache(args...)
             push!(keyexprs, :($arg isa BasicSymbolic ? $SymbolicKey(objectid($arg)) : $arg))
             push!(argexprs, arg)
             push!(keytypes, Any)
+            push!(cache_additional_types, Any)
+            push!(cache_additional_values, arg)
+            cache_hit_condition = :($cache_hit_condition && (!($arg isa BasicSymbolic) || $arg === $cache_value_name[$(length(cache_additional_values))]))
             continue
         end
         argname, Texpr = arg.args
         push!(argexprs, argname)
+
+        if Texpr == :Any
+            # if the type is `Any`, branch on it being a `BasicSymbolic`
+            push!(keyexprs, :($argname isa BasicSymbolic ? $SymbolicKey(objectid($argname)) : $argname))
+            push!(keytypes, Any)
+            push!(cache_additional_types, Any)
+            push!(cache_additional_values, argname)
+            cache_hit_condition = :($cache_hit_condition && (!($argname isa BasicSymbolic) || $argname === $cache_value_name[$(length(cache_additional_values))]))
+            continue
+        end
 
         # handle Union types that may contain a `BasicSymbolic`
         if Meta.isexpr(Texpr, :curly) && Texpr.args[1] == :Union
             Texprs = Texpr.args[2:end]
             Ts = map(Base.Fix1(Base.eval, __module__), Texprs)
             keyTs = map(x -> x <: BasicSymbolic ? SymbolicKey : x, Ts)
+            maybe_basicsymbolic = any(x -> x <: BasicSymbolic, Ts)
             push!(keytypes, Union{keyTs...})
-            push!(keyexprs, :($argname isa BasicSymbolic ? $SymbolicKey(objectid($argname)) : $argname))
+            if maybe_basicsymbolic
+                push!(keyexprs, :($argname isa BasicSymbolic ? $SymbolicKey(objectid($argname)) : $argname))
+                push!(cache_additional_types, Texpr)
+                push!(cache_additional_values, argname)
+                cache_hit_condition = :($cache_hit_condition && (!($argname isa BasicSymbolic) || $argname === $cache_value_name[$(length(cache_additional_values))]))
+            else
+                push!(keyexprs, argname)
+            end
             continue
         end
             
@@ -260,6 +289,9 @@ macro cache(args...)
         if T <: BasicSymbolic
             push!(keytypes, SymbolicKey) 
             push!(keyexprs, :($SymbolicKey(objectid($argname))))
+            push!(cache_additional_types, T)
+            push!(cache_additional_values, argname)
+            cache_hit_condition = :($cache_hit_condition && $argname === $cache_value_name[$(length(cache_additional_values))])
         else
             push!(keytypes, T)
             push!(keyexprs, argname)
@@ -280,8 +312,11 @@ macro cache(args...)
     # construct an expression for the type of the cache keys
     keyT = Expr(:curly, Tuple)
     append!(keyT.args, keytypes)
+    valT = Expr(:curly, Tuple)
+    append!(valT.args, cache_additional_types)
+    push!(valT.args, rettype)
     # the type of the cache
-    cacheT = :(Dict{$keyT, $rettype})
+    cacheT = :(Dict{$keyT, $valT})
     # type of the `TaskLocalValue`
     tlvT = :($(TaskLocalValue){Tuple{$cacheT, $CacheStats}})
     # the name of the cache struct
@@ -324,11 +359,11 @@ macro cache(args...)
             # look it up
             # we use a custom sentinel value since `nothing` is a valid return value
             # which we might want to cache
-            val = $(get)(cachedict, key, $(CacheSentinel)())
-            if !(val isa $CacheSentinel)
+            $cache_value_name = $(get)(cachedict, key, $(CacheSentinel)())
+            if $cache_hit_condition
                 # cache hit
                 cachestats.hits += 1
-                return val
+                return $cache_value_name[end]
             end
             # cache miss
             cachestats.misses += 1
@@ -339,7 +374,7 @@ macro cache(args...)
                 $(filter!)($cachename, cachedict)
             end
             # add to cache
-            cachedict[key] = val
+            cachedict[key] = ($(cache_additional_values...), val)
             return val
         end
 

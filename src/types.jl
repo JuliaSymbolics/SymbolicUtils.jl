@@ -69,6 +69,14 @@ function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
     ScalarSymbolic()
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the inner `Symbolic` wrapped in a non-symbolic subtype. Defaults to
+returning the input as-is.
+"""
+unwrap(x) = x
+
 function exprtype(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => TERM
@@ -538,10 +546,17 @@ function Sym{T}(name::Symbol; kw...) where {T}
     BasicSymbolic(s)
 end
 
+function unwrap_arr!(arr)
+    for i in eachindex(arr)
+        arr[i] = unwrap(arr[i])
+    end
+end
+
 function Term{T}(f, args; kw...) where T
     if eltype(args) !== Any
         args = convert(Vector{Any}, args)
     end
+    unwrap_arr!(args)
 
     s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
     BasicSymbolic(s)
@@ -551,7 +566,16 @@ function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
+function unwrap_dict(dict)
+    if any(k -> unwrap(k) !== k, keys(dict))
+        return typeof(dict)(unwrap(k) => v for (k, v) in dict)
+    end
+    return dict
+end
+
 function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
+    coeff = unwrap(coeff)
+    dict = unwrap_dict(dict)
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
@@ -569,6 +593,8 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
 end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
+    a = unwrap(a)
+    b = unwrap_dict(b)
     isempty(b) && return a
     if _isone(a) && length(b) == 1
         pair = first(b)
@@ -613,6 +639,8 @@ function maybe_intcoeff(x)
 end
 
 function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
+    n = unwrap(n)
+    d = unwrap(d)
     if T<:Number && !(T<:SafeReal)
         n, d = quick_cancel(n, d)
     end
@@ -662,6 +690,8 @@ end
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : Any[1]
 
 function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
+    a = unwrap(a)
+    b = unwrap(b)
     _iszero(b) && return 1
     _isone(b) && return a
     s = Pow{T}(; base=a, exp=b, arguments=[], metadata)
@@ -760,6 +790,7 @@ function makepow(a, b)
 end
 
 function term(f, args...; type = nothing)
+    args = map(unwrap, args)
     if type === nothing
         T = _promote_symtype(f, args)
     else
@@ -894,6 +925,7 @@ Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,
 
 assocmeta(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
 function assocmeta(d::Base.ImmutableDict, ctx, val)::ImmutableDict{DataType,Any}
+    val = unwrap(val)
     # optimizations
     # If using upto 3 contexts, things stay compact
     if isdefined(d, :parent)
@@ -915,7 +947,7 @@ function setmetadata(s::Symbolic, ctx::DataType, val)
         @set s.metadata = assocmeta(s.metadata, ctx, val)
     else
         # fresh Dict
-        @set s.metadata = Base.ImmutableDict{DataType, Any}(ctx, val)
+        @set s.metadata = Base.ImmutableDict{DataType, Any}(ctx, unwrap(val))
     end
 end
 
@@ -1333,6 +1365,10 @@ function +(a::SN, b::SN)
 end
 
 function +(a::Number, b::SN)
+    tmp = unwrap(a)
+    if tmp !== a
+        return tmp + b
+    end
     !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
     iszero(a) && return b
     if isadd(b)
@@ -1399,6 +1435,10 @@ function *(a::SN, b::SN)
 end
 
 function *(a::Number, b::SN)
+    tmp = unwrap(a)
+    if tmp !== a
+        return tmp * b
+    end
     !issafecanon(*, b) && return term(*, a, b)
     if iszero(a)
         a
@@ -1439,6 +1479,7 @@ end
 ###
 
 function ^(a::SN, b)
+    b = unwrap(b)
     !issafecanon(^, a,b) && return Pow(a, b)
     if b isa Number && iszero(b)
         # fast path

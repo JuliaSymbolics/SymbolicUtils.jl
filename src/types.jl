@@ -18,7 +18,6 @@ sdict(kv...) = Dict{Any, Any}(kv...)
 using Base: RefValue
 const EMPTY_ARGS = []
 const EMPTY_HASH = RefValue(UInt(0))
-const NOT_SORTED = RefValue(false)
 const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 const ENABLE_HASHCONSING = Ref(true)
@@ -42,7 +41,6 @@ const ENABLE_HASHCONSING = Ref(true)
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
-        issorted::RefValue{Bool} = NOT_SORTED
     end
     mutable struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
@@ -50,7 +48,6 @@ const ENABLE_HASHCONSING = Ref(true)
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
-        issorted::RefValue{Bool} = NOT_SORTED
     end
     mutable struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
@@ -150,25 +147,19 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-function TermInterface.sorted_arguments(x::BasicSymbolic)
-    args = arguments(x)
+@cache function TermInterface.sorted_arguments(x::BasicSymbolic)::Vector{Any}
+    args = copy(arguments(x))
     @compactified x::BasicSymbolic begin
         Add => @goto ADD
         Mul => @goto MUL
         _   => return args
     end
     @label MUL
-    if !x.issorted[]
-        sort!(args, by=get_degrees)
-        x.issorted[] = true
-    end
+    sort!(args, by=get_degrees)
     return args
 
     @label ADD
-    if !x.issorted[]
-        sort!(args, lt = monomial_lt, by=get_degrees)
-        x.issorted[] = true
-    end
+    sort!(args, lt = monomial_lt, by=get_degrees)
     return args
 end
 
@@ -603,7 +594,7 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], kw...)
     BasicSymbolic(s)
 end
 
@@ -621,7 +612,7 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], issorted=RefValue(false), kw...)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], kw...)
         BasicSymbolic(s)
     end
 end
@@ -642,7 +633,7 @@ ratio(x::Rat,y::Rat) = x//y
 function maybe_intcoeff(x)
     if ismul(x)
         if x.coeff isa Rational && isone(x.coeff.den)
-            Mul{symtype(x)}(; coeff=x.coeff.num, dict=x.dict, x.metadata, arguments=[], issorted=RefValue(false))
+            Mul{symtype(x)}(; coeff=x.coeff.num, dict=x.dict, x.metadata, arguments=[])
         else
             x
         end

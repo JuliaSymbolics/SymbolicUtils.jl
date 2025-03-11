@@ -215,7 +215,7 @@ macro cache(args...)
     fn = EL.JLFunction(fnexpr)
     name = fn.name
     # this will now be an inner workhorse function, which the cached function will call
-    fn.name = gensym(name)
+    fn.name = gensym(Symbol(name))
     # the name of the global constant cache
     cachename = Symbol("cacheof($name)")
     # conditions for performing caching. At the very least, need hashconsing enabled and

@@ -2,6 +2,7 @@ using SymbolicUtils
 using SymbolicUtils: BasicSymbolic, @cache, associated_cache, set_limit!, get_limit,
                      clear_cache!, SymbolicKey, metadata, maketerm
 using OhMyThreads: tmap
+using Random
 
 @cache function f1(x::BasicSymbolic)::BasicSymbolic
     return 2x + 1
@@ -140,17 +141,17 @@ end
 @testset "Threading" begin
     @syms x y z
     @test isequal(f4(2x + 1), 2(2x + 1) + 1)
-
+    rng = Xoshiro(3)
     function build_rand_expr(vars, depth, maxdepth)
         if depth < maxdepth
             v = build_rand_expr(vars, depth + 1, maxdepth)
         else
-            v = rand(vars)
+            v = rand(rng, vars)
         end
         if isodd(depth)
-            return v + rand([1:3; vars])
+            return v + rand(rng, [1:3; vars])
         else
-            return v * rand([1:3; vars])
+            return v * rand(rng, [1:3; vars])
         end
     end
 

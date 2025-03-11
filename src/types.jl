@@ -1002,7 +1002,7 @@ end
 function remove_minus(t)
     !iscall(t) && return -t
     @assert operation(t) == (*)
-    args = arguments(t)
+    args = sorted_arguments(t)
     @assert args[1] < 0
     Any[-args[1], args[2:end]...]
 end

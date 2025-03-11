@@ -130,7 +130,7 @@ end
     @test stats.hits == stats.misses == stats.clears == 0
 end
 
-@cache function f4(x::Union{BasicSymbolic, Int})::Union{BasicSymbolic, Int}
+@cache function f4(x::Union{BasicSymbolic, Number})::Union{BasicSymbolic, Number}
     x isa Number && return x
     if iscall(x)
         return maketerm(typeof(x), operation(x), map(f4, arguments(x)), metadata(x))

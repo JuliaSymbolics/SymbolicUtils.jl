@@ -1,5 +1,7 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul, Div, Pow, hash2, metadata
+using SymbolicUtils: Term, Add, Mul, Div, Pow, hash2, metadata, BasicSymbolic, Symbolic,
+                     isequal_with_metadata
+import TermInterface
 
 struct Ctx1 end
 struct Ctx2 end
@@ -146,4 +148,43 @@ end
         ex2 = setmetadata(ex, Int, 3)
         @test ex2.hash2[] != h
     end
+end
+
+struct MySymbolic <: Symbolic{Real}
+    sym::BasicSymbolic{Real}
+end
+
+TermInterface.iscall(x::MySymbolic) = iscall(x.sym)
+TermInterface.operation(x::MySymbolic) = operation(x.sym)
+TermInterface.arguments(x::MySymbolic) = arguments(x.sym)
+SymbolicUtils.metadata(x::MySymbolic) = metadata(x.sym)
+Base.isequal(a::MySymbolic, b::MySymbolic) = isequal(a.sym, b.sym)
+
+@testset "`isequal_with_metadata` on custom symbolics" begin
+    @syms x::Real
+    xx = setmetadata(x, Int, 3)
+    @test isequal(x, xx)
+    @test !isequal_with_metadata(x, xx)
+    myx = MySymbolic(x)
+    myxx = MySymbolic(xx)
+    @test isequal(myx, myxx)
+    @test !isequal_with_metadata(myx, myxx)
+
+    ex = 2x
+    exx = 2xx
+    myex = MySymbolic(ex)
+    myexx = MySymbolic(exx)
+    @test isequal(ex, exx)
+    @test !isequal_with_metadata(ex, exx)
+    @test isequal(myex, myexx)
+    @test !isequal_with_metadata(myex, myexx)
+
+    t = Term{Real}(max, Any[x, myex])
+    tt = Term{Real}(max, Any[xx, myexx])
+    @test isequal(t, tt)
+    @test !isequal_with_metadata(t, tt)
+    myt = MySymbolic(t)
+    mytt = MySymbolic(tt)
+    @test isequal(myt, mytt)
+    @test !isequal_with_metadata(myt, mytt)
 end

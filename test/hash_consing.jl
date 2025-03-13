@@ -1,5 +1,6 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul, Div, Pow, hash2, metadata, Symbolic, isequal_with_metadata
+using SymbolicUtils: Term, Add, Mul, Div, Pow, hash2, metadata, BasicSymbolic, Symbolic,
+                     isequal_with_metadata
 import TermInterface
 
 struct Ctx1 end

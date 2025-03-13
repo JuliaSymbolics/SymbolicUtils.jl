@@ -314,6 +314,21 @@ function isequal_with_metadata(a::BasicSymbolic{T}, b::BasicSymbolic{S})::Bool w
     _isequal(a, b, E; comparator = isequal_with_metadata)::Bool && isequal_with_metadata(metadata(a), metadata(b)) || return false
 end
 
+function isequal_with_metadata(a::Symbolic, b::Symbolic)::Bool
+    a === b && return true
+    typeof(a) == typeof(b) || return false
+
+    ma = metadata(a)
+    mb = metadata(b)
+    if iscall(a) && iscall(b)
+        return isequal_with_metadata(operation(a), operation(b)) && isequal_with_metadata(arguments(a), arguments(b)) && isequal_with_metadata(ma, mb)
+    elseif iscall(a) || iscall(b)
+        return false
+    else
+        return isequal_with_metadata(ma, mb)
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 

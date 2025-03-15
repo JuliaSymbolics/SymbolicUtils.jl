@@ -26,6 +26,7 @@ const ENABLE_HASHCONSING = Ref(true)
 @compactify show_methods=false begin
     @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
+        id::RefValue{UInt64} = Ref{UInt64}(0)
     end
     mutable struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
@@ -107,11 +108,11 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     # Call outer constructor because hash consing cannot be applied in inner constructor
     @compactified obj::BasicSymbolic begin
         Sym => Sym{T}(nt_new.name; nt_new...)
-        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
-        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
-        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
-        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
-        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)))
+        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
+        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
+        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
+        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
+        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -255,6 +256,7 @@ end
 
 function Base.isequal(a::BasicSymbolic{T}, b::BasicSymbolic{S}) where {T,S}
     a === b && return true
+    a.id == b.id && a.id != 0 && return true
 
     E = exprtype(a)
     E === exprtype(b) || return false
@@ -298,6 +300,7 @@ function.
 """
 function isequal_with_metadata(a::BasicSymbolic{T}, b::BasicSymbolic{S})::Bool where {T, S}
     a === b && return true
+    a.id == b.id && a.id != 0 && return true
 
     E = exprtype(a)
     E === exprtype(b) || return false
@@ -513,6 +516,12 @@ end
 ### Constructors
 ###
 
+mutable struct AtomicIDCounter
+    @atomic x::UInt64
+end
+
+const ID_COUNTER = AtomicIDCounter(0)
+
 """
 $(TYPEDSIGNATURES)
 
@@ -542,21 +551,27 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     h = hash2(s)
     k = get!(cache, h, s)
     if isequal_with_metadata(k, s)
+        if iszero(k.id[])
+            k.id[] = @atomic ID_COUNTER.x += 1
+        end
         return k
     else
+        if iszero(s.id[])
+            s.id[] = @atomic ID_COUNTER.x += 1
+        end
         return s
     end
 end
 
 function Sym{T}(name::Symbol; kw...) where {T}
-    s = Sym{T}(; name, kw...)
+    s = Sym{T}(; name, kw..., id = Ref{UInt}(0))
     BasicSymbolic(s)
 end
 
 function Term{T}(f, args; kw...) where T
     args = SmallV{Any}(args)
 
-    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
+    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw..., id = Ref{UInt64}(0))
     BasicSymbolic(s)
 end
 
@@ -586,7 +601,7 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw...)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw..., id = Ref{UInt64}(0))
     BasicSymbolic(s)
 end
 
@@ -604,7 +619,7 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw...)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw..., id = Ref{UInt64}(0))
         BasicSymbolic(s)
     end
 end
@@ -672,7 +687,7 @@ function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
         end
     end
 
-    s = Div{T}(; num=n, den=d, simplified, arguments=SmallV{Any}(), metadata)
+    s = Div{T}(; num=n, den=d, simplified, arguments=SmallV{Any}(), metadata, id = Ref{UInt64}(0))
     BasicSymbolic(s)
 end
 
@@ -692,7 +707,7 @@ function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     b = unwrap(b)
     _iszero(b) && return 1
     _isone(b) && return a
-    s = Pow{T}(; base=a, exp=b, arguments=SmallV{Any}(), metadata)
+    s = Pow{T}(; base=a, exp=b, arguments=SmallV{Any}(), metadata, id = Ref{UInt64}(0))
     BasicSymbolic(s)
 end
 

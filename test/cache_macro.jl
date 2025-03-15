@@ -30,6 +30,8 @@ end
 
     set_limit!(f1, 10)
     @test get_limit(f1) == 10
+    SymbolicUtils.set_retain_fraction!(f1, 0.1)
+    @test SymbolicUtils.get_retain_fraction(f1) == 0.1
     for i in 1:8
         xx = setmetadata(xx, Int, i)
         f1(xx)
@@ -56,8 +58,6 @@ end
     @test length(cache) == 0
     stats = SymbolicUtils.get_stats(f1)
     @test stats.hits == stats.misses == stats.clears == 0
-    SymbolicUtils.set_retain_fraction!(f1, 0.1)
-    @test SymbolicUtils.get_retain_fraction(f1) == 0.1
     @test SymbolicUtils.is_caching_enabled(f1)
     SymbolicUtils.toggle_caching!(f1, false)
     @test !SymbolicUtils.is_caching_enabled(f1)

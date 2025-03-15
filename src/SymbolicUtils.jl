@@ -24,6 +24,7 @@ using WeakValueDicts: WeakValueDict
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 
+include("cache.jl")
 Base.@deprecate istree iscall
 export istree, operation, arguments, sorted_arguments, iscall
 # Sym, Term,
@@ -76,6 +77,5 @@ include("code.jl")
 # Adjoints
 include("adjoints.jl")
 
-include("cache.jl")
 
 end # module

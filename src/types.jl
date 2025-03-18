@@ -406,6 +406,8 @@ function isequal_with_metadata(a::Union{AbstractArray, Tuple}, b::Union{Abstract
     return true
 end
 
+isequal_with_metadata(a::Number, b::Number) = typeof(a) == typeof(b) && isequal(a, b)
+
 Base.one( s::Symbolic) = one( symtype(s))
 Base.zero(s::Symbolic) = zero(symtype(s))
 

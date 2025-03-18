@@ -86,7 +86,15 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
-const wvd = TaskLocalValue{WeakValueDict{UInt, BasicSymbolic}}(WeakValueDict{UInt, BasicSymbolic})
+mutable struct HashConsingWrapper
+    bs::BasicSymbolic
+end
+
+Base.hash(x::HashConsingWrapper, h::UInt) = hash2(x.bs, h)
+
+Base.isequal(x::HashConsingWrapper, y::HashConsingWrapper) = isequal_with_metadata(x.bs, y.bs)
+
+const wkd = TaskLocalValue{WeakKeyDict{HashConsingWrapper, Nothing}}(WeakKeyDict{HashConsingWrapper, Nothing})
 
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")

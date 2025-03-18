@@ -23,39 +23,39 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
 const ENABLE_HASHCONSING = Ref(true)
 
 @compactify show_methods=false begin
-    @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
+    @abstract struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
     end
-    mutable struct Sym{T} <: BasicSymbolic{T}
+    struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
     end
-    mutable struct Term{T} <: BasicSymbolic{T}
+    struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
     end
-    mutable struct Mul{T} <: BasicSymbolic{T}
+    struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    mutable struct Add{T} <: BasicSymbolic{T}
+    struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    mutable struct Div{T} <: BasicSymbolic{T}
+    struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
         den::Any               = 1
         simplified::Bool       = false
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    mutable struct Pow{T} <: BasicSymbolic{T}
+    struct Pow{T} <: BasicSymbolic{T}
         base::Any              = 1
         exp::Any               = 1
         arguments::Vector{Any} = EMPTY_ARGS

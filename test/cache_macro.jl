@@ -165,7 +165,7 @@ end
     return x + y + z
 end
 
-# temporary defintion to induce objectid collisions
+# temporary definition to induce objectid collisions
 Base.objectid(x::BasicSymbolic) = 0x42
 
 @testset "`objectid` collision handling" begin

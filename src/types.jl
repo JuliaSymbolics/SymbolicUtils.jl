@@ -546,10 +546,11 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     if !ENABLE_HASHCONSING[]
         return s
     end
+    cache = wkd[]
     hcw = HashConsingWrapper(s)
-    k = getkey(wkd[], hcw, nothing)
+    k = getkey(cache, hcw, nothing)
     if isnothing(k)
-        wkd[][hcw] = nothing
+        cache[hcw] = nothing
         return s
     else
         return k.bs

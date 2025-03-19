@@ -23,6 +23,8 @@ import ArrayInterface
 using WeakValueDicts: WeakValueDict
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
+using ReadOnlyArrays
+using ReadOnlyDicts
 
 include("cache.jl")
 Base.@deprecate istree iscall

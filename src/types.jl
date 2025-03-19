@@ -18,7 +18,7 @@ sdict(kv...) = Dict{Any, Any}(kv...)
 using Base: RefValue
 const EMPTY_ARGS = []
 const EMPTY_HASH = RefValue(UInt(0))
-const EMPTY_DICT = sdict()
+const EMPTY_DICT = ReadOnlyDict(sdict())
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 const ENABLE_HASHCONSING = Ref(true)
 

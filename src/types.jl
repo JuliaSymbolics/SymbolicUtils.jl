@@ -1330,6 +1330,10 @@ function _merge!(f::F, d, others...; filter=x->false) where F
     acc
 end
 
+function mapvalues(f, d1::ReadOnlyDict)
+    mapvalues(f, parent(d1))
+end
+
 function mapvalues(f, d1::AbstractDict)
     d = copy(d1)
     for (k, v) in d

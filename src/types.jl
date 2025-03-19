@@ -151,8 +151,8 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-@cache function TermInterface.sorted_arguments(x::BasicSymbolic)::Vector{Any}
-    args = copy(arguments(x))
+@cache function TermInterface.sorted_arguments(x::BasicSymbolic)::ReadOnlyVector{Any}
+    args = copy(parent(arguments(x)))
     @compactified x::BasicSymbolic begin
         Add => @goto ADD
         Mul => @goto MUL
@@ -171,7 +171,7 @@ end
 
 TermInterface.children(x::BasicSymbolic) = arguments(x)
 TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
-function TermInterface.arguments(x::BasicSymbolic)
+function TermInterface.arguments(x::BasicSymbolic)::ReadOnlyVector{Any}
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
         Add  => @goto ADDMUL

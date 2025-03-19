@@ -62,6 +62,10 @@ const ENABLE_HASHCONSING = Ref(true)
     end
 end
 
+function Base.setproperty!(x::BasicSymbolic, sym::Symbol, v)
+    error("Mutating `BasicSymbolic` is not allowed")
+end
+
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
     ScalarSymbolic()
 end

@@ -558,17 +558,10 @@ function Sym{T}(name::Symbol; kw...) where {T}
     BasicSymbolic(s)
 end
 
-function unwrap_arr!(arr)
-    for i in eachindex(arr)
-        arr[i] = unwrap(arr[i])
-    end
-end
-
 function Term{T}(f, args; kw...) where T
     if eltype(args) !== Any
         args = convert(Vector{Any}, args)
     end
-    unwrap_arr!(args)
 
     s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
     BasicSymbolic(s)
@@ -578,16 +571,8 @@ function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
-function unwrap_dict(dict)
-    if any(k -> unwrap(k) !== k, keys(dict))
-        return typeof(dict)(unwrap(k) => v for (k, v) in dict)
-    end
-    return dict
-end
-
 function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
     coeff = unwrap(coeff)
-    dict = unwrap_dict(dict)
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
@@ -606,7 +591,6 @@ end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
     a = unwrap(a)
-    b = unwrap_dict(b)
     isempty(b) && return a
     if _isone(a) && length(b) == 1
         pair = first(b)

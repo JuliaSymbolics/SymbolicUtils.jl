@@ -20,7 +20,6 @@ import TermInterface: iscall, isexpr, head, children,
                       operation, arguments, metadata, maketerm, sorted_arguments
 # For ReverseDiffExt
 import ArrayInterface
-using WeakValueDicts: WeakValueDict
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 

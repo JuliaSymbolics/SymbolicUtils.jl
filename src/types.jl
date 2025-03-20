@@ -23,39 +23,39 @@ const EMPTY_DICT_T = typeof(EMPTY_DICT)
 const ENABLE_HASHCONSING = Ref(true)
 
 @compactify show_methods=false begin
-    @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
+    @abstract struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
     end
-    mutable struct Sym{T} <: BasicSymbolic{T}
+    struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
     end
-    mutable struct Term{T} <: BasicSymbolic{T}
+    struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
         arguments::Vector{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
     end
-    mutable struct Mul{T} <: BasicSymbolic{T}
+    struct Mul{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    mutable struct Add{T} <: BasicSymbolic{T}
+    struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    mutable struct Div{T} <: BasicSymbolic{T}
+    struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
         den::Any               = 1
         simplified::Bool       = false
         arguments::Vector{Any} = EMPTY_ARGS
     end
-    mutable struct Pow{T} <: BasicSymbolic{T}
+    struct Pow{T} <: BasicSymbolic{T}
         base::Any              = 1
         exp::Any               = 1
         arguments::Vector{Any} = EMPTY_ARGS
@@ -86,7 +86,15 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
-const wvd = TaskLocalValue{WeakValueDict{UInt, BasicSymbolic}}(WeakValueDict{UInt, BasicSymbolic})
+mutable struct HashConsingWrapper
+    bs::BasicSymbolic
+end
+
+Base.hash(x::HashConsingWrapper, h::UInt) = hash2(x.bs, h)
+
+Base.isequal(x::HashConsingWrapper, y::HashConsingWrapper) = isequal_with_metadata(x.bs, y.bs)
+
+const wkd = TaskLocalValue{WeakKeyDict{HashConsingWrapper, Nothing}}(WeakKeyDict{HashConsingWrapper, Nothing})
 
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
@@ -522,7 +530,7 @@ Implements hash consing (flyweight design pattern) for `BasicSymbolic` objects.
 
 This function checks if an equivalent `BasicSymbolic` object already exists. It uses a 
 custom hash function (`hash2`) incorporating metadata and symtypes to search for existing 
-objects in a `WeakValueDict` (`wvd`).  Due to the possibility of hash collisions (where 
+objects in a `WeakKeyDict` (`wkd`). Due to the possibility of hash collisions (where 
 different objects produce the same hash), a custom equality check (`isequal_with_metadata`) 
 which includes metadata comparison, is used to confirm the equivalence of objects with 
 matching hashes. If an equivalent object is found, the existing object is returned; 
@@ -530,7 +538,7 @@ otherwise, the input `s` is returned. This reduces memory usage, improves compil
 for runtime code generation, and supports built-in common subexpression elimination, 
 particularly when working with symbolic objects with metadata.
 
-Using a `WeakValueDict` ensures that only weak references to `BasicSymbolic` objects are 
+Using a `WeakKeyDict` ensures that only weak references to `BasicSymbolic` objects are 
 stored, allowing objects that are no longer strongly referenced to be garbage collected. 
 Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and 
 `Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
@@ -540,12 +548,14 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     if !ENABLE_HASHCONSING[]
         return s
     end
-    h = hash2(s)
-    t = get!(wvd[], h, s)
-    if t === s || isequal_with_metadata(t, s)
-        t
+    cache = wkd[]
+    hcw = HashConsingWrapper(s)
+    k = getkey(cache, hcw, nothing)
+    if isnothing(k)
+        cache[hcw] = nothing
+        return s
     else
-        s
+        return k.bs
     end
 end
 

@@ -133,9 +133,9 @@ end
 
 @testset "Hashconsing can be toggled" begin
     SymbolicUtils.ENABLE_HASHCONSING[] = false
-    name = gensym(:x)
-    x1 = only(@eval @syms $name)
-    x2 = only(@eval @syms $name)
+    @syms a b
+    x1 = a + b
+    x2 = a + b
     @test x1 !== x2
     SymbolicUtils.ENABLE_HASHCONSING[] = true
 end

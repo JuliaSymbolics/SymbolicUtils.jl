@@ -471,7 +471,7 @@ end
 # ismul(x)
 function quick_mul(x, y)
     if haskey(x.dict, y) && x.dict[y] >= 1
-        d = copy(x.dict)
+        d = copy(parent(x.dict))
         if d[y] > 1
             d[y] -= 1
         elseif d[y] == 1
@@ -490,7 +490,7 @@ end
 function quick_mulpow(x, y)
     y.exp isa Number || return (x, y)
     if haskey(x.dict, y.base)
-        d = copy(x.dict)
+        d = copy(parent(x.dict))
         if x.dict[y.base] > y.exp
             d[y.base] -= y.exp
             den = 1
@@ -509,7 +509,7 @@ end
 
 # Double mul case
 function quick_mulmul(x, y)
-    num_dict, den_dict = _merge_div(x.dict, y.dict)
+    num_dict, den_dict = _merge_div(parent(x.dict), parent(y.dict))
     Mul(symtype(x), x.coeff, num_dict), Mul(symtype(y), y.coeff, den_dict)
 end
 

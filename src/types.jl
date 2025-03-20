@@ -18,7 +18,7 @@ sdict(kv...) = Dict{Any, Any}(kv...)
 using Base: RefValue
 const EMPTY_ARGS = []
 const EMPTY_HASH = RefValue(UInt(0))
-const EMPTY_DICT = sdict()
+const EMPTY_DICT = ReadOnlyDict(sdict())
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 const ENABLE_HASHCONSING = Ref(true)
 
@@ -60,6 +60,10 @@ const ENABLE_HASHCONSING = Ref(true)
         exp::Any               = 1
         arguments::Vector{Any} = EMPTY_ARGS
     end
+end
+
+function Base.setproperty!(x::BasicSymbolic, sym::Symbol, v)
+    error("Mutating `BasicSymbolic` is not allowed")
 end
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
@@ -155,8 +159,8 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
-@cache function TermInterface.sorted_arguments(x::BasicSymbolic)::Vector{Any}
-    args = copy(arguments(x))
+@cache function TermInterface.sorted_arguments(x::BasicSymbolic)::ReadOnlyVector{Any}
+    args = copy(parent(arguments(x)))
     @compactified x::BasicSymbolic begin
         Add => @goto ADD
         Mul => @goto MUL
@@ -175,7 +179,7 @@ end
 
 TermInterface.children(x::BasicSymbolic) = arguments(x)
 TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
-function TermInterface.arguments(x::BasicSymbolic)
+function TermInterface.arguments(x::BasicSymbolic)::ReadOnlyVector{Any}
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
         Add  => @goto ADDMUL
@@ -564,17 +568,10 @@ function Sym{T}(name::Symbol; kw...) where {T}
     BasicSymbolic(s)
 end
 
-function unwrap_arr!(arr)
-    for i in eachindex(arr)
-        arr[i] = unwrap(arr[i])
-    end
-end
-
 function Term{T}(f, args; kw...) where T
     if eltype(args) !== Any
         args = convert(Vector{Any}, args)
     end
-    unwrap_arr!(args)
 
     s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
     BasicSymbolic(s)
@@ -584,16 +581,8 @@ function Term(f, args; metadata=NO_METADATA)
     Term{_promote_symtype(f, args)}(f, args, metadata=metadata)
 end
 
-function unwrap_dict(dict)
-    if any(k -> unwrap(k) !== k, keys(dict))
-        return typeof(dict)(unwrap(k) => v for (k, v) in dict)
-    end
-    return dict
-end
-
 function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
     coeff = unwrap(coeff)
-    dict = unwrap_dict(dict)
     if isempty(dict)
         return coeff
     elseif _iszero(coeff) && length(dict) == 1
@@ -612,7 +601,6 @@ end
 
 function Mul(T, a, b; metadata=NO_METADATA, kw...)
     a = unwrap(a)
-    b = unwrap_dict(b)
     isempty(b) && return a
     if _isone(a) && length(b) == 1
         pair = first(b)
@@ -1350,6 +1338,10 @@ function _merge!(f::F, d, others...; filter=x->false) where F
         end
     end
     acc
+end
+
+function mapvalues(f, d1::ReadOnlyDict)
+    mapvalues(f, parent(d1))
 end
 
 function mapvalues(f, d1::AbstractDict)

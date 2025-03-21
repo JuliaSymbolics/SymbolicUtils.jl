@@ -444,7 +444,7 @@ end
 
 function toexpr(s::SetArray, st)
     ex = quote
-        $([:($(toexpr(s.arr, st))[$(ex isa AtIndex ? ex.i : i)] = $(toexpr(ex, st)))
+        $([:($(toexpr(s.arr, st))[$(ex isa AtIndex ? toexpr(ex.i, st) : i)] = $(toexpr(ex, st)))
            for (i, ex) in enumerate(s.elems)]...)
         nothing
     end

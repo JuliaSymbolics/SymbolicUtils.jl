@@ -288,3 +288,20 @@ SymbolicUtils.Code.cse_inside_expr(sym, ::typeof(foo), args...) = false
     ex3 = letblock.body
     @test any(isequal(exfoo), arguments(ex3))
 end
+
+@testset "`AtIndex` with symbolic index" begin
+    @syms a b c::Array
+    ex = SetArray(false, c, [AtIndex(MakeArray([a, b], Array), [a + b, a - b])])
+    expr = quote
+        let a = 1, b = 2, c = zeros(Int, 3, 3)
+            $(toexpr(ex))
+            c
+        end
+    end
+    arr = eval(expr)
+    @test arr[1] == 3
+    @test arr[2] == -1
+    for i in 3:length(arr)
+        @test arr[i] == 0
+    end
+end

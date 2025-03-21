@@ -107,7 +107,7 @@ end
     marr = MakeArray(arr, Array)
     sparr = sparse([1, 2, 3, 4], [1, 2, 3, 4], vec(arr))
     msparr = MakeSparseArray(sparr)
-    sarr = SetArray(false, :buffer, [[a^2 + c^2], AtIndex(3, arr), AtIndex(4, msparr)])
+    sarr = SetArray(false, :buffer, [[a^2 + c^2], AtIndex(3, arr), AtIndex(4, msparr)], true)
 
     csex = cse(sarr)
     # test that simple array is CSEd
@@ -127,7 +127,6 @@ end
     expr = quote
         let a = 1, b = 2, c = 3, buffer = Any[0, "A", 0, 0]
             $(toexpr(csex))
-            buffer
         end
     end
     val = eval(expr)

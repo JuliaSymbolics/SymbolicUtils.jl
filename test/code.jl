@@ -323,3 +323,21 @@ end
     @test all(iszero, arr[1:3])
     @test all(iszero, arr[8:end])
 end
+
+@testset "`SetArray` with `return_arr`" begin
+    @syms a b c::Array
+    ex = SetArray(false, c, [3, 2, 1], false)
+    expr = quote
+        let b = 2, c = zeros(Int, 3)
+            $(toexpr(ex))
+        end
+    end
+    @test eval(expr) === nothing
+    ex = SetArray(false, c, [3, 2, 1], true)
+    expr = quote
+        let b = 2, c = zeros(Int, 3)
+            $(toexpr(ex))
+        end
+    end
+    @test eval(expr) == [3, 2, 1]
+end

@@ -416,10 +416,11 @@ end
     inbounds::Bool
     arr
     elems  # Either iterator of Pairs or just an iterator
+    return_arr::Bool
 end
 
 """
-    SetArray(inbounds, arr, elems)
+    SetArray(inbounds::Bool, arr, elems[, return_arr::Bool])
 
 An expression representing setting of elements of `arr`.
 
@@ -430,8 +431,13 @@ is performed in its place.
 
 `inbounds` is a boolean flag, `true` surrounds the resulting expression
 in an `@inbounds`.
+
+`return_arr` is a flag which controls whether the generated `begin..end` block
+returns the `arr`. Defaults to `false`, in which case the block returns `nothing`.
 """
 SetArray
+
+SetArray(inbounds, arr, elems) = SetArray(inbounds, arr, elems, false)
 
 @matchable struct AtIndex <: CodegenPrimitive
     i
@@ -446,7 +452,7 @@ function toexpr(s::SetArray, st)
     ex = quote
         $([:($(toexpr(s.arr, st))[$(ex isa AtIndex ? toexpr(ex.i, st) : i)] = $(toexpr(ex, st)))
            for (i, ex) in enumerate(s.elems)]...)
-        nothing
+        $(s.return_arr ? toexpr(s.arr, st) : nothing)
     end
     s.inbounds ? :(@inbounds $ex) : ex
 end
@@ -906,7 +912,7 @@ function cse!(x::MakeArray, state::CSEState)
 end
 
 function cse!(x::SetArray, state::CSEState)
-    return SetArray(x.inbounds, x.arr, cse!(x.elems, state))
+    return SetArray(x.inbounds, x.arr, cse!(x.elems, state), x.return_arr)
 end
 
 function cse!(x::MakeSparseArray, state::CSEState)

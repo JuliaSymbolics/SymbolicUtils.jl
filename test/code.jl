@@ -305,3 +305,21 @@ end
         @test arr[i] == 0
     end
 end
+
+@testset "`ForLoop`" begin
+    @syms a b c::Array
+    ex = ForLoop(a, term(range, b^2, b^2 + 3), SetArray(false, c, [AtIndex(a, a + 1)]))
+    expr = quote
+        let b = 2, c = zeros(Int, 10)
+            $(toexpr(ex))
+            c
+        end
+    end
+    arr = eval(expr)
+    @test arr[4] == 5
+    @test arr[5] == 6
+    @test arr[6] == 7
+    @test arr[7] == 8
+    @test all(iszero, arr[1:3])
+    @test all(iszero, arr[8:end])
+end

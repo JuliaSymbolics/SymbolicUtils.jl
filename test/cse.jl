@@ -201,3 +201,24 @@ end
     rgf = @RuntimeGeneratedFunction(toexpr(innerfn))
     @test rgf(5, sin(1)) == trueval
 end
+
+@testset "ForLoop" begin
+    @syms a b c::Array
+    ex = ForLoop(a, term(range, b^2, b^2 + 3), SetArray(false, c, [AtIndex(a, a^2 + sin(a^2))]))
+    csex = cse(ex)
+    @test findfirst(isequal(csex.body.range), Code.lhs.(csex.pairs)) !== nothing
+    @test findfirst(isequal(csex.body.body.body.elems[1].elem), Code.lhs.(csex.body.body.pairs)) !== nothing
+    expr = quote
+        let b = 2, c = zeros(10)
+            $(toexpr(ex))
+            c
+        end
+    end
+    arr = eval(expr)
+    @test arr[4] == 4^2 + sin(4^2)
+    @test arr[5] == 5^2 + sin(5^2)
+    @test arr[6] == 6^2 + sin(6^2)
+    @test arr[7] == 7^2 + sin(7^2)
+    @test all(iszero, arr[1:3])
+    @test all(iszero, arr[8:end])
+end

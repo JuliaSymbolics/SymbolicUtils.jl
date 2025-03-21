@@ -5,7 +5,7 @@ using StaticArrays, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       SpawnFetch, Multithreaded, cse
+       SpawnFetch, Multithreaded, ForLoop, cse
 
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
@@ -705,6 +705,27 @@ function toexpr(exp::LiteralExpr, st)
     recurse_expr(exp.ex, st)
 end
 
+"""
+    ForLoop(itervar, range, body)
+
+Generate a `for` loop of the form
+```julia
+for itervar in range
+    body
+end
+```
+"""
+struct ForLoop <: CodegenPrimitive
+    itervar
+    range
+    body
+end
+
+function toexpr(f::ForLoop, st)
+    :(for $(toexpr(f.itervar, st)) in $(toexpr(f.range, st))
+        $(toexpr(f.body, st))
+    end)
+end
 
 ### Code-related utilities
 
@@ -933,6 +954,12 @@ function cse!(x::SpawnFetch{T}, state::CSEState) where {T}
     # SpawnFetch is special. We want to CSE the individual functions independently, since
     # they shouldn't refer to global state. The arguments use `state`.
     return SpawnFetch{T}(map(cse, x.exprs), cse!(x.args, state), x.combine)
+end
+
+function cse!(x::ForLoop, state::CSEState)
+    # cse the range with current scope, CSE the body with a new scope
+    new_state = new_scope(state)
+    return ForLoop(x.itervar, cse!(x.range, state), apply_cse(cse!(x.body, new_state), new_state))
 end
 
 end

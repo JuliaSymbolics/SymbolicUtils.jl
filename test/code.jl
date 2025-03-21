@@ -285,7 +285,7 @@ SymbolicUtils.Code.cse_inside_expr(sym, ::typeof(foo), args...) = false
     exfoo = term(foo, ex1; type = Real)
     ex2 = ex1 + exfoo
     letblock = cse(ex2)
-    ex3 = letblock.body
+    ex3 = Code.rhs(last(letblock.pairs))
     @test any(isequal(exfoo), arguments(ex3))
 end
 

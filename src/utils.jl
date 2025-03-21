@@ -210,6 +210,9 @@ end
 macro matchable(expr)
     @assert expr.head == :struct
     name = expr.args[2]
+    if Meta.isexpr(name, :<:)
+        name = name.args[1]
+    end
     if name isa Expr && name.head === :curly
         name = name.args[1]
     end

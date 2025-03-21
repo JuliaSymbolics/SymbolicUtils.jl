@@ -52,6 +52,7 @@ MultivariatePolynomials = "0.5"
 NaNMath = "0.3, 1.1.2"
 OhMyThreads = "0.7"
 ReverseDiff = "1"
+RuntimeGeneratedFunctions = "0.5.13"
 Setfield = "0.7, 0.8, 1"
 SpecialFunctions = "0.10, 1.0, 2"
 StaticArrays = "0.12, 1.0"
@@ -72,9 +73,10 @@ PkgBenchmark = "32113eaa-f34f-5b0d-bd6c-c81e245fc73d"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ReferenceTests = "324d217c-45ce-50fc-942e-d289b448e8cf"
 ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "SafeTestsets", "Test", "Zygote", "OhMyThreads"]
+test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "SafeTestsets", "Test", "Zygote", "OhMyThreads", "RuntimeGeneratedFunctions"]

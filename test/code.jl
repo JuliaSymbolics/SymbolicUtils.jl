@@ -285,6 +285,59 @@ SymbolicUtils.Code.cse_inside_expr(sym, ::typeof(foo), args...) = false
     exfoo = term(foo, ex1; type = Real)
     ex2 = ex1 + exfoo
     letblock = cse(ex2)
-    ex3 = letblock.body
+    ex3 = Code.rhs(last(letblock.pairs))
     @test any(isequal(exfoo), arguments(ex3))
+end
+
+@testset "`AtIndex` with symbolic index" begin
+    @syms a b c::Array
+    ex = SetArray(false, c, [AtIndex(MakeArray([a, b], Array), [a + b, a - b])])
+    expr = quote
+        let a = 1, b = 2, c = zeros(Int, 3, 3)
+            $(toexpr(ex))
+            c
+        end
+    end
+    arr = eval(expr)
+    @test arr[1] == 3
+    @test arr[2] == -1
+    for i in 3:length(arr)
+        @test arr[i] == 0
+    end
+end
+
+@testset "`ForLoop`" begin
+    @syms a b c::Array
+    ex = ForLoop(a, term(range, b^2, b^2 + 3), SetArray(false, c, [AtIndex(a, a + 1)]))
+    expr = quote
+        let b = 2, c = zeros(Int, 10)
+            $(toexpr(ex))
+            c
+        end
+    end
+    arr = eval(expr)
+    @test arr[4] == 5
+    @test arr[5] == 6
+    @test arr[6] == 7
+    @test arr[7] == 8
+    @test all(iszero, arr[1:3])
+    @test all(iszero, arr[8:end])
+end
+
+@testset "`SetArray` with `return_arr`" begin
+    @syms a b c::Array
+    ex = SetArray(false, c, [3, 2, 1], false)
+    expr = quote
+        let b = 2, c = zeros(Int, 3)
+            $(toexpr(ex))
+        end
+    end
+    @test eval(expr) === nothing
+    ex = SetArray(false, c, [3, 2, 1], true)
+    expr = quote
+        let b = 2, c = zeros(Int, 3)
+            $(toexpr(ex))
+        end
+    end
+    @test eval(expr) == [3, 2, 1]
 end

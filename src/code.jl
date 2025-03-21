@@ -10,7 +10,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm
+                      symtype, sorted_arguments, metadata, isterm, term, maketerm, Symbolic
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -38,6 +38,8 @@ end
 @inline Base.getproperty(st::LazyState, f::Symbol) = f==:symbolify ?  getproperty(st, :rewrites) : getproperty(get(st), f)
 
 ##========================##
+
+abstract type CodegenPrimitive end
 
 """
     toexpr(ex, [st,])
@@ -77,7 +79,7 @@ when `y(t)` is itself the argument of a function rather than `y`.
 """
 toexpr(x) = toexpr(x, LazyState())
 
-@matchable struct Assignment
+@matchable struct Assignment <: CodegenPrimitive
     lhs
     rhs
 end
@@ -179,14 +181,19 @@ function _is_array_of_symbolics(O)
     # symbolic or arrays of symbolics
     return O isa AbstractArray && symbolic_type(O) == NotSymbolic() &&
         (symbolic_type(eltype(O)) != NotSymbolic() ||
-        any(x -> symbolic_type(x) != NotSymbolic() || _is_array_of_symbolics(x), O))
+        any(x -> x isa CodegenPrimitive || symbolic_type(x) != NotSymbolic() || _is_array_of_symbolics(x), O))
 end
 
 # workaround for https://github.com/JuliaSparse/SparseArrays.jl/issues/599
 function _is_array_of_symbolics(O::SparseMatrixCSC)
     return symbolic_type(eltype(O)) != NotSymbolic() ||
-        any(x -> symbolic_type(x) != NotSymbolic() || _is_array_of_symbolics(x), findnz(O)[3])
+        any(x -> x isa CodegenPrimitive || symbolic_type(x) != NotSymbolic() || _is_array_of_symbolics(x), findnz(O)[3])
 end
+
+function _is_tuple_of_symbolics(O::Tuple)
+    return any(x -> x isa CodegenPrimitive || symbolic_type(x) != NotSymbolic() || _is_array_of_symbolics(x) || _is_tuple_of_symbolics(x), O)
+end
+_is_tuple_of_symbolics(O) = false
 
 function toexpr(O, st)
     if issym(O)
@@ -211,7 +218,7 @@ function toexpr(O, st)
 end
 
 # Call elements of vector arguments by their name.
-@matchable struct DestructuredArgs
+@matchable struct DestructuredArgs <: CodegenPrimitive
     elems
     inds
     name
@@ -258,7 +265,7 @@ function get_assignments(d::DestructuredArgs, st)
     end
 end
 
-@matchable struct Let
+@matchable struct Let <: CodegenPrimitive
     pairs::Vector{Union{Assignment,DestructuredArgs}} # an iterator of pairs, ordered
     body
     let_block::Bool
@@ -318,7 +325,7 @@ function toexpr(l::Let, st)
                                                   toexpr(l.body, st))
 end
 
-@matchable struct Func
+@matchable struct Func <: CodegenPrimitive
     args::Vector
     kwargs
     body
@@ -405,7 +412,7 @@ function toexpr(f::Func, st)
     end
 end
 
-@matchable struct SetArray
+@matchable struct SetArray <: CodegenPrimitive
     inbounds::Bool
     arr
     elems  # Either iterator of Pairs or just an iterator
@@ -426,7 +433,7 @@ in an `@inbounds`.
 """
 SetArray
 
-@matchable struct AtIndex
+@matchable struct AtIndex <: CodegenPrimitive
     i
     elem
 end
@@ -444,7 +451,7 @@ function toexpr(s::SetArray, st)
     s.inbounds ? :(@inbounds $ex) : ex
 end
 
-@matchable struct MakeArray
+@matchable struct MakeArray <: CodegenPrimitive
     elems
     similarto # Must be either a reference to an array or a concrete type
     output_eltype
@@ -600,7 +607,7 @@ end
 
 ## We use a separate type for Sparse Arrays to sidestep the need for
 ## iszero to be defined on the expression type
-@matchable struct MakeSparseArray{S<:AbstractSparseArray}
+@matchable struct MakeSparseArray{S<:AbstractSparseArray} <: CodegenPrimitive
     array::S
 end
 
@@ -629,9 +636,11 @@ function toexpr(a::MakeSparseArray{<:SparseVector}, st)
                    [$(toexpr.(sp.nzval, (st,))...)]))
 end
 
-@matchable struct MakeTuple
+@matchable struct MakeTuple <: CodegenPrimitive
     elems
 end
+
+MakeTuple(x::Tuple) = MakeTuple(collect(x))
 
 """
     MakeTuple(tup)
@@ -661,7 +670,7 @@ Use `Symbolics.MultithreadedForm` ParallelType from the Symbolics.jl package to 
 SymbolicUtils supports `Multithreaded` type. Which spawns
 threaded tasks.
 """
-struct SpawnFetch{Typ}
+struct SpawnFetch{Typ} <: CodegenPrimitive
     exprs::Vector
     args::Union{Nothing, Vector}
     combine
@@ -685,7 +694,7 @@ end
 Literally `ex`, an `Expr`. `toexpr` on `LiteralExpr` recursively calls
 `toexpr` on any interpolated symbolic expressions.
 """
-struct LiteralExpr
+struct LiteralExpr <: CodegenPrimitive
     ex
 end
 
@@ -714,6 +723,32 @@ function cse_inside_expr(sym, f, args...)
 end
 
 """
+    $(TYPEDEF)
+
+A struct maintaining the state of CSE across multiple expressions. This allows
+leveraging common subexpressions across a hierarchy of codegen constructs.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct CSEState
+    """
+    An ordered list of assignment statements computing intermediate expressions
+    for CSE. Also allows `DestructuredArgs` for `Let` CSE.
+    """
+    sorted_exprs::Vector{Union{Assignment, DestructuredArgs}}
+    """
+    A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
+    """
+    visited::IdDict{Any, Any}
+end
+
+CSEState() = CSEState(Union{Assignment, DestructuredArgs}[], IdDict())
+
+Base.copy(x::CSEState) = CSEState(copy(x.sorted_eprs), copy(x.visited))
+
+"""
 $(SIGNATURES)
 
 Perform a topological sort on a symbolic expression represented as a Directed Acyclic 
@@ -729,104 +764,147 @@ Hash consing is assumed, meaning that structurally identical expressions are rep
 the same object in memory. This allows for efficient equality checks using `IdDict`.
 """
 function topological_sort(graph)
-    sorted_nodes = Assignment[]
-    visited = IdDict()
-
-    function dfs(node)
-        if haskey(visited, node)
-            return visited[node]
-        end
-        if iscall(node)
-            op = operation(node)
-            args = arguments(node)
-            if !cse_inside_expr(node, op, args...)
-                visited[node] = node
-                return node
-            end
-            args = map(dfs, arguments(node))
-            # use `term` instead of `maketerm` because we only care about the operation being performed
-            # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-            new_node = term(operation(node), args...; type = symtype(node))
-            sym = newsym(symtype(new_node))
-            push!(sorted_nodes, sym ← new_node)
-            visited[node] = sym
-            return sym
-        elseif _is_array_of_symbolics(node)
-            # workaround for https://github.com/JuliaSparse/SparseArrays.jl/issues/599
-            if issparse(node)
-                new_node = copy(node)
-                for (i, j, v) in zip(findnz(node)...)
-                    new_node[i, j] = dfs(v)
-                end
-            else
-                new_node = map(dfs, node)
-            end
-            sym = newsym(typeof(new_node))
-            push!(sorted_nodes, sym ← new_node)
-            visited[node] = sym
-            return sym
-        else
-            visited[node] = node
-            return node
-        end
-    end
-
-    dfs(graph)
-    return sorted_nodes
+    state = CSEState()
+    cse!(graph, state)
+    return state.sorted_exprs
 end
 
-function _cse!(mem, expr)
-    iscall(expr) || return expr
-    op = _cse!(mem, operation(expr))
-    args = map(Base.Fix1(_cse!, mem), arguments(expr))
-    t = maketerm(typeof(expr), op, args, nothing)
+"""
+    $(TYPEDSIGNATURES)
 
-    v, dict = mem
-    update! = let v=v, t=t
-        () -> begin
-            var = newsym(symtype(t))
-            push!(v, var ← t)
-            length(v)
-        end
-    end
-    v[get!(update!, dict, t)].lhs
-end
-
+Perform Common Subexpression Elimination on the given expression `expr`. Return a `Let`
+that computes `expr` with CSE.
+"""
 function cse(expr)
-    sorted_nodes = topological_sort(expr)
-    if isempty(sorted_nodes)
-        return Let(Assignment[], expr)
+    state = CSEState()
+    newexpr = cse!(expr, state)
+    if newexpr isa Func # special-case `Func` because wrapping it in a `Let` makes no sense
+        return Func(newexpr.args, newexpr.kwargs, Let(state.sorted_exprs, newexpr.body, false), newexpr.pre)
     else
-        last_assignment = pop!(sorted_nodes)
-        body = rhs(last_assignment)
-        return Let(sorted_nodes, body)
+        return Let(state.sorted_exprs, newexpr, false)
     end
 end
 
-function _cse(exprs::AbstractArray)
-    letblock = cse(Term{Any}(tuple, vec(exprs)))
-    letblock.pairs, reshape(arguments(letblock.body), size(exprs))
-end
+"""
+    cse!(x, state::CSEState)
 
-function cse(x::MakeArray)
-    assigns, expr = _cse(x.elems)
-    Let(assigns, MakeArray(expr, x.similarto, x.output_eltype))
-end
+Perform CSE on `x`, updating `state` with the required assignments and returning the
+modified `x`. The returned value should be computable given the assignments in `state`
+and should have the same type as `x`.
+"""
+function cse! end
 
-function cse(x::SetArray)
-    assigns, expr = _cse(x.elems)
-    Let(assigns, SetArray(x.inbounds, x.arr, expr))
-end
+indextype(::AbstractSparseArray{Tv, Ti}) where {Tv, Ti} = Ti
 
-function cse(x::MakeSparseArray)
-    sp = x.array
-    assigns, expr = _cse(sp.nzval)
-    if sp isa SparseMatrixCSC
-        Let(assigns, MakeSparseArray(SparseMatrixCSC(sp.m, sp.n,
-                                                     sp.colptr, sp.rowval, exprs)))
-    else
-        Let(assigns, MakeSparseArray(SparseVector(sp.n, sp.nzinds, exprs)))
+function cse!(expr::Symbolic, state::CSEState)
+    get!(state.visited, expr) do
+        iscall(expr) || return expr
+
+        op = operation(expr)
+        args = arguments(expr)
+        cse_inside_expr(expr, op, args...) || return expr
+        args = map(args) do arg
+            if arg isa Union{Tuple, AbstractArray}
+                if arg isa Tuple
+                    new_arg = cse!(MakeTuple(arg), state)
+                    sym = newsym(Tuple{symtype.(arg)...})
+                elseif issparse(arg)
+                    new_arg = cse!(MakeSparseArray(arg), state)
+                    sym = newsym(AbstractSparseArray{symtype(eltype(arg)), indextype(arg), ndims(arg)})
+                else
+                    new_arg = cse!(MakeArray(arg, typeof(arg)), state)
+                    sym = newsym(AbstractArray{symtype(eltype(arg)), ndims(arg)})
+                end
+                push!(state.sorted_exprs, sym ← new_arg)
+                state.visited[arg] = sym
+                return sym
+            end
+            return cse!(arg, state)
+        end
+        # use `term` instead of `maketerm` because we only care about the operation being performed
+        # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
+        new_expr = term(operation(expr), args...; type = symtype(expr))
+        sym = newsym(symtype(new_expr))
+        push!(state.sorted_exprs, sym ← new_expr)
+        return sym
     end
+end
+
+cse!(x, ::CSEState) = x
+cse!(x::Expr, ::CSEState) = x
+cse!(x::LiteralExpr, ::CSEState) = x
+
+cse!(x::CodegenPrimitive, state::CSEState) = throw(MethodError(cse!, (x, state)))
+
+function cse!(x::AbstractArray, state::CSEState)
+    res = map(Base.Fix2(cse!, state), x)
+    return res
+end
+
+function cse!(x::AbstractSparseArray, state::CSEState)
+    new_x = copy(x)
+    for (i, j, v) in zip(findnz(x)...)
+        new_x[i, j] = cse!(v, state)
+    end
+    return new_x
+end
+
+function cse!(x::Tuple, state::CSEState)
+    res = map(Base.Fix2(cse!, state), x)
+    return res
+end
+
+function cse!(x::MakeArray, state::CSEState)
+    return MakeArray(cse!(x.elems, state), x.similarto, x.output_eltype)
+end
+
+function cse!(x::SetArray, state::CSEState)
+    return SetArray(x.inbounds, x.arr, cse!(x.elems, state))
+end
+
+function cse!(x::MakeSparseArray, state::CSEState)
+    m, n = size(x.array)
+    i, j, v = findnz(x.array)
+    return MakeSparseArray(sparse(i, j, cse!(v, state), m, n))
+end
+
+function cse!(x::Assignment, state::CSEState)
+    return Assignment(x.lhs, cse!(x.rhs, state))
+end
+
+function cse!(x::DestructuredArgs, state::CSEState)
+    return DestructuredArgs(x.elems, x.inds, cse!(x.name, state), x.inbounds, x.create_bindings)
+end
+
+function cse!(x::Let, state::CSEState)
+    # if we just CSE the body, the CSE subexpressions will be wrapped around this Let,
+    # but will depend on variables defined in the assignments of this Let which is
+    # incorrect. Instead, we include `x.pairs` in `state.sorted_exprs`, and return
+    # a `Let` with no assignments and a CSEd body.
+    for p in x.pairs
+        # cse the assignments individually too
+        newp = cse!(p, state)
+        push!(state.sorted_exprs, newp)
+    end
+    return Let([], cse!(x.body, state), x.let_block)
+end
+
+function cse!(x::Func, state::CSEState)
+    return Func(x.args, x.kwargs, cse!(x.body, state), x.pre)
+end
+
+function cse!(x::AtIndex, state::CSEState)
+    return AtIndex(x.i, cse!(x.elem, state))
+end
+
+function cse!(x::MakeTuple, state::CSEState)
+    return MakeTuple(cse!(x.elems, state))
+end
+
+function cse!(x::SpawnFetch{T}, state::CSEState) where {T}
+    # SpawnFetch is special. We want to CSE the individual functions independently, since
+    # they shouldn't refer to global state. The arguments use `state`.
+    return SpawnFetch{T}(map(cse, x.exprs), cse!(x.args, state), x.combine)
 end
 
 end

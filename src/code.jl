@@ -746,7 +746,21 @@ end
 
 CSEState() = CSEState(Union{Assignment, DestructuredArgs}[], IdDict())
 
-Base.copy(x::CSEState) = CSEState(copy(x.sorted_eprs), copy(x.visited))
+Base.copy(x::CSEState) = CSEState(copy(x.sorted_exprs), copy(x.visited))
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return a `CSEState` for a new scope inside the one represented by `state`. The new
+`CSEState` will use previously-CSEd bindings for expressions only involving variables
+outside the new scope, but will generate new bindings for variables defined in this scope.
+The new bindings will not affect the outer scope.
+"""
+function new_scope(state::CSEState)
+    state = copy(state)
+    empty!(state.sorted_exprs)
+    return state
+end
 
 """
 $(SIGNATURES)
@@ -772,17 +786,29 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Perform Common Subexpression Elimination on the given expression `expr`. Return a `Let`
-that computes `expr` with CSE.
+Perform Common Subexpression Elimination on the given expression `expr`. Return an
+equivalent `expr` with optimized computation.
 """
 function cse(expr)
     state = CSEState()
     newexpr = cse!(expr, state)
-    if newexpr isa Func # special-case `Func` because wrapping it in a `Let` makes no sense
-        return Func(newexpr.args, newexpr.kwargs, Let(state.sorted_exprs, newexpr.body, false), newexpr.pre)
-    else
-        return Let(state.sorted_exprs, newexpr, false)
-    end
+    return apply_cse(newexpr, state)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a CSEd expression `newexpr` and the corresponding `state`, return an equivalent
+expression with optimized computation.
+
+This is also used when introducing new scopes in subexpressions.
+"""
+function apply_cse(newexpr, state::CSEState)
+    # we special-case an empty `sorted_exprs` because e.g. if `expr` is a `Func`, it will
+    # introduce a new scope and not add bindings to `state`. We don't want to wrap it
+    # in a `Let`.
+    isempty(state.sorted_exprs) && return newexpr
+    return Let(state.sorted_exprs, newexpr, false)
 end
 
 """
@@ -877,24 +903,26 @@ function cse!(x::DestructuredArgs, state::CSEState)
 end
 
 function cse!(x::Let, state::CSEState)
-    # if we just CSE the body, the CSE subexpressions will be wrapped around this Let,
-    # but will depend on variables defined in the assignments of this Let which is
-    # incorrect. Instead, we include `x.pairs` in `state.sorted_exprs`, and return
-    # a `Let` with no assignments and a CSEd body.
+    state = new_scope(state)
+    # `Let` introduces a new scope. For each assignment `p` in `x.pairs`, we CSE it
+    # and then append it to the new assignments from CSE. This is because the assignments
+    # are imperative, so the CSE assignments for a given `p` can include previous `p`,
+    # preventing us from simply wrapping the `Let` in another `Let`.
     for p in x.pairs
-        # cse the assignments individually too
         newp = cse!(p, state)
         push!(state.sorted_exprs, newp)
     end
-    return Let([], cse!(x.body, state), x.let_block)
+    newbody = cse!(x.body, state)
+    return Let(state.sorted_exprs, newbody, x.let_block)
 end
 
 function cse!(x::Func, state::CSEState)
-    return Func(x.args, x.kwargs, cse!(x.body, state), x.pre)
+    state = new_scope(state)
+    return Func(x.args, x.kwargs, apply_cse(cse!(x.body, state), state), x.pre)
 end
 
 function cse!(x::AtIndex, state::CSEState)
-    return AtIndex(x.i, cse!(x.elem, state))
+    return AtIndex(cse!(x.i, state), cse!(x.elem, state))
 end
 
 function cse!(x::MakeTuple, state::CSEState)

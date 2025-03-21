@@ -1,4 +1,5 @@
-using SymbolicUtils, SymbolicUtils.Code, Test
+using SymbolicUtils, SymbolicUtils.Code, SparseArrays, Test
+using SymbolicUtils.Code: topological_sort
 using RuntimeGeneratedFunctions
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -45,8 +46,7 @@ end
     sorted_nodes = topological_sort(expr)
     @test isempty(sorted_nodes)
     let_expr = cse(expr)
-    @test isempty(let_expr.pairs)
-    @test isequal(let_expr.body, a)
+    @test isequal(let_expr, expr)
 
     # array symbolics
     # https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/688#pullrequestreview-2554931739
@@ -71,9 +71,9 @@ end
 
 @testset "Expr" begin
     ex = :(a^2 + sin(a^2))
-    @test isequal(cse(ex).body, ex)
+    @test isequal(cse(ex), ex)
     ex = LiteralExpr(ex)
-    @test isequal(cse(ex).body, ex)
+    @test isequal(cse(ex), ex)
 end
 
 @testset "Tuple" begin

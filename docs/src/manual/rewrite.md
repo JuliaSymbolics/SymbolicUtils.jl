@@ -71,7 +71,7 @@ If you want to match a variable number of subexpressions at once, you will need 
 @rule(+(~~xs) => ~~xs)(x + y + z)
 
 # output
-3-element view(::Vector{Any}, 1:3) with eltype Any:
+3-element view(::ReadOnlyArrays.ReadOnlyVector{Any, Vector{Any}}, 1:3) with eltype Any:
  z
  y
  x

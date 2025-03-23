@@ -25,6 +25,9 @@ import TaskLocalValues: TaskLocalValue
 
 include("cache.jl")
 Base.@deprecate istree iscall
+
+include("small_array.jl")
+
 export istree, operation, arguments, sorted_arguments, iscall
 # Sym, Term,
 # Add, Mul and Pow

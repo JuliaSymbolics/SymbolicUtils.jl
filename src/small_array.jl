@@ -125,3 +125,9 @@ function Base.push!(x::SmallVec{T, V}, v) where {T, V}
 end
 
 Base.pop!(x::SmallVec) = pop!(x.data)
+
+function Base.sizehint!(x::SmallVec{T, V}, n; kwargs...) where {T, V}
+    x.data isa Backing && return x
+    sizehint!(x.data, n; kwargs...)
+    x
+end

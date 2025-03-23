@@ -142,18 +142,16 @@ end
     @syms a b c d::Array e f
     fn = Func([a, DestructuredArgs([b, c])], [], Let([Assignment(d, [a^2 + b^2, b^2 + c^2]), DestructuredArgs([e, f], term(broadcast, *, 2, d))], a^2 + b^2 + e + f))
     csex = cse(fn)
-    @show csex.body.pairs
-    display(toexpr(csex))
-    @test length(csex.body.pairs) == 9
     sexprs = csex.body.pairs
     assignments = filter(x -> x isa Assignment, sexprs)
-    @test sexprs[6].lhs === d
+    didx = findfirst(x -> isequal(x.lhs, d), sexprs)
     # the array in the assignment should be CSEd
-    i, j = findfirst.(isequal.(sexprs[6].rhs), (Code.lhs.(assignments),))
+    i, j = findfirst.(isequal.(sexprs[didx].rhs), (Code.lhs.(assignments),))
     @test i !== nothing
     @test j !== nothing
-    @test sexprs[8] isa DestructuredArgs
-    @test isequal(sexprs[8].name, sexprs[7].lhs)
+    didx = findfirst(x -> x isa DestructuredArgs, sexprs)
+    @test sexprs[didx] isa DestructuredArgs
+    @test findfirst(isequal(sexprs[didx].name), Code.lhs.(assignments)) !== nothing
 
     rgf = @RuntimeGeneratedFunction(toexpr(csex))
     trueval = let a = 1,

@@ -1,6 +1,5 @@
 # A little trick for travis
 using PkgBenchmark, SymbolicUtils
-using Metatheory
 
 pkgpath = dirname(dirname(pathof(SymbolicUtils)))
 # move it out of the repository so that you can check out different branches

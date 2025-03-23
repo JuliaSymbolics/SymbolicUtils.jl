@@ -142,7 +142,8 @@ end
     @syms a b c d::Array e f
     fn = Func([a, DestructuredArgs([b, c])], [], Let([Assignment(d, [a^2 + b^2, b^2 + c^2]), DestructuredArgs([e, f], term(broadcast, *, 2, d))], a^2 + b^2 + e + f))
     csex = cse(fn)
-
+    @show csex.body.pairs
+    display(toexpr(csex))
     @test length(csex.body.pairs) == 9
     sexprs = csex.body.pairs
     assignments = filter(x -> x isa Assignment, sexprs)

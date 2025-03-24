@@ -32,7 +32,7 @@ GC'ed when removed.
 defaultval(::Type{T}) where {T <: Number} = zero(T)
 defaultval(::Type{Any}) = nothing
 
-function Base.getindex(x::Backing, i::Int)
+Base.@propagate_inbounds function Base.getindex(x::Backing, i::Int)
     @boundscheck 1 <= i <= x.len
     if i == 1
         x.x1
@@ -43,7 +43,7 @@ function Base.getindex(x::Backing, i::Int)
     end
 end
 
-function Base.setindex!(x::Backing, v, i::Int)
+Base.@propagate_inbounds function Base.setindex!(x::Backing, v, i::Int)
     @boundscheck 1 <= i <= x.len
     if i == 1
         setfield!(x, :x1, v)
@@ -54,18 +54,28 @@ function Base.setindex!(x::Backing, v, i::Int)
     end
 end
 
-function Base.push!(x::Backing, v)
+Base.@propagate_inbounds function Base.push!(x::Backing, v)
     x.len < 3 || throw(ArgumentError("`Backing` is full"))
     x.len += 1
     x[x.len] = v
 end
 
-function Base.pop!(x::Backing{T}) where {T}
+Base.@propagate_inbounds function Base.pop!(x::Backing{T}) where {T}
     x.len > 0 || throw(ArgumentError("Array is empty"))
     v = x[x.len]
     x[x.len] = defaultval(T)
     x.len -= 1
     v
+end
+
+Base.@propagate_inbounds function Base.deleteat!(x::Backing{T}, i::Int) where {T}
+    @boundscheck 1 <= i <= x.len
+    x[i] = defaultval(T)
+    for j in i:x.len-1
+        x[i] = x[i + 1]
+    end
+    x.len -= 1
+    x
 end
 
 """
@@ -113,10 +123,11 @@ Base.convert(::Type{SmallVec{T, V}}, x::SmallVec{T, V}) where {T, V} = x
 
 Base.size(x::SmallVec) = size(x.data)
 Base.isempty(x::SmallVec) = isempty(x.data)
-Base.getindex(x::SmallVec, i::Int) = x.data[i]
-Base.setindex!(x::SmallVec, v, i::Int) = setindex!(x.data, v, i)
+Base.@propagate_inbounds Base.getindex(x::SmallVec, i::Int) = x.data[i]
+Base.@propagate_inbounds Base.setindex!(x::SmallVec, v, i::Int) = setindex!(x.data, v, i)
+Base.@propagate_inbounds Base.deleteat!(x::SmallVec, i) = deleteat!(x.data, i)
 
-function Base.push!(x::SmallVec{T, V}, v) where {T, V}
+Base.@propagate_inbounds function Base.push!(x::SmallVec{T, V}, v) where {T, V}
     buf = x.data
     buf isa Backing{T} || return push!(buf::V, v)
     isfull(buf) || return push!(buf::Backing{T}, v)
@@ -124,10 +135,82 @@ function Base.push!(x::SmallVec{T, V}, v) where {T, V}
     return push!(x.data::V, v)
 end
 
-Base.pop!(x::SmallVec) = pop!(x.data)
+Base.@propagate_inbounds Base.pop!(x::SmallVec) = pop!(x.data)
 
 function Base.sizehint!(x::SmallVec{T, V}, n; kwargs...) where {T, V}
-    x.data isa Backing && return x
+    if x.data isa Backing
+        if n > 3
+            x.data = V(x.data)
+        end
+        return x
+    end
     sizehint!(x.data, n; kwargs...)
     x
 end
+
+mutable struct LittleBigDict{K, V, KVec, VVec, D <: AbstractDict{K, V}} <: AbstractDict{K, V}
+    data::Union{LittleDict{K, V, SmallVec{K, KVec}, SmallVec{V, VVec}}, D}
+
+    function LittleBigDict{K, V, Kv, Vv, D}(keys, vals) where {K, V, Kv, Vv, D}
+        nk = length(keys)
+        nv = length(vals)
+        nk == nv || throw(ArgumentError("Got $nk keys for $nv values"))
+        if nk < 25
+            keys = SmallVec{K, Kv}(keys)
+            vals = SmallVec{V, Vv}(vals)
+            new{K, V, Kv, Vv, D}(LittleDict{K, V}(keys, vals))
+        else
+            new{K, V, Kv, Vv, D}(D(zip(keys, vals)))
+        end
+    end
+
+    function LittleBigDict{K, V, Kv, Vv, D}(d::D) where {K, V, Kv, Vv, D}
+        if length(d) < 25
+            return LittleBigDict{K, V, Kv, Vv, D}(collect(keys(d)), collect(values(d)))
+        else
+            return new{K, V, Kv, Vv, D}(d)
+        end
+    end
+
+    function LittleBigDict{K, V, Kv, Vv, D}(d::AbstractDict) where {K, V, Kv, Vv, D}
+        LittleBigDict{K, V, Kv, Vv, D}(collect(keys(d)), collect(values(d)))
+    end
+end
+
+function LittleBigDict{K, V, D}() where {K, V, D}
+    LittleBigDict{K, V, Vector{K}, Vector{V}, D}((), ())
+end
+LittleBigDict{K, V}() where {K, V} = LittleBigDict{K, V, Dict{K, V}}()
+
+Base.haskey(x::LittleBigDict, k) = haskey(x.data, k)
+Base.length(x::LittleBigDict) = length(x.data)
+Base.getkey(x::LittleBigDict, k, d) = getkey(x.data, k, d)
+Base.get(x::LittleBigDict, k, d) = get(x.data, k, d)
+function Base.sizehint!(x::LittleBigDict{K, V, Kv, Vv, D}, n; kwargs...) where {K, V, Kv, Vv, D}
+    if x.data isa LittleDict && n >= 25
+        x.data = D(x.data)
+    end
+    sizehint!(x.data, n; kwargs...)
+end
+function Base.setindex!(x::LittleBigDict{K, V, Kv, Vv, D}, v, k) where {K, V, Kv, Vv, D}
+    if x.data isa LittleDict
+        delete!(x.data, k)
+        get!(Returns(v), x.data, k)
+        if length(x.data) > 25
+            x.data = D(x.data)
+        end
+        v
+    else
+        setindex!(x.data, v, k)
+    end
+end
+Base.getindex(x::LittleBigDict, k) = getindex(x.data, k)
+Base.delete!(x::LittleBigDict, k) = delete!(x.data, k)
+function Base.get!(f::Base.Callable, x::LittleBigDict{K, V, Kv, Vv, D}, k) where {K, V, Kv, Vv, D}
+    res = get!(f, x.data, k)
+    if x.data isa LittleDict && length(x.data) > 25
+        x.data = D(x.data)
+    end
+    res
+end
+Base.iterate(x::LittleBigDict, args...) = iterate(x.data, args...)

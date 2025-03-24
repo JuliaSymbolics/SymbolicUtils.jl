@@ -22,6 +22,7 @@ import TermInterface: iscall, isexpr, head, children,
 import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
+import OrderedCollections: LittleDict
 
 include("cache.jl")
 Base.@deprecate istree iscall

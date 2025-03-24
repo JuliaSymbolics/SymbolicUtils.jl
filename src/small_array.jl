@@ -127,7 +127,12 @@ end
 Base.@propagate_inbounds Base.pop!(x::SmallVec) = pop!(x.data)
 
 function Base.sizehint!(x::SmallVec{T, V}, n; kwargs...) where {T, V}
-    x.data isa Backing && return x
+    if x.data isa Backing
+        if n > 3
+            x.data = V(x.data)
+        end
+        return x
+    end
     sizehint!(x.data, n; kwargs...)
     x
 end

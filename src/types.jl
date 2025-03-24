@@ -13,7 +13,7 @@ abstract type Symbolic{T} end
 const Metadata = Union{Nothing,Base.ImmutableDict{DataType,Any}}
 const NO_METADATA = nothing
 
-sdict(kv...) = Dict{Any, Any}(kv...)
+sdict() = LittleBigDict{Any, Any}()
 
 using Base: RefValue
 const SmallV{T} = SmallVec{T, Vector{T}}

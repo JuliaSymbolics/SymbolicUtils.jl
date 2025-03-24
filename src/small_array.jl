@@ -60,7 +60,7 @@ function Base.push!(x::Backing, v)
     x[x.len] = v
 end
 
-function Base.pop!(x::Backing{T}, v) where {T}
+function Base.pop!(x::Backing{T}) where {T}
     x.len > 0 || throw(ArgumentError("Array is empty"))
     v = x[x.len]
     x[x.len] = defaultval(T)

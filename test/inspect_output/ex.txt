@@ -1,7 +1,7 @@
  1 DIV
  2 ├─ MUL(scalar = 1, powers = (z => 1, 1 + 2x + 3y => 2))
  3 │  ├─ POW
- 4 │  │  ├─ ADD(scalar = 1, coeffs = (y => 3, x => 2))
+ 4 │  │  ├─ ADD(scalar = 1, coeffs = (x => 2, y => 3))
  5 │  │  │  ├─ 1
  6 │  │  │  ├─ MUL(scalar = 2, powers = (x => 1,))
  7 │  │  │  │  ├─ 2

@@ -147,3 +147,70 @@ function Base.sizehint!(x::SmallVec{T, V}, n; kwargs...) where {T, V}
     sizehint!(x.data, n; kwargs...)
     x
 end
+
+mutable struct LittleBigDict{K, V, KVec, VVec, D <: AbstractDict{K, V}} <: AbstractDict{K, V}
+    data::Union{LittleDict{K, V, SmallVec{K, KVec}, SmallVec{V, VVec}}, D}
+
+    function LittleBigDict{K, V, Kv, Vv, D}(keys, vals) where {K, V, Kv, Vv, D}
+        nk = length(keys)
+        nv = length(vals)
+        nk == nv || throw(ArgumentError("Got $nk keys for $nv values"))
+        if nk < 25
+            keys = SmallVec{K, Kv}(keys)
+            vals = SmallVec{V, Vv}(vals)
+            new{K, V, Kv, Vv, D}(LittleDict{K, V}(keys, vals))
+        else
+            new{K, V, Kv, Vv, D}(D(zip(keys, vals)))
+        end
+    end
+
+    function LittleBigDict{K, V, Kv, Vv, D}(d::D) where {K, V, Kv, Vv, D}
+        if length(d) < 25
+            return LittleBigDict{K, V, Kv, Vv, D}(collect(keys(d)), collect(values(d)))
+        else
+            return new{K, V, Kv, Vv, D}(d)
+        end
+    end
+
+    function LittleBigDict{K, V, Kv, Vv, D}(d::AbstractDict) where {K, V, Kv, Vv, D}
+        LittleBigDict{K, V, Kv, Vv, D}(collect(keys(d)), collect(values(d)))
+    end
+end
+
+function LittleBigDict{K, V, D}() where {K, V, D}
+    LittleBigDict{K, V, Vector{K}, Vector{V}, D}((), ())
+end
+LittleBigDict{K, V}() where {K, V} = LittleBigDict{K, V, Dict{K, V}}()
+
+Base.haskey(x::LittleBigDict, k) = haskey(x.data, k)
+Base.length(x::LittleBigDict) = length(x.data)
+Base.getkey(x::LittleBigDict, k, d) = getkey(x.data, k, d)
+Base.get(x::LittleBigDict, k, d) = get(x.data, k, d)
+function Base.sizehint!(x::LittleBigDict{K, V, Kv, Vv, D}, n; kwargs...) where {K, V, Kv, Vv, D}
+    if x.data isa LittleDict && n >= 25
+        x.data = D(x.data)
+    end
+    sizehint!(x.data, n; kwargs...)
+end
+function Base.setindex!(x::LittleBigDict{K, V, Kv, Vv, D}, v, k) where {K, V, Kv, Vv, D}
+    if x.data isa LittleDict
+        delete!(x.data, k)
+        get!(Returns(v), x.data, k)
+        if length(x.data) > 25
+            x.data = D(x.data)
+        end
+        v
+    else
+        setindex!(x.data, v, k)
+    end
+end
+Base.getindex(x::LittleBigDict, k) = getindex(x.data, k)
+Base.delete!(x::LittleBigDict, k) = delete!(x.data, k)
+function Base.get!(f::Base.Callable, x::LittleBigDict{K, V, Kv, Vv, D}, k) where {K, V, Kv, Vv, D}
+    res = get!(f, x.data, k)
+    if x.data isa LittleDict && length(x.data) > 25
+        x.data = D(x.data)
+    end
+    res
+end
+Base.iterate(x::LittleBigDict, args...) = iterate(x.data, args...)

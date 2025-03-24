@@ -16,7 +16,8 @@ const NO_METADATA = nothing
 sdict(kv...) = Dict{Any, Any}(kv...)
 
 using Base: RefValue
-const EMPTY_ARGS = []
+const SmallV{T} = SmallVec{T, Vector{T}}
+const EMPTY_ARGS = SmallV{Any}()
 const EMPTY_HASH = RefValue(UInt(0))
 const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
@@ -31,7 +32,7 @@ const ENABLE_HASHCONSING = Ref(true)
     end
     struct Term{T} <: BasicSymbolic{T}
         f::Any                 = identity  # base/num if Pow; issorted if Add/Dict
-        arguments::Vector{Any} = EMPTY_ARGS
+        arguments::SmallV{Any} = EMPTY_ARGS
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
     end
@@ -40,25 +41,25 @@ const ENABLE_HASHCONSING = Ref(true)
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
-        arguments::Vector{Any} = EMPTY_ARGS
+        arguments::SmallV{Any} = EMPTY_ARGS
     end
     struct Add{T} <: BasicSymbolic{T}
         coeff::Any             = 0         # exp/den if Pow
         dict::EMPTY_DICT_T     = EMPTY_DICT
         hash::RefValue{UInt}   = EMPTY_HASH
         hash2::RefValue{UInt} = EMPTY_HASH
-        arguments::Vector{Any} = EMPTY_ARGS
+        arguments::SmallV{Any} = EMPTY_ARGS
     end
     struct Div{T} <: BasicSymbolic{T}
         num::Any               = 1
         den::Any               = 1
         simplified::Bool       = false
-        arguments::Vector{Any} = EMPTY_ARGS
+        arguments::SmallV{Any} = EMPTY_ARGS
     end
     struct Pow{T} <: BasicSymbolic{T}
         base::Any              = 1
         exp::Any               = 1
-        arguments::Vector{Any} = EMPTY_ARGS
+        arguments::SmallV{Any} = EMPTY_ARGS
     end
 end
 
@@ -564,17 +565,8 @@ function Sym{T}(name::Symbol; kw...) where {T}
     BasicSymbolic(s)
 end
 
-function unwrap_arr!(arr)
-    for i in eachindex(arr)
-        arr[i] = unwrap(arr[i])
-    end
-end
-
 function Term{T}(f, args; kw...) where T
-    if eltype(args) !== Any
-        args = convert(Vector{Any}, args)
-    end
-    unwrap_arr!(args)
+    args = SmallV{Any}(args)
 
     s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw...)
     BasicSymbolic(s)
@@ -606,7 +598,7 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], kw...)
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw...)
     BasicSymbolic(s)
 end
 
@@ -624,7 +616,7 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=[], kw...)
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw...)
         BasicSymbolic(s)
     end
 end
@@ -645,7 +637,7 @@ ratio(x::Rat,y::Rat) = x//y
 function maybe_intcoeff(x)
     if ismul(x)
         if x.coeff isa Rational && isone(x.coeff.den)
-            Mul{symtype(x)}(; coeff=x.coeff.num, dict=x.dict, x.metadata, arguments=[])
+            Mul{symtype(x)}(; coeff=x.coeff.num, dict=x.dict, x.metadata, arguments=SmallV{Any}())
         else
             x
         end
@@ -692,7 +684,7 @@ function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
         end
     end
 
-    s = Div{T}(; num=n, den=d, simplified, arguments=[], metadata)
+    s = Div{T}(; num=n, den=d, simplified, arguments=SmallV{Any}(), metadata)
     BasicSymbolic(s)
 end
 
@@ -712,7 +704,7 @@ function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     b = unwrap(b)
     _iszero(b) && return 1
     _isone(b) && return a
-    s = Pow{T}(; base=a, exp=b, arguments=[], metadata)
+    s = Pow{T}(; base=a, exp=b, arguments=SmallV{Any}(), metadata)
     BasicSymbolic(s)
 end
 
@@ -728,13 +720,13 @@ function toterm(t::BasicSymbolic{T}) where T
         args = Any[]
         push!(args, t.coeff)
         for (k, coeff) in t.dict
-            push!(args, coeff == 1 ? k : Term{T}(E === MUL ? (^) : (*), Any[coeff, k]))
+            push!(args, coeff == 1 ? k : Term{T}(E === MUL ? (^) : (*), SmallV{Any}((coeff, k))))
         end
         Term{T}(operation(t), args)
     elseif E === DIV
-        Term{T}(/, Any[t.num, t.den])
+        Term{T}(/, SmallV{Any}((t.num, t.den)))
     elseif E === POW
-        Term{T}(^, [t.base, t.exp])
+        Term{T}(^, SmallV{Any}((t.base, t.exp)))
     else
         error_on_type()
     end
@@ -808,13 +800,13 @@ function makepow(a, b)
 end
 
 function term(f, args...; type = nothing)
-    args = map(unwrap, args)
+    args = SmallV{Any}(args)
     if type === nothing
         T = _promote_symtype(f, args)
     else
         T = type
     end
-    Term{T}(f, Any[args...])
+    Term{T}(f, args)
 end
 
 """
@@ -826,7 +818,7 @@ function unflatten(t::Symbolic{T}) where{T}
         f = operation(t)
         if f == (+) || f == (*)   # TODO check out for other n-ary --> binary ops
             a = arguments(t)
-            return foldl((x,y) -> Term{T}(f, Any[x, y]), a)
+            return foldl((x,y) -> Term{T}(f, SmallV{Any}((x, y))), a)
         end
     end
     return t
@@ -1192,7 +1184,7 @@ promote_symtype(f, Ts...) = Any
 
 struct FnType{X<:Tuple,Y,Z} end
 
-(f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, Any[args...])
+(f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, SmallV{Any}(args))
 
 function (f::Symbolic)(args...)
     error("Sym $f is not callable. " *

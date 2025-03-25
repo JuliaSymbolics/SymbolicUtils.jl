@@ -102,6 +102,7 @@ resets the stats.
 function clear_cache!(fn)
     dict, stats = associated_cache(fn).tlv[]
     empty!(dict)
+    sizehint!(dict, get_limit(fn))
     reset_stats!(stats)
 end
 
@@ -339,7 +340,7 @@ macro cache(args...)
     end)
 
     # instantiation of the TaskLocalValue
-    tlvctor = :($tlvT(() -> ($cacheT(), $CacheStats())))
+    tlvctor = :($tlvT(() -> ((dict = $cacheT(); sizehint!(dict, $get_limit($name)); dict), $CacheStats())))
     # instantiation expression for the constant value
     cachector = Expr(:call, structT, tlvctor, config[:limit], config[:retain_fraction], config[:enabled])
 

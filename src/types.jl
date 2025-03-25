@@ -1346,39 +1346,72 @@ sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
 sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
-function +(a::SN, b::SN)
-    !issafecanon(+, a,b) && return term(+, a, b) # Don't flatten if args have metadata
-    if isadd(a) && isadd(b)
-        return Add(add_t(a,b),
-                   a.coeff + b.coeff,
-                   _merge(+, a.dict, b.dict, filter=_iszero))
-    elseif isadd(a)
-        coeff, dict = makeadd(1, 0, b)
-        return Add(add_t(a,b), a.coeff + coeff, _merge(+, a.dict, dict, filter=_iszero))
-    elseif isadd(b)
-        return b + a
-    end
-    coeff, dict = makeadd(1, 0, a, b)
-    Add(add_t(a,b), coeff, dict)
-end
 
-function +(a::Number, b::SN)
-    tmp = unwrap(a)
-    if tmp !== a
-        return tmp + b
-    end
-    !issafecanon(+, b) && return term(+, a, b) # Don't flatten if args have metadata
-    iszero(a) && return b
-    if isadd(b)
-        Add(add_t(a,b), a + b.coeff, b.dict)
+function +(a::SN, bs::Union{SN, Number}...)
+    isempty(bs) && return a
+    # entries where `!issafecanon`
+    unsafes = SmallV{Any}()
+    # coeff and dict of the `Add`
+    coeff = 0
+    dict = sdict()
+    # type of the `Add`
+    T = symtype(a)
+
+    # handle `a` separately
+    if issafecanon(+, a)
+        if isadd(a)
+            coeff = a.coeff
+            dict = copy(a.dict)
+        elseif ismul(a)
+            v = a.coeff
+            a′ = Mul(symtype(a), 1, copy(a.dict); metadata = a.metadata)
+            dict[a′] = v
+        else
+            dict[a] = 1
+        end
     else
-        Add(add_t(a,b), makeadd(1, a, b)...)
+        push!(unsafes, a)
     end
+
+    for b in bs
+        T = promote_symtype(+, T, symtype(b))
+        if !issafecanon(+, b)
+            push!(unsafes, b)
+            continue
+        end
+        if b isa Number
+            coeff += b
+            continue
+        end
+        if isadd(b)
+            coeff += b.coeff
+            for (k, v) in b.dict
+                dict[k] = get(dict, k, 0) + v
+            end
+        elseif ismul(b)
+            v = b.coeff
+            b′ = Mul(symtype(b), 1, copy(b.dict); metadata = b.metadata)
+            dict[b′] = get(dict, b′, 0) + v
+        else
+            dict[b] = get(dict, b, 0) + 1
+        end
+    end
+    # remove entries multiplied by zero
+    filter!(dict) do kvp
+        !iszero(kvp[2])
+    end
+
+    result = isempty(dict) ? coeff : Add(T, coeff, dict)
+    if !isempty(unsafes)
+        push!(unsafes, result)
+        result = Term{T}(+, unsafes)
+    end
+    return result
 end
 
-+(a::SN, b::Number) = b + a
-
-+(a::SN) = a
+function +(a::Number, b::SN, bs::Union{SN, Number}...)
+    return +(b, a, bs...)
+end
 
 function -(a::SN)
     !issafecanon(*, a) && return term(-, a)

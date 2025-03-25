@@ -32,7 +32,7 @@ GC'ed when removed.
 defaultval(::Type{T}) where {T <: Number} = zero(T)
 defaultval(::Type{Any}) = nothing
 
-function Base.getindex(x::Backing, i::Int)
+Base.@propagate_inbounds function Base.getindex(x::Backing, i::Int)
     @boundscheck 1 <= i <= x.len
     if i == 1
         x.x1
@@ -43,7 +43,7 @@ function Base.getindex(x::Backing, i::Int)
     end
 end
 
-function Base.setindex!(x::Backing, v, i::Int)
+Base.@propagate_inbounds function Base.setindex!(x::Backing, v, i::Int)
     @boundscheck 1 <= i <= x.len
     if i == 1
         setfield!(x, :x1, v)
@@ -54,14 +54,14 @@ function Base.setindex!(x::Backing, v, i::Int)
     end
 end
 
-function Base.push!(x::Backing, v)
-    x.len < 3 || throw(ArgumentError("`Backing` is full"))
+Base.@propagate_inbounds function Base.push!(x::Backing, v)
+    @boundscheck x.len < 3
     x.len += 1
     x[x.len] = v
 end
 
-function Base.pop!(x::Backing{T}) where {T}
-    x.len > 0 || throw(ArgumentError("Array is empty"))
+Base.@propagate_inbounds function Base.pop!(x::Backing{T}) where {T}
+    @boundscheck x.len > 0
     v = x[x.len]
     x[x.len] = defaultval(T)
     x.len -= 1
@@ -113,10 +113,10 @@ Base.convert(::Type{SmallVec{T, V}}, x::SmallVec{T, V}) where {T, V} = x
 
 Base.size(x::SmallVec) = size(x.data)
 Base.isempty(x::SmallVec) = isempty(x.data)
-Base.getindex(x::SmallVec, i::Int) = x.data[i]
-Base.setindex!(x::SmallVec, v, i::Int) = setindex!(x.data, v, i)
+Base.@propagate_inbounds Base.getindex(x::SmallVec, i::Int) = x.data[i]
+Base.@propagate_inbounds Base.setindex!(x::SmallVec, v, i::Int) = setindex!(x.data, v, i)
 
-function Base.push!(x::SmallVec{T, V}, v) where {T, V}
+Base.@propagate_inbounds function Base.push!(x::SmallVec{T, V}, v) where {T, V}
     buf = x.data
     buf isa Backing{T} || return push!(buf::V, v)
     isfull(buf) || return push!(buf::Backing{T}, v)
@@ -124,7 +124,7 @@ function Base.push!(x::SmallVec{T, V}, v) where {T, V}
     return push!(x.data::V, v)
 end
 
-Base.pop!(x::SmallVec) = pop!(x.data)
+Base.@propagate_inbounds Base.pop!(x::SmallVec) = pop!(x.data)
 
 function Base.sizehint!(x::SmallVec{T, V}, n; kwargs...) where {T, V}
     x.data isa Backing && return x

@@ -139,6 +139,10 @@ mutable struct SmallVec{T, V <: AbstractVector{T}} <: AbstractVector{T}
         end
     end
 
+    function SmallVec{T, V}(x::Backing{T}) where {T, V}
+        new{T, V}(x)
+    end
+
     function SmallVec{T, V}() where {T, V}
         new{T, V}(Backing{T}())
     end
@@ -179,12 +183,3 @@ end
 
 Base.any(f::Function, x::SmallVec) = any(f, x.data)
 Base.all(f::Function, x::SmallVec) = all(f, x.data)
-function Base.map(f, x::SmallVec)
-    inner = map(f, x.data)
-    T = eltype(inner)
-    if inner isa Backing
-        return SmallVec{T, Vector{T}}(inner)
-    else
-        return SmallVec{T, typeof(inner)}(inner)
-    end
-end

@@ -102,12 +102,14 @@ function Base.map(f, x::Backing{T}) where {T}
     elseif x.len == 2
         x1 = f(x.x1)
         x2 = f(x.x2)
-        Backing{promote_type(typeof(x1), typeof(x2))}(x1, x2)
+        Backing{Base.promote_typejoin(typeof(x1), typeof(x2))}(x1, x2)
     elseif x.len == 3
         x1 = f(x.x1)
         x2 = f(x.x2)
         x3 = f(x.x3)
-        Backing{promote_type(typeof(x1), typeof(x2), typeof(x3))}(x1, x2, x3)
+        _T = Base.promote_typejoin(typeof(x1), typeof(x2))
+        _T = Base.promote_typejoin(_T, typeof(x3))
+        Backing{_T}(x1, x2, x3)
     end
 end
 

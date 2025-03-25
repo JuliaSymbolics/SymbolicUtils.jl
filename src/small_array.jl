@@ -179,4 +179,12 @@ end
 
 Base.any(f::Function, x::SmallVec) = any(f, x.data)
 Base.all(f::Function, x::SmallVec) = all(f, x.data)
-Base.map(f, x::SmallVec) = map(f, x.data)
+function Base.map(f, x::SmallVec)
+    inner = map(f, x.data)
+    T = eltype(inner)
+    if inner isa Backing
+        return SmallVec{T, Vector{T}}(inner)
+    else
+        return SmallVec{T, typeof(inner)}(inner)
+    end
+end

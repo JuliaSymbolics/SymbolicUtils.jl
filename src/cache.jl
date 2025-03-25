@@ -193,7 +193,7 @@ macro cache(args...)
     # parse configuration options
     config = Dict(:limit => 100_000, :retain_fraction => 0.5, :allow_any_return => false, :enabled => true)
     for carg in configargs
-        if !Meta.isexpr(carg, :())
+        if !Meta.isexpr(carg, :(=))
             throw(ArgumentError("Expected `key = value` syntax, got $carg"))
         end
         k, v = carg.args

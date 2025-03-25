@@ -196,3 +196,12 @@ end
 Base.delete_method(only(methods(objectid, @__MODULE__)))
 @syms x
 @test objectid(x) != 0x42
+
+@cache limit = 10 retain_fraction = 0.1 function f6(x::BasicSymbolic, y::Union{BasicSymbolic, Int}, z)::BasicSymbolic
+    return x + y + z
+end
+
+@testset "Keyword argument syntax works" begin
+    @test SymbolicUtils.get_limit(f6) == 10
+    @test SymbolicUtils.get_retain_fraction(f6) ≈ 0.1
+end

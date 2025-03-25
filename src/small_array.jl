@@ -68,6 +68,49 @@ Base.@propagate_inbounds function Base.pop!(x::Backing{T}) where {T}
     v
 end
 
+function Base.any(f::Function, x::Backing)
+    if x.len == 0
+        false
+    elseif x.len == 1
+        f(x.x1)
+    elseif x.len == 2
+        f(x.x1) || f(x.x2)
+    elseif x.len == 3
+        f(x.x1) || f(x.x2) || f(x.x3)
+    end
+end
+
+function Base.all(f::Function, x::Backing)
+    if x.len == 0
+        true
+    elseif x.len == 1
+        f(x.x1)
+    elseif x.len == 2
+        f(x.x1) && f(x.x2)
+    elseif x.len == 3
+        f(x.x1) && f(x.x2) && f(x.x3)
+    end
+end
+
+function Base.map(f, x::Backing{T}) where {T}
+    if x.len == 0
+        # StaticArrays does this, so we are only as bad as they are
+        Backing{Core.Compiler.return_type(f, Tuple{T})}()
+    elseif x.len == 1
+        x1 = f(x.x1)
+        Backing{typeof(x1)}(x1)
+    elseif x.len == 2
+        x1 = f(x.x1)
+        x2 = f(x.x2)
+        Backing{promote_type(typeof(x1), typeof(x2))}(x1, x2)
+    elseif x.len == 3
+        x1 = f(x.x1)
+        x2 = f(x.x2)
+        x3 = f(x.x3)
+        Backing{promote_type(typeof(x1), typeof(x2), typeof(x3))}(x1, x2, x3)
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -131,3 +174,7 @@ function Base.sizehint!(x::SmallVec{T, V}, n; kwargs...) where {T, V}
     sizehint!(x.data, n; kwargs...)
     x
 end
+
+Base.any(f::Function, x::SmallVec) = any(f, x.data)
+Base.all(f::Function, x::SmallVec) = all(f, x.data)
+Base.map(f, x::SmallVec) = map(f, x.data)

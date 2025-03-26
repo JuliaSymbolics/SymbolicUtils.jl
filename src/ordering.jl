@@ -36,10 +36,10 @@ function get_degrees(expr)
                              (x,y)->(x...,y...,), args)
         elseif op == (+)
             ds = map(get_degrees, args)
-            _, idx = findmax(x->sum(last.(x), init=0), ds)
+            _, idx = findmax(x->sum(last, x, init=0), ds)
             return ds[idx]
         elseif op == (getindex)
-            return ((Symbol.(args)...,) => 1,)
+            return (Tuple(map(Symbol, args)) => 1,)
         else
             return ((Symbol("zzzzzzz", hash(expr)),) => 1,)
         end

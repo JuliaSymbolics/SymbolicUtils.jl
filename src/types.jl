@@ -332,14 +332,10 @@ function isequal_with_metadata(a::NamedTuple, b::NamedTuple)
     a === b && return true
     typeof(a) == typeof(b) || return false
 
-    for (k, v) in pairs(a)
-        haskey(b, k) || return false
-        isequal_with_metadata(v, b[k]) || return false
-    end
-
-    for (k, v) in pairs(b)
-        haskey(a, k) || return false
-        isequal_with_metadata(v, a[k]) || return false
+    # same type, so same keys and value types
+    # either everything works or it fails and early exits
+    for (av, bv) in zip(values(a), values(b))
+        isequal_with_metadata(av, bv) || return false
     end
 
     return true
@@ -350,27 +346,28 @@ function isequal_with_metadata(a::AbstractDict, b::AbstractDict)
     typeof(a) == typeof(b) || return false
     length(a) == length(b) || return false
 
-    akeys = collect(keys(a))
-    avisited = falses(length(akeys))
-    bkeys = collect(keys(b))
-    bvisited = falses(length(bkeys))
-
-    for k in akeys
-        idx = findfirst(eachindex(bkeys)) do i
-            !bvisited[i] && isequal_with_metadata(k, bkeys[i])
-        end
-        idx === nothing && return false
-        bvisited[idx] = true
-        isequal_with_metadata(a[k], b[bkeys[idx]]) || return false
+    # they have same length, so either `b` has all the same keys
+    # or this will fail. Can't use `get(b, k, nothing)` because if
+    # `a[k] === nothing` it will result in a false positive.
+    for (k, v) in a
+        k2 = getkey(b, k, nothing)
+        isequal_with_metadata(k, k2) || return false
+        isequal_with_metadata(v, b[k2]) || return false
     end
-    for (j, k) in enumerate(bkeys)
-        bvisited[j] && continue
-        idx = findfirst(eachindex(akeys)) do i
-            !avisited[i] && isequal_with_metadata(k, akeys[i])
+    return true
+end
+
+function isequal_with_metadata(a::Base.ImmutableDict, b::Base.ImmutableDict)
+    a === b && return true
+    typeof(a) == typeof(b) || return false
+    length(a) == length(b) || return false
+
+    for (k, v) in a
+        match = false
+        for (k2, v2) in b
+            match |= isequal_with_metadata(k, k2) && isequal_with_metadata(v, v2) 
         end
-        idx === nothing && return false
-        avisited[idx] = true
-        isequal_with_metadata(b[k], a[akeys[idx]]) || return false
+        match || return false
     end
     return true
 end

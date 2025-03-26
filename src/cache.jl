@@ -102,6 +102,7 @@ resets the stats.
 function clear_cache!(fn)
     dict, stats = associated_cache(fn).tlv[]
     empty!(dict)
+    sizehint!(dict, get_limit(fn))
     reset_stats!(stats)
 end
 
@@ -193,7 +194,7 @@ macro cache(args...)
     # parse configuration options
     config = Dict(:limit => 100_000, :retain_fraction => 0.5, :allow_any_return => false, :enabled => true)
     for carg in configargs
-        if !Meta.isexpr(carg, :())
+        if !Meta.isexpr(carg, :(=))
             throw(ArgumentError("Expected `key = value` syntax, got $carg"))
         end
         k, v = carg.args
@@ -339,7 +340,7 @@ macro cache(args...)
     end)
 
     # instantiation of the TaskLocalValue
-    tlvctor = :($tlvT(() -> ($cacheT(), $CacheStats())))
+    tlvctor = :($tlvT(() -> ((dict = $cacheT(); sizehint!(dict, $get_limit($name)); dict), $CacheStats())))
     # instantiation expression for the constant value
     cachector = Expr(:call, structT, tlvctor, config[:limit], config[:retain_fraction], config[:enabled])
 

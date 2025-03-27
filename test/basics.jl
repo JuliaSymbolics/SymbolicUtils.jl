@@ -221,6 +221,8 @@ end
     b1, b3, d1, d2 = get(b,1),get(b,3), get(d,1), get(d,2)
     @test repr(a + b3 + b1 + d2 + c) == "a + b[1] + b[3] + c + d[2]"
     @test repr(expand((c + b3 - d1)^3)) == "b[3]^3 + 3(b[3]^2)*c - 3(b[3]^2)*d[1] + 3b[3]*(c^2) - 6b[3]*c*d[1] + 3b[3]*(d[1]^2) + c^3 - 3(c^2)*d[1] + 3c*(d[1]^2) - (d[1]^3)"
+    # test negative powers sorting
+    @test repr((b3^2)^(-2) + a^(-3) + (c*d1)^(-2)) == "1 / (b[3]^4) + 1 / ((c^2)*(d[1]^2)) + 1 / (a^3)"
 end
 
 @testset "inspect" begin

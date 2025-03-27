@@ -786,7 +786,8 @@ end
 
 CSEState() = CSEState(Union{Assignment, DestructuredArgs}[], IdDict(), Ref(1))
 
-Base.copy(x::CSEState) = CSEState(copy(x.sorted_exprs), copy(x.visited), Ref(x.varid[]))
+# the copy still references the same `varid` Ref to work in nested scopes
+Base.copy(x::CSEState) = CSEState(copy(x.sorted_exprs), copy(x.visited), x.varid)
 
 """
     $(TYPEDSIGNATURES)

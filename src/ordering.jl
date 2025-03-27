@@ -17,9 +17,17 @@
 """
 $(SIGNATURES)
 
-Internal function used for printing symbolic expressions. This function determines
-the degrees of symbols within a given expression, implementing a variation on 
-degree lexicographic order.
+Get the degrees of symbols within a given expression.
+
+This internal function is used to define the order of terms in a symbolic expression,
+which is a variation on degree lexicographic order. It is used for printing and
+by [`sorted_arguments`](@ref).
+
+Returns a tuple of degree and lexicographically sorted *multiplier* ⇒ *power* pairs,
+where the *multiplier* is a tuple of the symbol optionally followed by its indices.
+For a sum expression, returns the `get_degrees()` result for term with the highest degree.
+
+See also `monomial_lt` and `lexlt`.
 """
 function get_degrees(expr)
     if issym(expr)

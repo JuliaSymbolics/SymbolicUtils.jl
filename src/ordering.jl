@@ -30,43 +30,52 @@ For a sum expression, returns the `get_degrees()` result for term with the highe
 See also `monomial_lt` and `lexlt`.
 """
 function get_degrees(expr)
+    res = _get_degrees(expr)
+    if res isa AbstractVector
+        return Tuple(res)
+    else
+        return res
+    end
+end
+
+function _get_degrees(expr)
     if issym(expr)
         return ((Symbol(expr),) => 1,)
     elseif iscall(expr)
         # operation-specific degree handling
-        return get_degrees(operation(expr), expr)
+        return _get_degrees(operation(expr), expr)
     else
         return () # skip numbers and unsupported expressions
     end
 end
 
 # fallback for unsupported operation
-get_degrees(::Any, expr) =
+_get_degrees(::Any, expr) =
     ((Symbol("zzzzzzz", hash(expr)),) => 1,)
 
 _getindex_symbol(arr, i) = Symbol(arr[i])
 
-function get_degrees(::typeof(getindex), expr)
+function _get_degrees(::typeof(getindex), expr)
     args = arguments(expr)
     @inbounds return (ntuple(Base.Fix1(_getindex_symbol, args), length(args)) => 1,)
 end
 
-function get_degrees(::typeof(*), expr)
+function _get_degrees(::typeof(*), expr)
     args = arguments(expr)
     ds = sizehint!(Vector{Any}(), length(args))
     for arg in args
-        degs = get_degrees(arg)
+        degs = _get_degrees(arg)
         append!(ds, degs)
     end
     return sort!(ds)
 end
 
-function get_degrees(::typeof(+), expr)
+function _get_degrees(::typeof(+), expr)
     # among the terms find the best in terms of monomial_lt
     sel_degs = ()
     sel_degsum = 0
     for arg in arguments(expr)
-        degs = get_degrees(arg)
+        degs = _get_degrees(arg)
         degsum = sum(last, degs, init=0)
         if (sel_degs == ()) || (degsum > sel_degsum) ||
            (degsum == sel_degsum && lexlt(degs, sel_degs))
@@ -76,10 +85,10 @@ function get_degrees(::typeof(+), expr)
     return sel_degs
 end
 
-function get_degrees(::typeof(^), expr)
+function _get_degrees(::typeof(^), expr)
     base_expr, pow_expr = arguments(expr)
     if pow_expr isa Number
-        @inbounds degs = map(get_degrees(base_expr)) do (base, pow)
+        @inbounds degs = map(_get_degrees(base_expr)) do (base, pow)
             (base => pow * pow_expr)
         end
         if pow_expr < 0 && length(degs) > 1
@@ -90,23 +99,23 @@ function get_degrees(::typeof(^), expr)
         return degs
     else
         # expression in the power argument is not supported
-        return get_degrees(nothing, expr)
+        return _get_degrees(nothing, expr)
     end
 end
 
-function get_degrees(::typeof(/), expr)
+function _get_degrees(::typeof(/), expr)
     nom_expr, denom_expr = arguments(expr)
     if denom_expr isa Number # constant denominator
-        return get_degrees(nom_expr)
+        return _get_degrees(nom_expr)
     elseif nom_expr isa Number # constant nominator
-        @inbounds degs = map(get_degrees(denom_expr)) do (base, pow)
+        @inbounds degs = map(_get_degrees(denom_expr)) do (base, pow)
             (base => -pow)
         end
         isa(degs, AbstractVector) || (degs = collect(degs))
         return sort!(degs)
     else
         # TODO expressions in both nom and denom are not yet supported
-        return get_degrees(nothing, expr)
+        return _get_degrees(nothing, expr)
     end
 end
 

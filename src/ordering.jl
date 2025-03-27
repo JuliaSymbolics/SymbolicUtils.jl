@@ -57,9 +57,9 @@ end
 function lexlt(degs1, degs2)
     for (a, b) in zip(degs1, degs2)
         if a[1] == b[1] && a[2] != b[2]
-            return a[2] > b[2]
+            return a[2] > b[2] # higher degree first
         elseif a[1] != b[1]
-            return a < b
+            return a[1] < b[1] # lexicographic order for the base
         end
     end
     return false # they are equal

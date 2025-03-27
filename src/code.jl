@@ -737,7 +737,16 @@ end
 
 ### Common subexprssion evaluation
 
-@inline newsym(::Type{T}) where T = Sym{T}(gensym("cse"))
+"""
+    newsym!(state::CSEState, ::Type{T})
+
+Generates new symbol of type `T` with unique name in `state`.
+"""
+@inline function newsym!(state, ::Type{T}) where T 
+    name = "##cse#$(state.varid[])"
+    state.varid[] += 1
+    Sym{T}(Symbol(name))
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -769,11 +778,15 @@ struct CSEState
     A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
     """
     visited::IdDict{Any, Any}
+    """
+    Integer counter, used to generate unique names for intermediate variables.
+    """
+    varid::Ref{Int}
 end
 
-CSEState() = CSEState(Union{Assignment, DestructuredArgs}[], IdDict())
+CSEState() = CSEState(Union{Assignment, DestructuredArgs}[], IdDict(), Ref(1))
 
-Base.copy(x::CSEState) = CSEState(copy(x.sorted_exprs), copy(x.visited))
+Base.copy(x::CSEState) = CSEState(copy(x.sorted_exprs), copy(x.visited), Ref(x.varid[]))
 
 """
     $(TYPEDSIGNATURES)
@@ -860,13 +873,13 @@ function cse!(expr::Symbolic, state::CSEState)
             if arg isa Union{Tuple, AbstractArray}
                 if arg isa Tuple
                     new_arg = cse!(MakeTuple(arg), state)
-                    sym = newsym(Tuple{symtype.(arg)...})
+                    sym = newsym!(state, Tuple{symtype.(arg)...})
                 elseif issparse(arg)
                     new_arg = cse!(MakeSparseArray(arg), state)
-                    sym = newsym(AbstractSparseArray{symtype(eltype(arg)), indextype(arg), ndims(arg)})
+                    sym = newsym!(state, AbstractSparseArray{symtype(eltype(arg)), indextype(arg), ndims(arg)})
                 else
                     new_arg = cse!(MakeArray(arg, typeof(arg)), state)
-                    sym = newsym(AbstractArray{symtype(eltype(arg)), ndims(arg)})
+                    sym = newsym!(state, AbstractArray{symtype(eltype(arg)), ndims(arg)})
                 end
                 push!(state.sorted_exprs, sym ← new_arg)
                 state.visited[arg] = sym
@@ -877,7 +890,7 @@ function cse!(expr::Symbolic, state::CSEState)
         # use `term` instead of `maketerm` because we only care about the operation being performed
         # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
         new_expr = term(operation(expr), args...; type = symtype(expr))
-        sym = newsym(symtype(new_expr))
+        sym = newsym!(state, symtype(new_expr))
         push!(state.sorted_exprs, sym ← new_expr)
         return sym
     end

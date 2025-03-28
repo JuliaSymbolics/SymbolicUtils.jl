@@ -220,3 +220,12 @@ end
     @test all(iszero, arr[1:3])
     @test all(iszero, arr[8:end])
 end
+
+@testset "CSE doesn't affect ranges" begin
+    @syms x::Array
+    t = term(view, x, 1:3)
+    fnexpr = Func([x], [], t)
+    fn1 = @RuntimeGeneratedFunction(toexpr(fnexpr))
+    fn2 = @RuntimeGeneratedFunction(cse(toexpr(fnexpr)))
+    @test fn1(ones(5)) == fn2(ones(5))
+end

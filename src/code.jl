@@ -857,7 +857,8 @@ function cse!(expr::Symbolic, state::CSEState)
         args = arguments(expr)
         cse_inside_expr(expr, op, args...) || return expr
         args = map(args) do arg
-            if arg isa Union{Tuple, AbstractArray}
+            if arg isa Union{Tuple, AbstractArray} &&
+                (_is_array_of_symbolics(arg) || _is_tuple_of_symbolics(arg))
                 if arg isa Tuple
                     new_arg = cse!(MakeTuple(arg), state)
                     sym = newsym(Tuple{symtype.(arg)...})
@@ -889,6 +890,7 @@ cse!(x::LiteralExpr, ::CSEState) = x
 
 cse!(x::CodegenPrimitive, state::CSEState) = throw(MethodError(cse!, (x, state)))
 
+cse!(x::AbstractRange, ::CSEState) = x
 function cse!(x::AbstractArray, state::CSEState)
     res = map(Base.Fix2(cse!, state), x)
     return res

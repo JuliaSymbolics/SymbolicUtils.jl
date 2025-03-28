@@ -889,6 +889,7 @@ cse!(x::LiteralExpr, ::CSEState) = x
 
 cse!(x::CodegenPrimitive, state::CSEState) = throw(MethodError(cse!, (x, state)))
 
+cse!(x::AbstractRange, ::CSEState) = x
 function cse!(x::AbstractArray, state::CSEState)
     res = map(Base.Fix2(cse!, state), x)
     return res

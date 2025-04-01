@@ -418,3 +418,14 @@ end
     hash(var)
     @test hash(var) != hash(setproperties(var; exp = c))
 end
+
+@testset "`substitute` handles identity of */+" begin
+    @syms t x(t) y
+    x = setmetadata(x(t), Int, 3)
+    ex = x * y
+    res = substitute(ex, Dict(y => 1))
+    @test SymbolicUtils.isequal_with_metadata(res, x)
+    ex = x + y
+    res = substitute(ex, Dict(y => 0))
+    @test SymbolicUtils.isequal_with_metadata(res, x)
+end

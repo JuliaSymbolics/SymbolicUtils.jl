@@ -222,7 +222,11 @@ end
     @test repr(a + b3 + b1 + d2 + c) == "a + b[1] + b[3] + c + d[2]"
     @test repr(expand((c + b3 - d1)^3)) == "b[3]^3 + 3(b[3]^2)*c - 3(b[3]^2)*d[1] + 3b[3]*(c^2) - 6b[3]*c*d[1] + 3b[3]*(d[1]^2) + c^3 - 3(c^2)*d[1] + 3c*(d[1]^2) - (d[1]^3)"
     # test negative powers sorting
-    @test repr((b3^2)^(-2) + a^(-3) + (c*d1)^(-2)) == "1 / (b[3]^4) + 1 / ((c^2)*(d[1]^2)) + 1 / (a^3)"
+    @test repr((b3^2)^(-2) + a^(-3) + (c*d1)^(-2)) == "1 / (a^3) + 1 / (b[3]^4) + 1 / ((c^2)*(d[1]^2))"
+
+    # test that the "x^2 + y^-1 + sin(a)^3.5 + 2t + 1//1" expression from Symbolics.jl/build_targets.jl is properly sorted
+    @syms x1 y1 a1 t1
+    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "(1//1) + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
 end
 
 @testset "inspect" begin

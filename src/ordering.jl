@@ -124,15 +124,20 @@ end
 function monomial_lt(degs1, degs2)
     d1 = sum(last, degs1, init=0)
     d2 = sum(last, degs2, init=0)
-    d1 != d2 ? d1 < d2 : lexlt(degs1, degs2)
+    d1 != d2 ?
+        # lower absolute degree first, or if equal, positive degree first
+        (abs(d1) < abs(d2) || abs(d1) == abs(d2) && d1 > d2) :
+        lexlt(degs1, degs2)
 end
 
 function lexlt(degs1, degs2)
-    for (a, b) in zip(degs1, degs2)
-        if a[1] == b[1] && a[2] != b[2]
-            return a[2] > b[2] # higher degree first
-        elseif a[1] != b[1]
-            return a[1] < b[1] # lexicographic order for the base
+    for ((a_base, a_deg), (b_base, b_deg)) in zip(degs1, degs2)
+        if a_base == b_base && a_deg != b_deg
+            # same base, higher absolute degree first, positive degree first
+            return abs(a_deg) > abs(b_deg) || abs(a_deg) == abs(b_deg) && a_deg > b_deg
+        elseif a_base != b_base
+            # lexicographic order for the base
+            return a_base < b_base
         end
     end
     return false # they are equal

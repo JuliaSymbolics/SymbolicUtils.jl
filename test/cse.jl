@@ -229,3 +229,22 @@ end
     fn2 = @RuntimeGeneratedFunction(cse(toexpr(fnexpr)))
     @test fn1(ones(5)) == fn2(ones(5))
 end
+
+@testset "Tuples and arrays of `Symbol`s aren't symbolic" begin
+    @syms x y
+    f(a, b, c) = a + b + length(c)
+    ex = term(f, x, y, (:a, :b, :c))
+    expr = quote
+        let x = 1, y = 2
+            $(toexpr(cse(ex)))
+        end
+    end
+    @test eval(expr) == 6
+    ex = term(f, x, y, [:a, :b, :c])
+    expr = quote
+        let x = 1, y = 2
+            $(toexpr(cse(ex)))
+        end
+    end
+    @test eval(expr) == 6
+end

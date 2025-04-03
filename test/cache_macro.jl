@@ -1,6 +1,6 @@
 using SymbolicUtils
 using SymbolicUtils: BasicSymbolic, @cache, associated_cache, set_limit!, get_limit,
-                     clear_cache!, SymbolicKey, metadata, maketerm
+                     clear_cache!, SymbolicKey, metadata, maketerm, get_cache_key
 using OhMyThreads: tmap
 using Random
 
@@ -14,9 +14,9 @@ end
     @test isequal(val, 2x + 1)
     cachestruct = associated_cache(f1)
     cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{SymbolicKey}, Tuple{BasicSymbolic, BasicSymbolic}}
+    @test cache isa Dict{Tuple{SymbolicKey}, BasicSymbolic}
     @test length(cache) == 1
-    @test cache[(SymbolicKey(objectid(x)),)][end] === val
+    @test cache[(get_cache_key(x),)] === val
     @test stats.hits == 0
     @test stats.misses == 1
     f1(x)
@@ -76,20 +76,20 @@ end
     @test isequal(val, 2x + 1)
     cachestruct = associated_cache(f2)
     cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{Union{SymbolicKey, UInt}}, NTuple{2, Union{BasicSymbolic, UInt}}}
+    @test cache isa Dict{Tuple{Union{SymbolicKey, UInt}}, Union{BasicSymbolic, UInt}}
     @test length(cache) == 1
-    @test cache[(SymbolicKey(objectid(x)),)][end] === val
+    @test cache[(get_cache_key(x),)] === val
     @test stats.hits == 0
     @test stats.misses == 1
     f2(x)
     @test stats.hits == 1
     @test stats.misses == 1
 
-    y = objectid(x)
+    y = get_cache_key(x).id
     val = f2(y)
     @test val == 2y + 1
     @test length(cache) == 2
-    @test cache[(y,)][end] == val
+    @test cache[(y,)] == val
     @test stats.misses == 2
 
     clear_cache!(f2)
@@ -111,9 +111,9 @@ end
     @test isequal(val, 2x + 1)
     cachestruct = associated_cache(fn)
     cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{Any}, Tuple{Any, Union{BasicSymbolic, Int}}}
+    @test cache isa Dict{Tuple{Any}, Union{BasicSymbolic, Int}}
     @test length(cache) == 1
-    @test cache[(SymbolicKey(objectid(x)),)][end] === val
+    @test cache[(get_cache_key(x),)] === val
     @test stats.hits == 0
     @test stats.misses == 1
     fn(x)
@@ -160,42 +160,6 @@ end
     truevals = map(f4, exprs)
     @test isequal(result, truevals)
 end
-
-@cache function f5(x::BasicSymbolic, y::Union{BasicSymbolic, Int}, z)::BasicSymbolic
-    return x + y + z
-end
-
-# temporary definition to induce objectid collisions
-Base.objectid(x::BasicSymbolic) = 0x42
-
-@testset "`objectid` collision handling" begin
-    @syms x y z
-    @test objectid(x) == objectid(y) == objectid(z) == 0x42
-    cachestruct = associated_cache(f5)
-    cache, stats = cachestruct.tlv[]
-    val = f5(x, 1, 2)
-    @test isequal(val, x + 3)
-    @test length(cache) == 1
-    @test stats.misses == 1
-    val2 = f5(y, 1, 2)
-    @test isequal(val2, y + 3)
-    @test length(cache) == 1
-    @test stats.misses == 2
-
-    clear_cache!(f5)
-    val = f5(x, y, z)
-    @test isequal(val, x + y + z)
-    @test length(cache) == 1
-    @test stats.misses == 1
-    val2 = f5(y, 2z, x)
-    @test isequal(val2, x + y + 2z)
-    @test length(cache) == 1
-    @test stats.misses == 2
-end
-
-Base.delete_method(only(methods(objectid, @__MODULE__)))
-@syms x
-@test objectid(x) != 0x42
 
 @cache limit = 10 retain_fraction = 0.1 function f6(x::BasicSymbolic, y::Union{BasicSymbolic, Int}, z)::BasicSymbolic
     return x + y + z

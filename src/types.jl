@@ -669,7 +669,7 @@ function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
     end
 
     d isa Number && _isone(-d) && return -1 * n
-    n isa Rat && d isa Rat && return n // d # maybe called by oblivious code in simplify
+    !(n isa AbstractFloat) && d isa Rat && return n * (1 // d) # maybe called by oblivious code in simplify
 
     # GCD coefficient upon construction
     rat, nc = ratcoeff(n)

@@ -24,6 +24,8 @@ import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 import WeakValueDicts: WeakValueDict
 
+include("WeakCacheSets.jl")
+
 include("cache.jl")
 Base.@deprecate istree iscall
 

@@ -27,7 +27,6 @@ TaskLocalValues = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
 TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 Unityper = "a7c27f48-0311-42f6-a7f8-2c11e75eb415"
-WeakValueDicts = "897b6980-f191-5a31-bcb0-bf3c4585e0c1"
 
 [weakdeps]
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
@@ -62,7 +61,6 @@ TaskLocalValues = "0.1.2"
 TermInterface = "2.0"
 TimerOutputs = "0.5"
 Unityper = "0.1.2"
-WeakValueDicts = "0.1.0"
 julia = "1.10"
 
 [extras]

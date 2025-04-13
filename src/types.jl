@@ -529,7 +529,7 @@ Implements hash consing (flyweight design pattern) for `BasicSymbolic` objects.
 
 This function checks if an equivalent `BasicSymbolic` object already exists. It uses a 
 custom hash function (`hash2`) incorporating metadata and symtypes to search for existing 
-objects in a `WeakValueDict` (`wvd`). Due to the possibility of hash collisions (where 
+objects in a `WeakCacheSet` (`wcs`). Due to the possibility of hash collisions (where 
 different objects produce the same hash), a custom equality check (`isequal_with_metadata`) 
 which includes metadata comparison, is used to confirm the equivalence of objects with 
 matching hashes. If an equivalent object is found, the existing object is returned; 
@@ -537,7 +537,7 @@ otherwise, the input `s` is returned. This reduces memory usage, improves compil
 for runtime code generation, and supports built-in common subexpression elimination, 
 particularly when working with symbolic objects with metadata.
 
-Using a `WeakValueDict` ensures that only weak references to `BasicSymbolic` objects are 
+Using a `WeakCacheSet` ensures that only weak references to `BasicSymbolic` objects are 
 stored, allowing objects that are no longer strongly referenced to be garbage collected. 
 Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and 
 `Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 

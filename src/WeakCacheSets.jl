@@ -200,7 +200,7 @@ function getkey!(h::WeakCacheSet{K}, key::K) where K
     if index > 0
         foundkey = h.keys[index].value::Union{K, Nothing}
         if isnothing(foundkey)
-            @inbounds h.keys[index] = key
+            @inbounds h.keys[index] = WeakRef(key)
             return key
         end
         return foundkey

@@ -22,8 +22,9 @@ import TermInterface: iscall, isexpr, head, children,
 import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
+using WeakValueDicts: WeakValueDict
 
-include("WeakCacheSets.jl")
+# include("WeakCacheSets.jl")
 
 include("cache.jl")
 Base.@deprecate istree iscall

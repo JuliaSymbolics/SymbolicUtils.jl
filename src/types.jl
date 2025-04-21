@@ -88,7 +88,7 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
-const wcs = TaskLocalValue{WeakCacheSet{BasicSymbolic}}(WeakCacheSet{BasicSymbolic})
+const wvd = TaskLocalValue{WeakValueDict{UInt, BasicSymbolic}}(WeakValueDict{UInt, BasicSymbolic})
 
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
@@ -547,12 +547,21 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     if !ENABLE_HASHCONSING[]
         return s
     end
-    cache = wcs[]
-    k = getkey!(cache, s)
-    if iszero(k.id[])
-        k.id[] = @atomic ID_COUNTER.x += 1
+
+    cache = wvd[]
+    h = hash2(s)
+    k = get!(cache, h, s)
+    if isequal_with_metadata(k, s)
+        if iszero(k.id[])
+            k.id[] = @atomic ID_COUNTER.x += 1
+        end
+        return k
+    else
+        if iszero(s.id[])
+            s.id[] = @atomic ID_COUNTER.x += 1
+        end
+        return s
     end
-    return k
 end
 
 function Sym{T}(name::Symbol; kw...) where {T}

@@ -3,13 +3,13 @@
 ## Features
 
 - Fast expressions
-- A [rule-based rewriting language](/rewrite/#rule-based_rewriting).
-- A [combinator library](/rewrite/#composing_rewriters) for making rewriters.
-- [Efficient representation](/representation/) of numeric expressions
+- A [rule-based rewriting language](@ref "Rule-based rewriting").
+- A [combinator library](@ref "Composing rewriters") for making rewriters.
+- [Efficient representation](@ref "Term representation and simplification") of numeric expressions
 - Type promotion:
-  - Symbols (`Sym`s) carry type information. ([read more](#creating_symbolic_expressions))
-  - Compound expressions composed of `Sym`s propagate type information. ([read more](#expression_interface))
-- Set of extendable [simplification rules](#Simplification).
+  - Symbols (`Sym`s) carry type information. ([read more](@ref "Creating symbolic expressions"))
+  - Compound expressions composed of `Sym`s propagate type information. ([read more](@ref "Expression interface"))
+- Set of extendable [simplification rules](@ref "Simplification").
 
 
 ## Creating symbolic expressions
@@ -106,14 +106,14 @@ g(2//5, g(1, β))
 
 ## Expression interface
 
-Symbolic expressions are of type `Term{T}`, `Add{T}`, `Mul{T}`, `Pow{T}` or `Div{T}` and denote some function call where one or more arguments are themselves such expressions or `Sym`s. See more about the representation [here](/representation/).
+Symbolic expressions are of type `Term{T}`, `Add{T}`, `Mul{T}`, `Pow{T}` or `Div{T}` and denote some function call where one or more arguments are themselves such expressions or `Sym`s. See more about the representation [here](@ref "Term representation and simplification").
 
 All the expression types support the [TermInterface.jl](https://github.com/0x0f0f0f/TermInterface.jl) interface.
 Please refer to the package for the complete reference of the interface.
 
 ## Term rewriting
 
-SymbolicUtils contains [a rule-based rewriting language](/rewrite/#rule-based_rewriting) for easy pattern matching and rewriting of expression. There is also a [combinator library](/rewrite/#composing_rewriters) to combine rules to chain, branch and loop over rules.
+SymbolicUtils contains [a rule-based rewriting language](@ref "Rule-based rewriting") for easy pattern matching and rewriting of expression. There is also a [combinator library](@ref "Composing rewriters") to combine rules to chain, branch and loop over rules.
 
 ## Simplification
 
@@ -158,11 +158,11 @@ If you read the previous section on the rules DSL, you should be able to read an
 
 It is common to want to generate executable code from symbolic expressions and blocks of them. We are working on experimental support for turning Symbolic expressions into executable functions with specific focus on array input and output and performance which is critical to the Differential Equations ecosystem which is making heavy use of this package.
 
-See [Code generation](/codegen/) for more about this.
+See [Code generation](@ref codegen) for more about this.
 
 ## Learn more
 
-If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the [Interfacing](/interface/) section to find out how you can do that without any fundamental changes to your package. Look at the [API documentation](/api/) for docstrings about specific functions or macros.
+If you have a package that you would like to utilize rule-based rewriting in, look at the suggestions in the [Interfacing](@ref "Interfacing with SymbolicUtils.jl") section to find out how you can do that without any fundamental changes to your package. Look at the [API Reference](@ref) for docstrings about specific functions or macros.
 
 Head over to the github repository to ask questions and [report problems](https://github.com/JuliaSymbolics/SymbolicUtils.jl)! Join the [Zulip stream](https://julialang.zulipchat.com/#narrow/stream/236639-symbolic-programming) to chat!
 

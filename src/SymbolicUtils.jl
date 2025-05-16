@@ -82,5 +82,7 @@ include("code.jl")
 # Adjoints
 include("adjoints.jl")
 
+# Mutable Arithmetics
+include("mutable_arithmetics.jl")
 
 end # module

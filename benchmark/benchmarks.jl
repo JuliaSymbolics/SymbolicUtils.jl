@@ -74,10 +74,10 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
         y3 = term(getindex, y, 3, type=Number),
         z11 = term(getindex, z, 1, 1, type=Number),
         z12 = term(getindex, z, 1, 2, type=Number),
-        z23 = term(getindex, z, 2, 3, type=Number),
+        z23 = term(getindex, z, 2, 3, type=Number)
+
         # create a relatively large polynomial
         large_poly = SymbolicUtils.expand((x^2 + 2y1 + 3z12 + y2*z23 + x*y1*z12 - x^2*z12 + x*z11 + y3 + y2 + z23 + 1)^8)
-
         overhead["get_degrees"]["large_poly"] = @benchmarkable SymbolicUtils.get_degrees($large_poly)
     end
 end

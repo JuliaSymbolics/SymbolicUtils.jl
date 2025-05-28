@@ -5,6 +5,8 @@ Sentinel value used for a cache miss, since cached functions may return `nothing
 """
 struct CacheSentinel end
 
+mutable struct IDType end
+
 """
     $(TYPEDEF)
 
@@ -13,7 +15,7 @@ Struct wrapping the `id` of a `BasicSymbolic`, since arguments annotated
 up a symbolic or a `UInt`.
 """
 struct SymbolicKey
-    id::UInt64
+    id::IDType
 end
 
 """
@@ -23,7 +25,17 @@ The key stored in the cache for a particular value. Returns a `SymbolicKey` for
 `BasicSymbolic` and is the identity function otherwise.
 """
 # can't dispatch because `BasicSymbolic` isn't defined here
-get_cache_key(x) = x isa BasicSymbolic ? SymbolicKey(x.id[]) : x
+function get_cache_key(x)
+    if x isa BasicSymbolic
+        id = x.id[]
+        if id === nothing
+            return CacheSentinel()
+        end
+        return SymbolicKey(id)
+    else
+        x
+    end
+end
 
 """
     associated_cache(fn)
@@ -241,6 +253,7 @@ macro cache(args...)
     argexprs = []
     # The name of the variable storing the result of looking up the cache
     cache_value_name = :val
+    valid_key_condition = :(true)
     # The condition for a cache hit
     cache_hit_condition = :(!($cache_value_name isa $CacheSentinel))
 
@@ -254,6 +267,7 @@ macro cache(args...)
             push!(keyexprs, :($get_cache_key($arg)))
             push!(argexprs, arg)
             push!(keytypes, Any)
+            valid_key_condition = :($valid_key_condition && !(key[$(length(keyexprs))] isa $CacheSentinel))
             continue
         end
         argname, Texpr = arg.args
@@ -263,6 +277,7 @@ macro cache(args...)
             # if the type is `Any`, branch on it being a `BasicSymbolic`
             push!(keyexprs, :($get_cache_key($argname)))
             push!(keytypes, Any)
+            valid_key_condition = :($valid_key_condition && !(key[$(length(keyexprs))] isa $CacheSentinel))
             continue
         end
 
@@ -275,6 +290,7 @@ macro cache(args...)
             push!(keytypes, Union{keyTs...})
             if maybe_basicsymbolic
                 push!(keyexprs, :($get_cache_key($argname)))
+                valid_key_condition = :($valid_key_condition && !(key[$(length(keyexprs))] isa $CacheSentinel))
             else
                 push!(keyexprs, argname)
             end
@@ -286,6 +302,7 @@ macro cache(args...)
         if T <: BasicSymbolic
             push!(keytypes, SymbolicKey) 
             push!(keyexprs, :($get_cache_key($argname)))
+            valid_key_condition = :($valid_key_condition && !(key[$(length(keyexprs))] isa $CacheSentinel))
         else
             push!(keytypes, T)
             push!(keyexprs, argname)
@@ -345,6 +362,9 @@ macro cache(args...)
         if $conditions
             # construct the `Tuple` key
             key = $keyexpr
+            if !($valid_key_condition)
+                return $innercall
+            end
             # get the cache and stats from the `TaskLocalValue` to avoid accessing
             # `task_local_storage` repeatedly.
             cachedict, cachestats = $cachename.tlv[]

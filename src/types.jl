@@ -22,11 +22,13 @@ const EMPTY_HASH = RefValue(UInt(0))
 const EMPTY_DICT = sdict()
 const EMPTY_DICT_T = typeof(EMPTY_DICT)
 const ENABLE_HASHCONSING = Ref(true)
+const TID = Union{IDType, Nothing}
+const DID = nothing
 
 @compactify show_methods=false begin
     @abstract mutable struct BasicSymbolic{T} <: Symbolic{T}
         metadata::Metadata     = NO_METADATA
-        id::RefValue{UInt64} = Ref{UInt64}(0)
+        id::RefValue{TID} = Ref{TID}(DID)
     end
     mutable struct Sym{T} <: BasicSymbolic{T}
         name::Symbol           = :OOF
@@ -88,8 +90,6 @@ function exprtype(x::BasicSymbolic)
     end
 end
 
-const wvd = TaskLocalValue{WeakValueDict{UInt, BasicSymbolic}}(WeakValueDict{UInt, BasicSymbolic})
-
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
 @noinline error_sym() = error("Sym doesn't have a operation or arguments!")
@@ -108,11 +108,11 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     # Call outer constructor because hash consing cannot be applied in inner constructor
     @compactified obj::BasicSymbolic begin
         Sym => Sym{T}(nt_new.name; nt_new...)
-        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
-        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
-        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
-        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
-        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{UInt64}(0))
+        Term => Term{T}(nt_new.f, nt_new.arguments; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{TID}(DID))
+        Add => Add(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{TID}(DID))
+        Mul => Mul(T, nt_new.coeff, nt_new.dict; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{TID}(DID))
+        Div => Div{T}(nt_new.num, nt_new.den, nt_new.simplified; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{TID}(DID))
+        Pow => Pow{T}(nt_new.base, nt_new.exp; nt_new..., hash = RefValue(UInt(0)), hash2 = RefValue(UInt(0)), id = Ref{TID}(DID))
         _ => Unityper.rt_constructor(obj){T}(;nt_new...)
     end
 end
@@ -516,11 +516,11 @@ end
 ### Constructors
 ###
 
-mutable struct AtomicIDCounter
-    @atomic x::UInt64
-end
+const wvd = TaskLocalValue{WeakValueDict{UInt, BasicSymbolic}}(WeakValueDict{UInt, BasicSymbolic})
 
-const ID_COUNTER = AtomicIDCounter(0)
+function generate_id()
+    return IDType()
+end
 
 """
 $(TYPEDSIGNATURES)
@@ -552,27 +552,27 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     h = hash2(s)
     k = get!(cache, h, s)
     if isequal_with_metadata(k, s)
-        if iszero(k.id[])
-            k.id[] = @atomic ID_COUNTER.x += 1
+        if isnothing(k.id[])
+            k.id[] = generate_id()
         end
         return k
     else
-        if iszero(s.id[])
-            s.id[] = @atomic ID_COUNTER.x += 1
+        if isnothing(s.id[])
+            s.id[] = generate_id()
         end
         return s
     end
 end
 
 function Sym{T}(name::Symbol; kw...) where {T}
-    s = Sym{T}(; name, kw..., id = Ref{UInt}(0))
+    s = Sym{T}(; name, kw..., id = Ref{TID}(DID))
     BasicSymbolic(s)
 end
 
 function Term{T}(f, args; kw...) where T
     args = SmallV{Any}(args)
 
-    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw..., id = Ref{UInt64}(0))
+    s = Term{T}(;f=f, arguments=args, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), kw..., id = Ref{TID}(DID))
     BasicSymbolic(s)
 end
 
@@ -602,7 +602,7 @@ function Add(::Type{T}, coeff, dict; metadata=NO_METADATA, kw...) where T
         end
     end
 
-    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw..., id = Ref{UInt64}(0))
+    s = Add{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw..., id = Ref{TID}(DID))
     BasicSymbolic(s)
 end
 
@@ -620,7 +620,7 @@ function Mul(T, a, b; metadata=NO_METADATA, kw...)
     else
         coeff = a
         dict = b
-        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw..., id = Ref{UInt64}(0))
+        s = Mul{T}(; coeff, dict, hash=Ref(UInt(0)), hash2=Ref(UInt(0)), metadata, arguments=SmallV{Any}(), kw..., id = Ref{TID}(DID))
         BasicSymbolic(s)
     end
 end
@@ -688,7 +688,7 @@ function Div{T}(n, d, simplified=false; metadata=nothing, kwargs...) where {T}
         end
     end
 
-    s = Div{T}(; num=n, den=d, simplified, arguments=SmallV{Any}(), metadata, id = Ref{UInt64}(0))
+    s = Div{T}(; num=n, den=d, simplified, arguments=SmallV{Any}(), metadata, id = Ref{TID}(DID))
     BasicSymbolic(s)
 end
 
@@ -708,7 +708,7 @@ function Pow{T}(a, b; metadata=NO_METADATA, kwargs...) where {T}
     b = unwrap(b)
     _iszero(b) && return 1
     _isone(b) && return a
-    s = Pow{T}(; base=a, exp=b, arguments=SmallV{Any}(), metadata, id = Ref{UInt64}(0))
+    s = Pow{T}(; base=a, exp=b, arguments=SmallV{Any}(), metadata, id = Ref{TID}(DID))
     BasicSymbolic(s)
 end
 

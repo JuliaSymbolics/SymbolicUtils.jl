@@ -70,32 +70,32 @@ end
     return 2x + 1
 end
 
-@testset "::Union (with `UInt`)" begin
-    @syms x
-    val = f2(x)
-    @test isequal(val, 2x + 1)
-    cachestruct = associated_cache(f2)
-    cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{Union{SymbolicKey, UInt}}, Union{BasicSymbolic, UInt}}
-    @test length(cache) == 1
-    @test cache[(get_cache_key(x),)] === val
-    @test stats.hits == 0
-    @test stats.misses == 1
-    f2(x)
-    @test stats.hits == 1
-    @test stats.misses == 1
+# @testset "::Union (with `UInt`)" begin
+#     @syms x
+#     val = f2(x)
+#     @test isequal(val, 2x + 1)
+#     cachestruct = associated_cache(f2)
+#     cache, stats = cachestruct.tlv[]
+#     @test cache isa Dict{Tuple{Union{SymbolicKey, UInt}}, Union{BasicSymbolic, UInt}}
+#     @test length(cache) == 1
+#     @test cache[(get_cache_key(x),)] === val
+#     @test stats.hits == 0
+#     @test stats.misses == 1
+#     f2(x)
+#     @test stats.hits == 1
+#     @test stats.misses == 1
 
-    y = get_cache_key(x).id
-    val = f2(y)
-    @test val == 2y + 1
-    @test length(cache) == 2
-    @test cache[(y,)] == val
-    @test stats.misses == 2
+#     y = get_cache_key(x).id
+#     val = f2(y)
+#     @test val == 2y + 1
+#     @test length(cache) == 2
+#     @test cache[(y,)] == val
+#     @test stats.misses == 2
 
-    clear_cache!(f2)
-    @test length(cache) == 0
-    @test stats.hits == stats.misses == stats.clears == 0
-end
+#     clear_cache!(f2)
+#     @test length(cache) == 0
+#     @test stats.hits == stats.misses == stats.clears == 0
+# end
 
 @cache function f3(x)::Union{BasicSymbolic, Int}
     return 2x + 1

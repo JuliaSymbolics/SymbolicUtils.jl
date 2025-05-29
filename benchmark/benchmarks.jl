@@ -5,7 +5,7 @@ using Random
 
 SUITE = BenchmarkGroup()
 
-@syms a b c d; Random.seed!(123);
+@syms a b c d x y[1:3] z[1:2, 1:2]; Random.seed!(123);
 
 let r = @rule(~x => ~x), rs = RuleSet([r]),
     acr = @rule(~x::is_literal_number + ~y => ~y)
@@ -67,7 +67,19 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
         subs_expr = (sin(a+b) + cos(b+c)) * (sin(b+c) + cos(c+a)) * (sin(c+a) + cos(a+b))
     end
 
+    overhead["get_degrees"] = BenchmarkGroup()
 
+    let y1 = term(getindex, y, 1, type=Number),
+        y2 = term(getindex, y, 2, type=Number),
+        y3 = term(getindex, y, 3, type=Number),
+        z11 = term(getindex, z, 1, 1, type=Number),
+        z12 = term(getindex, z, 1, 2, type=Number),
+        z23 = term(getindex, z, 2, 3, type=Number)
+
+        # create a relatively large polynomial
+        large_poly = SymbolicUtils.expand((x^2 + 2y1 + 3z12 + y2*z23 + x*y1*z12 - x^2*z12 + x*z11 + y3 + y2 + z23 + 1)^8)
+        overhead["get_degrees"]["large_poly"] = @benchmarkable SymbolicUtils.get_degrees($large_poly)
+    end
 end
 
 let

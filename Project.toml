@@ -40,7 +40,7 @@ SymbolicUtilsReverseDiffExt = "ReverseDiff"
 [compat]
 AbstractTrees = "0.4"
 ArrayInterface = "7.8"
-Bijections = "0.1.2"
+Bijections = "0.2"
 ChainRulesCore = "1"
 Combinatorics = "1.0"
 ConstructionBase = "1.5.7"

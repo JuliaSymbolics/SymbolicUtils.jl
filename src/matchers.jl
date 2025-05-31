@@ -6,13 +6,18 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 function matcher(val::Any)
-    iscall(val) && return term_matcher(val)
+    matcher(val, false)
+end
+
+# `fullac_flag == true` enables fully nested associative-commutative pattern matching
+function matcher(val::Any, fullac_flag)
+    iscall(val) && return term_matcher(val, fullac_flag)
     function literal_matcher(next, data, bindings)
         islist(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
     end
 end
 
-function matcher(slot::Slot)
+function matcher(slot::Slot, fullac_flag) # fullac_flag unused but needed to keep the interface uniform
     function slot_matcher(next, data, bindings)
         !islist(data) && return
         val = get(bindings, slot.name, nothing)
@@ -56,7 +61,7 @@ function trymatchexpr(data, value, n)
     end
 end
 
-function matcher(segment::Segment)
+function matcher(segment::Segment, fullac_flag) # fullac_flag unused but needed to keep the interface uniform
     function segment_matcher(success, data, bindings)
         val = get(bindings, segment.name, nothing)
 
@@ -84,8 +89,8 @@ function matcher(segment::Segment)
     end
 end
 
-function term_matcher(term)
-    matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
+function term_matcher(term, fullac_flag = false)
+    matchers = (matcher(operation(term), fullac_flag), map(a -> matcher(a, fullac_flag), arguments(term))...,)
     function term_matcher(success, data, bindings)
 
         !islist(data) && return nothing
@@ -103,6 +108,26 @@ function term_matcher(term)
             end
         end
 
-        loop(car(data), bindings, matchers) # Try to eat exactly one term
+        if !(fullac_flag && iscall(term) && operation(term) in ((+), (*)))
+            loop(car(data), bindings, matchers) # Try to eat exactly one term
+        else # try all permutations of `car(data)` to see if a match is possible
+            data1 = car(data)
+            args = arguments(data1)
+            op = operation(data1)
+            data_arg_perms = permutations(args)
+            result = nothing
+            T = symtype(data)
+            if op != operation(term)
+                return nothing
+            end
+            for perm in data_arg_perms
+                data_permuted = Term{T}(op, perm)
+                result = loop(data_permuted, bindings, matchers) # Try to eat exactly one term
+                if !(result isa Nothing)
+                    break
+                end
+            end
+            return result
+        end
     end
 end

@@ -375,6 +375,13 @@ end
     @test isequal(x / -1, -x)
 end
 
+@testset "pow" begin
+    @syms x
+
+    # issue 717
+    @test isequal(Pow(x, im), x^im)
+end
+
 @testset "LiteralReal" begin
     @syms x::LiteralReal y::LiteralReal z::LiteralReal
     @test repr(x+x) == "x + x"

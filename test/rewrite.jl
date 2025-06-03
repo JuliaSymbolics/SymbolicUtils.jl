@@ -47,6 +47,20 @@ end
     @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
 end
 
+@testset "Slot matcher with default value" begin
+    r_sum = @rule (~x + ~!y)^2 => ~y
+    @test r_sum((a + b)^2) === b
+    @test r_sum(b^2) === 0
+
+    r_mult = @rule (~x * ~!y + ~z) => ~y
+    @test r_mult(c + a*b) === b
+    @test r_mult(c + b) === 1
+
+    r_pow = @rule (~x + ~y)^(~!m) => ~m
+    @test r_pow((a + b)^2) === 2
+    @test r_pow(a + b) === 1
+end
+
 using SymbolicUtils: @capture
 
 @testset "Capture form" begin

@@ -52,13 +52,34 @@ end
     @test r_sum((a + b)^2) === b
     @test r_sum(b^2) === 0
 
-    r_mult = @rule (~x * ~!y + ~z) => ~y
-    @test r_mult(c + a*b) === b
-    @test r_mult(c + b) === 1
+    r_mult = @rule ~x * ~!y  => ~y
+    @test r_mult(a * b) === b
+    @test r_mult(a) === 1
 
-    r_pow = @rule (~x + ~y)^(~!m) => ~m
-    @test r_pow((a + b)^2) === 2
-    @test r_pow(a + b) === 1
+    r_mult2 = @rule (~x * ~!y + ~z) => ~y
+    @test r_mult2(c + a*b) === b
+    @test r_mult2(c + b) === 1
+
+    # here the "normal part" in the defslot_term_matcher is not a symbol but a tree
+    r_mult3 = @rule (~!x)*(~y + ~z) => ~x
+    @test r_mult3(a*(c+2)) === a
+    @test r_mult3(2*(c+2)) === 2
+    @test r_mult3(c+2) === 1
+    
+    r_pow = @rule (~x)^(~!m) => ~m
+    @test r_pow(a^(b+1)) === b+1
+    @test r_pow(a) === 1
+    @test r_pow(a+1) === 1
+
+    # here the "normal part" in the defslot_term_matcher is not a symbol but a tree
+    r_pow2 = @rule (~x + ~y)^(~!m) => ~m
+    @test r_pow2((a+b)^c) === c
+    @test r_pow2(a+b) === 1
+
+    r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
+    @test r_mix((a + b*c)^d) === c + d
+    @test r_mix((a + b*c)) === 1 + c
+    @test r_mix((a + b)) === 2 #1+1
 end
 
 using SymbolicUtils: @capture

@@ -64,7 +64,7 @@ function defaultValOfCall(call)
         return 1
     end
     # else no default value for this call
-    return nothing
+    error("You can use default slots only with +, * and ^, but you tried with: $call")
 end
 
 DefSlot(s) = DefSlot(s, alwaystrue, nothing, 0)

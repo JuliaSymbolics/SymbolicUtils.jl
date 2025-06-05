@@ -77,7 +77,7 @@ end
     @test r_pow2(a+b) === 1
 
     r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
-    @test r_mix((a + b*c)^d) === c + d
+    @test r_mix((a + b*c)^2) === 2 + c
     @test r_mix((a + b*c)) === 1 + c
     @test r_mix((a + b)) === 2 #1+1
 end

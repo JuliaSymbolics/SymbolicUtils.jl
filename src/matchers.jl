@@ -156,7 +156,7 @@ function defslot_term_matcher_constructor(term)
         # if data is not a list, return nothing
         !islist(data) && return nothing
         # if data (is not a tree and is just a symbol) or (is a tree not starting with the default operation)
-        if !iscall(car(data)) || (istree(car(data)) && nameof(operation(car(data))) != defslot.operation)
+        if !iscall(car(data)) || (iscall(car(data)) && nameof(operation(car(data))) != defslot.operation)
             other_part_matcher = matchers[defslot_index==2 ? 2 : 3] # find the matcher of the normal part
             
             # checks wether it matches the normal part

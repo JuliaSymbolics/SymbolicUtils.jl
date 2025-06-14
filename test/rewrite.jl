@@ -47,6 +47,58 @@ end
     @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
 end
 
+@testset "Slot matcher with default value" begin
+    r_sum = @rule (~x + ~!y)^2 => ~y
+    @test r_sum((a + b)^2) === b
+    @test r_sum(b^2) === 0
+
+    r_mult = @rule ~x * ~!y  => ~y
+    @test r_mult(a * b) === b
+    @test r_mult(a) === 1
+
+    r_mult2 = @rule (~x * ~!y + ~z) => ~y
+    @test r_mult2(c + a*b) === b
+    @test r_mult2(c + b) === 1
+
+    # here the "normal part" in the defslot_term_matcher is not a symbol but a tree
+    r_mult3 = @rule (~!x)*(~y + ~z) => ~x
+    @test r_mult3(a*(c+2)) === a
+    @test r_mult3(2*(c+2)) === 2
+    @test r_mult3(c+2) === 1
+    
+    r_pow = @rule (~x)^(~!m) => ~m
+    @test r_pow(a^(b+1)) === b+1
+    @test r_pow(a) === 1
+    @test r_pow(a+1) === 1
+
+    # here the "normal part" in the defslot_term_matcher is not a symbol but a tree
+    r_pow2 = @rule (~x + ~y)^(~!m) => ~m
+    @test r_pow2((a+b)^c) === c
+    @test r_pow2(a+b) === 1
+
+    r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
+    @test r_mix((a + b*c)^2) === (2, c)
+    @test r_mix((a + b*c)) === (1, c)
+    @test r_mix((a + b)) === (1, 1)
+end
+
+@testset "1/power matches power with exponent of opposite sign" begin
+    r1 = @rule (~x)^(~y) => (~x, ~y) # rule with slot as exponent
+    @test r1(1/a^b) === (a, -b) # uses frankestein
+    @test r1(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
+    @test r1(1/a^2) === (a, -2) # uses opposite_sign_matcher
+
+    r2 = @rule (~x)^(~y + ~z) => (~x, ~y, ~z) # rule with term as exponent
+    @test r2(1/a^(b+2c)) === (a, -b, -2c) # uses frankestein
+    @test r2(1/a^3) === nothing # should use a term_matcher that flips the sign, but is not implemented
+
+    r1defslot = @rule (~x)^(~!y) => (~x, ~y) # rule with slot as exponent
+    @test r1defslot(1/a^b) === (a, -b) # uses frankestein
+    @test r1defslot(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
+    @test r1defslot(1/a^2) === (a, -2) # uses opposite_sign_matcher
+    @test r1defslot(a) === (a, 1)
+end
+
 using SymbolicUtils: @capture
 
 @testset "Capture form" begin

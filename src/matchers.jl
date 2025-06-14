@@ -13,9 +13,6 @@ function matcher(val::Any)
         # just two arguments bc defslot is only supported with operations with two args: *, ^, +
         if length(arguments(val)) == 2 && any(x -> isa(x, DefSlot), arguments(val))
             return defslot_term_matcher_constructor(val)
-        # else (a)^(b) can also match 1/( (a)^(b) ) , just with b of oppsite sign
-        elseif operation(val) == ^
-            return neg_pow_term_matcher_constructor(val)
         # else return a normal term matcher
         else
             return term_matcher_constructor(val)
@@ -56,6 +53,10 @@ function opposite_sign_matcher(slot::Slot)
             next(assoc(bindings, slot.name, -car(data)), 1) # this - is the only differenct wrt matcher(slot::Slot)
         end
     end
+end
+
+function opposite_sign_matcher(defslot::DefSlot)
+    opposite_sign_matcher(Slot(defslot.name, defslot.predicate))
 end
 
 # this is called only when defslot_term_matcher finds the operation and tries
@@ -147,48 +148,27 @@ function term_matcher_constructor(term)
             # the length of the list, is considered empty
         end
 
-        loop(car(data), bindings, matchers) # Try to eat exactly one term
-    end
-end
-
-# (a)^(b) can also match 1/( (a)^(b) ) , just with b of oppsite sign
-function neg_pow_term_matcher_constructor(term)
-    matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
-
-    function neg_pow_term_matcher(success, data, bindings)
-        !islist(data) && return nothing # if data is not a list, return nothing
-        !iscall(car(data)) && return nothing # if first element is not a call, return nothing
-
-        function loop(term, bindings′, matchers′)
-            if !islist(matchers′)
-                if  !islist(term)
-                    return success(bindings′, 1)
-                end
-                return nothing
-            end
-            car(matchers′)(term, bindings′) do b, n
-                loop(drop_n(term, n), b, cdr(matchers′))
-            end
-        end
-
         result = loop(car(data), bindings, matchers)
-        # if data is of the form 1/(...)^(...), it might match with negative exponent
-        if result === nothing && (operation(car(data))==/) && arguments(car(data))[1]==1 && iscall(arguments(car(data))[2]) && (operation(arguments(car(data))[2])==^)
-            denominator = arguments(car(data))[2]
-            # let's say data = a^b with a and b can be whatever
-            # if b is not a number then call the loop function with a^-b
-            if !isa(arguments(denominator)[2], Number)
-                frankestein = arguments(denominator)[1] ^ -(arguments(denominator)[2])
-                result = loop(frankestein, bindings, matchers)
-            else
-                # if b is a number, like 3, we cant call loop with a^-3 bc it
-                # will automatically transform into 1/a^3. Therfore we need to
-                # create a matcher that flips the sign of the exponent. I created
-                # this matecher just for `Slot`s and not for terms, because if b
-                # is a number and not a call, certainly doesn't match a term (I hope).
-                if isa(arguments(term)[2], Slot)
-                    matchers2 = (matcher(operation(term)), matcher(arguments(term)[1]), opposite_sign_matcher(arguments(term)[2])) # is this ok to be here or should it be outside neg_pow_term_matcher?
-                    result = loop(denominator, bindings, matchers2)
+        # if data is of the alternative form 1/(...)^(...), it might match with negative exponent
+        if operation(term)==^
+            alternative_form = (operation(car(data))==/) && arguments(car(data))[1]==1 && iscall(arguments(car(data))[2]) && (operation(arguments(car(data))[2])==^)
+            if result === nothing && alternative_form
+                denominator = arguments(car(data))[2]
+                # let's say data = a^b with a and b can be whatever
+                # if b is not a number then call the loop function with a^-b
+                if !isa(arguments(denominator)[2], Number)
+                    frankestein = arguments(denominator)[1] ^ -(arguments(denominator)[2])
+                    result = loop(frankestein, bindings, matchers)
+                else
+                    # if b is a number, like 3, we cant call loop with a^-3 bc it
+                    # will automatically transform into 1/a^3. Therfore we need to
+                    # create a matcher that flips the sign of the exponent. I created
+                    # this matecher just for `Slot`s and not for terms, because if b
+                    # is a number and not a call, certainly doesn't match a term (I hope).
+                    if isa(arguments(term)[2], Slot)
+                        matchers2 = (matcher(operation(term)), matcher(arguments(term)[1]), opposite_sign_matcher(arguments(term)[2])) # is this ok to be here or should it be outside neg_pow_term_matcher?
+                        result = loop(denominator, bindings, matchers2)
+                    end
                 end
             end
         end
@@ -201,11 +181,11 @@ end
 #    normal part (can bee a tree)   operation     defslot part
 
 # defslot_term_matcher works like this:
-# checks wether data starts with the default operation.
-#     if yes (1): continues like term_matcher
-#     if no checks wether data matches the normal part
+# checks wether data is a call.
+#     if yes (1): continues like term_matcher (if it finds a match returns (2))
+#     if still no match found checks wether data (is just a symbol) or (is a tree not starting with the default operation) 
 #          if no returns nothing, rule is not applied
-#          if yes (2): adds the pair (default value name, default value) to the found bindings and 
+#          if yes (3): adds the pair (default value name, default value) to the found bindings and 
 #          calls the success function like term_matcher would do
 
 function defslot_term_matcher_constructor(term)
@@ -218,33 +198,64 @@ function defslot_term_matcher_constructor(term)
     function defslot_term_matcher(success, data, bindings)
         # if data is not a list, return nothing
         !islist(data) && return nothing
+        result = nothing
+        if iscall(car(data))
+            # (1)
+            function loop(term, bindings′, matchers′) # Get it to compile faster
+                if !islist(matchers′)
+                    if  !islist(term)
+                        return success(bindings′, 1)
+                    end
+                    return nothing
+                end
+                car(matchers′)(term, bindings′) do b, n
+                    loop(drop_n(term, n), b, cdr(matchers′))
+                end
+            end
+
+            result = loop(car(data), bindings, matchers) # Try to eat exactly one term
+            # if data is of the alternative form 1/(...)^(...), it might match with negative exponent
+            if operation(term)==^
+                alternative_form = (operation(car(data))==/) && arguments(car(data))[1]==1 && iscall(arguments(car(data))[2]) && (operation(arguments(car(data))[2])==^)
+                if result === nothing && alternative_form
+                    denominator = arguments(car(data))[2]
+                    # let's say data = a^b with a and b can be whatever
+                    # if b is not a number then call the loop function with a^-b
+                    if !isa(arguments(denominator)[2], Number)
+                        frankestein = arguments(denominator)[1] ^ -(arguments(denominator)[2])
+                        result = loop(frankestein, bindings, matchers)
+                    else
+                        # if b is a number, like 3, we cant call loop with a^-3 bc it
+                        # will automatically transform into 1/a^3. Therfore we need to
+                        # create a matcher that flips the sign of the exponent. I created
+                        # this matecher just for `DefSlot`s and not for terms, because if b
+                        # is a number and not a call, certainly doesn't match a term (I hope).
+                        if isa(arguments(term)[2], DefSlot)
+                            matchers2 = (matcher(operation(term)), matcher(arguments(term)[1]), opposite_sign_matcher(arguments(term)[2])) # is this ok to be here or should it be outside neg_pow_term_matcher?
+                            result = loop(denominator, bindings, matchers2)
+                        end
+                    end
+                end
+            end
+            # (2)
+            if result !== nothing
+                return result
+            end
+        end
+        
         # if data (is not a tree and is just a symbol) or (is a tree not starting with the default operation)
-        if !iscall(car(data)) || (iscall(car(data)) && nameof(operation(car(data))) != defslot.operation)
+        if ( !iscall(car(data)) || (iscall(car(data)) && nameof(operation(car(data))) != defslot.operation) )
             other_part_matcher = matchers[defslot_index==2 ? 2 : 3] # find the matcher of the normal part
             
             # checks wether it matches the normal part
-            #                             <-----------------(2)------------------------------->
+            #                             <-----------------(3)------------------------------->
             bindings = other_part_matcher((b,n) -> assoc(b, defslot.name, defslot.defaultValue), data, bindings)
             
             if bindings === nothing
                 return nothing
             end
-            return success(bindings, 1)
+            result = success(bindings, 1)
         end
-
-        # (1)
-        function loop(term, bindings′, matchers′) # Get it to compile faster
-            if !islist(matchers′)
-                if  !islist(term)
-                    return success(bindings′, 1)
-                end
-                return nothing
-            end
-            car(matchers′)(term, bindings′) do b, n
-                loop(drop_n(term, n), b, cdr(matchers′))
-            end
-        end
-
-        loop(car(data), bindings, matchers) # Try to eat exactly one term
+        result
     end
 end

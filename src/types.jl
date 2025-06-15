@@ -1538,7 +1538,7 @@ function ^(a::SN, b)
     if b isa Number && iszero(b)
         # fast path
         1
-    elseif b isa Number && b < 0
+    elseif b isa Real && b < 0
         Div(1, a ^ (-b))
     elseif ismul(a) && b isa Number
         coeff = unstable_pow(a.coeff, b)

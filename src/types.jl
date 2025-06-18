@@ -92,7 +92,7 @@ end
 
 # Same but different error messages
 @noinline error_on_type() = error("Internal error: unreachable reached!")
-@noinline error_sym() = error("Sym doesn't have a operation or arguments!")
+@noinline error_sym() = error("Sym doesn't have an operation or any arguments!")
 @noinline error_property(E, s) = error("$E doesn't have field $s")
 
 # We can think about bits later

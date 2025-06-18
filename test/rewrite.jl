@@ -2,7 +2,7 @@ using SymbolicUtils
 
 include("utils.jl")
 
-@syms a b c
+@syms a b c x
 
 @testset "Equality" begin
     @eqtest a == a
@@ -45,6 +45,20 @@ end
     @eqtest @rule(+(~~x,~y, ~~x) => (~~x, ~y))(term(+,9,8,9,type=Any)) == ([9,],8)
     @eqtest @rule(+(~~x,~y, ~~x) => (~~x, ~y, ~~x))(term(+,9,8,9,9,8,type=Any)) == ([9,8], 9, [9,8])
     @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
+end
+
+@testset "Commutative + and *" begin
+    r1 = @rule sin(~x) + cos(~x) => ~x
+    @test r1(sin(a)+cos(a)) === a
+    @test r1(sin(x)+cos(x)) === x
+    r2 = @rule (~x+~y)*(~z+~w)^(~m) => (~x, ~y, ~z, ~w, ~m)
+    r3 = @rule (~z+~w)^(~m)*(~x+~y) => (~x, ~y, ~z, ~w, ~m)
+    @test r2((a+b)*(x+c)^b) === (a, b, x, c, b)
+    @test r3((a+b)*(x+c)^b) === (a, b, x, c, b)
+    rPredicate1 = @rule ~x::(x->isa(x,Number)) + ~y => (~x, ~y)
+    rPredicate2 = @rule ~y + ~x::(x->isa(x,Number)) => (~x, ~y)
+    @test rPredicate1(2+x) === (2, x)
+    @test rPredicate2(2+x) === (2, x)
 end
 
 @testset "Slot matcher with default value" begin

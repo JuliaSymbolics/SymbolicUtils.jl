@@ -76,7 +76,7 @@ end
     @test r_pow2((a+b)^c) === c
     @test r_pow2(a+b) === 1
 
-    r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
+    r_mix = @rule (~x + (~y)*(~!c))^(~!m) => (~m, ~c)
     @test r_mix((a + b*c)^2) === (2, c)
     @test r_mix((a + b*c)) === (1, c)
     @test r_mix((a + b)) === (1, 1)
@@ -92,7 +92,7 @@ end
     @test r2(1/a^(b+2c)) === (a, -b, -2c) # uses frankestein
     @test r2(1/a^3) === nothing # should use a term_matcher that flips the sign, but is not implemented
 
-    r1defslot = @rule (~x)^(~!y) => (~x, ~y) # rule with slot as exponent
+    r1defslot = @rule (~x)^(~!y) => (~x, ~y) # rule with defslot as exponent
     @test r1defslot(1/a^b) === (a, -b) # uses frankestein
     @test r1defslot(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
     @test r1defslot(1/a^2) === (a, -2) # uses opposite_sign_matcher

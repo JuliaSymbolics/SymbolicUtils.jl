@@ -1,7 +1,7 @@
 
 @inline alwaystrue(x) = true
 
-# Matcher patterns with Slot and Segment
+# Matcher patterns with Slot, DefSlot and Segment
 
 # matches one term
 # syntax:  ~x
@@ -15,6 +15,79 @@ Slot(s) = Slot(s, alwaystrue)
 Base.isequal(s1::Slot, s2::Slot) = s1.name == s2.name
 
 Base.show(io::IO, s::Slot) = (print(io, "~"); print(io, s.name))
+
+# for when the slot is a symbol, like `~x`
+makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
+
+# for when the slot is an expression, like `~x::predicate`
+function makeslot(s::Expr, keys)
+    if !(s.head == :(::))
+        error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
+    end
+
+    name = s.args[1]
+
+    push!(keys, name)
+    :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
+end
+
+
+
+
+
+
+# matches one term with built in default value.
+# syntax: ~!x
+# Example usage:
+# (~!x + ~y) can match (a + b) but also just "a" and x takes default value of zero.
+# (~!x)*(~y) can match a*b but also just "a", and x takes default value of one.
+# (~x + ~y)^(~!z) can match (a + b)^c but also just "a + b", and z takes default value of one.
+# only these three operations are supported for default values.
+
+struct DefSlot{P, O}
+    name::Symbol
+    predicate::P
+    operation::O
+    defaultValue::Real
+end
+
+# operation | default
+# + | 0
+# * | 1
+# ^ | 1
+function defaultValOfCall(call)
+    if call == :+
+        return 0
+    elseif call == :*
+        return 1
+    elseif call == :^
+        return 1
+    end
+    # else no default value for this call
+    error("You can use default slots only with +, * and ^, but you tried with: $call")
+end
+
+DefSlot(s) = DefSlot(s, alwaystrue, nothing, 0)
+Base.isequal(s1::DefSlot, s2::DefSlot) = s1.name == s2.name
+Base.show(io::IO, s::DefSlot) = (print(io, "~!"); print(io, s.name))
+
+makeDefSlot(s::Symbol, keys, op) = (push!(keys, s); DefSlot(s, alwaystrue, op, defaultValOfCall(op)))
+
+function makeDefSlot(s::Expr, keys, op)
+    if !(s.head == :(::))
+        error("Syntax for specifying a default slot is ~!x::\$predicate, where predicate is a boolean function")
+    end
+
+    name = s.args[1]
+
+    push!(keys, name)
+    tmp = defaultValOfCall(op)
+    :(DefSlot($(QuoteNode(name)), $(esc(s.args[2])), $(esc(op))), $(esc(tmp)))
+end
+
+
+
+
 
 # matches zero or more terms
 # syntax: ~~x
@@ -37,37 +110,29 @@ function makesegment(s::Expr, keys)
     end
 
     name = s.args[1]
-
+    
     push!(keys, name)
     :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
 end
 
-makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
-
-function makeslot(s::Expr, keys)
-    if !(s.head == :(::))
-        error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
-    end
-
-    name = s.args[1]
-
-    push!(keys, name)
-    :(Slot($(QuoteNode(name)), $(esc(s.args[2]))))
-end
-
-function makepattern(expr, keys)
+# parent call is needed to know which default value to give if any default slots are present
+function makepattern(expr, keys, parentCall=nothing)
     if expr isa Expr
         if expr.head === :call
             if expr.args[1] === :(~)
                 if expr.args[2] isa Expr && expr.args[2].args[1] == :(~)
                     # matches ~~x::predicate
                     makesegment(expr.args[2].args[2], keys)
+                elseif expr.args[2] isa Expr && expr.args[2].args[1] == :(!)
+                    # matches ~!x::predicate
+                    makeDefSlot(expr.args[2].args[2], keys, parentCall)
                 else
                     # matches ~x::predicate
                     makeslot(expr.args[2], keys)
                 end
             else
-                :(term($(map(x->makepattern(x, keys), expr.args)...); type=Any))
+                # make a pattern for every argument of the expr.
+                :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any))
             end
         elseif expr.head === :ref
             :(term(getindex, $(map(x->makepattern(x, keys), expr.args)...); type=Any))

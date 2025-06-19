@@ -48,17 +48,21 @@ end
 end
 
 @testset "Commutative + and *" begin
-    r1 = @rule sin(~x) + cos(~x) => ~x
-    @test r1(sin(a)+cos(a)) === a
-    @test r1(sin(x)+cos(x)) === x
-    r2 = @rule (~x+~y)*(~z+~w)^(~m) => (~x, ~y, ~z, ~w, ~m)
-    r3 = @rule (~z+~w)^(~m)*(~x+~y) => (~x, ~y, ~z, ~w, ~m)
+    r1 = @acrule exp(sin(~x) + cos(~x)) => ~x
+    @test r1(exp(sin(a)+cos(a))) === a
+    @test r1(exp(sin(x)+cos(x))) === x
+    r2 = @acrule (~x+~y)*(~z+~w)^(~m) => (~x, ~y, ~z, ~w, ~m)
+    r3 = @acrule (~z+~w)^(~m)*(~x+~y) => (~x, ~y, ~z, ~w, ~m)
     @test r2((a+b)*(x+c)^b) === (a, b, x, c, b)
     @test r3((a+b)*(x+c)^b) === (a, b, x, c, b)
-    rPredicate1 = @rule ~x::(x->isa(x,Number)) + ~y => (~x, ~y)
-    rPredicate2 = @rule ~y + ~x::(x->isa(x,Number)) => (~x, ~y)
+    rPredicate1 = @acrule ~x::(x->isa(x,Number)) + ~y => (~x, ~y)
+    rPredicate2 = @acrule ~y + ~x::(x->isa(x,Number)) => (~x, ~y)
     @test rPredicate1(2+x) === (2, x)
     @test rPredicate2(2+x) === (2, x)
+    r5 = @acrule (~y*(~z+~w))+~x => (~x, ~y, ~z, ~w)
+    r6 = @acrule ~x+((~z+~w)*~y) => (~x, ~y, ~z, ~w)
+    @test r5(c*(a+b)+d) === (d, c, a, b)
+    @test r6(c*(a+b)+d) === (d, c, a, b)
 end
 
 @testset "Slot matcher with default value" begin

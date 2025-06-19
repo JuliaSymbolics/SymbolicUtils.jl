@@ -11,7 +11,7 @@ function matcher(val::Any)
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
         # just two arguments bc defslot is only supported with operations with two args: *, ^, +
-        if length(arguments(val)) == 2 && any(x -> isa(x, DefSlot), arguments(val))
+        if any(x -> isa(x, DefSlot), arguments(val))
             return defslot_term_matcher_constructor(val)
         end
         # else return a normal term matcher
@@ -188,13 +188,6 @@ function term_matcher_constructor(term)
         return term_matcher_pow
     # if the operation is commutative
     elseif operation(term) in [+, *]
-        all_matchers = []
-        args = arguments(term)
-        for inds in permutations(eachindex(args), length(args))
-            reord = @views args[inds]
-            push!(all_matchers, (matcher(operation(term)), map(matcher, reord)...,))
-        end
-
         function term_matcher_comm(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
@@ -223,10 +216,17 @@ end
 # (~x + ...complicated pattern...)     *          ~!y
 #    normal part (can bee a tree)   operation     defslot part
 function defslot_term_matcher_constructor(term)
-    a = arguments(term) # lenght two bc defslot term matcher is allowed only with +,* and ^ that accept two arguments
+    a = arguments(term)
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
     defslot = a[defslot_index]
-    other_part_matcher = matcher(defslot_index==1 ? a[2] : a[1]) # find the matcher of the normal part
+    if length(a) == 2
+        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1])
+    else
+        others = [a[i] for i in eachindex(a) if i != defslot_index]
+        T = symtype(term)
+        f = operation(term)
+        other_part_matcher = term_matcher_constructor(Term{T}(f, others))
+    end
     
     normal_matcher = term_matcher_constructor(term)
 
@@ -236,12 +236,14 @@ function defslot_term_matcher_constructor(term)
         result !== nothing && return result
         # if no match, try to match with a defslot
         # if data (is not a tree and is just a symbol) or (is a tree not starting with the default operation)
-        if ( !iscall(car(data)) || (iscall(car(data)) && nameof(operation(car(data))) != defslot.operation) )            
-            # checks wether it matches the normal part if yes executes (foo)
-            # (foo): adds the pair (default value name, default value) to the found bindings
-            #                           <------------------(foo)---------------------------->
-            result = other_part_matcher((b,n) -> assoc(b, defslot.name, defslot.defaultValue), data, bindings)
-            result !== nothing && return success(result, 1)
-        end
+
+        # checks wether it matches the normal part if yes executes (foo)
+        # (foo): adds the pair (default value name, default value) to the found bindings
+        #                           <------------------(foo)---------------------------->
+        result = other_part_matcher((b,n) -> assoc(b, defslot.name, defslot.defaultValue), data, bindings)
+        println(result)
+        result !== nothing && return success(result, 1)
+
+        nothing
     end
 end

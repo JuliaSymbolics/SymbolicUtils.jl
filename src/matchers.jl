@@ -13,10 +13,9 @@ function matcher(val::Any)
         # just two arguments bc defslot is only supported with operations with two args: *, ^, +
         if length(arguments(val)) == 2 && any(x -> isa(x, DefSlot), arguments(val))
             return defslot_term_matcher_constructor(val)
-        # else return a normal term matcher
-        else
-            return term_matcher_constructor(val)
         end
+        # else return a normal term matcher
+        return term_matcher_constructor(val)
     end
 
     function literal_matcher(next, data, bindings)
@@ -232,6 +231,7 @@ function defslot_term_matcher_constructor(term)
     normal_matcher = term_matcher_constructor(term)
 
     function defslot_term_matcher(success, data, bindings)
+        !islist(data) && return nothing # if data is not a list, return nothing
         result = normal_matcher(success, data, bindings)
         result !== nothing && return result
         # if no match, try to match with a defslot

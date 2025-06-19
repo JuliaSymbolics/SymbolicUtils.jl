@@ -6,16 +6,16 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 
-function matcher(val::Any)
+function matcher(val::Any; acSets = nothing)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
         # just two arguments bc defslot is only supported with operations with two args: *, ^, +
         if any(x -> isa(x, DefSlot), arguments(val))
-            return defslot_term_matcher_constructor(val)
+            return defslot_term_matcher_constructor(val, acSets)
         end
         # else return a normal term matcher
-        return term_matcher_constructor(val)
+        return term_matcher_constructor(val, acSets)
     end
 
     function literal_matcher(next, data, bindings)
@@ -24,7 +24,8 @@ function matcher(val::Any)
     end
 end
 
-function matcher(slot::Slot)
+# acSets is not used but needs to be there in case matcher(::Slot) is directly called from the macro
+function matcher(slot::Slot; acSets = nothing)
     function slot_matcher(next, data, bindings)
         !islist(data) && return nothing
         val = get(bindings, slot.name, nothing)
@@ -43,7 +44,7 @@ end
 # this is called only when defslot_term_matcher finds the operation and tries
 # to match it, so no default value used. So the same function as slot_matcher
 # can be used
-function matcher(defslot::DefSlot)
+function matcher(defslot::DefSlot; acSets = nothing)
     matcher(Slot(defslot.name, defslot.predicate))
 end
 
@@ -59,7 +60,7 @@ function opposite_sign_matcher(slot::Slot)
                 return next(bindings, 1)
             end
         elseif slot.predicate(car(data))
-            next(assoc(bindings, slot.name, -car(data)), 1) # this - is the only differenct wrt matcher(slot::Slot)
+            next(assoc(bindings, slot.name, -car(data)), 1) # this - is the only difference wrt matcher(slot::Slot)
         end
     end
 end
@@ -96,7 +97,7 @@ function trymatchexpr(data, value, n)
     end
 end
 
-function matcher(segment::Segment)
+function matcher(segment::Segment; acSets=nothing)
     function segment_matcher(success, data, bindings)
         val = get(bindings, segment.name, nothing)
 
@@ -124,8 +125,8 @@ function matcher(segment::Segment)
     end
 end
 
-function term_matcher_constructor(term)
-    matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
+function term_matcher_constructor(term, acSets)
+    matchers = (matcher(operation(term); acSets=acSets), map(x->matcher(x;acSets=acSets), arguments(term))...,)
     
     function loop(term, bindings′, matchers′) # Get it to compile faster
         if !islist(matchers′)
@@ -137,7 +138,7 @@ function term_matcher_constructor(term)
         car(matchers′)(term, bindings′) do b, n
             loop(drop_n(term, n), b, cdr(matchers′))
         end
-        # explenation of above 3 lines:
+        # explanation of above 3 lines:
         # car(matchers′)(b,n -> loop(drop_n(term, n), b, cdr(matchers′)), term, bindings′)
         #                <------ next(b,n) ---------------------------->
         # car = first element of list, cdr = rest of the list, drop_n = drop first n elements of list
@@ -171,7 +172,7 @@ function term_matcher_constructor(term)
                     frankestein = arguments(denominator)[1] ^ -(arguments(denominator)[2])
                     result = loop(frankestein, bindings, matchers)
                 # if b is a number, like 3, we cant call loop with a^-3 bc it
-                # will automatically transform into 1/a^3. Therfore we need to
+                # will automatically transform into 1/a^3. Therefore we need to
                 # create a matcher that flips the sign of the exponent. I created
                 # this matecher just for `Slot`s and `DefSlot`s, but not for 
                 # terms or literals,  because if b is a number and not a call,
@@ -181,21 +182,27 @@ function term_matcher_constructor(term)
                     result = loop(denominator, bindings, matchers_modified)
                 end
             end
-            if result !== nothing
-                return success(result, 1)
-            end        
+            result !== nothing && return success(result, 1)
+            return nothing
         end
         return term_matcher_pow
     # if the operation is commutative
-    elseif operation(term) in [+, *]
+    elseif acSets!==nothing && !isa(arguments(term)[1], Segment) && operation(term) in [+, *]
         function term_matcher_comm(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
             
-            for m in all_matchers
-                result = loop(car(data), bindings, m)
-                result !== nothing && return success(result, 1)
+            T = symtype(car(data))
+            f = operation(car(data))
+            data_args = arguments(car(data))
+
+            for inds in acSets(eachindex(data_args), length(arguments(term)))
+                candidate = Term{T}(f, @views data_args[inds])
+
+                result = loop(candidate, bindings, matchers)                
+                result !== nothing && length(data_args) == length(inds) && return success(result,1)
             end
+            return nothing
         end
         return term_matcher_comm
     else
@@ -204,9 +211,8 @@ function term_matcher_constructor(term)
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
             
             result = loop(car(data), bindings, matchers)
-            if result !== nothing
-                return success(result, 1)
-            end
+            result !== nothing && return success(result, 1)
+            return nothing
         end
         return term_matcher
     end
@@ -215,35 +221,31 @@ end
 # creates a matcher for a term containing a defslot, such as:
 # (~x + ...complicated pattern...)     *          ~!y
 #    normal part (can bee a tree)   operation     defslot part
-function defslot_term_matcher_constructor(term)
+function defslot_term_matcher_constructor(term, acSets)
     a = arguments(term)
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
     defslot = a[defslot_index]
     if length(a) == 2
-        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1])
+        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1]; acSets = acSets)
     else
         others = [a[i] for i in eachindex(a) if i != defslot_index]
         T = symtype(term)
         f = operation(term)
-        other_part_matcher = term_matcher_constructor(Term{T}(f, others))
+        other_part_matcher = term_matcher_constructor(Term{T}(f, others), acSets)
     end
     
-    normal_matcher = term_matcher_constructor(term)
+    normal_matcher = term_matcher_constructor(term, acSets)
 
     function defslot_term_matcher(success, data, bindings)
         !islist(data) && return nothing # if data is not a list, return nothing
         result = normal_matcher(success, data, bindings)
         result !== nothing && return result
-        # if no match, try to match with a defslot
-        # if data (is not a tree and is just a symbol) or (is a tree not starting with the default operation)
-
-        # checks wether it matches the normal part if yes executes (foo)
+        # if no match, try to match with a defslot.
+        # checks whether it matches the normal part if yes executes (foo)
         # (foo): adds the pair (default value name, default value) to the found bindings
         #                           <------------------(foo)---------------------------->
         result = other_part_matcher((b,n) -> assoc(b, defslot.name, defslot.defaultValue), data, bindings)
-        println(result)
         result !== nothing && return success(result, 1)
-
         nothing
     end
 end

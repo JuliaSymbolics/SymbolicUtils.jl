@@ -2,7 +2,7 @@ using SymbolicUtils
 
 include("utils.jl")
 
-@syms a b c x
+@syms a b c d x
 
 @testset "Equality" begin
     @eqtest a == a

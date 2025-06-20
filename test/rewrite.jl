@@ -98,6 +98,15 @@ end
     @test r_mix((a + b*c)^2) === (2, c)
     @test r_mix((a + b*c)) === (1, c)
     @test r_mix((a + b)) === (1, 1)
+
+    r_more_than_two_arguments = @rule (~!a)*exp(~x)*sin(~x) => (~a, ~x)
+    @test r_more_than_two_arguments(sin(x)*exp(x)) === (1, x)
+    @test r_more_than_two_arguments(sin(x)*exp(x)*a) === (a, x)
+
+    r_mixmix = @rule (~!a)*exp(~x)*sin(~!b + (~x)^2 + ~x) => (~a, ~b, ~x)
+    @test r_mixmix(exp(x)*sin(1+x+x^2)*2) === (2, 1, x)
+    @test r_mixmix(exp(x)*sin(x+x^2)*2) === (2, 0, x)
+    @test r_mixmix(exp(x)*sin(x+x^2)) === (1, 0, x)
 end
 
 @testset "1/power matches power with exponent of opposite sign" begin

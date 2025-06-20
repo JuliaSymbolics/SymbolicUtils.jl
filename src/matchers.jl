@@ -127,17 +127,18 @@ function term_matcher_constructor(term, acSets)
     end
 
     # if the operation is a pow, we have to match also 1/(...)^(...) with negative exponent
-    if operation(term)==^
-        function term_matcher_pow(success, data, bindings)
+    if operation(term) === ^
+        function pow_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
-            !iscall(car(data)) && return nothing # if first element is not a call, return nothing
+            data = car(data) # from (..., ) to ...
+            !iscall(data) && return nothing # if first element is not a call, return nothing
             
-            result = loop(car(data), bindings, matchers)
+            result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
             
             # if data is of the alternative form 1/(...)^(...), it might match with negative exponent
-            if (operation(car(data))==/) && arguments(car(data))[1]==1 && iscall(arguments(car(data))[2]) && (operation(arguments(car(data))[2])==^)
-                denominator = arguments(car(data))[2]
+            if (operation(data) === /) && isequal(arguments(data)[1], 1) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
+                denominator = arguments(data)[2]
                 T = symtype(denominator)
                 frankestein = Term{T}(^, [arguments(denominator)[1], -arguments(denominator)[2]])
                 result = loop(frankestein, bindings, matchers)
@@ -145,10 +146,10 @@ function term_matcher_constructor(term, acSets)
             end
             return nothing
         end
-        return term_matcher_pow
+        return pow_term_matcher
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
     elseif acSets!==nothing && !isa(arguments(term)[1], Segment) && operation(term) in [+, *]
-        function term_matcher_comm(success, data, bindings)
+        function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
             
@@ -164,7 +165,7 @@ function term_matcher_constructor(term, acSets)
             end
             return nothing
         end
-        return term_matcher_comm
+        return commutative_term_matcher
     else
         function term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing

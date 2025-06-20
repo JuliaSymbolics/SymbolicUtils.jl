@@ -48,27 +48,6 @@ function matcher(defslot::DefSlot; acSets = nothing)
     matcher(Slot(defslot.name, defslot.predicate))
 end
 
-# function opposite_sign_matcher(val::Any)
-# end
-
-function opposite_sign_matcher(slot::Slot)
-    function slot_matcher(next, data, bindings)
-        !islist(data) && return nothing
-        val = get(bindings, slot.name, nothing)
-        if val !== nothing
-            if isequal(val, car(data))
-                return next(bindings, 1)
-            end
-        elseif slot.predicate(car(data))
-            next(assoc(bindings, slot.name, -car(data)), 1) # this - is the only difference wrt matcher(slot::Slot)
-        end
-    end
-end
-
-function opposite_sign_matcher(defslot::DefSlot)
-    opposite_sign_matcher(Slot(defslot.name, defslot.predicate))
-end
-
 # returns n == offset, 0 if failed
 function trymatchexpr(data, value, n)
     if !islist(value)
@@ -149,13 +128,6 @@ function term_matcher_constructor(term, acSets)
 
     # if the operation is a pow, we have to match also 1/(...)^(...) with negative exponent
     if operation(term)==^
-        # the below 4 lines could stay in the function term_matcher_pow, but 
-        # are here to speed up the rule matcher function
-        cond = isa(arguments(term)[2], Slot) || isa(arguments(term)[2], DefSlot)
-        if cond
-            matchers_modified = (matcher(operation(term)), matcher(arguments(term)[1]), opposite_sign_matcher(arguments(term)[2])) # is this ok to be here or should it be outside neg_pow_term_matcher?
-        end
-        
         function term_matcher_pow(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
@@ -166,27 +138,15 @@ function term_matcher_constructor(term, acSets)
             # if data is of the alternative form 1/(...)^(...), it might match with negative exponent
             if (operation(car(data))==/) && arguments(car(data))[1]==1 && iscall(arguments(car(data))[2]) && (operation(arguments(car(data))[2])==^)
                 denominator = arguments(car(data))[2]
-                # let's say data = a^b with a and b can be whatever
-                # if b is not a number then call the loop function with a^-b
-                if !isa(arguments(denominator)[2], Number)
-                    frankestein = arguments(denominator)[1] ^ -(arguments(denominator)[2])
-                    result = loop(frankestein, bindings, matchers)
-                # if b is a number, like 3, we cant call loop with a^-3 bc it
-                # will automatically transform into 1/a^3. Therefore we need to
-                # create a matcher that flips the sign of the exponent. I created
-                # this matecher just for `Slot`s and `DefSlot`s, but not for 
-                # terms or literals,  because if b is a number and not a call,
-                # certainly doesn't match a term (I hope).
-                # Also not a literal because...?
-                elseif cond
-                    result = loop(denominator, bindings, matchers_modified)
-                end
+                T = symtype(denominator)
+                frankestein = Term{T}(^, [arguments(denominator)[1], -arguments(denominator)[2]])
+                result = loop(frankestein, bindings, matchers)
+                result !== nothing && return success(result, 1)
             end
-            result !== nothing && return success(result, 1)
             return nothing
         end
         return term_matcher_pow
-    # if the operation is commutative
+    # if we want to do commutative checks, i.e. call matcher with different order of the arguments
     elseif acSets!==nothing && !isa(arguments(term)[1], Segment) && operation(term) in [+, *]
         function term_matcher_comm(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing

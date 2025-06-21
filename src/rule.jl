@@ -130,6 +130,9 @@ function makepattern(expr, keys, parentCall=nothing)
                     # matches ~x::predicate
                     makeslot(expr.args[2], keys)
                 end
+            elseif expr.args[1] === :(//)
+                # bc when the expression is not quoted, 3//2 is a Rational{Int64}, not a call
+                return esc(expr.args[2] // expr.args[3])
             else
                 # make a pattern for every argument of the expr.
                 :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any))

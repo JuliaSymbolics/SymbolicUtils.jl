@@ -2,7 +2,7 @@ using SymbolicUtils
 
 include("utils.jl")
 
-@syms a b c
+@syms a b c d x
 
 @testset "Equality" begin
     @eqtest a == a
@@ -47,6 +47,24 @@ end
     @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
 end
 
+@testset "Commutative + and *" begin
+    r1 = @acrule exp(sin(~x) + cos(~x)) => ~x
+    @test r1(exp(sin(a)+cos(a))) === a
+    @test r1(exp(sin(x)+cos(x))) === x
+    r2 = @acrule (~x+~y)*(~z+~w)^(~m) => (~x, ~y, ~z, ~w, ~m)
+    r3 = @acrule (~z+~w)^(~m)*(~x+~y) => (~x, ~y, ~z, ~w, ~m)
+    @test r2((a+b)*(x+c)^b) === (a, b, x, c, b)
+    @test r3((a+b)*(x+c)^b) === (a, b, x, c, b)
+    rPredicate1 = @acrule ~x::(x->isa(x,Number)) + ~y => (~x, ~y)
+    rPredicate2 = @acrule ~y + ~x::(x->isa(x,Number)) => (~x, ~y)
+    @test rPredicate1(2+x) === (2, x)
+    @test rPredicate2(2+x) === (2, x)
+    r5 = @acrule (~y*(~z+~w))+~x => (~x, ~y, ~z, ~w)
+    r6 = @acrule ~x+((~z+~w)*~y) => (~x, ~y, ~z, ~w)
+    @test r5(c*(a+b)+d) === (d, c, a, b)
+    @test r6(c*(a+b)+d) === (d, c, a, b)
+end
+
 @testset "Slot matcher with default value" begin
     r_sum = @rule (~x + ~!y)^2 => ~y
     @test r_sum((a + b)^2) === b
@@ -76,10 +94,36 @@ end
     @test r_pow2((a+b)^c) === c
     @test r_pow2(a+b) === 1
 
-    r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
-    @test r_mix((a + b*c)^2) === 2 + c
-    @test r_mix((a + b*c)) === 1 + c
-    @test r_mix((a + b)) === 2 #1+1
+    r_mix = @rule (~x + (~y)*(~!c))^(~!m) => (~m, ~c)
+    @test r_mix((a + b*c)^2) === (2, c)
+    @test r_mix((a + b*c)) === (1, c)
+    @test r_mix((a + b)) === (1, 1)
+
+    r_more_than_two_arguments = @rule (~!a)*exp(~x)*sin(~x) => (~a, ~x)
+    @test r_more_than_two_arguments(sin(x)*exp(x)) === (1, x)
+    @test r_more_than_two_arguments(sin(x)*exp(x)*a) === (a, x)
+
+    r_mixmix = @rule (~!a)*exp(~x)*sin(~!b + (~x)^2 + ~x) => (~a, ~b, ~x)
+    @test r_mixmix(exp(x)*sin(1+x+x^2)*2) === (2, 1, x)
+    @test r_mixmix(exp(x)*sin(x+x^2)*2) === (2, 0, x)
+    @test r_mixmix(exp(x)*sin(x+x^2)) === (1, 0, x)
+end
+
+@testset "1/power matches power with exponent of opposite sign" begin
+    r1 = @rule (~x)^(~y) => (~x, ~y) # rule with slot as exponent
+    @test r1(1/a^b) === (a, -b) # uses frankestein
+    @test r1(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
+    @test r1(1/a^2) === (a, -2) # uses opposite_sign_matcher
+
+    r2 = @rule (~x)^(~y + ~z) => (~x, ~y, ~z) # rule with term as exponent
+    @test r2(1/a^(b+2c)) === (a, -b, -2c) # uses frankestein
+    @test r2(1/a^3) === nothing # should use a term_matcher that flips the sign, but is not implemented
+
+    r1defslot = @rule (~x)^(~!y) => (~x, ~y) # rule with defslot as exponent
+    @test r1defslot(1/a^b) === (a, -b) # uses frankestein
+    @test r1defslot(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
+    @test r1defslot(1/a^2) === (a, -2) # uses opposite_sign_matcher
+    @test r1defslot(a) === (a, 1)
 end
 
 using SymbolicUtils: @capture

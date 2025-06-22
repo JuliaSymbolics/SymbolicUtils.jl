@@ -152,6 +152,7 @@ function term_matcher_constructor(term, acSets)
         function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
+            operation(term) !== operation(car(data)) && return nothing # if the operation of data is not the correct one, don't even try
             
             T = symtype(car(data))
             f = operation(car(data))

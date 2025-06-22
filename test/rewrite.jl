@@ -109,7 +109,7 @@ end
     @test r_mixmix(exp(x)*sin(x+x^2)) === (1, 0, x)
 end
 
-@testset "1/power matches power with exponent of opposite sign" begin
+@testset "power matcher with negative exponent" begin
     r1 = @rule (~x)^(~y) => (~x, ~y) # rule with slot as exponent
     @test r1(1/a^b) === (a, -b) # uses frankestein
     @test r1(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
@@ -124,6 +124,9 @@ end
     @test r1defslot(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
     @test r1defslot(1/a^2) === (a, -2) # uses opposite_sign_matcher
     @test r1defslot(a) === (a, 1)
+
+    r = @rule (~x + ~y)^(~m) => (~x, ~y, ~m) # rule to match (1/...)^(...)
+    @test r((1/(a+b))^3) === (a,b,-3)
 end
 
 using SymbolicUtils: @capture

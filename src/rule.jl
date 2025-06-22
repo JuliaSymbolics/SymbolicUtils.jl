@@ -384,6 +384,26 @@ macro rule(expr)
     end
 end
 
+macro smrule(expr)
+    @assert expr.head == :call && expr.args[1] == :(=>)
+    lhs = expr.args[2]
+    rhs = rewrite_rhs(expr.args[3])
+    keys = Symbol[]
+    lhs_term = makepattern(lhs, keys)
+    unique!(keys)
+    quote
+        $(__source__)
+        lhs_pattern = $(lhs_term)
+        Rule(
+            $(QuoteNode(expr)),
+            lhs_pattern,
+            matcher(lhs_pattern; acSets = permutations),
+            __MATCHES__ -> $(makeconsequent(rhs)),
+            rule_depth($lhs_term)
+        )
+    end
+end
+
 """
     @capture ex pattern
 

@@ -136,6 +136,14 @@ function term_matcher_constructor(term, acSets)
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
             
+            # if data is of the alternative form (1/...)^(...), it might match with negative exponent
+            if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && isequal(arguments(arguments(data)[1])[1], 1)
+                one_over_smth = arguments(data)[1]
+                T = symtype(one_over_smth)
+                frankestein = Term{T}(^, [arguments(one_over_smth)[2], -arguments(data)[2]])
+                result = loop(frankestein, bindings, matchers)
+                result !== nothing && return success(result, 1)
+            end
             # if data is of the alternative form 1/(...)^(...), it might match with negative exponent
             if (operation(data) === /) && isequal(arguments(data)[1], 1) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
                 denominator = arguments(data)[2]
@@ -200,7 +208,7 @@ function defslot_term_matcher_constructor(term, acSets)
 
     function defslot_term_matcher(success, data, bindings)
         !islist(data) && return nothing # if data is not a list, return nothing
-        # call the normal mathcer, with succes function foo1 that simply returns the bindings
+        # call the normal matcher, with success function foo1 that simply returns the bindings
         #                       <--foo1-->
         result = normal_matcher((b,n) -> b, data, bindings)
         result !== nothing && return success(result, 1)

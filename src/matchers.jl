@@ -200,12 +200,14 @@ function defslot_term_matcher_constructor(term, acSets)
 
     function defslot_term_matcher(success, data, bindings)
         !islist(data) && return nothing # if data is not a list, return nothing
-        result = normal_matcher(success, data, bindings)
-        result !== nothing && return result
+        # call the normal mathcer, with succes function foo1 that simply returns the bindings
+        #                       <--foo1-->
+        result = normal_matcher((b,n) -> b, data, bindings)
+        result !== nothing && return success(result, 1)
         # if no match, try to match with a defslot.
-        # checks whether it matches the normal part if yes executes (foo)
-        # (foo): adds the pair (default value name, default value) to the found bindings
-        #                           <------------------(foo)---------------------------->
+        # checks whether it matches the normal part if yes executes foo2
+        # foo2: adds the pair (default value name, default value) to the found bindings
+        #                           <-------------------foo2---------------------------->
         result = other_part_matcher((b,n) -> assoc(b, defslot.name, defslot.defaultValue), data, bindings)
         result !== nothing && return success(result, 1)
         nothing

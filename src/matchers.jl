@@ -133,9 +133,6 @@ function term_matcher_constructor(term, acSets)
             data = car(data) # from (..., ) to ...
             !iscall(data) && return nothing # if first element is not a call, return nothing
             
-            result = loop(data, bindings, matchers)
-            result !== nothing && return success(result, 1)
-            
             # if data is of the alternative form (1/...)^(...), it might match with negative exponent
             if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && isequal(arguments(arguments(data)[1])[1], 1)
                 one_over_smth = arguments(data)[1]
@@ -144,6 +141,10 @@ function term_matcher_constructor(term, acSets)
                 result = loop(frankestein, bindings, matchers)
                 result !== nothing && return success(result, 1)
             end
+
+            result = loop(data, bindings, matchers)
+            result !== nothing && return success(result, 1)
+            
             # if data is of the alternative form 1/(...)^(...), it might match with negative exponent
             if (operation(data) === /) && isequal(arguments(data)[1], 1) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
                 denominator = arguments(data)[2]

@@ -153,6 +153,23 @@ function term_matcher_constructor(term, acSets)
                 result = loop(frankestein, bindings, matchers)
                 result !== nothing && return success(result, 1)
             end
+            
+            # if data is a exp call, it might match with base e
+            if operation(data)===exp
+                T = symtype(arguments(data)[1])
+                frankestein = Term{T}(^,[ℯ,arguments(data)[1]])
+                result = loop(frankestein, bindings, matchers)
+                result !== nothing && return success(result, 1)
+            end
+
+            # if data is a sqrt call, it might match with exponent 1//2
+            if operation(data)===sqrt
+                T = symtype(arguments(data)[1])
+                frankestein = Term{T}(^,[arguments(data)[1], 1//2])
+                result = loop(frankestein, bindings, matchers)
+                result !== nothing && return success(result, 1)
+            end
+
             return nothing
         end
         return pow_term_matcher

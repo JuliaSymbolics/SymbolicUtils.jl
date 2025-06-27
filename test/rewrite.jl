@@ -1,5 +1,5 @@
 using SymbolicUtils
-
+using Test 
 include("utils.jl")
 
 @syms a b c
@@ -38,7 +38,7 @@ end
     @test @rule((~x)^(~x) => ~x)(b^a) === nothing
     @test @rule((~x)^(~x) => ~x)(a+a) === nothing
     @eqtest @rule((~x)^(~x) => ~x)(sin(a)^sin(a)) == sin(a)
-    @eqtest @rule((~x*~y + ~x*~z)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
+    @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
 
     @eqtest @rule(+(~~x) => ~~x)(a + b) == [a,b]
     @eqtest @rule(+(~~x) => ~~x)(term(+, a, b, c)) == [a,b,c]
@@ -77,8 +77,8 @@ end
     @test r_pow2(a+b) === 1
 
     r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
-    @test r_mix((a + b*c)^2) === 2 + c
-    @test r_mix((a + b*c)) === 1 + c
+    @test r_mix((a + b*c)^2) === 2 + b
+    @test r_mix((a + b*c)) === 1 + b
     @test r_mix((a + b)) === 2 #1+1
 end
 

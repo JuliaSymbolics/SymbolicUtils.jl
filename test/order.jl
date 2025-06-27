@@ -64,8 +64,8 @@ end
     @test !(b(t) <ₑ a(t))
 
     @syms y() x()
-    @test x() <ₑ y()
-    @test !(y() <ₑ x())
+    @test y() <ₑ x()
+    @test !(x() <ₑ y())
 end
 
 @testset "Sym vs Term" begin

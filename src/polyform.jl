@@ -213,10 +213,10 @@ function TermInterface.arguments(x::PolyForm{T}) where {T}
         m = MP.monomial(t)
 
         if !isone(c)
-            [c, (unstable_pow(resolve(v), pow)
+            [c, (^(resolve(v), pow)
                         for (v, pow) in MP.powers(m) if !iszero(pow))...]
         else
-            [unstable_pow(resolve(v), pow)
+            [^(resolve(v), pow)
                     for (v, pow) in MP.powers(m) if !iszero(pow)]
         end
     elseif MP.nterms(x.p) == 0
@@ -283,7 +283,7 @@ function simplify_div(d)
     if all(_isone, ds)
         return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
     else
-        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)))
+        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)), false)
     end
 end
 
@@ -336,22 +336,27 @@ function simplify_fractions(x; polyform=false)
     sdiv(a) = isdiv(a) ? simplify_div(a) : a
 
     expr = Postwalk(sdiv ∘ quick_cancel,
-                    maketerm=frac_maketerm)(Postwalk(add_with_div,
+                    maketerm=frac_maketerm)(Postwalk(PassThrough(add_with_div),
                                                            maketerm=frac_maketerm)(x))
 
     polyform ? expr : unpolyize(expr)
 end
 
 function add_with_div(x, flatten=true)
-    (!iscall(x) || operation(x) != (+)) && return x
+    (!iscall(x) || operation(x) != (+)) && return nothing
     aa = arguments(x)
-    !any(a->isdiv(a), aa) && return x # no rewrite necessary
+    !any(a->isdiv(a), aa) && return nothing # no rewrite necessary
 
-    divs = filter(a->isdiv(a), aa)
-    nondivs = filter(a->!(isdiv(a)), aa)
-    nds = isempty(nondivs) ? 0 : +(nondivs...)
-    d = reduce(quick_cancel∘add_divs, divs)
-    flatten ? quick_cancel(add_divs(d, nds)) : d + nds
+    nondiv_result = 0
+    div_result = 0
+    for a in aa
+        if isdiv(a)
+            div_result = quick_cancel(add_divs(div_result, a))
+        else
+            nondiv_result += a
+        end
+    end
+    flatten ? quick_cancel(add_divs(div_result, nondiv_result)) : div_result + nondiv_result
 end
 """
     flatten_fractions(x)
@@ -364,7 +369,7 @@ julia> flatten_fractions((1+(1+1/a)/a)/a)
 ```
 """
 function flatten_fractions(x)
-    Fixpoint(Postwalk(add_with_div))(x)
+    Fixpoint(Postwalk(PassThrough(add_with_div)))(x)
 end
 
 function fraction_iszero(x)
@@ -419,7 +424,7 @@ function quick_cancel(d)
         return prod(arguments(d))
     elseif isdiv(d)
         num, den = quick_cancel(d.num, d.den)
-        return Div(num, den)
+        return Div(num, den, false)
     else
         return d
     end
@@ -471,7 +476,7 @@ end
 # ismul(x)
 function quick_mul(x, y)
     if haskey(x.dict, y) && x.dict[y] >= 1
-        d = copy(x.dict)
+        d = copy(parent(x.dict))
         if d[y] > 1
             d[y] -= 1
         elseif d[y] == 1
@@ -490,7 +495,7 @@ end
 function quick_mulpow(x, y)
     y.exp isa Number || return (x, y)
     if haskey(x.dict, y.base)
-        d = copy(x.dict)
+        d = copy(parent(x.dict))
         if x.dict[y.base] > y.exp
             d[y.base] -= y.exp
             den = 1
@@ -514,6 +519,12 @@ function quick_mulmul(x, y)
 end
 
 function _merge_div(ndict, ddict)
+    if ndict isa ReadOnlyDict
+        ndict = parent(ndict)
+    end
+    if ddict isa ReadOnlyDict
+        ddict = parent(ddict)
+    end
     num = copy(ndict)
     den = copy(ddict)
     for (k, v) in den

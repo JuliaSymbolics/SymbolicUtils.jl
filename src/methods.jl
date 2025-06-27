@@ -29,11 +29,19 @@ const basic_diadic = [+, -, *, /, //, \, ^]
 export SafeReal, LiteralReal
 
 # ideally the relationship should be the other way around
-abstract type SafeReal <: Real end
+abstract type SafeRealImpl <: Number end
+const SafeReal = Union{SafeRealImpl, Real}
+Base.one(::Type{SafeReal}) = true
+Base.zero(::Type{SafeReal}) = false
+Base.convert(::Type{<:SafeRealImpl}, x::Number) = convert(Real, x)
 
 ################### LiteralReal #######################
 
-abstract type LiteralReal <: Real end
+abstract type LiteralRealImpl <: Number end
+const LiteralReal = Union{LiteralRealImpl, Real}
+Base.one(::Type{LiteralReal}) = true
+Base.zero(::Type{LiteralReal}) = false
+Base.convert(::Type{<:LiteralRealImpl}, x::Number) = convert(Real, x)
 
 #######################################################
 
@@ -101,13 +109,13 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
 end
 
 @number_methods(BasicSymbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
-@number_methods(BasicSymbolic{<:LiteralReal}, term(f, a), term(f, a, b), onlybasics)
+@number_methods(BasicSymbolic{LiteralReal}, term(f, a), term(f, a, b), onlybasics)
 
 for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
-    for R in [SafeReal, LiteralReal]
+    for R in [SafeRealImpl, LiteralRealImpl]
         @eval function promote_symtype(::$(typeof(f)),
                 T::Type{<:$R},
                 S::Type{<:Real})
@@ -153,8 +161,8 @@ end
 promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralReal}) = LiteralReal
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeRealImpl}) = SafeReal
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralRealImpl}) = LiteralReal
 end
 
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)

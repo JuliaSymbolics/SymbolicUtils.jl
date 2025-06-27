@@ -7,7 +7,12 @@ using DocStringExtensions
 
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
-using Unityper
+using Moshi.Data: @data
+import Moshi.Data as MData
+using Moshi.Match: @match
+using ReadOnlyArrays
+using ReadOnlyDicts
+using EnumX: @enumx
 using TermInterface
 using DataStructures
 using Setfield
@@ -23,6 +28,7 @@ import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 using WeakValueDicts: WeakValueDict
+using Base: RefValue
 
 # include("WeakCacheSets.jl")
 

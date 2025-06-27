@@ -1,7 +1,7 @@
-1 ADD(scalar = 0, coeffs = (z => 1, x => 2))
-2 ├─ MUL(scalar = 2, powers = (x => 1,))
+1 AddOrMul(variant = "ADD", scalar = 0, coeffs = (z => 1, x => 2))
+2 ├─ AddOrMul(variant = "MUL", scalar = 2, powers = (x => 1,))
 3 │  ├─ 2
-4 │  └─ SYM(x)
-5 └─ SYM(z)
+4 │  └─ Sym(x)
+5 └─ Sym(z)
 
 Hint: call SymbolicUtils.pluck(expr, line_number) to get the subexpression starting at line_number

@@ -1,7 +1,11 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul, Div, Pow, hash2, metadata, BasicSymbolic, Symbolic,
-                     isequal_with_metadata
+using SymbolicUtils: Term, Add, Mul, Div, Pow, hash_core, metadata, BasicSymbolic, Symbolic,
+                     isequal_core
 import TermInterface
+
+hash2(a, b) = hash_core(a, b; full=true)
+hash2(a) = hash_core(a, zero(UInt); full=true)
+isequal_with_metadata(a, b) = isequal_core(a, b; full=true)
 
 struct Ctx1 end
 struct Ctx2 end
@@ -81,7 +85,7 @@ end
     v5 = 3a/6
     v6 = 2a/4
     @test v5 === v6
-    v7 = Div{Float64}(-1,a)
+    v7 = Div{Float64}(-1,a, false)
     @test v7 !== v3
 
     vm1 = setmetadata(v1,Ctx1, "meta_1")
@@ -117,8 +121,8 @@ end
     b1 = setmetadata(b, Int, 3)
     a2 = setmetadata(a, Int, b1)
     @test a1 !== a2
-    @test !SymbolicUtils.isequal_with_metadata(a1, a2)
-    @test metadata(metadata(a1)[Int]) === nothing
+    @test !isequal_with_metadata(a1, a2)
+    @test isempty(metadata(metadata(a1)[Int]))
     @test metadata(metadata(a2)[Int])[Int] == 3
 end
 
@@ -127,8 +131,8 @@ end
     aa = setmetadata(a, Int, b)
     @test aa !== a
     @test isequal(a, aa)
-    @test !SymbolicUtils.isequal_with_metadata(a, aa)
-    @test !SymbolicUtils.isequal_with_metadata(2a, 2aa)
+    @test !isequal_with_metadata(a, aa)
+    @test !isequal_with_metadata(2a, 2aa)
 end
 
 @testset "Hashconsing can be toggled" begin
@@ -143,7 +147,7 @@ end
 @testset "`hash2` is cached" begin
     @syms a b f(..)
     for ex in [a + b, a * b, f(a)]
-        h = SymbolicUtils.hash2(ex)
+        h = hash2(ex)
         @test h == ex.hash2[]
         ex2 = setmetadata(ex, Int, 3)
         @test ex2.hash2[] != h
@@ -193,12 +197,12 @@ end
     @syms x
     tmp1 = x ^ 3.0
     tmp2 = x ^ 3
-    @test !SymbolicUtils.isequal_with_metadata(tmp1, tmp2)
+    @test !isequal_with_metadata(tmp1, tmp2)
     @test arguments(tmp1)[2] isa Float64
     @test arguments(tmp2)[2] isa Int
     tmp1 = 2tmp1
     tmp2 = 2tmp2
-    @test !SymbolicUtils.isequal_with_metadata(tmp1, tmp2)
+    @test !isequal_with_metadata(tmp1, tmp2)
     @test arguments(arguments(tmp1)[2])[2] isa Float64
     @test arguments(arguments(tmp2)[2])[2] isa Int
 end

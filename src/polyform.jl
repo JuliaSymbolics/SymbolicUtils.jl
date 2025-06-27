@@ -26,19 +26,19 @@ PolyForm(sin((x+y)^2))               #=> sin((x+y)^2)
 PolyForm(sin((x+y)^2), recurse=true) #=> sin((x^2 + (2x)y + y^2))
 ```
 """
-struct PolyForm{T} <: Symbolic{T}
+struct PolyForm <: Symbolic{Real}
     p::MP.AbstractPolynomialLike
     pvar2sym::Bijection{Any,Any}   # @polyvar x --> @sym x  etc.
     sym2term::Dict{BasicSymbolic,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
     metadata
-    function (::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T}
+    function PolyForm(p, d1, d2, m=nothing)
         p isa Number && return p
         p isa MP.AbstractPolynomialLike && MP.isconstant(p) && return convert(Number, p)
-        new{T}(p, d1, d2, m)
+        new(p, d1, d2, m)
     end
 end
 
-@number_methods(PolyForm{<:Number}, term(f, a), term(f, a, b))
+@number_methods(PolyForm, term(f, a), term(f, a, b))
 
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
@@ -56,7 +56,7 @@ function get_pvar2sym()
         PVAR2SYM[] = WeakRef(d)
         return d
     else
-        return v
+        return v::Bijections.Bijection{Any, Any, Dict{Any, Any}, Dict{Any, Any}}
     end
 end
 
@@ -67,7 +67,7 @@ function get_sym2term()
         SYM2TERM[] = WeakRef(d)
         return d
     else
-        return v
+        return v::Dict{BasicSymbolic, Any}
     end
 end
 
@@ -80,7 +80,7 @@ end
 
 # forward gcd
 
-PF = :(PolyForm{promote_symtype(/, symtype(x), symtype(y))})
+PF = :(PolyForm)
 const FriendlyCoeffType = Union{Integer, Rational}
 @eval begin
     Base.div(x::PolyForm, y::PolyForm) = $PF(div(x.p, y.p), mix_dicts(x, y)...)
@@ -103,15 +103,16 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         end
 
         op = operation(x)
-        args = arguments(x)
+        args = parent(arguments(x))
 
-        local_polyize(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
-
-        if typeof(+) <: Fs && op == (+)
+        local_polyize = let pvar2sym = pvar2sym, sym2term = sym2term, vtype = vtype, pow = pow, Fs = Fs, recurse = recurse
+                f(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
+        end
+        if (+) isa Fs && op === (+)
             return sum(local_polyize, args)
-        elseif typeof(*) <: Fs && op == (*)
+        elseif (*) isa Fs && op === (*)
             return prod(local_polyize, args)
-        elseif typeof(^) <: Fs && op == (^) && args[2] isa Integer && args[2] > 0
+        elseif (^) isa Fs && op === (^) && args[2] isa Integer && args[2] > 0
             @assert length(args) == 2
             return local_polyize(args[1])^(args[2])
         else
@@ -120,7 +121,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
             y = if recurse
                 maketerm(typeof(x),
                          op,
-                         map(a->PolyForm(a, pvar2sym, sym2term, vtype; Fs, recurse), args),
+                         map(a->PolyForm(a; pvar2sym, sym2term, vtype, Fs, recurse), args),
                          metadata(x))
             else
                 x
@@ -129,9 +130,9 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
             name = Symbol(string(op), "_", hash(y))
 
             @label lookup
-            sym = Sym{symtype(x)}(name)
+            sym = Sym{Number}(name)
             if haskey(sym2term, sym)
-                if isequal(sym2term[sym][1], x)
+                if isequal(sym2term[sym][1], x)::Bool
                     return local_polyize(sym)
                 else # hash collision
                     name = Symbol(name, "_")
@@ -153,10 +154,10 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     end
 end
 
-function PolyForm(x,
+function PolyForm(x;
         pvar2sym=get_pvar2sym(),
         sym2term=get_sym2term(),
-        vtype=DynamicPolynomials.Variable{ DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder},DynamicPolynomials.Graded{MP.LexOrder}};
+        vtype=DynamicPolynomials.Variable{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, DynamicPolynomials.Graded{MP.LexOrder}},
         Fs = Union{typeof(+), typeof(*), typeof(^)},
         recurse=false,
         metadata=metadata(x))
@@ -167,7 +168,7 @@ function PolyForm(x,
 
     # Polyize and return a PolyForm
     p = polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
-    PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)
+    PolyForm(p, pvar2sym, sym2term, metadata)
 end
 
 isexpr(x::Type{<:PolyForm}) = true
@@ -186,7 +187,7 @@ end
 head(::PolyForm) = PolyForm
 operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
-function TermInterface.arguments(x::PolyForm{T}) where {T}
+function TermInterface.arguments(x::PolyForm)
 
     function is_var(v)
         MP.nterms(v) == 1 &&
@@ -213,10 +214,10 @@ function TermInterface.arguments(x::PolyForm{T}) where {T}
         m = MP.monomial(t)
 
         if !isone(c)
-            [c, (unstable_pow(resolve(v), pow)
+            [c, (^(resolve(v), pow)
                         for (v, pow) in MP.powers(m) if !iszero(pow))...]
         else
-            [unstable_pow(resolve(v), pow)
+            [^(resolve(v), pow)
                     for (v, pow) in MP.powers(m) if !iszero(pow)]
         end
     elseif MP.nterms(x.p) == 0
@@ -227,7 +228,7 @@ function TermInterface.arguments(x::PolyForm{T}) where {T}
                 convert(Number, t) :
                 (is_var(t) ?
                  resolve(t) :
-                 PolyForm{T}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
+                 PolyForm(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
 children(x::PolyForm) = arguments(x)
@@ -245,7 +246,7 @@ Expand expressions by distributing multiplication over addition, e.g.,
 multivariate polynomials implementation.
 `variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
 """
-expand(expr) = unpolyize(PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
+expand(expr) = unpolyize(PolyForm(expr; Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
 
 function unpolyize(x)
     # we need a special maketerm here because the default one used in Postwalk will call
@@ -265,9 +266,9 @@ function polyform_factors(d, pvar2sym, sym2term)
         if ispow(x) && x.exp isa Integer && x.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(PolyForm(x.base, pvar2sym, sym2term), x.exp)
+            Pow(PolyForm(x.base; pvar2sym, sym2term), x.exp)
         else
-            PolyForm(x, pvar2sym, sym2term)
+            PolyForm(x; pvar2sym, sym2term)
         end
     end
 
@@ -283,23 +284,7 @@ function simplify_div(d)
     if all(_isone, ds)
         return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
     else
-        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)))
-    end
-end
-
-#add_divs(x::Div, y::Div) = (x.num * y.den + y.num * x.den) / (x.den * y.den)
-#add_divs(x::Div, y) = (x.num + y * x.den) / x.den
-#add_divs(x, y::Div) = (x * y.den + y.num) / y.den
-#add_divs(x, y) = x + y
-function add_divs(x, y)
-    if isdiv(x) && isdiv(y)
-        return (x.num * y.den + y.num * x.den) / (x.den * y.den)
-    elseif isdiv(x)
-        return (x.num + y * x.den) / x.den
-    elseif isdiv(y)
-        return (x * y.den + y.num) / y.den
-    else
-        x + y
+        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)), false)
     end
 end
 
@@ -344,14 +329,42 @@ end
 
 function add_with_div(x, flatten=true)
     (!iscall(x) || operation(x) != (+)) && return x
-    aa = arguments(x)
-    !any(a->isdiv(a), aa) && return x # no rewrite necessary
+    aa = parent(arguments(x))
+    !any(isdiv, aa) && return x # no rewrite necessary
 
-    divs = filter(a->isdiv(a), aa)
-    nondivs = filter(a->!(isdiv(a)), aa)
-    nds = isempty(nondivs) ? 0 : +(nondivs...)
-    d = reduce(quick_cancel∘add_divs, divs)
-    flatten ? quick_cancel(add_divs(d, nds)) : d + nds
+    # find and multiply all denominators
+    dens = ArgsT()
+    for a in aa
+        isdiv(a) || continue
+        push!(dens, a.den)
+    end
+    den = mul_worker(dens)
+
+    # add all numerators
+    div_idx = 1
+    nums = ArgsT()
+    for a in aa
+        # if it is a division, we don't want to multiply the numerator by
+        # its own denominator, so temporarily overwrite the index in `dens`
+        # that is the denominator of this term (tracked by `div_idx`), multiply
+        # and voila! numerator. Remember to reset `dens` at the end.
+        if isdiv(a)
+            _den = dens[div_idx]
+            dens[div_idx] = a.num
+            _num = mul_worker(dens)
+            dens[div_idx] = _den
+            div_idx += 1
+        else
+            _num = den * a
+        end
+        push!(nums, _num)
+    end
+    num = add_worker(nums)
+
+    if flatten
+        num, den = quick_cancel(num, den)
+    end
+    return num / den
 end
 """
     flatten_fractions(x)
@@ -369,7 +382,10 @@ end
 
 function fraction_iszero(x)
     !iscall(x) && return _iszero(x)
+    old_hc = ENABLE_HASHCONSING[]
+    ENABLE_HASHCONSING[] = false
     ff = flatten_fractions(x)
+    ENABLE_HASHCONSING[] = old_hc
     # fast path and then slow path
     any(_iszero, numerators(ff)) ||
     any(_iszero∘expand, numerators(ff))
@@ -412,16 +428,21 @@ it wouldn't simplify `(x^2 + 15 -  8x)  / (x - 5)` to `(x - 3)`.
 But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
-function quick_cancel(d)
-    if ispow(d) && isdiv(d.base)
-        return quick_cancel((d.base.num^d.exp) / (d.base.den^d.exp))
-    elseif ismul(d) && any(isdiv, arguments(d))
-        return prod(arguments(d))
-    elseif isdiv(d)
-        num, den = quick_cancel(d.num, d.den)
-        return Div(num, den)
-    else
-        return d
+quick_cancel(d) = d
+function quick_cancel(d::BSImpl.Type{T}) where {T}
+    @match d begin
+        BSImpl.Pow(; base = BSImpl.Div(; num, den), exp) => begin
+            n, d = quick_cancel((num ^ exp), (den ^ exp))
+            return Div{T}(n, d, false)
+        end
+        BSImpl.AddOrMul(; variant) && if variant == AddMulVariant.MUL && any(isdiv, arguments(d)) end => begin
+            return reduce(*, arguments(d))
+        end
+        BSImpl.Div(; num, den) => begin
+            num, den = quick_cancel(num, den)
+            return Div(num, den, false)
+        end
+        _ => return d
     end
 end
 
@@ -480,7 +501,7 @@ function quick_mul(x, y)
             error("Can't reach")
         end
 
-        return Mul(symtype(x), x.coeff, d), 1
+        return Mul{symtype(x)}(x.coeff, d), 1
     else
         return x, y
     end
@@ -501,7 +522,7 @@ function quick_mulpow(x, y)
             den = Pow{symtype(y)}(y.base, y.exp-d[y.base])
             delete!(d, y.base)
         end
-        return Mul(symtype(x), x.coeff, d), den
+        return Mul{symtype(x)}(x.coeff, d), den
     else
         return x, y
     end
@@ -510,7 +531,7 @@ end
 # Double mul case
 function quick_mulmul(x, y)
     num_dict, den_dict = _merge_div(x.dict, y.dict)
-    Mul(symtype(x), x.coeff, num_dict), Mul(symtype(y), y.coeff, den_dict)
+    Mul{symtype(x)}(x.coeff, num_dict), Mul{symtype(y)}(y.coeff, den_dict)
 end
 
 function _merge_div(ndict, ddict)

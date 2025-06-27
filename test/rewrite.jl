@@ -38,7 +38,7 @@ end
     @test @rule((~x)^(~x) => ~x)(b^a) === nothing
     @test @rule((~x)^(~x) => ~x)(a+a) === nothing
     @eqtest @rule((~x)^(~x) => ~x)(sin(a)^sin(a)) == sin(a)
-    @eqtest @rule((~x*~y + ~x*~z)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
+    @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
 
     @eqtest @rule(+(~~x) => ~~x)(a + b) == [a,b]
     @eqtest @rule(+(~~x) => ~~x)(term(+, a, b, c)) == [a,b,c]

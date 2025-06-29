@@ -25,6 +25,8 @@ end
     @eqtest simplify(Term{Real}(real, [x])) == x
     @eqtest simplify(Term{Real}(imag, [x])) == 0
     @eqtest simplify(Term{Real}(imag, [y])) == imag(y)
+    @eqtest simplify(conj(x*y^2)) == x*conj(y^2)
+    @eqtest simplify(conj(x+y)) == x+conj(y)
     @eqtest simplify(x - y) == x + -1 * y
     @eqtest simplify(x - sin(y)) == x + -1 * sin(y)
     @eqtest simplify(-sin(x)) == -1 * sin(x)

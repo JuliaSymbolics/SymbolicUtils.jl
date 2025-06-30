@@ -15,7 +15,8 @@ const SmallV{T} = SmallVec{T, Vector{T}}
 const ArgsT = SmallV{Any}
 const ROArgsT = ReadOnlyVector{Any, ArgsT}
 const RODict{K, V} = ReadOnlyDict{K, V, Dict{K, V}}
-const ShapeT = Union{Unknown, Tuple{Vararg{UnitRange{Int}}}}
+const ShapeVecT = SmallV{UnitRange{Int}}
+const ShapeT = Union{Unknown, ShapeVecT}
 const IdentT = Union{IDType, Nothing}
 
 """
@@ -527,15 +528,15 @@ const POW_SALT = 0x2b55b97a6efb080c % UInt
 
 Wrapper over `hash` which may or may not hash symbolic metadata.
 """
-hash_core(s, h::UInt; kw...) = hash(s, h)
+hash_core(s, h::UInt; kw...)::UInt = hash(s, h)
 
-function hashvec_core(s, h::UInt; kw...)
+function hashvec_core(s, h::UInt; kw...)::UInt
     foldr(s; init = h) do x, hh
         hash_core(x, hh; kw...)
     end
 end
 
-function hash_core(s::Number, h::UInt; full = true)
+function hash_core(s::Number, h::UInt; full = true)::UInt
     h = hash(s, h)
     if full
         h = hash(typeof(s), h)
@@ -543,74 +544,84 @@ function hash_core(s::Number, h::UInt; full = true)
     return h
 end
 
-function hash_core(s::AbstractArray, h::UInt; kw...)
+function hash_core(s::AbstractArray, h::UInt; kw...)::UInt
     h = hash_core(typeof(s), hash_core(size(s), h; kw...); kw...)
     return hashvec_core(s, h; kw...)
 end
 
-function hash_core(s::Union{Tuple, NamedTuple}, h::UInt; kw...)
-    return hashvec_core(s, hash_core(typeof(s), h; kw...); kw...)
+function hash_core(s::Tuple, h::UInt; kw...)::UInt
+    return hashvec_core(s, h; kw...)
 end
 
-function hash_core(s::AbstractDict, h::UInt; kw...)
-    h = hash_core(typeof(s), h; kw...)
+function hash_core(s::NamedTuple, h::UInt; kw...)::UInt
+    return hashvec_core(pairs(s), h; kw...)
+end
+
+function hash_core(s::AbstractDict, h::UInt; kw...)::UInt
+    h = hash_core(typeof(s), h; kw...)::UInt
     for (k, v) in s
-        h ⊻= hash_core(k, hash_core(v, zero(UInt); kw...); kw...)
+        h ⊻= hash_core(k, hash_core(v, zero(UInt); kw...)::UInt; kw...)::UInt
     end
     return h
 end
 
-function hash_core(s::BSImpl.Type, h::UInt; full = true)
+function hash_core(s::BSImpl.Type, h::UInt; full = true)::UInt
     if !iszero(h)
         return hash(hash_core(s, zero(h); full), h)
     end
-    vtype = MData.variant_type(s)
+    # vtype = MData.variant_type(s)
     # Const is a special case
     # if vtype <: BSImpl.Const
     #     return hash_core(s.val, h; full) ⊻ CONST_SALT
     # end
     # Early exit, every other variant has a hash2 field
-    if full && !iszero(s.hash2[])
-        return s.hash2[]
+
+    if full
+        cache = s.hash2[]
+        !iszero(cache) && return cache
     end
-    partial = @match s begin
+    
+    partial::UInt = @match s begin
         BSImpl.Sym(; name, shape) => begin
-            hash_core(shape, hash_core(name, h; full); full) ⊻ SYM_SALT
+            h = hash_core(name, h; full)
+            h = hash_core(shape, h; full)
+            h ⊻ SYM_SALT
         end
         BSImpl.Term(; f, args, shape, hash) => begin
             # use/update cached hash
-            if iszero(hash[])
+            cache = hash[]
+            if iszero(cache)
                 hash[] = hash_core(f, hash_core(args, hash_core(shape, h; full); full); full)
             else
-                hash[]
+                cache
             end
         end
         BSImpl.AddOrMul(; variant, dict, coeff, shape, hash) => begin
-            if iszero(hash[])
-                inner = hash_core(dict, h; full)
-                inner = hash_core(shape, hash_core(coeff, inner; full); full)
-                inner = Base.hash((variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT), inner)
+            cache = hash[]
+            if iszero(cache)
+                inner = hash_core(dict, h; full)::UInt
+                inner = hash_core(shape, hash_core(coeff, inner; full); full)::UInt
+                inner = Base.hash((variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT), inner)::UInt
                 hash[] = inner
             else
-                hash[]
+                cache
             end
             
         end
-        BSImpl.Div(; num, den, shape) => begin
-            hash_core(num, hash_core(den, h; full); full) ⊻ DIV_SALT
+        BSImpl.Div(; num, den) => begin
+            hash_core(num, hash_core(den, h; full)::UInt; full)::UInt ⊻ DIV_SALT
         end
-        BSImpl.Pow(; base, exp, shape) => begin
-            hash_core(base, hash_core(exp, h; full); full) ⊻ POW_SALT
+        BSImpl.Pow(; base, exp) => begin
+            hash_core(base, hash_core(exp, h; full)::UInt; full)::UInt ⊻ POW_SALT
         end
-        _ => throw(UnimplementedForVariantError(hash_core, MData.variant_type(s)))
     end
 
     full || return partial
 
-    return s.hash2[] = hash_core(metadata(s), partial; full)
+    return s.hash2[] = hash_core(metadata(s), partial; full)::UInt
 end
 
-hash_core(s::BasicSymbolic, h::UInt; kw...) = hash_core(_unwrap_internal(s), h; kw...)
+hash_core(s::BasicSymbolic, h::UInt; kw...)::UInt = hash_core(_unwrap_internal(s), h; kw...)
 
 Base.hash(s::BasicSymbolic, h::UInt) = hash_core(s, h; full = false)
 Base.hash(s::HashconsingWrapper, h::UInt) = hash_core(s.data, h; full = true)
@@ -697,7 +708,7 @@ function parse_metadata(x)
 end
 
 default_shape(::Type{<:AbstractArray}) = Unknown()
-default_shape(_) = ()
+default_shape(_) = ShapeVecT()
 
 parse_args(x::ArgsT) = x
 function parse_args(x::AbstractVector)
@@ -1594,13 +1605,33 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 
+function safe_add!(dict, coeff, b)
+    if isadd(b)
+        coeff += b.coeff
+        for (k, v) in b.dict
+            dict[k] = get(dict, k, 0) + v
+        end
+    elseif ismul(b)
+        v = b.coeff
+        b′ = Mul(symtype(b), 1, copy(b.dict); metadata = b.metadata)
+        dict[b′] = get(dict, b′, 0) + v
+    else
+        dict[b] = get(dict, b, 0) + 1
+    end
+    return coeff
+end
+
 function +(a::SN, bs::SN...)
     isempty(bs) && return a
+    T = symtype(a)
+    for b in bs
+        T = promote_symtype(+, T, symtype(b))
+    end
     # entries where `!issafecanon`
     unsafes = SmallV{Any}()
     # coeff and dict of the `Add`
     coeff = 0
-    dict = Dict{Symbolic, Any}()
+    dict = Dict{Symbolic, T}()
     # type of the `Add`
     T = symtype(a)
 
@@ -1621,23 +1652,23 @@ function +(a::SN, bs::SN...)
     end
 
     for b in bs
-        T = promote_symtype(+, T, symtype(b))
         if !issafecanon(+, b)
             push!(unsafes, b)
             continue
         end
-        if isadd(b)
-            coeff += b.coeff
-            for (k, v) in b.dict
-                dict[k] = get(dict, k, 0) + v
-            end
-        elseif ismul(b)
-            v = b.coeff
-            b′ = Mul(symtype(b), 1, copy(b.dict); metadata = b.metadata)
-            dict[b′] = get(dict, b′, 0) + v
-        else
-            dict[b] = get(dict, b, 0) + 1
-        end
+        coeff = safe_add!(dict, coeff, b)
+        # if isadd(b)
+        #     coeff += b.coeff
+        #     for (k, v) in b.dict
+        #         dict[k] = get(dict, k, 0) + v
+        #     end
+        # elseif ismul(b)
+        #     v = b.coeff
+        #     b′ = Mul(symtype(b), 1, copy(b.dict); metadata = b.metadata)
+        #     dict[b′] = get(dict, b′, 0) + v
+        # else
+        #     dict[b] = get(dict, b, 0) + 1
+        # end
     end
     # remove entries multiplied by zero
     filter!(dict) do kvp

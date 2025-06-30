@@ -6,7 +6,7 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 
-function matcher(val::Any; acSets = nothing)
+function matcher(val::Any, acSets)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
@@ -25,7 +25,7 @@ function matcher(val::Any; acSets = nothing)
 end
 
 # acSets is not used but needs to be there in case matcher(::Slot) is directly called from the macro
-function matcher(slot::Slot; acSets = nothing)
+function matcher(slot::Slot, acSets)
     function slot_matcher(next, data, bindings)
         !islist(data) && return nothing
         val = get(bindings, slot.name, nothing)
@@ -44,8 +44,8 @@ end
 # this is called only when defslot_term_matcher finds the operation and tries
 # to match it, so no default value used. So the same function as slot_matcher
 # can be used
-function matcher(defslot::DefSlot; acSets = nothing)
-    matcher(Slot(defslot.name, defslot.predicate))
+function matcher(defslot::DefSlot, acSets)
+    matcher(Slot(defslot.name, defslot.predicate), nothing) # slot matcher doesnt use acsets
 end
 
 # returns n == offset, 0 if failed
@@ -76,7 +76,7 @@ function trymatchexpr(data, value, n)
     end
 end
 
-function matcher(segment::Segment; acSets=nothing)
+function matcher(segment::Segment, acSets)
     function segment_matcher(success, data, bindings)
         val = get(bindings, segment.name, nothing)
 
@@ -105,7 +105,7 @@ function matcher(segment::Segment; acSets=nothing)
 end
 
 function term_matcher_constructor(term, acSets)
-    matchers = (matcher(operation(term); acSets=acSets), map(x->matcher(x;acSets=acSets), arguments(term))...,)
+    matchers = (matcher(operation(term), acSets), map(x->matcher(x,acSets), arguments(term))...,)
     
     function loop(term, bindings′, matchers′) # Get it to compile faster
         if !islist(matchers′)
@@ -181,14 +181,21 @@ function term_matcher_constructor(term, acSets)
             operation(term) !== operation(car(data)) && return nothing # if the operation of data is not the correct one, don't even try
             
             T = symtype(car(data))
-            f = operation(car(data))
-            data_args = arguments(car(data))
-
-            for inds in acSets(eachindex(data_args), length(arguments(term)))
-                candidate = Term{T}(f, @views data_args[inds])
-
-                result = loop(candidate, bindings, matchers)                
-                result !== nothing && length(data_args) == length(inds) && return success(result,1)
+            if T <: Number
+                f = operation(car(data))
+                data_args = arguments(car(data))
+                
+                for inds in acSets(eachindex(data_args), length(arguments(term)))
+                    candidate = Term{T}(f, @views data_args[inds])
+                    
+                    result = loop(candidate, bindings, matchers)                
+                    result !== nothing && length(data_args) == length(inds) && return success(result,1)
+                end
+            # if car(data) does not subtype to number, it might not be commutative
+            else
+                # call the normal matcher
+                result = loop(car(data), bindings, matchers)
+                result !== nothing && return success(result, 1)
             end
             return nothing
         end
@@ -214,7 +221,7 @@ function defslot_term_matcher_constructor(term, acSets)
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
     defslot = a[defslot_index]
     if length(a) == 2
-        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1]; acSets = acSets)
+        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1], acSets)
     else
         others = [a[i] for i in eachindex(a) if i != defslot_index]
         T = symtype(term)

@@ -376,28 +376,10 @@ macro rule(expr)
     quote
         $(__source__)
         lhs_pattern = $(lhs_term)
-        Rule($(QuoteNode(expr)),
-             lhs_pattern,
-             matcher(lhs_pattern),
-             __MATCHES__ -> $(makeconsequent(rhs)),
-             rule_depth($lhs_term))
-    end
-end
-
-macro smrule(expr)
-    @assert expr.head == :call && expr.args[1] == :(=>)
-    lhs = expr.args[2]
-    rhs = rewrite_rhs(expr.args[3])
-    keys = Symbol[]
-    lhs_term = makepattern(lhs, keys)
-    unique!(keys)
-    quote
-        $(__source__)
-        lhs_pattern = $(lhs_term)
         Rule(
             $(QuoteNode(expr)),
             lhs_pattern,
-            matcher(lhs_pattern; acSets = permutations),
+            matcher(lhs_pattern, permutations),
             __MATCHES__ -> $(makeconsequent(rhs)),
             rule_depth($lhs_term)
         )
@@ -435,7 +417,7 @@ macro capture(ex, lhs)
         lhs_pattern = $(lhs_term)
         __MATCHES__ = Rule($(QuoteNode(lhs)),
              lhs_pattern,
-             matcher(lhs_pattern),
+             matcher(lhs_pattern, nothing),
              identity,
              rule_depth($lhs_term))($(esc(ex)))
         if __MATCHES__ !== nothing
@@ -474,7 +456,7 @@ macro acrule(expr)
         lhs_pattern = $(lhs_term)
         rule = Rule($(QuoteNode(expr)),
              lhs_pattern,
-             matcher(lhs_pattern; acSets = permutations),
+             matcher(lhs_pattern, permutations),
              __MATCHES__ -> $(makeconsequent(rhs)),
              rule_depth($lhs_term))
         ACRule(permutations, rule, $arity)
@@ -496,7 +478,7 @@ macro ordered_acrule(expr)
         lhs_pattern = $(lhs_term)
         rule = Rule($(QuoteNode(expr)),
              lhs_pattern,
-             matcher(lhs_pattern; acSets = combinations),
+             matcher(lhs_pattern, combinations),
              __MATCHES__ -> $(makeconsequent(rhs)),
              rule_depth($lhs_term))
         ACRule(combinations, rule, $arity)

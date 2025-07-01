@@ -528,46 +528,46 @@ const POW_SALT = 0x2b55b97a6efb080c % UInt
 
 Wrapper over `hash` which may or may not hash symbolic metadata.
 """
-hash_core(s, h::UInt; kw...)::UInt = hash(s, h)
+hash_core(s, h::UInt; kw...) = hash(s, h)::UInt
 
-function hashvec_core(s, h::UInt; kw...)::UInt
+function hashvec_core(s, h::UInt; kw...)
     foldr(s; init = h) do x, hh
         hash_core(x, hh; kw...)
-    end
+    end::UInt
 end
 
-function hash_core(s::Number, h::UInt; full = true)::UInt
+function hash_core(s::Number, h::UInt; full = true)
     h = hash(s, h)
     if full
         h = hash(typeof(s), h)
     end
-    return h
+    return h::UInt
 end
 
-function hash_core(s::AbstractArray, h::UInt; kw...)::UInt
+function hash_core(s::AbstractArray, h::UInt; kw...)
     h = hash_core(typeof(s), hash_core(size(s), h; kw...); kw...)
-    return hashvec_core(s, h; kw...)
+    return hashvec_core(s, h; kw...)::UInt
 end
 
-function hash_core(s::Tuple, h::UInt; kw...)::UInt
-    return hashvec_core(s, h; kw...)
+function hash_core(s::Tuple, h::UInt; kw...)
+    return hashvec_core(s, h; kw...)::UInt
 end
 
-function hash_core(s::NamedTuple, h::UInt; kw...)::UInt
-    return hashvec_core(pairs(s), h; kw...)
+function hash_core(s::NamedTuple, h::UInt; kw...)
+    return hashvec_core(pairs(s), h; kw...)::UInt
 end
 
-function hash_core(s::AbstractDict, h::UInt; kw...)::UInt
+function hash_core(s::AbstractDict, h::UInt; kw...)
     h = hash_core(typeof(s), h; kw...)::UInt
     for (k, v) in s
         h ⊻= hash_core(k, hash_core(v, zero(UInt); kw...)::UInt; kw...)::UInt
     end
-    return h
+    return h::UInt
 end
 
-function hash_core(s::BSImpl.Type, h::UInt; full = true)::UInt
+function hash_core(s::BSImpl.Type, h::UInt; full = true)
     if !iszero(h)
-        return hash(hash_core(s, zero(h); full), h)
+        return hash(hash_core(s, zero(h); full), h)::UInt
     end
     # vtype = MData.variant_type(s)
     # Const is a special case
@@ -591,7 +591,7 @@ function hash_core(s::BSImpl.Type, h::UInt; full = true)::UInt
             # use/update cached hash
             cache = hash[]
             if iszero(cache)
-                hash[] = hash_core(f, hash_core(args, hash_core(shape, h; full); full); full)
+                hash[] = hash_core(f, hash_core(args, hash_core(shape, h; full)::UInt; full)::UInt; full)::UInt
             else
                 cache
             end

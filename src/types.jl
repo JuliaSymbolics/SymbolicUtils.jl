@@ -528,15 +528,16 @@ const POW_SALT = 0x2b55b97a6efb080c % UInt
 
 Wrapper over `hash` which may or may not hash symbolic metadata.
 """
-hash_core(s, h::UInt; kw...) = hash(s, h)::UInt
+hash_core_impl(s, h::UInt, full) = hash(s, h)::UInt
 
-function hashvec_core(s, h::UInt; kw...)
-    foldr(s; init = h) do x, hh
-        hash_core(x, hh; kw...)
-    end::UInt
+function hashvec_core(s, h::UInt, kw)
+    for x in s
+        h = hash_core(x, h, kw)
+    end
+    return h
 end
 
-function hash_core(s::Number, h::UInt; full = true)
+function hash_core_impl(s::Number, h::UInt, full)
     h = hash(s, h)
     if full
         h = hash(typeof(s), h)
@@ -544,30 +545,30 @@ function hash_core(s::Number, h::UInt; full = true)
     return h::UInt
 end
 
-function hash_core(s::AbstractArray, h::UInt; kw...)
-    h = hash_core(typeof(s), hash_core(size(s), h; kw...); kw...)
-    return hashvec_core(s, h; kw...)::UInt
+function hash_core_impl(s::AbstractArray, h::UInt, full)
+    h = hash_core(typeof(s), hash_core(size(s), h, full), full)
+    return hashvec_core(s, h, full)::UInt
 end
 
-function hash_core(s::Tuple, h::UInt; kw...)
-    return hashvec_core(s, h; kw...)::UInt
+function hash_core_impl(s::Tuple, h::UInt, full)
+    return hashvec_core(s, h, full)::UInt
 end
 
-function hash_core(s::NamedTuple, h::UInt; kw...)
-    return hashvec_core(pairs(s), h; kw...)::UInt
+function hash_core_impl(s::NamedTuple, h::UInt, full)
+    return hashvec_core(pairs(s), h, full)::UInt
 end
 
-function hash_core(s::AbstractDict, h::UInt; kw...)
-    h = hash_core(typeof(s), h; kw...)::UInt
+function hash_core_impl(s::AbstractDict, h::UInt, full)
+    h = hash_core(typeof(s), h, full)::UInt
     for (k, v) in s
-        h ⊻= hash_core(k, hash_core(v, zero(UInt); kw...)::UInt; kw...)::UInt
+        h ⊻= hash_core(k, hash_core(v, zero(UInt), full)::UInt, full)::UInt
     end
     return h::UInt
 end
 
-function hash_core(s::BSImpl.Type, h::UInt; full = true)
+function hash_core_impl(s::BSImpl.Type, h::UInt, full)
     if !iszero(h)
-        return hash(hash_core(s, zero(h); full), h)::UInt
+        return hash(hash_core(s, zero(h), full), h)::UInt
     end
     # vtype = MData.variant_type(s)
     # Const is a special case
@@ -576,56 +577,164 @@ function hash_core(s::BSImpl.Type, h::UInt; full = true)
     # end
     # Early exit, every other variant has a hash2 field
 
-    if full
-        cache = s.hash2[]
-        !iszero(cache) && return cache
-    end
+    # if full
+    #     cache = s.hash2[]
+    #     !iszero(cache) && return cache
+    # end
     
     partial::UInt = @match s begin
         BSImpl.Sym(; name, shape) => begin
-            h = hash_core(name, h; full)
-            h = hash_core(shape, h; full)
+            h = hash_core(name, h, full)
+            h = hash_core(shape, h, full)
             h ⊻ SYM_SALT
         end
         BSImpl.Term(; f, args, shape, hash) => begin
             # use/update cached hash
-            cache = hash[]
-            if iszero(cache)
-                hash[] = hash_core(f, hash_core(args, hash_core(shape, h; full)::UInt; full)::UInt; full)::UInt
-            else
-                cache
-            end
+            # cache = hash[]
+            # if iszero(cache)
+                hash_core(f, hash_core(args, hash_core(shape, h, full)::UInt, full)::UInt, full)::UInt
+            # else
+            #     cache
+            # end
         end
         BSImpl.AddOrMul(; variant, dict, coeff, shape, hash) => begin
-            cache = hash[]
-            if iszero(cache)
-                inner = hash_core(dict, h; full)::UInt
-                inner = hash_core(shape, hash_core(coeff, inner; full); full)::UInt
-                inner = Base.hash((variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT), inner)::UInt
-                hash[] = inner
-            else
-                cache
-            end
+            # cache = hash[]
+            # if iszero(cache)
+                inner = hash_core(dict, h, full)::UInt
+                inner = hash_core(shape, hash_core(coeff, inner, full), full)::UInt
+                inner = hash_core((variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT), inner, full)::UInt
+                # hash[] = inner
+            # else
+            #     cache
+            # end
             
         end
         BSImpl.Div(; num, den) => begin
-            hash_core(num, hash_core(den, h; full)::UInt; full)::UInt ⊻ DIV_SALT
+            hash_core(num, hash_core(den, h, full)::UInt, full)::UInt ⊻ DIV_SALT
         end
         BSImpl.Pow(; base, exp) => begin
-            hash_core(base, hash_core(exp, h; full)::UInt; full)::UInt ⊻ POW_SALT
+            hash_core(base, hash_core(exp, h, full)::UInt, full)::UInt ⊻ POW_SALT
         end
     end
 
     full || return partial
 
-    return s.hash2[] = hash_core(metadata(s), partial; full)::UInt
+    return hash_core(metadata(s), partial, full)::UInt
 end
 
-hash_core(s::BasicSymbolic, h::UInt; kw...)::UInt = hash_core(_unwrap_internal(s), h; kw...)
+hash_core_impl(s::BasicSymbolic, h::UInt, full)::UInt = hash_core(_unwrap_internal(s), h, full)
 
-Base.hash(s::BasicSymbolic, h::UInt) = hash_core(s, h; full = false)
-Base.hash(s::HashconsingWrapper, h::UInt) = hash_core(s.data, h; full = true)
-Base.hash(s::BSImpl.Type, h::UInt) = hash_core(s, h; full = true)
+Base.@nospecializeinfer function hash_core(x::Any, h::UInt, full)
+    @nospecialize x
+    # if x isa BasicSymbolic{Real}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{Number}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{LiteralReal}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{SafeReal}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{Vector{Real}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{Matrix{Real}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{Vector{LiteralReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{Matrix{LiteralReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{Vector{SafeReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BasicSymbolic{Matrix{SafeReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{Real}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{Number}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{LiteralReal}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{SafeReal}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{Vector{Real}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{Matrix{Real}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{Vector{LiteralReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{Matrix{LiteralReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{Vector{SafeReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa BSImpl.Type{Matrix{SafeReal}}
+    #     hash_core_impl(x, h, full)
+    if x isa ArgsT
+        hash_core_impl(x, h, full)
+    # elseif x isa ROArgsT
+    #     hash_core_impl(x, h, full)
+    elseif x isa Unknown
+        hash(x, h)
+    elseif x isa ShapeVecT
+        hash_core_impl(x, h, full)
+    elseif x isa MetadataT
+        hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Real}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Number}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, LiteralReal}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, SafeReal}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Vector{Real}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Vector{Number}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Vector{LiteralReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Vector{SafeReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Matrix{Real}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Matrix{Number}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Matrix{LiteralReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa RODict{Symbolic, Matrix{SafeReal}}
+    #     @noinline hash_core_impl(x, h, full)
+    elseif x isa Symbol
+        @noinline hash_core_impl(x, h, full)
+    elseif x isa Int
+        @noinline hash_core_impl(x, h, full)
+    elseif x isa Float64
+        @noinline hash_core_impl(x, h, full)
+    elseif x isa Rational{Int}
+        @noinline hash_core_impl(x, h, full)
+    # elseif x isa DataType
+    #     @noinline hash_core_impl(x, h, full)
+    elseif x isa Tuple{Int}
+        @noinline hash_core_impl(x, h, full)
+    elseif x isa AddMulVariant.T
+        @noinline hash_core_impl(x, h, full)
+    elseif x isa Bool
+        @noinline hash_core_impl(x, h, full)
+    # elseif x isa Tuple
+    #     hash_core_tup(x, h, full)
+    # elseif x isa NamedTuple
+    #     hash_core_nt(x, h, full)
+    # elseif x isa AbstractArray
+    #     hash_core_arr(x, h, full)
+    # elseif x isa AbstractDict
+    #     hash_core_dict(x, h, full)
+    # elseif x isa Number
+    #     hash_core_num(x, h, full)
+    # else
+
+    #     hash_core_impl(x, h, full)::UInt
+    end
+end
+
+Base.hash(s::BasicSymbolic, h::UInt) = hash_core(s, h, false)
+Base.hash(s::HashconsingWrapper, h::UInt) = hash_core(s.data, h, true)
+Base.hash(s::BSImpl.Type, h::UInt) = hash_core(s, h, true)
 
 Base.one( s::Union{Symbolic, BSImpl.Type}) = one( symtype(s))
 Base.zero(s::Union{Symbolic, BSImpl.Type}) = zero(symtype(s))

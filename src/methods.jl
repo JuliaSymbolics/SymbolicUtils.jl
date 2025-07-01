@@ -25,24 +25,6 @@ const previously_declared_for = Set([])
 
 const basic_monadic = [-, +]
 const basic_diadic = [+, -, *, /, //, \, ^]
-#################### SafeReal #########################
-export SafeReal, LiteralReal
-
-# ideally the relationship should be the other way around
-abstract type SafeRealImpl <: Number end
-const SafeReal = Union{SafeRealImpl, Real}
-Base.one(::Type{SafeReal}) = true
-Base.zero(::Type{SafeReal}) = false
-Base.convert(::Type{<:SafeRealImpl}, x::Number) = convert(Real, x)
-
-################### LiteralReal #######################
-
-abstract type LiteralRealImpl <: Number end
-const LiteralReal = Union{LiteralRealImpl, Real}
-Base.one(::Type{LiteralReal}) = true
-Base.zero(::Type{LiteralReal}) = false
-Base.convert(::Type{<:LiteralRealImpl}, x::Number) = convert(Real, x)
-
 #######################################################
 
 assert_like(f, T) = nothing

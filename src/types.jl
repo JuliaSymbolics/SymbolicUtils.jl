@@ -28,7 +28,7 @@ Base.convert(::Type{<:LiteralRealImpl}, x::Number) = convert(Real, x)
 
 struct Unknown end
 
-const MetadataT = Base.ImmutableDict{DataType, Any}
+const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
 const SmallV{T} = SmallVec{T, Vector{T}}
 const ArgsT = SmallV{Any}
 const ROArgsT = ReadOnlyVector{Any, ArgsT}
@@ -872,7 +872,7 @@ end
 # end
 
 parse_metadata(x::MetadataT) = x
-
+parse_metadata(::Nothing) = nothing
 function parse_metadata(x)
     meta = MetadataT()
     for kvp in x
@@ -911,32 +911,32 @@ function unwrap_dict(dict)
     return dict
 end
 
-function BSImpl.Sym{T}(name::Symbol; metadata = MetadataT(), shape = default_shape(T)) where {T}
+function BSImpl.Sym{T}(name::Symbol; metadata = nothing, shape = default_shape(T)) where {T}
     metadata = parse_metadata(metadata)
     hashcons(BSImpl.Sym{T}(; name, metadata, shape, override_properties(BSImpl.Sym{T})...))
 end
 
-function BSImpl.Term{T}(f, args; metadata = MetadataT(), shape = default_shape(T)) where {T}
+function BSImpl.Term{T}(f, args; metadata = nothing, shape = default_shape(T)) where {T}
     metadata = parse_metadata(metadata)
     args = parse_args(args)
     hashcons(BSImpl.Term{T}(; f, args, metadata, shape, override_properties(BSImpl.Term{T})...))
 end
 
-function BSImpl.AddOrMul{T}(variant::AddMulVariant.T, coeff::T, dict::AbstractDict; metadata = MetadataT(), shape = default_shape(T)) where {T}
+function BSImpl.AddOrMul{T}(variant::AddMulVariant.T, coeff::T, dict::AbstractDict; metadata = nothing, shape = default_shape(T)) where {T}
     metadata = parse_metadata(metadata)
     dict = parse_dict(T, dict)
     args = ArgsT()
     hashcons(BSImpl.AddOrMul{T}(; variant, coeff, dict, args, metadata, shape, override_properties(BSImpl.AddOrMul{T})...))
 end
 
-function BSImpl.Div{T}(num, den, simplified::Bool; metadata = MetadataT(), shape = default_shape(T)) where {T}
+function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, shape = default_shape(T)) where {T}
     metadata = parse_metadata(metadata)
     num = parse_maybe_symbolic(num)
     den = parse_maybe_symbolic(den)
     hashcons(BSImpl.Div{T}(; num, den, simplified, metadata, shape, override_properties(BSImpl.Div{T})...))
 end
 
-function BSImpl.Pow{T}(base, exp; metadata = MetadataT(), shape = default_shape(T)) where {T}
+function BSImpl.Pow{T}(base, exp; metadata = nothing, shape = default_shape(T)) where {T}
     metadata = parse_metadata(metadata)
     base = parse_maybe_symbolic(base)
     exp = parse_maybe_symbolic(exp)
@@ -1237,9 +1237,6 @@ function term(f, args...; type = nothing)
 end
 
 function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
-    if metadata === nothing
-        metadata = MetadataT()
-    end
     args = unwrap_args(args)
     st = symtype(T)
     pst = _promote_symtype(head, args)
@@ -1263,9 +1260,6 @@ end
 function basicsymbolic(f, args, stype, metadata)
     if f isa Symbol
         error("$f must not be a Symbol")
-    end
-    if metadata === nothing
-        metadata = MetadataT()
     end
     args = unwrap_args(args)
     T = stype
@@ -1323,7 +1317,7 @@ end
 
 issafecanon(f, s) = true
 function issafecanon(f, s::Symbolic)
-    if isempty(metadata(s)) || issym(s)
+    if metadata(s) === nothing || isempty(metadata(s)) || issym(s)
         return true
     else
         _issafecanon(f, s)

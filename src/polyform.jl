@@ -492,7 +492,7 @@ function quick_mul(x, y)
             error("Can't reach")
         end
 
-        return Mul(symtype(x), x.coeff, d), 1
+        return Mul{symtype(x)}(x.coeff, d), 1
     else
         return x, y
     end
@@ -513,7 +513,7 @@ function quick_mulpow(x, y)
             den = Pow{symtype(y)}(y.base, y.exp-d[y.base])
             delete!(d, y.base)
         end
-        return Mul(symtype(x), x.coeff, d), den
+        return Mul{symtype(x)}(x.coeff, d), den
     else
         return x, y
     end
@@ -522,7 +522,7 @@ end
 # Double mul case
 function quick_mulmul(x, y)
     num_dict, den_dict = _merge_div(x.dict, y.dict)
-    Mul(symtype(x), x.coeff, num_dict), Mul(symtype(y), y.coeff, den_dict)
+    Mul{symtype(x)}(x.coeff, num_dict), Mul{symtype(y)}(y.coeff, den_dict)
 end
 
 function _merge_div(ndict, ddict)

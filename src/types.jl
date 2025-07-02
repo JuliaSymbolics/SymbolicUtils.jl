@@ -1264,8 +1264,6 @@ function Mul{T}(coeff, dict; kw...) where {T}
     BasicSymbolic(BSImpl.AddOrMul{T}(variant, coeff, dict; kw...))
 end
 
-Mul(T::Type, args... ; kw...) = Mul{T}(args...; kw...)
-
 """
     $(TYPEDSIGNATURES)
 
@@ -2036,7 +2034,7 @@ function safe_add!(dict, coeff, b)
         end
     elseif ismul(b)
         v = b.coeff
-        b′ = Mul(symtype(b), 1, copy(b.dict); metadata = b.metadata)
+        b′ = Mul{symtype(b)}(1, copy(b.dict); metadata = b.metadata)
         dict[b′] = get(dict, b′, 0) + v
     else
         dict[b] = get(dict, b, 0) + 1
@@ -2065,7 +2063,7 @@ function +(a::SN, bs::SN...)
             dict = copy(parent(a.dict))
         elseif ismul(a)
             v = a.coeff
-            a′ = Mul(symtype(a), 1, copy(a.dict); metadata = a.metadata)
+            a′ = Mul{symtype(a)}(1, copy(a.dict); metadata = a.metadata)
             dict[a′] = v
         else
             dict[a] = 1
@@ -2155,21 +2153,21 @@ function *(a::SN, b::SN)
     elseif isdiv(b)
         Div(a * b.num, b.den, false)
     elseif ismul(a) && ismul(b)
-        Mul(mul_t(a, b),
+        Mul{mul_t(a, b)}(
             a.coeff * b.coeff,
             _merge(+, a.dict, b.dict, filter=_iszero))
     elseif ismul(a) && ispow(b)
         if b.exp isa Number
-            Mul(mul_t(a, b),
+            Mul{mul_t(a, b)}(
                 a.coeff, _merge(+, a.dict, Base.ImmutableDict(b.base=>b.exp), filter=_iszero))
         else
-            Mul(mul_t(a, b),
+            Mul{mul_t(a, b)}(
                 a.coeff, _merge(+, a.dict, Base.ImmutableDict(b=>1), filter=_iszero))
         end
     elseif ispow(a) && ismul(b)
         b * a
     else
-        Mul(mul_t(a,b), makemul(mul_t(a, b), a, b)...)
+        Mul{mul_t(a,b)}(makemul(mul_t(a, b), a, b)...)
     end
 end
 
@@ -2190,7 +2188,7 @@ function *(a::Number, b::SN)
         T = promote_symtype(+, typeof(a), symtype(b))
         Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
     else
-        Mul(mul_t(a, b), makemul(mul_t(a, b), a, b)...)
+        Mul{mul_t(a, b)}(makemul(mul_t(a, b), a, b)...)
     end
 end
 
@@ -2227,7 +2225,7 @@ function ^(a::SN, b)
         Div(1, a ^ (-b), false)
     elseif ismul(a) && b isa Number
         coeff = ^(a.coeff, b)
-        Mul(promote_symtype(^, symtype(a), symtype(b)),
+        Mul{promote_symtype(^, symtype(a), symtype(b))}(
             coeff, mapvalues((k, v) -> b*v, a.dict))
     else
         Pow(a, b)

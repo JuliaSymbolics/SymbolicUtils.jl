@@ -145,8 +145,8 @@ end
 
 Base.propertynames(x::HashconsingWrapper) = propertynames(x.data)
 
-struct BasicSymbolic{T} <: Symbolic{T}
-    data::HashconsingWrapper{T}
+mutable struct BasicSymbolic{T} <: Symbolic{T}
+    const data::HashconsingWrapper{T}
 end
 
 function Base.getproperty(x::BasicSymbolic, name::Symbol)

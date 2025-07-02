@@ -179,7 +179,7 @@ returning the input as-is.
 unwrap(x) = x
 
 _unwrap_internal(x) = x
-_unwrap_internal(x::BasicSymbolic{T}) where{T} = x.data::BSImpl.Type{T}
+_unwrap_internal(x::BasicSymbolic) = x.data
 # _unwrap_internal(x::HashconsingWrapper) = x.data
 
 struct UnimplementedForVariantError <: Exception

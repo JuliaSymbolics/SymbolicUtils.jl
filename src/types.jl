@@ -578,9 +578,14 @@ function hash_core_impl(s::Number, h::UInt, full)
     return h::UInt
 end
 
-for T in [AbstractArray, ShapeVecT, ROArgsT]
+function hash_core_impl(s::AbstractArray, h::UInt, full)
+    error()
+    h = hash_core(typeof(s), hash(size(s), h), full)
+    return hashvec_core(s, h, full)::UInt
+end
+for T in [ShapeVecT, ArgsT, ROArgsT]
     @eval function hash_core_impl(s::$T, h::UInt, full)
-        h = hash_core(typeof(s), hash_core(size(s), h, full), full)
+        h = hash_core(typeof(s), hash(length(s), h), full)
         return hashvec_core(s, h, full)::UInt
     end
 end

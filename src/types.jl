@@ -948,6 +948,15 @@ Base.@nospecializeinfer function hash_addmuldict(x::Dict, h::UInt)
     end
 end
 
+function hashargs(x::ArgsT, h::UInt)
+    h += Base.hash_abstractarray_seed
+    h = hash(length(x), h)
+    for val in x
+        h = hash_anyscalar(val, h)
+    end
+    return h
+end
+
 function Base.hash(s::BSImpl.Type, h::UInt)
     is_unset = true
     cvariant = COMPARISON_VARIANT[]
@@ -983,7 +992,7 @@ function Base.hash(s::BSImpl.Type, h::UInt)
             # use/update cached hash
             cache = hash
             if iszero(cache)
-                s.hash = Base.hash(f, Base.hash(args, Base.hash(shape, h)))
+                s.hash = Base.hash(f, hashargs(args, Base.hash(shape, h)))::UInt
             else
                 cache
             end

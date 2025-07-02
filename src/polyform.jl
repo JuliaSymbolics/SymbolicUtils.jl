@@ -103,9 +103,11 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         end
 
         op = operation(x)
-        args = arguments(x)
+        args = parent(arguments(x))
 
-        local_polyize(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
+        local_polyize = let pvar2sym = pvar2sym, sym2term = sym2term, vtype = vtype, pow = pow, Fs = Fs, recurse = recurse
+                f(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
+        end
 
         if typeof(+) <: Fs && op == (+)
             return sum(local_polyize, args)

@@ -74,90 +74,91 @@ end
 
 Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
 """
-@data BasicSymbolicImpl{T} begin 
+@data mutable BasicSymbolicImpl{T} begin 
     # struct Const{T}
     #     val::T
     #     id::RefValue{IdentT}
     # end
     struct Sym
-        name::Symbol
-        metadata::MetadataT
-        hash2::RefValue{UInt}
-        shape::ShapeT
-        id::RefValue{IdentT}
+        const name::Symbol
+        const metadata::MetadataT
+        hash2::UInt
+        const shape::ShapeT
+        id::IdentT
     end
     struct Term
-        f::Any
-        args::ArgsT
-        metadata::MetadataT
-        hash::RefValue{UInt}
-        hash2::RefValue{UInt}
-        shape::ShapeT
-        id::RefValue{IdentT}
+        const f::Any
+        const args::ArgsT
+        const metadata::MetadataT
+        hash::UInt
+        hash2::UInt
+        const shape::ShapeT
+        id::IdentT
     end
     struct AddOrMul
-        variant::AddMulVariant.T
-        coeff::T
-        dict::RODict{Symbolic, T}
-        args::ArgsT
-        metadata::MetadataT
-        hash::RefValue{UInt}
-        hash2::RefValue{UInt}
-        shape::ShapeT
-        id::RefValue{IdentT}
+        const variant::AddMulVariant.T
+        const coeff::T
+        const dict::RODict{Symbolic, T}
+        const args::ArgsT
+        const metadata::MetadataT
+        hash::UInt
+        hash2::UInt
+        const shape::ShapeT
+        id::IdentT
     end
     struct Div
-        num::Any
-        den::Any
+        const num::Any
+        const den::Any
         # TODO: Keep or remove?
         # Flag for whether this div is in the most simplified form we can compute.
         # This being false doesn't mean no elimination is performed. Trivials such as
         # constant factors can be eliminated. However, polynomial elimination may not
         # have been performed yet. Typically used as an early-exit for simplification
         # algorithms to not try to eliminate more.
-        simplified::Bool
-        metadata::MetadataT
-        hash2::RefValue{UInt}
-        shape::ShapeT
-        id::RefValue{IdentT}
+        const simplified::Bool
+        const metadata::MetadataT
+        hash2::UInt
+        const shape::ShapeT
+        id::IdentT
     end
     struct Pow
-        base::Any
-        exp::Any
-        metadata::MetadataT
-        hash2::RefValue{UInt}
-        shape::ShapeT
-        id::RefValue{IdentT}
+        const base::Any
+        const exp::Any
+        const metadata::MetadataT
+        hash2::UInt
+        const shape::ShapeT
+        id::IdentT
     end
 end
 
 const BSImpl = BasicSymbolicImpl
 
-mutable struct HashconsingWrapper{T}
-    data::BSImpl.Type{T}
-end
+# mutable struct HashconsingWrapper{T}
+#     data::BSImpl.Type{T}
+# end
 
-function Base.getproperty(x::HashconsingWrapper, name::Symbol)
-    inner = getfield(x, 1)
-    name == :data && return inner
-    getproperty(inner, name)
-end
+# function Base.getproperty(x::HashconsingWrapper, name::Symbol)
+#     inner = getfield(x, 1)
+#     name == :data && return inner
+#     getproperty(inner, name)
+# end
 
-Base.propertynames(x::HashconsingWrapper) = propertynames(x.data)
+# Base.propertynames(x::HashconsingWrapper) = propertynames(x.data)
 
 mutable struct BasicSymbolic{T} <: Symbolic{T}
-    const data::HashconsingWrapper{T}
+    # const data::HashconsingWrapper{T}
+    const data::BSImpl.Type{T}
 end
 
-function Base.getproperty(x::BasicSymbolic, name::Symbol)
+@inline function Base.getproperty(x::BasicSymbolic, name::Symbol)
     data = getfield(x, 1)
-    inner = getfield(data, 1)
+    # inner = getfield(data, 1)
     name == :data && return data
-    name == :inner && return inner
-    getproperty(inner, name)
+    # name == :inner && return inner
+    getproperty(data, name)
 end
 
-Base.propertynames(x::BasicSymbolic) = propertynames(x.inner)
+@inline Base.propertynames(x::BasicSymbolic) = propertynames(x.data)
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
     ScalarSymbolic()
@@ -176,8 +177,8 @@ returning the input as-is.
 unwrap(x) = x
 
 _unwrap_internal(x) = x
-_unwrap_internal(x::BasicSymbolic{T}) where{T} = x.inner::BSImpl.Type{T}
-_unwrap_internal(x::HashconsingWrapper) = x.data
+_unwrap_internal(x::BasicSymbolic{T}) where{T} = x.data::BSImpl.Type{T}
+# _unwrap_internal(x::HashconsingWrapper) = x.data
 
 struct UnimplementedForVariantError <: Exception
     method
@@ -201,11 +202,16 @@ override_properties(obj::BSImpl.Type) = override_properties(MData.variant_type(o
 function override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
         # Type{<:BSImpl.Const} => (; id = Ref{IdentT}(nothing))
-        ::Type{<:BSImpl.Sym} => (; id = Ref{IdentT}(nothing), hash2 = Ref{UInt}(0))
-        ::Type{<:BSImpl.Term} => (; id = Ref{IdentT}(nothing), hash = Ref{UInt}(0), hash2 = Ref{UInt}(0))
-        ::Type{<:BSImpl.AddOrMul} => (; id = Ref{IdentT}(nothing), hash = Ref{UInt}(0), hash2 = Ref{UInt}(0))
-        ::Type{<:BSImpl.Div} => (; id = Ref{IdentT}(nothing), hash2 = Ref{UInt}(0))
-        ::Type{<:BSImpl.Pow} => (; id = Ref{IdentT}(nothing), hash2 = Ref{UInt}(0))
+        # ::Type{<:BSImpl.Sym} => (; id = Ref{IdentT}(nothing), hash2 = Ref{UInt}(0))
+        # ::Type{<:BSImpl.Term} => (; id = Ref{IdentT}(nothing), hash = Ref{UInt}(0), hash2 = Ref{UInt}(0))
+        # ::Type{<:BSImpl.AddOrMul} => (; id = Ref{IdentT}(nothing), hash = Ref{UInt}(0), hash2 = Ref{UInt}(0))
+        # ::Type{<:BSImpl.Div} => (; id = Ref{IdentT}(nothing), hash2 = Ref{UInt}(0))
+        # ::Type{<:BSImpl.Pow} => (; id = Ref{IdentT}(nothing), hash2 = Ref{UInt}(0))
+        ::Type{<:BSImpl.Sym} => (; id = nothing, hash2 = 0)
+        ::Type{<:BSImpl.Term} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.AddOrMul} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Div} => (; id = nothing, hash2 = 0)
+        ::Type{<:BSImpl.Pow} => (; id = nothing, hash2 = 0)
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
@@ -226,11 +232,11 @@ function ConstructionBase.setproperties(obj::BasicSymbolic{T}, patch::NamedTuple
     if length(patch) == 1
         if only(keys(patch)) == :data
             return BasicSymbolic{T}(patch.data)
-        elseif only(keys(patch)) == :inner
-            return BasicSymbolic{T}(HashconsingWrapper{T}(patch.inner))
+        # elseif only(keys(patch)) == :inner
+        #     return BasicSymbolic{T}(HashconsingWrapper{T}(patch.inner))
         end
     end
-    inner = ConstructionBase.setproperties(obj.inner, patch)
+    inner = ConstructionBase.setproperties(obj.data, patch)
     return BasicSymbolic{T}(hashcons(inner))
 end
 
@@ -252,8 +258,8 @@ symtype(x) = typeof(x)
 @inline symtype(::Type{<:Symbolic{T}}) where T = T
 @inline symtype(::BSImpl.Type{T}) where T = T
 @inline symtype(::Type{<:BSImpl.Type{T}}) where T = T
-@inline symtype(x::HashconsingWrapper{T}) where T = throw(MethodError(symtype, (x,)))
-@inline symtype(x::Type{<:HashconsingWrapper{T}}) where T = throw(MethodError(symtype, (x,)))
+# @inline symtype(x::HashconsingWrapper{T}) where T = throw(MethodError(symtype, (x,)))
+# @inline symtype(x::Type{<:HashconsingWrapper{T}}) where T = throw(MethodError(symtype, (x,)))
 
 # We're returning a function pointer
 @inline TermInterface.operation(x::BasicSymbolic) = operation(_unwrap_internal(x))
@@ -345,8 +351,8 @@ ispow(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Pow)
 
 # for fn in [:isconst, :issym, :isterm, :isaddmul, :isadd, :ismul, :isdiv, :ispow]
 for fn in [:issym, :isterm, :isaddmul, :isadd, :ismul, :isdiv, :ispow]
-    @eval $fn(x::BasicSymbolic) = $fn(x.inner)
-    @eval $fn(x::HashconsingWrapper) = throw(MethodError($fn, (x,)))
+    @eval $fn(x::BasicSymbolic) = $fn(_unwrap_internal(x))
+    # @eval $fn(x::HashconsingWrapper) = throw(MethodError($fn, (x,)))
     @eval $fn(x) = false
 end
 
@@ -359,8 +365,8 @@ Base.isequal(x, ::Symbolic) = false
 Base.isequal(::Symbolic, ::Missing) = false
 Base.isequal(::Missing, ::Symbolic) = false
 Base.isequal(::Symbolic, ::Symbolic) = false
-Base.isequal(a::HashconsingWrapper, b::Any) = throw(MethodError(isequal, (a, b)))
-Base.isequal(a::Any, b::HashconsingWrapper) = throw(MethodError(isequal, (a, b)))
+# Base.isequal(a::HashconsingWrapper, b::Any) = throw(MethodError(isequal, (a, b)))
+# Base.isequal(a::Any, b::HashconsingWrapper) = throw(MethodError(isequal, (a, b)))
 Base.isequal(::BSImpl.Type, ::Any) = false
 Base.isequal(::Any, ::BSImpl.Type) = false
 
@@ -444,7 +450,7 @@ end
 
 function isequal_core(a::BSImpl.Type{T}, b::BSImpl.Type{S}; full = true) where {T, S}
     a === b && return true
-    a.id[] === b.id[] && a.id[] !== nothing && return true
+    a.id === b.id && a.id !== nothing && return true
     T === S || return false
 
     Ta = MData.variant_type(a)
@@ -502,37 +508,40 @@ function isequal_core(a::Symbolic, b::Symbolic; full = true)
     return partial && isequal_core(ma, mb; full)
 end
 
-for T1 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type], T2 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type]
+# for T1 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type], T2 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type]
+for T1 in [BasicSymbolic, BSImpl.Type], T2 in [BasicSymbolic, BSImpl.Type]
     T1 == T2 == BSImpl.Type && continue
     @eval function isequal_core(a::$T1, b::$T2; kw...)
-        $(if (T1 == HashconsingWrapper || T2 == HashconsingWrapper) && T1 != T2
-            :(throw(MethodError(isequal_core, (a, b))))
-        else
-            :(isequal_core(_unwrap_internal(a), _unwrap_internal(b); kw...))
-        end)
+        # $(if (T1 == HashconsingWrapper || T2 == HashconsingWrapper) && T1 != T2
+        #     :(throw(MethodError(isequal_core, (a, b))))
+        # else
+        #     :(isequal_core(_unwrap_internal(a), _unwrap_internal(b); kw...))
+        # end)
+            isequal_core(_unwrap_internal(a), _unwrap_internal(b); kw...)
     end
 end
 
 # Only `BasicSymbolic` compares equality with `full = false`
-Base.isequal(a::BasicSymbolic, b::BasicSymbolic) = isequal_core(a.inner, b.inner; full = false)
+Base.isequal(a::BasicSymbolic, b::BasicSymbolic) = isequal_core(_unwrap_internal(a), _unwrap_internal(b); full = false)
 
 # Use the most specific definition of equality from the two variants
-for T1 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type], T2 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type]
+# for T1 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type], T2 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type]
+for T1 in [BasicSymbolic, BSImpl.Type], T2 in [BasicSymbolic, BSImpl.Type]
     T1 == T2 == BasicSymbolic && continue
     @eval function Base.isequal(a::$T1, b::$T2)
-        $(if (T1 == HashconsingWrapper || T2 == HashconsingWrapper) && T1 != T2
-            :(throw(MethodError(isequal_core, (a, b))))
-        else
-            :(isequal_core(_unwrap_internal(a), _unwrap_internal(b); full = true))
-        end)
+        # $(if (T1 == HashconsingWrapper || T2 == HashconsingWrapper) && T1 != T2
+        #     :(throw(MethodError(isequal_core, (a, b))))
+        # else
+            isequal_core(_unwrap_internal(a), _unwrap_internal(b); full = true)
+        # end)
     end
 end
 
 # only implement a subset necessary for hashconsing
-Base.isequal(a::HashconsingWrapper, b::WeakRef) = b.value !== nothing && isequal_core(a, b.value; full = true)
-Base.isequal(a::WeakRef, b::HashconsingWrapper) = a.value !== nothing && isequal_core(a.value, b; full = true)
-Base.isequal(a::HashconsingWrapper, b::Nothing) = false
-Base.isequal(a::Nothing, b::HashconsingWrapper) = false
+# Base.isequal(a::HashconsingWrapper, b::WeakRef) = b.value !== nothing && isequal_core(a, b.value; full = true)
+# Base.isequal(a::WeakRef, b::HashconsingWrapper) = a.value !== nothing && isequal_core(a.value, b; full = true)
+# Base.isequal(a::HashconsingWrapper, b::Nothing) = false
+# Base.isequal(a::Nothing, b::HashconsingWrapper) = false
 
 # const CONST_SALT = 0x194813feb8a8c83d % UInt
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
@@ -605,7 +614,7 @@ for T in [BSImpl.Type; [BSImpl.Type{T} for T in SYMTYPE_VARIANTS]]
     # Early exit, every other variant has a hash2 field
 
     if full
-        cache = s.hash2[]
+        cache = s.hash2
         !iszero(cache) && return cache
     end
     
@@ -617,20 +626,20 @@ for T in [BSImpl.Type; [BSImpl.Type{T} for T in SYMTYPE_VARIANTS]]
         end
         BSImpl.Term(; f, args, shape, hash) => begin
             # use/update cached hash
-            cache = hash[]
+            cache = hash
             if iszero(cache)
-                hash[] = hash_core(f, hash_core(args, hash_core(shape, h, full)::UInt, full)::UInt, full)::UInt
+                s.hash = hash_core(f, hash_core(args, hash_core(shape, h, full)::UInt, full)::UInt, full)::UInt
             else
                 cache
             end
         end
         BSImpl.AddOrMul(; variant, dict, coeff, shape, hash) => begin
-            cache = hash[]
+            cache = hash
             if iszero(cache)
                 inner = hash_core(dict, h, full)::UInt
                 inner = hash_core(shape, hash_core(coeff, inner, full), full)::UInt
                 inner = hash_core((variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT), inner, full)::UInt
-                hash[] = inner
+                s.hash = inner
             else
                 cache
             end
@@ -646,11 +655,11 @@ for T in [BSImpl.Type; [BSImpl.Type{T} for T in SYMTYPE_VARIANTS]]
 
     full || return partial
 
-    return s.hash2[] = hash_core(metadata(s), partial, full)::UInt
+    return s.hash2 = hash_core(metadata(s), partial, full)::UInt
 end
 end
 
-for T in [BasicSymbolic; [BasicSymbolic{T} for T in SYMTYPE_VARIANTS]; HashconsingWrapper; [HashconsingWrapper{T} for T in SYMTYPE_VARIANTS]]
+for T in [BasicSymbolic; [BasicSymbolic{T} for T in SYMTYPE_VARIANTS];#= HashconsingWrapper; [HashconsingWrapper{T} for T in SYMTYPE_VARIANTS]=# ]
     @eval hash_core_impl(s::$T, h::UInt, full)::UInt = hash_core(_unwrap_internal(s), h, full)
 end
 
@@ -696,26 +705,26 @@ Base.@nospecializeinfer function hash_core(x::Any, h::UInt, full)
         hash_core_impl(x, h, full)
     elseif x isa BSImpl.Type{Matrix{SafeReal}}
         hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{Real}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{Number}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{LiteralReal}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{SafeReal}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{Vector{Real}}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{Matrix{Real}}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{Vector{LiteralReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{Matrix{LiteralReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{Vector{SafeReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa HashconsingWrapper{Matrix{SafeReal}}
-        hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{Real}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{Number}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{LiteralReal}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{SafeReal}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{Vector{Real}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{Matrix{Real}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{Vector{LiteralReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{Matrix{LiteralReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{Vector{SafeReal}}
+    #     hash_core_impl(x, h, full)
+    # elseif x isa HashconsingWrapper{Matrix{SafeReal}}
+    #     hash_core_impl(x, h, full)
     elseif x isa ArgsT
         hash_core_impl(x, h, full)
     elseif x isa ROArgsT
@@ -780,24 +789,25 @@ Base.@nospecializeinfer function hash_core(x::Any, h::UInt, full)
 end
 
 Base.hash(s::BasicSymbolic, h::UInt) = hash_core(s, h, false)
-Base.hash(s::HashconsingWrapper, h::UInt) = hash_core(s.data, h, true)
+# Base.hash(s::HashconsingWrapper, h::UInt) = hash_core(s.data, h, true)
 Base.hash(s::BSImpl.Type, h::UInt) = hash_core(s, h, true)
 
 Base.one( s::Union{Symbolic, BSImpl.Type}) = one( symtype(s))
 Base.zero(s::Union{Symbolic, BSImpl.Type}) = zero(symtype(s))
-Base.one( s::HashconsingWrapper) = throw(MethodError(one, (s,)))
-Base.zero(s::HashconsingWrapper) = throw(MethodError(zero, (s,)))
+# Base.one( s::HashconsingWrapper) = throw(MethodError(one, (s,)))
+# Base.zero(s::HashconsingWrapper) = throw(MethodError(zero, (s,)))
 
 
 Base.nameof(s::Union{BasicSymbolic, BSImpl.Type}) = issym(s) ? s.name : error("Non-Sym BasicSymbolic doesn't have a name")
-Base.nameof(s::HashconsingWrapper) = throw(MethodError(nameof, (s,)))
+# Base.nameof(s::HashconsingWrapper) = throw(MethodError(nameof, (s,)))
 
 ###
 ### Constructors
 ###
 
 const ENABLE_HASHCONSING = Ref(true)
-const WKD = TaskLocalValue{WeakKeyDict{HashconsingWrapper, Nothing}}(WeakKeyDict{HashconsingWrapper, Nothing})
+# const WKD = TaskLocalValue{WeakKeyDict{HashconsingWrapper, Nothing}}(WeakKeyDict{HashconsingWrapper, Nothing})
+const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})
 
 function generate_id()
     return IDType()
@@ -824,7 +834,8 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 `Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
 original behavior of those functions.
 """
-function hashcons(s::HashconsingWrapper{T})::HashconsingWrapper{T} where {T}
+# function hashcons(s::HashconsingWrapper{T})::HashconsingWrapper{T} where {T}
+function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
     if !ENABLE_HASHCONSING[]
         return s
     end
@@ -835,19 +846,19 @@ function hashcons(s::HashconsingWrapper{T})::HashconsingWrapper{T} where {T}
         cache[s] = nothing
         k = s
     end
-    if k.id[] === nothing
-        k.id[] = generate_id()
+    if k.id === nothing
+        k.id = generate_id()
     end
     return k
 end
 
-function hashcons(x::BSImpl.Type{T})::HashconsingWrapper{T} where {T}
-    hashcons(HashconsingWrapper(x))
-end
+# function hashcons(x::BSImpl.Type{T})::HashconsingWrapper{T} where {T}
+#     hashcons(HashconsingWrapper(x))
+# end
 
-function hashcons(x::BasicSymbolic{T})::BasicSymbolic{T} where {T}
-    BasicSymbolic(hashcons(x.inner))
-end
+# function hashcons(x::BasicSymbolic{T})::BasicSymbolic{T} where {T}
+#     BasicSymbolic(hashcons(_unwrap_internal(x)))
+# end
 
 # function BSImpl.Const{T}(val::T) where {T}
 #     hashcons(BSImpl.Const{T}(; val, override_properties(BSImpl.Const{T})...))
@@ -1295,7 +1306,7 @@ end
 ### Metadata
 ###
 metadata(s::BSImpl.Type) = s.metadata
-metadata(s::HashconsingWrapper) = throw(MethodError(metadata, (s,)))
+# metadata(s::HashconsingWrapper) = throw(MethodError(metadata, (s,)))
 metadata(s::Symbolic) = s.metadata
 metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 

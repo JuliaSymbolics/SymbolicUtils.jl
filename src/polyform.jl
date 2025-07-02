@@ -26,19 +26,19 @@ PolyForm(sin((x+y)^2))               #=> sin((x+y)^2)
 PolyForm(sin((x+y)^2), recurse=true) #=> sin((x^2 + (2x)y + y^2))
 ```
 """
-struct PolyForm{T} <: Symbolic{T}
+struct PolyForm <: Symbolic{Number}
     p::MP.AbstractPolynomialLike
     pvar2sym::Bijection{Any,Any}   # @polyvar x --> @sym x  etc.
     sym2term::Dict{BasicSymbolic,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
     metadata
-    function (::Type{PolyForm{T}})(p, d1, d2, m=nothing) where {T}
+    function PolyForm(p, d1, d2, m=nothing)
         p isa Number && return p
         p isa MP.AbstractPolynomialLike && MP.isconstant(p) && return convert(Number, p)
-        new{T}(p, d1, d2, m)
+        new(p, d1, d2, m)
     end
 end
 
-@number_methods(PolyForm{<:Number}, term(f, a), term(f, a, b))
+@number_methods(PolyForm, term(f, a), term(f, a, b))
 
 Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
 Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
@@ -56,7 +56,7 @@ function get_pvar2sym()
         PVAR2SYM[] = WeakRef(d)
         return d
     else
-        return v
+        return v::Bijections.Bijection{Any, Any, Dict{Any, Any}, Dict{Any, Any}}
     end
 end
 
@@ -67,7 +67,7 @@ function get_sym2term()
         SYM2TERM[] = WeakRef(d)
         return d
     else
-        return v
+        return v::Dict{BasicSymbolic, Any}
     end
 end
 
@@ -80,7 +80,7 @@ end
 
 # forward gcd
 
-PF = :(PolyForm{promote_symtype(/, symtype(x), symtype(y))})
+PF = :(PolyForm)
 const FriendlyCoeffType = Union{Integer, Rational}
 @eval begin
     Base.div(x::PolyForm, y::PolyForm) = $PF(div(x.p, y.p), mix_dicts(x, y)...)
@@ -109,11 +109,11 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
                 f(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         end
 
-        if typeof(+) <: Fs && op == (+)
+        if (+) isa Fs && op === (+)
             return sum(local_polyize, args)
-        elseif typeof(*) <: Fs && op == (*)
+        elseif (*) isa Fs && op === (*)
             return prod(local_polyize, args)
-        elseif typeof(^) <: Fs && op == (^) && args[2] isa Integer && args[2] > 0
+        elseif (^) isa Fs && op === (^) && args[2] isa Integer && args[2] > 0
             @assert length(args) == 2
             return local_polyize(args[1])^(args[2])
         else
@@ -131,9 +131,9 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
             name = Symbol(string(op), "_", hash(y))
 
             @label lookup
-            sym = Sym{symtype(x)}(name)
+            sym = Sym{Number}(name)
             if haskey(sym2term, sym)
-                if isequal(sym2term[sym][1], x)
+                if isequal(sym2term[sym][1], x)::Bool
                     return local_polyize(sym)
                 else # hash collision
                     name = Symbol(name, "_")
@@ -155,10 +155,10 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     end
 end
 
-function PolyForm(x,
+function PolyForm(x;
         pvar2sym=get_pvar2sym(),
         sym2term=get_sym2term(),
-        vtype=DynamicPolynomials.Variable{ DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder},DynamicPolynomials.Graded{MP.LexOrder}};
+        vtype=DynamicPolynomials.Variable{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, DynamicPolynomials.Graded{MP.LexOrder}},
         Fs = Union{typeof(+), typeof(*), typeof(^)},
         recurse=false,
         metadata=metadata(x))
@@ -169,7 +169,7 @@ function PolyForm(x,
 
     # Polyize and return a PolyForm
     p = polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
-    PolyForm{symtype(x)}(p, pvar2sym, sym2term, metadata)
+    PolyForm(p, pvar2sym, sym2term, metadata)
 end
 
 isexpr(x::Type{<:PolyForm}) = true
@@ -188,7 +188,7 @@ end
 head(::PolyForm) = PolyForm
 operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
 
-function TermInterface.arguments(x::PolyForm{T}) where {T}
+function TermInterface.arguments(x::PolyForm)
 
     function is_var(v)
         MP.nterms(v) == 1 &&
@@ -229,7 +229,7 @@ function TermInterface.arguments(x::PolyForm{T}) where {T}
                 convert(Number, t) :
                 (is_var(t) ?
                  resolve(t) :
-                 PolyForm{T}(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
+                 PolyForm(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
     end
 end
 children(x::PolyForm) = arguments(x)
@@ -247,7 +247,7 @@ Expand expressions by distributing multiplication over addition, e.g.,
 multivariate polynomials implementation.
 `variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
 """
-expand(expr) = unpolyize(PolyForm(expr, Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
+expand(expr) = unpolyize(PolyForm(expr; Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
 
 function unpolyize(x)
     # we need a special maketerm here because the default one used in Postwalk will call

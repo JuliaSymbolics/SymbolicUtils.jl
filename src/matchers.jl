@@ -35,7 +35,9 @@ function matcher(slot::Slot)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
         elseif slot.predicate(car(data))
-            next(assoc(bindings, slot.name, car(data)), 1)
+            rest = car(data)
+            binds = assoc(bindings, slot.name, rest)
+            next(binds, 1)
         end
     end
 end

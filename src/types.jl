@@ -523,19 +523,106 @@ for T1 in [BasicSymbolic, BSImpl.Type], T2 in [BasicSymbolic, BSImpl.Type]
     end
 end
 
+Base.@nospecializeinfer function isequal_maybe_scal(a, b)
+    @nospecialize a b
+    if a isa BasicSymbolic{Number} && b isa BasicSymbolic{Number}
+        isequal(a, b)
+    elseif a isa Int && b isa Int
+        isequal(a, b)
+    elseif a isa Float64 && b isa Float64
+        isequal(a, b)
+    elseif a isa Rational{Int} && b isa Rational{Int}
+        isequal(a, b)
+    else
+        isequal(a, b)::Bool
+    end
+end
+
+function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
+    a === b && return true
+    ida = a.id
+    idb = b.id
+    ida === idb && ida !== nothing && return true
+    typeof(a) === typeof(b) || return false
+
+    Ta = MData.variant_type(a)
+    Tb = MData.variant_type(b)
+    Ta === Tb || return false
+
+    is_unset = true
+    cvariant = COMPARISON_VARIANT[]
+    if iszero(cvariant)
+        cvariant = COMPARISON_VARIANT[] = 1
+    else
+        is_unset = false
+    end
+    full = isone(cvariant)
+
+    partial = @match (a, b) begin
+        # (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => return isequal(v1, v2)
+        (BSImpl.Sym(; name = n1, shape = s1), BSImpl.Sym(; name = n2, shape = s2)) => begin
+            n1 === n2 && s1 == s2
+        end
+        (BSImpl.Term(; f = f1, args = args1, shape = s1), BSImpl.Term(; f = f2, args = args2, shape = s2)) => begin
+            isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2
+        end
+        (BSImpl.AddOrMul(; variant = v1, dict = d1, coeff = c1), BSImpl.AddOrMul(; variant = v2, dict = d2, coeff = c2)) => begin
+            v1 == v2 && isequal(d1, d2) && isequal(c1, c2)
+        end
+        (BSImpl.Div(; num = n1, den = d1), BSImpl.Div(; num = n2, den = d2)) => begin
+            isequal(n1, n2) && isequal(d1, d2)
+        end
+        (BSImpl.Pow(; base = n1, exp = d1), BSImpl.Pow(; base = n2, exp = d2)) => begin
+            isequal(n1, n2) && isequal(d1, d2)
+        end
+        _ => throw(UnimplementedForVariantError(isequal_core, Ta))
+    end
+
+    if full && partial
+        partial = isequal(metadata(a), metadata(b))
+    end
+    if is_unset
+        COMPARISON_VARIANT[] = 0
+    end
+    return partial
+end
+
 # Only `BasicSymbolic` compares equality with `full = false`
-Base.isequal(a::BasicSymbolic, b::BasicSymbolic) = isequal_core(_unwrap_internal(a), _unwrap_internal(b), false)
+function Base.isequal(a::BasicSymbolic, b::BasicSymbolic)
+    typeof(a) === typeof(b) || return false
+    is_unset = true
+    cvariant = COMPARISON_VARIANT[]
+    if iszero(cvariant)
+        cvariant = COMPARISON_VARIANT[] = 2
+    else
+        is_unset = false
+    end
+
+    result = isequal(_unwrap_internal(a), _unwrap_internal(b))
+
+    if is_unset
+        COMPARISON_VARIANT[] = 0
+    end
+    return result
+end
 
 # Use the most specific definition of equality from the two variants
 # for T1 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type], T2 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type]
 for T1 in [BasicSymbolic, BSImpl.Type], T2 in [BasicSymbolic, BSImpl.Type]
-    T1 == T2 == BasicSymbolic && continue
+    T1 == T2 && continue
     @eval function Base.isequal(a::$T1, b::$T2)
-        # $(if (T1 == HashconsingWrapper || T2 == HashconsingWrapper) && T1 != T2
-        #     :(throw(MethodError(isequal_core, (a, b))))
-        # else
-            isequal_core(_unwrap_internal(a), _unwrap_internal(b), true)
-        # end)
+        is_unset = true
+        cvariant = COMPARISON_VARIANT[]
+        if iszero(cvariant)
+            cvariant = COMPARISON_VARIANT[] = 1
+        else
+            is_unset = false
+        end
+        result = isequal(_unwrap_internal(a), _unwrap_internal(b))
+        if is_unset
+            COMPARISON_VARIANT[] = 0
+        end
+        return result
     end
 end
 
@@ -795,9 +882,149 @@ Base.@nospecializeinfer function hash_core(x::Any, h::UInt, full)
     end
 end
 
-Base.hash(s::BasicSymbolic, h::UInt) = hash_core(s, h, false)
-# Base.hash(s::HashconsingWrapper, h::UInt) = hash_core(s.data, h, true)
-Base.hash(s::BSImpl.Type, h::UInt) = hash_core(s, h, true)
+const COMPARISON_VARIANT = TaskLocalValue{Int}(Returns(0))
+
+Base.@nospecializeinfer function hash_coeff(x::Number, h::UInt)
+    @nospecialize x
+    if x isa Int
+        hash(x, h)
+    elseif x isa Float64
+        hash(x, h)
+    elseif x isa Rational{Int}
+        hash(x, h)
+    elseif x isa UInt
+        hash(x, h)
+    elseif x isa Bool
+        hash(x, h)
+    else
+        hash(x, h)::UInt
+    end
+end
+
+Base.@nospecializeinfer function hash_anyscalar(x::Any, h::UInt)
+    @nospecialize x
+    if x isa Int
+        hash(x, h)
+    elseif x isa Float64
+        hash(x, h)
+    elseif x isa Rational{Int}
+        hash(x, h)
+    elseif x isa UInt
+        hash(x, h)
+    elseif x isa Bool
+        hash(x, h)
+    elseif x isa BasicSymbolic{Number}
+        hash(x, h)
+    else
+        hash(x, h)::UInt
+    end
+end
+
+Base.@nospecializeinfer function hash_addmuldict(x::Dict, h::UInt)
+    @nospecialize x
+    if x isa Dict{Symbolic, Number}
+        hash(x, h)
+    else
+        hash(x, h)::UInt
+    end
+end
+
+function Base.hash(s::BSImpl.Type, h::UInt)
+    is_unset = true
+    cvariant = COMPARISON_VARIANT[]
+    if iszero(cvariant)
+        cvariant = COMPARISON_VARIANT[] = 1
+    else
+        is_unset = false
+    end
+    full = isone(cvariant)
+
+    if !iszero(h)
+        return hash(hash(s, zero(h)), h)::UInt
+    end
+    # vtype = MData.variant_type(s)
+    # Const is a special case
+    # if vtype <: BSImpl.Const
+    #     return hash_core(s.val, h; full) ⊻ CONST_SALT
+    # end
+    # Early exit, every other variant has a hash2 field
+
+    if full
+        cache = s.hash2
+        !iszero(cache) && return cache
+    end
+    
+    partial::UInt = @match s begin
+        BSImpl.Sym(; name, shape) => begin
+            h = Base.hash(name, h)
+            h = Base.hash(shape, h)
+            h ⊻ SYM_SALT
+        end
+        BSImpl.Term(; f, args, shape, hash) => begin
+            # use/update cached hash
+            cache = hash
+            if iszero(cache)
+                s.hash = Base.hash(f, Base.hash(args, Base.hash(shape, h)))
+            else
+                cache
+            end
+        end
+        BSImpl.AddOrMul(; variant, dict, coeff, shape, hash) => begin
+            cache = hash
+            if iszero(cache)
+                inner = hash_addmuldict(dict, h)
+                inner = Base.hash(shape, hash_coeff(coeff, inner))
+                inner = Base.hash((variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT), inner)
+                s.hash = inner
+            else
+                cache
+            end
+            
+        end
+        BSImpl.Div(; num, den) => begin
+            hash_anyscalar(num, hash_anyscalar(den, h)) ⊻ DIV_SALT
+        end
+        BSImpl.Pow(; base, exp) => begin
+            hash_anyscalar(base, hash_anyscalar(exp, h)) ⊻ POW_SALT
+        end
+    end
+
+    if full
+        partial = s.hash2 = Base.hash(metadata(s), partial)::UInt
+    end
+    if is_unset
+        COMPARISON_VARIANT[] = 0
+    end
+    return partial
+end
+
+Base.@nospecializeinfer function Base.hash(x::BasicSymbolic, h::UInt)
+    @nospecialize x
+    is_unset = true
+    cvariant = COMPARISON_VARIANT[]
+    if iszero(cvariant)
+        cvariant = COMPARISON_VARIANT[] = 2
+    else
+        is_unset = false
+    end
+
+    if x isa BasicSymbolic{Real}
+        result = Base.hash(_unwrap_internal(x), h)
+    elseif x isa BasicSymbolic{Number}
+        result = Base.hash(_unwrap_internal(x), h)
+    else
+        result = Base.hash(_unwrap_internal(x), h)
+    end
+    
+    if is_unset
+        COMPARISON_VARIANT[] = 0
+    end
+    return result
+end
+
+# Base.hash(s::BasicSymbolic, h::UInt) = hash_core(s, h, false)
+# # Base.hash(s::HashconsingWrapper, h::UInt) = hash_core(s.data, h, true)
+# Base.hash(s::BSImpl.Type, h::UInt) = hash_core(s, h, true)
 
 Base.one( s::Union{Symbolic, BSImpl.Type}) = one( symtype(s))
 Base.zero(s::Union{Symbolic, BSImpl.Type}) = zero(symtype(s))

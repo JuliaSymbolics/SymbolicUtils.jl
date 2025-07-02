@@ -561,11 +561,12 @@ Base.@nospecializeinfer function hash_anyscalar(x::Any, h::UInt)
     end
 end
 
-function custom_dicthash(x::Dict, h::UInt)
+function custom_dicthash(x::Dict{Symbolic, Number}, h::UInt)
     hv = Base.hasha_seed
     for (k, v) in x
         h1 = hash_anyscalar(v, zero(UInt))
         h1 = hash_anyscalar(k, h1)
+        hv ⊻= h1
     end
     return hash(hv, h)
 end
@@ -740,7 +741,7 @@ function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
     h = hash(s)
     k = get(cache, h, nothing)
 
-    TOTAL[] += 1
+    # TOTAL[] += 1
     # Main._total += 1
     # k = getkey(cache, s, nothing)
 
@@ -752,20 +753,20 @@ function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
     #     push!(Main._debug, s => ks[i])
     # end
     if k === nothing || !isequal(k, s)
-        MISSES[] += 1
-        if k !== nothing
-            buffer = collides[]
-            buffer2 = get!(() -> [], buffer, h)
-            push!(buffer2, k => s)
-            COLLISIONS[] += 1
-        #     @show hash(k) h
-        #     # push!(Main._misses, k => s)
-        end
+        # MISSES[] += 1
+        # if k !== nothing
+        #     buffer = collides[]
+        #     buffer2 = get!(() -> [], buffer, h)
+        #     push!(buffer2, k => s)
+        #     COLLISIONS[] += 1
+        # #     @show hash(k) h
+        # #     # push!(Main._misses, k => s)
+        # end
         
         cache[h] = s
         k = s
-    else
-        HITS[] += 1
+    # else
+    #     HITS[] += 1
     end
     if k.id === nothing
         k.id = generate_id()

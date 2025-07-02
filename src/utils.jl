@@ -42,13 +42,13 @@ function has_trig_exp(term)
     if Base.@nany 9 i->fns[i] === op
         return true
     else
-        return any(has_trig_exp, arguments(term))
+        return any(has_trig_exp, parent(arguments(term)))
     end
 end
 
 function fold(t)
     if iscall(t)
-        tt = map(fold, arguments(t))
+        tt = map(fold, parent(arguments(t)))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
             return operation(t)(tt...)

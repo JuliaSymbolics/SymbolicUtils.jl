@@ -10,7 +10,8 @@ function matcher(val::Any)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
-        if length(arguments(val)) == 2 && any(x -> isa(x, DefSlot), arguments(val))
+        args = parent(arguments(val))
+        if length(args) == 2 && any(x -> isa(x, DefSlot), args)
             return defslot_term_matcher_constructor(val)
         # else return a normal term matcher
         else
@@ -35,7 +36,9 @@ function matcher(slot::Slot)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
         elseif slot.predicate(car(data))
-            next(assoc(bindings, slot.name, car(data)), 1)
+            rest = car(data)
+            binds = assoc(bindings, slot.name, rest)
+            next(binds, 1)
         end
     end
 end

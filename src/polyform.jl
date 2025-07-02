@@ -338,17 +338,16 @@ function simplify_fractions(x; polyform=false)
     sdiv(a) = isdiv(a) ? simplify_div(a) : a
 
     expr = Postwalk(sdiv ∘ quick_cancel,
-                    maketerm=frac_maketerm)(Postwalk(PassThrough(add_with_div),
+                    maketerm=frac_maketerm)(Postwalk(add_with_div,
                                                            maketerm=frac_maketerm)(x))
 
     polyform ? expr : unpolyize(expr)
 end
 
 function add_with_div(x, flatten=true)
-    (!iscall(x) || operation(x) != (+)) && return nothing
-    aa = arguments(x)
-    !any(a->isdiv(a), aa) && return nothing # no rewrite necessary
-
+    (!iscall(x) || operation(x) != (+)) && return x
+    aa = parent(arguments(x))
+    !any(isdiv, aa) && return x # no rewrite necessary
     nondiv_result = 0
     div_result = 0
     for a in aa
@@ -371,7 +370,7 @@ julia> flatten_fractions((1+(1+1/a)/a)/a)
 ```
 """
 function flatten_fractions(x)
-    Fixpoint(Postwalk(PassThrough(add_with_div)))(x)
+    Fixpoint(Postwalk(add_with_div))(x)
 end
 
 function fraction_iszero(x)

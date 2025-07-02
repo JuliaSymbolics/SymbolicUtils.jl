@@ -1439,7 +1439,7 @@ end
 
 Return the `coeff` and `dict` for multiplying `xs...` into a symbolic of symtype `T`.
 """
-function makemul(::Type{T}, xs...)::Tuple{T, Dict{Symbolic, T}} where {T}
+function makemul(::Type{T}, xs...) where {T}
     dict = Dict{Symbolic, T}()
     coeff = one(T)
     for x in xs
@@ -1458,7 +1458,7 @@ function makemul(::Type{T}, xs...)::Tuple{T, Dict{Symbolic, T}} where {T}
     end
 
     filter!(!iszero ∘ last, dict)
-    return coeff, dict
+    return (coeff, dict)::Tuple{T, Dict{Symbolic, T}}
 end
 
 """

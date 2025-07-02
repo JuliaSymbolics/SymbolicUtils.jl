@@ -382,157 +382,6 @@ Base.isequal(::Symbolic, ::Symbolic) = false
 Base.isequal(::BSImpl.Type, ::Any) = false
 Base.isequal(::Any, ::BSImpl.Type) = false
 
-# inner = hash_core(coeff, hash_core(shape, h; full); full)
-# 0x7c6102299fd57f5d
-# 0x7c6102299fd57f5d
-# inner = hash_core(dict, inner; full)
-# 0xffcea3d2b96f7cf8
-# 0xbfa195b78e177550
-# inner = inner ⊻ (variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT)
-# 0x5564097813c5d652
-"""
-    $(METHODLIST)
-
-Wrapper over `isequal` which may or may not compare symbolic metadata.
-"""
-isequal_core(a, b, full) = isequal(a, b)
-
-isequal_core(a::Number, b::Number, full) = isequal(a, b) && (!full || typeof(a) == typeof(b))
-isequal_core(a::AbstractRange, b::AbstractRange, full) = isequal(a, b)
-function isequal_core(a::Union{AbstractArray, Tuple}, b::Union{AbstractArray, Tuple}, full)
-    a === b && return true
-    length(a) == length(b) || return false
-    typeof(a) == typeof(b) || return false
-    if a isa AbstractArray
-        size(a) == size(b) || return false
-    end
-    for (x, y) in zip(a, b)
-        isequal_core(x, y, full) || return false
-    end
-    return true
-end
-
-struct Sentinel end
-function isequal_core(a::AbstractDict, b::AbstractDict, full)
-    a === b && return true
-    typeof(a) == typeof(b) || return false
-    length(a) == length(b) || return false
-
-    # they have same length, so either `b` has all the same keys
-    # or this will fail. Can't use `get(b, k, nothing)` because if
-    # `a[k] === nothing` it will result in a false positive.
-    for (k, v) in a
-        k2 = getkey(b, k, Sentinel())
-        k2 === Sentinel() && return false
-        isequal_core(k, k2, full) || return false
-        isequal_core(v, b[k2], full) || return false
-    end
-    return true
-end
-
-# ImmutableDict doesn't implement `getkey`
-function isequal_core(a::Base.ImmutableDict, b::Base.ImmutableDict, full)
-    a === b && return true
-    typeof(a) == typeof(b) || return false
-    length(a) == length(b) || return false
-
-    for (k, v) in a
-        match = false
-        for (k2, v2) in b
-            match |= isequal_core(k, k2, full) && isequal_core(v, v2, full)
-            match && break
-        end
-        match || return false
-    end
-    return true
-end
-
-function isequal_core(a::NamedTuple, b::NamedTuple, full)
-    a === b && return true
-    typeof(a) == typeof(b) || return false
-
-    # same type, so same keys and value types
-    # either everything works or it fails and early exits
-    for (av, bv) in zip(values(a), values(b))
-        isequal_core(av, bv, full) || return false
-    end
-
-    return true
-end
-
-function isequal_core(a::BSImpl.Type{T}, b::BSImpl.Type{S}, full) where {T, S}
-    a === b && return true
-    a.id === b.id && a.id !== nothing && return true
-    T === S || return false
-
-    Ta = MData.variant_type(a)
-    Tb = MData.variant_type(b)
-    Ta === Tb || return false
-
-    partial = @match (a, b) begin
-        # (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => return isequal(v1, v2)
-        (BSImpl.Sym(; name = n1, shape = s1), BSImpl.Sym(; name = n2, shape = s2)) => begin
-            n1 === n2 && s1 == s2
-        end
-        (BSImpl.Term(; f = f1, args = args1, shape = s1), BSImpl.Term(; f = f2, args = args2, shape = s2)) => begin
-            isequal(f1, f2) && all(zip(args1, args2)) do (x, y)
-                isequal_core(x, y, full)
-            end && s1 == s2
-        end
-        (BSImpl.AddOrMul(; variant = v1, dict = d1, coeff = c1), BSImpl.AddOrMul(; variant = v2, dict = d2, coeff = c2)) => begin
-            v1 == v2 && isequal_core(d1, d2, full) && isequal_core(c1, c2, full)
-        end
-        (BSImpl.Div(; num = n1, den = d1), BSImpl.Div(; num = n2, den = d2)) => begin
-            isequal_core(n1, n2, full) && isequal_core(d1, d2, full)
-        end
-        (BSImpl.Pow(; base = n1, exp = d1), BSImpl.Pow(; base = n2, exp = d2)) => begin
-            isequal_core(n1, n2, full) && isequal_core(d1, d2, full)
-        end
-        _ => throw(UnimplementedForVariantError(isequal_core, Ta))
-    end
-
-    partial && full || return partial
-    # Ta <: BSImpl.Const && return partial
-
-    return isequal_core(metadata(a), metadata(b), full)
-end
-
-function isequal_core(a::Symbolic, b::Symbolic, full)
-    a === b && return true
-    typeof(a) == typeof(b) || return false
-
-    partial = if iscall(a) && iscall(b)
-        opa = operation(a)
-        argsa = arguments(a)
-        opb = operation(b)
-        argsb = arguments(b)
-        isequal_core(opa, opb, full) && isequal_core(argsa, argsb, full)
-    elseif iscall(a) || iscall(b)
-        false
-    else
-        isequal(a, b)
-    end
-
-    partial && full || return partial
-
-    ma = metadata(a)
-    mb = metadata(b)
-    return partial && isequal_core(ma, mb, full)
-end
-
-# for T1 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type], T2 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type]
-for T1 in [BasicSymbolic, BSImpl.Type], T2 in [BasicSymbolic, BSImpl.Type]
-    T1 == T2 == BSImpl.Type && continue
-    @eval function isequal_core(a::$T1, b::$T2, full)
-        # $(if (T1 == HashconsingWrapper || T2 == HashconsingWrapper) && T1 != T2
-        #     :(throw(MethodError(isequal_core, (a, b))))
-        # else
-        #     :(isequal_core(_unwrap_internal(a), _unwrap_internal(b); kw...))
-        # end)
-            isequal_core(_unwrap_internal(a), _unwrap_internal(b), full)
-    end
-end
-
 Base.@nospecializeinfer function isequal_maybe_scal(a, b)
     @nospecialize a b
     if a isa BasicSymbolic{Number} && b isa BasicSymbolic{Number}
@@ -547,27 +396,31 @@ Base.@nospecializeinfer function isequal_maybe_scal(a, b)
         isequal(a, b)::Bool
     end
 end
+using Base.ScopedValues
 
-function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
-    a === b && return true
-    ida = a.id
-    idb = b.id
-    ida === idb && ida !== nothing && return true
-    typeof(a) === typeof(b) || return false
+const SV_COMPARE = ScopedValue{Int}()
 
-    Ta = MData.variant_type(a)
-    Tb = MData.variant_type(b)
-    Ta === Tb || return false
-
-    is_unset = true
-    cvariant = COMPARISON_VARIANT[]
-    if iszero(cvariant)
-        cvariant = COMPARISON_VARIANT[] = 1
-    else
-        is_unset = false
+function isequal_symdict(a::Dict, b::Dict, val)
+    if val == 2
+        return isequal(a, b)
     end
-    full = isone(cvariant)
+    length(a) == length(b) || return false
+    for (k, v) in a
+        k2 = nothing
+        v2 = nothing
+        @with SV_COMPARE => 2 begin
+            k2 = getkey(b, k, nothing)
+            k2 === nothing && return false
+            v2 = b[k2]
+        end
+        v == v2 && isequal(k, k2) || return false
+    end
+    return true
+end
 
+function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, val)
+    # @show "E"
+    full = isone(val)
     partial = @match (a, b) begin
         # (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => return isequal(v1, v2)
         (BSImpl.Sym(; name = n1, shape = s1), BSImpl.Sym(; name = n2, shape = s2)) => begin
@@ -577,7 +430,10 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
             isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2
         end
         (BSImpl.AddOrMul(; variant = v1, dict = d1, coeff = c1), BSImpl.AddOrMul(; variant = v2, dict = d2, coeff = c2)) => begin
-            v1 == v2 && isequal(d1, d2) && isequal(c1, c2)
+            # @show v1 == v2
+            # @show isequal_symdict(d1, d2, val)
+            # @show isequal(c1, c2)
+            v1 == v2 && isequal_symdict(d1, d2, val) && isequal(c1, c2)
         end
         (BSImpl.Div(; num = n1, den = d1), BSImpl.Div(; num = n2, den = d2)) => begin
             isequal(n1, n2) && isequal(d1, d2)
@@ -587,33 +443,51 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
         end
         _ => throw(UnimplementedForVariantError(isequal_core, Ta))
     end
-
+    # @show partial, full
     if full && partial
         partial = isequal(metadata(a), metadata(b))
     end
-    if is_unset
-        COMPARISON_VARIANT[] = 0
-    end
+    # @show "L"
     return partial
+end
+
+function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
+    a === b && return true
+    ida = a.id
+    idb = b.id
+    ida === idb && ida !== nothing && return true
+    # if ida !== idb && ida !== nothing && idb !== nothing
+    #     push!(Main._debug, a => b)
+    # end
+    typeof(a) === typeof(b) || return false
+
+    Ta = MData.variant_type(a)
+    Tb = MData.variant_type(b)
+    Ta === Tb || return false
+
+    val = ScopedValues.get(SV_COMPARE)
+    if val === nothing
+        @with SV_COMPARE => 1 begin
+            isequal_bsimpl(a, b, 1)
+        end
+    else
+        isequal_bsimpl(a, b, something(val))
+    end
 end
 
 # Only `BasicSymbolic` compares equality with `full = false`
 function Base.isequal(a::BasicSymbolic, b::BasicSymbolic)
     typeof(a) === typeof(b) || return false
-    is_unset = true
-    cvariant = COMPARISON_VARIANT[]
-    if iszero(cvariant)
-        cvariant = COMPARISON_VARIANT[] = 2
+
+
+    val = ScopedValues.get(SV_COMPARE)
+    if val === nothing
+        @with SV_COMPARE => 2 begin
+            isequal(_unwrap_internal(a), _unwrap_internal(b))
+        end
     else
-        is_unset = false
+        isequal(_unwrap_internal(a), _unwrap_internal(b))
     end
-
-    result = isequal(_unwrap_internal(a), _unwrap_internal(b))
-
-    if is_unset
-        COMPARISON_VARIANT[] = 0
-    end
-    return result
 end
 
 # Use the most specific definition of equality from the two variants
@@ -621,18 +495,14 @@ end
 for T1 in [BasicSymbolic, BSImpl.Type], T2 in [BasicSymbolic, BSImpl.Type]
     T1 == T2 && continue
     @eval function Base.isequal(a::$T1, b::$T2)
-        is_unset = true
-        cvariant = COMPARISON_VARIANT[]
-        if iszero(cvariant)
-            cvariant = COMPARISON_VARIANT[] = 1
+        val = ScopedValues.get(SV_COMPARE)
+        if val === nothing
+            @with SV_COMPARE => 2 begin
+                isequal(_unwrap_internal(a), _unwrap_internal(b))
+            end
         else
-            is_unset = false
+            isequal(_unwrap_internal(a), _unwrap_internal(b))
         end
-        result = isequal(_unwrap_internal(a), _unwrap_internal(b))
-        if is_unset
-            COMPARISON_VARIANT[] = 0
-        end
-        return result
     end
 end
 
@@ -652,245 +522,6 @@ const POW_SALT = 0x2b55b97a6efb080c % UInt
 const SCALAR_SYMTYPE_VARIANTS = [Number, Real, SafeReal, LiteralReal]
 const ARR_VARIANTS = [Vector, Matrix]
 const SYMTYPE_VARIANTS = [SCALAR_SYMTYPE_VARIANTS; [A{T} for A in ARR_VARIANTS for T in SCALAR_SYMTYPE_VARIANTS]]
-
-"""
-    $(METHODLIST)
-
-Wrapper over `hash` which may or may not hash symbolic metadata.
-"""
-hash_core_impl(s, h::UInt, full) = hash(s, h)::UInt
-
-function hashvec_core(s, h::UInt, kw)
-    for x in s
-        h = hash_core(x, h, kw)
-    end
-    return h
-end
-
-function hash_core_impl(s::Number, h::UInt, full)
-    h = hash(s, h)
-    if full
-        h = hash(typeof(s), h)
-    end
-    return h::UInt
-end
-
-function hash_core_impl(s::AbstractArray, h::UInt, full)
-    error()
-    h = hash_core(typeof(s), hash(size(s), h), full)
-    return hashvec_core(s, h, full)::UInt
-end
-for T in [ShapeVecT, ArgsT, ROArgsT]
-    @eval function hash_core_impl(s::$T, h::UInt, full)
-        h = hash_core(typeof(s), hash(length(s), h), full)
-        return hashvec_core(s, h, full)::UInt
-    end
-end
-
-function hash_core_impl(s::Tuple, h::UInt, full)
-    return hashvec_core(s, h, full)::UInt
-end
-
-function hash_core_impl(s::NamedTuple, h::UInt, full)
-    return hashvec_core(pairs(s), h, full)::UInt
-end
-
-for T in [AbstractDict; MetadataT; [RODict{Symbolic, T} for T in SYMTYPE_VARIANTS]]
-    @eval function hash_core_impl(s::$T, h::UInt, full)
-        h = hash_core(typeof(s), h, full)::UInt
-        for (k, v) in s
-            h ⊻= hash_core(k, hash_core(v, zero(UInt), full)::UInt, full)::UInt
-        end
-        return h::UInt
-    end
-end
-
-for T in [BSImpl.Type; [BSImpl.Type{T} for T in SYMTYPE_VARIANTS]]
-@eval function hash_core_impl(s::$T, h::UInt, full)
-    if !iszero(h)
-        return hash(hash_core(s, zero(h), full), h)::UInt
-    end
-    # vtype = MData.variant_type(s)
-    # Const is a special case
-    # if vtype <: BSImpl.Const
-    #     return hash_core(s.val, h; full) ⊻ CONST_SALT
-    # end
-    # Early exit, every other variant has a hash2 field
-
-    if full
-        cache = s.hash2
-        !iszero(cache) && return cache
-    end
-    
-    partial::UInt = @match s begin
-        BSImpl.Sym(; name, shape) => begin
-            h = hash_core(name, h, full)
-            h = hash_core(shape, h, full)
-            h ⊻ SYM_SALT
-        end
-        BSImpl.Term(; f, args, shape, hash) => begin
-            # use/update cached hash
-            cache = hash
-            if iszero(cache)
-                s.hash = hash_core(f, hash_core(args, hash_core(shape, h, full)::UInt, full)::UInt, full)::UInt
-            else
-                cache
-            end
-        end
-        BSImpl.AddOrMul(; variant, dict, coeff, shape, hash) => begin
-            cache = hash
-            if iszero(cache)
-                inner = hash_core(dict, h, full)::UInt
-                inner = hash_core(shape, hash_core(coeff, inner, full), full)::UInt
-                inner = hash_core((variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT), inner, full)::UInt
-                s.hash = inner
-            else
-                cache
-            end
-            
-        end
-        BSImpl.Div(; num, den) => begin
-            hash_core(num, hash_core(den, h, full)::UInt, full)::UInt ⊻ DIV_SALT
-        end
-        BSImpl.Pow(; base, exp) => begin
-            hash_core(base, hash_core(exp, h, full)::UInt, full)::UInt ⊻ POW_SALT
-        end
-    end
-
-    full || return partial
-
-    return s.hash2 = hash_core(metadata(s), partial, full)::UInt
-end
-end
-
-for T in [BasicSymbolic; [BasicSymbolic{T} for T in SYMTYPE_VARIANTS];#= HashconsingWrapper; [HashconsingWrapper{T} for T in SYMTYPE_VARIANTS]=# ]
-    @eval hash_core_impl(s::$T, h::UInt, full)::UInt = hash_core(_unwrap_internal(s), h, full)
-end
-
-Base.@nospecializeinfer function hash_core(x::Any, h::UInt, full)
-    @nospecialize x
-    if x isa BasicSymbolic{Real}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{Number}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{LiteralReal}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{SafeReal}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{Vector{Real}}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{Matrix{Real}}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{Vector{LiteralReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{Matrix{LiteralReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{Vector{SafeReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa BasicSymbolic{Matrix{SafeReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{Real}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{Number}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{LiteralReal}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{SafeReal}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{Vector{Real}}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{Matrix{Real}}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{Vector{LiteralReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{Matrix{LiteralReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{Vector{SafeReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa BSImpl.Type{Matrix{SafeReal}}
-        hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{Real}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{Number}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{LiteralReal}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{SafeReal}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{Vector{Real}}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{Matrix{Real}}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{Vector{LiteralReal}}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{Matrix{LiteralReal}}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{Vector{SafeReal}}
-    #     hash_core_impl(x, h, full)
-    # elseif x isa HashconsingWrapper{Matrix{SafeReal}}
-    #     hash_core_impl(x, h, full)
-    elseif x isa ArgsT
-        hash_core_impl(x, h, full)
-    elseif x isa ROArgsT
-        hash_core_impl(x, h, full)
-    elseif x isa Unknown
-        hash(x, h)
-    elseif x isa ShapeVecT
-        hash_core_impl(x, h, full)
-    elseif x isa MetadataT
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Real}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Number}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, LiteralReal}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, SafeReal}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Vector{Real}}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Vector{Number}}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Vector{LiteralReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Vector{SafeReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Matrix{Real}}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Matrix{Number}}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Matrix{LiteralReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa RODict{Symbolic, Matrix{SafeReal}}
-        hash_core_impl(x, h, full)
-    elseif x isa Symbol
-        hash_core_impl(x, h, full)
-    elseif x isa Int
-        hash_core_impl(x, h, full)
-    elseif x isa Float64
-        hash_core_impl(x, h, full)
-    elseif x isa Rational{Int}
-        hash_core_impl(x, h, full)
-    elseif x isa DataType
-        objectid(x)
-    elseif x isa Tuple{Int}
-        hash_core_impl(x, h, full)
-    elseif x isa AddMulVariant.T
-        hash_core_impl(x, h, full)
-    elseif x isa Bool
-        hash_core_impl(x, h, full)
-    elseif x isa Float64
-        hash(x, h)
-    elseif x isa Int
-        hash(x, h)
-    elseif x isa UInt
-        hash(x, h)
-    elseif x isa Rational{Int}
-        hash(x, h)
-    else
-        hash_core_impl(x, h, full)::UInt
-    end
-end
 
 const COMPARISON_VARIANT = TaskLocalValue{Int}(Returns(0))
 
@@ -957,26 +588,8 @@ function hashargs(x::ArgsT, h::UInt)
     return h
 end
 
-function Base.hash(s::BSImpl.Type, h::UInt)
-    is_unset = true
-    cvariant = COMPARISON_VARIANT[]
-    if iszero(cvariant)
-        cvariant = COMPARISON_VARIANT[] = 1
-    else
-        is_unset = false
-    end
-    full = isone(cvariant)
-
-    if !iszero(h)
-        return hash(hash(s, zero(h)), h)::UInt
-    end
-    # vtype = MData.variant_type(s)
-    # Const is a special case
-    # if vtype <: BSImpl.Const
-    #     return hash_core(s.val, h; full) ⊻ CONST_SALT
-    # end
-    # Early exit, every other variant has a hash2 field
-
+function hash_bsimpl(s::BSImpl.Type, h::UInt, val)
+    full = isone(val)
     if full
         cache = s.hash2
         !iszero(cache) && return cache
@@ -990,6 +603,7 @@ function Base.hash(s::BSImpl.Type, h::UInt)
         end
         BSImpl.Term(; f, args, shape, hash) => begin
             # use/update cached hash
+            # error()
             cache = hash
             if iszero(cache)
                 s.hash = Base.hash(f, hashargs(args, Base.hash(shape, h)))::UInt
@@ -1020,32 +634,44 @@ function Base.hash(s::BSImpl.Type, h::UInt)
     if full
         partial = s.hash2 = Base.hash(metadata(s), partial)::UInt
     end
-    if is_unset
-        COMPARISON_VARIANT[] = 0
-    end
     return partial
+end
+
+function Base.hash(s::BSImpl.Type, h::UInt)
+    if !iszero(h)
+        return hash(hash(s, zero(h)), h)::UInt
+    end
+    val = ScopedValues.get(SV_COMPARE)
+    if val === nothing
+        @with SV_COMPARE => 1 begin
+            hash_bsimpl(s, h, 1)
+        end
+    else
+        hash_bsimpl(s, h, something(val))
+    end
 end
 
 Base.@nospecializeinfer function Base.hash(x::BasicSymbolic, h::UInt)
     @nospecialize x
-    is_unset = true
-    cvariant = COMPARISON_VARIANT[]
-    if iszero(cvariant)
-        cvariant = COMPARISON_VARIANT[] = 2
+    val = ScopedValues.get(SV_COMPARE)
+    if val === nothing
+        @with SV_COMPARE => 2 begin
+            if x isa BasicSymbolic{Real}
+                result = Base.hash(_unwrap_internal(x), h)
+            elseif x isa BasicSymbolic{Number}
+                result = Base.hash(_unwrap_internal(x), h)
+            else
+                result = Base.hash(_unwrap_internal(x), h)
+            end
+        end
     else
-        is_unset = false
-    end
-
-    if x isa BasicSymbolic{Real}
-        result = Base.hash(_unwrap_internal(x), h)
-    elseif x isa BasicSymbolic{Number}
-        result = Base.hash(_unwrap_internal(x), h)
-    else
-        result = Base.hash(_unwrap_internal(x), h)
-    end
-    
-    if is_unset
-        COMPARISON_VARIANT[] = 0
+        if x isa BasicSymbolic{Real}
+            result = Base.hash(_unwrap_internal(x), h)
+        elseif x isa BasicSymbolic{Number}
+            result = Base.hash(_unwrap_internal(x), h)
+        else
+            result = Base.hash(_unwrap_internal(x), h)
+        end
     end
     return result
 end
@@ -1070,10 +696,16 @@ Base.nameof(s::Union{BasicSymbolic, BSImpl.Type}) = issym(s) ? s.name : error("N
 const ENABLE_HASHCONSING = Ref(true)
 # const WKD = TaskLocalValue{WeakKeyDict{HashconsingWrapper, Nothing}}(WeakKeyDict{HashconsingWrapper, Nothing})
 const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})
+const WVD = TaskLocalValue{WeakValueDict{UInt, BSImpl.Type}}(WeakValueDict{UInt, BSImpl.Type})
 
 function generate_id()
     return IDType()
 end
+
+const TOTAL = TaskLocalValue{Int}(Returns(0))
+const HITS = TaskLocalValue{Int}(Returns(0))
+const MISSES = TaskLocalValue{Int}(Returns(0))
+const COLLISIONS = TaskLocalValue{Int}(Returns(0))
 
 """
 $(TYPEDSIGNATURES)
@@ -1096,17 +728,44 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 `Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
 original behavior of those functions.
 """
-# function hashcons(s::HashconsingWrapper{T})::HashconsingWrapper{T} where {T}
+
+const collides = TaskLocalValue{Any}(Returns(Dict()))
+
 function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
     if !ENABLE_HASHCONSING[]
         return s
     end
 
-    cache = WKD[]
-    k = getkey(cache, s, nothing)
-    if k === nothing || !isequal_core(k, s, true)
-        cache[s] = nothing
+    cache = WVD[]
+    h = hash(s)
+    k = get(cache, h, nothing)
+
+    TOTAL[] += 1
+    # Main._total += 1
+    # k = getkey(cache, s, nothing)
+
+    # ks = collect(keys(cache))
+    # for i in eachindex(ks)
+    #     isassigned(ks, i) || continue
+    #     isequal(ks[i], s) || continue
+    #     k === ks[i] && continue
+    #     push!(Main._debug, s => ks[i])
+    # end
+    if k === nothing || !isequal(k, s)
+        MISSES[] += 1
+        if k !== nothing
+            buffer = collides[]
+            buffer2 = get!(() -> [], buffer, h)
+            push!(buffer2, k => s)
+            COLLISIONS[] += 1
+        #     @show hash(k) h
+        #     # push!(Main._misses, k => s)
+        end
+        
+        cache[h] = s
         k = s
+    else
+        HITS[] += 1
     end
     if k.id === nothing
         k.id = generate_id()

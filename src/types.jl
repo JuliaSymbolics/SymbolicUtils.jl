@@ -930,10 +930,19 @@ Base.@nospecializeinfer function hash_anyscalar(x::Any, h::UInt)
     end
 end
 
+function custom_dicthash(x::Dict, h::UInt)
+    hv = Base.hasha_seed
+    for (k, v) in x
+        h1 = hash_anyscalar(v, zero(UInt))
+        h1 = hash_anyscalar(k, h1)
+    end
+    return hash(hv, h)
+end
+
 Base.@nospecializeinfer function hash_addmuldict(x::Dict, h::UInt)
     @nospecialize x
     if x isa Dict{Symbolic, Number}
-        hash(x, h)
+        custom_dicthash(x, h)
     else
         hash(x, h)::UInt
     end

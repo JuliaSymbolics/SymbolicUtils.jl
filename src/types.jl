@@ -32,10 +32,12 @@ const MetadataT = Base.ImmutableDict{DataType, Any}
 const SmallV{T} = SmallVec{T, Vector{T}}
 const ArgsT = SmallV{Any}
 const ROArgsT = ReadOnlyVector{Any, ArgsT}
-const RODict{K, V} = ReadOnlyDict{K, V, Dict{K, V}}
+const RODict{K, V} = Dict{K, V}
 const ShapeVecT = SmallV{UnitRange{Int}}
 const ShapeT = Union{Unknown, ShapeVecT}
 const IdentT = Union{IDType, Nothing}
+
+Base.parent(x::Dict) = x
 
 """
     Enum used to differentiate between variants of `BasicSymbolicImpl.ACTerm`.
@@ -383,11 +385,11 @@ Base.isequal(::Any, ::BSImpl.Type) = false
 
 Wrapper over `isequal` which may or may not compare symbolic metadata.
 """
-isequal_core(a, b; kw...) = isequal(a, b)
+isequal_core(a, b, full) = isequal(a, b)
 
-isequal_core(a::Number, b::Number; full = true) = isequal(a, b) && (!full || typeof(a) == typeof(b))
-isequal_core(a::AbstractRange, b::AbstractRange; kw...) = isequal(a, b)
-function isequal_core(a::Union{AbstractArray, Tuple}, b::Union{AbstractArray, Tuple}; kw...)
+isequal_core(a::Number, b::Number, full) = isequal(a, b) && (!full || typeof(a) == typeof(b))
+isequal_core(a::AbstractRange, b::AbstractRange, full) = isequal(a, b)
+function isequal_core(a::Union{AbstractArray, Tuple}, b::Union{AbstractArray, Tuple}, full)
     a === b && return true
     length(a) == length(b) || return false
     typeof(a) == typeof(b) || return false
@@ -395,13 +397,13 @@ function isequal_core(a::Union{AbstractArray, Tuple}, b::Union{AbstractArray, Tu
         size(a) == size(b) || return false
     end
     for (x, y) in zip(a, b)
-        isequal_core(x, y; kw...) || return false
+        isequal_core(x, y, full) || return false
     end
     return true
 end
 
 struct Sentinel end
-function isequal_core(a::AbstractDict, b::AbstractDict; kw...)
+function isequal_core(a::AbstractDict, b::AbstractDict, full)
     a === b && return true
     typeof(a) == typeof(b) || return false
     length(a) == length(b) || return false
@@ -412,14 +414,14 @@ function isequal_core(a::AbstractDict, b::AbstractDict; kw...)
     for (k, v) in a
         k2 = getkey(b, k, Sentinel())
         k2 === Sentinel() && return false
-        isequal_core(k, k2; kw...) || return false
-        isequal_core(v, b[k2]; kw...) || return false
+        isequal_core(k, k2, full) || return false
+        isequal_core(v, b[k2], full) || return false
     end
     return true
 end
 
 # ImmutableDict doesn't implement `getkey`
-function isequal_core(a::Base.ImmutableDict, b::Base.ImmutableDict; kw...)
+function isequal_core(a::Base.ImmutableDict, b::Base.ImmutableDict, full)
     a === b && return true
     typeof(a) == typeof(b) || return false
     length(a) == length(b) || return false
@@ -427,7 +429,7 @@ function isequal_core(a::Base.ImmutableDict, b::Base.ImmutableDict; kw...)
     for (k, v) in a
         match = false
         for (k2, v2) in b
-            match |= isequal_core(k, k2; kw...) && isequal_core(v, v2; kw...)
+            match |= isequal_core(k, k2, full) && isequal_core(v, v2, full)
             match && break
         end
         match || return false
@@ -435,20 +437,20 @@ function isequal_core(a::Base.ImmutableDict, b::Base.ImmutableDict; kw...)
     return true
 end
 
-function isequal_core(a::NamedTuple, b::NamedTuple; kw...)
+function isequal_core(a::NamedTuple, b::NamedTuple, full)
     a === b && return true
     typeof(a) == typeof(b) || return false
 
     # same type, so same keys and value types
     # either everything works or it fails and early exits
     for (av, bv) in zip(values(a), values(b))
-        isequal_core(av, bv; kw...) || return false
+        isequal_core(av, bv, full) || return false
     end
 
     return true
 end
 
-function isequal_core(a::BSImpl.Type{T}, b::BSImpl.Type{S}; full = true) where {T, S}
+function isequal_core(a::BSImpl.Type{T}, b::BSImpl.Type{S}, full) where {T, S}
     a === b && return true
     a.id === b.id && a.id !== nothing && return true
     T === S || return false
@@ -464,17 +466,17 @@ function isequal_core(a::BSImpl.Type{T}, b::BSImpl.Type{S}; full = true) where {
         end
         (BSImpl.Term(; f = f1, args = args1, shape = s1), BSImpl.Term(; f = f2, args = args2, shape = s2)) => begin
             isequal(f1, f2) && all(zip(args1, args2)) do (x, y)
-                isequal_core(x, y; full)
+                isequal_core(x, y, full)
             end && s1 == s2
         end
         (BSImpl.AddOrMul(; variant = v1, dict = d1, coeff = c1), BSImpl.AddOrMul(; variant = v2, dict = d2, coeff = c2)) => begin
-            v1 == v2 && isequal_core(d1, d2; full) && isequal_core(c1, c2; full)
+            v1 == v2 && isequal_core(d1, d2, full) && isequal_core(c1, c2, full)
         end
         (BSImpl.Div(; num = n1, den = d1), BSImpl.Div(; num = n2, den = d2)) => begin
-            isequal_core(n1, n2; full) && isequal_core(d1, d2; full)
+            isequal_core(n1, n2, full) && isequal_core(d1, d2, full)
         end
         (BSImpl.Pow(; base = n1, exp = d1), BSImpl.Pow(; base = n2, exp = d2)) => begin
-            isequal_core(n1, n2; full) && isequal_core(d1, d2; full)
+            isequal_core(n1, n2, full) && isequal_core(d1, d2, full)
         end
         _ => throw(UnimplementedForVariantError(isequal_core, Ta))
     end
@@ -482,10 +484,10 @@ function isequal_core(a::BSImpl.Type{T}, b::BSImpl.Type{S}; full = true) where {
     partial && full || return partial
     # Ta <: BSImpl.Const && return partial
 
-    return isequal_core(metadata(a), metadata(b); full)
+    return isequal_core(metadata(a), metadata(b), full)
 end
 
-function isequal_core(a::Symbolic, b::Symbolic; full = true)
+function isequal_core(a::Symbolic, b::Symbolic, full)
     a === b && return true
     typeof(a) == typeof(b) || return false
 
@@ -494,7 +496,7 @@ function isequal_core(a::Symbolic, b::Symbolic; full = true)
         argsa = arguments(a)
         opb = operation(b)
         argsb = arguments(b)
-        isequal_core(opa, opb; full) && isequal_core(argsa, argsb; full)
+        isequal_core(opa, opb, full) && isequal_core(argsa, argsb, full)
     elseif iscall(a) || iscall(b)
         false
     else
@@ -505,24 +507,24 @@ function isequal_core(a::Symbolic, b::Symbolic; full = true)
 
     ma = metadata(a)
     mb = metadata(b)
-    return partial && isequal_core(ma, mb; full)
+    return partial && isequal_core(ma, mb, full)
 end
 
 # for T1 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type], T2 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type]
 for T1 in [BasicSymbolic, BSImpl.Type], T2 in [BasicSymbolic, BSImpl.Type]
     T1 == T2 == BSImpl.Type && continue
-    @eval function isequal_core(a::$T1, b::$T2; kw...)
+    @eval function isequal_core(a::$T1, b::$T2, full)
         # $(if (T1 == HashconsingWrapper || T2 == HashconsingWrapper) && T1 != T2
         #     :(throw(MethodError(isequal_core, (a, b))))
         # else
         #     :(isequal_core(_unwrap_internal(a), _unwrap_internal(b); kw...))
         # end)
-            isequal_core(_unwrap_internal(a), _unwrap_internal(b); kw...)
+            isequal_core(_unwrap_internal(a), _unwrap_internal(b), full)
     end
 end
 
 # Only `BasicSymbolic` compares equality with `full = false`
-Base.isequal(a::BasicSymbolic, b::BasicSymbolic) = isequal_core(_unwrap_internal(a), _unwrap_internal(b); full = false)
+Base.isequal(a::BasicSymbolic, b::BasicSymbolic) = isequal_core(_unwrap_internal(a), _unwrap_internal(b), false)
 
 # Use the most specific definition of equality from the two variants
 # for T1 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type], T2 in [BasicSymbolic, HashconsingWrapper, BSImpl.Type]
@@ -532,7 +534,7 @@ for T1 in [BasicSymbolic, BSImpl.Type], T2 in [BasicSymbolic, BSImpl.Type]
         # $(if (T1 == HashconsingWrapper || T2 == HashconsingWrapper) && T1 != T2
         #     :(throw(MethodError(isequal_core, (a, b))))
         # else
-            isequal_core(_unwrap_internal(a), _unwrap_internal(b); full = true)
+            isequal_core(_unwrap_internal(a), _unwrap_internal(b), true)
         # end)
     end
 end
@@ -842,7 +844,7 @@ function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
 
     cache = WKD[]
     k = getkey(cache, s, nothing)
-    if k === nothing || !isequal_core(k, s; full = true)
+    if k === nothing || !isequal_core(k, s, true)
         cache[s] = nothing
         k = s
     end

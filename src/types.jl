@@ -1184,26 +1184,26 @@ function basicsymbolic(f, args, stype, metadata)
     elseif all(x->symtype(x) <: Number, args)
         if f === (+)
             res = +(args...)
-            if isadd(res) || (isterm(res) && operation(res) == (+))
+            if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
                 @set! res.metadata = metadata
             end
             res
         elseif f == (*)
             res = *(args...)
-            if ismul(res) || (isterm(res) && operation(res) == (*))
+            if metadata !== nothing && (ismul(res) || (isterm(res) && operation(res) == (*)))
                 @set! res.metadata = metadata
             end
             res
         elseif f == (/)
             @assert length(args) == 2
             res = args[1] / args[2]
-            if isdiv(res)
+            if metadata !== nothing && isdiv(res)
                 @set! res.metadata = metadata
             end
             res
         elseif f == (^) && length(args) == 2
             res = args[1] ^ args[2]
-            if ispow(res)
+            if metadata !== nothing && ispow(res)
                 @set! res.metadata = metadata
             end
             res

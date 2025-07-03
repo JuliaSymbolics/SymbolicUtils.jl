@@ -77,9 +77,26 @@ end
     @test r_pow2(a+b) === 1
 
     r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
-    @test r_mix((a + b*c)^2) === 2 + c
-    @test r_mix((a + b*c)) === 1 + c
-    @test r_mix((a + b)) === 2 #1+1
+    @test r_mix((a + b*c)^2) === (2, c)
+    @test r_mix((a + b*c)) === (1, c)
+    @test r_mix((a + b)) === (1, 1)
+end
+
+@testset "1/power matches power with exponent of opposite sign" begin
+    r1 = @rule (~x)^(~y) => (~x, ~y) # rule with slot as exponent
+    @test r1(1/a^b) === (a, -b) # uses frankestein
+    @test r1(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
+    @test r1(1/a^2) === (a, -2) # uses opposite_sign_matcher
+
+    r2 = @rule (~x)^(~y + ~z) => (~x, ~y, ~z) # rule with term as exponent
+    @test r2(1/a^(b+2c)) === (a, -b, -2c) # uses frankestein
+    @test r2(1/a^3) === nothing # should use a term_matcher that flips the sign, but is not implemented
+
+    r1defslot = @rule (~x)^(~!y) => (~x, ~y) # rule with slot as exponent
+    @test r1defslot(1/a^b) === (a, -b) # uses frankestein
+    @test r1defslot(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
+    @test r1defslot(1/a^2) === (a, -2) # uses opposite_sign_matcher
+    @test r1defslot(a) === (a, 1)
 end
 
 using SymbolicUtils: @capture

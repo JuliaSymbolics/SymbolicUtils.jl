@@ -1183,13 +1183,13 @@ function basicsymbolic(f, args, stype, metadata)
         @goto FALLBACK
     elseif all(x->symtype(x) <: Number, args)
         if f === (+)
-            res = +(args...)
+            res = add_worker(args)
             if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
                 @set! res.metadata = metadata
             end
             res
         elseif f == (*)
-            res = *(args...)
+            res = mul_worker(args)
             if metadata !== nothing && (ismul(res) || (isterm(res) && operation(res) == (*)))
                 @set! res.metadata = metadata
             end
@@ -1703,6 +1703,11 @@ function safe_add!(dict, coeff, b)
 end
 
 function +(a::SN, bs::SN...)
+    add_worker((a, bs...))
+end
+
+function add_worker(terms)
+    a, bs = Iterators.peel(terms)
     isempty(bs) && return a
     T = symtype(a)
     for b in bs
@@ -1802,6 +1807,14 @@ mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
 mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
+
+function mul_worker(terms)
+    result, rest = Iterators.peel(terms)
+    for arg in rest
+        result = result * arg
+    end
+    return result
+end
 
 function *(a::SN, b::SN)
     # Always make sure Div wraps Mul

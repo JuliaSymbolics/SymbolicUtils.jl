@@ -26,7 +26,7 @@ PolyForm(sin((x+y)^2))               #=> sin((x+y)^2)
 PolyForm(sin((x+y)^2), recurse=true) #=> sin((x^2 + (2x)y + y^2))
 ```
 """
-struct PolyForm <: Symbolic{Number}
+struct PolyForm <: Symbolic{Real}
     p::MP.AbstractPolynomialLike
     pvar2sym::Bijection{Any,Any}   # @polyvar x --> @sym x  etc.
     sym2term::Dict{BasicSymbolic,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))

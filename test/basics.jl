@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, isequal_core
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, _unwrap_internal
 using SymbolicUtils
 using ConstructionBase: setproperties
 using Setfield
@@ -117,11 +117,11 @@ end
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test isequal(w + z, Add(Complex, 0, Dict(w=>1, z=>1)))
-    @test isequal(z + a, Add(Number, 0, Dict(z=>1, a=>1)))
-    @test isequal(a + b, Add(Real, 0, Dict(a=>1, b=>1)))
-    @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
-    @test isequal(a + z, Add(Number, 0, Dict(a=>1, z=>1)))
+    @test isequal(w + z, Add{Complex}(0, Dict(w=>1, z=>1)))
+    @test isequal(z + a, Add{Number}(0, Dict(z=>1, a=>1)))
+    @test isequal(a + b, Add{Real}(0, Dict(a=>1, b=>1)))
+    @test isequal(a + x, Add{Number}(0, Dict(a=>1, x=>1)))
+    @test isequal(a + z, Add{Number}(0, Dict(a=>1, z=>1)))
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
@@ -303,8 +303,8 @@ toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
 @testset "diffs" begin
     @syms a b c
     @test isequal(toterm(-1c), Term{Number}(*, [-1, c]))
-    @test isequal(toterm(-1(a+b)), Term{Number}(+, [-1a, -b]))
-    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [-1c, a]))
+    @test isequal(toterm(-1(a+b)), Term{Number}(+, [-b, -a]))
+    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [a, -c]))
 end
 
 @testset "hash" begin
@@ -346,9 +346,9 @@ end
     a1 = setmetadata(a, Ctx1, "meta_1")
     a2 = setmetadata(a, Ctx1, "meta_1")
     a3 = setmetadata(a, Ctx2, "meta_2")
-    @test !isequal_core(a, a1; full=true)
-    @test isequal_core(a1, a2; full=true)
-    @test !isequal_core(a1, a3; full=true)
+    @test !isequal(_unwrap_internal(a), _unwrap_internal(a1))
+    @test isequal(_unwrap_internal(a1), _unwrap_internal(a2))
+    @test !isequal(_unwrap_internal(a1), _unwrap_internal(a3))
 end
 
 @testset "subtyping" begin
@@ -437,8 +437,8 @@ end
     x = setmetadata(x(t), Int, 3)
     ex = x * y
     res = substitute(ex, Dict(y => 1))
-    @test SymbolicUtils.isequal_core(res, x; full=true)
+    @test isequal(_unwrap_internal(res), _unwrap_internal(x))
     ex = x + y
     res = substitute(ex, Dict(y => 0))
-    @test SymbolicUtils.isequal_core(res, x; full=true)
+    @test isequal(_unwrap_internal(res), _unwrap_internal(x))
 end

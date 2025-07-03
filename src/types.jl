@@ -908,8 +908,6 @@ function Add{T}(coeff, dict; kw...) where {T}
     BasicSymbolic(BSImpl.AddOrMul{T}(variant, coeff, dict, kw...))
 end
 
-Add(T::Type, args... ; kw...) = Add{T}(args...; kw...)
-
 function Mul{T}(coeff, dict; kw...) where {T}
     coeff = convert(T, maybe_integer(unwrap(coeff)))
     dict = unwrap_dict(dict)
@@ -1766,7 +1764,7 @@ function add_worker(terms)
         !iszero(kvp[2])
     end
 
-    result = isempty(dict) ? coeff : Add(T, coeff, dict)
+    result = isempty(dict) ? coeff : Add{T}(coeff, dict)
     if !isempty(unsafes)
         push!(unsafes, result)
         result = Term{T}(+, unsafes)
@@ -1792,7 +1790,7 @@ end
 
 function -(a::SN)
     !issafecanon(*, a) && return term(-, a)
-    isadd(a) ? Add(sub_t(a), -a.coeff, mapvalues((_,v) -> -v, a.dict)) : (-1 * a)
+    isadd(a) ? Add{sub_t(a)}(-a.coeff, mapvalues((_,v) -> -v, a.dict)) : (-1 * a)
 end
 
 function -(a::SN, b::SN)
@@ -1964,7 +1962,7 @@ function *(a::Number, b::SN)
     elseif isone(-a) && isadd(b)
         # -1(a+b) -> -a - b
         T = promote_symtype(+, typeof(a), symtype(b))
-        Add(T, b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
+        Add{T}(b.coeff * a, Dict{Any,Any}(k=>v*a for (k, v) in b.dict))
     else
         Mul{mul_t(a, b)}(makemul(mul_t(a, b), a, b)...)
     end

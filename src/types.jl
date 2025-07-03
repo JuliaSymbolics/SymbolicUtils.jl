@@ -456,9 +456,9 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
     ida = a.id
     idb = b.id
     ida === idb && ida !== nothing && return true
-    # if ida !== idb && ida !== nothing && idb !== nothing
-    #     push!(Main._debug, a => b)
-    # end
+    if ida !== idb && ida !== nothing && idb !== nothing
+        return false
+    end
     typeof(a) === typeof(b) || return false
 
     Ta = MData.variant_type(a)
@@ -698,6 +698,7 @@ const ENABLE_HASHCONSING = Ref(true)
 # const WKD = TaskLocalValue{WeakKeyDict{HashconsingWrapper, Nothing}}(WeakKeyDict{HashconsingWrapper, Nothing})
 const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})
 const WVD = TaskLocalValue{WeakValueDict{UInt, BSImpl.Type}}(WeakValueDict{UInt, BSImpl.Type})
+const WCS = TaskLocalValue{WeakCacheSet{BSImpl.Type}}(WeakCacheSet{BSImpl.Type})
 
 function generate_id()
     return IDType()
@@ -737,37 +738,22 @@ function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
         return s
     end
 
-    cache = WVD[]
-    h = hash(s)
-    k = get(cache, h, nothing)
+    cache = WCS[]
+    k = getkey!(cache, s)
+    # cache = WVD[]
+    # h = hash(s)
+    # k = get(cache, h, nothing)
 
-    # TOTAL[] += 1
-    # Main._total += 1
-    # k = getkey(cache, s, nothing)
-
-    # ks = collect(keys(cache))
-    # for i in eachindex(ks)
-    #     isassigned(ks, i) || continue
-    #     isequal(ks[i], s) || continue
-    #     k === ks[i] && continue
-    #     push!(Main._debug, s => ks[i])
-    # end
-    if k === nothing || !isequal(k, s)
-        # MISSES[] += 1
-        if k !== nothing
-            buffer = collides[]
-            buffer2 = get!(() -> [], buffer, h)
-            push!(buffer2, k => s)
-        #     COLLISIONS[] += 1
-        # #     @show hash(k) h
-        # #     # push!(Main._misses, k => s)
-        end
+    # if k === nothing || !isequal(k, s)
+    #     if k !== nothing
+    #         buffer = collides[]
+    #         buffer2 = get!(() -> [], buffer, h)
+    #         push!(buffer2, k => s)
+    #     end
         
-        cache[h] = s
-        k = s
-    # else
-    #     HITS[] += 1
-    end
+    #     cache[h] = s
+    #     k = s
+    # end
     if k.id === nothing
         k.id = generate_id()
     end
@@ -1079,7 +1065,7 @@ function makeadd(::Type{T}, xs...)::Tuple{T, Dict{Symbolic, T}} where {T}
         end
         if ismul(x)
             v = x.coeff
-            k = @set x.coeff = one(symtype(x))
+            k = Mul{T}(1, x.dict; metadata = metadata(x))
         else
             k = x
             v = 1
@@ -1694,11 +1680,13 @@ function safe_add!(dict, coeff, b)
         v = b.coeff
         metadata = b.metadata
         if metadata === nothing
-            b′ = Mul{symtype(b)}(1, copy(b.dict))
+            b′ = Mul{symtype(b)}(1, b.dict)
         else
-            b′ = Mul{symtype(b)}(1, copy(b.dict); metadata)
+            b′ = Mul{symtype(b)}(1, b.dict; metadata)
         end
         dict[b′] = get(dict, b′, 0) + v
+    elseif b isa Number
+        coeff += b
     else
         dict[b] = get(dict, b, 0) + 1
     end
@@ -1722,7 +1710,6 @@ function add_worker(terms)
     coeff = 0
     dict = Dict{Symbolic, T}()
     # type of the `Add`
-    T = symtype(a)
 
     # handle `a` separately
     if issafecanon(+, a)
@@ -1731,8 +1718,10 @@ function add_worker(terms)
             dict = copy(parent(a.dict))
         elseif ismul(a)
             v = a.coeff
-            a′ = Mul{symtype(a)}(1, copy(a.dict); metadata = a.metadata)
+            a′ = Mul{symtype(a)}(1, a.dict; metadata = a.metadata)
             dict[a′] = v
+        elseif a isa Number
+            coeff = a
         else
             dict[a] = 1
         end
@@ -1746,25 +1735,19 @@ function add_worker(terms)
             continue
         end
         coeff = safe_add!(dict, coeff, b)
-        # if isadd(b)
-        #     coeff += b.coeff
-        #     for (k, v) in b.dict
-        #         dict[k] = get(dict, k, 0) + v
-        #     end
-        # elseif ismul(b)
-        #     v = b.coeff
-        #     b′ = Mul(symtype(b), 1, copy(b.dict); metadata = b.metadata)
-        #     dict[b′] = get(dict, b′, 0) + v
-        # else
-        #     dict[b] = get(dict, b, 0) + 1
-        # end
     end
     # remove entries multiplied by zero
     filter!(dict) do kvp
         !iszero(kvp[2])
     end
-
-    result = isempty(dict) ? coeff : Add{T}(coeff, dict)
+    if isempty(dict)
+        result = coeff
+    elseif iszero(coeff) && length(dict) == 1
+        expr, coeff = first(dict)
+        result = coeff * expr
+    else
+        result = Add{T}(coeff, dict)
+    end
     if !isempty(unsafes)
         push!(unsafes, result)
         result = Term{T}(+, unsafes)
@@ -1844,6 +1827,7 @@ function mul_worker(terms)
         b = unwrap(b)
         if !issafecanon(*, b)
             push!(unsafes, b)
+            continue
         end
         inner = _unwrap_internal(b)
         @match inner begin
@@ -1894,29 +1878,38 @@ function mul_worker(terms)
         end
     end
 
-    if !isempty(unsafes)
-        unsafe_term = Term{T}(*, unsafes)
-        num_dict[unsafe_term] = get(num_dict, unsafe_term, 0) + 1
+    if iszero(num_coeff)
+        return num_coeff
     end
     filter!(kvp -> !iszero(kvp[2]), num_dict)
-
-    if den_dict !== nothing
-        filter!(kvp, !iszero(kvp[2]), den_dict)
-    end
-    if den_dict === nothing || isempty(den_dict)
-        if num_coeff isa Rat && den_coeff isa Rat
-            num_coeff = maybe_integer(num_coeff // den_coeff)
-        else
-            num_coeff = num_coeff / den_coeff
-        end
-        den_coeff = 1
-        return Mul{T}(num_coeff, num_dict)
+    if isempty(num_dict)
+        num = num_coeff
+    elseif isone(num_coeff) && length(num_dict) == 1
+        base, exp = first(num_dict)
+        num = Pow{T}(base, exp)
     else
         num = Mul{T}(num_coeff, num_dict)
-        den = Mul{T}(den_coeff, den_dict)
-        return Div{T}(num, den, false)
     end
-    
+
+    if !isempty(unsafes)
+        push!(unsafes, num)
+        num = Term{T}(*, unsafes)
+    end
+
+    if den_dict !== nothing
+        filter!(kvp -> !iszero(kvp[2]), den_dict)
+    end
+
+    if den_dict === nothing || isempty(den_dict)
+        den = den_coeff
+    elseif isone(den_coeff) && length(den_dict) == 1
+        base, exp = first(den_dict)
+        den = Pow{T}(base, exp)
+    else
+        den = Mul{T}(den_coeff, den_dict)
+    end
+
+    return Div{T}(num, den, false)
 end
 
 function *(a::SN, b::SN)

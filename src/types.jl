@@ -1694,7 +1694,12 @@ function safe_add!(dict, coeff, b)
         end
     elseif ismul(b)
         v = b.coeff
-        b′ = Mul{symtype(b)}(1, copy(b.dict); metadata = b.metadata)
+        metadata = b.metadata
+        if metadata === nothing
+            b′ = Mul{symtype(b)}(1, copy(b.dict))
+        else
+            b′ = Mul{symtype(b)}(1, copy(b.dict); metadata)
+        end
         dict[b′] = get(dict, b′, 0) + v
     else
         dict[b] = get(dict, b, 0) + 1

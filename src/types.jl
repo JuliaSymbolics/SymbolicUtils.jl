@@ -754,14 +754,14 @@ function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
     # end
     if k === nothing || !isequal(k, s)
         # MISSES[] += 1
-        # if k !== nothing
-        #     buffer = collides[]
-        #     buffer2 = get!(() -> [], buffer, h)
-        #     push!(buffer2, k => s)
+        if k !== nothing
+            buffer = collides[]
+            buffer2 = get!(() -> [], buffer, h)
+            push!(buffer2, k => s)
         #     COLLISIONS[] += 1
         # #     @show hash(k) h
         # #     # push!(Main._misses, k => s)
-        # end
+        end
         
         cache[h] = s
         k = s
@@ -1813,12 +1813,112 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 
-function mul_worker(terms)
-    result, rest = Iterators.peel(terms)
-    for arg in rest
-        result = result * arg
+# should not be called with a `div`
+function get_mul_coeff_dict(::Type{T}, term; safe = false) where {T}
+    inner = _unwrap_internal(term)
+    @match inner begin
+        x::Number => (x, Dict{Symbolic, T}())
+        BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => (coeff, copy(dict))
+        BSImpl.Pow(; base, exp) && if exp isa Number end => (1, Dict{Symbolic, T}(base => exp))
+        _ => (1, Dict{Symbolic, T}(term => 1))
     end
-    return result
+end
+
+function mul_worker(terms)
+    length(terms) == 1 && return only(terms)
+    a, bs = Iterators.peel(terms)
+    a = unwrap(a)
+    T = symtype(a)
+    for b in bs
+        T = promote_symtype(*, T, symtype(b))
+    end
+    if isdiv(a)
+        num_coeff, num_dict = get_mul_coeff_dict(T, a.num)
+        den_coeff, den_dict = get_mul_coeff_dict(T, a.den)
+    else
+        num_coeff, num_dict = get_mul_coeff_dict(T, a)
+        den_coeff = 1
+        den_dict = nothing
+    end
+    unsafes = SmallV{Any}()
+
+    for b in bs
+        b = unwrap(b)
+        if !issafecanon(*, b)
+            push!(unsafes, b)
+        end
+        inner = _unwrap_internal(b)
+        @match inner begin
+            x::Number => (num_coeff *= x)
+            BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => begin
+                num_coeff *= coeff
+                for (k, v) in dict
+                    num_dict[k] = get(num_dict, k, 0) + v
+                end
+            end
+            BSImpl.Pow(; base, exp) && if exp isa Number end => begin
+                num_dict[base] = get(num_dict, base, 0) + exp
+            end
+            BSImpl.Div(; num, den) => begin
+                if den_dict === nothing && !(den isa Number)
+                    den_dict = Dict{Symbolic, T}()
+                end
+                num_inner = _unwrap_internal(num)
+                @match num_inner begin
+                    x::Number => (num_coeff *= x)
+                    BSImpl.AddOrMul(; variant = AddMullVariant.MUL, coeff, dict) => begin
+                        num_coeff *= coeff
+                        for (k, v) in dict
+                            num_dict[k] = get(num_dict, k, 0) + v
+                        end
+                    end
+                    BSImpl.Pow(; base, exp) && if exp isa number end => begin
+                        num_dict[base] = get(num_dict, base, 0) + exp
+                    end
+                    _ => (num_dict[num] = get(num_dict, num, 0) + 1)
+                end
+                den_inner = _unwrap_internal(den)
+                @match den_inner begin
+                    x::Number => (den_coeff *= x)
+                    BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => begin
+                        den_coeff *= coeff
+                        for (k, v) in dict
+                            den_dict[k] = get(den_dict, k, 0) + v
+                        end
+                    end
+                    BSImpl.Pow(; base, exp) && if exp isa Number end => begin
+                        den_dict[base] = get(den_dict, base, 0) + exp
+                    end
+                    _ => (den_dict[den] = get(den_dict, k, 0))
+                end
+            end
+            _ => (num_dict[b] = get(num_dict, b, 0) + 1)
+        end
+    end
+
+    if !isempty(unsafes)
+        unsafe_term = Term{T}(*, unsafes)
+        num_dict[unsafe_term] = get(num_dict, unsafe_term, 0) + 1
+    end
+    filter!(kvp -> !iszero(kvp[2]), num_dict)
+
+    if den_dict !== nothing
+        filter!(kvp, !iszero(kvp[2]), den_dict)
+    end
+    if den_dict === nothing || isempty(den_dict)
+        if num_coeff isa Rat && den_coeff isa Rat
+            num_coeff = maybe_integer(num_coeff // den_coeff)
+        else
+            num_coeff = num_coeff / den_coeff
+        end
+        den_coeff = 1
+        return Mul{T}(num_coeff, num_dict)
+    else
+        num = Mul{T}(num_coeff, num_dict)
+        den = Mul{T}(den_coeff, den_dict)
+        return Div{T}(num, den, false)
+    end
+    
 end
 
 function *(a::SN, b::SN)

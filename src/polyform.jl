@@ -108,7 +108,6 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         local_polyize = let pvar2sym = pvar2sym, sym2term = sym2term, vtype = vtype, pow = pow, Fs = Fs, recurse = recurse
                 f(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         end
-
         if (+) isa Fs && op === (+)
             return sum(local_polyize, args)
         elseif (*) isa Fs && op === (*)
@@ -122,7 +121,7 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
             y = if recurse
                 maketerm(typeof(x),
                          op,
-                         map(a->PolyForm(a, pvar2sym, sym2term, vtype; Fs, recurse), args),
+                         map(a->PolyForm(a; pvar2sym, sym2term, vtype, Fs, recurse), args),
                          metadata(x))
             else
                 x
@@ -267,9 +266,9 @@ function polyform_factors(d, pvar2sym, sym2term)
         if ispow(x) && x.exp isa Integer && x.exp > 0
             # here we do want to recurse one level, that's why it's wrong to just
             # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(PolyForm(x.base, pvar2sym, sym2term), x.exp)
+            Pow(PolyForm(x.base; pvar2sym, sym2term), x.exp)
         else
-            PolyForm(x, pvar2sym, sym2term)
+            PolyForm(x; pvar2sym, sym2term)
         end
     end
 

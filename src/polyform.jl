@@ -417,11 +417,11 @@ it wouldn't simplify `(x^2 + 15 -  8x)  / (x - 5)` to `(x - 3)`.
 But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
-quick_cancel(d::BasicSymbolic) = quick_cancel(_unwrap_internal(d))
+quick_cancel(d::BasicSymbolic) = (quick_cancel(_unwrap_internal(d)))
 quick_cancel(d) = d
 function quick_cancel(d::BSImpl.Type{T}) where {T}
     @match d begin
-        BSImpl.Pow(; base = BSImpl.Div(; num, den), exp) => begin
+        BSImpl.Pow(; base = BasicSymbolic(BSImpl.Div(; num, den)), exp) => begin
             n, d = quick_cancel((num ^ exp), (den ^ exp))
             return Div{T}(n, d, false)
         end
@@ -432,7 +432,7 @@ function quick_cancel(d::BSImpl.Type{T}) where {T}
             num, den = quick_cancel(num, den)
             return Div(num, den, false)
         end
-        _ => return d
+        _ => return BasicSymbolic(d)
     end
 end
 

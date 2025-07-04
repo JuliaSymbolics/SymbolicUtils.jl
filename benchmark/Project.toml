@@ -1,1 +1,5 @@
 [deps]
+
+[sources]
+WeakCacheSets = {url="https://github.com/JuliaCollections/WeakCacheSets.jl"}
+Moshi = {url="https://github.com/AayushSabharwal/Moshi.jl", rev="as/mutable-adt"}

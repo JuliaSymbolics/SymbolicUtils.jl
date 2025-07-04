@@ -5,19 +5,21 @@ function AbstractTrees.nodevalue(x::Symbolic)
     iscall(x) ? operation(x) : isexpr(x) ? head(x) : x
 end
 
-function AbstractTrees.nodevalue(x::BasicSymbolic)
+AbstractTrees.nodevalue(x::BasicSymbolic) = AbstractTrees.nodevalue(_unwrap_internal(x))
+function AbstractTrees.nodevalue(x::BSImpl.Type)
+    T = nameof(MData.variant_type(x))
     str = if !iscall(x)
-        string(exprtype(x), "(", x, ")")
+        string(T, "(", x, ")")
     elseif isadd(x)
-        string(exprtype(x), 
-            (scalar=x.coeff, coeffs=Tuple(k=>v for (k,v) in x.dict)))
+        string(T, 
+            (variant=string(x.variant), scalar=x.coeff, coeffs=Tuple(k=>v for (k,v) in x.dict)))
     elseif ismul(x)
-        string(exprtype(x),
-            (scalar=x.coeff, powers=Tuple(k=>v for (k,v) in x.dict)))
+        string(T,
+            (variant=string(x.variant), scalar=x.coeff, powers=Tuple(k=>v for (k,v) in x.dict)))
     elseif isdiv(x) || ispow(x)
-        string(exprtype(x))
+        string(T)
     else
-        string(exprtype(x),"{", operation(x), "}")
+        string(T,"{", operation(x), "}")
     end
 
     if inspect_metadata[] && !isnothing(metadata(x))

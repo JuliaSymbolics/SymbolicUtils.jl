@@ -60,8 +60,8 @@ end
 
 If(f, x) = IfElse(f, x, Empty())
 
-struct Chain
-    rws
+struct Chain{Cs}
+    rws::Cs
     stop_on_match::Bool
 end
 Chain(rws) = Chain(rws, false)
@@ -78,8 +78,24 @@ function (rw::Chain)(x)
         end
     end
     return x
-
 end
+
+@generated function (rw::Chain{<:NTuple{N, Any}})(x) where {N}
+    quote
+        Base.@nexprs $N i -> begin
+            f = rw.rws[i]
+            y = f(x)
+            if rw.stop_on_match && y !== nothing && !isequal(x, y)
+                return y
+            end
+            if y !== nothing
+                x = y
+            end
+        end
+        return x
+    end
+end
+
 instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
 
 struct RestartedChain{Cs}

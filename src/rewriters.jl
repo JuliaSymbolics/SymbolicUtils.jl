@@ -30,7 +30,6 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer
 using TermInterface
 
 import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype
@@ -69,7 +68,7 @@ Chain(rws) = Chain(rws, false)
 
 function (rw::Chain)(x)
     for f in rw.rws
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
         if rw.stop_on_match && !isnothing(y) && !isequal(y, x)
             return y
         end
@@ -91,7 +90,7 @@ instrument(c::RestartedChain, f) = RestartedChain(map(x->instrument(x,f), c.rws)
 
 function (rw::RestartedChain)(x)
     for f in rw.rws
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
         if y !== nothing
             return Chain(rw.rws)(y)
         end
@@ -103,7 +102,7 @@ end
     quote
         Base.@nexprs $N i->begin
             let f = rw.rws[i]
-                y = @timer cached_repr(repr(f)) f(x)
+                y = f(x)
                 if y !== nothing
                     return Chain(rw.rws)(y)
                 end
@@ -122,11 +121,11 @@ instrument(x::Fixpoint, f) = Fixpoint(instrument(x.rw, f))
 
 function (rw::Fixpoint)(x)
     f = rw.rw
-    y = @timer cached_repr(f) f(x)
+    y = f(x)
     while x !== y && !isequal(x, y)
         y === nothing && return x
         x = y
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
     end
     return x
 end
@@ -150,7 +149,7 @@ instrument(x::FixpointNoCycle, f) = Fixpoint(instrument(x.rw, f))
 function (rw::FixpointNoCycle)(x)
     f = rw.rw
     push!(rw.hist, hash(x))
-    y = @timer cached_repr(f) f(x)
+    y = f(x)
     while x !== y && hash(x) ∉ rw.hist
         if y === nothing
             empty!(rw.hist)
@@ -158,7 +157,7 @@ function (rw::FixpointNoCycle)(x)
         end
         push!(rw.hist, y)
         x = y
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
     end
     empty!(rw.hist)
     return x

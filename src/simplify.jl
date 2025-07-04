@@ -13,7 +13,7 @@ Simplify an expression (`x`) by applying `rewriter` until there are no changes.
 By default, simplify will assume denominators are not zero and allow cancellation in fractions.
 Pass `simplify_fractions=false` to prevent this.
 """
-function simplify(x;
+@inline function simplify(x;
                   expand=false,
                   polynorm=nothing,
                   threaded=false,

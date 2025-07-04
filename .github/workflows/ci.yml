@@ -20,6 +20,7 @@ jobs:
         version:
           - 'min'
           - '1'
+      fail-fast: false
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

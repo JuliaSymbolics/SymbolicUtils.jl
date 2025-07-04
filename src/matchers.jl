@@ -104,8 +104,8 @@ function matcher(segment::Segment, acSets)
 end
 
 function term_matcher_constructor(term, acSets)
-    matchers = (matcher(operation(term), acSets), map(x->matcher(x,acSets), arguments(term))...,)
-    
+    matchers = vcat([matcher(operation(term), acSets)], map(x -> matcher(x, acSets), parent(arguments(term))))
+
     function loop(term, bindings′, matchers′) # Get it to compile faster
         if !islist(matchers′)
             if  !islist(term)
@@ -261,7 +261,7 @@ end
 # Note: there is a bit of a waste here bc the matcher get created twice, both 
 # in the normal_matcher and in defslot_matcher and other_part_matcher
 function defslot_term_matcher_constructor(term, acSets)
-    a = arguments(term)
+    a = parent(arguments(term))
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
     defslot = a[defslot_index]
     defslot_matcher = matcher(defslot, acSets)

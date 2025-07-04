@@ -28,6 +28,7 @@ import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 using WeakValueDicts: WeakValueDict
+using WeakCacheSets: WeakCacheSet, getkey!
 using Base: RefValue
 
 # include("WeakCacheSets.jl")

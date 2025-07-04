@@ -94,6 +94,8 @@ let
          (-f*(g + (-d*g) / d)) / (i + (-c*(h + (-e*g) / d)) / b + (-f*g) / d)) / d
     pform["simplify_fractions"] = @benchmarkable simplify_fractions($ex)
     pform["iszero"] = @benchmarkable SymbolicUtils.fraction_iszero($ex)
-    pform["isone"] = @benchmarkable SymbolicUtils.fraction_isone($o)
+    pform["isone"] = @benchmarkable SymbolicUtils.fraction_isone($ex)
+    pform["isone:noop"] = @benchmarkable SymbolicUtils.fraction_isone($o)
+    pform["iszero:noop"] = @benchmarkable SymbolicUtils.fraction_iszero($o)
     pform["easy_iszero"] = @benchmarkable SymbolicUtils.fraction_iszero($((b*(h + (-e*g) / d)) / b + (e*g) / d - h))
 end

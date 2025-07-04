@@ -583,15 +583,40 @@ function (acr::ACRule)(term)
         f = operation(term)
         T = symtype(term)
         args = arguments(term)
+        is_full_perm = acr.arity == length(args)
+        if is_full_perm
+            args_buf = copy(parent(args))
+        else
+            args_buf = ArgsT(@view args[1:acr.arity])
+        end
 
         itr = acr.sets(eachindex(args), acr.arity)
 
         for inds in itr
-            result = r(Term{T}(f, @views args[inds]))
+            for (i, ind) in enumerate(inds)
+                args_buf[i] = args[ind]
+            end
+            # this is temporary and only constructed so the rule can
+            # try and match it - no need to hashcons it.
+            old_hc = ENABLE_HASHCONSING[]
+            ENABLE_HASHCONSING[] = false
+            tempterm = Term{T}(f, args_buf)
+            ENABLE_HASHCONSING[] = old_hc
+            # this term will be hashconsed regardless
+            result = r(tempterm)
             if result !== nothing
                 # Assumption: inds are unique
-                length(args) == length(inds) && return result
-                return maketerm(typeof(term), f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], metadata(term))
+                is_full_perm && return result
+                inds_set = BitSet(inds)
+                full_args_buf = ArgsT(@view args[1:(length(args)-acr.arity+1)])
+                idx = 1
+                for i in eachindex(args)
+                    i in inds_set && continue
+                    full_args_buf[idx] = args[i]
+                    idx += 1
+                end
+                full_args_buf[idx] = result
+                return maketerm(typeof(term), f, full_args_buf, metadata(term))
             end
         end
     end

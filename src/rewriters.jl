@@ -60,9 +60,9 @@ end
 
 If(f, x) = IfElse(f, x, Empty())
 
-struct Chain{Cs}
-    rws::Cs
-    stop_on_match::Bool
+mutable struct Chain{Cs}
+    const rws::Cs
+    const stop_on_match::Bool
 end
 Chain(rws) = Chain(rws, false)
 
@@ -138,7 +138,7 @@ instrument(x::Fixpoint, f) = Fixpoint(instrument(x.rw, f))
 function (rw::Fixpoint)(x)
     f = rw.rw
     y = f(x)
-    while x !== y && !isequal(x, y)
+    while (x !== y) && !isequal(x, y)
         y === nothing && return x
         x = y
         y = f(x)

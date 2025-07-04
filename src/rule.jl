@@ -130,6 +130,9 @@ function makepattern(expr, keys, parentCall=nothing)
                     # matches ~x::predicate
                     makeslot(expr.args[2], keys)
                 end
+            elseif expr.args[1] === :(//)
+                # bc when the expression is not quoted, 3//2 is a Rational{Int64}, not a call
+                return esc(expr.args[2] // expr.args[3])
             else
                 # make a pattern for every argument of the expr.
                 :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any))
@@ -373,11 +376,13 @@ macro rule(expr)
     quote
         $(__source__)
         lhs_pattern = $(lhs_term)
-        Rule($(QuoteNode(expr)),
-             lhs_pattern,
-             matcher(lhs_pattern),
-             __MATCHES__ -> $(makeconsequent(rhs)),
-             rule_depth($lhs_term))
+        Rule(
+            $(QuoteNode(expr)),
+            lhs_pattern,
+            matcher(lhs_pattern, permutations),
+            __MATCHES__ -> $(makeconsequent(rhs)),
+            rule_depth($lhs_term)
+        )
     end
 end
 
@@ -412,7 +417,7 @@ macro capture(ex, lhs)
         lhs_pattern = $(lhs_term)
         __MATCHES__ = Rule($(QuoteNode(lhs)),
              lhs_pattern,
-             matcher(lhs_pattern),
+             matcher(lhs_pattern, nothing),
              identity,
              rule_depth($lhs_term))($(esc(ex)))
         if __MATCHES__ !== nothing
@@ -437,16 +442,46 @@ Rule(acr::ACRule)   = acr.rule
 getdepth(r::ACRule) = getdepth(r.rule)
 
 macro acrule(expr)
-    arity = length(expr.args[2].args[2:end])
+    @assert expr.head == :call && expr.args[1] == :(=>)
+    lhs = expr.args[2]
+    rhs = rewrite_rhs(expr.args[3])
+    keys = Symbol[]
+    lhs_term = makepattern(lhs, keys)
+    unique!(keys)
+
+    arity = length(lhs.args[2:end])
+
     quote
-        ACRule(permutations, $(esc(:(@rule($(expr))))), $arity)
+        $(__source__)
+        lhs_pattern = $(lhs_term)
+        rule = Rule($(QuoteNode(expr)),
+             lhs_pattern,
+             matcher(lhs_pattern, permutations),
+             __MATCHES__ -> $(makeconsequent(rhs)),
+             rule_depth($lhs_term))
+        ACRule(permutations, rule, $arity)
     end
 end
 
 macro ordered_acrule(expr)
-    arity = length(expr.args[2].args[2:end])
+    @assert expr.head == :call && expr.args[1] == :(=>)
+    lhs = expr.args[2]
+    rhs = rewrite_rhs(expr.args[3])
+    keys = Symbol[]
+    lhs_term = makepattern(lhs, keys)
+    unique!(keys)
+
+    arity = length(lhs.args[2:end])
+
     quote
-        ACRule(combinations, $(esc(:(@rule($(expr))))), $arity)
+        $(__source__)
+        lhs_pattern = $(lhs_term)
+        rule = Rule($(QuoteNode(expr)),
+             lhs_pattern,
+             matcher(lhs_pattern, combinations),
+             __MATCHES__ -> $(makeconsequent(rhs)),
+             rule_depth($lhs_term))
+        ACRule(combinations, rule, $arity)
     end
 end
 
@@ -454,15 +489,11 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if !iscall(term)
+    if !iscall(term) || operation(term) != operation(r.lhs)
+        # different operations -> try deflsot
         r(term)
     else
-        f =  operation(term)
-        # Assume that the matcher was formed by closing over a term
-        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
-            return nothing
-        end
-
+        f = operation(term)
         T = symtype(term)
         args = arguments(term)
 

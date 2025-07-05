@@ -598,10 +598,7 @@ function (acr::ACRule)(term)
             end
             # this is temporary and only constructed so the rule can
             # try and match it - no need to hashcons it.
-            old_hc = ENABLE_HASHCONSING[]
-            ENABLE_HASHCONSING[] = false
-            tempterm = Term{T}(f, args_buf)
-            ENABLE_HASHCONSING[] = old_hc
+            tempterm = BSImpl.Term{T}(f, args_buf; unsafe = true)
             # this term will be hashconsed regardless
             result = r(tempterm)
             if result !== nothing

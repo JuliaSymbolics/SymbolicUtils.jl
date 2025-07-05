@@ -799,7 +799,7 @@ struct CSEState
     """
     A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
     """
-    visited::IdDict{Any, Any}
+    visited::IdDict{Union{SymbolicUtils.IDType, AbstractArray, Tuple}, BasicSymbolic}
     """
     Integer counter, used to generate unique names for intermediate variables.
     """
@@ -899,8 +899,9 @@ function cse! end
 
 indextype(::AbstractSparseArray{Tv, Ti}) where {Tv, Ti} = Ti
 
-function cse!(expr::Symbolic, state::CSEState)
-    get!(state.visited, expr) do
+
+function cse!(expr::BasicSymbolic, state::CSEState)
+    get!(state.visited, expr.id) do
         iscall(expr) || return expr
 
         op = operation(expr)

@@ -436,7 +436,7 @@ function quick_cancel(d::BSImpl.Type{T}) where {T}
             return Div{T}(n, d, false)
         end
         BSImpl.AddOrMul(; variant) && if variant == AddMulVariant.MUL && any(isdiv, arguments(d)) end => begin
-            return reduce(*, arguments(d))
+            return mul_worker(arguments(d))
         end
         BSImpl.Div(; num, den) => begin
             num, den = quick_cancel(num, den)

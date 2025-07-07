@@ -94,6 +94,9 @@ end
 
 _isone(p::PolyForm) = isone(p.p)
 
+maybe_float(::Type{T}, x) where {T <: Integer} = x
+maybe_float(::Type, x) = x isa Number && !(x isa Rational) ? float(x) : x
+
 function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     if x isa Number
         return x
@@ -105,8 +108,8 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         op = operation(x)
         args = parent(arguments(x))
 
-        local_polyize = let pvar2sym = pvar2sym, sym2term = sym2term, vtype = vtype, pow = pow, Fs = Fs, recurse = recurse
-                f(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
+        local_polyize = let pvar2sym = pvar2sym, sym2term = sym2term, vtype = vtype, pow = pow, Fs = Fs, recurse = recurse, T = symtype(x)
+                f(y) = maybe_float(T, polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse))
         end
         if (+) isa Fs && op === (+)
             return sum(local_polyize, args)
@@ -431,8 +434,10 @@ Has optimized processes for `Mul` and `Pow` terms.
 quick_cancel(d) = d
 function quick_cancel(d::BSImpl.Type{T}) where {T}
     @match d begin
-        BSImpl.Pow(; base = BSImpl.Div(; num, den), exp) => begin
-            n, d = quick_cancel((num ^ exp), (den ^ exp))
+        BSImpl.Pow(; base, exp) => begin
+            base isa BSImpl.Type || return d
+            MData.isa_variant(base, BSImpl.Div) || return d
+            n, d = quick_cancel((base.num ^ exp), (base.den ^ exp))
             return Div{T}(n, d, false)
         end
         BSImpl.AddOrMul(; variant) && if variant == AddMulVariant.MUL && any(isdiv, arguments(d)) end => begin

@@ -97,6 +97,18 @@ for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{<:Rational},
+                   S::Type{Integer}) = Rational
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{Integer},
+                   S::Type{<:Rational}) = Rational
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{<:Complex{<:Rational}},
+                   S::Type{Integer}) = Complex{Rational}
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{Integer},
+                   S::Type{<:Complex{<:Rational}}) = Complex{Rational}
     for R in [SafeRealImpl, LiteralRealImpl]
         @eval function promote_symtype(::$(typeof(f)),
                 T::Type{<:$R},

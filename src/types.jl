@@ -682,7 +682,13 @@ If `x` is a rational with denominator 1, turn it into an integer.
 """
 function maybe_integer(x)
     x = unwrap(x)
-    x isa Number && isinteger(x) ? Integer(x) : x
+    x isa Real || return x
+    isinteger(x) || return x
+    if typemin(Int) <= x <= typemax(Int)
+        return Int(x)
+    else
+        return x
+    end
 end
 
 function parse_args(args::AbstractVector)
@@ -691,7 +697,6 @@ function parse_args(args::AbstractVector)
     elseif !(args isa ArgsT)
         args = ArgsT(args)
     end
-    map!(parse_maybe_symbolic, args, args)
     return args::ArgsT
 end
 
@@ -704,7 +709,7 @@ function parse_dict(::Type{T}, x::AbstractDict) where {T}
 end
 
 parse_maybe_symbolic(x::Symbolic) = x
-parse_maybe_symbolic(x) = maybe_integer(x)
+parse_maybe_symbolic(x) = x
 # parse_maybe_symbolic(x) = Const{typeof(x)}(x)
 
 function unwrap_args(args)
@@ -747,6 +752,7 @@ end
     metadata = parse_metadata(metadata)
     dict = parse_dict(T, dict)
     props = ordered_override_properties(BSImpl.AddOrMul)
+    coeff = maybe_integer(coeff)
     var = BSImpl.AddOrMul{T}(variant, coeff, dict, metadata, shape, props...)
     if !unsafe
         var = hashcons(var)
@@ -756,8 +762,8 @@ end
 
 @inline function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    num = parse_maybe_symbolic(num)
-    den = parse_maybe_symbolic(den)
+    num = maybe_integer(parse_maybe_symbolic(num))
+    den = maybe_integer(parse_maybe_symbolic(den))
     props = ordered_override_properties(BSImpl.Div)
     var = BSImpl.Div{T}(num, den, simplified, metadata, shape, props...)
     if !unsafe
@@ -768,8 +774,8 @@ end
 
 @inline function BSImpl.Pow{T}(base, exp; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    base = parse_maybe_symbolic(base)
-    exp = parse_maybe_symbolic(exp)
+    base = maybe_integer(parse_maybe_symbolic(base))
+    exp = maybe_integer(parse_maybe_symbolic(exp))
     props = ordered_override_properties(BSImpl.Pow)
     var = BSImpl.Pow{T}(base, exp, metadata, shape, props...)
     if !unsafe
@@ -1026,7 +1032,7 @@ function makemul(::Type{T}, xs...) where {T}
     end
 
     filter!(!iszero ∘ last, dict)
-    return (coeff, dict)::Tuple{T, Dict{Symbolic, T}}
+    return (coeff, dict)
 end
 
 """

@@ -184,7 +184,7 @@ function term_matcher_constructor(term, acSets)
                 
                 for inds in acSets(eachindex(data_args), length(data_args))
                     candidate = Term{T}(f, @views data_args[inds])
-                    
+
                     result = loop(candidate, bindings, matchers)                
                     result !== nothing && return success(result,1)
                 end

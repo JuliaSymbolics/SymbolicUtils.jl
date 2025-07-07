@@ -25,16 +25,6 @@ const previously_declared_for = Set([])
 
 const basic_monadic = [-, +]
 const basic_diadic = [+, -, *, /, //, \, ^]
-#################### SafeReal #########################
-export SafeReal, LiteralReal
-
-# ideally the relationship should be the other way around
-abstract type SafeReal <: Real end
-
-################### LiteralReal #######################
-
-abstract type LiteralReal <: Real end
-
 #######################################################
 
 assert_like(f, T) = nothing
@@ -101,13 +91,25 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
 end
 
 @number_methods(BasicSymbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
-@number_methods(BasicSymbolic{<:LiteralReal}, term(f, a), term(f, a, b), onlybasics)
+@number_methods(BasicSymbolic{LiteralReal}, term(f, a), term(f, a, b), onlybasics)
 
 for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{<:Number},
                    S::Type{<:Number}) = promote_type(T, S)
-    for R in [SafeReal, LiteralReal]
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{<:Rational},
+                   S::Type{Integer}) = Rational
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{Integer},
+                   S::Type{<:Rational}) = Rational
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{<:Complex{<:Rational}},
+                   S::Type{Integer}) = Complex{Rational}
+    @eval promote_symtype(::$(typeof(f)),
+                   T::Type{Integer},
+                   S::Type{<:Complex{<:Rational}}) = Complex{Rational}
+    for R in [SafeRealImpl, LiteralRealImpl]
         @eval function promote_symtype(::$(typeof(f)),
                 T::Type{<:$R},
                 S::Type{<:Real})
@@ -153,8 +155,8 @@ end
 promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeReal}) = SafeReal
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralReal}) = LiteralReal
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeRealImpl}) = SafeReal
+    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralRealImpl}) = LiteralReal
 end
 
 Base.:*(a::AbstractArray, b::Symbolic{<:Number}) = map(x->x*b, a)

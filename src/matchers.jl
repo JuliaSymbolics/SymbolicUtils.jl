@@ -91,12 +91,9 @@ function matcher(segment::Segment, acSets)
             for i=length(data):-1:0
                 subexpr = take_n(data, i)
 
-                if segment.predicate(subexpr)
-                    res = success(assoc(bindings, segment.name, subexpr), i)
-                    if res !== nothing
-                        break
-                    end
-                end
+                !segment.predicate(subexpr) && continue
+                res = success(assoc(bindings, segment.name, subexpr), i)
+                res !== nothing && break
             end
 
             return res
@@ -174,7 +171,7 @@ function term_matcher_constructor(term, acSets)
         end
         return pow_term_matcher
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
-    elseif acSets!==nothing && !isa(arguments(term)[1], Segment) && operation(term) in [+, *]
+    elseif acSets!==nothing && operation(term) in [+, *]
         function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
@@ -185,11 +182,11 @@ function term_matcher_constructor(term, acSets)
                 f = operation(car(data))
                 data_args = arguments(car(data))
                 
-                for inds in acSets(eachindex(data_args), length(arguments(term)))
+                for inds in acSets(eachindex(data_args), length(data_args))
                     candidate = Term{T}(f, @views data_args[inds])
                     
                     result = loop(candidate, bindings, matchers)                
-                    result !== nothing && length(data_args) == length(inds) && return success(result,1)
+                    result !== nothing && return success(result,1)
                 end
             # if car(data) does not subtype to number, it might not be commutative
             else

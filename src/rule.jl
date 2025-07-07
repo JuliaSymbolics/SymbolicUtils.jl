@@ -82,7 +82,7 @@ function makeDefSlot(s::Expr, keys, op)
 
     push!(keys, name)
     tmp = defaultValOfCall(op)
-    :(DefSlot($(QuoteNode(name)), $(esc(s.args[2])), $(esc(op))), $(esc(tmp)))
+    :(DefSlot($(QuoteNode(name)), $(esc(s.args[2])), $(esc(op)), $(esc(tmp))))
 end
 
 

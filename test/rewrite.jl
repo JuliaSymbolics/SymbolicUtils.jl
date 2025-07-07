@@ -108,6 +108,12 @@ end
     @test r_mixmix(exp(x)*sin(1+x+x^2)*2) === (2, 1, x)
     @test r_mixmix(exp(x)*sin(x+x^2)*2) === (2, 0, x)
     @test r_mixmix(exp(x)*sin(x+x^2)) === (1, 0, x)
+
+    r_predicate = @rule ~x + (~!m::(var->isa(var, Int))) => (~x, ~m)
+    @test r_predicate(x+2) === (x, 2)
+    @test r_predicate(x+2.0) !== (x, 2.0)
+    # Note: r_predicate(x+2.0) doesnt return nothing, but (x+2.0, 0)
+    # becasue of the defslot
 end
 
 @testset "power matcher with negative exponent" begin

@@ -1,10 +1,12 @@
 # API Reference
+```@meta
+CurrentModule = SymbolicUtils
+```
 
 ## Symbols and Terms
 ```@docs
 SymbolicUtils.@syms
 SymbolicUtils.Sym
-SymbolicUtils.issym
 SymbolicUtils.symtype
 SymbolicUtils.Term
 SymbolicUtils.Add
@@ -17,19 +19,19 @@ SymbolicUtils.promote_symtype
 
 ```@docs
 @rule
-SymbolicUtils.Rewriters
+Rewriters
 ```
 
 ## Simplify
 
 ```@docs
-SymbolicUtils.simplify
-SymbolicUtils.expand
-SymbolicUtils.substitute
+simplify
+expand
+substitute
 ```
 
 ## Utilities
 
 ```@docs
-SymbolicUtils.@timerewrite
+@timerewrite
 ```

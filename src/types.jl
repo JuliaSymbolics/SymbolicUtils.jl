@@ -122,7 +122,7 @@ end
 ###
 
 """
-$(SIGNATURES)
+symtype(x)
 
 Returns the [numeric type](https://docs.julialang.org/en/v1/base/numbers/#Standard-Numeric-Types) 
 of `x`. By default this is just `typeof(x)`.

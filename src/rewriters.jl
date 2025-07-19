@@ -24,7 +24,7 @@ rewriters.
    threaded spawn.
 - `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order traversal.
 - `Fixpoint(rw)` returns a rewriter which applies `rw` repeatedly until there are no changes to be made.
-- `FixpointNoCycle` behaves like [`Fixpoint`](@ref) but instead it applies `rw` repeatedly only while it is returning new results.
+- `FixpointNoCycle` behaves like `Fixpoint` but instead it applies `rw` repeatedly only while it is returning new results.
 - `PassThrough(rw)` returns a rewriter which if `rw(x)` returns `nothing` will instead
    return `x` otherwise will return `rw(x)`.
 
@@ -112,7 +112,6 @@ end
         return x
     end
 end
-
 
 struct Fixpoint{C}
     rw::C

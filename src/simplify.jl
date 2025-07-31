@@ -23,8 +23,8 @@ function simplify(x;
     if polynorm !== nothing
         Base.depwarn("simplify(..; polynorm=$polynorm) is deprecated, use simplify(..; expand=$polynorm) instead",
                         :simplify)
+        expand = polynorm  # Use polynorm value as expand for backward compatibility
     end
-
 
     f = if rewriter === nothing
         if threaded

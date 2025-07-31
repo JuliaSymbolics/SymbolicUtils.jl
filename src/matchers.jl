@@ -120,7 +120,7 @@ function term_matcher_constructor(term)
             car(matchers′)(term, bindings′) do b, n
                 loop(drop_n(term, n), b, cdr(matchers′))
             end
-            # explenation of above 3 lines:
+            # explanation of above 3 lines:
             # car(matchers′)(b,n -> loop(drop_n(term, n), b, cdr(matchers′)), term, bindings′)
             #                <------ next(b,n) ---------------------------->
             # car = first element of list, cdr = rest of the list, drop_n = drop first n elements of list
@@ -138,15 +138,15 @@ end
 #    normal part (can bee a tree)   operation     defslot part
 
 # defslot_term_matcher works like this:
-# checks wether data starts with the default operation.
+# checks whether data starts with the default operation.
 #     if yes (1): continues like term_matcher
-#     if no checks wether data matches the normal part
+#     if no checks whether data matches the normal part
 #          if no returns nothing, rule is not applied
 #          if yes (2): adds the pair (default value name, default value) to the found bindings and 
 #          calls the success function like term_matcher would do
 
 function defslot_term_matcher_constructor(term)
-    a = arguments(term) # lenght two bc defslot term matcher is allowed only with +,* and ^, that accept two arguments
+    a = arguments(term) # length two bc defslot term matcher is allowed only with +,* and ^, that accept two arguments
     matchers = (matcher(operation(term)), map(matcher, a)...) # create matchers for the operation and the two arguments of the term
     
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
@@ -159,7 +159,7 @@ function defslot_term_matcher_constructor(term)
         if !iscall(car(data)) || (iscall(car(data)) && nameof(operation(car(data))) != defslot.operation)
             other_part_matcher = matchers[defslot_index==2 ? 2 : 3] # find the matcher of the normal part
             
-            # checks wether it matches the normal part
+            # checks whether it matches the normal part
             #                             <-----------------(2)------------------------------->
             bindings = other_part_matcher((b,n) -> assoc(b, defslot.name, defslot.defaultValue), data, bindings)
             

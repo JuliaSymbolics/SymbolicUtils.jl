@@ -121,6 +121,7 @@ end
     @test r1(1/a^b) === (a, -b) # uses frankestein
     @test r1(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
     @test r1(1/a^2) === (a, -2) # uses opposite_sign_matcher
+    @test r1(1/a) === (a, -1)
 
     r2 = @rule (~x)^(~y + ~z) => (~x, ~y, ~z) # rule with term as exponent
     @test r2(1/a^(b+2c)) === (a, -b, -2c) # uses frankestein

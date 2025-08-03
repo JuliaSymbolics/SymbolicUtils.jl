@@ -150,6 +150,15 @@ function term_matcher_constructor(term, acSets)
                 result = loop(frankestein, bindings, matchers)
                 result !== nothing && return success(result, 1)
             end
+
+            # if data is of the alternative form 1/(...), it might match with exponent = -1
+            if (operation(data) === /) && isequal(arguments(data)[1], 1)
+                denominator = arguments(data)[2]
+                T = symtype(denominator)
+                frankestein = Term{T}(^, [denominator, -1])
+                result = loop(frankestein, bindings, matchers)
+                result !== nothing && return success(result, 1)
+            end
             
             # if data is a exp call, it might match with base e
             if operation(data)===exp

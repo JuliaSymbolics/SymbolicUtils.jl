@@ -97,20 +97,6 @@ end
 
 ## Rational Polynomial form with Div
 
-function polyform_factors(d, pvar2sym, sym2term)
-    make(xs) = map(xs) do x
-        if ispow(x) && x.exp isa Integer && x.exp > 0
-            # here we do want to recurse one level, that's why it's wrong to just
-            # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(PolyForm(x.base; pvar2sym, sym2term), x.exp)
-        else
-            PolyForm(x; pvar2sym, sym2term)
-        end
-    end
-
-    return make(numerators(d)), make(denominators(d))
-end
-
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
 function simplify_div(d)

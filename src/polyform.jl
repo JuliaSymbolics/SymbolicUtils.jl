@@ -305,11 +305,20 @@ end
 
 function frac_maketerm(T, f, args, metadata)
     # TODO add stype to T?
-    if f in (*, /, \, +, -)
-        f(args...)
+    if f === (*)
+        mul_worker(args)
+    elseif f === (/)
+        args[1] / args[2]
+    elseif f === (\)
+        args[1] \ args[2]
+    elseif f === (+)
+        add_worker(args)
+    elseif f === (-)
+        args[1] - args[2]
     elseif f == (^)
-        if args[2] isa Integer && args[2] < 0
-            1/((args[1])^(-args[2]))
+        exp = unwrap_const(args[2])
+        if exp isa Integer && exp < 0
+            1/((args[1])^(-exp))
         else
             args[1]^args[2]
         end

@@ -454,20 +454,22 @@ But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
 quick_cancel(d) = d
-function quick_cancel(d::BSImpl.Type{T}) where {T}
+function quick_cancel(d::BSImpl.Type)
     @match d begin
         BSImpl.Pow(; base, exp) => begin
             base isa BSImpl.Type || return d
             MData.isa_variant(base, BSImpl.Div) || return d
-            n, d = quick_cancel((base.num ^ exp), (base.den ^ exp))
-            return Div{T}(n, d, false)
+            num = MData.variant_getfield(base, BSImpl.Div, :num)
+            den = MData.variant_getfield(base, BSImpl.Div, :den)
+            n, d = quick_cancel((num ^ exp), (den ^ exp))
+            return Div{symtype(d)}(n, d, false)
         end
         BSImpl.AddOrMul(; variant) && if variant == AddMulVariant.MUL && any(isdiv, arguments(d)) end => begin
-            return mul_worker(arguments(d))
+            return mul_worker(symtype(d), arguments(d))
         end
         BSImpl.Div(; num, den) => begin
             num, den = quick_cancel(num, den)
-            return Div(num, den, false)
+            return Div{symtype(d)}(num, den, false)
         end
         _ => return d
     end

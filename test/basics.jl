@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Polyform, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, PolynomialT
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Polyform, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, PolynomialT, Const
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
@@ -259,7 +259,7 @@ end
     # test that maketerm doesn't hard-code BasicSymbolic subtype
     # and is consistent with BasicSymbolic arithmetic operations
     @test isequal(SymbolicUtils.maketerm(typeof(a / b), *, [a / b, c],  nothing), (a / b) * c)
-    @test isequal(SymbolicUtils.maketerm(typeof(a * b), *, [0, c],  nothing), 0)
+    @test isequal(SymbolicUtils.maketerm(typeof(a * b), *, [0, c],  nothing), Const{Number}(0))
     @test isequal(SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3],  nothing), (a * b)^3)
 
     # test that maketerm sets metadata correctly
@@ -334,14 +334,14 @@ end
     @syms a b c
     for x in [a, a*b, a^2, sin(a)]
         @test isequal(x * 1, x)
-        @test x * 0 === 0
+        @test x * 0 === Const{Number}(0)
         @test isequal(x + 0, x)
         @test isequal(x + x, 2x)
         @test isequal(x + 2x, 3x)
         @test x - x === 0
         @test isequal(-x, -1x)
         @test isequal(x^1, x)
-        @test isequal((x^-1)*inv(x^-1), 1)
+        @test isequal(unwrap_const((x^-1)*inv(x^-1)), 1)
     end
 end
 
@@ -385,10 +385,10 @@ end
     @test issym((2x/2y).num)
     @test get_mul_coefficient((2x/3y).num) == 2
     @test get_mul_coefficient((2x/3y).den) == 3
-    @test (2x/-3x) == -2//3
-    @test (2.5x/3x).num == 2.5
-    @test (2.5x/3x).den == 3
-    @test (x/3x) == 1//3
+    @test unwrap_const(2x/-3x) == -2//3
+    @test unwrap_const((2.5x/3x).num) == 2.5
+    @test unwrap_const((2.5x/3x).den) == 3
+    @test unwrap_const(x/3x) == 1//3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)
 end
@@ -398,7 +398,7 @@ end
     t = x ^ im
     @test iscall(t)
     @test operation(t) == (^)
-    @test isequal(arguments(t), [x, im])
+    @test isequal(unwrap_const.(arguments(t)), [x, im])
 end
 
 @testset "LiteralReal" begin

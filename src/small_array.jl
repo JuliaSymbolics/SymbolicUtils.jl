@@ -193,4 +193,7 @@ end
 
 Base.any(f::Function, x::SmallVec) = any(f, x.data)
 Base.all(f::Function, x::SmallVec) = all(f, x.data)
-Base.map(f, x::SmallVec{T, V}) where {T, V} = SmallVec{T,V}(map(f, x.data))
+function Base.map(f, x::SmallVec{T, Vector{T}}) where {T}
+    arr = map(f, x.data)
+    SmallVec{eltype(arr),Vector{eltype(arr)}}(arr)
+end

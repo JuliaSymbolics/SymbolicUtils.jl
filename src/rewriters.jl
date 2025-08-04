@@ -32,7 +32,7 @@ rewriters.
 module Rewriters
 using TermInterface
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT
+import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT, maybe_const, SmallV
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -405,7 +405,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
                     end
                     args = copy(parent(args))::ArgsT
                 end
-                args[i] = newarg
+                args[i] = maybe_const(newarg)
             end
             if args isa ArgsT
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))
@@ -432,7 +432,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
                 newarg = if node_count(arg) > p.thread_cutoff
                     Threads.@spawn op(arg)
                 else
-                    op(arg)
+                    maybe_const(op(arg))
                 end
                 if args isa ROArgsT
                     if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)
@@ -445,7 +445,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             if args isa ArgsT
                 for i in eachindex(args)
                     if args[i] isa Task
-                        args[i] = fetch(args[i])
+                        args[i] = maybe_const(fetch(args[i]))
                     end
                 end
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))

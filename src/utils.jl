@@ -146,7 +146,9 @@ function sort_args(f, t)
 end
 
 # Linked List interface
-@inline assoc(d::ImmutableDict, k, v) = ImmutableDict(d, k=>v)
+@inline function assoc(d::ImmutableDict{Symbol, Any}, k::Symbol, v::Any)
+    ImmutableDict(d, k=>v)::ImmutableDict{Symbol, Any}
+end
 
 struct LL{V}
     v::V

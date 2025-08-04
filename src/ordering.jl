@@ -5,8 +5,8 @@
 <ₑ(a::Real,    b::Complex) = true
 <ₑ(a::Complex, b::Real) = false
 
-<ₑ(a::Symbolic, b::Number) = false
-<ₑ(a::Number,   b::Symbolic) = true
+<ₑ(a::Symbolic, b::Number) = isconst(a) && unwrap_const(a) < b
+<ₑ(a::Number,   b::Symbolic) = isconst(b) && a < unwrap_const(b)
 
 <ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
 
@@ -89,6 +89,8 @@ end
 
 function _get_degrees(::typeof(^), expr, degs_cache)
     base_expr, pow_expr = arguments(expr)
+    base_expr = unwrap_const(base_expr)
+    pow_expr = unwrap_const(pow_expr)
     if pow_expr isa Real
         @inbounds degs = map(_get_degrees(base_expr, degs_cache)) do (base, pow)
             (base => pow * pow_expr)
@@ -107,6 +109,8 @@ end
 
 function _get_degrees(::typeof(/), expr, degs_cache)
     nom_expr, denom_expr = arguments(expr)
+    nom_expr = unwrap_const(nom_expr)
+    denom_expr = unwrap_const(denom_expr)
     if denom_expr isa Number # constant denominator
         return _get_degrees(nom_expr, degs_cache)
     elseif nom_expr isa Number # constant nominator
@@ -157,11 +161,16 @@ function <ₑ(a::Tuple, b::Tuple)
 end
 
 function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
+    if isconst(a)
+        return <ₑ(unwrap_const(a), b)
+    elseif isconst(b)
+        return <ₑ(a, unwrap_const(b))
+    end
     da, db = get_degrees(a), get_degrees(b)
     fw = monomial_lt(da, db)
     bw = monomial_lt(db, da)
     if fw === bw && !isequal(a, b)
-        if _arglen(a) == _arglen(b)
+        if _arglen(a) == _arglen(b) != 0
             return (operation(a), arguments(a)...,) <ₑ (operation(b), arguments(b)...,)
         else
             return _arglen(a) < _arglen(b)

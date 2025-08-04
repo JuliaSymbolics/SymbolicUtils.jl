@@ -94,12 +94,11 @@ end
 
 _isone(p::PolyForm) = isone(p.p)
 
-maybe_float(::Type{T}, x) where {T <: Integer} = x
-maybe_float(::Type, x) = x isa Number && !(x isa Rational) ? float(x) : x
-
 function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
     if x isa Number
         return x
+    elseif isconst(x)
+        return unwrap_const(x)
     elseif iscall(x)
         if !(symtype(x) <: Number)
             error("Cannot convert $x of symtype $(symtype(x)) into a PolyForm")
@@ -108,16 +107,16 @@ function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         op = operation(x)
         args = parent(arguments(x))
 
-        local_polyize = let pvar2sym = pvar2sym, sym2term = sym2term, vtype = vtype, pow = pow, Fs = Fs, recurse = recurse, T = symtype(x)
-                f(y) = maybe_float(T, polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse))
+        local_polyize = let pvar2sym = pvar2sym, sym2term = sym2term, vtype = vtype, pow = pow, Fs = Fs, recurse = recurse
+            f(y) = polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse)
         end
         if (+) isa Fs && op === (+)
             return sum(local_polyize, args)
         elseif (*) isa Fs && op === (*)
             return prod(local_polyize, args)
-        elseif (^) isa Fs && op === (^) && args[2] isa Integer && args[2] > 0
+        elseif (^) isa Fs && op === (^) && unwrap_const(args[2]) isa Integer && unwrap_const(args[2]) > 0
             @assert length(args) == 2
-            return local_polyize(args[1])^(args[2])
+            return local_polyize(args[1])^unwrap_const(args[2])
         else
             # create a new symbol to store this
 
@@ -211,27 +210,40 @@ function TermInterface.arguments(x::PolyForm)
     end
 
     if MP.nterms(x.p) == 1
-        MP.isconstant(x.p) && return [convert(Number, x.p)]
+        MP.isconstant(x.p) && return SmallV{Any}(convert(Number, x.p))
         t = MP.term(x.p)
         c = MP.coefficient(t)
         m = MP.monomial(t)
 
+        args = ArgsT()
         if !isone(c)
-            [c, (^(resolve(v), pow)
-                        for (v, pow) in MP.powers(m) if !iszero(pow))...]
-        else
-            [^(resolve(v), pow)
-                    for (v, pow) in MP.powers(m) if !iszero(pow)]
+            push!(args, maybe_const(c))
         end
+        for (v, pow) in MP.powers(m)
+            iszero(pow) && continue
+            push!(args, resolve(v) ^ pow)
+        end
+        return args
     elseif MP.nterms(x.p) == 0
-        [0]
+        return ArgsT((0,))
     else
         ts = MP.terms(x.p)
-        return [MP.isconstant(t) ?
-                convert(Number, t) :
-                (is_var(t) ?
-                 resolve(t) :
-                 PolyForm(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
+        args = ArgsT()
+        for t in ts
+            if MP.isconstant(t)
+                push!(args, maybe_const(convert(Number, t)))
+            elseif is_var(t)
+                push!(args, resolve(t))
+            else
+                push!(args, PolyForm(t, x.pvar2sym, x.sym2term, nothing))
+            end
+        end
+        # return [MP.isconstant(t) ?
+        #         convert(Number, t) :
+        #         (is_var(t) ?
+        #          resolve(t) :
+        #          PolyForm(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
+        return args
     end
 end
 children(x::PolyForm) = arguments(x)

@@ -362,7 +362,8 @@ function add_with_div(x, flatten=true)
         isdiv(a) || continue
         push!(dens, a.den)
     end
-    den = mul_worker(dens)
+    T = symtype(x)
+    den = mul_worker(T, dens)
 
     # add all numerators
     div_idx = 1
@@ -375,7 +376,7 @@ function add_with_div(x, flatten=true)
         if isdiv(a)
             _den = dens[div_idx]
             dens[div_idx] = a.num
-            _num = mul_worker(dens)
+            _num = mul_worker(T, dens)
             dens[div_idx] = _den
             div_idx += 1
         else

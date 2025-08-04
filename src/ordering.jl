@@ -89,7 +89,7 @@ end
 
 function _get_degrees(::typeof(^), expr, degs_cache)
     base_expr, pow_expr = arguments(expr)
-    if pow_expr isa Number
+    if pow_expr isa Real
         @inbounds degs = map(_get_degrees(base_expr, degs_cache)) do (base, pow)
             (base => pow * pow_expr)
         end

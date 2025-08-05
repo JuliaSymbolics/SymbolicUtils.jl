@@ -516,7 +516,7 @@ end
 ### Constructors
 ###
 
-const wvd = TaskLocalValue{WeakValueDict{UInt, BasicSymbolic}}(WeakValueDict{UInt, BasicSymbolic})
+const wvd = TaskLocalValue{WeakCacheSet{BasicSymbolic}}(WeakCacheSet{BasicSymbolic})
 
 function generate_id()
     return IDType()
@@ -549,19 +549,11 @@ function BasicSymbolic(s::BasicSymbolic)::BasicSymbolic
     end
 
     cache = wvd[]
-    h = hash2(s)
-    k = get!(cache, h, s)
-    if isequal_with_metadata(k, s)
-        if isnothing(k.id[])
-            k.id[] = generate_id()
-        end
-        return k
-    else
-        if isnothing(s.id[])
-            s.id[] = generate_id()
-        end
-        return s
+    k = getkey!(cache, s)
+    if k.id[] === nothing
+        k.id[] = generate_id()
     end
+    return k
 end
 
 function Sym{T}(name::Symbol; kw...) where {T}

@@ -1,3 +1,9 @@
+# Copied from WeakCacheSets.jl, modified to use hash2 and isequal_with_metadata instead of
+# the standard `hash` and `isequal`.
+module WeakCacheSets
+
+using SymbolicUtils: hash2, isequal_with_metadata
+
 # These can be changed, to trade off better performance for space
 const maxallowedprobe = 16
 const maxprobeshift   = 6
@@ -229,3 +235,7 @@ function Base.show(io::IO, t::WeakCacheSet{K}) where K
         end
     print(io, ')')
 end
+
+export WeakCacheSet, getkey!
+
+end # module WeakCacheSets

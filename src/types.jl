@@ -405,6 +405,9 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
     isequal_bsimpl(a, b, COMPARE_FULL[])
 end
 
+Base.isequal(a::BSImpl.Type, b::WeakRef) = isequal(a, b.value)
+Base.isequal(a::WeakRef, b::BSImpl.Type) = isequal(a.value, b)
+
 # const CONST_SALT = 0x194813feb8a8c83d % UInt
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const ADD_SALT = 0xaddaddaddaddadda % UInt

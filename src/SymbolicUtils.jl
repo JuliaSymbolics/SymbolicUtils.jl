@@ -7,7 +7,12 @@ using DocStringExtensions
 
 export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 
-using Unityper
+using Moshi.Data: @data
+import Moshi.Data as MData
+using Moshi.Match: @match
+using ReadOnlyArrays
+using ReadOnlyDicts
+using EnumX: @enumx
 using TermInterface
 using DataStructures
 using Setfield
@@ -22,6 +27,10 @@ import TermInterface: iscall, isexpr, head, children,
 import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
+using WeakValueDicts: WeakValueDict
+using WeakCacheSets: WeakCacheSet, getkey!
+using Base: RefValue
+import MacroTools
 
 function hash2 end
 function isequal_with_metadata end

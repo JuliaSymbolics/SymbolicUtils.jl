@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, isequal_with_metadata
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
 using SymbolicUtils
 using ConstructionBase: setproperties
 using Setfield
@@ -117,11 +117,11 @@ end
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
 
-    @test isequal(w + z, Add(Complex, 0, Dict(w=>1, z=>1)))
-    @test isequal(z + a, Add(Number, 0, Dict(z=>1, a=>1)))
-    @test isequal(a + b, Add(Real, 0, Dict(a=>1, b=>1)))
-    @test isequal(a + x, Add(Number, 0, Dict(a=>1, x=>1)))
-    @test isequal(a + z, Add(Number, 0, Dict(a=>1, z=>1)))
+    @test isequal(w + z, Add{Complex}(0, Dict(w=>1, z=>1)))
+    @test isequal(z + a, Add{Number}(0, Dict(z=>1, a=>1)))
+    @test isequal(a + b, Add{Real}(0, Dict(a=>1, b=>1)))
+    @test isequal(a + x, Add{Number}(0, Dict(a=>1, x=>1)))
+    @test isequal(a + z, Add{Number}(0, Dict(a=>1, z=>1)))
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
@@ -226,7 +226,7 @@ end
 
     # test that the "x^2 + y^-1 + sin(a)^3.5 + 2t + 1//1" expression from Symbolics.jl/build_targets.jl is properly sorted
     @syms x1 y1 a1 t1
-    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "(1//1) + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
+    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "1 + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
 end
 
 @testset "inspect" begin
@@ -303,8 +303,8 @@ toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
 @testset "diffs" begin
     @syms a b c
     @test isequal(toterm(-1c), Term{Number}(*, [-1, c]))
-    @test isequal(toterm(-1(a+b)), Term{Number}(+, [-1a, -b]))
-    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [a, -1c]))
+    @test isequal(toterm(-1(a+b)), Term{Number}(+, [-b, -a]))
+    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [a, -c]))
 end
 
 @testset "hash" begin
@@ -346,9 +346,11 @@ end
     a1 = setmetadata(a, Ctx1, "meta_1")
     a2 = setmetadata(a, Ctx1, "meta_1")
     a3 = setmetadata(a, Ctx2, "meta_2")
-    @test !isequal_with_metadata(a, a1)
-    @test isequal_with_metadata(a1, a2)
-    @test !isequal_with_metadata(a1, a3)
+    SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true begin
+        @test !isequal(a, a1)
+        @test isequal(a1, a2)
+        @test !isequal(a1, a3)
+    end
 end
 
 @testset "subtyping" begin
@@ -437,10 +439,14 @@ end
     x = setmetadata(x(t), Int, 3)
     ex = x * y
     res = substitute(ex, Dict(y => 1))
-    @test SymbolicUtils.isequal_with_metadata(res, x)
+    SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true begin
+        @test isequal(res, x)
+    end
     ex = x + y
     res = substitute(ex, Dict(y => 0))
-    @test SymbolicUtils.isequal_with_metadata(res, x)
+    SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true begin
+        @test isequal(res, x)
+    end
 end
 
 @testset "Negative coefficient to fractional power" begin

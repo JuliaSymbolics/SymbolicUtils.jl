@@ -30,7 +30,6 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer
 using TermInterface
 
 import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype
@@ -131,15 +130,15 @@ julia> chain = Chain([r1, r2])
 julia> chain(sin(x)^2 + cos(x)^2)  # Returns 1
 ```
 """
-struct Chain
-    rws
-    stop_on_match::Bool
+mutable struct Chain{Cs}
+    const rws::Cs
+    const stop_on_match::Bool
 end
 Chain(rws) = Chain(rws, false)
 
 function (rw::Chain)(x)
     for f in rw.rws
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
         if rw.stop_on_match && !isnothing(y) && !isequal(y, x)
             return y
         end
@@ -149,8 +148,24 @@ function (rw::Chain)(x)
         end
     end
     return x
-
 end
+
+@generated function (rw::Chain{<:NTuple{N, Any}})(x) where {N}
+    quote
+        Base.@nexprs $N i -> begin
+            f = rw.rws[i]
+            y = f(x)
+            if rw.stop_on_match && y !== nothing && !isequal(x, y)
+                return y
+            end
+            if y !== nothing
+                x = y
+            end
+        end
+        return x
+    end
+end
+
 instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
 
 """
@@ -180,7 +195,7 @@ instrument(c::RestartedChain, f) = RestartedChain(map(x->instrument(x,f), c.rws)
 
 function (rw::RestartedChain)(x)
     for f in rw.rws
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
         if y !== nothing
             return Chain(rw.rws)(y)
         end
@@ -192,7 +207,7 @@ end
     quote
         Base.@nexprs $N i->begin
             let f = rw.rws[i]
-                y = @timer cached_repr(repr(f)) f(x)
+                y = f(x)
                 if y !== nothing
                     return Chain(rw.rws)(y)
                 end
@@ -231,11 +246,11 @@ instrument(x::Fixpoint, f) = Fixpoint(instrument(x.rw, f))
 
 function (rw::Fixpoint)(x)
     f = rw.rw
-    y = @timer cached_repr(f) f(x)
-    while x !== y && !isequal(x, y)
+    y = f(x)
+    while (x !== y) && !isequal(x, y)
         y === nothing && return x
         x = y
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
     end
     return x
 end
@@ -259,7 +274,7 @@ instrument(x::FixpointNoCycle, f) = Fixpoint(instrument(x.rw, f))
 function (rw::FixpointNoCycle)(x)
     f = rw.rw
     push!(rw.hist, hash(x))
-    y = @timer cached_repr(f) f(x)
+    y = f(x)
     while x !== y && hash(x) ∉ rw.hist
         if y === nothing
             empty!(rw.hist)
@@ -267,7 +282,7 @@ function (rw::FixpointNoCycle)(x)
         end
         push!(rw.hist, y)
         x = y
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
     end
     empty!(rw.hist)
     return x
@@ -380,7 +395,7 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
 
         if iscall(x)
             x = p.maketerm(typeof(x), operation(x), map(PassThrough(p),
-                            arguments(x)), metadata(x))
+                            parent(arguments(x))), metadata(x))
         end
 
         return ord === :post ? p.rw(x) : x
@@ -396,14 +411,14 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if iscall(x)
-            _args = map(arguments(x)) do arg
+            _args = map(parent(arguments(x))) do arg
                 if node_count(arg) > p.thread_cutoff
                     Threads.@spawn p(arg)
                 else
                     p(arg)
                 end
             end
-            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
+            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, parent(arguments(x)))
             t = p.maketerm(typeof(x), operation(x), args, metadata(x))
         end
         return ord === :post ? p.rw(t) : t

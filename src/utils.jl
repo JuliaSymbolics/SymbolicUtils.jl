@@ -1,30 +1,3 @@
-const TIMER_OUTPUTS = true
-const being_timed = Ref{Bool}(false)
-
-if TIMER_OUTPUTS
-    using TimerOutputs
-
-    macro timer(name, expr)
-        :(if being_timed[]
-              @timeit $(esc(name)) $(esc(expr))
-          else
-              $(esc(expr))
-          end)
-    end
-
-    macro iftimer(expr)
-        esc(expr)
-    end
-
-else
-    macro timer(name, expr)
-        esc(expr)
-    end
-
-    macro iftimer(expr)
-    end
-end
-
 using Base: ImmutableDict
 
 
@@ -42,13 +15,13 @@ function has_trig_exp(term)
     if Base.@nany 9 i->fns[i] === op
         return true
     else
-        return any(has_trig_exp, arguments(term))
+        return any(has_trig_exp, parent(arguments(term)))
     end
 end
 
 function fold(t)
     if iscall(t)
-        tt = map(fold, arguments(t))
+        tt = map(fold, parent(arguments(t)))
         if !any(x->x isa Symbolic, tt)
             # evaluate it
             return operation(t)(tt...)
@@ -68,8 +41,18 @@ isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(x)
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
-_iszero(x) = x isa Number && iszero(x)
-_isone(x) = x isa Number && isone(x)
+function _iszero(x)
+    x = unwrap(x)
+    x isa Number && return iszero(x)
+    x isa Array && return iszero(x)
+    return false
+end
+function _isone(x)
+    x = unwrap(x)
+    x isa Number && return isone(x)
+    x isa Array && return isone(x)
+    return false
+end
 _isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) <: Integer)
 _isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
 

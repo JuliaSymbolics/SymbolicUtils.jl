@@ -1,5 +1,5 @@
 using SymbolicUtils
-
+using Test 
 include("utils.jl")
 
 @syms a b c d x
@@ -38,9 +38,9 @@ end
     @test @rule((~x)^(~x) => ~x)(b^a) === nothing
     @test @rule((~x)^(~x) => ~x)(a+a) === nothing
     @eqtest @rule((~x)^(~x) => ~x)(sin(a)^sin(a)) == sin(a)
-    @eqtest @rule((~x*~y + ~x*~z)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
+    @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
 
-    @eqtest @rule(+(~~x) => ~~x)(a + b) == [a,b]
+    @test issetequal(@rule(+(~~x) => ~~x)(a + b), [a,b])
     @eqtest @rule(+(~~x) => ~~x)(term(+, a, b, c)) == [a,b,c]
     @eqtest @rule(+(~~x,~y, ~~x) => (~~x, ~y))(term(+,9,8,9,type=Any)) == ([9,],8)
     @eqtest @rule(+(~~x,~y, ~~x) => (~~x, ~y, ~~x))(term(+,9,8,9,9,8,type=Any)) == ([9,8], 9, [9,8])
@@ -68,15 +68,16 @@ end
 
 @testset "Slot matcher with default value" begin
     r_sum = @rule (~x + ~!y)^2 => ~y
-    @test r_sum((a + b)^2) === b
+    @test r_sum((a + b)^2) in Set([a, b])
     @test r_sum(b^2) === 0
 
     r_mult = @rule ~x * ~!y  => ~y
-    @test r_mult(a * b) === b
+    @test r_mult(a * b) in Set([a, b])
     @test r_mult(a) === 1
 
     r_mult2 = @rule (~x * ~!y + ~z) => ~y
-    @test r_mult2(c + a*b) === b
+    # can match either `a` or `b` or coefficient of `c`
+    @test r_mult2(c + a*b) in Set([1, a, b])
     @test r_mult2(c + b) === 1
 
     # here the "normal part" in the defslot_term_matcher is not a symbol but a tree
@@ -86,7 +87,7 @@ end
     @test r_mult3(c+2) === 1
     
     r_pow = @rule (~x)^(~!m) => ~m
-    @test r_pow(a^(b+1)) === b+1
+    @test isequal(r_pow(a^(b+1)), b+1)
     @test r_pow(a) === 1
     @test r_pow(a+1) === 1
 
@@ -225,7 +226,7 @@ end
     ex = setmetadata(ex, MetaData, :metadata)
     ex1 = ex + b
 
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(sorted_arguments(ex1)[1], MetaData) == :metadata
 
     ex = a * b
     ex = setmetadata(ex, MetaData, :metadata)

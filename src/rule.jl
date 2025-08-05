@@ -210,7 +210,7 @@ function (r::Rule)(term)
 
     try
         # n == 1 means that exactly one term of the input (term,) was matched
-        success(bindings, n) = n == 1 ? (@timer "RHS" rhs(assoc(bindings, :MATCH, term))) : nothing
+        success(bindings, n) = n == 1 ? (rhs(assoc(bindings, :MATCH, term))) : nothing
         return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
     catch err
         throw(RuleRewriteError(r, term))
@@ -583,15 +583,37 @@ function (acr::ACRule)(term)
         f = operation(term)
         T = symtype(term)
         args = arguments(term)
+        is_full_perm = acr.arity == length(args)
+        if is_full_perm
+            args_buf = copy(parent(args))
+        else
+            args_buf = ArgsT(@view args[1:acr.arity])
+        end
 
         itr = acr.sets(eachindex(args), acr.arity)
 
         for inds in itr
-            result = r(Term{T}(f, @views args[inds]))
+            for (i, ind) in enumerate(inds)
+                args_buf[i] = args[ind]
+            end
+            # this is temporary and only constructed so the rule can
+            # try and match it - no need to hashcons it.
+            tempterm = BSImpl.Term{T}(f, args_buf; unsafe = true)
+            # this term will be hashconsed regardless
+            result = r(tempterm)
             if result !== nothing
                 # Assumption: inds are unique
-                length(args) == length(inds) && return result
-                return maketerm(typeof(term), f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], metadata(term))
+                is_full_perm && return result
+                inds_set = BitSet(inds)
+                full_args_buf = ArgsT(@view args[1:(length(args)-acr.arity+1)])
+                idx = 1
+                for i in eachindex(args)
+                    i in inds_set && continue
+                    full_args_buf[idx] = args[i]
+                    idx += 1
+                end
+                full_args_buf[idx] = result
+                return maketerm(typeof(term), f, full_args_buf, metadata(term))
             end
         end
     end
@@ -609,59 +631,6 @@ getdepth(::Any) = typemax(Int)
     msg = "Failed to apply rule $(err.rule) on expression "
     msg *= sprint(io->showraw(io, err.expr))
     print(io, msg)
-end
-
-function timerewrite(f)
-    if !TIMER_OUTPUTS
-        error("timerewrite must be called after enabling " *
-              "TIMER_OUTPUTS in the main file of this package")
-    end
-    reset_timer!()
-    being_timed[] = true
-    x = f()
-    being_timed[] = false
-    print_timer()
-    println()
-    x
-end
-
-
-"""
-    @timerewrite expr
-
-If `expr` calls `simplify` or a `RuleSet` object, track the amount of time
-it spent on applying each rule and pretty print the timing.
-
-This uses [TimerOutputs.jl](https://github.com/KristofferC/TimerOutputs.jl).
-
-## Example:
-
-```julia
-
-julia> expr = foldr(*, rand([a,b,c,d], 100))
-(a ^ 26) * (b ^ 30) * (c ^ 16) * (d ^ 28)
-
-julia> @timerewrite simplify(expr)
- ────────────────────────────────────────────────────────────────────────────────────────────────
-                                                         Time                   Allocations
-                                                 ──────────────────────   ───────────────────────
-                Tot / % measured:                     340ms / 15.3%           92.2MiB / 10.8%
-
- Section                                 ncalls     time   %tot     avg     alloc   %tot      avg
- ────────────────────────────────────────────────────────────────────────────────────────────────
- ACRule((~y) ^ ~n * ~y => (~y) ^ (~n ...    667   11.1ms  21.3%  16.7μs   2.66MiB  26.8%  4.08KiB
-   RHS                                       92    277μs  0.53%  3.01μs   14.4KiB  0.14%     160B
- ACRule((~x) ^ ~n * (~x) ^ ~m => (~x)...    575   7.63ms  14.6%  13.3μs   1.83MiB  18.4%  3.26KiB
- (*)(~(~(x::!issortedₑ))) => sort_arg...    831   6.31ms  12.1%  7.59μs    738KiB  7.26%     910B
-   RHS                                      164   3.03ms  5.81%  18.5μs    250KiB  2.46%  1.52KiB
-   ...
-   ...
- ────────────────────────────────────────────────────────────────────────────────────────────────
-(a ^ 26) * (b ^ 30) * (c ^ 16) * (d ^ 28)
-```
-"""
-macro timerewrite(expr)
-    :(timerewrite(()->$(esc(expr))))
 end
 
 Base.@deprecate RuleSet(x) Postwalk(Chain(x))

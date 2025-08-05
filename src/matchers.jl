@@ -11,7 +11,7 @@ function matcher(val::Any, acSets)
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
         # just two arguments bc defslot is only supported with operations with two args: *, ^, +
-        if any(x -> isa(x, DefSlot), arguments(val))
+        if any(x -> isa(x, DefSlot), parent(arguments(val)))
             return defslot_term_matcher_constructor(val, acSets)
         end
         # else return a normal term matcher
@@ -36,7 +36,9 @@ function matcher(slot::Slot, acSets)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
         elseif slot.predicate(car(data))
-            next(assoc(bindings, slot.name, car(data)), 1)
+            rest = car(data)
+            binds = assoc(bindings, slot.name, rest)
+            next(binds, 1)
         end
     end
 end
@@ -102,8 +104,8 @@ function matcher(segment::Segment, acSets)
 end
 
 function term_matcher_constructor(term, acSets)
-    matchers = (matcher(operation(term), acSets), map(x->matcher(x,acSets), arguments(term))...,)
-    
+    matchers = vcat([matcher(operation(term), acSets)], map(x -> matcher(x, acSets), parent(arguments(term))))
+
     function loop(term, bindings′, matchers′) # Get it to compile faster
         if !islist(matchers′)
             if  !islist(term)
@@ -259,7 +261,7 @@ end
 # Note: there is a bit of a waste here bc the matcher get created twice, both 
 # in the normal_matcher and in defslot_matcher and other_part_matcher
 function defslot_term_matcher_constructor(term, acSets)
-    a = arguments(term)
+    a = parent(arguments(term))
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
     defslot = a[defslot_index]
     defslot_matcher = matcher(defslot, acSets)

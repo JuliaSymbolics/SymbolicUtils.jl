@@ -36,6 +36,9 @@ const ACDict{K, V} = Dict{K, V}
 const ShapeVecT = SmallV{UnitRange{Int}}
 const ShapeT = Union{Unknown, ShapeVecT}
 const IdentT = Union{Tuple{UInt, IDType}, Tuple{Nothing, Nothing}}
+const PolyVarOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
+const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=PolyVarOrder)
+const PolyVarT = typeof(ExamplePolyVar)
 
 """
     Enum used to differentiate between variants of `BasicSymbolicImpl.ACTerm`.
@@ -133,6 +136,77 @@ end
 
 const BSImpl = BasicSymbolicImpl
 const BasicSymbolic = BSImpl.Type
+
+const POLYVAR_LOCK = ReadWriteLock()
+# NOTE: All of these are accessed via POLYVAR_LOCK
+const BS_TO_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
+const BS_TO_PARTIAL_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
+const PVAR_TO_BS = Dict{Symbol, WeakRef}()
+const PARTIAL_PVARS = Set{Symbol}()
+
+# TODO: manage scopes better here
+function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
+    pvar = partial_pvar = name = partial_name = nothing
+    @manually_scope COMPARE_FULL => true begin
+        @readlock POLYVAR_LOCK begin
+            pvar = get(BS_TO_PVAR, x, nothing)
+
+            if pvar !== nothing
+                return pvar
+            end
+
+            inner_name = @match x begin
+                BSImpl.Sym(; name) => name
+                _ => nameof(operation(x))
+            end
+            name = Symbol(inner_name, :_, hash(x))
+            while haskey(PVAR_TO_BS, name)
+                # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
+                # a valid mapping for the polyvar (name)
+                name = Symbol(name, :_)
+            end
+
+            pvar = MP.similar_variable(ExamplePolyVar, name)
+            @manually_scope COMPARE_FULL => false begin
+                # do the same thing, but for the partial hash
+                partial_name = Symbol(inner_name, :_, hash(x))
+            end true
+            while partial_name in PARTIAL_PVARS
+                # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
+                # a valid mapping for the polyvar (name)
+                partial_name = Symbol(partial_name, :_)
+            end
+            partial_pvar = MP.similar_variable(ExamplePolyVar, partial_name)
+        end
+        @lock POLYVAR_LOCK begin
+            BS_TO_PARTIAL_PVAR[x] = partial_pvar
+            BS_TO_PVAR[x] = pvar
+            PVAR_TO_BS[name] = WeakRef(x)
+            push!(PARTIAL_PVARS, partial_name)
+        end
+    end
+    return pvar
+end
+
+function basicsymbolic_to_partial_polyvar(x::BasicSymbolic)::PolyVarT
+    basicsymbolic_to_polyvar(x)
+    @manually_scope COMPARE_FULL => true begin
+        return @readlock POLYVAR_LOCK BS_TO_PARTIAL_PVAR[x]
+    end
+end
+
+function polyvar_to_basicsymbolic(x::PolyVarT)
+    name = Symbol(MP.name(x))
+    bs = @readlock POLYVAR_LOCK get(PVAR_TO_BS, name, nothing)
+    if bs === nothing
+        error("Invalid polyvar $x")
+    end
+    bs = bs.value
+    if bs === nothing
+        error("Invalid polyvar $x")
+    end
+    return bs::BasicSymbolic
+end
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
     ScalarSymbolic()

@@ -31,6 +31,9 @@ using WeakValueDicts: WeakValueDict
 using WeakCacheSets: WeakCacheSet, getkey!
 using Base: RefValue
 import MacroTools
+import MultivariatePolynomials as MP
+import DynamicPolynomials as DP
+import ConcurrentUtilities: ReadWriteLock, readlock, readunlock
 
 function hash2 end
 function isequal_with_metadata end
@@ -85,6 +88,20 @@ macro manually_scope(val, expr, is_forced = false)
     end |> esc
 end
 
+# copied from https://github.com/JuliaLang/julia/blob/80f7db8e51b2ba1dd21e913611c23a6d5b75ecab/base/lock.jl#L371-L381
+# and adapted for readlock/readunlock
+macro readlock(l, expr)
+    quote
+        temp = $(esc(l))
+        $readlock(temp)
+        try
+            $(esc(expr))
+        finally
+            $readunlock(temp)
+        end
+    end
+end
+
 include("cache.jl")
 Base.@deprecate istree iscall
 
@@ -117,7 +134,6 @@ include("matchers.jl")
 include("rewriters.jl")
 
 # Convert to an efficient multi-variate polynomial representation
-import MultivariatePolynomials as MP
 import DynamicPolynomials
 export expand
 include("polyform.jl")

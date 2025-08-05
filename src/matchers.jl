@@ -10,7 +10,8 @@ function matcher(val::Any)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
-        if length(arguments(val)) == 2 && any(x -> isa(x, DefSlot), arguments(val))
+        args = parent(arguments(val))
+        if length(args) == 2 && any(x -> isa(x, DefSlot), args)
             return defslot_term_matcher_constructor(val)
         # else return a normal term matcher
         else
@@ -35,7 +36,9 @@ function matcher(slot::Slot)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
         elseif slot.predicate(car(data))
-            next(assoc(bindings, slot.name, car(data)), 1)
+            rest = car(data)
+            binds = assoc(bindings, slot.name, rest)
+            next(binds, 1)
         end
     end
 end
@@ -104,32 +107,34 @@ function matcher(segment::Segment)
 end
 
 function term_matcher_constructor(term)
-    matchers = (matcher(operation(term)), map(matcher, arguments(term))...,)
+    matchers = vcat([matcher(operation(term))], map(matcher, parent(arguments(term))))
 
-    function term_matcher(success, data, bindings)
-        !islist(data) && return nothing # if data is not a list, return nothing
-        !iscall(car(data)) && return nothing # if first element is not a call, return nothing
+    let matchers = matchers
+        function term_matcher(success, data, bindings)
+            !islist(data) && return nothing # if data is not a list, return nothing
+            !iscall(car(data)) && return nothing # if first element is not a call, return nothing
 
-        function loop(term, bindings′, matchers′) # Get it to compile faster
-            if !islist(matchers′)
-                if  !islist(term)
-                    return success(bindings′, 1)
+            function loop(term, bindings′, matchers′) # Get it to compile faster
+                if !islist(matchers′)
+                    if  !islist(term)
+                        return success(bindings′, 1)
+                    end
+                    return nothing
                 end
-                return nothing
+                car(matchers′)(term, bindings′) do b, n
+                    loop(drop_n(term, n), b, cdr(matchers′))
+                end
+                # explanation of above 3 lines:
+                # car(matchers′)(b,n -> loop(drop_n(term, n), b, cdr(matchers′)), term, bindings′)
+                #                <------ next(b,n) ---------------------------->
+                # car = first element of list, cdr = rest of the list, drop_n = drop first n elements of list
+                # Calls the first matcher, with the "next" function being loop again but with n terms dropepd from term
+                # Term is a linked list (a list and a index). drop n advances the index. when the index sorpasses
+                # the length of the list, is considered empty
             end
-            car(matchers′)(term, bindings′) do b, n
-                loop(drop_n(term, n), b, cdr(matchers′))
-            end
-            # explanation of above 3 lines:
-            # car(matchers′)(b,n -> loop(drop_n(term, n), b, cdr(matchers′)), term, bindings′)
-            #                <------ next(b,n) ---------------------------->
-            # car = first element of list, cdr = rest of the list, drop_n = drop first n elements of list
-            # Calls the first matcher, with the "next" function being loop again but with n terms dropepd from term
-            # Term is a linked list (a list and a index). drop n advances the index. when the index sorpasses
-            # the length of the list, is considered empty
-        end
 
-        loop(car(data), bindings, matchers) # Try to eat exactly one term
+            loop(car(data), bindings, matchers) # Try to eat exactly one term
+        end
     end
 end
 
@@ -146,7 +151,7 @@ end
 #          calls the success function like term_matcher would do
 
 function defslot_term_matcher_constructor(term)
-    a = arguments(term) # length two bc defslot term matcher is allowed only with +,* and ^, that accept two arguments
+    a = parent(arguments(term)) # length two bc defslot term matcher is allowed only with +,* and ^, that accept two arguments
     matchers = (matcher(operation(term)), map(matcher, a)...) # create matchers for the operation and the two arguments of the term
     
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term

@@ -20,7 +20,7 @@ r1 = @rule sin(2(~x)) => 2sin(~x)*cos(~x)
 r1(sin(2z))
 
 # output
-2sin(z)*cos(z)
+2cos(z)*sin(z)
 ```
 
 The `@rule` macro takes a pair of patterns -- the _matcher_ and the _consequent_ (`@rule matcher => consequent`). If an expression matches the matcher pattern, it is rewritten to the consequent pattern. `@rule` returns a callable object that applies the rule to an expression.
@@ -41,7 +41,7 @@ Slot variable (matcher) is not necessary a single variable
 r1(sin(2*(w-z)))
 
 # output
-2cos(w - z)*sin(w - z)
+2sin(w - z)*cos(w - z)
 ```
 
 but it must be a single expression
@@ -61,7 +61,7 @@ r2 = @rule sin(~x + ~y) => sin(~x)*cos(~y) + cos(~x)*sin(~y);
 r2(sin(α+β))
 
 # output
-sin(β)*cos(α) + cos(β)*sin(α)
+cos(β)*sin(α) + sin(β)*cos(α)
 ```
 
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~xs` in the following example is a segment variable:
@@ -71,10 +71,10 @@ If you want to match a variable number of subexpressions at once, you will need 
 @rule(+(~~xs) => ~~xs)(x + y + z)
 
 # output
-3-element view(::SymbolicUtils.SmallVec{Any, Vector{Any}}, 1:3) with eltype Any:
- z
- y
+3-element view(::ReadOnlyArrays.ReadOnlyVector{Any, SymbolicUtils.SmallVec{Any, Vector{Any}}}, 1:3) with eltype Any:
  x
+ y
+ z
 ```
 
 `~~xs` is a vector of subexpressions matched. You can use it to construct something more useful:

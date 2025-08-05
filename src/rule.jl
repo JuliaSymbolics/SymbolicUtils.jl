@@ -22,7 +22,7 @@ makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
 # for when the slot is an expression, like `~x::predicate`
 function makeslot(s::Expr, keys)
     if !(s.head == :(::))
-        error("Syntax for specifying a slot is ~x::\$predicate, where predicate is a boolean function")
+        error("Syntax for specifying a slot is ~x::predicate, where predicate is a boolean function")
     end
 
     name = s.args[1]

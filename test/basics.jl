@@ -453,3 +453,13 @@ end
     @syms a
     @test isequal((-5a)^0.5, sqrt(5) * Pow{Number}(-a, 0.5))
 end
+
+@testset "Equivalent expressions across tasks are equal" begin
+    @syms a
+    task = Threads.@spawn @syms a
+    a2 = only(fetch(task))
+    @test isequal(a, a2)
+    @test SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true begin
+        isequal(a, a2)
+    end
+end

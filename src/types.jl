@@ -35,7 +35,7 @@ const ROArgsT = ReadOnlyVector{Any, ArgsT}
 const ACDict{K, V} = Dict{K, V}
 const ShapeVecT = SmallV{UnitRange{Int}}
 const ShapeT = Union{Unknown, ShapeVecT}
-const IdentT = Union{IDType, Nothing}
+const IdentT = Union{Tuple{UInt, IDType}, Tuple{Nothing, Nothing}}
 
 """
     Enum used to differentiate between variants of `BasicSymbolicImpl.ACTerm`.
@@ -171,22 +171,22 @@ override_properties(obj::BSImpl.Type) = override_properties(MData.variant_type(o
 
 function override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
-        ::Type{<:BSImpl.Sym} => (; id = nothing, hash2 = 0)
-        ::Type{<:BSImpl.Term} => (; id = nothing, hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.AddOrMul} => (; id = nothing, hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.Div} => (; id = nothing, hash2 = 0)
-        ::Type{<:BSImpl.Pow} => (; id = nothing, hash2 = 0)
+        ::Type{<:BSImpl.Sym} => (; id = (nothing, nothing), hash2 = 0)
+        ::Type{<:BSImpl.Term} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.AddOrMul} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Div} => (; id = (nothing, nothing), hash2 = 0)
+        ::Type{<:BSImpl.Pow} => (; id = (nothing, nothing), hash2 = 0)
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
 
 function ordered_override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
-        ::Type{<:BSImpl.Sym} => (0, nothing)
-        ::Type{<:BSImpl.Term} => (0, 0, nothing)
-        ::Type{<:BSImpl.AddOrMul} => (ArgsT(), 0, 0, nothing)
-        ::Type{<:BSImpl.Div} => (0, nothing)
-        ::Type{<:BSImpl.Pow} => (0, nothing)
+        ::Type{<:BSImpl.Sym} => (0, (nothing, nothing))
+        ::Type{<:BSImpl.Term} => (0, 0, (nothing, nothing))
+        ::Type{<:BSImpl.AddOrMul} => (ArgsT(), 0, 0, (nothing, nothing))
+        ::Type{<:BSImpl.Div} => (0, (nothing, nothing))
+        ::Type{<:BSImpl.Pow} => (0, (nothing, nothing))
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
@@ -539,8 +539,8 @@ end
 
 function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
     a === b && return true
-    ida = a.id
-    idb = b.id
+    taskida, ida = a.id
+    taskidb, idb = b.id
     ida === idb && ida !== nothing && return true
     typeof(a) === typeof(b) || return false
 
@@ -549,7 +549,7 @@ function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
     Ta === Tb || return false
 
 
-    if full && ida !== idb && ida !== nothing && idb !== nothing
+    if full && ida !== idb && ida !== nothing && idb !== nothing && taskida == taskidb
         return false
     end
 
@@ -725,9 +725,10 @@ const ENABLE_HASHCONSING = Ref(true)
 const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})
 const WVD = TaskLocalValue{WeakValueDict{UInt, BSImpl.Type}}(WeakValueDict{UInt, BSImpl.Type})
 const WCS = TaskLocalValue{WeakCacheSet{BSImpl.Type}}(WeakCacheSet{BSImpl.Type})
+const TASK_ID = TaskLocalValue{UInt}(() -> rand(UInt))
 
 function generate_id()
-    return IDType()
+    return (TASK_ID[], IDType())
 end
 
 const TOTAL = TaskLocalValue{Int}(Returns(0))
@@ -780,7 +781,7 @@ function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
         #     cache[h] = s
         #     k = s
         # end
-        if k.id === nothing
+        if k.id === (nothing, nothing)
             k.id = generate_id()
         end
         return k

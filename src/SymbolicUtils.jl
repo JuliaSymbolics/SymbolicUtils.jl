@@ -33,6 +33,7 @@ using Base: RefValue
 import MacroTools
 import MultivariatePolynomials as MP
 import DynamicPolynomials as DP
+import MutableArithmetics as MA
 import ConcurrentUtilities: ReadWriteLock, readlock, readunlock
 
 # include("WeakCacheSets.jl")

@@ -341,3 +341,8 @@ end
     end
     @test eval(expr) == [3, 2, 1]
 end
+
+@testset "`create_array` creating single-element SArray of SArray" begin
+    val = Code.create_array(SArray, nothing, Val(1), Val((1,)), Code.create_array(SArray, nothing, Val(1), Val((1,)), 1.0))
+    @test val == SA[SA[1.0]]
+end

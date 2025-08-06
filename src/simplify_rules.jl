@@ -68,7 +68,6 @@ let
         @rule(imag(~x::_isreal) => zero(symtype(~x)))
         @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z)
         @rule(ifelse(~x, ~y, ~y) => ~y)
-        @rule(sqrt(~x) => (~x)^(1//2))
     ]
 
     TRIG_EXP_RULES = [

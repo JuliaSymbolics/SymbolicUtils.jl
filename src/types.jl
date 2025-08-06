@@ -1875,15 +1875,7 @@ function add_worker(terms)
 end
 
 function +(a::Number, b::SN, bs::SN...)
-    b = +(b, bs...)
-    issafecanon(+, b) || return term(+, a, b)
-    iszero(a) && return b
-    T  = add_t(a, b)
-    if isadd(b)
-        Add{T}(a + b.coeff, b.dict)
-    else
-        Add{T}(makeadd(T, a, b)...)
-    end
+    return add_worker((a, b, bs...))
 end
 
 function +(a::SN, b::Number, bs::SN...)
@@ -1892,16 +1884,27 @@ end
 
 function -(a::SN)
     !issafecanon(*, a) && return term(-, a)
-    isadd(a) ? Add{sub_t(a)}(-a.coeff, mapvalues((_,v) -> -v, a.dict)) : (-1 * a)
+    T = sub_t(a)
+    @match a begin
+        BSImpl.Polyform(; poly, vars, partial_polyvars, shape) => begin
+            result = copy(poly)
+            MP.map_coefficients_to!(result, (-), poly; nonzero = true)
+            Polyform{T}(result, partial_polyvars, vars; shape)
+        end
+        _ => (-1 * a)
+    end
 end
 
 function -(a::SN, b::SN)
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
-    isadd(a) && isadd(b) ? Add{sub_t(a,b)}(
-                               a.coeff - b.coeff,
-                               _merge(-, a.dict,
-                                      b.dict,
-                                      filter=_iszero)) : a + (-b)
+    @match (a, b) begin
+        (BSImpl.Polyform(; poly = poly1), BSImpl.Polyform(; poly = poly2)) => begin
+            poly2 = MP.map_coefficients((-), poly2)
+            MA.operate!(+, poly2, poly1)
+            return Polyform{sub_t(a, b)}(poly2)
+        end
+        _ => return add_worker((a, -b))
+    end
 end
 
 -(a::Number, b::SN) = a + (-b)

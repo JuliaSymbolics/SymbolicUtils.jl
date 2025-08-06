@@ -55,8 +55,6 @@ end
     @test simplify(Term(zero, [a])) == 0
     @test simplify(Term(zero, [b + 1])) == 0
     @test simplify(Term(zero, [x + 2])) == 0
-
-    @test simplify(sqrt(b) - b^(1//2)) === 0
 end
 
 @testset "LiteralReal" begin

@@ -130,48 +130,36 @@ function term_matcher_constructor(term, acSets)
             data = car(data) # from (..., ) to ...
             !iscall(data) && return nothing # if first element is not a call, return nothing
             
-            # if data is of the alternative form (1/...)^(...), it might match with negative exponent
-            if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && isequal(arguments(arguments(data)[1])[1], 1)
-                one_over_smth = arguments(data)[1]
-                T = symtype(one_over_smth)
-                frankestein = Term{T}(^, [arguments(one_over_smth)[2], -arguments(data)[2]])
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
-            end
-
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
             
-            # if data is of the alternative form 1/(...)^(...), it might match with negative exponent
-            if (operation(data) === /) && isequal(arguments(data)[1], 1) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
+            frankestein = nothing
+            if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && isequal(arguments(arguments(data)[1])[1], 1)
+                # if data is of the alternative form (1/...)^(...)
+                one_over_smth = arguments(data)[1]
+                T = symtype(one_over_smth)
+                frankestein = Term{T}(^, [arguments(one_over_smth)[2], -arguments(data)[2]])
+            elseif (operation(data) === /) && isequal(arguments(data)[1], 1) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
+                # if data is of the alternative form 1/(...)^(...)
                 denominator = arguments(data)[2]
                 T = symtype(denominator)
                 frankestein = Term{T}(^, [arguments(denominator)[1], -arguments(denominator)[2]])
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
-            end
-
-            # if data is of the alternative form 1/(...), it might match with exponent = -1
-            if (operation(data) === /) && isequal(arguments(data)[1], 1)
+            elseif (operation(data) === /) && isequal(arguments(data)[1], 1)
+                # if data is of the alternative form 1/(...), it might match with exponent = -1
                 denominator = arguments(data)[2]
                 T = symtype(denominator)
                 frankestein = Term{T}(^, [denominator, -1])
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
-            end
-            
-            # if data is a exp call, it might match with base e
-            if operation(data)===exp
+            elseif operation(data)===exp
+                # if data is a exp call, it might match with base e
                 T = symtype(arguments(data)[1])
-                frankestein = Term{T}(^,[ℯ,arguments(data)[1]])
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
-            end
-
-            # if data is a sqrt call, it might match with exponent 1//2
-            if operation(data)===sqrt
+                frankestein = Term{T}(^,[ℯ, arguments(data)[1]])
+            elseif operation(data)===sqrt
+                # if data is a sqrt call, it might match with exponent 1//2
                 T = symtype(arguments(data)[1])
                 frankestein = Term{T}(^,[arguments(data)[1], 1//2])
+            end
+
+            if frankestein !==nothing
                 result = loop(frankestein, bindings, matchers)
                 result !== nothing && return success(result, 1)
             end

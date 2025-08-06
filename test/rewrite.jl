@@ -137,6 +137,12 @@ end
     @test r((1/(a+b))^3) === (a,b,-3)
 end
 
+@testset "special power matches" begin
+    r1 = @rule (~x)^(~y) => (~x, ~y)
+    @test r1(exp(a)) === (ℯ, a) # uses exp_matcher
+    @test r1(sqrt(a)) === (a, 1//2) # uses sqrt_matcher
+end
+
 using SymbolicUtils: @capture
 
 @testset "Capture form" begin

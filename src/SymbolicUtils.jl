@@ -49,9 +49,7 @@ macro manually_scope(val, expr, is_forced = false)
     retval_name = gensym(:retval)
     close_expr = :($var_name[] = $old_name)
     interpolated_expr = MacroTools.postwalk(expr) do ex
-        if Meta.isexpr(ex, :return)
-            return Expr(:block, close_expr, ex)
-        elseif Meta.isexpr(ex, :$) && length(ex.args) == 1 && ex.args[1] == :$
+        if Meta.isexpr(ex, :$) && length(ex.args) == 1 && ex.args[1] == :$
             return cur_name
         else
             return ex
@@ -59,11 +57,11 @@ macro manually_scope(val, expr, is_forced = false)
     end
     basic_result = quote
         $cur_name = $var_name[] = $new_val
-        $retval_name = begin
+        $retval_name = try
             $interpolated_expr
+        finally
+            $close_expr
         end
-        $close_expr
-        $retval_name
     end
     is_forced && return quote
         $old_name = $var_name[]

@@ -41,6 +41,17 @@ const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=PolyVarOrder)
 const PolyVarT = typeof(ExamplePolyVar)
 const PolynomialT{T} = DP.Polynomial{DP.Commutative{DP.CreationOrder}, PolyVarOrder, T}
 
+function zeropoly(::Type{T}) where {T}
+    mv = DP.MonomialVector{DP.Commutative{DP.CreationOrder}, PolyVarOrder}()
+    PolynomialT{T}(T[], mv)
+end
+
+function onepoly(::Type{T}) where {T}
+    V = DP.Commutative{DP.CreationOrder}
+    mv = DP.MonomialVector{V, PolyVarOrder}(DP.Variable{V, PolyVarOrder}[], [Int[]])
+    PolynomialT{T}(T[one(T)], mv)
+end
+
 """
     Enum used to differentiate between variants of `BasicSymbolicImpl.ACTerm`.
 """
@@ -1822,89 +1833,45 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 
-function safe_add!(dict, coeff, b)
-    if isadd(b)
-        coeff += b.coeff
-        for (k, v) in b.dict
-            dict[k] = get(dict, k, 0) + v
-        end
-    elseif ismul(b)
-        v = b.coeff
-        metadata = b.metadata
-        if metadata === nothing
-            b′ = Mul{symtype(b)}(1, b.dict)
-        else
-            b′ = Mul{symtype(b)}(1, b.dict; metadata)
-        end
-        dict[b′] = get(dict, b′, 0) + v
-    elseif b isa Number
-        coeff += b
-    else
-        dict[b] = get(dict, b, 0) + 1
-    end
-    return coeff
-end
-
 function +(a::SN, bs::SN...)
     add_worker((a, bs...))
 end
 
 function add_worker(terms)
+    if isone(length(terms))
+        return only(terms)
+    end
+    # entries where `!issafecanon`
+    unsafes = SmallV{Any}()
     a, bs = Iterators.peel(terms)
-    isempty(bs) && return a
     T = symtype(a)
     for b in bs
         T = promote_symtype(+, T, symtype(b))
     end
-    # entries where `!issafecanon`
-    unsafes = SmallV{Any}()
-    # coeff and dict of the `Add`
-    coeff = 0
-    dict = Dict{Symbolic, T}()
-    # type of the `Add`
-
-    # handle `a` separately
-    if issafecanon(+, a)
-        if isadd(a)
-            coeff = a.coeff
-            dict = copy(a.dict)
-        elseif ismul(a)
-            v = a.coeff
-            a′ = Mul{symtype(a)}(1, a.dict; metadata = a.metadata)
-            dict[a′] = v
-        elseif a isa Number
-            coeff = a
-        else
-            dict[a] = 1
-        end
-    else
-        push!(unsafes, a)
-    end
-
-    for b in bs
-        if !issafecanon(+, b)
-            push!(unsafes, b)
+    result = zeropoly(T)
+    for term in terms
+        term = unwrap(term)
+        if !issafecanon(+, term)
+            push!(unsafes, term)
             continue
         end
-        coeff = safe_add!(dict, coeff, b)
+        @match term begin
+            x::Number => MA.operate!(+, result, x)
+            BSImpl.Polyform(; poly) => MA.operate!(+, result, poly)
+            x::BasicSymbolic => MA.operate!(+, result, basicsymbolic_to_polyvar(x))
+        end
     end
-    # remove entries multiplied by zero
-    filter!(dict) do kvp
-        !iszero(kvp[2])
-    end
-    if isempty(dict)
-        result = coeff
-    elseif iszero(coeff) && length(dict) == 1
-        expr, coeff = first(dict)
-        result = coeff * expr
+    nterms = MP.nterms(result)
+    if iszero(nterms) && isempty(unsafes)
+        return zero(T)
+    elseif iszero(nterms)
+        return Term{T}(+, unsafes)
+    elseif isempty(unsafes)
+        return Polyform{T}(result)
     else
-        result = Add{T}(coeff, dict)
+        push!(unsafes, Polyform{T}(result))
+        return Term{T}(+, unsafes)
     end
-    if !isempty(unsafes)
-        push!(unsafes, result)
-        result = Term{T}(+, unsafes)
-    end
-    return result
 end
 
 function +(a::Number, b::SN, bs::SN...)

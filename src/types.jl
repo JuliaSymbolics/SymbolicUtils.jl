@@ -106,14 +106,6 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
         hash2::UInt
         id::IdentT
     end
-    struct Pow
-        const base::Any
-        const exp::Any
-        const metadata::MetadataT
-        const shape::ShapeT
-        hash2::UInt
-        id::IdentT
-    end
 end
 
 const BSImpl = BasicSymbolicImpl
@@ -231,7 +223,6 @@ function override_properties(obj::Type{<:BSImpl.Variant})
         ::Type{<:BSImpl.Polyform} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
         ::Type{<:BSImpl.Term} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
         ::Type{<:BSImpl.Div} => (; id = (nothing, nothing), hash2 = 0)
-        ::Type{<:BSImpl.Pow} => (; id = (nothing, nothing), hash2 = 0)
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
@@ -242,7 +233,6 @@ function ordered_override_properties(obj::Type{<:BSImpl.Variant})
         ::Type{<:BSImpl.Term} => (0, 0, (nothing, nothing))
         ::Type{<:BSImpl.Polyform} => (ArgsT(), 0, 0, (nothing, nothing))
         ::Type{<:BSImpl.Div} => (0, (nothing, nothing))
-        ::Type{<:BSImpl.Pow} => (0, (nothing, nothing))
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
@@ -253,7 +243,6 @@ function ConstructionBase.getproperties(obj::BSImpl.Type)
         BSImpl.Term(; f, args, metadata, hash, hash2, shape, id) => (; f, args, metadata, hash, hash2, shape, id)
         BSImpl.Polyform(; poly, partial_polyvars, vars, metadata, shape, args, hash, hash2, id) => (; poly, partial_polyvars, vars, metadata, shape, args, hash, hash2, id)
         BSImpl.Div(; num, den, simplified, metadata, hash2, shape, id) => (; num, den, simplified, metadata, hash2, shape, id)
-        BSImpl.Pow(; base, exp, metadata, hash2, shape, id) => (; base, exp, metadata, hash2, shape, id)
     end
 end
 
@@ -363,7 +352,6 @@ See also: [`iscall`](@ref), [`arguments`](@ref)
             PolyformVariant.POW => (^)
         end
         BSImpl.Div(_) => (/)
-        BSImpl.Pow(_) => (^)
         _ => throw(UnimplementedForVariantError(operation, MData.variant_type(x)))
     end
 end
@@ -504,7 +492,6 @@ function TermInterface.arguments(x::BSImpl.Type)::ROArgsT
             return ROArgsT(args)
         end
         BSImpl.Div(num, den) => ROArgsT(ArgsT((num, den)))
-        BSImpl.Pow(base, exp) => ROArgsT(ArgsT((base, exp)))
         _ => throw(UnimplementedForVariantError(arguments, MData.variant_type(x)))
     end
 end
@@ -552,7 +539,7 @@ ispolyform(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Polyform)
 isadd(x::BSImpl.Type) = ispolyform(x) && polyform_variant(x) == PolyformVariant.ADD
 ismul(x::BSImpl.Type) = ispolyform(x) && polyform_variant(x) == PolyformVariant.MUL
 isdiv(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Div)
-ispow(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Pow) || ispolyform(x) && polyform_variant(x) == PolyformVariant.POW
+ispow(x::BSImpl.Type) = ispolyform(x) && polyform_variant(x) == PolyformVariant.POW
 
 for fname in [:issym, :isterm, :ispolyform, :isadd, :ismul, :isdiv, :ispow]
     @eval $fname(x) = false
@@ -624,9 +611,6 @@ function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
             end
         end
         (BSImpl.Div(; num = n1, den = d1), BSImpl.Div(; num = n2, den = d2)) => begin
-            isequal_maybe_scal(n1, n2, full) && isequal_maybe_scal(d1, d2, full)
-        end
-        (BSImpl.Pow(; base = n1, exp = d1), BSImpl.Pow(; base = n2, exp = d2)) => begin
             isequal_maybe_scal(n1, n2, full) && isequal_maybe_scal(d1, d2, full)
         end
     end
@@ -735,9 +719,6 @@ function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
         end
         BSImpl.Div(; num, den) => begin
             hash_anyscalar(num, hash_anyscalar(den, h, full), full) ⊻ DIV_SALT
-        end
-        BSImpl.Pow(; base, exp) => begin
-            hash_anyscalar(base, hash_anyscalar(exp, h, full), full) ⊻ POW_SALT
         end
     end
 
@@ -945,24 +926,11 @@ end
     return var
 end
 
-@inline function BSImpl.Pow{T}(base, exp; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
-    metadata = parse_metadata(metadata)
-    base = maybe_integer(parse_maybe_symbolic(base))
-    exp = maybe_integer(parse_maybe_symbolic(exp))
-    props = ordered_override_properties(BSImpl.Pow)
-    var = BSImpl.Pow{T}(base, exp, metadata, shape, props...)
-    if !unsafe
-        var = hashcons(var)
-    end
-    return var
-end
-
 # struct Const{T} end
 struct Sym{T} end
 struct Term{T} end
 struct Polyform{T} end
 struct Div{T} end
-struct Pow{T} end
 
 # function Const{T}(val)::Symbolic where {T}
 #     val = unwrap(val)
@@ -1111,20 +1079,6 @@ end
 Return the denominator of expression `x` as an array of multiplied terms.
 """
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : SmallV{Any}((1,))
-
-function Pow{T}(base, exp; kw...) where {T}
-    base = unwrap(base)
-    exp = unwrap(exp)
-    # TODO: Returning 1 isn't valid for matrix algebra
-    # This should use a `_one` function
-    _iszero(exp) && return 1
-    _isone(exp) && return base
-    return BSImpl.Pow{T}(base, exp; kw...)
-end
-
-function Pow(a, b; kw...)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)...; kw...)
-end
 
 function unwrap_const(x)
     x
@@ -2070,4 +2024,4 @@ function ^(a::SN, b)
     return BSImpl.Term{T}(^, ArgsT((a, b)))
 end
 
-^(a::Number, b::SN) = Pow(a, b)
+^(a::Number, b::SN) = Term{promote_symtype(^, symtype(a), symtype(b))}(^, ArgsT((a, b)))

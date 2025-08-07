@@ -440,9 +440,9 @@ function quick_cancel(d::BSImpl.Type{T}) where {T}
             n, d = quick_cancel((base.num ^ exp), (base.den ^ exp))
             return Div{T}(n, d, false)
         end
-        BSImpl.AddOrMul(; variant) && if variant == AddMulVariant.MUL && any(isdiv, arguments(d)) end => begin
-            return mul_worker(arguments(d))
-        end
+        # BSImpl.AddOrMul(; variant) && if variant == AddMulVariant.MUL && any(isdiv, arguments(d)) end => begin
+        #     return mul_worker(arguments(d))
+        # end
         BSImpl.Div(; num, den) => begin
             num, den = quick_cancel(num, den)
             return Div(num, den, false)
@@ -452,6 +452,9 @@ function quick_cancel(d::BSImpl.Type{T}) where {T}
 end
 
 function quick_cancel(x, y)
+    if ispolyform(x) || ispolyform(y)
+        return x, y
+    end
     if ispow(x) && ispow(y)
         return quick_powpow(x, y)
     elseif ismul(x) && ispow(y)

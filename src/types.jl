@@ -1729,13 +1729,13 @@ function ^(a::SN, b)
         BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false)
         _ => nothing
     end
-    if b isa Integer
+    if isinteger(b)
         @match a begin
+            BSImpl.Sym(;) => return BSImpl.Polyform{T}(basicsymbolic_to_polyvar(a) ^ Int(b))
             BSImpl.Polyform(; poly, partial_polyvars, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
                 poly = MP.polynomial(poly ^ b, T)
                 return BSImpl.Polyform{T}(poly, partial_polyvars, vars)
             end
-            _ => return BSImpl.Term{T}(^, ArgsT((a, b)))
         end
     end
     return BSImpl.Term{T}(^, ArgsT((a, b)))

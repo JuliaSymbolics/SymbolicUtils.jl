@@ -602,20 +602,20 @@ end
 
 ## SArray
 @inline function create_array(::Type{<:SArray}, ::Nothing, nd::Val, ::Val{dims}, elems...) where dims
-    SArray{Tuple{dims...}}(elems...)
+    SArray{Tuple{dims...}}(elems)
 end
 
 @inline function create_array(::Type{<:SArray}, T, nd::Val, ::Val{dims}, elems...) where dims
-    SArray{Tuple{dims...}, T}(elems...)
+    SArray{Tuple{dims...}, T}(elems)
 end
 
 ## MArray
 @inline function create_array(::Type{<:MArray}, ::Nothing, nd::Val, ::Val{dims}, elems...) where dims
-    MArray{Tuple{dims...}}(elems...)
+    MArray{Tuple{dims...}}(elems)
 end
 
 @inline function create_array(::Type{<:MArray}, T, nd::Val, ::Val{dims}, elems...) where dims
-    MArray{Tuple{dims...}, T}(elems...)
+    MArray{Tuple{dims...}, T}(elems)
 end
 
 ## We use a separate type for Sparse Arrays to sidestep the need for

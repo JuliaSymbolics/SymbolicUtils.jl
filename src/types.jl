@@ -2184,14 +2184,95 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 
-# should not be called with a `div`
-function get_mul_coeff_dict(::Type{T}, term; safe = false) where {T}
-    @match term begin
-        x::Number => (x, Dict{Symbolic, T}())
-        BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => (coeff, copy(dict))
-        BSImpl.Pow(; base, exp) && if exp isa Number end => (1, Dict{Symbolic, T}(base => exp))
-        _ => (1, Dict{Symbolic, T}(term => 1))
+struct MultipliedPolynomialPostprocessor
+    base_occurrences::Dict{BasicSymbolic, BitSet}
+    var_exponents::Vector{Real}
+    monomial::(typeof(MP.monomial(ExamplePolyVar)))
+    varsbuf::Vector{BasicSymbolic}
+    var_to_idx::Dict{BasicSymbolic, Int}
+end
+
+MultipliedPolynomialPostprocessor() = MultipliedPolynomialPostprocessor(Dict(), Real[], MP.monomial(ExamplePolyVar), BasicSymbolic[], Dict())
+
+const CACHED_MPP = TaskLocalValue{MultipliedPolynomialPostprocessor}(MultipliedPolynomialPostprocessor)
+
+function (mpp::MultipliedPolynomialPostprocessor)(poly::PolynomialT, ::Type{T}) where {T}
+    pvars = MP.variables(poly)
+    vars = mpp.varsbuf
+    empty!(vars)
+    sizehint!(vars, length(pvars))
+    var_to_idx = mpp.var_to_idx
+    empty!(var_to_idx)
+    base_occurrences = mpp.base_occurrences
+    empty!(base_occurrences)
+    var_exponents = mpp.var_exponents
+    empty!(var_exponents)
+    for (i, pvar) in enumerate(pvars)
+        var = polyvar_to_basicsymbolic(pvar)
+        push!(vars, var)
+        var_to_idx[var] = i
+        if iscall(var) && operation(var) === (^)
+            base, exp = arguments(var)
+            if !(exp isa Real)
+                base, exp = var, 1
+            end
+        else
+            base, exp = var, 1
+        end
+        push!(var_exponents, exp)
+        push!(get!(BitSet, base_occurrences, base), i)
     end
+
+    result = zero(PolynomialT{T})
+    monomial_buffer = mpp.monomial
+    for term in MP.terms(poly)
+        coeff = MP.coefficient(term)
+        mono = MP.monomial(term)
+        exps = MP.exponents(mono)
+
+        new_mono = MP.constant_monomial(result)
+        for (base, mask) in base_occurrences
+            exp = sum(mask) do i
+                exps[i] * var_exponents[i]
+            end
+            if isinteger(exp)
+                mbase = basicsymbolic_to_polyvar(base)
+                mexp = Int(exp)
+            else
+                mbase = basicsymbolic_to_polyvar(Term{T}(^, ArgsT((base, exp))))
+                mexp = 1
+            end
+            # cheat to avoid allocations
+            MP.variables(monomial_buffer)[] = mbase
+            MP.exponents(monomial_buffer)[] = mexp
+            MA.operate!(*, new_mono, monomial_buffer)
+        end
+        new_term = MP.Term{T, typeof(new_mono)}(coeff, new_mono)
+        MA.operate!(+, result, new_term)
+    end
+
+    return result
+end
+
+postprocessed_multiplied_polynomial(args...) = CACHED_MPP[](args...)
+
+function _mul_worker!(num_poly, den_poly, term)
+    @match term begin
+        x::Number => MA.operate!(*, num_poly, x)
+        BSImpl.Polyform(; poly) && if polyform_variant(poly) == PolyformVariant.MUL end => begin
+            MA.operate!(*, num_poly, poly)
+        end
+        BSImpl.Div(; num, den) => begin
+            if den_poly === nothing
+                den_poly = one(PolynomialT{T})
+            end
+            num_poly, den_poly = _mul_worker!(num_poly, den_poly, num)
+            den_poly, num_poly = _mul_worker!(den_poly, num_poly, den)
+        end
+        _ => MA.operate!(*, num_poly, basicsymbolic_to_polyvar(term))
+    end
+
+    return num_poly, den_poly
 end
 
 function mul_worker(terms)
@@ -2203,112 +2284,24 @@ function mul_worker(terms)
         T = promote_symtype(*, T, symtype(b))
     end
     unsafes = SmallV{Any}()
-    if isdiv(a)
-        num_coeff, num_dict = get_mul_coeff_dict(T, a.num)
-        den_coeff, den_dict = get_mul_coeff_dict(T, a.den)
-    elseif !issafecanon(*, a)
-        push!(unsafes, a)
-        num_coeff, num_dict = 1, Dict{Symbolic, T}()
-        den_coeff, den_dict = 1, nothing
-    else
-        num_coeff, num_dict = get_mul_coeff_dict(T, a)
-        den_coeff = 1
-        den_dict = nothing
-    end
-
-    for b in bs
-        b = unwrap(b)
-        if !issafecanon(*, b)
-            push!(unsafes, b)
+    num_poly = one(PolynomialT{T})
+    den_poly = nothing
+    for term in terms
+        if !issafecanon(*, term)
+            push!(unsafes, term)
             continue
         end
-        @match b begin
-            x::Number => (num_coeff *= x)
-            BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => begin
-                num_coeff *= coeff
-                for (k, v) in dict
-                    num_dict[k] = get(num_dict, k, 0) + v
-                end
-            end
-            BSImpl.Pow(; base, exp) && if exp isa Number end => begin
-                num_dict[base] = get(num_dict, base, 0) + exp
-            end
-            BSImpl.Div(; num, den) => begin
-                if den_dict === nothing && !(den isa Number)
-                    den_dict = Dict{Symbolic, T}()
-                end
-                @match num begin
-                    x::Number => (num_coeff *= x)
-                    BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => begin
-                        num_coeff *= coeff
-                        for (k, v) in dict
-                            num_dict[k] = get(num_dict, k, 0) + v
-                        end
-                    end
-                    BSImpl.Pow(; base, exp) && if exp isa Number end => begin
-                        num_dict[base] = get(num_dict, base, 0) + exp
-                    end
-                    _ => (num_dict[num] = get(num_dict, num, 0) + 1)
-                end
-                @match den begin
-                    x::Number => (den_coeff *= x)
-                    BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => begin
-                        den_coeff *= coeff
-                        for (k, v) in dict
-                            den_dict[k] = get(den_dict, k, 0) + v
-                        end
-                    end
-                    BSImpl.Pow(; base, exp) && if exp isa Number end => begin
-                        den_dict[base] = get(den_dict, base, 0) + exp
-                    end
-                    _ => (den_dict[den] = get(den_dict, den, 0) + 1)
-                end
-            end
-            _ => (num_dict[b] = get(num_dict, b, 0) + 1)
-        end
+        num_poly, den_poly = _mul_worker!(num_poly, den_poly, term)
     end
-
-    if iszero(num_coeff)
-        return num_coeff
-    end
-    filter!(kvp -> !iszero(kvp[2]), num_dict)
-    if isempty(num_dict)
-        num = num_coeff
-    elseif isone(num_coeff) && length(num_dict) == 1
-        base, exp = first(num_dict)
-        num = Pow{T}(base, exp)
-    elseif isone(-num_coeff) && length(num_dict) == 1 && isadd(first(keys(num_dict))) && isone(first(values(num_dict)))
-        add_term, _ = first(num_dict)
-        coeff = -add_term.coeff
-        dict = copy(add_term.dict)
-        map!(x -> -x, values(dict))
-        num = Add{T}(coeff, dict; metadata = metadata(add_term))
-    else
-        num = Mul{T}(num_coeff, num_dict)
-    end
-
+    num = Polyform{T}(postprocessed_multiplied_polynomial(num_poly, T))
     if !isempty(unsafes)
         push!(unsafes, num)
         num = Term{T}(*, unsafes)
     end
-
-    if den_dict !== nothing
-        filter!(kvp -> !iszero(kvp[2]), den_dict)
-    end
-
-    if den_dict === nothing || isempty(den_dict)
-        den = den_coeff
-    elseif isone(den_coeff) && length(den_dict) == 1
-        base, exp = first(den_dict)
-        den = Pow{T}(base, exp)
-    elseif isone(-den_coeff) && length(den_dict) == 1 && isadd(first(keys(den_dict))) && isone(first(values(den_dict)))
-        add_term, _ = first(den_dict)
-        coeff = -add_term.coeff
-        dict = copy(add_term.dict)
-        map!(x -> -x, values(dict))
-        den = Add{T}(coeff, dict; metadata = metadata(add_term))
+    if den_poly === nothing
+        den = one(T)
     else
-        den = Mul{T}(den_coeff, den_dict)
+        den = Polyform{T}(postprocessed_multiplied_polynomial(den_poly, T))
     end
 
     return Div{T}(num, den, false)

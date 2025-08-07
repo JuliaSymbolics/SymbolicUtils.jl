@@ -2053,19 +2053,29 @@ end
 
 function ^(a::SN, b)
     b = unwrap(b)
-    !issafecanon(^, a,b) && return Pow(a, b)
+    T = promote_symtype(^, symtype(a), symtype(b))
+    !issafecanon(^, a, b) && return Term{T}(^, ArgsT((a, b)))
     if b isa Number && iszero(b)
         # fast path
-        1
-    elseif b isa Real && b < 0
-        Div(1, a ^ (-b), false)
-    elseif ismul(a) && b isa Number
-        coeff = ^(a.coeff, b)
-        Mul{promote_symtype(^, symtype(a), symtype(b))}(
-            coeff, mapvalues((k, v) -> b*v, a.dict))
-    else
-        Pow(a, b)
+        return 1
     end
+    if b isa Real && b < 0
+        return Div{T}(1, a ^ (-b), false)
+    end
+    @match a begin
+        BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false)
+        _ => nothing
+    end
+    if b isa Integer
+        @match a begin
+            BSImpl.Polyform(; poly, partial_polyvars, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
+                poly = MP.polynomial(poly ^ b, T)
+                return BSImpl.Polyform{T}(poly, partial_polyvars, vars)
+            end
+            _ => return BSImpl.Term{T}(^, ArgsT((a, b)))
+        end
+    end
+    return BSImpl.Term{T}(^, ArgsT((a, b)))
 end
 
 ^(a::Number, b::SN) = Pow(a, b)

@@ -444,6 +444,14 @@ end
 
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
+function swap_polynomial_vars(poly::PolynomialT, new_vars::Vector{PolyVarT})
+    typeof(poly)(MP.coefficients(poly), DP.MonomialVector(new_vars, MP.monomials(poly).Z))
+end
+
+function swap_polynomial_vars(_::PolyVarT, new_vars::Vector{PolyVarT})
+    MP.polynomial(only(new_vars))
+end
+
 function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
     a === b && return true
     taskida, ida = a.id
@@ -848,9 +856,25 @@ function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
         coeff = MP.coefficient(term)
         mono = MP.monomial(term)
         exps = MP.exponents(mono)
-        if isone(coeff) && isone(count(!iszero, exps)) 
+        nnz = count(!iszero, exps)
+        if isone(coeff) && isone(nnz) 
             idx = findfirst(!iszero, exps)
             isone(exps[idx]) && return polyvar_to_basicsymbolic(MP.variables(mono)[idx])
+        elseif isone(-coeff) && isone(nnz)
+            idx = findfirst(!iszero, exps)
+            if isone(exps[idx])
+                pvars = MP.variables(poly)
+                var = polyvar_to_basicsymbolic(pvars[idx])
+                @match var begin
+                    BSImpl.Term(; f, args) && if f === (+) end => begin
+                        args = copy(parent(args))
+                        map!(x -> coeff * x, args, args)
+                        return BSImpl.Term(; f, args)
+                    end
+                    BSImpl.Polyform(;) => return -var
+                    _ => nothing
+                end
+            end
         end
     end
     BSImpl.Polyform{T}(poly, args...; kw...)
@@ -1576,9 +1600,8 @@ function -(a::SN, b::SN)
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
     @match (a, b) begin
         (BSImpl.Polyform(; poly = poly1), BSImpl.Polyform(; poly = poly2)) => begin
-            poly2 = MP.map_coefficients((-), poly2)
-            MA.operate!(+, poly2, poly1)
-            return Polyform{sub_t(a, b)}(poly2)
+            T = sub_t(a, b)
+            return Polyform{T}(poly1 - poly2)
         end
         _ => return add_worker((a, -b))
     end
@@ -1632,7 +1655,7 @@ function (mpp::MultipliedPolynomialPostprocessor)(poly::PolynomialT, ::Type{T}) 
         push!(get!(BitSet, base_occurrences, base), i)
     end
 
-    result = zero(PolynomialT{T})
+    result = zeropoly(T)
     monomial_buffer = mpp.monomial
     for term in MP.terms(poly)
         coeff = MP.coefficient(term)
@@ -1673,7 +1696,7 @@ function _mul_worker!(num_poly, den_poly, term)
         end
         BSImpl.Div(; num, den) => begin
             if den_poly === nothing
-                den_poly = one(PolynomialT{T})
+                den_poly = onepoly(eltype(MP.coefficients(num_poly)))
             end
             num_poly, den_poly = _mul_worker!(num_poly, den_poly, num)
             den_poly, num_poly = _mul_worker!(den_poly, num_poly, den)
@@ -1693,7 +1716,7 @@ function mul_worker(terms)
         T = promote_symtype(*, T, symtype(b))
     end
     unsafes = SmallV{Any}()
-    num_poly = one(PolynomialT{T})
+    num_poly = onepoly(T)
     den_poly = nothing
     for term in terms
         if !issafecanon(*, term)
@@ -1760,17 +1783,21 @@ function ^(a::SN, b)
     if b isa Real && b < 0
         return Div{T}(1, a ^ (-b), false)
     end
+    if b isa Number && iscall(a) && operation(a) === (^) && arguments(a)[2] isa Number
+        base, exp = arguments(a)
+        return base ^ (exp * b)
+    end
     @match a begin
         BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false)
         _ => nothing
     end
-    if isinteger(b)
+    if b isa Number && isinteger(b)
         @match a begin
-            BSImpl.Sym(;) => return BSImpl.Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), T))
             BSImpl.Polyform(; poly, partial_polyvars, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
                 poly = MP.polynomial(poly ^ Int(b), T)
                 return Polyform{T}(poly, partial_polyvars, vars)
             end
+            _ => return Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), T))
         end
     end
     return BSImpl.Term{T}(^, ArgsT((a, b)))

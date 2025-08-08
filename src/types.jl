@@ -1813,6 +1813,8 @@ function add_worker(terms)
         return Polyform{T}(result)
     else
         push!(unsafes, Polyform{T}(result))
+        # ensure `result` is always the first
+        unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
         return Term{T}(+, unsafes)
     end
 end
@@ -1971,6 +1973,8 @@ function mul_worker(terms)
     num = Polyform{T}(postprocessed_multiplied_polynomial(num_poly, T))
     if !isempty(unsafes)
         push!(unsafes, num)
+        # ensure `num` is always the first
+        unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
         num = Term{T}(*, unsafes)
     end
     if den_poly === nothing

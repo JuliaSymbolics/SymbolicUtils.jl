@@ -1787,7 +1787,7 @@ function ^(a::SN, b)
         BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false)
         _ => nothing
     end
-    if isinteger(b)
+    if b isa Number && isinteger(b)
         @match a begin
             BSImpl.Sym(;) => return BSImpl.Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), T))
             BSImpl.Polyform(; poly, partial_polyvars, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin

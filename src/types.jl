@@ -816,7 +816,7 @@ function Term(f, args; kw...)
     Term{_promote_symtype(f, args)}(f, args; kw...)
 end
 
-function Polyform{T}(poly::PolynomialT; kw...) where {T}
+function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
     nterms = MP.nterms(poly)
     if MP.isconstant(poly)
         return MP.leading_coefficient(poly)
@@ -830,10 +830,10 @@ function Polyform{T}(poly::PolynomialT; kw...) where {T}
             isone(exps[idx]) && return polyvar_to_basicsymbolic(MP.variables(mono)[idx])
         end
     end
-    BSImpl.Polyform{T}(poly; kw...)
+    BSImpl.Polyform{T}(poly, args...; kw...)
 end
 
-Polyform(poly::PolynomialT{T}; kw...) where {T} = Polyform{T}(poly; kw...)
+Polyform(poly::PolynomialT{T}, args...; kw...) where {T} = Polyform{T}(poly, args...; kw...)
 
 """
     $(TYPEDSIGNATURES)

@@ -129,7 +129,7 @@ end
     @syms a b
     x1 = a + b
     x2 = a + b
-    @test x1.id === nothing === x2.id
+    @test x1.id === (nothing, nothing) === x2.id
     SymbolicUtils.ENABLE_HASHCONSING[] = true
 end
 

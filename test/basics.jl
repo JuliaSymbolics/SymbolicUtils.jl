@@ -448,3 +448,13 @@ end
         @test isequal(res, x)
     end
 end
+
+@testset "Equivalent expressions across tasks are equal" begin
+    @syms a
+    task = Threads.@spawn @syms a
+    a2 = only(fetch(task))
+    @test isequal(a, a2)
+    @test SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true begin
+        isequal(a, a2)
+    end
+end

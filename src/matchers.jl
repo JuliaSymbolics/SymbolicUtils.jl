@@ -194,6 +194,46 @@ function term_matcher_constructor(term, acSets)
             return nothing
         end
         return commutative_term_matcher
+    # if the operation is sqrt, we have to match also ^(1//2)
+    elseif operation(term)==sqrt
+        function sqrt_matcher(success, data, bindings)
+            !islist(data) && return nothing # if data is not a list, return nothing
+            data = car(data)
+            !iscall(data) && return nothing # if first element is not a call, return nothing
+            
+            # do the normal matcher
+            result = loop(data, bindings, matchers)
+            result !== nothing && return success(result, 1)
+
+            if (operation(data) === ^) && (arguments(data)[2] === 1//2)
+                T = symtype(arguments(data)[1])
+                frankestein = Term{T}(sqrt,[arguments(data)[1]])
+                result = loop(frankestein, bindings, matchers)
+                result !== nothing && return success(result, 1)
+            end
+            return nothing
+        end
+        return sqrt_matcher
+    # if the operation is exp, we have to match also ℯ^
+    elseif operation(term)==exp
+        function exp_matcher(success, data, bindings)
+            !islist(data) && return nothing # if data is not a list, return nothing
+            data = car(data)
+            !iscall(data) && return nothing # if first element is not a call, return nothing
+            
+            # do the normal matcher
+            result = loop(data, bindings, matchers)
+            result !== nothing && return success(result, 1)
+
+            if (operation(data) === ^) && (arguments(data)[1] === ℯ)
+                T = symtype(arguments(data)[2])
+                frankestein = Term{T}(exp,[arguments(data)[2]])
+                result = loop(frankestein, bindings, matchers)
+                result !== nothing && return success(result, 1)
+            end
+            return nothing
+        end
+        return exp_matcher
     else
         function term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing

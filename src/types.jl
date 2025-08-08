@@ -571,11 +571,15 @@ function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
                 cache
             end
         end
-        BSImpl.Polyform(; poly, shape, hash) => begin
-            if iszero(hash)
-                s.hash = Base.hash(poly, Base.hash(shape, h))
+        BSImpl.Polyform(; poly, partial_polyvars, shape, hash) => begin
+            if full
+                Base.hash(swap_polynomial_vars(poly, partial_polyvars), Base.hash(shape, h))
             else
-                hash
+                if iszero(hash)
+                    s.hash = Base.hash(poly, Base.hash(shape, h))
+                else
+                    hash
+                end
             end
         end
         BSImpl.Div(; num, den) => begin

@@ -23,6 +23,11 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
             elseif f === (*) || f === (+)
                 arg1, restargs = Iterators.peel(args)
                 poly = to_poly!(poly_to_bs, arg1)
+                if !(poly isa PolynomialT)
+                    _poly = zeropoly(T)
+                    MA.operate!(+, _poly, poly)
+                    poly = _poly
+                end
                 for arg in restargs
                     MA.operate!(*, poly, to_poly!(poly_to_bs, arg))
                 end
@@ -101,13 +106,12 @@ function simplify_div(d)
     isdiv(d) || return d
     d.simplified && return d
     num, den = simplify_div(symtype(d), d.num, d.den)
-    return Div{symtype(d)}(num, den, true)
+    return simplify_fractions(num) / simplify_fractions(den)
 end
 function simplify_div(::Type{T}, num, den) where {T}
-    poly_to_bs_1 = Dict{PolyVarT, BasicSymbolic}()
-    partial_poly1 = to_poly!(poly_to_bs_1, num, false)
-    poly_to_bs_2 = Dict{PolyVarT, BasicSymbolic}()
-    partial_poly2 = to_poly!(poly_to_bs_2, den, false)
+    poly_to_bs = Dict{PolyVarT, BasicSymbolic}()
+    partial_poly1 = to_poly!(poly_to_bs, num, false)
+    partial_poly2 = to_poly!(poly_to_bs, den, false)
     factor = gcd(partial_poly1, partial_poly2)
     if isone(factor)
         return num, den
@@ -116,13 +120,11 @@ function simplify_div(::Type{T}, num, den) where {T}
     # uses it as buffer. The result is the returned value.
     partial_poly1 = MP.div_multiple(partial_poly1, factor, MA.IsMutable())
     partial_poly2 = MP.div_multiple(partial_poly2, factor, MA.IsMutable())
-    vars1 = [poly_to_bs_1[v] for v in MP.variables(partial_poly1)]
-    vars2 = [poly_to_bs_2[v] for v in MP.variables(partial_poly2)]
-    pvars1 = map(basicsymbolic_to_polyvar, vars1)
-    pvars2 = map(basicsymbolic_to_polyvar, vars2)
-    poly1 = postprocessed_multiplied_polynomial(swap_polynomial_vars(partial_poly1, pvars1), T)
-    poly2 = postprocessed_multiplied_polynomial(swap_polynomial_vars(partial_poly2, pvars2), T)
-    return Polyform{T}(poly1), Polyform{T}(poly2)
+    pvars1 = MP.variables(partial_poly1)
+    pvars2 = MP.variables(partial_poly2)
+    vars1 = [poly_to_bs[v] for v in pvars1]
+    vars2 = [poly_to_bs[v] for v in pvars2]
+    return subs_poly(partial_poly1, vars1), subs_poly(partial_poly2, vars2)
 end
 
 """

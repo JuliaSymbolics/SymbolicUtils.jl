@@ -1793,7 +1793,7 @@ function ^(a::SN, b)
                 poly = MP.polynomial(poly ^ b, T)
                 return BSImpl.Polyform{T}(poly, partial_polyvars, vars)
             end
-            _ => nothing
+            _ => return BSImpl.Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), T))
         end
     end
     return BSImpl.Term{T}(^, ArgsT((a, b)))

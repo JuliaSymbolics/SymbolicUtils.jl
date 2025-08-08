@@ -1,6 +1,7 @@
 export simplify_fractions, quick_cancel, flatten_fractions
 
-function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T})::Union{PolyVarT, PolynomialT{T}} where {T}
+to_poly!(_, expr, _) = expr
+function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Union{PolyVarT, PolynomialT{T}} where {T}
     @match expr begin
         BSImpl.Sym(;) => begin
             pvar = basicsymbolic_to_partial_polyvar(expr)

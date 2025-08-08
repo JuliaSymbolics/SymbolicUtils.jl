@@ -113,7 +113,7 @@ end
     @test r_predicate(x+2) === (x, 2)
     @test r_predicate(x+2.0) !== (x, 2.0)
     # Note: r_predicate(x+2.0) doesnt return nothing, but (x+2.0, 0)
-    # becasue of the defslot
+    # because of the defslot
 end
 
 @testset "power matcher with negative exponent" begin
@@ -157,6 +157,16 @@ end
     r1 = @rule (~x)^(~y) => (~x, ~y)
     @test r1(exp(a)) === (ℯ, a) # uses exp_matcher
     @test r1(sqrt(a)) === (a, 1//2) # uses sqrt_matcher
+end
+
+@testset "Alternate form of special functions" begin
+    rsqrt = @rule sqrt(~x) => ~x
+    @test rsqrt(sqrt(x))===x
+    @test rsqrt((x)^(1//2))===x
+
+    rexp = @rule exp(~x) => ~x
+    @test rexp(exp(x)) === x
+    @test rexp(ℯ^x) === x
 end
 
 using SymbolicUtils: @capture

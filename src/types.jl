@@ -40,6 +40,17 @@ const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=PolyVarOrder)
 const PolyVarT = typeof(ExamplePolyVar)
 const PolynomialT{T} = DP.Polynomial{DP.Commutative{DP.CreationOrder}, PolyVarOrder, T}
 
+function zeropoly(::Type{T}) where {T}
+    mv = DP.MonomialVector{DP.Commutative{DP.CreationOrder}, PolyVarOrder}()
+    PolynomialT{T}(T[], mv)
+end
+
+function onepoly(::Type{T}) where {T}
+    V = DP.Commutative{DP.CreationOrder}
+    mv = DP.MonomialVector{V, PolyVarOrder}(DP.Variable{V, PolyVarOrder}[], [Int[]])
+    PolynomialT{T}(T[one(T)], mv)
+end
+
 """
     $(TYPEDEF)
 
@@ -1530,7 +1541,7 @@ function add_worker(terms)
     for b in bs
         T = promote_symtype(+, T, symtype(b))
     end
-    result = zero(PolynomialT{T})
+    result = zeropoly(T)
     for term in terms
         term = unwrap(term)
         if !issafecanon(+, term)

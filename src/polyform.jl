@@ -98,57 +98,177 @@ end
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
 function simplify_div(d)
+    isdiv(d) || return d
     d.simplified && return d
-    ns, ds = polyform_factors(d, get_pvar2sym(), get_sym2term())
-    ns, ds = rm_gcds(ns, ds)
-    if all(_isone, ds)
-        return isempty(ns) ? 1 : simplify_fractions(_mul(ns))
+    num, den = simplify_div(symtype(d), d.num, d.den)
+    return Div{symtype(d)}(num, den, true)
+end
+function simplify_div(::Type{T}, num, den) where {T}
+    poly_to_bs_1 = Dict{PolyVarT, BasicSymbolic}()
+    partial_poly1 = to_poly!(poly_to_bs_1, num, false)
+    poly_to_bs_2 = Dict{PolyVarT, BasicSymbolic}()
+    partial_poly2 = to_poly!(poly_to_bs_2, den, false)
+    factor = gcd(partial_poly1, partial_poly2)
+    if isone(factor)
+        return num, den
+    end
+    # NOTE: This does not mutate `partial_poly1` to be the result, it just
+    # uses it as buffer. The result is the returned value.
+    partial_poly1 = MP.div_multiple(partial_poly1, factor, MA.IsMutable())
+    partial_poly2 = MP.div_multiple(partial_poly2, factor, MA.IsMutable())
+    vars1 = [poly_to_bs_1[v] for v in MP.variables(partial_poly1)]
+    vars2 = [poly_to_bs_2[v] for v in MP.variables(partial_poly2)]
+    pvars1 = map(basicsymbolic_to_polyvar, vars1)
+    pvars2 = map(basicsymbolic_to_polyvar, vars2)
+    poly1 = postprocessed_multiplied_polynomial(swap_polynomial_vars(partial_poly1, pvars1), T)
+    poly2 = postprocessed_multiplied_polynomial(swap_polynomial_vars(partial_poly2, pvars2), T)
+    return Polyform{T}(poly1), Polyform{T}(poly2)
+end
+
+"""
+    quick_cancel(d)
+
+Cancel out matching factors from numerator and denominator.
+This is not as effective as `simplify_fractions`, for example,
+it wouldn't simplify `(x^2 + 15 -  8x)  / (x - 5)` to `(x - 3)`.
+But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
+Has optimized processes for `Mul` and `Pow` terms.
+"""
+quick_cancel(d) = d
+function quick_cancel(d::BSImpl.Type{T}) where {T}
+    iscall(d) || return d
+    op = operation(d)
+    if op === (^)
+        base, exp = arguments(d)
+        base isa BasicSymbolic || return d
+        isdiv(base) || return d
+        num, den = quick_cancel(base.num, base.den)
+        return Div{T}(num ^ exp, den ^ exp, false)
+    elseif op === (/)
+        num, den = arguments(d)
+        num, den = quick_cancel(num, den)
+        return Div{T}(num, den, false)
     else
-        Div(simplify_fractions(_mul(ns)), simplify_fractions(_mul(ds)), false)
+        return d
     end
 end
 
-function frac_maketerm(T, f, args, metadata)
-    # TODO add stype to T?
-    if f in (*, /, \, +, -)
-        f(args...)
-    elseif f == (^)
-        if args[2] isa Integer && args[2] < 0
-            1/((args[1])^(-args[2]))
-        else
-            args[1]^args[2]
+function quick_cancel(x, y)
+    opx = iscall(x) ? operation(x) : nothing
+    opy = iscall(y) ? operation(y) : nothing
+    if opx === (^) && opy === (^)
+        return quick_powpow(x, y)
+    elseif opx === (*) && opy === (^)
+        return quick_mulpow(x, y)
+    elseif opx === (^) && opy === (*)
+        return reverse(quick_mulpow(y, x))
+    elseif opx === (*) && opy === (*)
+        return quick_mulmul(x, y)
+    elseif opx === (^)
+        return quick_pow(x, y)
+    elseif opy === (^)
+        return reverse(quick_pow(y, x))
+    elseif opx === (*)
+        return quick_mul(x, y)
+    elseif opy === (*)
+        return reverse(quick_mul(y, x))
+    elseif isequal(x, y)
+        return 1, 1
+    else
+        return x, y
+    end
+end
+
+# ispow(x) case
+function quick_pow(x, y)
+    base, exp = arguments(x)
+    exp isa Number || return (x, y)
+    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), 1) : (x, y)
+end
+
+# Double Pow case
+function quick_powpow(x, y)
+    base1, exp1 = arguments(x)
+    base2, exp2 = arguments(y)
+    isequal(base1, base2) || return x, y
+    !(exp1 isa Number && exp2 isa Number) && return (x, y)
+    if exp1 > exp2
+        return base1 ^ (exp1 - exp2), 1
+    elseif exp1 == exp2
+        return 1, 1
+    else # exp1 < exp2
+        return 1, base2 ^ (exp2 - exp1)
+    end
+end
+
+# ismul(x)
+function quick_mul(x, y)
+    yy = BSImpl.Term{symtype(y)}(^, ArgsT((y, 1)))
+    newx, newy = quick_mulpow(x, yy)
+    return isequal(newy, yy) ? (x, y) : (newx, newy)
+end
+
+# mul, pow case
+function quick_mulpow(x, y)
+    base, exp = arguments(y)
+    exp isa Number || return (x, y)
+    args = arguments(x)
+    idx = 0
+    argbase = argexp = nothing
+    for (i, arg) in enumerate(args)
+        if isequal(arg, base)
+            idx = i
+            argbase = arg
+            argexp = 1
+            break
         end
+        
+        if iscall(arg) && operation(arg) === (^) && isequal(arguments(arg)[1], base)
+            idx = i
+            argbase, argexp = arguments(arg)
+            break
+        end
+    end
+    iszero(idx) && return x, y
+    argexp isa Number || return x, y
+    # cheat by mutating `args` to avoid allocating
+    args = parent(args)
+    oldval = args[idx]
+    if argexp > exp
+        args[idx] = argbase ^ (argexp - exp)
+        result = mul_worker(args), 1
+    elseif argexp == exp
+        args[idx] = 1
+        result = mul_worker(args), 1
     else
-        maketerm(T, f, args, metadata)
+        args[idx] = 1
+        result = mul_worker(args), base ^ (exp - argexp)
+    end
+    args[idx] = oldval
+    return result
+end
+
+# Double mul case
+function quick_mulmul(x, y)
+    yargs = arguments(y)
+    for (i, arg) in enumerate(yargs)
+        newx, newarg = quick_cancel(x, arg)
+        isequal(arg, newarg) && continue
+        if yargs isa ROArgsT
+            yargs = copy(parent(yargs))
+        end
+        yargs[i] = newarg
+        x = newx
+    end
+    if yargs isa ROArgsT
+        return x, y
+    else
+        return x, mul_worker(yargs)
     end
 end
 
-"""
-    simplify_fractions(x; polyform=false)
-
-Find `Div` nodes and simplify them by cancelling a set of factors of numerators
-and denominators. If `polyform=true` the factors which were converted into PolyForm
-for the purpose of finding polynomial GCDs will be left as they are.
-Note that since PolyForms have different `hash`es than SymbolicUtils expressions,
-`substitute` may not work if `polyform=true`
-"""
-function simplify_fractions(x; polyform=false)
-
-    x = Postwalk(quick_cancel)(x)
-
-    !needs_div_rules(x) && return x
-
-    sdiv(a) = isdiv(a) ? simplify_div(a) : a
-
-    expr = Postwalk(sdiv ∘ quick_cancel,
-                    maketerm=frac_maketerm)(Postwalk(add_with_div,
-                                                           maketerm=frac_maketerm)(x))
-
-    polyform ? expr : unpolyize(expr)
-end
-
-function add_with_div(x, flatten=true)
-    (!iscall(x) || operation(x) != (+)) && return x
+function add_with_div(x)
+    (!iscall(x) || operation(x) !== (+)) && return x
     aa = parent(arguments(x))
     !any(isdiv, aa) && return x # no rewrite necessary
 
@@ -181,11 +301,30 @@ function add_with_div(x, flatten=true)
     end
     num = add_worker(nums)
 
-    if flatten
-        num, den = quick_cancel(num, den)
-    end
+    num, den = quick_cancel(num, den)
     return num / den
 end
+
+const FRAC_SIMPLIFIER = Rewriters.Postwalk(simplify_div ∘ quick_cancel) ∘ Rewriters.Postwalk(add_with_div)
+const QUICK_CANCELER = Rewriters.Postwalk(quick_cancel)
+
+"""
+    simplify_fractions(x; polyform=false)
+
+Find `Div` nodes and simplify them by cancelling a set of factors of numerators
+and denominators.
+"""
+function simplify_fractions(x)
+
+    x = QUICK_CANCELER(x)
+
+    !needs_div_rules(x) && return x
+
+    return FRAC_SIMPLIFIER(x)
+end
+
+const FRACTION_FLATTENER = Rewriters.Fixpoint(Rewriters.Postwalk(add_with_div))
+
 """
     flatten_fractions(x)
 
@@ -197,7 +336,7 @@ julia> flatten_fractions((1+(1+1/a)/a)/a)
 ```
 """
 function flatten_fractions(x)
-    Fixpoint(Postwalk(add_with_div))(x)
+    FRACTION_FLATTENER(x)
 end
 
 function fraction_iszero(x)
@@ -226,176 +365,3 @@ function has_div(x)
     return isdiv(x) || (iscall(x) && any(has_div, arguments(x)))
 end
 
-flatten_pows(xs) = map(xs) do x
-    ispow(x) ? Iterators.repeated(arguments(x)...) : (x,)
-end |> Iterators.flatten |> a->collect(Any,a)
-
-# coefftype(x::PolyForm) = coefftype(x.p)
-coefftype(x::MP.AbstractPolynomialLike{T}) where {T} = T
-coefftype(x) = typeof(x)
-
-const MaybeGcd = Union{#=PolyForm, =#MP.AbstractPolynomialLike, Integer}
-_gcd(x::MaybeGcd, y::MaybeGcd) = (coefftype(x) <: Complex || coefftype(y) <: Complex) ? 1 : gcd(x, y)
-_gcd(x, y) = 1
-
-
-"""
-    quick_cancel(d)
-
-Cancel out matching factors from numerator and denominator.
-This is not as effective as `simplify_fractions`, for example,
-it wouldn't simplify `(x^2 + 15 -  8x)  / (x - 5)` to `(x - 3)`.
-But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
-Has optimized processes for `Mul` and `Pow` terms.
-"""
-quick_cancel(d) = d
-function quick_cancel(d::BSImpl.Type{T}) where {T}
-    @match d begin
-        # BSImpl.Pow(; base, exp) => begin
-        #     base isa BSImpl.Type || return d
-        #     MData.isa_variant(base, BSImpl.Div) || return d
-        #     n, d = quick_cancel((base.num ^ exp), (base.den ^ exp))
-        #     return Div{T}(n, d, false)
-        # end
-        # BSImpl.AddOrMul(; variant) && if variant == AddMulVariant.MUL && any(isdiv, arguments(d)) end => begin
-        #     return mul_worker(arguments(d))
-        # end
-        BSImpl.Div(; num, den) => begin
-            num, den = quick_cancel(num, den)
-            return Div(num, den, false)
-        end
-        _ => return d
-    end
-end
-
-function quick_cancel(x, y)
-    if ispolyform(x) || ispolyform(y)
-        return x, y
-    end
-    if ispow(x) && ispow(y)
-        return quick_powpow(x, y)
-    elseif ismul(x) && ispow(y)
-        return quick_mulpow(x, y)
-    elseif ispow(x) && ismul(y)
-        return reverse(quick_mulpow(y, x))
-    elseif ismul(x) && ismul(y)
-        return quick_mulmul(x, y)
-    elseif ispow(x)
-        return quick_pow(x, y)
-    elseif ispow(y)
-        return reverse(quick_pow(y, x))
-    elseif ismul(x)
-        return quick_mul(x, y)
-    elseif ismul(y)
-        return reverse(quick_mul(y, x))
-    else
-        return isequal(x, y) ? (1,1) : (x, y)
-    end
-end
-
-# ispow(x) case
-function quick_pow(x, y)
-    x.exp isa Number || return (x, y)
-    isequal(x.base, y) && x.exp >= 1 ? (Pow{symtype(x)}(x.base, x.exp - 1),1) : (x, y)
-end
-
-# Double Pow case
-function quick_powpow(x, y)
-    if isequal(x.base, y.base)
-        !(x.exp isa Number && y.exp isa Number) && return (x, y)
-        if x.exp > y.exp
-            return Pow{symtype(x)}(x.base, x.exp-y.exp), 1
-        elseif x.exp == y.exp
-            return 1, 1
-        else # x.exp < y.exp
-            return 1, Pow{symtype(y)}(y.base, y.exp-x.exp)
-        end
-    end
-    return x, y
-end
-
-# ismul(x)
-function quick_mul(x, y)
-    if haskey(x.dict, y) && x.dict[y] >= 1
-        d = copy(x.dict)
-        if d[y] > 1
-            d[y] -= 1
-        elseif d[y] == 1
-            delete!(d, y)
-        else
-            error("Can't reach")
-        end
-
-        return Mul{symtype(x)}(x.coeff, d), 1
-    else
-        return x, y
-    end
-end
-
-# mul, pow case
-function quick_mulpow(x, y)
-    y.exp isa Number || return (x, y)
-    if haskey(x.dict, y.base)
-        d = copy(x.dict)
-        if x.dict[y.base] > y.exp
-            d[y.base] -= y.exp
-            den = 1
-        elseif x.dict[y.base] == y.exp
-            delete!(d, y.base)
-            den = 1
-        else
-            den = Pow{symtype(y)}(y.base, y.exp-d[y.base])
-            delete!(d, y.base)
-        end
-        return Mul{symtype(x)}(x.coeff, d), den
-    else
-        return x, y
-    end
-end
-
-# Double mul case
-function quick_mulmul(x, y)
-    num_dict, den_dict = _merge_div(x.dict, y.dict)
-    Mul{symtype(x)}(x.coeff, num_dict), Mul{symtype(y)}(y.coeff, den_dict)
-end
-
-function _merge_div(ndict, ddict)
-    num = copy(ndict)
-    den = copy(ddict)
-    for (k, v) in den
-        if haskey(num, k)
-            nk = num[k]
-            if nk > v
-                num[k] -= v
-                delete!(den, k)
-            elseif nk == v
-                delete!(num, k)
-                delete!(den, k)
-            else
-                den[k] -= nk
-                delete!(num, k)
-            end
-        end
-    end
-    num, den
-end
-
-function rm_gcds(ns, ds)
-    ns = flatten_pows(ns)
-    ds = flatten_pows(ds)
-
-    for i = 1:length(ns)
-        for j = 1:length(ds)
-            g = _gcd(ns[i], ds[j])
-            if !_isone(g)
-                ns[i] = div(ns[i], g)
-                ds[j] = div(ds[j], g)
-            end
-        end
-    end
-
-    filter!(!_isone, ns)
-    filter!(!_isone, ds)
-
-    ns,ds
-end

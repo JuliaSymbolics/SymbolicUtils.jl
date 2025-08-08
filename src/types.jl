@@ -322,7 +322,7 @@ end
                 PolyformVariant.MUL => sort!(args, by = get_degrees)
                 _ => nothing
             end
-            return args
+            return ROArgsT(ArgsT(args))
         end
         _ => return arguments(x)
     end

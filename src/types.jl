@@ -841,9 +841,23 @@ function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
         coeff = MP.coefficient(term)
         mono = MP.monomial(term)
         exps = MP.exponents(mono)
-        if isone(coeff) && isone(count(!iszero, exps)) 
+        nnz = count(!iszero, exps)
+        if isone(coeff) && isone(nnz) 
             idx = findfirst(!iszero, exps)
             isone(exps[idx]) && return polyvar_to_basicsymbolic(MP.variables(mono)[idx])
+        elseif isone(-coeff) && isone(nnz)
+            idx = findfirst(!iszero, exps)
+            pvars = MP.variables(poly)
+            var = polyvar_to_basicsymbolic(pvars[idx])
+            @match var begin
+                BSImpl.Term(; f, args) && if f === (+) end => begin
+                    args = copy(parent(args))
+                    map!(x -> coeff * x, args, args)
+                    return BSImpl.Term(; f, args)
+                end
+                BSImpl.Polyform(;) => return -var
+                _ => nothing
+            end
         end
     end
     BSImpl.Polyform{T}(poly, args...; kw...)

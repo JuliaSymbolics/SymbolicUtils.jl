@@ -442,3 +442,8 @@ end
     res = substitute(ex, Dict(y => 0))
     @test SymbolicUtils.isequal_with_metadata(res, x)
 end
+
+@testset "Negative coefficient to fractional power" begin
+    @syms a
+    @test isequal((-5a)^0.5, sqrt(5) * Pow{Number}(-a, 0.5))
+end

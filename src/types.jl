@@ -1533,9 +1533,14 @@ function ^(a::SN, b)
     elseif b isa Real && b < 0
         Div(1, a ^ (-b))
     elseif ismul(a) && b isa Number
-        coeff = unstable_pow(a.coeff, b)
-        Mul(promote_symtype(^, symtype(a), symtype(b)),
-            coeff, mapvalues((k, v) -> b*v, a.dict))
+        if a.coeff isa Real && a.coeff < 0 && !isinteger(b)
+            coeff = unstable_pow(-a.coeff, b)
+            coeff * Pow(Mul(promote_symtype(^, symtype(a), symtype(b)), -1, copy(a.dict)), b)
+        else
+            coeff = unstable_pow(a.coeff, b)
+            Mul(promote_symtype(^, symtype(a), symtype(b)),
+                coeff, mapvalues((k, v) -> b*v, a.dict))
+        end
     else
         Pow(a, b)
     end

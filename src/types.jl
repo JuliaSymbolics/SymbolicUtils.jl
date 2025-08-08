@@ -1712,7 +1712,7 @@ function mul_worker(terms)
         T = promote_symtype(*, T, symtype(b))
     end
     unsafes = SmallV{Any}()
-    num_poly = one(PolynomialT{T})
+    num_poly = onepoly(T)
     den_poly = nothing
     for term in terms
         if !issafecanon(*, term)

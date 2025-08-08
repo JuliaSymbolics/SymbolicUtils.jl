@@ -170,7 +170,7 @@ function quick_cancel(x, y)
         return reverse(quick_pow(y, x))
     elseif opx === (*)
         return quick_mul(x, y)
-    elseif opy === (^)
+    elseif opy === (*)
         return reverse(quick_mul(y, x))
     elseif isequal(x, y)
         return 1, 1

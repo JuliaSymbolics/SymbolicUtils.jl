@@ -346,7 +346,7 @@ function TermInterface.arguments(x::BSImpl.Type)::ROArgsT
                             push!(args, coeff)
                         elseif isone(coeff) && isone(count(!iszero, exps))
                             idx = findfirst(!iszero, exps)
-                            push!(args, vars[idx])
+                            push!(args, vars[idx] ^ exps[idx])
                         else
                             push!(args, BSImpl.Polyform{T}(MP.polynomial(term, T), partial_polyvars, vars; shape))
                         end

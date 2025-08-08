@@ -1692,7 +1692,7 @@ function _mul_worker!(num_poly, den_poly, term)
         end
         BSImpl.Div(; num, den) => begin
             if den_poly === nothing
-                den_poly = one(PolynomialT{T})
+                den_poly = onepoly(eltype(MP.coefficients(num_poly)))
             end
             num_poly, den_poly = _mul_worker!(num_poly, den_poly, num)
             den_poly, num_poly = _mul_worker!(den_poly, num_poly, den)

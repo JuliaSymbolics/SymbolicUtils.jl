@@ -1651,7 +1651,7 @@ function (mpp::MultipliedPolynomialPostprocessor)(poly::PolynomialT, ::Type{T}) 
         push!(get!(BitSet, base_occurrences, base), i)
     end
 
-    result = zero(PolynomialT{T})
+    result = zeropoly(T)
     monomial_buffer = mpp.monomial
     for term in MP.terms(poly)
         coeff = MP.coefficient(term)

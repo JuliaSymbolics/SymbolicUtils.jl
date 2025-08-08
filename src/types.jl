@@ -1580,7 +1580,7 @@ MultipliedPolynomialPostprocessor() = MultipliedPolynomialPostprocessor(Dict(), 
 
 const CACHED_MPP = TaskLocalValue{MultipliedPolynomialPostprocessor}(MultipliedPolynomialPostprocessor)
 
-function (mpp::MultipliedPolynomialPostprocessor)(poly::PolynomialT{T}) where {T}
+function (mpp::MultipliedPolynomialPostprocessor)(poly::PolynomialT, ::Type{T}) where {T}
     pvars = MP.variables(poly)
     vars = mpp.varsbuf
     empty!(vars)
@@ -1638,7 +1638,7 @@ function (mpp::MultipliedPolynomialPostprocessor)(poly::PolynomialT{T}) where {T
     return result
 end
 
-postprocessed_multiplyied_polynomial(p) = CACHED_MPP[](p)
+postprocessed_multiplied_polynomial(args...) = CACHED_MPP[](args...)
 
 function _mul_worker!(num_poly, den_poly, term)
     @match term begin
@@ -1677,7 +1677,7 @@ function mul_worker(terms)
         end
         num_poly, den_poly = _mul_worker!(num_poly, den_poly, term)
     end
-    num = Polyform{T}(postprocessed_multiplyied_polynomial(num_poly))
+    num = Polyform{T}(postprocessed_multiplied_polynomial(num_poly, T))
     if !isempty(unsafes)
         push!(unsafes, num)
         num = Term{T}(*, unsafes)
@@ -1685,7 +1685,7 @@ function mul_worker(terms)
     if den_poly === nothing
         den = one(T)
     else
-        den = Polyform{T}(postprocessed_multiplyied_polynomial(den_poly))
+        den = Polyform{T}(postprocessed_multiplied_polynomial(den_poly, T))
     end
 
     return Div{T}(num, den, false)
@@ -1744,6 +1744,7 @@ function ^(a::SN, b)
                 poly = MP.polynomial(poly ^ b, T)
                 return BSImpl.Polyform{T}(poly, partial_polyvars, vars)
             end
+            _ => nothing
         end
     end
     return BSImpl.Term{T}(^, ArgsT((a, b)))

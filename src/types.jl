@@ -433,6 +433,10 @@ end
 
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
+function swap_polynomial_vars(poly::PolynomialT, new_vars::Vector{PolyVarT})
+    typeof(poly)(MP.coefficients(poly), DP.MonomialVector(new_vars, MP.monomials(poly).Z))
+end
+
 function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
     a === b && return true
     taskida, ida = a.id
@@ -466,8 +470,8 @@ function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
             s1 == s2 && if full
                 isequal(p1, p2)
             else
-                poly1 = typeof(p1)(MP.coefficients(p1), DP.MonomialVector(part1, MP.monomials(p1).Z))
-                poly2 = typeof(p2)(MP.coefficients(p2), DP.MonomialVector(part2, MP.monomials(p2).Z))
+                poly1 = swap_polynomial_vars(p1, part1)
+                poly2 = swap_polynomial_vars(p2, part2)
                 isequal(poly1, poly2)
             end
         end

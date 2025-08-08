@@ -687,9 +687,7 @@ function get_mul_coefficient(x)
     @match x begin
         BSImpl.Term(; args) => begin
             if ispolyform(args[1]) && polyform_variant(args[1]) == PolyformVariant.MUL
-                poly = MData.variant_getfield(args[1], BSImpl.Polyform, :poly)
-                first_term = MP.terms(poly)[1]
-                return MP.isconstant(first_term) ? MP.coefficient(first_term) : 1
+                return MP.coefficient(MP.terms(poly)[1])
             else
                 return 1
             end

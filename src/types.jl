@@ -1789,7 +1789,6 @@ function ^(a::SN, b)
     end
     if b isa Number && isinteger(b)
         @match a begin
-            BSImpl.Sym(;) => return BSImpl.Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), T))
             BSImpl.Polyform(; poly, partial_polyvars, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
                 poly = MP.polynomial(poly ^ b, T)
                 return BSImpl.Polyform{T}(poly, partial_polyvars, vars)

@@ -6,16 +6,16 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 
-function matcher(val::Any, acSets)
+function matcher(val::Any, acSets, condition)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
         # just two arguments bc defslot is only supported with operations with two args: *, ^, +
         if any(x -> isa(x, DefSlot), arguments(val))
-            return defslot_term_matcher_constructor(val, acSets)
+            return defslot_term_matcher_constructor(val, acSets, condition)
         end
         # else return a normal term matcher
-        return term_matcher_constructor(val, acSets)
+        return term_matcher_constructor(val, acSets, condition)
     end
 
     function literal_matcher(next, data, bindings)
@@ -24,8 +24,9 @@ function matcher(val::Any, acSets)
     end
 end
 
-# acSets is not used but needs to be there in case matcher(::Slot) is directly called from the macro
-function matcher(slot::Slot, acSets)
+# acSets and condition are not used but needs to be there in case 
+# matcher(::Slot) is directly called from the macro
+function matcher(slot::Slot, acSets, condition)
     function slot_matcher(next, data, bindings)
         !islist(data) && return nothing
         val = get(bindings, slot.name, nothing)
@@ -36,6 +37,7 @@ function matcher(slot::Slot, acSets)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
         elseif slot.predicate(car(data))
+            # println("slot of $slot matched")
             next(assoc(bindings, slot.name, car(data)), 1)
         end
     end
@@ -44,8 +46,8 @@ end
 # this is called only when defslot_term_matcher finds the operation and tries
 # to match it, so no default value used. So the same function as slot_matcher
 # can be used
-function matcher(defslot::DefSlot, acSets)
-    matcher(Slot(defslot.name, defslot.predicate), nothing) # slot matcher doesnt use acsets
+function matcher(defslot::DefSlot, acSets, condition)
+    matcher(Slot(defslot.name, defslot.predicate), nothing, nothing)
 end
 
 # returns n == offset, 0 if failed
@@ -101,8 +103,11 @@ function matcher(segment::Segment, acSets)
     end
 end
 
-function term_matcher_constructor(term, acSets)
-    matchers = (matcher(operation(term), acSets), map(x->matcher(x,acSets), arguments(term))...,)
+function term_matcher_constructor(term, acSets, condition)
+    matchers = (
+        matcher(operation(term), acSets, condition),
+        map(x->matcher(x,acSets, condition), arguments(term))...,
+    )
     
     function loop(term, bindings′, matchers′) # Get it to compile faster
         if !islist(matchers′)
@@ -123,15 +128,32 @@ function term_matcher_constructor(term, acSets)
         # the length of the list, is considered empty
     end
 
+    # if condition errors, this means not all the bindings 
+    # are associated, so we are not at the end of the match. So
+    # we continue to the next matchers
+    function check_conditions(result)
+        result === nothing && return false
+        try
+            tmp = condition(result)
+            # tmp==nothing means no conditions are present
+            tmp===nothing && return true
+            return tmp
+        catch e
+            # println("condition failed, continuing")
+            return true
+        end
+    end
+
     # if the operation is a pow, we have to match also 1/(...)^(...) with negative exponent
     if operation(term) === ^
         function pow_term_matcher(success, data, bindings)
+            # println("in ^ matcher of $term with data $data")
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data) # from (..., ) to ...
             !iscall(data) && return nothing # if first element is not a call, return nothing
             
             result = loop(data, bindings, matchers)
-            result !== nothing && return success(result, 1)
+            check_conditions(result) && return success(result, 1)
             
             frankestein = nothing
             if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && isequal(arguments(arguments(data)[1])[1], 1)
@@ -161,7 +183,7 @@ function term_matcher_constructor(term, acSets)
 
             if frankestein !==nothing
                 result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
+                check_conditions(result) && return success(result, 1)
             end
 
             return nothing
@@ -170,6 +192,7 @@ function term_matcher_constructor(term, acSets)
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
     elseif acSets!==nothing && operation(term) in [+, *]
         function commutative_term_matcher(success, data, bindings)
+            # println("in +* matcher of $term with data $data")
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
             operation(term) !== operation(car(data)) && return nothing # if the operation of data is not the correct one, don't even try
@@ -183,64 +206,24 @@ function term_matcher_constructor(term, acSets)
                     candidate = Term{T}(f, @views data_args[inds])
 
                     result = loop(candidate, bindings, matchers)                
-                    result !== nothing && return success(result,1)
+                    check_conditions(result) && return success(result, 1)
                 end
             # if car(data) does not subtype to number, it might not be commutative
             else
                 # call the normal matcher
                 result = loop(car(data), bindings, matchers)
-                result !== nothing && return success(result, 1)
+                check_conditions(result) && return success(result, 1)
             end
             return nothing
         end
         return commutative_term_matcher
-    # if the operation is sqrt, we have to match also ^(1//2)
-    elseif operation(term)==sqrt
-        function sqrt_matcher(success, data, bindings)
-            !islist(data) && return nothing # if data is not a list, return nothing
-            data = car(data)
-            !iscall(data) && return nothing # if first element is not a call, return nothing
-            
-            # do the normal matcher
-            result = loop(data, bindings, matchers)
-            result !== nothing && return success(result, 1)
-
-            if (operation(data) === ^) && (arguments(data)[2] === 1//2)
-                T = symtype(arguments(data)[1])
-                frankestein = Term{T}(sqrt,[arguments(data)[1]])
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
-            end
-            return nothing
-        end
-        return sqrt_matcher
-    # if the operation is exp, we have to match also ℯ^
-    elseif operation(term)==exp
-        function exp_matcher(success, data, bindings)
-            !islist(data) && return nothing # if data is not a list, return nothing
-            data = car(data)
-            !iscall(data) && return nothing # if first element is not a call, return nothing
-            
-            # do the normal matcher
-            result = loop(data, bindings, matchers)
-            result !== nothing && return success(result, 1)
-
-            if (operation(data) === ^) && (arguments(data)[1] === ℯ)
-                T = symtype(arguments(data)[2])
-                frankestein = Term{T}(exp,[arguments(data)[2]])
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
-            end
-            return nothing
-        end
-        return exp_matcher
     else
         function term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
             
             result = loop(car(data), bindings, matchers)
-            result !== nothing && return success(result, 1)
+            check_conditions(result) && return success(result, 1)
             return nothing
         end
         return term_matcher
@@ -250,33 +233,47 @@ end
 # creates a matcher for a term containing a defslot, such as:
 # (~x + ...complicated pattern...)     *          ~!y
 #    normal part (can bee a tree)   operation     defslot part
-function defslot_term_matcher_constructor(term, acSets)
+function defslot_term_matcher_constructor(term, acSets, condition)
     a = arguments(term)
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
     defslot = a[defslot_index]
     if length(a) == 2
-        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1], acSets)
+        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1], acSets, condition)
     else
         others = [a[i] for i in eachindex(a) if i != defslot_index]
         T = symtype(term)
         f = operation(term)
-        other_part_matcher = term_matcher_constructor(Term{T}(f, others), acSets)
+        other_part_matcher = term_matcher_constructor(Term{T}(f, others), acSets, condition)
     end
     
-    normal_matcher = term_matcher_constructor(term, acSets)
+    normal_matcher = term_matcher_constructor(term, acSets, condition)
+
+
 
     function defslot_term_matcher(success, data, bindings)
+        # println("in defslotmatcher of $term with data $data")
         !islist(data) && return nothing # if data is not a list, return nothing
         # call the normal matcher, with success function foo1 that simply returns the bindings
         #                       <--foo1-->
         result = normal_matcher((b,n) -> b, data, bindings)
         result !== nothing && return success(result, 1)
+        # println("no match, trying defslot")
         # if no match, try to match with a defslot.
         # checks whether it matches the normal part if yes executes foo2
         # foo2: adds the pair (default value name, default value) to the found bindings
         #                           <-------------------foo2---------------------------->
         result = other_part_matcher((b,n) -> assoc(b, defslot.name, defslot.defaultValue), data, bindings)
-        result !== nothing && return success(result, 1)
-        nothing
+        result === nothing && return nothing
+        # println("defslot match!")
+        try
+            tmp = condition(result)
+            # tmp==nothing means no conditions are present
+            if tmp===nothing || tmp
+                return success(result, 1)
+            end
+        catch e
+            # println("condition failed, continuing")
+            return success(result, 1)
+        end
     end
 end

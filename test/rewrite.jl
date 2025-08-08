@@ -143,14 +143,17 @@ end
     @test r1(sqrt(a)) === (a, 1//2) # uses sqrt_matcher
 end
 
-@testset "Alternate form of special functions" begin
-    rsqrt = @rule sqrt(~x) => ~x
-    @test rsqrt(sqrt(x))===x
-    @test rsqrt((x)^(1//2))===x
+@testset "conditions inside rule" begin
+    r = @rule (~x)^(~m)*(~y)^(~n) => (~x, ~m, ~y, ~n) where (~m)^(~n)==8
+    @test r((a^2)*(b^3)) === (a, 2, b, 3)
+    @test r((b^2)*(a^3)) === (b, 2, a, 3)
 
-    rexp = @rule exp(~x) => ~x
-    @test rexp(exp(x)) === x
-    @test rexp(ℯ^x) === x
+    r_defslot = @rule (~x)^(~m)*(~y)^(~!n) => (~x, ~m, ~y, ~n) where (~m)^(~n)==8
+    @test r_defslot(y*x^8) === (x, 8, y, 1)
+    @test r_defslot(x*y^8) === (y, 8, x, 1)
+
+    r_defslot_2 = @rule (~x)^(~!m) => (~x, ~m) where false
+    @test C2(y)===nothing
 end
 
 using SymbolicUtils: @capture

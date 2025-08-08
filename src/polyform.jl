@@ -37,7 +37,9 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
             end
         end
         BSImpl.Div(; num, den) => begin
-            expr = BSImpl.Div{symtype(expr)}(expand(num), expand(den), false)
+            if recurse
+                expr = BSImpl.Div{symtype(expr)}(expand(num), expand(den), false)
+            end
             pvar = basicsymbolic_to_partial_polyvar(expr)
             get!(poly_to_bs, pvar, expr)
             return pvar

@@ -182,6 +182,22 @@ function polyvar_to_basicsymbolic(x::PolyVarT)
     return bs::BasicSymbolic
 end
 
+function subs_poly(poly::PolynomialT, vars)
+    add_buffer = ArgsT()
+    mul_buffer = ArgsT()
+    for term in MP.terms(poly)
+        empty!(mul_buffer)
+        coeff = MP.coefficient(term)
+        push!(mul_buffer, coeff)
+        mono = MP.monomial(term)
+        for (i, exp) in enumerate(MP.exponents(mono))
+            push!(mul_buffer, vars[i] ^ exp)
+        end
+        push!(add_buffer, mul_worker(mul_buffer))
+    end
+    return add_worker(add_buffer)
+end
+
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
     ScalarSymbolic()
 end

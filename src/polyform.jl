@@ -28,7 +28,9 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
                 end
                 return poly
             else
-                expr = BSImpl.Term{symtype(expr)}(f, map(expand, args))
+                if recurse
+                    expr = BSImpl.Term{symtype(expr)}(f, map(expand, args))
+                end
                 pvar = basicsymbolic_to_partial_polyvar(expr)
                 get!(poly_to_bs, pvar, expr)
                 return pvar

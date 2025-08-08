@@ -884,8 +884,8 @@ Return a tuple containing a boolean indicating whether `x` has a rational/intege
 and the rational/integer factor (or `NaN` otherwise).
 """
 function ratcoeff(x)
-    if ismul(x)
-        ratcoeff(x.coeff)
+    if iscall(x) && operation(x) === (*)
+        ratcoeff(get_mul_coefficient(x))
     elseif x isa Rat
         (true, x)
     else

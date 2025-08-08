@@ -1596,7 +1596,8 @@ function -(a::SN, b::SN)
         (BSImpl.Polyform(; poly = poly1), BSImpl.Polyform(; poly = poly2)) => begin
             poly2 = MP.map_coefficients((-), poly2)
             MA.operate!(+, poly2, poly1)
-            return Polyform{sub_t(a, b)}(poly2)
+            T = sub_t(a, b)
+            return Polyform{T}(MP.polynomial(poly2, T))
         end
         _ => return add_worker((a, -b))
     end

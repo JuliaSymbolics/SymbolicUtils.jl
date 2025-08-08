@@ -693,8 +693,7 @@ function get_mul_coefficient(x)
             end
         end
         BSImpl.Polyform(; poly) => begin
-            first_term = MP.terms(poly)[1]
-            return MP.isconstant(first_term) ? MP.coefficient(first_term) : 1
+            return MP.coefficient(MP.terms(poly)[1])
         end
     end
 end

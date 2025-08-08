@@ -32,7 +32,7 @@ rewriters.
 module Rewriters
 using TermInterface
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype
+import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, ArgsT, maybe_const, SmallV
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -219,8 +219,10 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
         end
 
         if iscall(x)
-            x = p.maketerm(typeof(x), operation(x), map(PassThrough(p),
-                            parent(arguments(x))), metadata(x))
+            args = parent(arguments(x))::ArgsT
+            argsbuf = ArgsT(undef, length(args))
+            map!(maybe_const ∘ PassThrough(p), argsbuf, args)
+            x = p.maketerm(typeof(x), operation(x), argsbuf, metadata(x))
         end
 
         return ord === :post ? p.rw(x) : x
@@ -236,15 +238,20 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if iscall(x)
-            _args = map(parent(arguments(x))) do arg
+            args = parent(arguments(x))
+            buffer = SmallV{Any}(undef, length(args))
+            for (i, arg) in enumerate(args)
                 if node_count(arg) > p.thread_cutoff
-                    Threads.@spawn p(arg)
+                    buffer[i] = Threads.@spawn p(arg)
                 else
-                    p(arg)
+                    buffer[i] = p(arg)
                 end
             end
-            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, parent(arguments(x)))
-            t = p.maketerm(typeof(x), operation(x), args, metadata(x))
+            new_args = ArgsT(undef, length(args))
+            for (i, (val, arg)) in enumerate(zip(buffer, args))
+                new_args[i] = maybe_const(passthrough(val isa Task ? fetch(val) : val, arg))
+            end
+            t = p.maketerm(typeof(x), operation(x), new_args, metadata(x))
         end
         return ord === :post ? p.rw(t) : t
     else

@@ -42,13 +42,13 @@ is_literal_number(x) = isliteral(Number)(x)
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
 function _iszero(x)
-    x = unwrap(x)
+    x = unwrap_const(unwrap(x))
     x isa Number && return iszero(x)
     x isa Array && return iszero(x)
     return false
 end
 function _isone(x)
-    x = unwrap(x)
+    x = unwrap_const(unwrap(x))
     x isa Number && return isone(x)
     x isa Array && return isone(x)
     return false
@@ -146,7 +146,9 @@ function sort_args(f, t)
 end
 
 # Linked List interface
-@inline assoc(d::ImmutableDict, k, v) = ImmutableDict(d, k=>v)
+@inline function assoc(d::ImmutableDict{Symbol, Any}, k::Symbol, v::Any)
+    ImmutableDict(d, k=>v)::ImmutableDict{Symbol, Any}
+end
 
 struct LL{V}
     v::V

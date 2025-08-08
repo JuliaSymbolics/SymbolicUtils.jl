@@ -226,7 +226,7 @@ end
 
     # test that the "x^2 + y^-1 + sin(a)^3.5 + 2t + 1//1" expression from Symbolics.jl/build_targets.jl is properly sorted
     @syms x1 y1 a1 t1
-    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "1 + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
+    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "1//1 + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
 end
 
 @testset "inspect" begin
@@ -331,7 +331,7 @@ end
         @test x - x === 0
         @test isequal(-x, -1x)
         @test isequal(x^1, x)
-        @test isequal((x^-1)*inv(x^-1), 1)
+        @test isequal(unwrap_const((x^-1)*inv(x^-1)), 1)
     end
 end
 
@@ -363,22 +363,22 @@ end
 @testset "div" begin
     @syms x::SafeReal y::Real
     @test issym((2x/2y).num)
-    @test (2x/3y).num.coeff == 2
-    @test (2x/3y).den.coeff == 3
-    @test (2x/-3x).num.coeff == -2
-    @test (2x/-3x).den.coeff == 3
-    @test (2.5x/3x).num.coeff == 2.5
-    @test (2.5x/3x).den.coeff == 3
-    @test (x/3x).den.coeff == 3
+    @test unwrap_const((2x/3y).num.coeff) == 2
+    @test unwrap_const((2x/3y).den.coeff) == 3
+    @test unwrap_const((2x/-3x).num.coeff) == -2
+    @test unwrap_const((2x/-3x).den.coeff) == 3
+    @test unwrap_const((2.5x/3x).num.coeff) == 2.5
+    @test unwrap_const((2.5x/3x).den.coeff) == 3
+    @test unwrap_const((x/3x).den.coeff) == 3
 
     @syms x y
     @test issym((2x/2y).num)
-    @test (2x/3y).num.coeff == 2
-    @test (2x/3y).den.coeff == 3
-    @test (2x/-3x) == -2//3
-    @test (2.5x/3x).num == 2.5
-    @test (2.5x/3x).den == 3
-    @test (x/3x) == 1//3
+    @test unwrap_const((2x/3y).num.coeff) == 2
+    @test unwrap_const((2x/3y).den.coeff) == 3
+    @test unwrap_const((2x/-3x)) == -2//3
+    @test unwrap_const((2.5x/3x).num) == 2.5
+    @test unwrap_const((2.5x/3x).den) == 3
+    @test unwrap_const((x/3x)) == 1//3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)
 end

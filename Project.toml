@@ -91,3 +91,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
 test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "SafeTestsets", "Test", "Zygote", "OhMyThreads", "RuntimeGeneratedFunctions"]
+
+[sources]
+WeakCacheSets = {url="https://github.com/JuliaCollections/WeakCacheSets.jl"}
+Moshi = {url="https://github.com/AayushSabharwal/Moshi.jl", rev="as/mutable-adt"}

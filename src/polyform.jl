@@ -1,242 +1,51 @@
-export PolyForm, simplify_fractions, quick_cancel, flatten_fractions
-using Bijections
+export simplify_fractions, quick_cancel, flatten_fractions
 
-"""
-    PolyForm{T} <: Symbolic
-
-Abstracts a [MultivariatePolynomials.jl](https://juliaalgebra.github.io/MultivariatePolynomials.jl/stable/) as a SymbolicUtils expression and vice-versa.
-
-The SymbolicUtils term interface (`isexpr`/`iscall`, `operation, and `arguments`) works on PolyForm lazily:
-the `operation` and `arguments` are created by converting one level of arguments into SymbolicUtils expressions. They may further contain PolyForm within them.
-We use this to hold polynomials in memory while doing `simplify_fractions`.
-
-    PolyForm{T}(x; Fs=Union{typeof(*),typeof(+),typeof(^)}, recurse=false)
-
-Turn a Symbolic expression `x` into a polynomial and return a PolyForm that abstracts it.
-
-`Fs` are the types of functions which should be applied if arguments are themselves
-polynomialized. For example, if you only want to polynomialize the base of power
-expressions, you would  leave out `typeof(^)` from the union. In this case `^`
-is not called, but maintained as a `Pow` term.
-
-`recurse` is a flag which calls `PolyForm` recursively on subexpressions. For example:
-
-```julia
-PolyForm(sin((x+y)^2))               #=> sin((x+y)^2)
-PolyForm(sin((x+y)^2), recurse=true) #=> sin((x^2 + (2x)y + y^2))
-```
-"""
-struct PolyForm <: Symbolic{Real}
-    p::MP.AbstractPolynomialLike
-    pvar2sym::Bijection{Any,Any}   # @polyvar x --> @sym x  etc.
-    sym2term::Dict{BasicSymbolic,Any}        # Symbol("sin-$hash(sin(x+y))") --> sin(x+y) => sin(PolyForm(...))
-    metadata
-    function PolyForm(p, d1, d2, m=nothing)
-        p isa Number && return p
-        p isa MP.AbstractPolynomialLike && MP.isconstant(p) && return convert(Number, p)
-        new(p, d1, d2, m)
-    end
-end
-
-@number_methods(PolyForm, term(f, a), term(f, a, b))
-
-Base.hash(p::PolyForm, u::UInt64) = xor(hash(p.p, u),  trunc(UInt, 0xbabacacababacaca))
-Base.isequal(x::PolyForm, y::PolyForm) = isequal(x.p, y.p)
-
-# We use the same PVAR2SYM bijection to maintain the MP.AbstractVariable <-> Sym mapping,
-# When all PolyForms go out of scope in a session, we allow it to free up memory and
-# start over if necessary
-const PVAR2SYM = Ref(WeakRef())
-const SYM2TERM = Ref(WeakRef())
-clear_dicts() = (PVAR2SYM[] = WeakRef(nothing); SYM2TERM[] = WeakRef(nothing); nothing)
-function get_pvar2sym()
-    v = PVAR2SYM[].value
-    if v === nothing
-        d = Bijection{Any,Any}()
-        PVAR2SYM[] = WeakRef(d)
-        return d
-    else
-        return v::Bijections.Bijection{Any, Any, Dict{Any, Any}, Dict{Any, Any}}
-    end
-end
-
-function get_sym2term()
-    v = SYM2TERM[].value
-    if v === nothing
-        d = Dict{BasicSymbolic,Any}()
-        SYM2TERM[] = WeakRef(d)
-        return d
-    else
-        return v::Dict{BasicSymbolic, Any}
-    end
-end
-
-function mix_dicts(p, q)
-    p.pvar2sym !== q.pvar2sym && error("pvar2sym mappings don't match for $p and $q")
-    p.sym2term !== q.sym2term && error("sym2term mappings don't match for $p and $q")
-
-    p.pvar2sym, p.sym2term
-end
-
-# forward gcd
-
-PF = :(PolyForm)
-const FriendlyCoeffType = Union{Integer, Rational}
-@eval begin
-    Base.div(x::PolyForm, y::PolyForm) = $PF(div(x.p, y.p), mix_dicts(x, y)...)
-    Base.div(x::FriendlyCoeffType, y::PolyForm)  = $PF(div(x, y.p), y.pvar2sym, y.sym2term)
-    Base.div(x::PolyForm, y::FriendlyCoeffType)  = $PF(div(x.p, y), x.pvar2sym, x.sym2term)
-
-    Base.gcd(x::PolyForm, y::PolyForm) = $PF(_gcd(x.p, y.p), mix_dicts(x, y)...)
-    Base.gcd(x::FriendlyCoeffType, y::PolyForm)  = $PF(_gcd(x, y.p), y.pvar2sym, y.sym2term)
-    Base.gcd(x::PolyForm, y::FriendlyCoeffType)  = $PF(_gcd(x.p, y), x.pvar2sym, x.sym2term)
-end
-
-_isone(p::PolyForm) = isone(p.p)
-
-maybe_float(::Type{T}, x) where {T <: Integer} = x
-maybe_float(::Type, x) = x isa Number && !(x isa Rational) ? float(x) : x
-
-function polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
-    if x isa Number
-        return x
-    elseif iscall(x)
-        if !(symtype(x) <: Number)
-            error("Cannot convert $x of symtype $(symtype(x)) into a PolyForm")
+to_poly!(_, expr, _...) = MA.operate!(+, zeropoly(typeof(expr)), expr)
+function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Union{PolyVarT, PolynomialT{T}} where {T}
+    @match expr begin
+        BSImpl.Sym(;) => begin
+            pvar = basicsymbolic_to_partial_polyvar(expr)
+            get!(poly_to_bs, pvar, expr)
+            return pvar
         end
-
-        op = operation(x)
-        args = parent(arguments(x))
-
-        local_polyize = let pvar2sym = pvar2sym, sym2term = sym2term, vtype = vtype, pow = pow, Fs = Fs, recurse = recurse, T = symtype(x)
-                f(y) = maybe_float(T, polyize(y, pvar2sym, sym2term, vtype, pow, Fs, recurse))
-        end
-        if (+) isa Fs && op === (+)
-            return sum(local_polyize, args)
-        elseif (*) isa Fs && op === (*)
-            return prod(local_polyize, args)
-        elseif (^) isa Fs && op === (^) && args[2] isa Integer && args[2] > 0
-            @assert length(args) == 2
-            return local_polyize(args[1])^(args[2])
-        else
-            # create a new symbol to store this
-
-            y = if recurse
-                maketerm(typeof(x),
-                         op,
-                         map(a->PolyForm(a; pvar2sym, sym2term, vtype, Fs, recurse), args),
-                         metadata(x))
-            else
-                x
+        BSImpl.Polyform(; poly, partial_polyvars, vars) => begin
+            pvars = MP.variables(poly)
+            subs = typeof(poly)[]
+            for var in vars
+                push!(subs, to_poly!(poly_to_bs, var))
             end
-
-            name = Symbol(string(op), "_", hash(y))
-
-            @label lookup
-            sym = Sym{Number}(name)
-            if haskey(sym2term, sym)
-                if isequal(sym2term[sym][1], x)::Bool
-                    return local_polyize(sym)
-                else # hash collision
-                    name = Symbol(name, "_")
-                    @goto lookup
+            return MP.polynomial(poly(pvars => subs), T)
+        end
+        BSImpl.Term(; f, args) => begin
+            if f === (^) && args[2] isa Real && isinteger(args[2])
+                base, exp = args
+                return MP.polynomial(to_poly!(poly_to_bs, base) ^ Int(exp), T)
+            elseif f === (*) || f === (+)
+                arg1, restargs = Iterators.peel(args)
+                poly = to_poly!(poly_to_bs, arg1)
+                for arg in restargs
+                    MA.operate!(*, poly, to_poly!(poly_to_bs, arg))
                 end
+                return poly
+            else
+                if recurse
+                    expr = BSImpl.Term{symtype(expr)}(f, map(expand, args))
+                end
+                pvar = basicsymbolic_to_partial_polyvar(expr)
+                get!(poly_to_bs, pvar, expr)
+                return pvar
             end
-
-            sym2term[sym] = (x => y)
-
-            return local_polyize(sym)
         end
-    elseif issym(x)
-        if haskey(active_inv(pvar2sym), x)
-            return pvar2sym(x)
+        BSImpl.Div(; num, den) => begin
+            if recurse
+                expr = BSImpl.Div{symtype(expr)}(expand(num), expand(den), false)
+            end
+            pvar = basicsymbolic_to_partial_polyvar(expr)
+            get!(poly_to_bs, pvar, expr)
+            return pvar
         end
-        pvar = MP.similar_variable(vtype, nameof(x))
-        pvar2sym[pvar] = x
-        return pvar
     end
 end
-
-function PolyForm(x;
-        pvar2sym=get_pvar2sym(),
-        sym2term=get_sym2term(),
-        vtype=DynamicPolynomials.Variable{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, DynamicPolynomials.Graded{MP.LexOrder}},
-        Fs = Union{typeof(+), typeof(*), typeof(^)},
-        recurse=false,
-        metadata=metadata(x))
-
-    if !(symtype(x) <: Number)
-        return x
-    end
-
-    # Polyize and return a PolyForm
-    p = polyize(x, pvar2sym, sym2term, vtype, pow, Fs, recurse)
-    PolyForm(p, pvar2sym, sym2term, metadata)
-end
-
-isexpr(x::Type{<:PolyForm}) = true
-isexpr(x::PolyForm) = true
-iscall(x::Type{<:PolyForm}) = true
-iscall(x::PolyForm) = true
-
-function maketerm(t::Type{<:PolyForm}, f, args, metadata)
-    # TODO: this looks uncovered.
-    basicsymbolic(f, args, nothing, metadata)
-end
-function maketerm(::Type{<:PolyForm}, f::Union{typeof(*), typeof(+), typeof(^)}, args, metadata)
-    f(args...)
-end
-
-head(::PolyForm) = PolyForm
-operation(x::PolyForm) = MP.nterms(x.p) == 1 ? (*) : (+)
-
-function TermInterface.arguments(x::PolyForm)
-
-    function is_var(v)
-        MP.nterms(v) == 1 &&
-        isone(MP.coefficient(MP.terms(v)[1])) &&
-        MP.degree(MP.monomial(v)) == 1
-    end
-
-    function get_var(v)
-        # must be called only after a is_var check
-        MP.variable(MP.monomial(v))
-    end
-
-    function resolve(p)
-        !is_var(p) && return p
-        pvar = get_var(p)
-        s = x.pvar2sym[pvar]
-        haskey(x.sym2term, s) ? x.sym2term[s][2] : s
-    end
-
-    if MP.nterms(x.p) == 1
-        MP.isconstant(x.p) && return [convert(Number, x.p)]
-        t = MP.term(x.p)
-        c = MP.coefficient(t)
-        m = MP.monomial(t)
-
-        if !isone(c)
-            [c, (^(resolve(v), pow)
-                        for (v, pow) in MP.powers(m) if !iszero(pow))...]
-        else
-            [^(resolve(v), pow)
-                    for (v, pow) in MP.powers(m) if !iszero(pow)]
-        end
-    elseif MP.nterms(x.p) == 0
-        [0]
-    else
-        ts = MP.terms(x.p)
-        return [MP.isconstant(t) ?
-                convert(Number, t) :
-                (is_var(t) ?
-                 resolve(t) :
-                 PolyForm(t, x.pvar2sym, x.sym2term, nothing)) for t in ts]
-    end
-end
-children(x::PolyForm) = arguments(x)
-
-Base.show(io::IO, x::PolyForm) = show_term(io, x)
 
 """
     expand(expr)
@@ -249,17 +58,25 @@ Expand expressions by distributing multiplication over addition, e.g.,
 multivariate polynomials implementation.
 `variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
 """
-expand(expr) = unpolyize(PolyForm(expr; Fs=Union{typeof(+), typeof(*), typeof(^)}, recurse=true))
-
-function unpolyize(x)
-    # we need a special maketerm here because the default one used in Postwalk will call
-    # promote_symtype to get the new type, but we just want to forward that in case
-    # promote_symtype is not defined for some of the expressions here.
-    Postwalk(identity, maketerm=(T,f,args,m) -> maketerm(T, f, args, m))(x)
-end
-
-function toterm(x::PolyForm)
-    toterm(unpolyize(x))
+function expand(expr)
+    if !(expr isa BasicSymbolic)
+        return expr
+    end
+    iscall(expr) || return expr
+    poly_to_bs = Dict{PolyVarT, BasicSymbolic}()
+    partial_poly = to_poly!(poly_to_bs, expr)
+    partial_pvars = MP.variables(partial_poly)
+    vars = SmallV{BasicSymbolic}()
+    pvars = PolyVarT[]
+    sizehint!(vars, length(partial_pvars))
+    sizehint!(pvars, length(partial_pvars))
+    for ppvar in partial_pvars
+        var = poly_to_bs[ppvar]
+        push!(vars, var)
+        push!(pvars, basicsymbolic_to_polyvar(var))
+    end
+    poly = swap_polynomial_vars(partial_poly, pvars)
+    return Polyform{symtype(expr)}(poly)
 end
 
 ## Rational Polynomial form with Div
@@ -413,11 +230,11 @@ flatten_pows(xs) = map(xs) do x
     ispow(x) ? Iterators.repeated(arguments(x)...) : (x,)
 end |> Iterators.flatten |> a->collect(Any,a)
 
-coefftype(x::PolyForm) = coefftype(x.p)
+# coefftype(x::PolyForm) = coefftype(x.p)
 coefftype(x::MP.AbstractPolynomialLike{T}) where {T} = T
 coefftype(x) = typeof(x)
 
-const MaybeGcd = Union{PolyForm, MP.AbstractPolynomialLike, Integer}
+const MaybeGcd = Union{#=PolyForm, =#MP.AbstractPolynomialLike, Integer}
 _gcd(x::MaybeGcd, y::MaybeGcd) = (coefftype(x) <: Complex || coefftype(y) <: Complex) ? 1 : gcd(x, y)
 _gcd(x, y) = 1
 
@@ -434,12 +251,12 @@ Has optimized processes for `Mul` and `Pow` terms.
 quick_cancel(d) = d
 function quick_cancel(d::BSImpl.Type{T}) where {T}
     @match d begin
-        BSImpl.Pow(; base, exp) => begin
-            base isa BSImpl.Type || return d
-            MData.isa_variant(base, BSImpl.Div) || return d
-            n, d = quick_cancel((base.num ^ exp), (base.den ^ exp))
-            return Div{T}(n, d, false)
-        end
+        # BSImpl.Pow(; base, exp) => begin
+        #     base isa BSImpl.Type || return d
+        #     MData.isa_variant(base, BSImpl.Div) || return d
+        #     n, d = quick_cancel((base.num ^ exp), (base.den ^ exp))
+        #     return Div{T}(n, d, false)
+        # end
         # BSImpl.AddOrMul(; variant) && if variant == AddMulVariant.MUL && any(isdiv, arguments(d)) end => begin
         #     return mul_worker(arguments(d))
         # end

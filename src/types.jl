@@ -1779,6 +1779,10 @@ function ^(a::SN, b)
     if b isa Real && b < 0
         return Div{T}(1, a ^ (-b), false)
     end
+    if b isa Number && iscall(a) && operation(a) === (^) && arguments(a)[2] isa Number
+        base, exp = arguments(a)
+        return base ^ (exp * b)
+    end
     @match a begin
         BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false)
         _ => nothing

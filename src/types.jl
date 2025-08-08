@@ -2021,9 +2021,9 @@ function ^(a::SN, b)
     b = unwrap(b)
     T = promote_symtype(^, symtype(a), symtype(b))
     !issafecanon(^, a, b) && return Term{T}(^, ArgsT((a, b)))
-    if b isa Number && iszero(b)
-        # fast path
-        return 1
+    if b isa Number
+        iszero(b) && return 1
+        isone(b) && return a
     end
     if b isa Real && b < 0
         return Div{T}(1, a ^ (-b), false)

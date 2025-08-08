@@ -817,6 +817,22 @@ end
 #     hashcons(BSImpl.Const{T}(; val, override_properties(BSImpl.Const{T})...))
 # end
 
+function get_mul_coefficient(x)
+    iscall(x) && operation(x) === (*) || throw(ArgumentError("$x is not a multiplication"))
+    @match x begin
+        BSImpl.Term(; args) => begin
+            if ispolyform(args[1]) && polyform_variant(args[1]) == PolyformVariant.MUL
+                return MP.coefficient(MP.terms(poly)[1])
+            else
+                return 1
+            end
+        end
+        BSImpl.Polyform(; poly) => begin
+            return MP.coefficient(MP.terms(poly)[1])
+        end
+    end
+end
+
 parse_metadata(x::MetadataT) = x
 parse_metadata(::Nothing) = nothing
 function parse_metadata(x)

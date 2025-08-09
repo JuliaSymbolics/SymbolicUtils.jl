@@ -9,6 +9,12 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
             return pvar
         end
         BSImpl.Polyform(; poly, partial_polyvars, vars) => begin
+            if !recurse
+                for (var, ppvar) in zip(vars, partial_polyvars)
+                    get!(poly_to_bs, ppvar, var)
+                end
+                return copy(swap_polynomial_vars(poly, partial_polyvars))
+            end
             pvars = MP.variables(poly)
             subs = typeof(poly)[]
             for var in vars

@@ -32,41 +32,23 @@ const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
 const SmallV{T} = SmallVec{T, Vector{T}}
 const ArgsT = SmallV{Any}
 const ROArgsT = ReadOnlyVector{Any, ArgsT}
-const ACDict{K, V} = Dict{K, V}
 const ShapeVecT = SmallV{UnitRange{Int}}
 const ShapeT = Union{Unknown, ShapeVecT}
-const IdentT = Union{IDType, Nothing}
+const IdentT = Union{Tuple{UInt, IDType}, Tuple{Nothing, Nothing}}
+const PolyVarOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
+const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=PolyVarOrder)
+const PolyVarT = typeof(ExamplePolyVar)
+const PolynomialT{T} = DP.Polynomial{DP.Commutative{DP.CreationOrder}, PolyVarOrder, T}
 
-"""
-    Enum used to differentiate between variants of `BasicSymbolicImpl.ACTerm`.
-"""
-@enumx AddMulVariant::Bool begin
-    ADD = false
-    MUL = true
+function zeropoly(::Type{T}) where {T}
+    mv = DP.MonomialVector{DP.Commutative{DP.CreationOrder}, PolyVarOrder}()
+    PolynomialT{T}(T[], mv)
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Check if `coeff` is the identity element for `ACTerm` variant `v`.
-"""
-function is_identity_coeff(v::AddMulVariant.T, coeff)
-    @match v begin
-        AddMulVariant.ADD => iszero(coeff)
-        AddMulVariant.MUL => isone(coeff)
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Get the identity coefficient for `ACTerm` variant `v` as type `T`.
-"""
-function identity_coeff(v::AddMulVariant.T, T = Bool)
-    @match v begin
-        AddMulVariant.ADD => zero(T)
-        AddMulVariant.MUL => one(T)
-    end
+function onepoly(::Type{T}) where {T}
+    V = DP.Commutative{DP.CreationOrder}
+    mv = DP.MonomialVector{V, PolyVarOrder}(DP.Variable{V, PolyVarOrder}[], [Int[]])
+    PolynomialT{T}(T[one(T)], mv)
 end
 
 """
@@ -95,10 +77,13 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
         hash2::UInt
         id::IdentT
     end
-    struct AddOrMul
-        const variant::AddMulVariant.T
-        const coeff::T
-        const dict::ACDict{Symbolic, T}
+    struct Polyform
+        # polynomial in terms of full hashed variables
+        const poly::PolynomialT{T}
+        # corresponding to poly.x.vars, the partially hashed variables
+        const partial_polyvars::Vector{PolyVarT}
+        # corresponding to poly.x.vars, the BasicSymbolic variables
+        const vars::SmallV{BasicSymbolicImpl.Type}
         const metadata::MetadataT
         const shape::ShapeT
         const args::ArgsT
@@ -121,18 +106,81 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
         hash2::UInt
         id::IdentT
     end
-    struct Pow
-        const base::Any
-        const exp::Any
-        const metadata::MetadataT
-        const shape::ShapeT
-        hash2::UInt
-        id::IdentT
-    end
 end
 
 const BSImpl = BasicSymbolicImpl
 const BasicSymbolic = BSImpl.Type
+
+const POLYVAR_LOCK = ReadWriteLock()
+# NOTE: All of these are accessed via POLYVAR_LOCK
+const BS_TO_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
+const BS_TO_PARTIAL_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
+const PVAR_TO_BS = Dict{Symbol, WeakRef}()
+const PARTIAL_PVARS = Set{Symbol}()
+
+# TODO: manage scopes better here
+function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
+    pvar = partial_pvar = name = partial_name = nothing
+    @manually_scope COMPARE_FULL => true begin
+        @readlock POLYVAR_LOCK begin
+            pvar = get(BS_TO_PVAR, x, nothing)
+
+            if pvar !== nothing
+                return pvar
+            end
+
+            inner_name = @match x begin
+                BSImpl.Sym(; name) => name
+                _ => nameof(operation(x))
+            end
+            name = Symbol(inner_name, :_, hash(x))
+            while haskey(PVAR_TO_BS, name)
+                # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
+                # a valid mapping for the polyvar (name)
+                name = Symbol(name, :_)
+            end
+
+            pvar = MP.similar_variable(ExamplePolyVar, name)
+            @manually_scope COMPARE_FULL => false begin
+                # do the same thing, but for the partial hash
+                partial_name = Symbol(inner_name, :_, hash(x))
+            end true
+            while partial_name in PARTIAL_PVARS
+                # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
+                # a valid mapping for the polyvar (name)
+                partial_name = Symbol(partial_name, :_)
+            end
+            partial_pvar = MP.similar_variable(ExamplePolyVar, partial_name)
+        end
+        @lock POLYVAR_LOCK begin
+            BS_TO_PARTIAL_PVAR[x] = partial_pvar
+            BS_TO_PVAR[x] = pvar
+            PVAR_TO_BS[name] = WeakRef(x)
+            push!(PARTIAL_PVARS, partial_name)
+        end
+    end
+    return pvar
+end
+
+function basicsymbolic_to_partial_polyvar(x::BasicSymbolic)::PolyVarT
+    basicsymbolic_to_polyvar(x)
+    @manually_scope COMPARE_FULL => true begin
+        return @readlock POLYVAR_LOCK BS_TO_PARTIAL_PVAR[x]
+    end
+end
+
+function polyvar_to_basicsymbolic(x::PolyVarT)
+    name = Symbol(MP.name(x))
+    bs = @readlock POLYVAR_LOCK get(PVAR_TO_BS, name, nothing)
+    if bs === nothing
+        error("Invalid polyvar $x")
+    end
+    bs = bs.value
+    if bs === nothing
+        error("Invalid polyvar $x")
+    end
+    return bs::BasicSymbolic
+end
 
 function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
     ScalarSymbolic()
@@ -171,22 +219,20 @@ override_properties(obj::BSImpl.Type) = override_properties(MData.variant_type(o
 
 function override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
-        ::Type{<:BSImpl.Sym} => (; id = nothing, hash2 = 0)
-        ::Type{<:BSImpl.Term} => (; id = nothing, hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.AddOrMul} => (; id = nothing, hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.Div} => (; id = nothing, hash2 = 0)
-        ::Type{<:BSImpl.Pow} => (; id = nothing, hash2 = 0)
+        ::Type{<:BSImpl.Sym} => (; id = (nothing, nothing), hash2 = 0)
+        ::Type{<:BSImpl.Polyform} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Term} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Div} => (; id = (nothing, nothing), hash2 = 0)
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
 
 function ordered_override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
-        ::Type{<:BSImpl.Sym} => (0, nothing)
-        ::Type{<:BSImpl.Term} => (0, 0, nothing)
-        ::Type{<:BSImpl.AddOrMul} => (ArgsT(), 0, 0, nothing)
-        ::Type{<:BSImpl.Div} => (0, nothing)
-        ::Type{<:BSImpl.Pow} => (0, nothing)
+        ::Type{<:BSImpl.Sym} => (0, (nothing, nothing))
+        ::Type{<:BSImpl.Term} => (0, 0, (nothing, nothing))
+        ::Type{<:BSImpl.Polyform} => (ArgsT(), 0, 0, (nothing, nothing))
+        ::Type{<:BSImpl.Div} => (0, (nothing, nothing))
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
@@ -195,9 +241,8 @@ function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
         BSImpl.Sym(; name, metadata, hash2, shape, id) => (; name, metadata, hash2, shape, id)
         BSImpl.Term(; f, args, metadata, hash, hash2, shape, id) => (; f, args, metadata, hash, hash2, shape, id)
-        BSImpl.AddOrMul(; variant, coeff, dict, args, metadata, hash, hash2, shape, id) => (; variant, coeff, dict, args, metadata, hash, hash2, shape, id)
+        BSImpl.Polyform(; poly, partial_polyvars, vars, metadata, shape, args, hash, hash2, id) => (; poly, partial_polyvars, vars, metadata, shape, args, hash, hash2, id)
         BSImpl.Div(; num, den, simplified, metadata, hash2, shape, id) => (; num, den, simplified, metadata, hash2, shape, id)
-        BSImpl.Pow(; base, exp, metadata, hash2, shape, id) => (; base, exp, metadata, hash2, shape, id)
     end
 end
 
@@ -205,7 +250,7 @@ function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple):
     props = getproperties(obj)
     overrides = override_properties(obj)
     # We only want to invalidate `args` if we're updating `coeff` or `dict`.
-    if isaddmul(obj) && (haskey(patch, :coeff) || haskey(patch, :dict))
+    if ispolyform(obj)
         extras = (; args = ArgsT())
     else
         extras = (;)
@@ -232,32 +277,64 @@ symtype(x) = typeof(x)
 @inline symtype(::BSImpl.Type{T}) where T = T
 @inline symtype(::Type{<:BSImpl.Type{T}}) where T = T
 
+@enumx PolyformVariant::UInt8 begin
+    ADD
+    MUL
+    POW
+end
+
+function polyform_variant(x::BasicSymbolic)
+    ispolyform(x) || throw(ArgumentError("Cannot call `polyform_variant` on non-polyform"))
+    poly = MData.variant_getfield(x, BSImpl.Polyform, :poly)
+    polyform_variant(poly)
+end
+function polyform_variant(poly::PolynomialT)
+    if MP.nterms(poly) > 1
+        return PolyformVariant.ADD
+    end
+    term = only(MP.terms(poly))
+    if !isone(MP.coefficient(term))
+        return PolyformVariant.MUL
+    end
+    mono = MP.monomial(term)
+    nnz = count(!iszero, MP.exponents(mono))
+    if iszero(nnz)
+        error("Polyform cannot be an empty polynomial")
+    elseif isone(nnz)
+        return PolyformVariant.POW
+    else
+        return PolyformVariant.MUL
+    end
+end
+
 # We're returning a function pointer
 @inline function TermInterface.operation(x::BSImpl.Type)
     @match x begin
         # BSImpl.Const(_) => throw(ArgumentError("`Const` does not have an operation."))
         BSImpl.Sym(_) => throw(ArgumentError("`Sym` does not have an operation."))
         BSImpl.Term(; f) => f
-        BSImpl.AddOrMul(; variant) => @match variant begin
-                AddMulVariant.ADD => (+)
-                AddMulVariant.MUL => (*)
-            end
+        BSImpl.Polyform(; poly) => @match polyform_variant(poly) begin
+            PolyformVariant.ADD => (+)
+            PolyformVariant.MUL => (*)
+            PolyformVariant.POW => (^)
+        end
         BSImpl.Div(_) => (/)
-        BSImpl.Pow(_) => (^)
         _ => throw(UnimplementedForVariantError(operation, MData.variant_type(x)))
     end
 end
 
 @cache function TermInterface.sorted_arguments(x::BSImpl.Type)::ROArgsT
     @match x begin
-        BSImpl.AddOrMul(; variant) => begin
-                args = copy(parent(arguments(x)))
-                @match variant begin
-                    AddMulVariant.ADD => sort!(args, by = get_degrees, lt = monomial_lt)
-                    AddMulVariant.MUL => sort!(args, by = get_degrees)
-                end
-                return ROArgsT(ArgsT(args))
+        BSImpl.Polyform(; poly) => begin
+            variant = polyform_variant(poly)
+            args = copy(parent(arguments(x)))
+            @match variant begin
+                PolyformVariant.ADD => sort!(args, by = get_degrees, lt = monomial_lt)
+                PolyformVariant.MUL => sort!(args, by = get_degrees)
+                _ => nothing
             end
+            return ROArgsT(ArgsT(args))
+        end
         _ => return arguments(x)
     end
 end
@@ -267,35 +344,56 @@ function TermInterface.arguments(x::BSImpl.Type)::ROArgsT
         # BSImpl.Const(_) => throw(ArgumentError("`Const` does not have arguments."))
         BSImpl.Sym(_) => throw(ArgumentError("`Sym` does not have arguments."))
         BSImpl.Term(; args) => ROArgsT(args)
-        BSImpl.AddOrMul(; args, coeff, dict, variant) => begin
-                isempty(args) || return ROArgsT(args)
-                sz = length(dict)
-                idcoeff = is_identity_coeff(variant, coeff)
-                sizehint!(args, sz + !idcoeff)
-                idcoeff || push!(args, coeff)
-                @match variant begin
-                    AddMulVariant.ADD => begin
-                        for (k, v) in dict
-                            var = if isone(v)
-                                k
-                            elseif applicable(*, k, v)
-                                k * v
-                            else
-                                maketerm(k, *, [k, v], nothing)
-                            end
-                            push!(args, var)
-                        end
-                    end
-                    AddMulVariant.MUL => begin
-                        for (k, v) in dict
-                            push!(args, isone(v) ? k : (k ^ v))
+        BSImpl.Polyform(; poly, partial_polyvars, vars, args, shape) => begin
+            T = symtype(x)
+            isempty(args) || return ROArgsT(args)
+            @match polyform_variant(poly) begin
+                PolyformVariant.ADD => begin
+                    for term in MP.terms(poly)
+                        coeff = MP.coefficient(term)
+                        mono = MP.monomial(term)
+                        exps = MP.exponents(mono)
+                        if MP.isconstant(term)
+                            push!(args, coeff)
+                        elseif isone(coeff) && isone(count(!iszero, exps))
+                            idx = findfirst(!iszero, exps)
+                            push!(args, vars[idx] ^ exps[idx])
+                        else
+                            push!(args, BSImpl.Polyform{T}(MP.polynomial(term, T), partial_polyvars, vars; shape))
                         end
                     end
                 end
-                return ROArgsT(args)
+                PolyformVariant.MUL => begin
+                    term = only(MP.terms(poly))
+                    coeff = MP.coefficient(term)
+                    mono = MP.monomial(term)
+                    if !isone(coeff)
+                        push!(args, coeff)
+                    end
+                    for (var, pow) in zip(vars, MP.exponents(mono))
+                        iszero(pow) && continue
+                        if isone(pow)
+                            push!(args, var)
+                        else
+                            push!(args, Term{T}(^, ArgsT((var, pow))))
+                        end
+                    end
+                end
+                PolyformVariant.POW => begin
+                    term = only(MP.terms(poly))
+                    mono = MP.monomial(term)
+                    exps = MP.exponents(mono)
+                    idx = findfirst(!iszero, exps)
+                    pow = exps[idx]
+                    @assert !iszero(pow)
+                    # @assert !isone(pow)
+                    push!(args, vars[idx])
+                    push!(args, pow)
+                end
             end
+            return ROArgsT(args)
+        end
         BSImpl.Div(num, den) => ROArgsT(ArgsT((num, den)))
-        BSImpl.Pow(base, exp) => ROArgsT(ArgsT((base, exp)))
         _ => throw(UnimplementedForVariantError(arguments, MData.variant_type(x)))
     end
 end
@@ -309,13 +407,13 @@ iscall(s::BSImpl.Type) = isexpr(s)
 isconst(x) = false
 issym(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Sym)
 isterm(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Term)
-isaddmul(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.AddOrMul)
-isadd(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.AddOrMul) && x.variant == AddMulVariant.ADD
-ismul(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.AddOrMul) && x.variant == AddMulVariant.MUL
+ispolyform(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Polyform)
+isadd(x::BSImpl.Type) = ispolyform(x) && polyform_variant(x) == PolyformVariant.ADD
+ismul(x::BSImpl.Type) = ispolyform(x) && polyform_variant(x) == PolyformVariant.MUL
 isdiv(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Div)
-ispow(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Pow)
+ispow(x::BSImpl.Type) = ispolyform(x) && polyform_variant(x) == PolyformVariant.POW
 
-for fname in [:issym, :isterm, :isaddmul, :isadd, :ismul, :isdiv, :ispow]
+for fname in [:issym, :isterm, :ispolyform, :isadd, :ismul, :isdiv, :ispow]
     @eval $fname(x) = false
 end
 
@@ -346,72 +444,18 @@ end
 
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
-macro manually_scope(val, expr, is_forced = false)
-    @assert Meta.isexpr(val, :call)
-    @assert val.args[1] == :(=>)
-
-    var_name = val.args[2]
-    new_val = val.args[3]
-    old_name = gensym(:old_val)
-    cur_name = gensym(:cur_val)
-    retval_name = gensym(:retval)
-    close_expr = :($var_name[] = $old_name)
-    interpolated_expr = MacroTools.postwalk(expr) do ex
-        if Meta.isexpr(ex, :return)
-            return Expr(:block, close_expr, ex)
-        elseif Meta.isexpr(ex, :$) && length(ex.args) == 1 && ex.args[1] == :$
-            return cur_name
-        else
-            return ex
-        end
-    end
-    basic_result = quote
-        $cur_name = $var_name[] = $new_val
-        $retval_name = begin
-            $interpolated_expr
-        end
-        $close_expr
-        $retval_name
-    end
-    is_forced && return quote
-        $old_name = $var_name[]
-        $basic_result
-    end |> esc
-
-    return quote
-        $old_name = $var_name[]
-        if $iszero($old_name)
-            $basic_result
-        else
-            $cur_name = $old_name
-            $retval_name = begin
-                $interpolated_expr
-            end
-        end
-        $retval_name
-    end |> esc
+function swap_polynomial_vars(poly::PolynomialT, new_vars::Vector{PolyVarT})
+    typeof(poly)(MP.coefficients(poly), DP.MonomialVector(new_vars, MP.monomials(poly).Z))
 end
 
-function isequal_symdict(a::Dict, b::Dict, full)
-    full || return isequal(a, b)
-    length(a) == length(b) || return false
-    for (k, v) in a
-        k2 = nothing
-        v2 = nothing
-        @manually_scope COMPARE_FULL => false begin
-            k2 = getkey(b, k, nothing)
-            k2 === nothing && return false
-            v2 = b[k2]
-        end true
-        v == v2 && isequal_bsimpl(k, k2, true) || return false
-    end
-    return true
+function swap_polynomial_vars(_::PolyVarT, new_vars::Vector{PolyVarT})
+    MP.polynomial(only(new_vars))
 end
 
 function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
     a === b && return true
-    ida = a.id
-    idb = b.id
+    taskida, ida = a.id
+    taskidb, idb = b.id
     ida === idb && ida !== nothing && return true
     typeof(a) === typeof(b) || return false
 
@@ -420,7 +464,7 @@ function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
     Ta === Tb || return false
 
 
-    if full && ida !== idb && ida !== nothing && idb !== nothing
+    if full && ida !== idb && ida !== nothing && idb !== nothing && taskida == taskidb
         return false
     end
 
@@ -431,13 +475,22 @@ function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
         (BSImpl.Term(; f = f1, args = args1, shape = s1), BSImpl.Term(; f = f2, args = args2, shape = s2)) => begin
             isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2
         end
-        (BSImpl.AddOrMul(; variant = v1, dict = d1, coeff = c1), BSImpl.AddOrMul(; variant = v2, dict = d2, coeff = c2)) => begin
-            v1 == v2 && isequal_symdict(d1, d2, full) && isequal_maybe_scal(c1, c2, full)
+        (BSImpl.Polyform(; poly = p1, partial_polyvars = part1, shape = s1), BSImpl.Polyform(; poly = p2, partial_polyvars = part2, shape = s2)) => begin
+            # Polyform is special. If we're doing a full comparison, checking equality of
+            # the contained `poly` works (even if they represent the same polynomials but
+            # `MP.variables` is different). Since the MP variables in the polynomial are
+            # based on the full comparison identity, their equality represents true equality.
+            # For partial equality checking, we simply replace `poly.x.vars` with `partial_polyvars`
+            # and compare those polynomials.
+            s1 == s2 && if full
+                isequal(p1, p2)
+            else
+                poly1 = swap_polynomial_vars(p1, part1)
+                poly2 = swap_polynomial_vars(p2, part2)
+                isequal(poly1, poly2)
+            end
         end
         (BSImpl.Div(; num = n1, den = d1), BSImpl.Div(; num = n2, den = d2)) => begin
-            isequal_maybe_scal(n1, n2, full) && isequal_maybe_scal(d1, d2, full)
-        end
-        (BSImpl.Pow(; base = n1, exp = d1), BSImpl.Pow(; base = n2, exp = d2)) => begin
             isequal_maybe_scal(n1, n2, full) && isequal_maybe_scal(d1, d2, full)
         end
     end
@@ -451,12 +504,16 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
     isequal_bsimpl(a, b, COMPARE_FULL[])
 end
 
+Base.isequal(a::BSImpl.Type, b::WeakRef) = isequal(a, b.value)
+Base.isequal(a::WeakRef, b::BSImpl.Type) = isequal(a.value, b)
+
 # const CONST_SALT = 0x194813feb8a8c83d % UInt
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const ADD_SALT = 0xaddaddaddaddadda % UInt
 const MUL_SALT = 0xaaaaaaaaaaaaaaaa % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
+const PLY_SALT = 0x36ee940e7fa431a3 % UInt
 
 const SCALAR_SYMTYPE_VARIANTS = [Number, Real, SafeReal, LiteralReal]
 const ARR_VARIANTS = [Vector, Matrix]
@@ -498,25 +555,6 @@ Base.@nospecializeinfer function hash_anyscalar(x::Any, h::UInt, full::Bool)
     end
 end
 
-function custom_dicthash(x::Dict{Symbolic, Number}, h::UInt, full)
-    hv = Base.hasha_seed
-    for (k, v) in x
-        h1 = hash_anyscalar(v, zero(UInt), full)
-        h1 = hash_anyscalar(k, h1, full)
-        hv ⊻= h1
-    end
-    return hash(hv, h)
-end
-
-Base.@nospecializeinfer function hash_addmuldict(x::Dict, h::UInt, full)
-    @nospecialize x
-    if x isa Dict{Symbolic, Number}
-        custom_dicthash(x, h, full)
-    else
-        hash(x, h)::UInt
-    end
-end
-
 function hashargs(x::ArgsT, h::UInt, full)
     h += Base.hash_abstractarray_seed
     h = hash(length(x), h)
@@ -548,23 +586,19 @@ function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
                 cache
             end
         end
-        BSImpl.AddOrMul(; variant, dict, coeff, shape, hash) => begin
-            cache = hash
-            if iszero(cache)
-                inner = hash_addmuldict(dict, h, full)
-                inner = Base.hash(shape, hash_coeff(coeff, inner))
-                inner = Base.hash((variant == AddMulVariant.ADD ? ADD_SALT : MUL_SALT), inner)
-                s.hash = inner
+        BSImpl.Polyform(; poly, partial_polyvars, shape, hash) => begin
+            if full
+                Base.hash(swap_polynomial_vars(poly, partial_polyvars), Base.hash(shape, h))
             else
-                cache
+                if iszero(hash)
+                    s.hash = Base.hash(poly, Base.hash(shape, h))
+                else
+                    hash
+                end
             end
-            
         end
         BSImpl.Div(; num, den) => begin
             hash_anyscalar(num, hash_anyscalar(den, h, full), full) ⊻ DIV_SALT
-        end
-        BSImpl.Pow(; base, exp) => begin
-            hash_anyscalar(base, hash_anyscalar(exp, h, full), full) ⊻ POW_SALT
         end
     end
 
@@ -596,9 +630,10 @@ const ENABLE_HASHCONSING = Ref(true)
 const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})
 const WVD = TaskLocalValue{WeakValueDict{UInt, BSImpl.Type}}(WeakValueDict{UInt, BSImpl.Type})
 const WCS = TaskLocalValue{WeakCacheSet{BSImpl.Type}}(WeakCacheSet{BSImpl.Type})
+const TASK_ID = TaskLocalValue{UInt}(() -> rand(UInt))
 
 function generate_id()
-    return IDType()
+    return (TASK_ID[], IDType())
 end
 
 const TOTAL = TaskLocalValue{Int}(Returns(0))
@@ -651,7 +686,7 @@ function hashcons(s::BSImpl.Type{T})::BSImpl.Type{T} where {T}
         #     cache[h] = s
         #     k = s
         # end
-        if k.id === nothing
+        if k.id === (nothing, nothing)
             k.id = generate_id()
         end
         return k
@@ -661,6 +696,22 @@ end
 # function BSImpl.Const{T}(val::T) where {T}
 #     hashcons(BSImpl.Const{T}(; val, override_properties(BSImpl.Const{T})...))
 # end
+
+function get_mul_coefficient(x)
+    iscall(x) && operation(x) === (*) || throw(ArgumentError("$x is not a multiplication"))
+    @match x begin
+        BSImpl.Term(; args) => begin
+            if ispolyform(args[1]) && polyform_variant(args[1]) == PolyformVariant.MUL
+                return MP.coefficient(MP.terms(poly)[1])
+            else
+                return 1
+            end
+        end
+        BSImpl.Polyform(; poly) => begin
+            return MP.coefficient(MP.terms(poly)[1])
+        end
+    end
+end
 
 parse_metadata(x::MetadataT) = x
 parse_metadata(::Nothing) = nothing
@@ -700,14 +751,6 @@ function parse_args(args::AbstractVector)
     return args::ArgsT
 end
 
-function parse_dict(::Type{T}, x::AbstractDict) where {T}
-    if !(x isa ACDict{Symbolic, T})
-        x = ACDict{Symbolic, T}(x)
-    end
-    map!(maybe_integer, values(x))
-    return x::ACDict{Symbolic, T}
-end
-
 parse_maybe_symbolic(x::Symbolic) = x
 parse_maybe_symbolic(x) = x
 # parse_maybe_symbolic(x) = Const{typeof(x)}(x)
@@ -718,13 +761,6 @@ function unwrap_args(args)
     else
         args
     end
-end
-
-function unwrap_dict(dict)
-    if any(k -> unwrap(k) !== k, keys(dict))
-        return typeof(dict)(unwrap(k) => v for (k, v) in dict)
-    end
-    return dict
 end
 
 @inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
@@ -748,12 +784,26 @@ end
     return var
 end
 
-@inline function BSImpl.AddOrMul{T}(variant::AddMulVariant.T, coeff::T, dict::AbstractDict; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Polyform{T}(poly::PolynomialT{T}; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+    vars = SmallV{BasicSymbolic}()
+    pvars = MP.variables(poly)
+    partial_polyvars = Vector{PolyVarT}()
+    sizehint!(vars, length(pvars))
+    sizehint!(partial_polyvars, length(pvars))
+    @manually_scope COMPARE_FULL => true begin
+        for pvar in pvars
+            var = polyvar_to_basicsymbolic(pvar)
+            push!(vars, var)
+            push!(partial_polyvars, basicsymbolic_to_partial_polyvar(var))
+        end
+    end
+    return BSImpl.Polyform{T}(poly, partial_polyvars, vars; metadata, shape, unsafe)
+end
+
+@inline function BSImpl.Polyform{T}(poly::PolynomialT{T}, partial_polyvars::Vector{PolyVarT}, vars::SmallV{BasicSymbolic}; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    dict = parse_dict(T, dict)
-    props = ordered_override_properties(BSImpl.AddOrMul)
-    coeff = maybe_integer(coeff)
-    var = BSImpl.AddOrMul{T}(variant, coeff, dict, metadata, shape, props...)
+    props = ordered_override_properties(BSImpl.Polyform)
+    var = BSImpl.Polyform{T}(poly, partial_polyvars, vars, metadata, shape, props...)
     if !unsafe
         var = hashcons(var)
     end
@@ -772,25 +822,11 @@ end
     return var
 end
 
-@inline function BSImpl.Pow{T}(base, exp; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
-    metadata = parse_metadata(metadata)
-    base = maybe_integer(parse_maybe_symbolic(base))
-    exp = maybe_integer(parse_maybe_symbolic(exp))
-    props = ordered_override_properties(BSImpl.Pow)
-    var = BSImpl.Pow{T}(base, exp, metadata, shape, props...)
-    if !unsafe
-        var = hashcons(var)
-    end
-    return var
-end
-
 # struct Const{T} end
 struct Sym{T} end
 struct Term{T} end
-struct Add{T} end
-struct Mul{T} end
+struct Polyform{T} end
 struct Div{T} end
-struct Pow{T} end
 
 # function Const{T}(val)::Symbolic where {T}
 #     val = unwrap(val)
@@ -811,34 +847,38 @@ function Term(f, args; kw...)
     Term{_promote_symtype(f, args)}(f, args; kw...)
 end
 
-# assumes associative commutative addition
-function Add{T}(coeff, dict; kw...) where {T}
-    coeff = convert(T, maybe_integer(unwrap(coeff)))
-    dict = unwrap_dict(dict)
-    isempty(dict) && return coeff
-    if _iszero(coeff) && length(dict) == 1
-        k, v = first(dict)
-        _isone(v) && return k
-        return k * v
+function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
+    nterms = MP.nterms(poly)
+    if MP.isconstant(poly)
+        return MP.leading_coefficient(poly)
+    elseif isone(nterms)
+        term = MP.terms(poly)[1]
+        coeff = MP.coefficient(term)
+        mono = MP.monomial(term)
+        exps = MP.exponents(mono)
+        nnz = count(!iszero, exps)
+        if isone(coeff) && isone(nnz) 
+            idx = findfirst(!iszero, exps)
+            isone(exps[idx]) && return polyvar_to_basicsymbolic(MP.variables(mono)[idx])
+        elseif isone(-coeff) && isone(nnz)
+            idx = findfirst(!iszero, exps)
+            pvars = MP.variables(poly)
+            var = polyvar_to_basicsymbolic(pvars[idx])
+            @match var begin
+                BSImpl.Term(; f, args) && if f === (+) end => begin
+                    args = copy(parent(args))
+                    map!(x -> coeff * x, args, args)
+                    return BSImpl.Term(; f, args)
+                end
+                BSImpl.Polyform(;) => return -var
+                _ => nothing
+            end
+        end
     end
-
-    variant = AddMulVariant.ADD
-    BSImpl.AddOrMul{T}(variant, coeff, dict; kw...)
+    BSImpl.Polyform{T}(poly, args...; kw...)
 end
 
-function Mul{T}(coeff, dict; kw...) where {T}
-    coeff = convert(T, maybe_integer(unwrap(coeff)))
-    dict = unwrap_dict(dict)
-    isempty(dict) && return coeff
-    if _isone(coeff) && length(dict) == 1
-        k, v = first(dict)
-        _isone(v) && return k
-        return k ^ v
-    end
-
-    variant = AddMulVariant.MUL
-    BSImpl.AddOrMul{T}(variant, coeff, dict; kw...)
-end
+Polyform(poly::PolynomialT{T}, args...; kw...) where {T} = Polyform{T}(poly, args...; kw...)
 
 """
     $(TYPEDSIGNATURES)
@@ -866,8 +906,8 @@ Return a tuple containing a boolean indicating whether `x` has a rational/intege
 and the rational/integer factor (or `NaN` otherwise).
 """
 function ratcoeff(x)
-    if ismul(x)
-        ratcoeff(x.coeff)
+    if iscall(x) && operation(x) === (*)
+        ratcoeff(get_mul_coefficient(x))
     elseif x isa Rat
         (true, x)
     else
@@ -950,89 +990,9 @@ Return the denominator of expression `x` as an array of multiplied terms.
 """
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : SmallV{Any}((1,))
 
-function Pow{T}(base, exp; kw...) where {T}
-    base = unwrap(base)
-    exp = unwrap(exp)
-    # TODO: Returning 1 isn't valid for matrix algebra
-    # This should use a `_one` function
-    _iszero(exp) && return 1
-    _isone(exp) && return base
-    return BSImpl.Pow{T}(base, exp; kw...)
-end
-
-function Pow(a, b; kw...)
-    Pow{promote_symtype(^, symtype(a), symtype(b))}(makepow(a, b)...; kw...)
-end
-
-function _mergedict!(dict::AbstractDict, other::AbstractDict)
-    for (k, v) in other
-        vv = get(dict, k, 0)
-        dict[k] = v + vv
-    end
-end
-
 function unwrap_const(x)
     x
     # isconst(x) ? x.val : x
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Return the `coeff` and `dict` for adding `xs...` into a symbolic of symtype `T`.
-"""
-function makeadd(::Type{T}, xs...)::Tuple{T, Dict{Symbolic, T}} where {T}
-    dict = Dict{Symbolic, T}()
-    coeff = zero(T)
-
-    for x in xs
-        x = unwrap_const(unwrap(x))
-        if x isa Number
-            coeff += convert(T, x)
-            continue
-        elseif isadd(x)
-            coeff += x.coeff
-            _mergedict!(dict, x.dict)
-            continue
-        end
-        if ismul(x)
-            v = x.coeff
-            k = Mul{T}(1, x.dict; metadata = metadata(x))
-        else
-            k = x
-            v = 1
-        end
-        dict[k] = get(dict, k, zero(T)) + v
-    end
-    filter!(!iszero ∘ last, dict)
-    return coeff, dict
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Return the `coeff` and `dict` for multiplying `xs...` into a symbolic of symtype `T`.
-"""
-function makemul(::Type{T}, xs...) where {T}
-    dict = Dict{Symbolic, T}()
-    coeff = one(T)
-    for x in xs
-        x = unwrap_const(unwrap(x))
-        if ispow(x) && x.exp isa T
-        # if ispow(x) && isconst(x.exp)
-            dict[x.base] = x.exp + get(dict, x.base, 0)
-        elseif x isa Number
-            coeff *= convert(T, x)
-        elseif ismul(x)
-            coeff *= x.coeff
-            _mergedict!(dict, x.dict)
-        else
-            dict[x] = get(dict, x, 0) + 1
-        end
-    end
-
-    filter!(!iszero ∘ last, dict)
-    return (coeff, dict)
 end
 
 """
@@ -1563,35 +1523,6 @@ end
 const SN = Symbolic{<:Number}
 # integration. Constructors of `Add, Mul, Pow...` from Base (+, *, ^, ...)
 
-_merge(f::F, d, others...; filter=x->false) where F = _merge!(f, Dict{Any,Any}(d), others...; filter=filter)
-
-function _merge!(f::F, d, others...; filter=x->false) where F
-    acc = d
-    for other in others
-        for (k, v) in other
-            v = f(v)
-            ak = get(acc, k, nothing)
-            if ak !== nothing
-                v = ak + v
-            end
-            if filter(v)
-                delete!(acc, k)
-            else
-                acc[k] = v
-            end
-        end
-    end
-    acc
-end
-
-function mapvalues(f, d1::AbstractDict)
-    d = copy(d1)
-    for (k, v) in d
-        d[k] = f(k, v)
-    end
-    d
-end
-
 add_t(a::Number,b::Number) = promote_symtype(+, symtype(a), symtype(b))
 add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
 sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
@@ -1599,101 +1530,51 @@ sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 
-function safe_add!(dict, coeff, b)
-    if isadd(b)
-        coeff += b.coeff
-        for (k, v) in b.dict
-            dict[k] = get(dict, k, 0) + v
-        end
-    elseif ismul(b)
-        v = b.coeff
-        metadata = b.metadata
-        if metadata === nothing
-            b′ = Mul{symtype(b)}(1, b.dict)
-        else
-            b′ = Mul{symtype(b)}(1, b.dict; metadata)
-        end
-        dict[b′] = get(dict, b′, 0) + v
-    elseif b isa Number
-        coeff += b
-    else
-        dict[b] = get(dict, b, 0) + 1
-    end
-    return coeff
-end
-
 function +(a::SN, bs::SN...)
     add_worker((a, bs...))
 end
 
 function add_worker(terms)
+    if isone(length(terms))
+        return only(terms)
+    end
+    # entries where `!issafecanon`
+    unsafes = SmallV{Any}()
     a, bs = Iterators.peel(terms)
-    isempty(bs) && return a
     T = symtype(a)
     for b in bs
         T = promote_symtype(+, T, symtype(b))
     end
-    # entries where `!issafecanon`
-    unsafes = SmallV{Any}()
-    # coeff and dict of the `Add`
-    coeff = 0
-    dict = Dict{Symbolic, T}()
-    # type of the `Add`
-
-    # handle `a` separately
-    if issafecanon(+, a)
-        if isadd(a)
-            coeff = a.coeff
-            dict = copy(a.dict)
-        elseif ismul(a)
-            v = a.coeff
-            a′ = Mul{symtype(a)}(1, a.dict; metadata = a.metadata)
-            dict[a′] = v
-        elseif a isa Number
-            coeff = a
-        else
-            dict[a] = 1
-        end
-    else
-        push!(unsafes, a)
-    end
-
-    for b in bs
-        if !issafecanon(+, b)
-            push!(unsafes, b)
+    result = zeropoly(T)
+    for term in terms
+        term = unwrap(term)
+        if !issafecanon(+, term)
+            push!(unsafes, term)
             continue
         end
-        coeff = safe_add!(dict, coeff, b)
+        @match term begin
+            x::Number => MA.operate!(+, result, x)
+            BSImpl.Polyform(; poly) => MA.operate!(+, result, poly)
+            x::BasicSymbolic => MA.operate!(+, result, basicsymbolic_to_polyvar(x))
+        end
     end
-    # remove entries multiplied by zero
-    filter!(dict) do kvp
-        !iszero(kvp[2])
-    end
-    if isempty(dict)
-        result = coeff
-    elseif iszero(coeff) && length(dict) == 1
-        expr, coeff = first(dict)
-        result = coeff * expr
+    nterms = MP.nterms(result)
+    if iszero(nterms) && isempty(unsafes)
+        return zero(T)
+    elseif iszero(nterms)
+        return Term{T}(+, unsafes)
+    elseif isempty(unsafes)
+        return Polyform{T}(result)
     else
-        result = Add{T}(coeff, dict)
+        push!(unsafes, Polyform{T}(result))
+        # ensure `result` is always the first
+        unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
+        return Term{T}(+, unsafes)
     end
-    if !isempty(unsafes)
-        push!(unsafes, result)
-        result = Term{T}(+, unsafes)
-    end
-    return result
 end
 
 function +(a::Number, b::SN, bs::SN...)
-    b = +(b, bs...)
-    issafecanon(+, b) || return term(+, a, b)
-    iszero(a) && return b
-    T  = add_t(a, b)
-    if isadd(b)
-        Add{T}(a + b.coeff, b.dict)
-    else
-        Add{T}(makeadd(T, a, b)...)
-    end
+    return add_worker((a, b, bs...))
 end
 
 function +(a::SN, b::Number, bs::SN...)
@@ -1702,16 +1583,28 @@ end
 
 function -(a::SN)
     !issafecanon(*, a) && return term(-, a)
-    isadd(a) ? Add{sub_t(a)}(-a.coeff, mapvalues((_,v) -> -v, a.dict)) : (-1 * a)
+    T = sub_t(a)
+    @match a begin
+        BSImpl.Polyform(; poly, vars, partial_polyvars, shape) => begin
+            result = copy(poly)
+            MP.map_coefficients_to!(result, (-), poly; nonzero = true)
+            BSImpl.Polyform{T}(result, partial_polyvars, vars; shape)
+        end
+        _ => (-1 * a)
+    end
 end
 
 function -(a::SN, b::SN)
     (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
-    isadd(a) && isadd(b) ? Add{sub_t(a,b)}(
-                               a.coeff - b.coeff,
-                               _merge(-, a.dict,
-                                      b.dict,
-                                      filter=_iszero)) : a + (-b)
+    @match (a, b) begin
+        (BSImpl.Polyform(; poly = poly1), BSImpl.Polyform(; poly = poly2)) => begin
+            poly2 = MP.map_coefficients((-), poly2)
+            MA.operate!(+, poly2, poly1)
+            T = sub_t(a, b)
+            return Polyform{T}(MP.polynomial(poly2, T))
+        end
+        _ => return add_worker((a, -b))
+    end
 end
 
 -(a::Number, b::SN) = a + (-b)
@@ -1723,14 +1616,95 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 
-# should not be called with a `div`
-function get_mul_coeff_dict(::Type{T}, term; safe = false) where {T}
-    @match term begin
-        x::Number => (x, Dict{Symbolic, T}())
-        BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => (coeff, copy(dict))
-        BSImpl.Pow(; base, exp) && if exp isa Number end => (1, Dict{Symbolic, T}(base => exp))
-        _ => (1, Dict{Symbolic, T}(term => 1))
+struct MultipliedPolynomialPostprocessor
+    base_occurrences::Dict{BasicSymbolic, BitSet}
+    var_exponents::Vector{Real}
+    monomial::(typeof(MP.monomial(ExamplePolyVar)))
+    varsbuf::Vector{BasicSymbolic}
+    var_to_idx::Dict{BasicSymbolic, Int}
+end
+
+MultipliedPolynomialPostprocessor() = MultipliedPolynomialPostprocessor(Dict(), Real[], MP.monomial(ExamplePolyVar), BasicSymbolic[], Dict())
+
+const CACHED_MPP = TaskLocalValue{MultipliedPolynomialPostprocessor}(MultipliedPolynomialPostprocessor)
+
+function (mpp::MultipliedPolynomialPostprocessor)(poly::PolynomialT, ::Type{T}) where {T}
+    pvars = MP.variables(poly)
+    vars = mpp.varsbuf
+    empty!(vars)
+    sizehint!(vars, length(pvars))
+    var_to_idx = mpp.var_to_idx
+    empty!(var_to_idx)
+    base_occurrences = mpp.base_occurrences
+    empty!(base_occurrences)
+    var_exponents = mpp.var_exponents
+    empty!(var_exponents)
+    for (i, pvar) in enumerate(pvars)
+        var = polyvar_to_basicsymbolic(pvar)
+        push!(vars, var)
+        var_to_idx[var] = i
+        if iscall(var) && operation(var) === (^)
+            base, exp = arguments(var)
+            if !(exp isa Real)
+                base, exp = var, 1
+            end
+        else
+            base, exp = var, 1
+        end
+        push!(var_exponents, exp)
+        push!(get!(BitSet, base_occurrences, base), i)
     end
+
+    result = zeropoly(T)
+    monomial_buffer = mpp.monomial
+    for term in MP.terms(poly)
+        coeff = MP.coefficient(term)
+        mono = MP.monomial(term)
+        exps = MP.exponents(mono)
+
+        new_mono = MP.constant_monomial(result)
+        for (base, mask) in base_occurrences
+            exp = sum(mask) do i
+                exps[i] * var_exponents[i]
+            end
+            if isinteger(exp)
+                mbase = basicsymbolic_to_polyvar(base)
+                mexp = Int(exp)
+            else
+                mbase = basicsymbolic_to_polyvar(Term{T}(^, ArgsT((base, exp))))
+                mexp = 1
+            end
+            # cheat to avoid allocations
+            MP.variables(monomial_buffer)[] = mbase
+            MP.exponents(monomial_buffer)[] = mexp
+            MA.operate!(*, new_mono, monomial_buffer)
+        end
+        new_term = MP.Term{T, typeof(new_mono)}(coeff, new_mono)
+        MA.operate!(+, result, new_term)
+    end
+
+    return result
+end
+
+postprocessed_multiplied_polynomial(args...) = CACHED_MPP[](args...)
+
+function _mul_worker!(num_poly, den_poly, term)
+    @match term begin
+        x::Number => MA.operate!(*, num_poly, x)
+        BSImpl.Polyform(; poly) && if polyform_variant(poly) == PolyformVariant.MUL end => begin
+            MA.operate!(*, num_poly, poly)
+        end
+        BSImpl.Div(; num, den) => begin
+            if den_poly === nothing
+                den_poly = onepoly(eltype(MP.coefficients(num_poly)))
+            end
+            num_poly, den_poly = _mul_worker!(num_poly, den_poly, num)
+            den_poly, num_poly = _mul_worker!(den_poly, num_poly, den)
+        end
+        _ => MA.operate!(*, num_poly, basicsymbolic_to_polyvar(term))
+    end
+
+    return num_poly, den_poly
 end
 
 function mul_worker(terms)
@@ -1742,112 +1716,26 @@ function mul_worker(terms)
         T = promote_symtype(*, T, symtype(b))
     end
     unsafes = SmallV{Any}()
-    if isdiv(a)
-        num_coeff, num_dict = get_mul_coeff_dict(T, a.num)
-        den_coeff, den_dict = get_mul_coeff_dict(T, a.den)
-    elseif !issafecanon(*, a)
-        push!(unsafes, a)
-        num_coeff, num_dict = 1, Dict{Symbolic, T}()
-        den_coeff, den_dict = 1, nothing
-    else
-        num_coeff, num_dict = get_mul_coeff_dict(T, a)
-        den_coeff = 1
-        den_dict = nothing
-    end
-
-    for b in bs
-        b = unwrap(b)
-        if !issafecanon(*, b)
-            push!(unsafes, b)
+    num_poly = onepoly(T)
+    den_poly = nothing
+    for term in terms
+        if !issafecanon(*, term)
+            push!(unsafes, term)
             continue
         end
-        @match b begin
-            x::Number => (num_coeff *= x)
-            BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => begin
-                num_coeff *= coeff
-                for (k, v) in dict
-                    num_dict[k] = get(num_dict, k, 0) + v
-                end
-            end
-            BSImpl.Pow(; base, exp) && if exp isa Number end => begin
-                num_dict[base] = get(num_dict, base, 0) + exp
-            end
-            BSImpl.Div(; num, den) => begin
-                if den_dict === nothing && !(den isa Number)
-                    den_dict = Dict{Symbolic, T}()
-                end
-                @match num begin
-                    x::Number => (num_coeff *= x)
-                    BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => begin
-                        num_coeff *= coeff
-                        for (k, v) in dict
-                            num_dict[k] = get(num_dict, k, 0) + v
-                        end
-                    end
-                    BSImpl.Pow(; base, exp) && if exp isa Number end => begin
-                        num_dict[base] = get(num_dict, base, 0) + exp
-                    end
-                    _ => (num_dict[num] = get(num_dict, num, 0) + 1)
-                end
-                @match den begin
-                    x::Number => (den_coeff *= x)
-                    BSImpl.AddOrMul(; variant = AddMulVariant.MUL, coeff, dict) => begin
-                        den_coeff *= coeff
-                        for (k, v) in dict
-                            den_dict[k] = get(den_dict, k, 0) + v
-                        end
-                    end
-                    BSImpl.Pow(; base, exp) && if exp isa Number end => begin
-                        den_dict[base] = get(den_dict, base, 0) + exp
-                    end
-                    _ => (den_dict[den] = get(den_dict, den, 0) + 1)
-                end
-            end
-            _ => (num_dict[b] = get(num_dict, b, 0) + 1)
-        end
+        num_poly, den_poly = _mul_worker!(num_poly, den_poly, term)
     end
-
-    if iszero(num_coeff)
-        return num_coeff
-    end
-    filter!(kvp -> !iszero(kvp[2]), num_dict)
-    if isempty(num_dict)
-        num = num_coeff
-    elseif isone(num_coeff) && length(num_dict) == 1
-        base, exp = first(num_dict)
-        num = Pow{T}(base, exp)
-    elseif isone(-num_coeff) && length(num_dict) == 1 && isadd(first(keys(num_dict))) && isone(first(values(num_dict)))
-        add_term, _ = first(num_dict)
-        coeff = -add_term.coeff
-        dict = copy(add_term.dict)
-        map!(x -> -x, values(dict))
-        num = Add{T}(coeff, dict; metadata = metadata(add_term))
-    else
-        num = Mul{T}(num_coeff, num_dict)
-    end
-
+    num = Polyform{T}(postprocessed_multiplied_polynomial(num_poly, T))
     if !isempty(unsafes)
         push!(unsafes, num)
+        # ensure `num` is always the first
+        unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
         num = Term{T}(*, unsafes)
     end
-
-    if den_dict !== nothing
-        filter!(kvp -> !iszero(kvp[2]), den_dict)
-    end
-
-    if den_dict === nothing || isempty(den_dict)
-        den = den_coeff
-    elseif isone(den_coeff) && length(den_dict) == 1
-        base, exp = first(den_dict)
-        den = Pow{T}(base, exp)
-    elseif isone(-den_coeff) && length(den_dict) == 1 && isadd(first(keys(den_dict))) && isone(first(values(den_dict)))
-        add_term, _ = first(den_dict)
-        coeff = -add_term.coeff
-        dict = copy(add_term.dict)
-        map!(x -> -x, values(dict))
-        den = Add{T}(coeff, dict; metadata = metadata(add_term))
+    if den_poly === nothing
+        den = one(T)
     else
-        den = Mul{T}(den_coeff, den_dict)
+        den = Polyform{T}(postprocessed_multiplied_polynomial(den_poly, T))
     end
 
     return Div{T}(num, den, false)
@@ -1886,19 +1774,33 @@ end
 
 function ^(a::SN, b)
     b = unwrap(b)
-    !issafecanon(^, a,b) && return Pow(a, b)
-    if b isa Number && iszero(b)
-        # fast path
-        1
-    elseif b isa Real && b < 0
-        Div(1, a ^ (-b), false)
-    elseif ismul(a) && b isa Number
-        coeff = ^(a.coeff, b)
-        Mul{promote_symtype(^, symtype(a), symtype(b))}(
-            coeff, mapvalues((k, v) -> b*v, a.dict))
-    else
-        Pow(a, b)
+    T = promote_symtype(^, symtype(a), symtype(b))
+    !issafecanon(^, a, b) && return Term{T}(^, ArgsT((a, b)))
+    if b isa Number
+        iszero(b) && return 1
+        isone(b) && return a
     end
+    if b isa Real && b < 0
+        return Div{T}(1, a ^ (-b), false)
+    end
+    if b isa Number && iscall(a) && operation(a) === (^) && arguments(a)[2] isa Number
+        base, exp = arguments(a)
+        return base ^ (exp * b)
+    end
+    @match a begin
+        BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false)
+        _ => nothing
+    end
+    if b isa Number && isinteger(b)
+        @match a begin
+            BSImpl.Polyform(; poly, partial_polyvars, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
+                poly = MP.polynomial(poly ^ Int(b), T)
+                return BSImpl.Polyform{T}(poly, partial_polyvars, vars)
+            end
+            _ => return BSImpl.Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), T))
+        end
+    end
+    return BSImpl.Term{T}(^, ArgsT((a, b)))
 end
 
-^(a::Number, b::SN) = Pow(a, b)
+^(a::Number, b::SN) = Term{promote_symtype(^, symtype(a), symtype(b))}(^, ArgsT((a, b)))

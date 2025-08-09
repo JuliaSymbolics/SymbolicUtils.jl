@@ -38,7 +38,7 @@ end
     @test @rule((~x)^(~x) => ~x)(b^a) === nothing
     @test @rule((~x)^(~x) => ~x)(a+a) === nothing
     @eqtest @rule((~x)^(~x) => ~x)(sin(a)^sin(a)) == sin(a)
-    @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
+    @eqtest @rule((~y*~x + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
 
     @test issetequal(@rule(+(~~x) => ~~x)(a + b), [a,b])
     @eqtest @rule(+(~~x) => ~~x)(term(+, a, b, c)) == [a,b,c]
@@ -220,7 +220,7 @@ end
     ex1 = ex + c
 
     @test SymbolicUtils.isterm(ex1)
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(arguments(ex1)[2], MetaData) == :metadata
 
     ex = a
     ex = setmetadata(ex, MetaData, :metadata)
@@ -233,7 +233,7 @@ end
     ex1 = ex * c
 
     @test SymbolicUtils.isterm(ex1)
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(arguments(ex1)[2], MetaData) == :metadata
 
     ex = a
     ex = setmetadata(ex, MetaData, :metadata)

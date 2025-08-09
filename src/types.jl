@@ -448,6 +448,10 @@ function swap_polynomial_vars(poly::PolynomialT, new_vars::Vector{PolyVarT})
     typeof(poly)(MP.coefficients(poly), DP.MonomialVector(new_vars, MP.monomials(poly).Z))
 end
 
+function swap_polynomial_vars(_::PolyVarT, new_vars::Vector{PolyVarT})
+    MP.polynomial(only(new_vars))
+end
+
 function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
     a === b && return true
     taskida, ida = a.id

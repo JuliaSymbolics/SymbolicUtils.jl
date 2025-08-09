@@ -29,6 +29,11 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
             elseif f === (*) || f === (+)
                 arg1, restargs = Iterators.peel(args)
                 poly = to_poly!(poly_to_bs, arg1)
+                if !(poly isa PolynomialT)
+                    _poly = zeropoly(T)
+                    MA.operate!(+, _poly, poly)
+                    poly = _poly
+                end
                 for arg in restargs
                     MA.operate!(*, poly, to_poly!(poly_to_bs, arg))
                 end

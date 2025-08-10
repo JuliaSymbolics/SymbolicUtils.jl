@@ -1821,6 +1821,7 @@ function +(a::SN, bs::SN...)
 end
 
 function add_worker(terms)
+    isempty(terms) && return 0
     if isone(length(terms))
         return only(terms)
     end

@@ -113,6 +113,20 @@ function Base.map(f, x::Backing{T}) where {T}
     end
 end
 
+function Base.empty!(x::Backing{T}) where {T}
+    if x.len >= 1
+        x.x1 = defaultval(T)
+    end
+    if x.len >= 2
+        x.x2 = defaultval(T)
+    end
+    if x.len == 3
+        x.x3 = defaultval(T)
+    end
+    x.len = 0
+    return x
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -184,3 +198,4 @@ end
 Base.any(f::Function, x::SmallVec) = any(f, x.data)
 Base.all(f::Function, x::SmallVec) = all(f, x.data)
 Base.map(f, x::SmallVec{T, V}) where {T, V} = SmallVec{T,V}(map(f, x.data))
+Base.empty!(x::SmallVec) = empty!(x.data)

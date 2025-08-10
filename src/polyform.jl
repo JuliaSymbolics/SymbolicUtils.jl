@@ -14,12 +14,23 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
             for var in vars
                 push!(subs, to_poly!(poly_to_bs, var))
             end
-            return MP.polynomial(poly(pvars => subs), T)
+            poly = poly(pvars => subs)
+            if poly isa PolynomialT{T}
+                return poly
+            end
+            return PolynomialT{T}(Vector{T}(MP.coefficients(poly)), MP.monomials(poly))
         end
         BSImpl.Term(; f, args) => begin
             if f === (^) && args[2] isa Real && isinteger(args[2])
                 base, exp = args
-                return MP.polynomial(to_poly!(poly_to_bs, base) ^ Int(exp), T)
+                poly = to_poly!(poly_to_bs, base)
+                return if poly isa PolyVarT
+                    isone(exp) && return poly
+                    mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}([poly], [Int[exp]])
+                    PolynomialT{T}(T[one(T)], mv)
+                else
+                    PolynomialT{T}(Vector{T}(MP.coefficients(poly)), MP.monomials(poly))
+                end
             elseif f === (*) || f === (+)
                 arg1, restargs = Iterators.peel(args)
                 poly = to_poly!(poly_to_bs, arg1)

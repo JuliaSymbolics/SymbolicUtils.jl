@@ -666,6 +666,21 @@ function toexpr(a::MakeTuple, st)
     :(($(toexpr.(a.elems, (st,))...),))
 end
 
+"""
+    Multithreaded
+
+A parallelism type for `SpawnFetch` that uses Julia's threading system.
+
+When used with `SpawnFetch{Multithreaded}`, expressions are executed
+in parallel using `Threads.@spawn`.
+
+# Examples
+```julia
+julia> SpawnFetch{Multithreaded}([func1, func2], combine_func)
+```
+
+See also: [`SpawnFetch`](@ref)
+"""
 struct Multithreaded end
 """
     SpawnFetch{ParallelType}(funcs [, args], reduce)
@@ -834,8 +849,22 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Perform Common Subexpression Elimination on the given expression `expr`. Return an
-equivalent `expr` with optimized computation.
+Perform common subexpression elimination on an expression.
+
+This optimization identifies repeated subexpressions and replaces them with
+variables to avoid redundant computation.
+
+# Arguments
+- `expr`: The expression to optimize
+
+# Returns
+An optimized expression with common subexpressions eliminated
+
+# Examples
+```julia
+julia> expr = :(sin(x) + sin(x) * cos(y))
+julia> cse(expr)  # sin(x) is computed only once
+```
 """
 function cse(expr)
     state = CSEState()

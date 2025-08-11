@@ -436,6 +436,35 @@ end
 Rule(acr::ACRule)   = acr.rule
 getdepth(r::ACRule) = getdepth(r.rule)
 
+"""
+    @acrule(lhs => rhs)
+
+Create an associative-commutative rule that matches all permutations of the arguments.
+
+This macro creates a rule that can match patterns regardless of the order of arguments
+in associative and commutative operations like addition and multiplication.
+
+# Arguments
+- `lhs`: The pattern to match (left-hand side)
+- `rhs`: The replacement expression (right-hand side)
+
+# Examples
+```julia
+julia> @syms x y z
+(x, y, z)
+
+julia> r = @acrule x + y => 2x  # Matches both x + y and y + x
+ACRule(x + y => 2x)
+
+julia> r(x + y)
+2x
+
+julia> r(y + x)
+2x
+```
+
+See also: [`@rule`](@ref), [`@ordered_acrule`](@ref)
+"""
 macro acrule(expr)
     arity = length(expr.args[2].args[2:end])
     quote

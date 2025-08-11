@@ -104,7 +104,6 @@ SymbolicUtils.SetArray
 SymbolicUtils.MakeArray
 SymbolicUtils.MakeSparseArray
 SymbolicUtils.MakeTuple
-SymbolicUtils.AtIndex
 ```
 
 ### Parallelism

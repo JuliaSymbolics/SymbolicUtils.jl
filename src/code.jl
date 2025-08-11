@@ -446,17 +446,6 @@ SetArray
 
 SetArray(inbounds, arr, elems) = SetArray(inbounds, arr, elems, false)
 
-"""
-    AtIndex(i, elem)
-
-Represent an element at a specific index in an array.
-
-This is used internally for array indexing operations in code generation.
-
-# Fields
-- `i`: The index
-- `elem`: The element at that index
-"""
 @matchable struct AtIndex <: CodegenPrimitive
     i
     elem

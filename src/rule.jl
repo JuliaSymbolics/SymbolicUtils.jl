@@ -163,6 +163,8 @@ function makeconsequent(expr)
         else
             return Expr(expr.head, map(makeconsequent, expr.args)...)
         end
+    elseif expr===:(~)
+        return :(__MATCHES__)
     else
         # treat as a literal
         return esc(expr)

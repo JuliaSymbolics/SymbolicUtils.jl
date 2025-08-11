@@ -860,12 +860,6 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Perform Common Subexpression Elimination on the given expression `expr`. Return an
-equivalent `expr` with optimized computation.
-"""
-"""
-    cse(expr)
-
 Perform common subexpression elimination on an expression.
 
 This optimization identifies repeated subexpressions and replaces them with

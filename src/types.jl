@@ -149,6 +149,37 @@ end
 
 @inline head(x::BasicSymbolic) = operation(x)
 
+"""
+    sorted_arguments(x::BasicSymbolic)
+
+Get the arguments of a symbolic expression in canonical sorted order.
+
+For commutative operations like addition and multiplication, the arguments
+are sorted according to a canonical ordering. This ensures that equivalent
+expressions have the same representation.
+
+# Arguments
+- `x::BasicSymbolic`: The symbolic expression
+
+# Returns
+A vector of the arguments in sorted order. For non-commutative operations,
+returns the arguments in their original order.
+
+# Examples
+```julia
+julia> @syms x y z
+(x, y, z)
+
+julia> expr = x + z + y
+x + y + z
+
+julia> sorted_arguments(expr)
+3-element Vector{Any}:
+ x
+ y
+ z
+```
+"""
 @cache function TermInterface.sorted_arguments(x::BasicSymbolic)::Vector{Any}
     args = copy(arguments(x))
     @compactified x::BasicSymbolic begin
@@ -795,6 +826,31 @@ function makepow(a, b)
     return (base, exp)
 end
 
+"""
+    term(f, args...; type = nothing)
+
+Create a symbolic term with operation `f` and arguments `args`.
+
+# Arguments
+- `f`: The operation or function head of the term
+- `args...`: The arguments to the operation
+- `type`: Optional type specification for the term. If not provided, the type is inferred using `promote_symtype`.
+
+# Examples
+```julia
+julia> @syms x y
+(x, y)
+
+julia> term(+, x, y)
+x + y
+
+julia> term(sin, x)
+sin(x)
+
+julia> term(^, x, 2)
+x^2
+```
+"""
 function term(f, args...; type = nothing)
     args = SmallV{Any}(args)
     if type === nothing
@@ -893,6 +949,27 @@ end
 metadata(s::Symbolic) = s.metadata
 metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
 
+"""
+    hasmetadata(s::Symbolic, ctx)
+
+Check if a symbolic expression has metadata for a given context.
+
+# Arguments
+- `s::Symbolic`: The symbolic expression to check
+- `ctx`: The metadata context key (typically a DataType)
+
+# Returns
+- `true` if the expression has metadata for the given context, `false` otherwise
+
+# Examples
+```julia
+julia> @syms x
+x
+
+julia> hasmetadata(x, Float64)
+false
+```
+"""
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
@@ -911,6 +988,30 @@ _issafecanon(::typeof(^), s) = !iscall(s) || !(operation(s) in (*, ^))
 
 issafecanon(f, ss...) = all(x->issafecanon(f, x), ss)
 
+"""
+    getmetadata(s::Symbolic, ctx)
+
+Retrieve metadata associated with a symbolic expression for a given context.
+
+# Arguments
+- `s::Symbolic`: The symbolic expression
+- `ctx`: The metadata context key (typically a DataType)
+
+# Returns
+The metadata value associated with the given context
+
+# Throws
+- `ArgumentError` if the expression does not have metadata for the given context
+
+# Examples
+```julia
+julia> @syms x::Float64
+x
+
+julia> getmetadata(x, symtype)  # Get the type metadata
+Float64
+```
+"""
 function getmetadata(s::Symbolic, ctx)
     md = metadata(s)
     if md isa AbstractDict
@@ -920,6 +1021,29 @@ function getmetadata(s::Symbolic, ctx)
     end
 end
 
+"""
+    getmetadata(s::Symbolic, ctx, default)
+
+Retrieve metadata associated with a symbolic expression for a given context,
+returning a default value if not found.
+
+# Arguments
+- `s::Symbolic`: The symbolic expression
+- `ctx`: The metadata context key (typically a DataType)
+- `default`: The default value to return if metadata is not found
+
+# Returns
+The metadata value associated with the given context, or `default` if not found
+
+# Examples
+```julia
+julia> @syms x
+x
+
+julia> getmetadata(x, Float64, "no type")
+"no type"
+```
+"""
 function getmetadata(s::Symbolic, ctx, default)
     md = metadata(s)
     md isa AbstractDict ? get(md, ctx, default) : default
@@ -948,6 +1072,31 @@ function assocmeta(d::Base.ImmutableDict, ctx, val)::ImmutableDict{DataType,Any}
     Base.ImmutableDict{DataType, Any}(d, ctx, val)
 end
 
+"""
+    setmetadata(s::Symbolic, ctx::DataType, val)
+
+Set metadata for a symbolic expression in a given context.
+
+# Arguments
+- `s::Symbolic`: The symbolic expression
+- `ctx::DataType`: The metadata context key
+- `val`: The metadata value to set
+
+# Returns
+A new symbolic expression with the updated metadata
+
+# Examples
+```julia
+julia> @syms x
+x
+
+julia> x_with_meta = setmetadata(x, Float64, "custom value")
+x
+
+julia> getmetadata(x_with_meta, Float64)
+"custom value"
+```
+"""
 function setmetadata(s::Symbolic, ctx::DataType, val)
     if s.metadata isa AbstractDict
         @set s.metadata = assocmeta(s.metadata, ctx, val)
@@ -1134,6 +1283,31 @@ function show_term(io::IO, t)
     return nothing
 end
 
+"""
+    showraw([io::IO], t)
+
+Display the raw structure of a symbolic expression without simplification.
+
+This function shows the internal structure of symbolic expressions without applying
+any simplification rules, which is useful for debugging and understanding the
+exact form of an expression.
+
+# Arguments
+- `io::IO`: Optional IO stream to write to (defaults to stdout)
+- `t`: The symbolic expression to display
+
+# Examples
+```julia
+julia> @syms x
+x
+
+julia> expr = x + x + x
+3x
+
+julia> showraw(expr)  # Shows the unsimplified structure
+x + x + x
+```
+"""
 showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)
 showraw(t) = showraw(stdout, t)
 

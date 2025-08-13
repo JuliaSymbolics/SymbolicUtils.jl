@@ -82,6 +82,22 @@ end
     @test r_mix((a + b)) === 2 #1+1
 end
 
+@testset "Return the matches dictionary" begin
+    r = @rule (~x + (~y)^2) => ~
+    res = r(a + b^2)
+    @test isa(res, Base.ImmutableDict)
+    @test res[:x] === a
+    @test res[:y] === b
+
+    r2 = @rule (~x + (~y)^(~m)) => (~) where ~m===2
+    @test isa(r2(a + b^2), Base.ImmutableDict)
+    @test r2(a + b^3)===nothing
+
+    r3 = @rule (~x + (~y)^(~m)) => ~m===2 ? (~) : ~x
+    @test isa(r3(a + b^2), Base.ImmutableDict)
+    @test r3(a + b^3)===a
+end
+
 using SymbolicUtils: @capture
 
 @testset "Capture form" begin

@@ -163,6 +163,8 @@ function makeconsequent(expr)
         else
             return Expr(expr.head, map(makeconsequent, expr.args)...)
         end
+    elseif expr===:(~)
+        return :(__MATCHES__)
     else
         # treat as a literal
         return esc(expr)
@@ -240,6 +242,24 @@ optionally be a Slot (`~x`) or a Segment (`~~x`) (described below).
 If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS
 Segment (`~x`) and slot variables (`~~x`) on the RHS will substitute the result of the
 matches found for these variables in the LHS.
+
+If the RHS is a single tilde `~`, then the rule returns a a dictionary of
+[slot variable, expression matched].
+
+_Example:_
+
+```julia
+julia> r = @rule (~x + (~y)^(~m)) => ~
+~x + (~y) ^ ~m => (~)
+
+julia> r(a + b^2)
+Base.ImmutableDict{Symbol, Any} with 5 entries:
+  :MATCH => a + b^2
+  :m     => 2
+  :y     => b
+  :x     => a
+  :____  => nothing
+```
 
 **Slot**:
 

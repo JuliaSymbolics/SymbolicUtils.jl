@@ -53,6 +53,8 @@ let
 
     POW_RULES = [
         @rule(^(~x::_isone, ~z) => 1)
+        @rule(ℯ^(~x) => exp(~x))
+        @rule((~x)^(1//2) => sqrt(~x))
     ]
 
     ASSORTED_RULES = [
@@ -132,17 +134,15 @@ let
     ]
 
     function number_simplifier()
-        rule_tree = [If(iscall, Chain(ASSORTED_RULES)),
-                     If(x -> !isadd(x) && is_operation(+)(x),
-                        Chain(CANONICALIZE_PLUS)),
-                     If(is_operation(+), Chain(PLUS_DISTRIBUTE)), # This would be useful even if isadd
-                     If(x -> !ismul(x) && is_operation(*)(x),
-                        Chain(CANONICALIZE_TIMES)),
-                     If(is_operation(*), MUL_DISTRIBUTE),
-                     If(x -> !ispow(x) && is_operation(^)(x),
-                        Chain(CANONICALIZE_POW)),
-                     If(is_operation(^), Chain(POW_RULES)),
-                    ] |> RestartedChain
+        rule_tree = [
+            If(iscall, Chain(ASSORTED_RULES)),
+            If(x -> !isadd(x) && is_operation(+)(x), Chain(CANONICALIZE_PLUS)),
+            If(is_operation(+), Chain(PLUS_DISTRIBUTE)), # This would be useful even if isadd
+            If(x -> !ismul(x) && is_operation(*)(x), Chain(CANONICALIZE_TIMES)),
+            If(is_operation(*), MUL_DISTRIBUTE),
+            If(x -> !ispow(x) && is_operation(^)(x), Chain(CANONICALIZE_POW)),
+            If(is_operation(^), Chain(POW_RULES)),
+        ] |> RestartedChain
 
         rule_tree
     end
@@ -159,17 +159,19 @@ let
 
     function default_simplifier(; kw...)
         IfElse(has_trig_exp,
-               Postwalk(IfElse(x->symtype(x) <: Number,
-                               Chain((number_simplifier(),
-                                      trig_exp_simplifier())),
-                               If(x->symtype(x) <: Bool,
-                                  bool_simplifier()))
-                        ; kw...),
-               Postwalk(Chain((If(x->symtype(x) <: Number,
-                                  number_simplifier()),
-                               If(x->symtype(x) <: Bool,
-                                  bool_simplifier())))
-                        ; kw...))
+            Postwalk(
+                IfElse(x->symtype(x) <: Number,
+                    Chain((number_simplifier(), trig_exp_simplifier())),
+                    If(x->symtype(x) <: Bool, bool_simplifier())
+                ); kw...
+            ),
+            Postwalk(
+                Chain((
+                    If(x->symtype(x) <: Number, number_simplifier()),
+                    If(x->symtype(x) <: Bool, bool_simplifier())
+                )); kw...
+            )
+        )
     end
 
     # reduce overhead of simplify by defining these as constant

@@ -97,6 +97,23 @@ Notice that the expression was autosimplified before application of the rule.
 2(2w + α + β)
 ```
 
+Note that writing a single tilde `~` as consequent, will make the rule return a dictionary of [slot variable, expression matched].
+
+```jldoctest rewrite
+r = @rule (~x + (~y)^(~m)) => ~
+
+r(z+w^α)
+
+# output
+Base.ImmutableDict{Symbol, Any} with 5 entries:
+  :MATCH => z + w^α
+  :m     => α
+  :y     => w
+  :x     => z
+  :____  => nothing
+
+```
+
 ### Predicates for matching
 
 Matcher pattern may contain slot variables with attached predicates, written as `~x::f` where `f` is a function that takes a matched expression and returns a boolean value. Such a slot will be considered a match only if `f` returns true.

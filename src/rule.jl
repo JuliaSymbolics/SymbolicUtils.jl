@@ -243,6 +243,24 @@ If an expression matches LHS entirely, then it is rewritten to the pattern in th
 Segment (`~x`) and slot variables (`~~x`) on the RHS will substitute the result of the
 matches found for these variables in the LHS.
 
+If the RHS is a single tilde `~`, then the rule returns a a dictionary of
+[slot variable, expression matched].
+
+_Example:_
+
+```julia
+julia> r = @rule (~x + (~y)^(~m)) => ~
+~x + (~y) ^ ~m => (~)
+
+julia> r(a + b^2)
+Base.ImmutableDict{Symbol, Any} with 5 entries:
+  :MATCH => a + b^2
+  :m     => 2
+  :y     => b
+  :x     => a
+  :____  => nothing
+```
+
 **Slot**:
 
 A Slot variable is written as `~x` and matches a single expression. `x` is the name of the variable. If a slot appears more than once in an LHS expression then expression matched at every such location must be equal (as shown by `isequal`).

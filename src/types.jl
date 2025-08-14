@@ -1930,95 +1930,84 @@ mul_t(a) = promote_symtype(*, symtype(a))
 
 *(a::SN) = a
 
-struct MultipliedPolynomialPostprocessor
-    base_occurrences::Dict{BasicSymbolic, BitSet}
-    var_exponents::Vector{Real}
-    monomial::(typeof(MP.monomial(ExamplePolyVar)))
-    varsbuf::Vector{BasicSymbolic}
-    var_to_idx::Dict{BasicSymbolic, Int}
-end
-
-MultipliedPolynomialPostprocessor() = MultipliedPolynomialPostprocessor(Dict(), Real[], MP.monomial(ExamplePolyVar), BasicSymbolic[], Dict())
-
-const CACHED_MPP = TaskLocalValue{MultipliedPolynomialPostprocessor}(MultipliedPolynomialPostprocessor)
-
-function (mpp::MultipliedPolynomialPostprocessor)(poly::PolynomialT, ::Type{T}) where {T}
-    pvars = MP.variables(poly)
-    vars = mpp.varsbuf
-    empty!(vars)
-    sizehint!(vars, length(pvars))
-    var_to_idx = mpp.var_to_idx
-    empty!(var_to_idx)
-    base_occurrences = mpp.base_occurrences
-    empty!(base_occurrences)
-    var_exponents = mpp.var_exponents
-    empty!(var_exponents)
-    for (i, pvar) in enumerate(pvars)
-        var = polyvar_to_basicsymbolic(pvar)
-        push!(vars, var)
-        var_to_idx[var] = i
-        if iscall(var) && operation(var) === (^)
-            base, exp = arguments(var)
-            if !(exp isa Real)
-                base, exp = var, 1
-            end
-        else
-            base, exp = var, 1
-        end
-        push!(var_exponents, exp)
-        push!(get!(BitSet, base_occurrences, base), i)
-    end
-
-    result = zeropoly(T)
-    monomial_buffer = mpp.monomial
-    for term in MP.terms(poly)
-        coeff = MP.coefficient(term)
-        mono = MP.monomial(term)
-        exps = MP.exponents(mono)
-
-        new_mono = MP.constant_monomial(result)
-        for (base, mask) in base_occurrences
-            exp = sum(mask) do i
-                exps[i] * var_exponents[i]
-            end
-            if isinteger(exp)
-                mbase = basicsymbolic_to_polyvar(base)
-                mexp = Int(exp)
-            else
-                mbase = basicsymbolic_to_polyvar(Term{T}(^, ArgsT((base, exp))))
-                mexp = 1
-            end
-            # cheat to avoid allocations
-            MP.variables(monomial_buffer)[] = mbase
-            MP.exponents(monomial_buffer)[] = mexp
-            MA.operate!(*, new_mono, monomial_buffer)
-        end
-        new_term = MP.Term{T, typeof(new_mono)}(coeff, new_mono)
-        MA.operate!(+, result, new_term)
-    end
-
-    return result
-end
-
-postprocessed_multiplied_polynomial(args...) = CACHED_MPP[](args...)
-
-function _mul_worker!(num_poly, den_poly, term)
+function _mul_worker!(num_coeff, den_coeff, num_dict, den_dict, term)
     @match term begin
-        x::Number => MA.operate!(*, num_poly, x)
-        BSImpl.Polyform(; poly) && if polyform_variant(poly) == PolyformVariant.MUL end => begin
-            MA.operate!(*, num_poly, poly)
+        x::Number => (num_coeff[] *= x)
+        BSImpl.Polyform(; poly, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
+            pterm = only(MP.terms(poly))
+            num_coeff[] *= MP.coefficient(pterm)
+            mono = MP.monomial(pterm)
+            for (i, exp) in enumerate(MP.exponents(mono))
+                base = vars[i]
+                if iscall(base) && operation(base) === ^
+                    _base, _exp = arguments(base)
+                    if _base isa BasicSymbolic && !(_exp isa BasicSymbolic)
+                        base = _base
+                        exp *= _exp
+                    end
+                end
+                num_dict[base] = get(num_dict, base, 0) + exp
+            end
+        end
+        BSImpl.Term(; f, args) && if f === (^) && args[1] isa BasicSymbolic && !(args[2] isa BasicSymbolic) end => begin
+            base, exp = args
+            num_dict[base] = get(num_dict, base, 0) + exp
         end
         BSImpl.Div(; num, den) => begin
-            if den_poly === nothing
-                den_poly = onepoly(eltype(MP.coefficients(num_poly)))
-            end
-            num_poly, den_poly = _mul_worker!(num_poly, den_poly, num)
-            den_poly, num_poly = _mul_worker!(den_poly, num_poly, den)
+            _mul_worker!(num_coeff, den_coeff, num_dict, den_dict, num)
+            _mul_worker!(den_coeff, num_coeff, den_dict, num_dict, den)
         end
-        _ => MA.operate!(*, num_poly, basicsymbolic_to_polyvar(term))
+        x::BasicSymbolic => begin
+            num_dict[x] = get(num_dict, x, 0) + 1
+        end
+    end
+    return nothing
+    # return (num_coeff, den_coeff)::Tuple{Number, Number}
+end
+
+function coeff_dict_to_term(::Type{T}, coeff, dict) where {T}
+    isempty(dict) && return coeff[]::T
+    if isone(coeff[]) && length(dict) == 1
+        k, v = first(dict)
+        return (k ^ v)
+    end
+    pvars = PolyVarT[]
+    partial_pvars = PolyVarT[]
+    vars = SmallV{BasicSymbolic}()
+    exps = Int[]
+    sizehint!(pvars, length(dict))
+    sizehint!(partial_pvars, length(dict))
+    sizehint!(vars, length(dict))
+    sizehint!(exps, length(dict))
+    for (k, v) in dict
+        if !isinteger(v)
+            k = Term{T}(^, ArgsT((k, v)))
+            v = 1
+        end
+        push!(vars, k)
+        push!(pvars, basicsymbolic_to_polyvar(k))
+        push!(partial_pvars, basicsymbolic_to_partial_polyvar(k))
+        push!(exps, Int(v))
     end
 
-    return num_poly, den_poly
+    N = length(pvars)
+    if N == 2
+        if pvars[1] < pvars[2]
+            pvars[1], pvars[2] = pvars[2], pvars[1]
+            partial_pvars[1], partial_pvars[2] = partial_pvars[2], partial_pvars[1]
+            vars[1], vars[2] = vars[2], vars[1]
+            exps[1], exps[2] = exps[2], exps[1]
+        end
+    elseif N > 2
+        perm = sortperm(pvars; rev=true)
+        pvars = pvars[perm]
+        partial_pvars = partial_pvars[perm]
+        vars = vars[perm]
+        exps = exps[perm]
+    end
+
+    mvec = DP.MonomialVector{PolyVarOrder, MonomialOrder}(pvars, [exps])
+    Polyform{T}(PolynomialT{T}(coeff, mvec), partial_pvars, vars)
 end
 
 function mul_worker(terms)
@@ -2029,30 +2018,34 @@ function mul_worker(terms)
     for b in bs
         T = promote_symtype(*, T, symtype(b))
     end
+    mul_worker(T, terms)
+end
+
+function mul_worker(::Type{T}, terms)::Union{T, BasicSymbolic{T}} where {T}
     unsafes = SmallV{Any}()
-    num_poly = onepoly(T)
-    den_poly = nothing
+    num_coeff = T[1]
+    den_coeff = T[1]
+    num_dict = Dict{BasicSymbolic, Any}()
+    den_dict = Dict{BasicSymbolic, Any}()
     for term in terms
         if !issafecanon(*, term)
             push!(unsafes, term)
             continue
         end
-        num_poly, den_poly = _mul_worker!(num_poly, den_poly, term)
+        _mul_worker!(num_coeff, den_coeff, num_dict, den_dict, term)
     end
-    num = Polyform{T}(postprocessed_multiplied_polynomial(num_poly, T))
+    filter!(kvp -> !iszero(kvp[2]), num_dict)
+    filter!(kvp -> !iszero(kvp[2]), den_dict)
+    num = coeff_dict_to_term(T, num_coeff, num_dict)# ::Union{T, BasicSymbolic{T}}
+    den = coeff_dict_to_term(T, den_coeff, den_dict)# ::Union{T, BasicSymbolic{T}}
     if !isempty(unsafes)
         push!(unsafes, num)
         # ensure `num` is always the first
         unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
-        num = Term{T}(*, unsafes)
-    end
-    if den_poly === nothing
-        den = one(T)
-    else
-        den = Polyform{T}(postprocessed_multiplied_polynomial(den_poly, T))
+        num = Term{T}(*, unsafes)::BasicSymbolic{T}
     end
 
-    return Div{T}(num, den, false)
+    return Div{T}(num, den, false)# ::Union{T, BasicSymbolic{T}}
 end
 
 function *(a::SN, b::SN)

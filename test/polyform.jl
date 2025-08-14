@@ -61,7 +61,7 @@ end
 
     ##404#issuecomment-939404030
     a = 1 / (x - (2//1)) + ((-5//1) - x) / ((x - (2//1))^2)
-    @test isequal(simplify_fractions(a), -7/(x-2)^2)
+    @test isequal(simplify_fractions(a), 7/expand(-(x-2)^2))
 
     # https://github.com/JuliaSymbolics/Symbolics.jl/issues/968
     @eqtest simplify_fractions((x * y + (1//2) * x) / (2 * x)) == 1//2 * (1//2 + y)

@@ -1049,7 +1049,8 @@ function term(f, args...; type = nothing)
     Term{T}(f, args)
 end
 
-function TermInterface.maketerm(T::Type{<:BasicSymbolic}, head, args, metadata)
+function TermInterface.maketerm(::Type{T}, head, args, metadata) where {T<:BasicSymbolic}
+    @nospecialize head
     args = unwrap_args(args)
     st = symtype(T)
     pst = _promote_symtype(head, args)

@@ -1223,16 +1223,13 @@ function TermInterface.maketerm(::Type{T}, head, args, metadata) where {T<:Basic
     basicsymbolic(head, args, new_st, metadata)
 end
 
-function basicsymbolic(f, args, stype, metadata)
+function basicsymbolic(f, args, ::Type{T}, metadata) where {T}
+    @nospecialize f
     if f isa Symbol
         error("$f must not be a Symbol")
     end
     args = unwrap_args(args)
-    T = stype
-    if T === nothing
-        T = _promote_symtype(f, args)
-    end
-    if T == LiteralReal
+    if T === LiteralReal
         @goto FALLBACK
     elseif all(x->symtype(x) <: Number, args)
         if f === (+)
@@ -1240,26 +1237,26 @@ function basicsymbolic(f, args, stype, metadata)
             if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
                 @set! res.metadata = metadata
             end
-            res
-        elseif f == (*)
+            return res
+        elseif f === (*)
             res = mul_worker(args)
             if metadata !== nothing && (ismul(res) || (isterm(res) && operation(res) == (*)))
                 @set! res.metadata = metadata
             end
-            res
-        elseif f == (/)
+            return res
+        elseif f === (/)
             @assert length(args) == 2
             res = args[1] / args[2]
             if metadata !== nothing && isdiv(res)
                 @set! res.metadata = metadata
             end
-            res
-        elseif f == (^) && length(args) == 2
+            return res
+        elseif f === (^) && length(args) == 2
             res = args[1] ^ args[2]
             if metadata !== nothing && ispow(res)
                 @set! res.metadata = metadata
             end
-            res
+            return res
         else
             @goto FALLBACK
         end
@@ -1841,7 +1838,7 @@ function add_worker(terms)
     for b in bs
         T = promote_symtype(+, T, symtype(b))
     end
-    result = zeropoly(T)
+    result = zeropoly(T)::PolynomialT
     for term in terms
         term = unwrap(term)
         if !issafecanon(+, term)
@@ -1849,12 +1846,35 @@ function add_worker(terms)
             continue
         end
         @match term begin
-            x::Number => MA.operate!(+, result, x)
-            BSImpl.Polyform(; poly) => MA.operate!(+, result, poly)
-            x::BasicSymbolic => MA.operate!(+, result, basicsymbolic_to_polyvar(x))
+            x::Number => begin
+                # DynamicPolynomials will mutate number types if it can. SymbolicUtils
+                # doesn't assume ownership of values passed to it, so we copy the ones
+                # we need to.
+                _T = typeof(x)
+                if MA.mutability(_T, +, _T, _T) === MA.IsMutable()
+                    tmp = copy(x)
+                    # `copy(::BigInt)` doesn't actually do anything
+                    if tmp === x
+                        tmp = deepcopy(x)
+                    end
+                    x = tmp
+                end
+                MA.operate!(+, result, x)
+            end
+            BSImpl.Polyform(; poly) => begin
+                MA.operate!(+, result, poly)
+            end
+            x::BasicSymbolic => begin
+                pvar = basicsymbolic_to_polyvar(x)
+                MA.operate!(+, result, pvar)
+            end
         end
     end
     nterms = MP.nterms(result)
+    if any(iszero, MP.coefficients(result))
+        mask = (!iszero).(MP.coefficients(result))
+        result = PolynomialT{T}(MP.coefficients(result)[mask], MP.monomials(result)[mask])
+    end
     if iszero(nterms) && isempty(unsafes)
         return zero(T)
     elseif iszero(nterms)

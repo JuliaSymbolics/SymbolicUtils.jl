@@ -717,6 +717,9 @@ function hashargs(x::ArgsT, h::UInt, full)
 end
 
 function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
+    if !iszero(h)
+        return hash(hash_bsimpl(s, zero(h), full), h)::UInt
+    end
     if full
         cache = s.hash2
         !iszero(cache) && return cache
@@ -730,20 +733,18 @@ function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
         end
         BSImpl.Term(; f, args, shape, hash) => begin
             # use/update cached hash
-            # error()
-            cache = hash
-            if iszero(cache)
-                s.hash = Base.hash(f, hashargs(args, Base.hash(shape, h), full))::UInt
+            if iszero(hash)
+                hash = s.hash = Base.hash(f, hashargs(args, Base.hash(shape, h), full))::UInt
             else
-                cache
+                hash
             end
         end
         BSImpl.Polyform(; poly, partial_polyvars, shape, hash) => begin
             if full
-                Base.hash(swap_polynomial_vars(poly, partial_polyvars), Base.hash(shape, h))
+                Base.hash(poly, Base.hash(shape, h))
             else
                 if iszero(hash)
-                    s.hash = Base.hash(poly, Base.hash(shape, h))
+                    hash = s.hash = Base.hash(swap_polynomial_vars(poly, partial_polyvars), Base.hash(shape, h))
                 else
                     hash
                 end
@@ -761,9 +762,6 @@ function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
 end
 
 function Base.hash(s::BSImpl.Type, h::UInt)
-    if !iszero(h)
-        return hash(hash(s, zero(h)), h)::UInt
-    end
     hash_bsimpl(s, h, COMPARE_FULL[])
 end
 
@@ -1001,7 +999,9 @@ end
 
 function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
     nterms = MP.nterms(poly)
-    if MP.isconstant(poly)
+    if iszero(nterms)
+        return zero(T)
+    elseif MP.isconstant(poly)
         return MP.leading_coefficient(poly)
     elseif isone(nterms)
         term = MP.terms(poly)[1]

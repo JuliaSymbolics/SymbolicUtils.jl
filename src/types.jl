@@ -35,19 +35,20 @@ const ROArgsT = ReadOnlyVector{Any, ArgsT}
 const ShapeVecT = SmallV{UnitRange{Int}}
 const ShapeT = Union{Unknown, ShapeVecT}
 const IdentT = Union{Tuple{UInt, IDType}, Tuple{Nothing, Nothing}}
-const PolyVarOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
-const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=PolyVarOrder)
+const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
+const PolyVarOrder = DP.Commutative{DP.CreationOrder}
+const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=MonomialOrder)
 const PolyVarT = typeof(ExamplePolyVar)
-const PolynomialT{T} = DP.Polynomial{DP.Commutative{DP.CreationOrder}, PolyVarOrder, T}
+const PolynomialT{T} = DP.Polynomial{DP.Commutative{DP.CreationOrder}, MonomialOrder, T}
 
 function zeropoly(::Type{T}) where {T}
-    mv = DP.MonomialVector{DP.Commutative{DP.CreationOrder}, PolyVarOrder}()
+    mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}()
     PolynomialT{T}(T[], mv)
 end
 
 function onepoly(::Type{T}) where {T}
     V = DP.Commutative{DP.CreationOrder}
-    mv = DP.MonomialVector{V, PolyVarOrder}(DP.Variable{V, PolyVarOrder}[], [Int[]])
+    mv = DP.MonomialVector{V, MonomialOrder}(DP.Variable{V, MonomialOrder}[], [Int[]])
     PolynomialT{T}(T[one(T)], mv)
 end
 
@@ -134,13 +135,12 @@ function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
                 _ => nameof(operation(x))
             end
             name = Symbol(inner_name, :_, hash(x))
-            while haskey(PVAR_TO_BS, name)
+            while (cur = get(PVAR_TO_BS, name, nothing); cur !== nothing && cur.value !== nothing)
                 # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
                 # a valid mapping for the polyvar (name)
                 name = Symbol(name, :_)
             end
 
-            pvar = MP.similar_variable(ExamplePolyVar, name)
             @manually_scope COMPARE_FULL => false begin
                 # do the same thing, but for the partial hash
                 partial_name = Symbol(inner_name, :_, hash(x))
@@ -150,9 +150,17 @@ function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
                 # a valid mapping for the polyvar (name)
                 partial_name = Symbol(partial_name, :_)
             end
-            partial_pvar = MP.similar_variable(ExamplePolyVar, partial_name)
         end
         @lock POLYVAR_LOCK begin
+            # NOTE: This _MUST NOT_ give away the lock between creating the polyvar
+            # and partial polyvar. Currently, this invariant enforces that the two are
+            # created sequentially. Since variables are ordered by creation order,
+            # this means that the relative ordering between PVARs of two symbolics
+            # is the same as the relative ordering between their PARTIAL_PVARs. This
+            # allows us to swap out the vector of variables in the polynomial while
+            # maintaining the ordering invariant.
+            pvar = MP.similar_variable(ExamplePolyVar, name)
+            partial_pvar = MP.similar_variable(ExamplePolyVar, partial_name)
             BS_TO_PARTIAL_PVAR[x] = partial_pvar
             BS_TO_PVAR[x] = pvar
             PVAR_TO_BS[name] = WeakRef(x)

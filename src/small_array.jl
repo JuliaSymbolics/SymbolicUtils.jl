@@ -138,6 +138,18 @@ function Base.empty!(x::Backing{T}) where {T}
     return x
 end
 
+function Base.copy(x::Backing{T}) where {T}
+    if x.len == 0
+        return Backing{T}()
+    elseif x.len == 1
+        return Backing{T}(x.x1)
+    elseif x.len == 2
+        return Backing{T}(x.x1, x.x2)
+    elseif x.len == 3
+        return Backing{T}(x.x1, x.x2, x.x3)
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -213,3 +225,4 @@ Base.any(f::Function, x::SmallVec) = any(f, x.data)
 Base.all(f::Function, x::SmallVec) = all(f, x.data)
 Base.map(f, x::SmallVec{T, V}) where {T, V} = SmallVec{T,V}(map(f, x.data))
 Base.empty!(x::SmallVec) = empty!(x.data)
+Base.copy(x::SmallVec{T, V}) where {T, V} = SmallVec{T, V}(copy(x.data))

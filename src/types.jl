@@ -1071,16 +1071,13 @@ function TermInterface.maketerm(::Type{T}, head, args, metadata) where {T<:Basic
     basicsymbolic(head, args, new_st, metadata)
 end
 
-function basicsymbolic(f, args, stype, metadata)
+function basicsymbolic(f, args, ::Type{T}, metadata) where {T}
+    @nospecialize f
     if f isa Symbol
         error("$f must not be a Symbol")
     end
     args = unwrap_args(args)
-    T = stype
-    if T === nothing
-        T = _promote_symtype(f, args)
-    end
-    if T == LiteralReal
+    if T === LiteralReal
         @goto FALLBACK
     elseif all(x->symtype(x) <: Number, args)
         if f === (+)
@@ -1088,26 +1085,26 @@ function basicsymbolic(f, args, stype, metadata)
             if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
                 @set! res.metadata = metadata
             end
-            res
-        elseif f == (*)
+            return res
+        elseif f === (*)
             res = mul_worker(args)
             if metadata !== nothing && (ismul(res) || (isterm(res) && operation(res) == (*)))
                 @set! res.metadata = metadata
             end
-            res
-        elseif f == (/)
+            return res
+        elseif f === (/)
             @assert length(args) == 2
             res = args[1] / args[2]
             if metadata !== nothing && isdiv(res)
                 @set! res.metadata = metadata
             end
-            res
-        elseif f == (^) && length(args) == 2
+            return res
+        elseif f === (^) && length(args) == 2
             res = args[1] ^ args[2]
             if metadata !== nothing && ispow(res)
                 @set! res.metadata = metadata
             end
-            res
+            return res
         else
             @goto FALLBACK
         end
@@ -1571,7 +1568,7 @@ function add_worker(terms)
     for b in bs
         T = promote_symtype(+, T, symtype(b))
     end
-    result = zeropoly(T)
+    result = zeropoly(T)::PolynomialT
     for term in terms
         term = unwrap(term)
         if !issafecanon(+, term)
@@ -1579,12 +1576,48 @@ function add_worker(terms)
             continue
         end
         @match term begin
-            x::Number => MA.operate!(+, result, x)
-            BSImpl.Polyform(; poly) => MA.operate!(+, result, poly)
-            x::BasicSymbolic => MA.operate!(+, result, basicsymbolic_to_polyvar(x))
+            x::Number => begin
+                if MP.nterms(result) == 0 || !MP.isconstant(MP.terms(result)[1])
+                    insert!(MP.coefficients(result), 1, zero(T))
+                    mvec = MP.monomials(result)
+                    template = zeros(Int, length(MP.variables(result)))
+                    insert!(mvec.Z, 1, template)
+                end
+                MP.coefficients(result)[1] += x
+            end
+            BSImpl.Polyform(; poly) => begin
+                MA.operate!(+, result, poly)
+            end
+            x::BasicSymbolic => begin
+                pvars = MP.variables(result)
+                pvar = basicsymbolic_to_polyvar(x)
+                idx = searchsortedfirst(pvars, pvar; rev = true)
+                monos = MP.monomials(result)
+                if idx > length(pvars) || !isequal(pvars[idx], pvar)
+                    for mono in monos
+                        insert!(MP.exponents(mono), idx, 0)
+                    end
+                    insert!(pvars, idx, pvar)
+                end
+                exps = zeros(Int, length(pvars))
+                exps[idx] = 1
+                mono = DP.Monomial{PolyVarOrder, MonomialOrder}(pvars, exps)
+                midx = searchsortedfirst(monos, mono)
+                N = MP.nterms(result)
+                if midx > N || !isequal(monos[midx], mono)
+                    insert!(monos.Z, midx, MP.exponents(mono))
+                    insert!(MP.coefficients(result), midx, one(T))
+                else
+                    MP.coefficients(result)[midx] += 1
+                end
+            end
         end
     end
     nterms = MP.nterms(result)
+    if any(iszero, MP.coefficients(result))
+        mask = (!iszero).(MP.coefficients(result))
+        result = PolynomialT{T}(MP.coefficients(result)[mask], MP.monomials(result)[mask])
+    end
     if iszero(nterms) && isempty(unsafes)
         return zero(T)
     elseif iszero(nterms)

@@ -43,6 +43,17 @@ Base.@propagate_inbounds function Base.getindex(x::Backing, i::Int)
     end
 end
 
+Base.@propagate_inbounds function Base.getindex(x::Backing{T}, i::Vector{Int}) where {T}
+    n = length(i)
+    if n == 1
+        return Backing{T}(x[i[1]])
+    elseif n == 2
+        return Backing{T}(x[i[1]], x[i[2]])
+    elseif n == 3
+        return Backing{T}(x[i[1]], x[i[2]], x[i[3]])
+    end
+end
+
 Base.@propagate_inbounds function Base.setindex!(x::Backing, v, i::Int)
     @boundscheck 1 <= i <= x.len
     if i == 1
@@ -178,6 +189,9 @@ Base.size(x::SmallVec) = size(x.data)
 Base.isempty(x::SmallVec) = isempty(x.data)
 Base.@propagate_inbounds Base.getindex(x::SmallVec, i::Int) = x.data[i]
 Base.@propagate_inbounds Base.setindex!(x::SmallVec, v, i::Int) = setindex!(x.data, v, i)
+Base.@propagate_inbounds function Base.getindex(x::SmallVec{T, V}, i::Vector{Int}) where {T, V}
+    SmallVec{T, V}(x.data[i])
+end
 
 Base.@propagate_inbounds function Base.push!(x::SmallVec{T, V}, v) where {T, V}
     buf = x.data

@@ -32,7 +32,7 @@ rewriters.
 module Rewriters
 using TermInterface
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype
+import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -219,8 +219,22 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
         end
 
         if iscall(x)
-            x = p.maketerm(typeof(x), operation(x), map(PassThrough(p),
-                            parent(arguments(x))), metadata(x))
+            args = arguments(x)
+            op = PassThrough(p)
+            for i in eachindex(args)
+                arg = args[i]
+                newarg = op(arg)
+                if args isa ROArgsT
+                    if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)
+                        continue
+                    end
+                    args = copy(parent(args))::ArgsT
+                end
+                args[i] = newarg
+            end
+            if args isa ArgsT
+                x = p.maketerm(typeof(x), operation(x), args, metadata(x))
+            end
         end
 
         return ord === :post ? p.rw(x) : x
@@ -236,17 +250,33 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             x = p.rw(x)
         end
         if iscall(x)
-            _args = map(parent(arguments(x))) do arg
-                if node_count(arg) > p.thread_cutoff
-                    Threads.@spawn p(arg)
+            args = arguments(x)
+            op = PassThrough(p)
+            for i in eachindex(args)
+                arg = args[i]
+                newarg = if node_count(arg) > p.thread_cutoff
+                    Threads.@spawn op(arg)
                 else
-                    p(arg)
+                    op(arg)
                 end
+                if args isa ROArgsT
+                    if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)
+                        continue
+                    end
+                    args = copy(parent(args))::ArgsT
+                end
+                args[i] = newarg
             end
-            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, parent(arguments(x)))
-            t = p.maketerm(typeof(x), operation(x), args, metadata(x))
+            if args isa ArgsT
+                for i in eachindex(args)
+                    if args[i] isa Task
+                        args[i] = fetch(args[i])
+                    end
+                end
+                x = p.maketerm(typeof(x), operation(x), args, metadata(x))
+            end
         end
-        return ord === :post ? p.rw(t) : t
+        return ord === :post ? p.rw(x) : x
     else
         return p.rw(x)
     end

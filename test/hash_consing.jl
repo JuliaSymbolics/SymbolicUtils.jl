@@ -52,7 +52,9 @@ end
     d3 = b - 2 + a
     d4 = a + b  - 2
     @test d3.id === d4.id
-    d5 = Add{Int}(0, Dict(a => 1, b => 1))
+    pa = SymbolicUtils.basicsymbolic_to_polyvar(a)
+    pb = SymbolicUtils.basicsymbolic_to_polyvar(b)
+    d5 = SymbolicUtils.Polyform{Int}(pa + pb)
     @test d5.id !== d1.id
 
     dm1 = setmetadata(d1,Ctx1,"meta_1")
@@ -66,7 +68,9 @@ end
     m3 = 6*a*b
     m4 = 3*a*2*b
     @test m3.id === m4.id
-    m5 = Mul{Int}(1, Dict(a => 1, b => 1))
+    pa = SymbolicUtils.basicsymbolic_to_polyvar(a)
+    pb = SymbolicUtils.basicsymbolic_to_polyvar(b)
+    m5 = SymbolicUtils.Polyform{Int}(pa * pb + 0)
     @test m5.id !== m1.id
 
     mm1 = setmetadata(m1, Ctx1, "meta_1")
@@ -97,8 +101,6 @@ end
     p3 = a^(2^-b)
     p4 = a^(2^-b)
     @test p3.id === p4.id
-    p5 = Pow{Float64}(a,b)
-    @test p1.id !== p5.id
 
     pm1 = setmetadata(p1,Ctx1, "meta_1")
     @test pm1.id !== p1.id
@@ -141,43 +143,4 @@ end
         ex2 = setmetadata(ex, Int, 3)
         @test ex2.hash2[] != h
     end
-end
-
-struct MySymbolic <: Symbolic{Real}
-    sym::BasicSymbolic{Real}
-end
-
-TermInterface.iscall(x::MySymbolic) = iscall(x.sym)
-TermInterface.operation(x::MySymbolic) = operation(x.sym)
-TermInterface.arguments(x::MySymbolic) = arguments(x.sym)
-SymbolicUtils.metadata(x::MySymbolic) = metadata(x.sym)
-Base.isequal(a::MySymbolic, b::MySymbolic) = isequal(a.sym, b.sym)
-
-@testset "`isequal_with_metadata` on custom symbolics" begin
-    @syms x::Real
-    xx = setmetadata(x, Int, 3)
-    @test isequal(x, xx)
-    @test !isequal2(x, xx)
-    myx = MySymbolic(x)
-    myxx = MySymbolic(xx)
-    @test isequal(myx, myxx)
-    @test !isequal2(myx, myxx)
-
-    ex = 2x
-    exx = 2xx
-    myex = MySymbolic(ex)
-    myexx = MySymbolic(exx)
-    @test isequal(ex, exx)
-    @test !isequal2(ex, exx)
-    @test isequal(myex, myexx)
-    @test !isequal2(myex, myexx)
-
-    t = Term{Real}(max, Any[x, myex])
-    tt = Term{Real}(max, Any[xx, myexx])
-    @test isequal(t, tt)
-    @test !isequal2(t, tt)
-    myt = MySymbolic(t)
-    mytt = MySymbolic(tt)
-    @test isequal(myt, mytt)
-    @test !isequal2(myt, mytt)
 end

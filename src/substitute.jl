@@ -1,3 +1,15 @@
+struct Substituter{D <: AbstractDict}
+    dict::D
+end
+
+function (s::Substituter)(expr)
+    haskey(s.dict, expr) ? s.dict[expr] : expr
+end
+
+function combine_fold(::Type{T}, op, args, meta) where {T}
+    can_fold = !(op isa Symbolic) && all(x -> !(x isa Symbolic) && !Code._is_tuple_or_array_of_symbolics(x), args)
+    can_fold ? op(args...) : maketerm(T, op, args, meta)
+end
 
 """
     substitute(expr, dict; fold=true)
@@ -13,31 +25,13 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 1 + sqrt(2)
 ```
 """
-function substitute(expr, dict; fold=true)
-    haskey(dict, expr) && return dict[expr]
-
-    if iscall(expr)
-        op = substitute(operation(expr), dict; fold=fold)
-        if fold
-            canfold = !(op isa Symbolic)
-            args = map(arguments(expr)) do x
-                x′ = substitute(x, dict; fold=fold)
-                canfold = canfold && !(x′ isa Symbolic)
-                x′
-            end
-            canfold && return op(args...)
-            args
-        else
-            args = map(x->substitute(x, dict, fold=fold), arguments(expr))
-        end
-
-        maketerm(typeof(expr),
-                 op,
-                 args,
-                 metadata(expr))
+@inline function substitute(expr, dict; fold=true)
+    rw = if fold
+        Prewalk(Substituter(dict); maketerm = combine_fold)
     else
-        expr
+        Prewalk(Substituter(dict))
     end
+    rw(expr)
 end
 
 """

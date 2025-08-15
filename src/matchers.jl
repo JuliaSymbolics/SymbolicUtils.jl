@@ -250,13 +250,20 @@ end
 # creates a matcher for a term containing a defslot, such as:
 # (~x + ...complicated pattern...)     *          ~!y
 #    normal part (can bee a tree)   operation     defslot part
+
+# Note: there is a bit of a waste here bc the matcher get created twice, both 
+# in the normal_matcher and in defslot_matcher and other_part_matcher
 function defslot_term_matcher_constructor(term, acSets)
     a = arguments(term)
     defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
     defslot = a[defslot_index]
+    defslot_matcher = matcher(defslot, acSets)
     if length(a) == 2
         other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1], acSets)
     else
+        # if we hare here the operation is a multiplication or sum of n>2 terms
+        # (because ^ cannot have more than 2 terms).
+        # creates the term matcher of the multiplication or sum of n-1 terms
         others = [a[i] for i in eachindex(a) if i != defslot_index]
         T = symtype(term)
         f = operation(term)
@@ -267,15 +274,18 @@ function defslot_term_matcher_constructor(term, acSets)
 
     function defslot_term_matcher(success, data, bindings)
         !islist(data) && return nothing # if data is not a list, return nothing
-        # call the normal matcher, with success function foo1 that simply returns the bindings
-        #                       <--foo1-->
-        result = normal_matcher((b,n) -> b, data, bindings)
+        # call the normal matcher, with success function that returns the bindings (foo1)
+        #                       <-foo1->
+        result = normal_matcher((b,n)->b, data, bindings)
         result !== nothing && return success(result, 1)
         # if no match, try to match with a defslot.
         # checks whether it matches the normal part if yes executes foo2
         # foo2: adds the pair (default value name, default value) to the found bindings
-        #                           <-------------------foo2---------------------------->
-        result = other_part_matcher((b,n) -> assoc(b, defslot.name, defslot.defaultValue), data, bindings)
+        #       after checking predicate and presence in the bindings. If added succesfully
+        #       returns the bindings (foo3), otherwise return nothing
+        #                           <-------------------foo2----------------------------------->
+        #                                                  <-foo3->
+        result = other_part_matcher((b,n)->defslot_matcher((b,n)->b, (defslot.defaultValue,), b), data, bindings)
         result !== nothing && return success(result, 1)
         nothing
     end

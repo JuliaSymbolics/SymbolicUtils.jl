@@ -109,11 +109,20 @@ end
     @test r_mixmix(exp(x)*sin(x+x^2)*2) === (2, 0, x)
     @test r_mixmix(exp(x)*sin(x+x^2)) === (1, 0, x)
 
-    r_predicate = @rule ~x + (~!m::(var->isa(var, Int))) => (~x, ~m)
-    @test r_predicate(x+2) === (x, 2)
-    @test r_predicate(x+2.0) !== (x, 2.0)
-    # Note: r_predicate(x+2.0) doesnt return nothing, but (x+2.0, 0)
-    # because of the defslot
+    # predicate checked in normal matching process
+    r_predicate1 = @rule x + (~!m::(var->isa(var, Int))) => ~m
+    @test r_predicate1(x+2) === 2
+    @test r_predicate1(x+2.0) === nothing
+
+    # predicate checked in defslot mathcing process
+    r_predicate2 = @rule x + ~!m::(var->!(var===0)) => ~m
+    @test r_predicate2(x+1)===1 # matches normally
+    @test r_predicate2(x)===nothing # doesnt matches bc the default value is 0 and doesnt respect the predicate
+
+    # multiple defslots with the same name
+    r3 = @rule sin(~!f*~x)+cos(~!f*~x) => ~
+    @test r3(sin(2x)+cos(2x))[:f]===2
+    @test r3(sin(2x)+cos(x))===nothing
 end
 
 @testset "power matcher with negative exponent" begin

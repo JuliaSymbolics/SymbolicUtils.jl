@@ -180,13 +180,13 @@ It works. This can be further simplified using Pythagorean identity and check it
 ```jldoctest rewriteex
 pyid = @rule sin(~x)^2 + cos(~x)^2 => 1
 
-pyid(cos(x)^2 + sin(x)^2) === nothing
+pyid(sin(x)^2 + 2sin(x)*cos(x) + cos(x)^2)===nothing
 
 # output
 true
 ```
 
-Why does it return `nothing`? If we look at the rule, we see that the order of `sin(x)` and `cos(x)` is different. Therefore, in order to work, the rule needs to be associative-commutative.
+Why does it return `nothing`? If we look at the expression, we see that we have an additional addend `+ 2sin(x)*cos(x)`. Therefore, in order to work, the rule needs to be associative-commutative.
 
 ```jldoctest rewriteex
 acpyid = @acrule sin(~x)^2 + cos(~x)^2 => 1

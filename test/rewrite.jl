@@ -114,7 +114,7 @@ end
     @test r_predicate1(x+2) === 2
     @test r_predicate1(x+2.0) === nothing
 
-    # predicate checked in defslot mathcing process
+    # predicate checked in defslot matching process
     r_predicate2 = @rule x + ~!m::(var->!(var===0)) => ~m
     @test r_predicate2(x+1)===1 # matches normally
     @test r_predicate2(x)===nothing # doesnt matches bc the default value is 0 and doesnt respect the predicate

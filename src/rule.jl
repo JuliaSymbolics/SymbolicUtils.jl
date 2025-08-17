@@ -240,10 +240,11 @@ it if it matches the LHS pattern to the RHS pattern, returns `nothing` otherwise
 The rule language is described below.
 
 LHS can be any possibly nested function call expression where any of the arguments can
-optionally be a Slot (`~x`) or a Segment (`~~x`) (described below).
+optionally be a Slot (`~x`), Default Value Slot (`~!x` also called DefSlot) or a Segment
+ (`~~x`) (described below).
 
-If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS
-Segment (`~x`) and slot variables (`~~x`) on the RHS will substitute the result of the
+If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS.
+Slot, DefSlot and Segment variables on the RHS will substitute the result of the
 matches found for these variables in the LHS.
 
 If the RHS is a single tilde `~`, then the rule returns a a dictionary of
@@ -305,6 +306,41 @@ julia> r(sin(2a)^2 + cos(2a)^2)
 julia> r(sin(2a)^2 + cos(a)^2)
 # nothing
 ```
+
+**DefSlot**:
+
+A DefSlot variable is written as `~!x`. Works like a normal slot, but can also take additional values if not present in the expression.
+
+_Example in power:_
+```julia
+julia> r_pow = @rule (~x)^(~!m) => ~m
+(~x) ^ ~(!m) => ~m
+
+julia> r_pow(x^2)
+2
+
+julia> r_pow(x)
+1
+```
+
+_Example in sum:_
+```julia
+julia> r_sum = @rule ~x + ~!y => ~y
+~x + ~(!y) => ~y
+
+julia> r_sum(x+2)
+x
+
+julia> r_sum(x)
+0
+```
+
+Currently DefSlot is implemented in:
+Operation | Default value
+----------|--------------
+* | 1
++ | 0
+2nd argument of ^ | 1
 
 **Segment**:
 

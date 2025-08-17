@@ -281,8 +281,8 @@ function defslot_term_matcher_constructor(term, acSets)
         # if no match, try to match with a defslot.
         # checks whether it matches the normal part if yes executes foo2
         # foo2: adds the pair (default value name, default value) to the found bindings
-        #       after checking predicate and presence in the bindings. If added succesfully
-        #       returns the bindings (foo3), otherwise return nothing
+        #       after checking predicate and presence in the bindings. If added 
+        #       successfully returns the bindings (foo3), otherwise return nothing
         #                           <-------------------foo2----------------------------------->
         #                                                  <-foo3->
         result = other_part_matcher((b,n)->defslot_matcher((b,n)->b, (defslot.defaultValue,), b), data, bindings)

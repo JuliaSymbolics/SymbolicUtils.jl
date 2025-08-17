@@ -383,24 +383,27 @@ whether the predicate holds or not.
 _In the consequent pattern_: Use `(@ctx)` to access the context object on the right hand side
 of an expression.
 """
-macro rule(expr)
-    @assert expr.head == :call && expr.args[1] == :(=>)
-    lhs = expr.args[2]
-    rhs = rewrite_rhs(expr.args[3])
-    keys = Symbol[]
-    lhs_term = makepattern(lhs, keys)
-    unique!(keys)
-    quote
-        $(__source__)
-        lhs_pattern = $(lhs_term)
-        Rule($(QuoteNode(expr)),
-             lhs_pattern,
-             matcher(lhs_pattern),
-             __MATCHES__ -> $(makeconsequent(rhs)),
-             rule_depth($lhs_term))
-    end
-end
+# macro rule(expr)
+#     @assert expr.head == :call && expr.args[1] == :(=>)
+#     lhs = expr.args[2]
+#     rhs = rewrite_rhs(expr.args[3])
+#     keys = Symbol[]
+#     lhs_term = makepattern(lhs, keys)
+#     unique!(keys)
+#     quote
+#         $(__source__)
+#         lhs_pattern = $(lhs_term)
+#         Rule($(QuoteNode(expr)),
+#              lhs_pattern,
+#              matcher(lhs_pattern),
+#              __MATCHES__ -> $(makeconsequent(rhs)),
+#              rule_depth($lhs_term))
+#     end
+# end
 
+using Metatheory
+using Metatheory: @rule
+using TermInterface: isexpr
 """
     @capture ex pattern
 
@@ -508,7 +511,7 @@ function (acr::ACRule)(term)
     else
         f =  operation(term)
         # Assume that the matcher was formed by closing over a term
-        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
+        if f != operation(r.left) # Maybe offer a fallback if m.term errors. 
             return nothing
         end
 

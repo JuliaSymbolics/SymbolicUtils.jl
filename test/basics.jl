@@ -3,12 +3,13 @@ using SymbolicUtils
 using ConstructionBase: setproperties
 using Setfield
 using Test, ReferenceTests
+import Base.nameof
 
 include("utils.jl")
 
 @testset "@syms" begin
     let
-        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int 
+        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
 
         @test issym(a) && symtype(a) == Number
         @test a.name === :a
@@ -241,6 +242,38 @@ end
     @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
 end
 
+let
+
+sq(x) = return SymbolicUtils.Term{Number}(sq, [x])
+
+function Base.nameof(::typeof(sq), arg)
+    if arg <: Real
+        return :sqrt_R
+    elseif arg <: Complex
+        return :sqrt_C
+    else
+        return :sqrt
+    end
+end
+
+@testset "call printing" begin
+    get_print(sym) = begin b = IOBuffer(); print(b, sym); String(take!(b)); end
+
+    x,y,z = @syms x::Real y::Complex z
+    @syms e() f(x) g(x,y) h(x,y,z)
+
+    @test get_print(e()) == "e()"
+    @test get_print(f(x)) == "f(x)"
+    @test get_print(g(x,y)) == "g(x, y)"
+    @test get_print(h(x,y,z)) == "h(x, y, z)"
+
+    @test get_print(sq(x)) == "sqrt_R(x)"
+    @test get_print(sq(y)) == "sqrt_C(y)"
+    @test get_print(sq(z)) == "sqrt(z)"
+end
+
+end
+
 @testset "maketerm" begin
     @syms a b c
     @test isequal(SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing).dict, Dict(a=>1,b=>1,c=>1))
@@ -255,7 +288,7 @@ end
     # test that maketerm sets metadata correctly
     metadata = Base.ImmutableDict{DataType, Any}(Ctx1, "meta_1")
     metadata2 = Base.ImmutableDict{DataType, Any}(Ctx2, "meta_2")
-    
+
     d = b * c
     @set! d.metadata = metadata2
 
@@ -283,12 +316,12 @@ end
     @test symtype(new_expr) == Bool
 
     # Doesn't know return type, promoted symtype is Any
-    foo(x,y) = x^2 + x 
+    foo(x,y) = x^2 + x
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), foo, [a, b], nothing)
     @test symtype(new_expr) == Number
 
     # Promoted symtype is a subtype of referred
-    @syms x::Int y::Int 
+    @syms x::Int y::Int
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), (+), [x, y], nothing)
     @test symtype(new_expr) == Int64
 
@@ -404,7 +437,7 @@ end
     ax = adjoint(x)
     @test isequal(ax, x)
     @test ax === x
-    @test isequal(adjoint(y), conj(y)) 
+    @test isequal(adjoint(y), conj(y))
 end
 
 @testset "`setproperties` clears hash" begin

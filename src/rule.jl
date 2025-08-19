@@ -82,7 +82,7 @@ function makeDefSlot(s::Expr, keys, op)
 
     push!(keys, name)
     tmp = defaultValOfCall(op)
-    :(DefSlot($(QuoteNode(name)), $(esc(s.args[2])), $(esc(op))), $(esc(tmp)))
+    :(DefSlot($(QuoteNode(name)), $(esc(s.args[2])), $(esc(op)), $(esc(tmp))))
 end
 
 
@@ -130,6 +130,9 @@ function makepattern(expr, keys, parentCall=nothing)
                     # matches ~x::predicate
                     makeslot(expr.args[2], keys)
                 end
+            elseif expr.args[1] === :(//)
+                # bc when the expression is not quoted, 3//2 is a Rational{Int64}, not a call
+                return esc(expr.args[2] // expr.args[3])
             else
                 # make a pattern for every argument of the expr.
                 :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any))
@@ -237,10 +240,11 @@ it if it matches the LHS pattern to the RHS pattern, returns `nothing` otherwise
 The rule language is described below.
 
 LHS can be any possibly nested function call expression where any of the arguments can
-optionally be a Slot (`~x`) or a Segment (`~~x`) (described below).
+optionally be a Slot (`~x`), Default Value Slot (`~!x` also called DefSlot) or a Segment
+ (`~~x`) (described below).
 
-If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS
-Segment (`~x`) and slot variables (`~~x`) on the RHS will substitute the result of the
+If an expression matches LHS entirely, then it is rewritten to the pattern in the RHS.
+Slot, DefSlot and Segment variables on the RHS will substitute the result of the
 matches found for these variables in the LHS.
 
 If the RHS is a single tilde `~`, then the rule returns a a dictionary of
@@ -302,6 +306,41 @@ julia> r(sin(2a)^2 + cos(2a)^2)
 julia> r(sin(2a)^2 + cos(a)^2)
 # nothing
 ```
+
+**DefSlot**:
+
+A DefSlot variable is written as `~!x`. Works like a normal slot, but can also take additional values if not present in the expression.
+
+_Example in power:_
+```julia
+julia> r_pow = @rule (~x)^(~!m) => ~m
+(~x) ^ ~(!m) => ~m
+
+julia> r_pow(x^2)
+2
+
+julia> r_pow(x)
+1
+```
+
+_Example in sum:_
+```julia
+julia> r_sum = @rule ~x + ~!y => ~y
+~x + ~(!y) => ~y
+
+julia> r_sum(x+2)
+x
+
+julia> r_sum(x)
+0
+```
+
+Currently DefSlot is implemented in:
+Operation | Default value
+----------|--------------
+* | 1
++ | 0
+2nd argument of ^ | 1
 
 **Segment**:
 
@@ -393,11 +432,13 @@ macro rule(expr)
     quote
         $(__source__)
         lhs_pattern = $(lhs_term)
-        Rule($(QuoteNode(expr)),
-             lhs_pattern,
-             matcher(lhs_pattern),
-             __MATCHES__ -> $(makeconsequent(rhs)),
-             rule_depth($lhs_term))
+        Rule(
+            $(QuoteNode(expr)),
+            lhs_pattern,
+            matcher(lhs_pattern, permutations),
+            __MATCHES__ -> $(makeconsequent(rhs)),
+            rule_depth($lhs_term)
+        )
     end
 end
 
@@ -432,7 +473,7 @@ macro capture(ex, lhs)
         lhs_pattern = $(lhs_term)
         __MATCHES__ = Rule($(QuoteNode(lhs)),
              lhs_pattern,
-             matcher(lhs_pattern),
+             matcher(lhs_pattern, nothing),
              identity,
              rule_depth($lhs_term))($(esc(ex)))
         if __MATCHES__ !== nothing
@@ -486,16 +527,46 @@ julia> r(y + x)
 See also: [`@rule`](@ref), [`@ordered_acrule`](@ref)
 """
 macro acrule(expr)
-    arity = length(expr.args[2].args[2:end])
+    @assert expr.head == :call && expr.args[1] == :(=>)
+    lhs = expr.args[2]
+    rhs = rewrite_rhs(expr.args[3])
+    keys = Symbol[]
+    lhs_term = makepattern(lhs, keys)
+    unique!(keys)
+
+    arity = length(lhs.args[2:end])
+
     quote
-        ACRule(permutations, $(esc(:(@rule($(expr))))), $arity)
+        $(__source__)
+        lhs_pattern = $(lhs_term)
+        rule = Rule($(QuoteNode(expr)),
+             lhs_pattern,
+             matcher(lhs_pattern, permutations),
+             __MATCHES__ -> $(makeconsequent(rhs)),
+             rule_depth($lhs_term))
+        ACRule(permutations, rule, $arity)
     end
 end
 
 macro ordered_acrule(expr)
-    arity = length(expr.args[2].args[2:end])
+    @assert expr.head == :call && expr.args[1] == :(=>)
+    lhs = expr.args[2]
+    rhs = rewrite_rhs(expr.args[3])
+    keys = Symbol[]
+    lhs_term = makepattern(lhs, keys)
+    unique!(keys)
+
+    arity = length(lhs.args[2:end])
+
     quote
-        ACRule(combinations, $(esc(:(@rule($(expr))))), $arity)
+        $(__source__)
+        lhs_pattern = $(lhs_term)
+        rule = Rule($(QuoteNode(expr)),
+             lhs_pattern,
+             matcher(lhs_pattern, combinations),
+             __MATCHES__ -> $(makeconsequent(rhs)),
+             rule_depth($lhs_term))
+        ACRule(combinations, rule, $arity)
     end
 end
 
@@ -503,15 +574,11 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if !iscall(term)
+    if !iscall(term) || operation(term) != operation(r.lhs)
+        # different operations -> try deflsot
         r(term)
     else
-        f =  operation(term)
-        # Assume that the matcher was formed by closing over a term
-        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
-            return nothing
-        end
-
+        f = operation(term)
         T = symtype(term)
         args = arguments(term)
 

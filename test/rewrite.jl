@@ -2,7 +2,7 @@ using SymbolicUtils
 
 include("utils.jl")
 
-@syms a b c
+@syms a b c d x
 
 @testset "Equality" begin
     @eqtest a == a
@@ -47,6 +47,25 @@ end
     @eqtest @rule(+(~~x,~y,~~x) => (~~x, ~y, ~~x))(term(+,6,type=Any)) == ([], 6, [])
 end
 
+@testset "Commutative + and *" begin
+    r1 = @rule exp(sin(~x) + cos(~x)) => ~x
+    # using a or x changes the order of the arguments in the call
+    @test r1(exp(sin(a)+cos(a))) === a
+    @test r1(exp(sin(x)+cos(x))) === x
+    r2 = @rule (~x+~y)*(~z+~w)^(~m) => (~x, ~y, ~z, ~w, ~m)
+    r3 = @rule (~z+~w)^(~m)*(~x+~y) => (~x, ~y, ~z, ~w, ~m)
+    @test r2((a+b)*(x+c)^b) === (a, b, x, c, b)
+    @test r3((a+b)*(x+c)^b) === (a, b, x, c, b)
+    rPredicate1 = @rule ~x::(x->isa(x,Number)) + ~y => (~x, ~y)
+    rPredicate2 = @rule ~y + ~x::(x->isa(x,Number)) => (~x, ~y)
+    @test rPredicate1(2+x) === (2, x)
+    @test rPredicate2(2+x) === (2, x)
+    r5 = @rule (~y*(~z+~w))+~x => (~x, ~y, ~z, ~w)
+    r6 = @rule ~x+((~z+~w)*~y) => (~x, ~y, ~z, ~w)
+    @test r5(c*(a+b)+d) === (d, c, a, b)
+    @test r6(c*(a+b)+d) === (d, c, a, b)
+end
+
 @testset "Slot matcher with default value" begin
     r_sum = @rule (~x + ~!y)^2 => ~y
     @test r_sum((a + b)^2) === b
@@ -76,10 +95,55 @@ end
     @test r_pow2((a+b)^c) === c
     @test r_pow2(a+b) === 1
 
-    r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
-    @test r_mix((a + b*c)^2) === 2 + c
-    @test r_mix((a + b*c)) === 1 + c
-    @test r_mix((a + b)) === 2 #1+1
+    r_mix = @rule (~x + (~y)*(~!c))^(~!m) => (~m, ~c)
+    @test r_mix((a + b*c)^2) === (2, c)
+    @test r_mix((a + b*c)) === (1, c)
+    @test r_mix((a + b)) === (1, 1)
+
+    r_more_than_two_arguments = @rule (~!a)*exp(~x)*sin(~x) => (~a, ~x)
+    @test r_more_than_two_arguments(sin(x)*exp(x)) === (1, x)
+    @test r_more_than_two_arguments(sin(x)*exp(x)*a) === (a, x)
+
+    r_mixmix = @rule (~!a)*exp(~x)*sin(~!b + (~x)^2 + ~x) => (~a, ~b, ~x)
+    @test r_mixmix(exp(x)*sin(1+x+x^2)*2) === (2, 1, x)
+    @test r_mixmix(exp(x)*sin(x+x^2)*2) === (2, 0, x)
+    @test r_mixmix(exp(x)*sin(x+x^2)) === (1, 0, x)
+
+    # predicate checked in normal matching process
+    r_predicate1 = @rule x + (~!m::(var->isa(var, Int))) => ~m
+    @test r_predicate1(x+2) === 2
+    @test r_predicate1(x+2.0) === nothing
+
+    # predicate checked in defslot matching process
+    r_predicate2 = @rule x + ~!m::(var->!(var===0)) => ~m
+    @test r_predicate2(x+1)===1 # matches normally
+    @test r_predicate2(x)===nothing # doesnt matches bc the default value is 0 and doesnt respect the predicate
+
+    # multiple defslots with the same name
+    r3 = @rule sin(~!f*~x)+cos(~!f*~x) => ~
+    @test r3(sin(2x)+cos(2x))[:f]===2
+    @test r3(sin(2x)+cos(x))===nothing
+end
+
+@testset "power matcher with negative exponent" begin
+    r1 = @rule (~x)^(~y) => (~x, ~y) # rule with slot as exponent
+    @test r1(1/a^b) === (a, -b) # uses frankestein
+    @test r1(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
+    @test r1(1/a^2) === (a, -2) # uses opposite_sign_matcher
+    @test r1(1/a) === (a, -1)
+
+    r2 = @rule (~x)^(~y + ~z) => (~x, ~y, ~z) # rule with term as exponent
+    @test r2(1/a^(b+2c)) === (a, -b, -2c) # uses frankestein
+    @test r2(1/a^3) === nothing # should use a term_matcher that flips the sign, but is not implemented
+
+    r1defslot = @rule (~x)^(~!y) => (~x, ~y) # rule with defslot as exponent
+    @test r1defslot(1/a^b) === (a, -b) # uses frankestein
+    @test r1defslot(1/a^(b+2c)) === (a, -b-2c) # uses frankestein
+    @test r1defslot(1/a^2) === (a, -2) # uses opposite_sign_matcher
+    @test r1defslot(a) === (a, 1)
+
+    r = @rule (~x + ~y)^(~m) => (~x, ~y, ~m) # rule to match (1/...)^(...)
+    @test r((1/(a+b))^3) === (a,b,-3)
 end
 
 @testset "Return the matches dictionary" begin
@@ -96,6 +160,22 @@ end
     r3 = @rule (~x + (~y)^(~m)) => ~m===2 ? (~) : ~x
     @test isa(r3(a + b^2), Base.ImmutableDict)
     @test r3(a + b^3)===a
+end
+
+@testset "special power matches" begin
+    r1 = @rule (~x)^(~y) => (~x, ~y)
+    @test r1(exp(a)) === (ℯ, a) # uses exp_matcher
+    @test r1(sqrt(a)) === (a, 1//2) # uses sqrt_matcher
+end
+
+@testset "Alternate form of special functions" begin
+    rsqrt = @rule sqrt(~x) => ~x
+    @test rsqrt(sqrt(x))===x
+    @test rsqrt((x)^(1//2))===x
+
+    rexp = @rule exp(~x) => ~x
+    @test rexp(exp(x)) === x
+    @test rexp(ℯ^x) === x
 end
 
 using SymbolicUtils: @capture

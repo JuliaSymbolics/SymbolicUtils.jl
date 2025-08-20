@@ -43,6 +43,17 @@ Base.@propagate_inbounds function Base.getindex(x::Backing, i::Int)
     end
 end
 
+Base.@propagate_inbounds function Base.getindex(x::Backing{T}, i::Vector{Int}) where {T}
+    n = length(i)
+    if n == 1
+        return Backing{T}(x[i[1]])
+    elseif n == 2
+        return Backing{T}(x[i[1]], x[i[2]])
+    elseif n == 3
+        return Backing{T}(x[i[1]], x[i[2]], x[i[3]])
+    end
+end
+
 Base.@propagate_inbounds function Base.setindex!(x::Backing, v, i::Int)
     @boundscheck 1 <= i <= x.len
     if i == 1
@@ -113,6 +124,32 @@ function Base.map(f, x::Backing{T}) where {T}
     end
 end
 
+function Base.empty!(x::Backing{T}) where {T}
+    if x.len >= 1
+        x.x1 = defaultval(T)
+    end
+    if x.len >= 2
+        x.x2 = defaultval(T)
+    end
+    if x.len == 3
+        x.x3 = defaultval(T)
+    end
+    x.len = 0
+    return x
+end
+
+function Base.copy(x::Backing{T}) where {T}
+    if x.len == 0
+        return Backing{T}()
+    elseif x.len == 1
+        return Backing{T}(x.x1)
+    elseif x.len == 2
+        return Backing{T}(x.x1, x.x2)
+    elseif x.len == 3
+        return Backing{T}(x.x1, x.x2, x.x3)
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -164,6 +201,9 @@ Base.size(x::SmallVec) = size(x.data)
 Base.isempty(x::SmallVec) = isempty(x.data)
 Base.@propagate_inbounds Base.getindex(x::SmallVec, i::Int) = x.data[i]
 Base.@propagate_inbounds Base.setindex!(x::SmallVec, v, i::Int) = setindex!(x.data, v, i)
+Base.@propagate_inbounds function Base.getindex(x::SmallVec{T, V}, i::Vector{Int}) where {T, V}
+    SmallVec{T, V}(x.data[i])
+end
 
 Base.@propagate_inbounds function Base.push!(x::SmallVec{T, V}, v) where {T, V}
     buf = x.data
@@ -184,3 +224,5 @@ end
 Base.any(f::Function, x::SmallVec) = any(f, x.data)
 Base.all(f::Function, x::SmallVec) = all(f, x.data)
 Base.map(f, x::SmallVec{T, V}) where {T, V} = SmallVec{T,V}(map(f, x.data))
+Base.empty!(x::SmallVec) = empty!(x.data)
+Base.copy(x::SmallVec{T, V}) where {T, V} = SmallVec{T, V}(copy(x.data))

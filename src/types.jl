@@ -1150,23 +1150,6 @@ function unwrap_const(x)
 end
 
 """
-    $(TYPEDSIGNATURES)
-
-Return the base and exponent for representing `a^b`.
-"""
-function makepow(a, b)
-    a = unwrap(a)
-    b = unwrap(b)
-    base = a
-    exp = b
-    if ispow(a)
-        base = a.base
-        exp = a.exp * b
-    end
-    return (base, exp)
-end
-
-"""
     term(f, args...; type = nothing)
 
 Create a symbolic term with operation `f` and arguments `args`.

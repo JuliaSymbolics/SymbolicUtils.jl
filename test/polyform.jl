@@ -1,11 +1,10 @@
-using SymbolicUtils: PolyForm, Term, symtype
+using SymbolicUtils: Polyform, Term, symtype
 using Test, SymbolicUtils
 
 include("utils.jl")
 
 @testset "div and polyform" begin
     @syms x y z
-    @test_skip repr(PolyForm(x-y)) == "-y + x"
     @test repr(x/y*x/z) == "(x^2) / (y*z)"
     @test repr(simplify_fractions(((x-y+z)*(x+4z+1)) /
                                   (y*(2x - 3y + 3z) +
@@ -62,10 +61,10 @@ end
 
     ##404#issuecomment-939404030
     a = 1 / (x - (2//1)) + ((-5//1) - x) / ((x - (2//1))^2)
-    @test isequal(simplify_fractions(a), -7/(x-2)^2)
+    @test isequal(simplify_fractions(a), 7/expand(-(x-2)^2))
 
     # https://github.com/JuliaSymbolics/Symbolics.jl/issues/968
-    @eqtest simplify_fractions((x * y + (1//2) * x) / (2 * x)) == 1//4 * (1 + 2y)
+    @eqtest simplify_fractions((x * y + (1//2) * x) / (2 * x)) == 1//2 * (1//2 + y)
 end
 
 @testset "isone iszero" begin

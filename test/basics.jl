@@ -1,6 +1,7 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Add, Mul, Pow, symtype, operation, arguments, issym, isterm, BasicSymbolic, term
+using SymbolicUtils: Symbolic, Sym, FnType, Term, Polyform, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, PolynomialT
 using SymbolicUtils
 using ConstructionBase: setproperties
+import MultivariatePolynomials as MP
 using Setfield
 using Test, ReferenceTests
 
@@ -116,12 +117,16 @@ end
 
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
-
-    @test isequal(w + z, Add{Complex}(0, Dict(w=>1, z=>1)))
-    @test isequal(z + a, Add{Number}(0, Dict(z=>1, a=>1)))
-    @test isequal(a + b, Add{Real}(0, Dict(a=>1, b=>1)))
-    @test isequal(a + x, Add{Number}(0, Dict(a=>1, x=>1)))
-    @test isequal(a + z, Add{Number}(0, Dict(a=>1, z=>1)))
+    pw = basicsymbolic_to_polyvar(w)
+    pz = basicsymbolic_to_polyvar(z)
+    pa = basicsymbolic_to_polyvar(a)
+    pb = basicsymbolic_to_polyvar(b)
+    px = basicsymbolic_to_polyvar(x)
+    @test isequal(w + z, Polyform{Complex}(MP.polynomial(pw + pz, Complex)))
+    @test isequal(z + a, Polyform{Number}(MP.polynomial(pz + pa, Number)))
+    @test isequal(a + b, Polyform{Real}(MP.polynomial(pa + pb, Real)))
+    @test isequal(a + x, Polyform{Number}(MP.polynomial(pa + px, Number)))
+    @test isequal(a + z, Polyform{Number}(MP.polynomial(pa + pz, Number)))
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
@@ -217,8 +222,8 @@ end
     @test repr(2a+1+3a^2+2b+3b^2+4a*b) == "1 + 2a + 2b + 3(a^2) + 4a*b + 3(b^2)"
 
     @syms a b[1:3] c d[1:3]
-    get(x, i) = term(getindex, x, i, type=Number)
-    b1, b3, d1, d2 = get(b,1),get(b,3), get(d,1), get(d,2)
+    _get(x, i) = term(getindex, x, i, type=Number)
+    b1, b3, d1, d2 = _get(b,1),_get(b,3), _get(d,1), _get(d,2)
     @test repr(a + b3 + b1 + d2 + c) == "a + b[1] + b[3] + c + d[2]"
     @test repr(expand((c + b3 - d1)^3)) == "b[3]^3 + 3(b[3]^2)*c - 3(b[3]^2)*d[1] + 3b[3]*(c^2) - 6b[3]*c*d[1] + 3b[3]*(d[1]^2) + c^3 - 3(c^2)*d[1] + 3c*(d[1]^2) - (d[1]^3)"
     # test negative powers sorting
@@ -226,7 +231,7 @@ end
 
     # test that the "x^2 + y^-1 + sin(a)^3.5 + 2t + 1//1" expression from Symbolics.jl/build_targets.jl is properly sorted
     @syms x1 y1 a1 t1
-    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "1 + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
+    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "(1//1) + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
 end
 
 @testset "inspect" begin
@@ -243,7 +248,12 @@ end
 
 @testset "maketerm" begin
     @syms a b c
-    @test isequal(SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing).dict, Dict(a=>1,b=>1,c=>1))
+    pa = basicsymbolic_to_polyvar(a)
+    pb = basicsymbolic_to_polyvar(b)
+    pc = basicsymbolic_to_polyvar(c)
+    poly = MP.polynomial(pa + pb + pc, Number)
+    t = SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing)
+    @test isequal(t.poly, poly)
     @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  1//2],  nothing), b)
 
     # test that maketerm doesn't hard-code BasicSymbolic subtype
@@ -304,7 +314,7 @@ toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
     @syms a b c
     @test isequal(toterm(-1c), Term{Number}(*, [-1, c]))
     @test isequal(toterm(-1(a+b)), Term{Number}(+, [-b, -a]))
-    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [a, -c]))
+    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [-c, a]))
 end
 
 @testset "hash" begin
@@ -363,18 +373,18 @@ end
 @testset "div" begin
     @syms x::SafeReal y::Real
     @test issym((2x/2y).num)
-    @test (2x/3y).num.coeff == 2
-    @test (2x/3y).den.coeff == 3
-    @test (2x/-3x).num.coeff == -2
-    @test (2x/-3x).den.coeff == 3
-    @test (2.5x/3x).num.coeff == 2.5
-    @test (2.5x/3x).den.coeff == 3
-    @test (x/3x).den.coeff == 3
+    @test get_mul_coefficient((2x/3y).num) == 2
+    @test get_mul_coefficient((2x/3y).den) == 3
+    @test get_mul_coefficient((2x/-3x).num) == -2
+    @test get_mul_coefficient((2x/-3x).den) == 3
+    @test get_mul_coefficient((2.5x/3x).num) == 2.5
+    @test get_mul_coefficient((2.5x/3x).den) == 3
+    @test get_mul_coefficient((x/3x).den) == 3
 
     @syms x y
     @test issym((2x/2y).num)
-    @test (2x/3y).num.coeff == 2
-    @test (2x/3y).den.coeff == 3
+    @test get_mul_coefficient((2x/3y).num) == 2
+    @test get_mul_coefficient((2x/3y).den) == 3
     @test (2x/-3x) == -2//3
     @test (2.5x/3x).num == 2.5
     @test (2.5x/3x).den == 3
@@ -383,11 +393,12 @@ end
     @test isequal(x / -1, -x)
 end
 
-@testset "pow" begin
+@testset "Issue#717: Power with complex exponent" begin
     @syms x
-
-    # issue 717
-    @test isequal(Pow(x, im), x^im)
+    t = x ^ im
+    @test iscall(t)
+    @test operation(t) == (^)
+    @test isequal(arguments(t), [x, im])
 end
 
 @testset "LiteralReal" begin
@@ -411,6 +422,9 @@ end
 
 @testset "`setproperties` clears hash" begin
     @syms a b c
+    pa = basicsymbolic_to_polyvar(a)
+    pb = basicsymbolic_to_polyvar(b)
+    pc = basicsymbolic_to_polyvar(c)
     hash(a)
     hash(b)
     hash(c)
@@ -422,16 +436,16 @@ end
     @test hash(var) != hash(setproperties(var; f = bar))
     var = a + b
     hash(var)
-    @test hash(var) != hash(setproperties(var; coeff = 2))
+    @test hash(var) != hash(setproperties(var; poly = pa + pb + 2))
     var = a * b
     hash(var)
-    @test hash(var) != hash(setproperties(var; coeff = 2))
+    @test hash(var) != hash(setproperties(var; poly = pa * pb * 2))
     var = a / b
     hash(var)
     @test hash(var) != hash(setproperties(var; num = c))
-    var = a ^ b
+    var = a ^ 3
     hash(var)
-    @test hash(var) != hash(setproperties(var; exp = c))
+    @test hash(var) != hash(setproperties(var; poly = pa ^ 4))
 end
 
 @testset "`substitute` handles identity of */+" begin

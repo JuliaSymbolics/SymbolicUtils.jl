@@ -31,6 +31,10 @@ using WeakValueDicts: WeakValueDict
 using WeakCacheSets: WeakCacheSet, getkey!
 using Base: RefValue
 import MacroTools
+import MultivariatePolynomials as MP
+import DynamicPolynomials as DP
+import MutableArithmetics as MA
+import ConcurrentUtilities: ReadWriteLock, readlock, readunlock
 
 function hash2 end
 function isequal_with_metadata end
@@ -38,6 +42,64 @@ function isequal_with_metadata end
 include("WeakCacheSets.jl")
 
 using .WeakCacheSets
+
+macro manually_scope(val, expr, is_forced = false)
+    @assert Meta.isexpr(val, :call)
+    @assert val.args[1] == :(=>)
+
+    var_name = val.args[2]
+    new_val = val.args[3]
+    old_name = gensym(:old_val)
+    cur_name = gensym(:cur_val)
+    retval_name = gensym(:retval)
+    close_expr = :($var_name[] = $old_name)
+    interpolated_expr = MacroTools.postwalk(expr) do ex
+        if Meta.isexpr(ex, :$) && length(ex.args) == 1 && ex.args[1] == :$
+            return cur_name
+        else
+            return ex
+        end
+    end
+    basic_result = quote
+        $cur_name = $var_name[] = $new_val
+        $retval_name = try
+            $interpolated_expr
+        finally
+            $close_expr
+        end
+    end
+    is_forced && return quote
+        $old_name = $var_name[]
+        $basic_result
+    end |> esc
+
+    return quote
+        $old_name = $var_name[]
+        if $iszero($old_name)
+            $basic_result
+        else
+            $cur_name = $old_name
+            $retval_name = begin
+                $interpolated_expr
+            end
+        end
+        $retval_name
+    end |> esc
+end
+
+# copied from https://github.com/JuliaLang/julia/blob/80f7db8e51b2ba1dd21e913611c23a6d5b75ecab/base/lock.jl#L371-L381
+# and adapted for readlock/readunlock
+macro readlock(l, expr)
+    quote
+        temp = $(esc(l))
+        $readlock(temp)
+        try
+            $(esc(expr))
+        finally
+            $readunlock(temp)
+        end
+    end
+end
 
 include("cache.jl")
 Base.@deprecate istree iscall
@@ -71,7 +133,6 @@ include("matchers.jl")
 include("rewriters.jl")
 
 # Convert to an efficient multi-variate polynomial representation
-import MultivariatePolynomials as MP
 import DynamicPolynomials
 export expand
 include("polyform.jl")

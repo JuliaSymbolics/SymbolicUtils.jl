@@ -190,7 +190,7 @@ function polyvar_to_basicsymbolic(x::PolyVarT)
     return bs::BasicSymbolic
 end
 
-function subs_poly(poly::PolynomialT, vars)
+function subs_poly(poly::Union{PolynomialT, MP.Term}, vars)
     add_buffer = ArgsT()
     mul_buffer = ArgsT()
     for term in MP.terms(poly)

@@ -38,7 +38,7 @@ end
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 
 isliteral(::Type{T}) where {T} = x -> x isa T
-is_literal_number(x) = isliteral(Number)(x)
+is_literal_number(x) = isliteral(Number)(unwrap_const(x))
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
 function _iszero(x)
@@ -147,7 +147,7 @@ end
 
 # Linked List interface
 @inline function assoc(d::ImmutableDict{Symbol, Any}, k::Symbol, v::Any)
-    ImmutableDict(d, k=>v)::ImmutableDict{Symbol, Any}
+    ImmutableDict(d, k=>unwrap_const(v))::ImmutableDict{Symbol, Any}
 end
 
 struct LL{V}

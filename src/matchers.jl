@@ -7,6 +7,7 @@
 #
 
 function matcher(val::Any)
+    val = unwrap_const(val)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
@@ -21,7 +22,7 @@ function matcher(val::Any)
 
     function literal_matcher(next, data, bindings)
         # car data is the first element of data
-        islist(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
+        islist(data) && isequal(unwrap_const(car(data)), val) ? next(bindings, 1) : nothing
     end
 end
 
@@ -35,7 +36,7 @@ function matcher(slot::Slot)
                 return next(bindings, 1)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
-        elseif slot.predicate(car(data))
+        elseif slot.predicate(unwrap_const(car(data)))
             rest = car(data)
             binds = assoc(bindings, slot.name, rest)
             next(binds, 1)
@@ -93,7 +94,7 @@ function matcher(segment::Segment)
             for i=length(data):-1:0
                 subexpr = take_n(data, i)
 
-                if segment.predicate(subexpr)
+                if segment.predicate(unwrap_const(subexpr))
                     res = success(assoc(bindings, segment.name, subexpr), i)
                     if res !== nothing
                         break

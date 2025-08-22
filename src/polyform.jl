@@ -157,7 +157,7 @@ function quick_cancel(d::BSImpl.Type{T}) where {T}
     op = operation(d)
     if op === (^)
         base, exp = arguments(d)
-        base isa BasicSymbolic || return d
+        isconst(base) && return d
         isdiv(base) || return d
         num, den = quick_cancel(base.num, base.den)
         return Div{T}(num ^ exp, den ^ exp, false)
@@ -199,6 +199,7 @@ end
 # ispow(x) case
 function quick_pow(x, y)
     base, exp = arguments(x)
+    exp = unwrap_const(exp)
     exp isa Number || return (x, y)
     isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), 1) : (x, y)
 end
@@ -208,6 +209,8 @@ function quick_powpow(x, y)
     base1, exp1 = arguments(x)
     base2, exp2 = arguments(y)
     isequal(base1, base2) || return x, y
+    exp1 = unwrap_const(exp1)
+    exp2 = unwrap_const(exp2)
     !(exp1 isa Number && exp2 isa Number) && return (x, y)
     if exp1 > exp2
         return base1 ^ (exp1 - exp2), 1
@@ -228,6 +231,7 @@ end
 # mul, pow case
 function quick_mulpow(x, y)
     base, exp = arguments(y)
+    exp = unwrap_const(exp)
     exp isa Number || return (x, y)
     args = arguments(x)
     idx = 0
@@ -247,6 +251,7 @@ function quick_mulpow(x, y)
         end
     end
     iszero(idx) && return x, y
+    argexp = unwrap_const(argexp)
     argexp isa Number || return x, y
     # cheat by mutating `args` to avoid allocating
     args = parent(args)

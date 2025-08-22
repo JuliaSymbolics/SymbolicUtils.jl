@@ -1,7 +1,7 @@
 using Test
 using Combinatorics
 using SymbolicUtils
-using SymbolicUtils: <ₑ, arguments, Term
+using SymbolicUtils: <ₑ, arguments, Term, closest_const
 SymbolicUtils.show_simplified[] = false
 
 @syms a b c
@@ -21,6 +21,10 @@ end
 @test istotal(a,a)
 @test istotal(a,b)
 @test istotal(2,a)
+@test 2 <ₑ closest_const(2)
+@test closest_const(2) <ₑ closest_const(3)
+@test closest_const(2) <ₑ a
+@test !(closest_const(3) <ₑ closest_const(2))
 @test 2 <ₑ a
 @test a <ₑ b
 @test istotal(a, 2a)

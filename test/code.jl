@@ -49,7 +49,7 @@ nanmath_st.rewrites[:nanmath] = true
                         var"x(t)" = state[2]
                         a = params[1]
                         b = params[2]
-                        $(+)($(+)($(+)(a, b), x($(+)(1, t))),  var"x(t)")
+                        $(+)($(+)($(+)(a, b), x($(+)(1, t))), var"x(t)")
                     end
                 end))
 

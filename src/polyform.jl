@@ -106,6 +106,19 @@ function simplify_div(d)
     num, den = simplify_div(symtype(d), d.num, d.den)
     return simplify_fractions(num) / simplify_fractions(den)
 end
+
+function canonicalize_coeffs!(coeffs::Vector{T}) where {T}
+    Int <: T || return
+    T <: Integer && return
+    for i in eachindex(coeffs)
+        v = coeffs[i]
+        isinteger(v) || continue
+        coeffs[i] = Int(v)
+    end
+    return
+end
+canonicalize_coeffs!(_) = nothing
+
 function simplify_div(::Type{T}, num, den) where {T}
     poly_to_bs = Dict{PolyVarT, BasicSymbolic}()
     partial_poly1 = to_poly!(poly_to_bs, num, false)
@@ -118,6 +131,8 @@ function simplify_div(::Type{T}, num, den) where {T}
     # uses it as buffer. The result is the returned value.
     partial_poly1 = MP.div_multiple(partial_poly1, factor, MA.IsMutable())
     partial_poly2 = MP.div_multiple(partial_poly2, factor, MA.IsMutable())
+    canonicalize_coeffs!(MP.coefficients(partial_poly1))
+    canonicalize_coeffs!(MP.coefficients(partial_poly2))
     pvars1 = MP.variables(partial_poly1)
     pvars2 = MP.variables(partial_poly2)
     vars1 = [poly_to_bs[v] for v in pvars1]

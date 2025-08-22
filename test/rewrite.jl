@@ -144,6 +144,20 @@ end
 
     r = @rule (~x + ~y)^(~m) => (~x, ~y, ~m) # rule to match (1/...)^(...)
     @test r((1/(a+b))^3) === (a,b,-3)
+
+
+    # neim problem
+    r_one = @rule a*b^(~n) => ~
+    @test r_one(a/b)[:n] === -1
+    @test r_one(a/b^3)[:n] === -3
+    @test r_one(a/sqrt(b))[:n] === -1//2
+
+    r_two = @rule b^(~n)*c^(~m) => ~
+    @test r_two(b^2/c)[:m] === -1 
+    @test r_two(b^2/c)[:n] === 2 
+    @test r_two(1/(b*sqrt(c)))[:n] === -1 
+    @test r_two(1/(b*sqrt(c)))[:m] === -1//2 
+
 end
 
 @testset "Return the matches dictionary" begin

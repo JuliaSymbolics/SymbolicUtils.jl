@@ -532,12 +532,17 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                     if !isone(coeff)
                         push!(args, coeff)
                     end
-                    for (var, pow) in zip(vars, MP.exponents(mono))
+                    _new_coeffs = ones(T, 1)
+                    for (i, (var, pow)) in enumerate(zip(vars, MP.exponents(mono)))
                         iszero(pow) && continue
                         if isone(pow)
                             push!(args, var)
                         else
-                            push!(args, Term{T}(^, ArgsT((var, pow))))
+                            exps = zeros(Int, length(vars))
+                            exps[i] = pow
+                            mvec = DP.MonomialVector(MP.variables(poly), [exps])
+                            newpoly = PolynomialT{T}(_new_coeffs, mvec)
+                            push!(args, Polyform{T}(newpoly, partial_polyvars, vars))
                         end
                     end
                 end

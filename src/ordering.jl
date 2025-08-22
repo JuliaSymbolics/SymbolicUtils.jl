@@ -5,8 +5,8 @@
 <ₑ(a::Real,    b::Complex) = true
 <ₑ(a::Complex, b::Real) = false
 
-<ₑ(a::Symbolic, b::Number) = isconst(a) && unwrap_const(a) < b
-<ₑ(a::Number,   b::Symbolic) = isconst(b) && a < unwrap_const(b)
+<ₑ(a::Symbolic, b::Number) = false
+<ₑ(a::Number, b::Symbolic) = true
 
 <ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
 
@@ -161,10 +161,8 @@ function <ₑ(a::Tuple, b::Tuple)
 end
 
 function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
-    if isconst(a)
-        return <ₑ(unwrap_const(a), b)
-    elseif isconst(b)
-        return <ₑ(a, unwrap_const(b))
+    if isconst(a) || isconst(b)
+        return <ₑ(unwrap_const(a), unwrap_const(b))
     end
     da, db = get_degrees(a), get_degrees(b)
     fw = monomial_lt(da, db)

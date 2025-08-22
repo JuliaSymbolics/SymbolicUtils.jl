@@ -2184,7 +2184,12 @@ end
 ### Div
 ###
 
-/(a::Union{SN,Number}, b::SN) = Div{promote_symtype(/, symtype(a), symtype(b))}(a, b, false)
+function /(a::Union{SN,Number}, b::SN)
+    if isconst(a) || isconst(b)
+        return unwrap_const(a) / unwrap_const(b)
+    end
+    Div{promote_symtype(/, symtype(a), symtype(b))}(a, b, false)
+end
 
 *(a::SN, b::Number) = b * a
 

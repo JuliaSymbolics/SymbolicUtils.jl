@@ -120,6 +120,8 @@ end
 canonicalize_coeffs!(_) = nothing
 
 function simplify_div(::Type{T}, num, den) where {T}
+    isconst(num) && return num, den
+    isconst(den) && return num, den
     poly_to_bs = Dict{PolyVarT, BasicSymbolic}()
     partial_poly1 = to_poly!(poly_to_bs, num, false)
     partial_poly2 = to_poly!(poly_to_bs, den, false)

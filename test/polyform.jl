@@ -1,4 +1,4 @@
-using SymbolicUtils: Polyform, Term, symtype
+using SymbolicUtils: Polyform, Term, symtype, unwrap_const
 using Test, SymbolicUtils
 
 include("utils.jl")
@@ -9,8 +9,8 @@ include("utils.jl")
     @test repr(simplify_fractions(((x-y+z)*(x+4z+1)) /
                                   (y*(2x - 3y + 3z) +
                                    x*(x + z)))) == repr(simplify_fractions((1 + x + 4z) / (x + (3//1)y)))
-    @test simplify_fractions( (1/x)^2 * x^2) == 1
-    @test simplify_fractions(x/(x+3) + 3/(x+3)) == 1
+    @test unwrap_const(simplify_fractions( (1/x)^2 * x^2)) == 1
+    @test unwrap_const(simplify_fractions(x/(x+3) + 3/(x+3))) == 1
     @test repr(simplify(simplify_fractions(cos(x)/sin(x) + sin(x)/cos(x)))) == "2 / sin(2x)"
 end
 
@@ -42,8 +42,8 @@ end
 
 @testset "simplify_fractions with quick-cancel" begin
     @syms x y
-    @test simplify_fractions(x/2x) == 1//2
-    @test simplify_fractions(2x//x) == 2
+    @test unwrap_const(simplify_fractions(x/2x)) == 1//2
+    @test unwrap_const(simplify_fractions(2x//x)) == 2
     @eqtest simplify_fractions((x+y) * (x-y) / (x+y)) == (x-y)
     @eqtest simplify_fractions(x^3 * y / x) == y*x^2
     @eqtest simplify_fractions(2x^3 * y / x) == 2y*x^2
@@ -54,7 +54,7 @@ end
     @eqtest simplify_fractions(x^2/x^4) == (1/x^2)
     @eqtest simplify_fractions(x^2/x^3) == 1/x
     @eqtest simplify_fractions(x^3/x^2) == x
-    @eqtest simplify_fractions(x^2/x^2) == 1
+    @eqtest unwrap_const(simplify_fractions(x^2/x^2)) == 1
     @eqtest simplify_fractions(3x^2/x^3) == 3/x
     @eqtest simplify_fractions(3*(x^2)*(y^3)/(3*(x^3)*(y^2))) == y/x
     @eqtest simplify_fractions(3*(x^x)/x*y) == 3*(x^x)/x*y

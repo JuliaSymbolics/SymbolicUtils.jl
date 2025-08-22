@@ -1468,7 +1468,14 @@ function Base.show(io::IO, v::BSImpl.Type)
     if issym(v)
         Base.show_unquoted(io, v.name)
     elseif isconst(v)
-        printstyled(io, v.val; color = :blue)
+        v = unwrap_const(v)
+        if v isa Complex
+            printstyled(io, "("; color = :blue)
+        end
+        printstyled(io, v; color = :blue)
+        if v isa Complex
+            printstyled(io, ")"; color = :blue)
+        end
     else
         show_term(io, v)
     end

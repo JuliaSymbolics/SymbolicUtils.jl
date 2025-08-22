@@ -1941,6 +1941,7 @@ end
 ###
 
 function ^(a::SN, b)
+    isconst(a) && return ^(unwrap_const(a), b)
     a = unwrap_const(a)
     b = unwrap_const(unwrap(b))
     T = promote_symtype(^, symtype(a), symtype(b))

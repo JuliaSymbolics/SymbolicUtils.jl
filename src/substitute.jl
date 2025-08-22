@@ -3,12 +3,37 @@ struct Substituter{D <: AbstractDict}
 end
 
 function (s::Substituter)(expr)
-    haskey(s.dict, expr) ? s.dict[expr] : expr
+    get(s.dict, expr, expr)
 end
 
-function combine_fold(::Type{T}, op, args, meta) where {T}
-    can_fold = !(op isa Symbolic) && all(x -> !(x isa Symbolic) && !Code._is_tuple_or_array_of_symbolics(x), args)
-    can_fold ? op(args...) : maketerm(T, op, args, meta)
+function _const_or_not_symbolic(x)
+    isconst(x) || !(x isa Symbolic)
+end
+
+function combine_fold(::Type{T}, op, args::ArgsT, meta) where {T}
+    @nospecialize op args meta
+    can_fold = !(op isa Symbolic) && all(_const_or_not_symbolic, args)
+    if can_fold
+        if op === (+)
+            add_worker(args)
+        elseif op === (*)
+            mul_worker(args)
+        elseif op === (/)
+            args[1] / args[2]
+        elseif op === (^)
+            args[1] ^ args[2]
+        elseif length(args) == 1
+            op(unwrap_const(args[1]))
+        elseif length(args) == 2
+            op(unwrap_const(args[1]), unwrap_const(args[2]))
+        elseif length(args) == 3
+            op(unwrap_const(args[1]), unwrap_const(args[2]), unwrap_const(args[3]))
+        else
+            op(unwrap_const.(args)...)
+        end
+    else
+        maketerm(T, op, args, meta)
+    end
 end
 
 """

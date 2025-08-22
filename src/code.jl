@@ -10,7 +10,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm, Symbolic
+                      symtype, sorted_arguments, metadata, isterm, term, maketerm, Symbolic, unwrap_const
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -203,11 +203,11 @@ end
 _is_tuple_of_symbolics(O) = false
 
 function toexpr(O, st)
-    if issym(O)
-        O = substitute_name(O, st)
-        return issym(O) ? nameof(O) : toexpr(O, st)
-    end
+    O = unwrap_const(O)
     O = substitute_name(O, st)
+    if issym(O)
+        return nameof(O)
+    end
 
     if _is_array_of_symbolics(O)
         return issparse(O) ? toexpr(MakeSparseArray(O)) : toexpr(MakeArray(O, typeof(O)), st)
@@ -908,6 +908,7 @@ function cse!(expr::BasicSymbolic, state::CSEState)
         args = arguments(expr)
         cse_inside_expr(expr, op, args...) || return expr
         args = map(args) do arg
+            arg = unwrap_const(arg)
             if arg isa Union{Tuple, AbstractArray} &&
                 (_is_array_of_symbolics(arg) || _is_tuple_of_symbolics(arg))
                 if arg isa Tuple

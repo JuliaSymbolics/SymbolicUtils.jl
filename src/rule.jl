@@ -96,7 +96,7 @@ struct Segment{F} <: Symbolic{Any}
     predicate::F
 end
 
-ismatch(s::Segment, t) = s.predicate(t)
+ismatch(s::Segment, t) = s.predicate(unwrap_const(t))
 
 Segment(s) = Segment(s, alwaystrue)
 

@@ -1224,8 +1224,7 @@ end
 ### Metadata
 ###
 metadata(s::BSImpl.Type) = isconst(s) ? nothing : s.metadata
-metadata(s::Symbolic) = s.metadata
-metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
+metadata(s::BasicSymbolic, meta) = Setfield.@set! s.metadata = meta
 
 function hasmetadata(s::Symbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)

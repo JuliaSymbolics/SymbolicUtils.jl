@@ -196,10 +196,11 @@ function subs_poly(poly::Union{PolynomialT, MP.Term}, vars)
     for term in MP.terms(poly)
         empty!(mul_buffer)
         coeff = MP.coefficient(term)
-        push!(mul_buffer, coeff)
+        push!(mul_buffer, closest_const(coeff))
         mono = MP.monomial(term)
         for (i, exp) in enumerate(MP.exponents(mono))
-            push!(mul_buffer, vars[i] ^ exp)
+            iszero(exp) && continue
+            push!(mul_buffer, (vars[i] ^ exp))
         end
         push!(add_buffer, mul_worker(mul_buffer))
     end

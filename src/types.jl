@@ -30,8 +30,6 @@ struct Unknown end
 
 const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
 const SmallV{T} = SmallVec{T, Vector{T}}
-const ArgsT = SmallV{Any}
-const ROArgsT = ReadOnlyVector{Any, ArgsT}
 const ShapeVecT = SmallV{UnitRange{Int}}
 const ShapeT = Union{Unknown, ShapeVecT}
 const IdentT = Union{Tuple{UInt, IDType}, Tuple{Nothing, Nothing}}
@@ -71,7 +69,7 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
     end
     struct Term
         const f::Any
-        const args::ArgsT
+        const args::SmallV{BasicSymbolicImpl.Type}
         const metadata::MetadataT
         const shape::ShapeT
         hash::UInt
@@ -87,14 +85,14 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
         const vars::SmallV{BasicSymbolicImpl.Type}
         const metadata::MetadataT
         const shape::ShapeT
-        const args::ArgsT
+        const args::SmallV{BasicSymbolicImpl.Type}
         hash::UInt
         hash2::UInt
         id::IdentT
     end
     struct Div
-        const num::Symbolic
-        const den::Symbolic
+        const num::BasicSymbolicImpl.Type
+        const den::BasicSymbolicImpl.Type
         # TODO: Keep or remove?
         # Flag for whether this div is in the most simplified form we can compute.
         # This being false doesn't mean no elimination is performed. Trivials such as
@@ -111,6 +109,8 @@ end
 
 const BSImpl = BasicSymbolicImpl
 const BasicSymbolic = BSImpl.Type
+const ArgsT = SmallV{BasicSymbolic}
+const ROArgsT = ReadOnlyVector{BasicSymbolic, ArgsT}
 
 const POLYVAR_LOCK = ReadWriteLock()
 # NOTE: All of these are accessed via POLYVAR_LOCK
@@ -921,6 +921,10 @@ function hashcons(s::BSImpl.Type)
         return k::typeof(s)
     end true
 end
+
+const SMALLV_DEFAULT = hashcons(BSImpl.Const{Int}(0, (nothing, nothing)))
+
+defaultval(::Type{<:BasicSymbolic}) = SMALLV_DEFAULT
 
 function get_mul_coefficient(x)
     iscall(x) && operation(x) === (*) || throw(ArgumentError("$x is not a multiplication"))

@@ -180,7 +180,7 @@ end
 
 @testset "substitute" begin
     @syms a b
-    @test substitute(a, Dict(a=>1)) == 1
+    @test unwrap_const(substitute(a, Dict(a=>1))) == 1
     @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(b+1))
     @test substitute(a+b, Dict(a=>1, b=>3)) == 4
     @test substitute(exp(a), Dict(a=>2)) ≈ exp(2)
@@ -231,7 +231,7 @@ end
 
     # test that the "x^2 + y^-1 + sin(a)^3.5 + 2t + 1//1" expression from Symbolics.jl/build_targets.jl is properly sorted
     @syms x1 y1 a1 t1
-    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "(1//1) + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
+    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "1//1 + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
 end
 
 @testset "inspect" begin

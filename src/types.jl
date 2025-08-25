@@ -1941,7 +1941,7 @@ function ^(a::SN, b)
     a = unwrap_const(a)
     b = unwrap_const(unwrap(b))
     T = promote_symtype(^, symtype(a), symtype(b))
-    !issafecanon(^, a, b) && return Term{T}(^, ArgsT((a, b)))
+    !issafecanon(^, a, b) && return Term{T}(^, ArgsT((a, maybe_const(b))))
     if b isa Number
         iszero(b) && return 1
         isone(b) && return a
@@ -1949,8 +1949,9 @@ function ^(a::SN, b)
     if b isa Real && b < 0
         return Div{T}(1, a ^ (-b), false)
     end
-    if b isa Number && iscall(a) && operation(a) === (^) && arguments(a)[2] isa Number
+    if b isa Number && iscall(a) && operation(a) === (^) && isconst(arguments(a)[2]) && unwrap_const(arguments(a)[2]) isa Number
         base, exp = arguments(a)
+        exp = unwrap_const(exp)
         return base ^ (exp * b)
     end
     @match a begin
@@ -1966,7 +1967,7 @@ function ^(a::SN, b)
             _ => return Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), T))
         end
     end
-    return BSImpl.Term{T}(^, ArgsT((a, b)))
+    return BSImpl.Term{T}(^, ArgsT((a, maybe_const(b))))
 end
 
-^(a::Number, b::SN) = Term{promote_symtype(^, symtype(a), symtype(b))}(^, ArgsT((a, b)))
+^(a::Number, b::SN) = Term{promote_symtype(^, symtype(a), symtype(b))}(^, ArgsT((closest_const(a), b)))

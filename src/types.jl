@@ -1958,15 +1958,7 @@ function add_worker(terms)
                 # DynamicPolynomials will mutate number types if it can. SymbolicUtils
                 # doesn't assume ownership of values passed to it, so we copy the ones
                 # we need to.
-                _T = typeof(x)
-                if MA.mutability(_T, +, _T, _T) === MA.IsMutable()
-                    tmp = copy(x)
-                    # `copy(::BigInt)` doesn't actually do anything
-                    if tmp === x
-                        tmp = deepcopy(x)
-                    end
-                    x = tmp
-                end
+                x = MA.copy_if_mutable(x)
                 MA.operate!(+, result, x)
             end
             BSImpl.Polyform(; poly) => begin

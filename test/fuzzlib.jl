@@ -3,6 +3,7 @@ using SymbolicUtils: Term, showraw, Symbolic, issym
 using SpecialFunctions
 using Test
 using NaNMath
+import Random
 
 function rand_input(T)
     if T == Bool
@@ -116,6 +117,7 @@ end
 
 function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
+    rstate = Random.getstate(Random.GLOBAL_RNG)
     expr = gen_rand_expr(inputs; spec=spec, kwargs...)
     inputs = collect(inputs)
     code = try
@@ -190,6 +192,8 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
                     $(sprint(io->showraw(io, simplify(expr)))) = $simplified
                 Inputs:
                     $inputs = $args
+                State:
+                    $rstate
                 """)
     end
 end
@@ -220,6 +224,7 @@ end
 
 test_dict = Dict{Any, Rational{BigInt}}(a=>1,b=>-1,c=>2,d=>-2,e=>5//3,g=>-2//3)
 function fuzz_addmulpow(lvl, d=test_dict)
+    rstate = Random.getstate(Random.GLOBAL_RNG)
     l, r = gen_expr(lvl)
     rl = try
         substitute(l, d)
@@ -236,10 +241,11 @@ function fuzz_addmulpow(lvl, d=test_dict)
         return
     end
     if rl isa Number || rr isa Number
-        if isequal(rl, rr)
+        if isequal(rl, rr) || iszero(denominator(rl)) && iszero(denominator(rr))
             @test true
         else
             println("Weird bug here:")
+            @show rstate
             @show d
             @show r l
             @show rl rr

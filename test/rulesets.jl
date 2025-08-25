@@ -1,6 +1,6 @@
 using Random: shuffle, seed!
 using SymbolicUtils
-using SymbolicUtils: getdepth, Rewriters, Term
+using SymbolicUtils: getdepth, Rewriters, Term, unwrap_const
 
 include("utils.jl")
 
@@ -23,7 +23,7 @@ end
     @syms a::Integer b c d x::Real y::Number
     @eqtest simplify(Term{Real}(conj, [x])) == x
     @eqtest simplify(Term{Real}(real, [x])) == x
-    @eqtest simplify(Term{Real}(imag, [x])) == 0
+    @eqtest unwrap_const(simplify(Term{Real}(imag, [x]))) == 0
     @eqtest simplify(Term{Real}(imag, [y])) == imag(y)
     @eqtest simplify(x - y) == x + -1 * y
     @eqtest simplify(x - sin(y)) == x + -1 * sin(y)
@@ -47,14 +47,14 @@ end
     @eqtest simplify(a * b * 1 * c * d) == simplify(a * b * c * d)
     @eqtest simplify_fractions(x^2.0 / (x * y)^2.0) == simplify_fractions(1 / (y^2.0))
 
-    @test simplify(Term(one, [a])) == 1
-    @test simplify(Term(one, [b + 1])) == 1
-    @test simplify(Term(one, [x + 2])) == 1
+    @test unwrap_const(simplify(Term(one, [a]))) == 1
+    @test unwrap_const(simplify(Term(one, [b + 1]))) == 1
+    @test unwrap_const(simplify(Term(one, [x + 2]))) == 1
 
 
-    @test simplify(Term(zero, [a])) == 0
-    @test simplify(Term(zero, [b + 1])) == 0
-    @test simplify(Term(zero, [x + 2])) == 0
+    @test unwrap_const(simplify(Term(zero, [a]))) == 0
+    @test unwrap_const(simplify(Term(zero, [b + 1]))) == 0
+    @test unwrap_const(simplify(Term(zero, [x + 2]))) == 0
 end
 
 @testset "LiteralReal" begin
@@ -74,14 +74,14 @@ end
 
     @eqtest simplify(a < 0) == (a < 0)
     @eqtest simplify(0 < a) == (0 < a)
-    @eqtest simplify((0 < a) | true) == true
-    @eqtest simplify(true | (0 < a)) == true
+    @eqtest unwrap_const(simplify((0 < a) | true)) == true
+    @eqtest unwrap_const(simplify(true | (0 < a))) == true
     @eqtest simplify((0 < a) & true) == (0 < a)
     @eqtest simplify(true & (0 < a)) == (0 < a)
-    @eqtest simplify(false & (0 < a)) == false
-    @eqtest simplify((0 < a) & false) == false
-    @eqtest simplify(Term{Bool}(!, [true])) == false
-    @eqtest simplify(Term{Bool}(|, [false, true])) == true
+    @eqtest unwrap_const(simplify(false & (0 < a))) == false
+    @eqtest unwrap_const(simplify((0 < a) & false)) == false
+    @eqtest unwrap_const(simplify(Term{Bool}(!, [true]))) == false
+    @eqtest unwrap_const(simplify(Term{Bool}(|, [false, true]))) == true
     @eqtest simplify(ifelse(true, a, b)) == a
     @eqtest simplify(ifelse(false, a, b)) == b
 
@@ -95,18 +95,18 @@ end
 @testset "Pythagorean Identities" begin
     @syms a::Integer x::Real y::Number
 
-    @test simplify(cos(x)^2 + 1 + sin(x)^2) == 2
-    @test simplify(cos(y)^2 + 1 + sin(y)^2) == 2
-    @test simplify(sin(y)^2 + cos(y)^2 + 1) == 2
+    @test unwrap_const(simplify(cos(x)^2 + 1 + sin(x)^2)) == 2
+    @test unwrap_const(simplify(cos(y)^2 + 1 + sin(y)^2)) == 2
+    @test unwrap_const(simplify(sin(y)^2 + cos(y)^2 + 1)) == 2
 
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 
-    @eqtest simplify(cosh(x)^2 + 1 - sinh(x)^2) == 2
-    @eqtest simplify(cosh(y)^2 + 1 - sinh(y)^2) == 2
-    @eqtest simplify(-sinh(y)^2 + cosh(y)^2 + 1) == 2
+    @eqtest unwrap_const(simplify(cosh(x)^2 + 1 - sinh(x)^2)) == 2
+    @eqtest unwrap_const(simplify(cosh(y)^2 + 1 - sinh(y)^2)) == 2
+    @eqtest unwrap_const(simplify(-sinh(y)^2 + cosh(y)^2 + 1)) == 2
 
     @eqtest simplify(cosh(x)^2 - 1) == sinh(x)^2
     @eqtest simplify(sinh(x)^2 + 1) == cosh(x)^2
@@ -128,17 +128,17 @@ end
     @syms a::Real b::Real
     @eqtest simplify(exp(a) * exp(b)) == simplify(exp(a + b))
     @eqtest simplify(exp(a) * exp(a)) == simplify(exp(2a))
-    @test simplify(exp(a) * exp(-a)) == 1
+    @test unwrap_const(simplify(exp(a) * exp(-a))) == 1
     @eqtest simplify(exp(a)^2) == simplify(exp(2a))
     @eqtest simplify(exp(a) * a * exp(b)) == simplify(a * exp(a + b))
-    @eqtest simplify(one(Int)^a) == 1
-    @eqtest simplify(one(Complex{Float64})^a) == 1
+    @eqtest unwrap_const(simplify(one(Int)^a)) == 1
+    @eqtest unwrap_const(simplify(one(Complex{Float64})^a)) == 1
     @eqtest simplify(a^b * 1^a) == a^b
 end
 
 @testset "simplify_fractions" begin
     @syms x y z
-    @eqtest simplify(2 * ((y + z) / x) - 2 * y / x - z / x * 2) == 0
+    @eqtest unwrap_const(simplify(2 * ((y + z) / x) - 2 * y / x - z / x * 2)) == 0
 end
 
 @testset "Depth" begin

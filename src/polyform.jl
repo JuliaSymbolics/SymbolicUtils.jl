@@ -3,6 +3,7 @@ export simplify_fractions, quick_cancel, flatten_fractions
 to_poly!(_, expr, _...) = MA.operate!(+, zeropoly(typeof(expr)), expr)
 function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Union{PolyVarT, PolynomialT{T}} where {T}
     @match expr begin
+        BSImpl.Const(; val) => to_poly!(poly_to_bs, val, recurse)
         BSImpl.Sym(;) => begin
             pvar = basicsymbolic_to_partial_polyvar(expr)
             get!(poly_to_bs, pvar, expr)
@@ -97,20 +98,6 @@ end
 
 ## Rational Polynomial form with Div
 
-function polyform_factors(d, pvar2sym, sym2term)
-    make(xs) = map(xs) do x
-        if ispow(x) && x.exp isa Integer && x.exp > 0
-            # here we do want to recurse one level, that's why it's wrong to just
-            # use Fs = Union{typeof(+), typeof(*)} here.
-            Pow(PolyForm(x.base; pvar2sym, sym2term), x.exp)
-        else
-            PolyForm(x; pvar2sym, sym2term)
-        end
-    end
-
-    return make(numerators(d)), make(denominators(d))
-end
-
 _mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
 
 function simplify_div(d)
@@ -119,7 +106,22 @@ function simplify_div(d)
     num, den = simplify_div(symtype(d), d.num, d.den)
     return simplify_fractions(num) / simplify_fractions(den)
 end
+
+function canonicalize_coeffs!(coeffs::Vector{T}) where {T}
+    Int <: T || return
+    T <: Integer && return
+    for i in eachindex(coeffs)
+        v = coeffs[i]
+        isinteger(v) || continue
+        coeffs[i] = Int(v)
+    end
+    return
+end
+canonicalize_coeffs!(_) = nothing
+
 function simplify_div(::Type{T}, num, den) where {T}
+    isconst(num) && return num, den
+    isconst(den) && return num, den
     poly_to_bs = Dict{PolyVarT, BasicSymbolic}()
     partial_poly1 = to_poly!(poly_to_bs, num, false)
     partial_poly2 = to_poly!(poly_to_bs, den, false)
@@ -131,6 +133,8 @@ function simplify_div(::Type{T}, num, den) where {T}
     # uses it as buffer. The result is the returned value.
     partial_poly1 = MP.div_multiple(partial_poly1, factor, MA.IsMutable())
     partial_poly2 = MP.div_multiple(partial_poly2, factor, MA.IsMutable())
+    canonicalize_coeffs!(MP.coefficients(partial_poly1))
+    canonicalize_coeffs!(MP.coefficients(partial_poly2))
     pvars1 = MP.variables(partial_poly1)
     pvars2 = MP.variables(partial_poly2)
     vars1 = [poly_to_bs[v] for v in pvars1]
@@ -153,7 +157,7 @@ function quick_cancel(d::BSImpl.Type{T}) where {T}
     op = operation(d)
     if op === (^)
         base, exp = arguments(d)
-        base isa BasicSymbolic || return d
+        isconst(base) && return d
         isdiv(base) || return d
         num, den = quick_cancel(base.num, base.den)
         return Div{T}(num ^ exp, den ^ exp, false)
@@ -195,6 +199,7 @@ end
 # ispow(x) case
 function quick_pow(x, y)
     base, exp = arguments(x)
+    exp = unwrap_const(exp)
     exp isa Number || return (x, y)
     isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), 1) : (x, y)
 end
@@ -204,6 +209,8 @@ function quick_powpow(x, y)
     base1, exp1 = arguments(x)
     base2, exp2 = arguments(y)
     isequal(base1, base2) || return x, y
+    exp1 = unwrap_const(exp1)
+    exp2 = unwrap_const(exp2)
     !(exp1 isa Number && exp2 isa Number) && return (x, y)
     if exp1 > exp2
         return base1 ^ (exp1 - exp2), 1
@@ -216,7 +223,7 @@ end
 
 # ismul(x)
 function quick_mul(x, y)
-    yy = BSImpl.Term{symtype(y)}(^, ArgsT((y, 1)))
+    yy = BSImpl.Term{symtype(y)}(^, ArgsT((maybe_const(y), maybe_const(1))))
     newx, newy = quick_mulpow(x, yy)
     return isequal(newy, yy) ? (x, y) : (newx, newy)
 end
@@ -224,6 +231,7 @@ end
 # mul, pow case
 function quick_mulpow(x, y)
     base, exp = arguments(y)
+    exp = unwrap_const(exp)
     exp isa Number || return (x, y)
     args = arguments(x)
     idx = 0
@@ -243,6 +251,7 @@ function quick_mulpow(x, y)
         end
     end
     iszero(idx) && return x, y
+    argexp = unwrap_const(argexp)
     argexp isa Number || return x, y
     # cheat by mutating `args` to avoid allocating
     args = parent(args)
@@ -251,10 +260,10 @@ function quick_mulpow(x, y)
         args[idx] = argbase ^ (argexp - exp)
         result = mul_worker(args), 1
     elseif argexp == exp
-        args[idx] = 1
+        args[idx] = closest_const(1)
         result = mul_worker(args), 1
     else
-        args[idx] = 1
+        args[idx] = closest_const(1)
         result = mul_worker(args), base ^ (exp - argexp)
     end
     args[idx] = oldval
@@ -270,7 +279,7 @@ function quick_mulmul(x, y)
         if yargs isa ROArgsT
             yargs = copy(parent(yargs))
         end
-        yargs[i] = newarg
+        yargs[i] = maybe_const(newarg)
         x = newx
     end
     if yargs isa ROArgsT
@@ -291,7 +300,8 @@ function add_with_div(x)
         isdiv(a) || continue
         push!(dens, a.den)
     end
-    den = mul_worker(dens)
+    T = symtype(x)
+    den = mul_worker(T, dens)
 
     # add all numerators
     div_idx = 1
@@ -304,7 +314,7 @@ function add_with_div(x)
         if isdiv(a)
             _den = dens[div_idx]
             dens[div_idx] = a.num
-            _num = mul_worker(dens)
+            _num = mul_worker(T, dens)
             dens[div_idx] = _den
             div_idx += 1
         else

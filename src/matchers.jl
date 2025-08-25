@@ -7,11 +7,12 @@
 #
 
 function matcher(val::Any)
+    val = unwrap_const(val)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
         args = parent(arguments(val))
-        if length(args) == 2 && any(x -> isa(x, DefSlot), args)
+        if length(args) == 2 && any(x -> isa(unwrap_const(x), DefSlot), args)
             return defslot_term_matcher_constructor(val)
         # else return a normal term matcher
         else
@@ -21,7 +22,7 @@ function matcher(val::Any)
 
     function literal_matcher(next, data, bindings)
         # car data is the first element of data
-        islist(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
+        islist(data) && isequal(unwrap_const(car(data)), val) ? next(bindings, 1) : nothing
     end
 end
 
@@ -35,7 +36,7 @@ function matcher(slot::Slot)
                 return next(bindings, 1)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
-        elseif slot.predicate(car(data))
+        elseif slot.predicate(unwrap_const(car(data)))
             rest = car(data)
             binds = assoc(bindings, slot.name, rest)
             next(binds, 1)
@@ -93,7 +94,7 @@ function matcher(segment::Segment)
             for i=length(data):-1:0
                 subexpr = take_n(data, i)
 
-                if segment.predicate(subexpr)
+                if segment.predicate(unwrap_const(subexpr))
                     res = success(assoc(bindings, segment.name, subexpr), i)
                     if res !== nothing
                         break
@@ -107,7 +108,7 @@ function matcher(segment::Segment)
 end
 
 function term_matcher_constructor(term)
-    matchers = vcat([matcher(operation(term))], map(matcher, parent(arguments(term))))
+    matchers = vcat([matcher(operation(term))], map(matcher ∘ unwrap_const, parent(arguments(term))))
 
     let matchers = matchers
         function term_matcher(success, data, bindings)
@@ -152,10 +153,10 @@ end
 
 function defslot_term_matcher_constructor(term)
     a = parent(arguments(term)) # length two bc defslot term matcher is allowed only with +,* and ^, that accept two arguments
-    matchers = (matcher(operation(term)), map(matcher, a)...) # create matchers for the operation and the two arguments of the term
+    matchers = (matcher(operation(term)), map(matcher ∘ unwrap_const, a)...) # create matchers for the operation and the two arguments of the term
     
-    defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
-    defslot = a[defslot_index]
+    defslot_index = findfirst(x -> isa(unwrap_const(x), DefSlot), a) # find the defslot in the term
+    defslot = unwrap_const(a[defslot_index])
     
     function defslot_term_matcher(success, data, bindings)
         # if data is not a list, return nothing

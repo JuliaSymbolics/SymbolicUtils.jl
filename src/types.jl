@@ -1374,8 +1374,7 @@ end
 ### Metadata
 ###
 metadata(s::BSImpl.Type) = isconst(s) ? nothing : s.metadata
-metadata(s::Symbolic) = s.metadata
-metadata(s::Symbolic, meta) = Setfield.@set! s.metadata = meta
+metadata(s::BasicSymbolic, meta) = Setfield.@set! s.metadata = meta
 
 """
     hasmetadata(s::Symbolic, ctx)

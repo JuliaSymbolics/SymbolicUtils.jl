@@ -12,7 +12,7 @@ function matcher(val::Any, acSets)
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
         # just two arguments bc defslot is only supported with operations with two args: *, ^, +
-        if any(x -> isa(x, DefSlot), parent(arguments(val)))
+        if any(x -> isa(unwrap_const(x), DefSlot), parent(arguments(val)))
             return defslot_term_matcher_constructor(val, acSets)
         end
         # else return a normal term matcher
@@ -105,7 +105,7 @@ function matcher(segment::Segment, acSets)
 end
 
 function term_matcher_constructor(term, acSets)
-    matchers = vcat([matcher(operation(term), acSets)], map(x -> matcher(x, acSets), parent(arguments(term))))
+    matchers = vcat([matcher(operation(term), acSets)], map(x -> matcher(unwrap_const(x), acSets), parent(arguments(term))))
 
     function loop(term, bindings′, matchers′) # Get it to compile faster
         if !islist(matchers′)
@@ -263,11 +263,11 @@ end
 # in the normal_matcher and in defslot_matcher and other_part_matcher
 function defslot_term_matcher_constructor(term, acSets)
     a = parent(arguments(term))
-    defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
-    defslot = a[defslot_index]
+    defslot_index = findfirst(x -> isa(unwrap_const(x), DefSlot), a) # find the defslot in the term
+    defslot = unwrap_const(a[defslot_index])
     defslot_matcher = matcher(defslot, acSets)
     if length(a) == 2
-        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1], acSets)
+        other_part_matcher = matcher(unwrap_const(a[defslot_index == 1 ? 2 : 1]), acSets)
     else
         # if we hare here the operation is a multiplication or sum of n>2 terms
         # (because ^ cannot have more than 2 terms).

@@ -5,7 +5,7 @@
 
 # matches one term
 # syntax:  ~x
-struct Slot{P} <: Symbolic{Any}
+struct Slot{P}
     name::Symbol
     predicate::P
 end
@@ -44,7 +44,7 @@ end
 # (~x + ~y)^(~!z) can match (a + b)^c but also just "a + b", and z takes default value of one.
 # only these three operations are supported for default values.
 
-struct DefSlot{P, O} <: Symbolic{Any}
+struct DefSlot{P, O}
     name::Symbol
     predicate::P
     operation::O
@@ -91,7 +91,7 @@ end
 
 # matches zero or more terms
 # syntax: ~~x
-struct Segment{F} <: Symbolic{Any}
+struct Segment{F}
     name::Symbol
     predicate::F
 end

@@ -12,7 +12,7 @@ function matcher(val::Any)
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
         args = parent(arguments(val))
-        if length(args) == 2 && any(x -> isa(x, DefSlot), args)
+        if length(args) == 2 && any(x -> isa(unwrap_const(x), DefSlot), args)
             return defslot_term_matcher_constructor(val)
         # else return a normal term matcher
         else
@@ -108,7 +108,7 @@ function matcher(segment::Segment)
 end
 
 function term_matcher_constructor(term)
-    matchers = vcat([matcher(operation(term))], map(matcher, parent(arguments(term))))
+    matchers = vcat([matcher(operation(term))], map(matcher ∘ unwrap_const, parent(arguments(term))))
 
     let matchers = matchers
         function term_matcher(success, data, bindings)
@@ -153,10 +153,10 @@ end
 
 function defslot_term_matcher_constructor(term)
     a = parent(arguments(term)) # length two bc defslot term matcher is allowed only with +,* and ^, that accept two arguments
-    matchers = (matcher(operation(term)), map(matcher, a)...) # create matchers for the operation and the two arguments of the term
+    matchers = (matcher(operation(term)), map(matcher ∘ unwrap_const, a)...) # create matchers for the operation and the two arguments of the term
     
-    defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
-    defslot = a[defslot_index]
+    defslot_index = findfirst(x -> isa(unwrap_const(x), DefSlot), a) # find the defslot in the term
+    defslot = unwrap_const(a[defslot_index])
     
     function defslot_term_matcher(success, data, bindings)
         # if data is not a list, return nothing

@@ -419,7 +419,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                         mono = MP.monomial(term)
                         exps = MP.exponents(mono)
                         if MP.isconstant(term)
-                            push!(args, coeff)
+                            push!(args, closest_const(coeff))
                         elseif isone(coeff) && isone(count(!iszero, exps))
                             idx = findfirst(!iszero, exps)
                             push!(args, vars[idx] ^ exps[idx])
@@ -433,7 +433,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                     coeff = MP.coefficient(term)
                     mono = MP.monomial(term)
                     if !isone(coeff)
-                        push!(args, coeff)
+                        push!(args, closest_const(coeff))
                     end
                     _new_coeffs = ones(T, 1)
                     for (i, (var, pow)) in enumerate(zip(vars, MP.exponents(mono)))
@@ -458,7 +458,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                     @assert !iszero(pow)
                     # @assert !isone(pow)
                     push!(args, vars[idx])
-                    push!(args, pow)
+                    push!(args, closest_const(pow))
                 end
             end
             return ROArgsT(args)

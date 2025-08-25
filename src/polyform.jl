@@ -223,7 +223,7 @@ end
 
 # ismul(x)
 function quick_mul(x, y)
-    yy = BSImpl.Term{symtype(y)}(^, ArgsT((y, 1)))
+    yy = BSImpl.Term{symtype(y)}(^, ArgsT((maybe_const(y), maybe_const(1))))
     newx, newy = quick_mulpow(x, yy)
     return isequal(newy, yy) ? (x, y) : (newx, newy)
 end
@@ -260,10 +260,10 @@ function quick_mulpow(x, y)
         args[idx] = argbase ^ (argexp - exp)
         result = mul_worker(args), 1
     elseif argexp == exp
-        args[idx] = 1
+        args[idx] = closest_const(1)
         result = mul_worker(args), 1
     else
-        args[idx] = 1
+        args[idx] = closest_const(1)
         result = mul_worker(args), base ^ (exp - argexp)
     end
     args[idx] = oldval
@@ -279,7 +279,7 @@ function quick_mulmul(x, y)
         if yargs isa ROArgsT
             yargs = copy(parent(yargs))
         end
-        yargs[i] = newarg
+        yargs[i] = maybe_const(newarg)
         x = newx
     end
     if yargs isa ROArgsT

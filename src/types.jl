@@ -1296,7 +1296,7 @@ x^2
 ```
 """
 function term(f, args...; type = nothing)
-    args = SmallV{Any}(args)
+    @nospecialize f
     if type === nothing
         T = _promote_symtype(f, args)
     else

@@ -375,6 +375,7 @@ end
 
 # We're returning a function pointer
 @inline function TermInterface.operation(x::BSImpl.Type)
+    @nospecialize x
     @match x begin
         BSImpl.Const(_) => throw(ArgumentError("`Const` does not have an operation."))
         BSImpl.Sym(_) => throw(ArgumentError("`Sym` does not have an operation."))

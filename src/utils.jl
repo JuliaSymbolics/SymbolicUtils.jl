@@ -2,9 +2,9 @@ using Base: ImmutableDict
 
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
-pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
-pow(x, y::Symbolic) = Base.:^(x,y)
-pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
+pow(x::BasicSymbolic,y) = y==0 ? 1 : Base.:^(x,y)
+pow(x, y::BasicSymbolic) = Base.:^(x,y)
+pow(x::BasicSymbolic,y::BasicSymbolic) = Base.:^(x,y)
 
 # Simplification utilities
 function has_trig_exp(term)
@@ -19,42 +19,28 @@ function has_trig_exp(term)
     end
 end
 
-function fold(t)
-    if iscall(t)
-        tt = map(fold, parent(arguments(t)))
-        if !any(x->x isa Symbolic, tt)
-            # evaluate it
-            return operation(t)(tt...)
-        else
-            return maketerm(typeof(t), operation(t), tt, metadata(t))
-        end
-    else
-        return t
-    end
-end
-
 ### Predicates
 
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 
 isliteral(::Type{T}) where {T} = x -> x isa T
-is_literal_number(x) = isliteral(Number)(x)
+is_literal_number(x) = isliteral(Number)(unwrap_const(x))
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
 function _iszero(x)
-    x = unwrap(x)
+    x = unwrap_const(unwrap(x))
     x isa Number && return iszero(x)
     x isa Array && return iszero(x)
     return false
 end
 function _isone(x)
-    x = unwrap(x)
+    x = unwrap_const(unwrap(x))
     x isa Number && return isone(x)
     x isa Array && return isone(x)
     return false
 end
-_isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) <: Integer)
-_isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
+_isinteger(x) = (x isa Number && isinteger(x)) || (x isa BasicSymbolic && symtype(x) <: Integer)
+_isreal(x) = (x isa Number && isreal(x)) || (x isa BasicSymbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
 needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
@@ -146,7 +132,9 @@ function sort_args(f, t)
 end
 
 # Linked List interface
-@inline assoc(d::ImmutableDict, k, v) = ImmutableDict(d, k=>v)
+@inline function assoc(d::ImmutableDict{Symbol, Any}, k::Symbol, v::Any)
+    ImmutableDict(d, k=>unwrap_const(v))::ImmutableDict{Symbol, Any}
+end
 
 struct LL{V}
     v::V

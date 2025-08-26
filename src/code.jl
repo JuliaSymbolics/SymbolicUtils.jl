@@ -10,7 +10,8 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm, Symbolic
+                      symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
+                      ArgsT, maybe_const
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -142,17 +143,20 @@ function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
 end
 
 function function_to_expr(op::typeof(^), O, st)
-    args = arguments(O)
-    if args[2] isa Real && args[2] < 0
-        args[1] = Term(inv, Any[args[1]])
-        args[2] = -args[2]
+    base, exp = arguments(O)
+    base = unwrap_const(base)
+    exp = unwrap_const(exp)
+    if exp isa Real && exp < 0
+        base = Term(inv, ArgsT((base,)))
+        if isone(-exp)
+            return toexpr(base, st)
+        else
+            exp = -exp
+        end
     end
-    if isequal(args[2], 1)
-        return toexpr(args[1], st)
-    end
-    if get(st.rewrites, :nanmath, false) === true && !(args[2] isa Integer)
+    if get(st.rewrites, :nanmath, false) === true && !(exp isa Integer)
         op = NaNMath.pow
-        return toexpr(Term(op, args), st)
+        return toexpr(Term(op, ArgsT((maybe_const(base), maybe_const(exp)))), st)
     end
     return nothing
 end
@@ -203,11 +207,11 @@ end
 _is_tuple_of_symbolics(O) = false
 
 function toexpr(O, st)
-    if issym(O)
-        O = substitute_name(O, st)
-        return issym(O) ? nameof(O) : toexpr(O, st)
-    end
+    O = unwrap_const(O)
     O = substitute_name(O, st)
+    if issym(O)
+        return nameof(O)
+    end
 
     if _is_array_of_symbolics(O)
         return issparse(O) ? toexpr(MakeSparseArray(O)) : toexpr(MakeArray(O, typeof(O)), st)
@@ -879,6 +883,7 @@ function cse!(expr::BasicSymbolic, state::CSEState)
         args = arguments(expr)
         cse_inside_expr(expr, op, args...) || return expr
         args = map(args) do arg
+            arg = unwrap_const(arg)
             if arg isa Union{Tuple, AbstractArray} &&
                 (_is_array_of_symbolics(arg) || _is_tuple_of_symbolics(arg))
                 if arg isa Tuple

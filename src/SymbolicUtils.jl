@@ -101,7 +101,7 @@ Base.@deprecate istree iscall
 
 include("small_array.jl")
 
-export istree, operation, arguments, sorted_arguments, iscall
+export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Sym, Term,
 # Add, Mul and Pow
 include("types.jl")

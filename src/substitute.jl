@@ -3,12 +3,37 @@ struct Substituter{D <: AbstractDict}
 end
 
 function (s::Substituter)(expr)
-    haskey(s.dict, expr) ? s.dict[expr] : expr
+    get(s.dict, expr, expr)
 end
 
-function combine_fold(::Type{T}, op, args, meta) where {T}
-    can_fold = !(op isa Symbolic) && all(x -> !(x isa Symbolic) && !Code._is_tuple_or_array_of_symbolics(x), args)
-    can_fold ? op(args...) : maketerm(T, op, args, meta)
+function _const_or_not_symbolic(x)
+    isconst(x) || !(x isa BasicSymbolic)
+end
+
+function combine_fold(::Type{T}, op, args::ArgsT, meta) where {T}
+    @nospecialize op args meta
+    can_fold = !(op isa BasicSymbolic) && all(_const_or_not_symbolic, args)
+    if can_fold
+        if op === (+)
+            add_worker(args)
+        elseif op === (*)
+            mul_worker(args)
+        elseif op === (/)
+            args[1] / args[2]
+        elseif op === (^)
+            args[1] ^ args[2]
+        elseif length(args) == 1
+            op(unwrap_const(args[1]))
+        elseif length(args) == 2
+            op(unwrap_const(args[1]), unwrap_const(args[2]))
+        elseif length(args) == 3
+            op(unwrap_const(args[1]), unwrap_const(args[2]), unwrap_const(args[3]))
+        else
+            op(unwrap_const.(args)...)
+        end
+    else
+        maketerm(T, op, args, meta)
+    end
 end
 
 """
@@ -35,19 +60,20 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 end
 
 """
-    occursin(needle::Symbolic, haystack::Symbolic)
+    occursin(needle::BasicSymbolic, haystack::BasicSymbolic)
 
 Determine whether the second argument contains the first argument. Note that
 this function doesn't handle associativity, commutativity, or distributivity.
 """
-Base.occursin(needle::Symbolic, haystack::Symbolic) = _occursin(needle, haystack)
-Base.occursin(needle, haystack::Symbolic) = _occursin(needle, haystack)
-Base.occursin(needle::Symbolic, haystack) = _occursin(needle, haystack)
+Base.occursin(needle::BasicSymbolic, haystack::BasicSymbolic) = _occursin(needle, haystack)
+Base.occursin(needle, haystack::BasicSymbolic) = _occursin(needle, haystack)
+Base.occursin(needle::BasicSymbolic, haystack) = _occursin(needle, haystack)
 function _occursin(needle, haystack)
-    isequal(needle, haystack) && return true
+    isequal(unwrap_const(needle), unwrap_const(haystack)) && return true
     if iscall(haystack)
         args = arguments(haystack)
         for arg in args
+            arg = unwrap_const(arg)
             if needle isa Integer || needle isa AbstractFloat
                 isequal(needle, arg) && return true
             else

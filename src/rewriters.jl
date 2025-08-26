@@ -32,7 +32,7 @@ rewriters.
 module Rewriters
 using TermInterface
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT
+import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT, maybe_const, SmallV, BSImpl, unwrap_const, BasicSymbolic
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 # Cache of printed rules to speed up @timer
@@ -211,11 +211,11 @@ instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 (p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
 
 passthrough(x, default) = x === nothing ? default : x
-function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
+function (p::Walk{ord, C, F, false})(x::BasicSymbolic) where {ord, C, F}
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
-            x = p.rw(x)
+            x = maybe_const(p.rw(x))::BasicSymbolic
         end
 
         if iscall(x)
@@ -225,23 +225,24 @@ function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
                 arg = args[i]
                 newarg = op(arg)
                 if args isa ROArgsT
-                    if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)
+                    if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool
                         continue
                     end
                     args = copy(parent(args))::ArgsT
                 end
-                args[i] = newarg
+                args[i] = maybe_const(newarg)
             end
             if args isa ArgsT
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))
             end
         end
 
-        return ord === :post ? p.rw(x) : x
+        return ord === :post ? maybe_const(p.rw(x))::BasicSymbolic : x
     else
-        return p.rw(x)
+        return maybe_const(p.rw(x))::BasicSymbolic
     end
 end
+(p::Walk{ord, C, F, false})(x) where {ord, C, F} = x
 
 function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
     @assert ord === :pre || ord === :post
@@ -255,9 +256,9 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             for i in eachindex(args)
                 arg = args[i]
                 newarg = if node_count(arg) > p.thread_cutoff
-                    Threads.@spawn op(arg)
+                    BSImpl.Const{Any}(Threads.@spawn op(arg); unsafe=true)
                 else
-                    op(arg)
+                    maybe_const(op(arg))
                 end
                 if args isa ROArgsT
                     if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)
@@ -269,8 +270,8 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
             end
             if args isa ArgsT
                 for i in eachindex(args)
-                    if args[i] isa Task
-                        args[i] = fetch(args[i])
+                    if unwrap_const(args[i]) isa Task
+                        args[i] = maybe_const(fetch(unwrap_const(args[i])))
                     end
                 end
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))

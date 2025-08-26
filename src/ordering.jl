@@ -5,8 +5,8 @@
 <ₑ(a::Real,    b::Complex) = true
 <ₑ(a::Complex, b::Real) = false
 
-<ₑ(a::Symbolic, b::Number) = false
-<ₑ(a::Number, b::Symbolic) = true
+<ₑ(a::BasicSymbolic, b::Number) = false
+<ₑ(a::Number, b::BasicSymbolic) = true
 
 <ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
 

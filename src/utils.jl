@@ -2,9 +2,9 @@ using Base: ImmutableDict
 
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
-pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
-pow(x, y::Symbolic) = Base.:^(x,y)
-pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
+pow(x::BasicSymbolic,y) = y==0 ? 1 : Base.:^(x,y)
+pow(x, y::BasicSymbolic) = Base.:^(x,y)
+pow(x::BasicSymbolic,y::BasicSymbolic) = Base.:^(x,y)
 
 # Simplification utilities
 function has_trig_exp(term)
@@ -16,20 +16,6 @@ function has_trig_exp(term)
         return true
     else
         return any(has_trig_exp, parent(arguments(term)))
-    end
-end
-
-function fold(t)
-    if iscall(t)
-        tt = map(fold, parent(arguments(t)))
-        if !any(x->x isa Symbolic, tt)
-            # evaluate it
-            return operation(t)(tt...)
-        else
-            return maketerm(typeof(t), operation(t), tt, metadata(t))
-        end
-    else
-        return t
     end
 end
 
@@ -53,8 +39,8 @@ function _isone(x)
     x isa Array && return isone(x)
     return false
 end
-_isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) <: Integer)
-_isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
+_isinteger(x) = (x isa Number && isinteger(x)) || (x isa BasicSymbolic && symtype(x) <: Integer)
+_isreal(x) = (x isa Number && isreal(x)) || (x isa BasicSymbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
 needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))

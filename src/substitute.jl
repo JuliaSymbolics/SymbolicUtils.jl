@@ -7,12 +7,12 @@ function (s::Substituter)(expr)
 end
 
 function _const_or_not_symbolic(x)
-    isconst(x) || !(x isa Symbolic)
+    isconst(x) || !(x isa BasicSymbolic)
 end
 
 function combine_fold(::Type{T}, op, args::ArgsT, meta) where {T}
     @nospecialize op args meta
-    can_fold = !(op isa Symbolic) && all(_const_or_not_symbolic, args)
+    can_fold = !(op isa BasicSymbolic) && all(_const_or_not_symbolic, args)
     if can_fold
         if op === (+)
             add_worker(args)
@@ -60,14 +60,14 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 end
 
 """
-    occursin(needle::Symbolic, haystack::Symbolic)
+    occursin(needle::BasicSymbolic, haystack::BasicSymbolic)
 
 Determine whether the second argument contains the first argument. Note that
 this function doesn't handle associativity, commutativity, or distributivity.
 """
-Base.occursin(needle::Symbolic, haystack::Symbolic) = _occursin(needle, haystack)
-Base.occursin(needle, haystack::Symbolic) = _occursin(needle, haystack)
-Base.occursin(needle::Symbolic, haystack) = _occursin(needle, haystack)
+Base.occursin(needle::BasicSymbolic, haystack::BasicSymbolic) = _occursin(needle, haystack)
+Base.occursin(needle, haystack::BasicSymbolic) = _occursin(needle, haystack)
+Base.occursin(needle::BasicSymbolic, haystack) = _occursin(needle, haystack)
 function _occursin(needle, haystack)
     isequal(unwrap_const(needle), unwrap_const(haystack)) && return true
     if iscall(haystack)

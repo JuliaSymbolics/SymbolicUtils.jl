@@ -10,7 +10,7 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm, Symbolic, unwrap_const,
+                      symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
                       ArgsT, maybe_const
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 

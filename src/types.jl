@@ -2,7 +2,6 @@
 #--------------------
 #### Symbolic
 #--------------------
-abstract type Symbolic{T} end
 
 #################### SafeReal #########################
 export SafeReal, LiteralReal
@@ -55,7 +54,7 @@ end
 
 Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
 """
-@data mutable BasicSymbolicImpl{T} <: Symbolic{T} begin 
+@data mutable BasicSymbolicImpl{T} begin 
     struct Const
         const val::T
         id::IdentT
@@ -619,11 +618,10 @@ end
 ### Base interface
 ###
 
-Base.isequal(::Symbolic, x) = false
-Base.isequal(x, ::Symbolic) = false
-Base.isequal(::Symbolic, ::Missing) = false
-Base.isequal(::Missing, ::Symbolic) = false
-Base.isequal(::Symbolic, ::Symbolic) = false
+Base.isequal(::BasicSymbolic, x) = false
+Base.isequal(x, ::BasicSymbolic) = false
+Base.isequal(::BasicSymbolic, ::Missing) = false
+Base.isequal(::Missing, ::BasicSymbolic) = false
 
 const SCALAR_SYMTYPE_VARIANTS = [Number, Real, SafeReal, LiteralReal, Int, Float64, Bool]
 const ARR_VARIANTS = [Vector, Matrix]
@@ -846,8 +844,8 @@ function Base.hash(s::BSImpl.Type, h::UInt)
     hash_bsimpl(s, h, COMPARE_FULL[])
 end
 
-Base.one( s::Union{Symbolic, BSImpl.Type}) = one( symtype(s))
-Base.zero(s::Union{Symbolic, BSImpl.Type}) = zero(symtype(s))
+Base.one( s::BSImpl.Type) = one( symtype(s))
+Base.zero(s::BSImpl.Type) = zero(symtype(s))
 
 
 Base.nameof(s::Union{BasicSymbolic, BSImpl.Type}) = issym(s) ? s.name : error("Non-Sym BasicSymbolic doesn't have a name")
@@ -1103,7 +1101,7 @@ struct Div{T} end
 
 function Const{T}(val) where {T}
     val = unwrap(val)
-    val isa Symbolic && return val
+    val isa BasicSymbolic && return val
     BSImpl.Const{T}(convert(T, val))
 end
 
@@ -1398,12 +1396,12 @@ julia> hasmetadata(x, Float64)
 false
 ```
 """
-function hasmetadata(s::Symbolic, ctx)
+function hasmetadata(s::BasicSymbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
 issafecanon(f, s) = true
-function issafecanon(f, s::Symbolic)
+function issafecanon(f, s::BasicSymbolic)
     if metadata(s) === nothing || isempty(metadata(s)) || issym(s)
         return true
     else
@@ -1440,7 +1438,7 @@ julia> getmetadata(x, symtype)  # Get the type metadata
 Float64
 ```
 """
-function getmetadata(s::Symbolic, ctx)
+function getmetadata(s::BasicSymbolic, ctx)
     md = metadata(s)
     if md isa AbstractDict
         md[ctx]
@@ -1472,7 +1470,7 @@ julia> getmetadata(x, Float64, "no type")
 "no type"
 ```
 """
-function getmetadata(s::Symbolic, ctx, default)
+function getmetadata(s::BasicSymbolic, ctx, default)
     md = metadata(s)
     md isa AbstractDict ? get(md, ctx, default) : default
 end
@@ -1525,7 +1523,7 @@ julia> getmetadata(x_with_meta, Float64)
 "custom value"
 ```
 """
-function setmetadata(s::Symbolic, ctx::DataType, val)
+function setmetadata(s::BasicSymbolic, ctx::DataType, val)
     if s.metadata isa AbstractDict
         @set s.metadata = assocmeta(s.metadata, ctx, val)
     else
@@ -1789,9 +1787,9 @@ promote_symtype(f, Ts...) = Any
 
 struct FnType{X<:Tuple,Y,Z} end
 
-(f::Symbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, SmallV{Any}(args))
+(f::BasicSymbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, SmallV{Any}(args))
 
-function (f::Symbolic)(args...)
+function (f::BasicSymbolic)(args...)
     error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable.")
 end
@@ -1816,7 +1814,7 @@ function promote_symtype(f::BasicSymbolic{<:FnType{X,Y}}, args...) where {X, Y}
     return Y
 end
 
-function Base.show(io::IO, f::Symbolic{<:FnType{X,Y}}) where {X,Y}
+function Base.show(io::IO, f::BasicSymbolic{<:FnType{X,Y}}) where {X,Y}
     print(io, nameof(f))
     # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
     # best printing, but it's better than erroring.
@@ -1925,7 +1923,7 @@ end
 ###
 ### Arithmetic
 ###
-const SN = Symbolic{<:Number}
+const SN = BasicSymbolic{<:Number}
 # integration. Constructors of `Add, Mul, Pow...` from Base (+, *, ^, ...)
 
 add_t(a::Number,b::Number) = promote_symtype(+, symtype(a), symtype(b))

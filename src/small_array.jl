@@ -191,6 +191,16 @@ mutable struct SmallVec{T, V <: AbstractVector{T}} <: AbstractVector{T}
             new{T, V}(V(x isa Tuple ? collect(x) : x))
         end
     end
+
+    function SmallVec{T, V}(::UndefInitializer, n::Integer) where {T, V}
+        if n <= 3
+            inner = Backing{T}()
+            inner.len = n
+        else
+            inner = V(undef, n)
+        end
+        return new{T, V}(inner)
+    end
 end
 
 Base.convert(::Type{SmallVec{T, V}}, x::V) where {T, V} = SmallVec{T}(x)
@@ -223,6 +233,9 @@ end
 
 Base.any(f::Function, x::SmallVec) = any(f, x.data)
 Base.all(f::Function, x::SmallVec) = all(f, x.data)
-Base.map(f, x::SmallVec{T, V}) where {T, V} = SmallVec{T,V}(map(f, x.data))
+function Base.map(f, x::SmallVec{T, Vector{T}}) where {T}
+    arr = map(f, x.data)
+    SmallVec{eltype(arr),Vector{eltype(arr)}}(arr)
+end
 Base.empty!(x::SmallVec) = empty!(x.data)
 Base.copy(x::SmallVec{T, V}) where {T, V} = SmallVec{T, V}(copy(x.data))

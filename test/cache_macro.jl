@@ -1,6 +1,7 @@
 using SymbolicUtils
 using SymbolicUtils: BasicSymbolic, @cache, associated_cache, set_limit!, get_limit,
-                     clear_cache!, SymbolicKey, metadata, maketerm, get_cache_key
+                     clear_cache!, SymbolicKey, metadata, maketerm, get_cache_key,
+                     unwrap_const
 using OhMyThreads: tmap
 using Random
 
@@ -131,7 +132,7 @@ end
 end
 
 @cache function f4(x::Union{BasicSymbolic, Number})::Union{BasicSymbolic, Number}
-    x isa Number && return x
+    unwrap_const(x) isa Number && return x
     if iscall(x)
         return maketerm(typeof(x), operation(x), map(f4, arguments(x)), metadata(x))
     end

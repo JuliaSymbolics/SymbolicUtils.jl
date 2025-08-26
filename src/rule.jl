@@ -97,7 +97,7 @@ struct Segment{F}
     predicate::F
 end
 
-ismatch(s::Segment, t) = s.predicate(t)
+ismatch(s::Segment, t) = s.predicate(unwrap_const(t))
 
 Segment(s) = Segment(s, alwaystrue)
 
@@ -612,7 +612,7 @@ function (acr::ACRule)(term)
                     full_args_buf[idx] = args[i]
                     idx += 1
                 end
-                full_args_buf[idx] = result
+                full_args_buf[idx] = maybe_const(result)
                 return maketerm(typeof(term), f, full_args_buf, metadata(term))
             end
         end

@@ -76,23 +76,28 @@ let
         @acrule(~r*~x::has_trig_exp + ~r*~y => ~r*(~x + ~y))
         @acrule(~r*~x::has_trig_exp + -1*~r*~y => ~r*(~x - ~y))
         @acrule(sin(~x)^2 + cos(~x)^2 => one(~x))
-        @acrule(sin(~x)^2 + -1        => -1*cos(~x)^2)
-        @acrule(cos(~x)^2 + -1        => -1*sin(~x)^2)
+        @acrule(-1*sin(~x)^2 + -1*cos(~x)^2 => -one(~x))
+        @acrule(1 + -1*sin(~x)^2      => cos(~x)^2)
+        @acrule(1 + -1*cos(~x)^2      => sin(~x)^2)
+        @acrule(sin(~x)^2 + -1        => -cos(~x)^2)
+        @acrule(cos(~x)^2 + -1        => -sin(~x)^2)
 
         @acrule(cos(~x)^2 + -1*sin(~x)^2 => cos(2 * ~x))
         @acrule(sin(~x)^2 + -1*cos(~x)^2 => -cos(2 * ~x))
         @acrule(cos(~x) * sin(~x) => sin(2 * ~x)/2)
 
-        @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x))
         @acrule(-1*tan(~x)^2 + sec(~x)^2 => one(~x))
+        @acrule(tan(~x)^2 + -1*sec(~x)^2 => -one(~x))
         @acrule(tan(~x)^2 +  1 => sec(~x)^2)
         @acrule(sec(~x)^2 + -1 => tan(~x)^2)
 
         @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x))
+        @acrule(-1*cot(~x)^2 + csc(~x)^2 => -one(~x))
         @acrule(cot(~x)^2 +  1 => csc(~x)^2)
         @acrule(csc(~x)^2 + -1 => cot(~x)^2)
 
         @acrule(cosh(~x)^2 + -1*sinh(~x)^2 => one(~x))
+        @acrule(-1*cosh(~x)^2 + sinh(~x)^2 => -one(~x))
         @acrule(cosh(~x)^2 + -1            => sinh(~x)^2)
         @acrule(sinh(~x)^2 +  1            => cosh(~x)^2)
 

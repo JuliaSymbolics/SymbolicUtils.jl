@@ -1,9 +1,6 @@
 import AbstractTrees
 
 const inspect_metadata = Ref{Bool}(false)
-function AbstractTrees.nodevalue(x::Symbolic)
-    iscall(x) ? operation(x) : isexpr(x) ? head(x) : x
-end
 
 function AbstractTrees.nodevalue(x::BSImpl.Type)
     T = nameof(MData.variant_type(x))
@@ -35,7 +32,7 @@ the expression.
 
 This function is used internally for printing via AbstractTrees.
 """
-function AbstractTrees.children(x::Symbolic)
+function AbstractTrees.children(x::BasicSymbolic)
     iscall(x) ? sorted_arguments(x) : isexpr(x) ? sorted_children(x) : ()
 end
 
@@ -50,7 +47,7 @@ Line numbers will be shown, use `pluck(expr, line_number)` to get the sub expres
 """
 function inspect end
 
-function inspect(io::IO, x::Symbolic;
+function inspect(io::IO, x::BasicSymbolic;
         hint=true,
         metadata=inspect_metadata[])
 

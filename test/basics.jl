@@ -1,4 +1,4 @@
-using SymbolicUtils: Symbolic, Sym, FnType, Term, Polyform, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, PolynomialT, Const
+using SymbolicUtils: Sym, FnType, Term, Polyform, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, PolynomialT, Const
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
@@ -165,7 +165,7 @@ end
 
 @testset "array-like operations" begin
     abstract type SquareDummy end
-    Base.:*(a::Symbolic{SquareDummy}, b) = b^2
+    Base.:*(a::BasicSymbolic{SquareDummy}, b) = b^2
     @syms s t a::SquareDummy A[1:2, 1:2]
 
     @test isequal(ndims(A), 2)

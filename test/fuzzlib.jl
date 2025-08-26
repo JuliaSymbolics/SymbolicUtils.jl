@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Term, showraw, Symbolic, issym
+using SymbolicUtils: BasicSymbolic, Term, showraw, issym
 using SpecialFunctions
 using Test
 using NaNMath
@@ -30,7 +30,7 @@ function rand_input(T)
     end
 end
 
-rand_input(i::Symbolic{T}) where {T} = rand_input(T)
+rand_input(i::BasicSymbolic{T}) where {T} = rand_input(T)
 
 const num_spec = let
     @syms a b::Real c::Integer d::Float64 e::Rational f

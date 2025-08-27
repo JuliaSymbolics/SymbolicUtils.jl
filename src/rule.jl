@@ -1,5 +1,6 @@
 
 @inline alwaystrue(x) = true
+const COMM_CHECKS_LIMIT = Ref(10)
 
 # Matcher patterns with Slot, DefSlot and Segment
 

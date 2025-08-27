@@ -181,7 +181,7 @@ function term_matcher_constructor(term, acSets)
 
             
             T = symtype(data)
-            if T <: Number
+            if T <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
                 f = operation(data)
                 
                 for inds in acSets(eachindex(data_args), length(data_args))

@@ -133,7 +133,8 @@ end
 
 # Linked List interface
 @inline function assoc(d::ImmutableDict{Symbol, Any}, k::Symbol, v::Any)
-    ImmutableDict(d, k=>unwrap_const(v))::ImmutableDict{Symbol, Any}
+    @nospecialize v
+    ImmutableDict(d, k, unwrap_const(v))
 end
 
 struct LL{V}

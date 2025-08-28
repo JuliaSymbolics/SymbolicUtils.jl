@@ -104,6 +104,43 @@ const BasicSymbolic = BSImpl.Type
 const ArgsT{T} = SmallV{BasicSymbolic{T}}
 const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
 
+function cleanpoly!(p::PolynomialT, partial_polyvars, vars)
+    pvars = MP.variables(p)
+    nvars = length(pvars)
+    unused = BitSet(1:nvars)
+    @inbounds for mono in MP.monomials(p)
+        checker = let exps = MP.exponents(mono)
+            function (i)
+                iszero(exps[i])
+            end
+        end
+        filter!(checker, unused)
+        isempty(unused) && return p
+    end
+    first_idx = first(unused)
+    new_len = nvars - length(unused)
+    @inbounds for mono in MP.monomials(p)
+        write_to = first_idx
+        exps = MP.exponents(mono)
+        for i in first_idx+1:nvars
+            exps[write_to] = exps[i]
+            write_to += !(i in unused)
+        end
+        resize!(exps, new_len)
+    end
+    write_to = first_idx
+    @inbounds for i in first_idx+1:nvars
+        pvars[write_to] = pvars[i]
+        partial_polyvars[write_to] = partial_polyvars[i]
+        vars[write_to] = vars[i]
+        write_to += !(i in unused)
+    end
+    resize!(pvars, new_len)
+    resize!(partial_polyvars, new_len)
+    resize!(vars, new_len)
+    return nothing
+end
+
 const POLYVAR_LOCK = ReadWriteLock()
 # NOTE: All of these are accessed via POLYVAR_LOCK
 const BS_TO_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
@@ -777,6 +814,7 @@ end
 @inline function BSImpl.Polyform{T}(poly::PolynomialT, partial_polyvars::Vector{PolyVarT}, vars::SmallV{BasicSymbolic{T}}; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     props = ordered_override_properties(BSImpl.Polyform{T})
+    cleanpoly!(poly, partial_polyvars, vars)
     var = BSImpl.Polyform{T}(poly, partial_polyvars, vars, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)

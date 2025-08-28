@@ -587,6 +587,7 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic
 ### Constructors
 ###
 
+# TODO: split into 3 caches based on `SymVariant`
 const ENABLE_HASHCONSING = Ref(true)
 # const WKD = TaskLocalValue{WeakKeyDict{HashconsingWrapper, Nothing}}(WeakKeyDict{HashconsingWrapper, Nothing})
 const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})

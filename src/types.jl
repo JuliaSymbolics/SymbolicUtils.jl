@@ -831,47 +831,6 @@ function maybe_integer(x)
     return (x isa Rational && isone(x.den)) ? x.num : x
 end
 
-@eval Base.@nospecializeinfer function closest_const(arg)
-    @nospecialize arg
-    $(begin
-        conds = Expr[]
-        bodys = Expr[]
-
-        for T in SYMTYPE_VARIANTS
-            isconcretetype(T) || continue
-            push!(conds, :(arg isa $T))
-            push!(bodys, :(Const{$T}(arg)))
-        end
-
-        expr = :()
-        if !isempty(conds)
-            root_cond, rest_conds = Iterators.peel(conds)
-            root_body, rest_bodys = Iterators.peel(bodys)
-            expr = Expr(:if, root_cond, root_body)
-            cur_expr = expr
-            for (cond, body) in zip(rest_conds, rest_bodys)
-                global cur_expr
-                new_chain = Expr(:elseif, cond, body)
-                push!(cur_expr.args, new_chain)
-                cur_expr = new_chain
-            end
-            push!(cur_expr.args, :(Const{typeof(arg)}(arg)::BasicSymbolic))
-        end
-        
-        expr
-    end)
-end
-
-Base.@nospecializeinfer function maybe_const(arg)
-    @nospecialize arg
-    arg isa BasicSymbolic ? arg : closest_const(arg)
-end
-
-Base.@nospecializeinfer function maybe_const(::Type{T}, arg) where {T}
-    @nospecialize arg
-    arg isa BasicSymbolic ? arg : Const{T}(arg)
-end
-
 function parse_args(args::Union{Tuple, AbstractVector})
     args isa ROArgsT && return parent(args)
     args isa ArgsT && return args

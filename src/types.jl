@@ -722,6 +722,11 @@ function unwrap_args(args)
     end
 end
 
+@inline BSImpl.Const{T}(val::BasicSymbolic{T}; kw...) where {T} = val
+@inline function BSImpl.Const{T}(val::BasicSymbolic{V}; kw...) where {T, V}
+    error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{$V}`.")
+end
+
 @inline function BSImpl.Const{T}(val; unsafe = false) where {T}
     props = ordered_override_properties(BSImpl.Const)
     var = BSImpl.Const{T}(val, props...)

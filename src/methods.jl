@@ -215,7 +215,13 @@ end
 for f in [!, ~]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:Bool}) = Bool
-        (::$(typeof(f)))(s::BasicSymbolic{Bool}) = Term{Bool}(!, [s])
+        function (::$(typeof(f)))(s::BasicSymbolic{T}) where {T}
+            type = symtype(s)
+            if type !== Bool
+                throw(MethodError(!, (s,)))
+            end
+            Term{T}(!, ArgsT{T}((s,)); type)
+        end
     end
 end
 

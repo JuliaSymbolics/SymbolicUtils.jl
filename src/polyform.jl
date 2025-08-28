@@ -397,8 +397,8 @@ function fraction_iszero(x)
     !iscall(x) && return _iszero(x)
     ff = flatten_fractions(x)
     # fast path and then slow path
-    any(_iszero, numerators(ff)) ||
-    any(_iszero∘expand, numerators(ff))
+    return (any(_iszero, numerators(ff)) ||
+    any(_iszero∘expand, numerators(ff)))::Bool
 end
 
 function fraction_isone(x)

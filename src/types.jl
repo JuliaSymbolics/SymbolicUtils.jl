@@ -831,15 +831,15 @@ function maybe_integer(x)
     return (x isa Rational && isone(x.den)) ? x.num : x
 end
 
-function parse_args(args::Union{Tuple, AbstractVector})
-    args isa ROArgsT && return parent(args)
-    args isa ArgsT && return args
-    _args = ArgsT()
+function parse_args(::Type{T}, args::Union{Tuple, AbstractVector}) where {T <: SymVariant}
+    args isa ROArgsT{T} && return parent(args)::ArgsT{T}
+    args isa ArgsT{T} && return args
+    _args = ArgsT{T}()
     sizehint!(_args, length(args))
     for arg in args
-        push!(_args, arg isa BasicSymbolic ? arg : closest_const(arg))
+        push!(_args, Const{T}(arg))
     end
-    return _args::ArgsT
+    return _args::ArgsT{T}
 end
 
 function unwrap_args(args)

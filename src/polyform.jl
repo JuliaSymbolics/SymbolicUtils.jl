@@ -319,23 +319,23 @@ function quick_mulmul(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     end
 end
 
-function add_with_div(x)
+function add_with_div(x::BasicSymbolic{T})::BasicSymbolic{T} where {T}
     (!iscall(x) || operation(x) !== (+)) && return x
     aa = parent(arguments(x))
     !any(isdiv, aa) && return x # no rewrite necessary
 
     # find and multiply all denominators
-    dens = ArgsT()
+    dens = ArgsT{T}()
     for a in aa
         isdiv(a) || continue
         push!(dens, a.den)
     end
-    T = symtype(x)
+    type = symtype(x)
     den = mul_worker(T, dens)
 
     # add all numerators
     div_idx = 1
-    nums = ArgsT()
+    nums = ArgsT{T}()
     for a in aa
         # if it is a division, we don't want to multiply the numerator by
         # its own denominator, so temporarily overwrite the index in `dens`
@@ -352,7 +352,7 @@ function add_with_div(x)
         end
         push!(nums, _num)
     end
-    num = add_worker(nums)
+    num = add_worker(T, nums)
 
     num, den = quick_cancel(num, den)
     return num / den

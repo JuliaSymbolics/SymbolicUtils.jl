@@ -1066,9 +1066,10 @@ Return the denominator of expression `x` as an array of multiplied terms.
 """
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : SmallV{Any}((1,))
 
-function unwrap_const(x)
+function unwrap_const(x::BasicSymbolic)
     isconst(x) ? x.val : x
 end
+unwrap_const(x) = x
 
 """
     term(f, args...; type = nothing)

@@ -10,14 +10,14 @@ function _const_or_not_symbolic(x)
     isconst(x) || !(x isa BasicSymbolic)
 end
 
-function combine_fold(::Type{T}, op, args::ArgsT, meta) where {T}
+function combine_fold(::Type{BasicSymbolic{T}}, op, args::ArgsT{T}, meta) where {T}
     @nospecialize op args meta
-    can_fold = !(op isa BasicSymbolic) && all(_const_or_not_symbolic, args)
+    can_fold = !(op isa BasicSymbolic{T}) && all(_const_or_not_symbolic, args)
     if can_fold
         if op === (+)
-            add_worker(args)
+            add_worker(T, args)
         elseif op === (*)
-            mul_worker(args)
+            mul_worker(T, args)
         elseif op === (/)
             args[1] / args[2]
         elseif op === (^)
@@ -32,7 +32,7 @@ function combine_fold(::Type{T}, op, args::ArgsT, meta) where {T}
             op(unwrap_const.(args)...)
         end
     else
-        maketerm(T, op, args, meta)
+        maketerm(BasicSymbolic{T}, op, args, meta)
     end
 end
 

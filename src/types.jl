@@ -1,25 +1,9 @@
-#-------------------
-#--------------------
-#### Symbolic
-#--------------------
+export SymReal, SafeReal, TreeReal, vartype
 
-#################### SafeReal #########################
-export SafeReal, LiteralReal
-
-# ideally the relationship should be the other way around
-abstract type SafeRealImpl <: Number end
-const SafeReal = Union{SafeRealImpl, Real}
-Base.one(::Type{SafeReal}) = true
-Base.zero(::Type{SafeReal}) = false
-Base.convert(::Type{<:SafeRealImpl}, x::Number) = convert(Real, x)
-
-################### LiteralReal #######################
-
-abstract type LiteralRealImpl <: Number end
-const LiteralReal = Union{LiteralRealImpl, Real}
-Base.one(::Type{LiteralReal}) = true
-Base.zero(::Type{LiteralReal}) = false
-Base.convert(::Type{<:LiteralRealImpl}, x::Number) = convert(Real, x)
+abstract type SymVariant end
+abstract type SymReal <: SymVariant end
+abstract type SafeReal <: SymVariant end
+abstract type TreeReal <: SymVariant end
 
 ###
 ### Uni-type design
@@ -36,17 +20,22 @@ const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
 const PolyVarOrder = DP.Commutative{DP.CreationOrder}
 const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=MonomialOrder)
 const PolyVarT = typeof(ExamplePolyVar)
-const PolynomialT{T} = DP.Polynomial{DP.Commutative{DP.CreationOrder}, MonomialOrder, T}
+const PolyCoeffT = Number
+const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
+# we can't actually print a zero polynomial of this type, since it attempts to call
+# `zero(Any)` but that doesn't matter because we shouldn't ever store a zero polynomial
+const PolynomialT = _PolynomialT{PolyCoeffT}
+const TypeT = Union{DataType, UnionAll, Union}
 
-function zeropoly(::Type{T}) where {T}
+function zeropoly()
     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}()
-    PolynomialT{T}(T[], mv)
+    PolynomialT(PolyCoeffT[], mv)
 end
 
-function onepoly(::Type{T}) where {T}
+function onepoly()
     V = DP.Commutative{DP.CreationOrder}
     mv = DP.MonomialVector{V, MonomialOrder}(DP.Variable{V, MonomialOrder}[], [Int[]])
-    PolynomialT{T}(T[one(T)], mv)
+    PolynomialT(PolyCoeffT[1], mv)
 end
 
 """
@@ -54,44 +43,47 @@ end
 
 Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
 """
-@data mutable BasicSymbolicImpl{T} begin 
+@data mutable BasicSymbolicImpl{T <: SymVariant} begin 
     struct Const
-        const val::T
+        const val::Any
         id::IdentT
     end
     struct Sym
         const name::Symbol
         const metadata::MetadataT
         const shape::ShapeT
+        const type::TypeT
         hash2::UInt
         id::IdentT
     end
     struct Term
         const f::Any
-        const args::SmallV{BasicSymbolicImpl.Type}
+        const args::SmallV{BasicSymbolicImpl.Type{T}}
         const metadata::MetadataT
         const shape::ShapeT
+        const type::TypeT
         hash::UInt
         hash2::UInt
         id::IdentT
     end
     struct Polyform
         # polynomial in terms of full hashed variables
-        const poly::PolynomialT{T}
+        const poly::PolynomialT
         # corresponding to poly.x.vars, the partially hashed variables
         const partial_polyvars::Vector{PolyVarT}
         # corresponding to poly.x.vars, the BasicSymbolic variables
-        const vars::SmallV{BasicSymbolicImpl.Type}
+        const vars::SmallV{BasicSymbolicImpl.Type{T}}
         const metadata::MetadataT
         const shape::ShapeT
-        const args::SmallV{BasicSymbolicImpl.Type}
+        const type::TypeT
+        const args::SmallV{BasicSymbolicImpl.Type{T}}
         hash::UInt
         hash2::UInt
         id::IdentT
     end
     struct Div
-        const num::BasicSymbolicImpl.Type
-        const den::BasicSymbolicImpl.Type
+        const num::BasicSymbolicImpl.Type{T}
+        const den::BasicSymbolicImpl.Type{T}
         # TODO: Keep or remove?
         # Flag for whether this div is in the most simplified form we can compute.
         # This being false doesn't mean no elimination is performed. Trivials such as
@@ -101,6 +93,7 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
         const simplified::Bool
         const metadata::MetadataT
         const shape::ShapeT
+        const type::TypeT
         hash2::UInt
         id::IdentT
     end

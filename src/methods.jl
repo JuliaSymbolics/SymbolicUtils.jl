@@ -146,8 +146,8 @@ for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
 end
 
-Base.:*(a::AbstractArray, b::BasicSymbolic{<:Number}) = map(x->x*b, a)
-Base.:*(a::BasicSymbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)
+Base.:*(a::AbstractArray, b::BasicSymbolic) = map(x->x*b, a)
+Base.:*(a::BasicSymbolic, b::AbstractArray) = map(x->a*x, b)
 
 for f in [identity, one, zero, *, +, -]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T

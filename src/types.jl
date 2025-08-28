@@ -656,9 +656,13 @@ function hashcons(s::BSImpl.Type)
     end true
 end
 
-const SMALLV_DEFAULT = hashcons(BSImpl.Const{Int}(0, (nothing, nothing)))
+const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, (nothing, nothing)))
+const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, (nothing, nothing)))
+const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, (nothing, nothing)))
 
-defaultval(::Type{<:BasicSymbolic}) = SMALLV_DEFAULT
+defaultval(::Type{BasicSymbolic{SymReal}}) = SMALLV_DEFAULT_SYMREAL
+defaultval(::Type{BasicSymbolic{SafeReal}}) = SMALLV_DEFAULT_SAFEREAL
+defaultval(::Type{BasicSymbolic{TreeReal}}) = SMALLV_DEFAULT_TREEREAL
 
 function get_mul_coefficient(x)
     iscall(x) && operation(x) === (*) || throw(ArgumentError("$x is not a multiplication"))

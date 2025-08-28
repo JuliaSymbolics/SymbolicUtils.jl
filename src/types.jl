@@ -736,59 +736,59 @@ end
     return var
 end
 
-@inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     props = ordered_override_properties(BSImpl.Sym)
-    var = BSImpl.Sym{T}(name, metadata, shape, props...)
+    var = BSImpl.Sym{T}(name, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end
     return var
 end
 
-@inline function BSImpl.Term{T}(f, args; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Term{T}(f, args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    args = parse_args(args)
+    args = parse_args(T, args)
     props = ordered_override_properties(BSImpl.Term)
-    var = BSImpl.Term{T}(f, args, metadata, shape, props...)
+    var = BSImpl.Term{T}(f, args, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end
     return var
 end
 
-@inline function BSImpl.Polyform{T}(poly::PolynomialT{T}; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
-    vars = SmallV{BasicSymbolic}()
+@inline function BSImpl.Polyform{T}(poly::PolynomialT; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
+    vars = SmallV{BasicSymbolic{T}}()
     pvars = MP.variables(poly)
     partial_polyvars = Vector{PolyVarT}()
     sizehint!(vars, length(pvars))
     sizehint!(partial_polyvars, length(pvars))
     @manually_scope COMPARE_FULL => true begin
         for pvar in pvars
-            var = polyvar_to_basicsymbolic(pvar)
+            var = polyvar_to_basicsymbolic(pvar)::BasicSymbolic{T}
             push!(vars, var)
             push!(partial_polyvars, basicsymbolic_to_partial_polyvar(var))
         end
     end
-    return BSImpl.Polyform{T}(poly, partial_polyvars, vars; metadata, shape, unsafe)
+    return BSImpl.Polyform{T}(poly, partial_polyvars, vars; metadata, shape, type, unsafe)
 end
 
-@inline function BSImpl.Polyform{T}(poly::PolynomialT{T}, partial_polyvars::Vector{PolyVarT}, vars::SmallV{BasicSymbolic}; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Polyform{T}(poly::PolynomialT, partial_polyvars::Vector{PolyVarT}, vars::SmallV{BasicSymbolic{T}}; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    props = ordered_override_properties(BSImpl.Polyform)
-    var = BSImpl.Polyform{T}(poly, partial_polyvars, vars, metadata, shape, props...)
+    props = ordered_override_properties(BSImpl.Polyform{T})
+    var = BSImpl.Polyform{T}(poly, partial_polyvars, vars, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end
     return var
 end
 
-@inline function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    num = maybe_const(num)
-    den = maybe_const(den)
+    num = Const{T}(num)
+    den = Const{T}(den)
     props = ordered_override_properties(BSImpl.Div)
-    var = BSImpl.Div{T}(num, den, simplified, metadata, shape, props...)
+    var = BSImpl.Div{T}(num, den, simplified, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end

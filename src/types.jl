@@ -246,37 +246,32 @@ function override_properties(obj::Type{<:BSImpl.Variant})
     end
 end
 
-function ordered_override_properties(obj::Type{<:BSImpl.Variant})
-    @match obj begin
-        ::Type{<:BSImpl.Const} => ((nothing, nothing),)
-        ::Type{<:BSImpl.Sym} => (0, (nothing, nothing))
-        ::Type{<:BSImpl.Term} => (0, 0, (nothing, nothing))
-        ::Type{<:BSImpl.Polyform} => (ArgsT(), 0, 0, (nothing, nothing))
-        ::Type{<:BSImpl.Div} => (0, (nothing, nothing))
-        _ => throw(UnimplementedForVariantError(override_properties, obj))
-    end
-end
+ordered_override_properties(::Type{<:BSImpl.Const}) = ((nothing, nothing),)
+ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, (nothing, nothing))
+ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, (nothing, nothing))
+ordered_override_properties(::Type{BSImpl.Polyform{T}}) where {T} = (ArgsT{T}(), 0, 0, (nothing, nothing))
+ordered_override_properties(::Type{<:BSImpl.Div}) = (0, (nothing, nothing))
 
 function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
         BSImpl.Const(; val, id) => (; val, id)
-        BSImpl.Sym(; name, metadata, hash2, shape, id) => (; name, metadata, hash2, shape, id)
-        BSImpl.Term(; f, args, metadata, hash, hash2, shape, id) => (; f, args, metadata, hash, hash2, shape, id)
-        BSImpl.Polyform(; poly, partial_polyvars, vars, metadata, shape, args, hash, hash2, id) => (; poly, partial_polyvars, vars, metadata, shape, args, hash, hash2, id)
-        BSImpl.Div(; num, den, simplified, metadata, hash2, shape, id) => (; num, den, simplified, metadata, hash2, shape, id)
+        BSImpl.Sym(; name, metadata, hash2, shape, type, id) => (; name, metadata, hash2, shape, type, id)
+        BSImpl.Term(; f, args, metadata, hash, hash2, shape, type, id) => (; f, args, metadata, hash, hash2, shape, type, id)
+        BSImpl.Polyform(; poly, partial_polyvars, vars, metadata, shape, type, args, hash, hash2, id) => (; poly, partial_polyvars, vars, metadata, shape, type, args, hash, hash2, id)
+        BSImpl.Div(; num, den, simplified, metadata, hash2, shape, type, id) => (; num, den, simplified, metadata, hash2, shape, type, id)
     end
 end
 
-function ConstructionBase.setproperties(obj::BSImpl.Type, patch::NamedTuple)
+function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple) where {T}
     props = getproperties(obj)
     overrides = override_properties(obj)
     # We only want to invalidate `args` if we're updating `coeff` or `dict`.
     if ispolyform(obj)
-        extras = (; args = ArgsT())
+        extras = (; args = ArgsT{T}())
     else
         extras = (;)
     end
-    hashcons(MData.variant_type(obj)(; props..., patch..., overrides..., extras...)::typeof(obj))
+    hashcons(MData.variant_type(obj)(; props..., patch..., overrides..., extras...)::BasicSymbolic{T})
 end
 
 ###

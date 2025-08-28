@@ -97,34 +97,64 @@ expand(x) = x
 
 ## Rational Polynomial form with Div
 
-_mul(xs...) = all(isempty, xs) ? 1 : *(Iterators.flatten(xs)...)
-
-function simplify_div(d)
+function simplify_div(d::T)::T where {T <: BasicSymbolic}
     isdiv(d) || return d
     d.simplified && return d
-    num, den = simplify_div(symtype(d), d.num, d.den)
+    num, den = simplify_div(d.num, d.den)
+    isequal(num, d) && return d
     return simplify_fractions(num) / simplify_fractions(den)
 end
 
-function canonicalize_coeffs!(coeffs::Vector{T}) where {T}
-    Int <: T || return
-    T <: Integer && return
+function canonicalize_coeffs!(coeffs::Vector{PolyCoeffT})
     for i in eachindex(coeffs)
         v = coeffs[i]
         isinteger(v) || continue
         coeffs[i] = Int(v)
     end
-    return
 end
-canonicalize_coeffs!(_) = nothing
+canonicalize_coeffs!(x) = nothing
 
-function simplify_div(::Type{T}, num, den) where {T}
+function poly_to_gcd_form(p::PolynomialT)
+    all_int = true
+    all_rat = true
+    any_complex = false
+    for c in MP.coefficients(p)
+        isint = isinteger(c)
+        all_int &= isint
+        all_rat &= isint || c isa Rational
+        any_complex |= c isa Complex
+        all_int || all_rat || break
+    end
+    if all_int
+        return DP.Polynomial(Integer.(MP.coefficients(p)), MP.monomials(p))
+    elseif all_rat
+        return DP.Polynomial(rationalize.(MP.coefficients(p)), MP.monomials(p))
+    elseif any_complex
+        return DP.Polynomial(complex.(MP.coefficients(p)), MP.monomials(p))
+    else
+        return DP.Polynomial(float.(MP.coefficients(p)), MP.monomials(p))
+    end
+end
+
+function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, PolynomialT})
+    if p1 isa PolyVarT && p2 isa PolyVarT
+        return gcd(p1, p2)
+    elseif p1 isa PolyVarT && p2 isa PolynomialT
+        return gcd(p1, poly_to_gcd_form(p2))
+    elseif p1 isa PolynomialT && p2 isa PolyVarT
+        return gcd(poly_to_gcd_form(p1), p2)
+    elseif p1 isa PolynomialT && p2 isa PolynomialT
+        return gcd(poly_to_gcd_form(p1), poly_to_gcd_form(p2))
+    end
+end
+
+function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: SymVariant}
     isconst(num) && return num, den
     isconst(den) && return num, den
-    poly_to_bs = Dict{PolyVarT, BasicSymbolic}()
+    poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
     partial_poly1 = to_poly!(poly_to_bs, num, false)
     partial_poly2 = to_poly!(poly_to_bs, den, false)
-    factor = gcd(partial_poly1, partial_poly2)
+    factor = safe_gcd(partial_poly1, partial_poly2)
     if isone(factor)
         return num, den
     end
@@ -136,9 +166,9 @@ function simplify_div(::Type{T}, num, den) where {T}
     canonicalize_coeffs!(MP.coefficients(partial_poly2))
     pvars1 = MP.variables(partial_poly1)
     pvars2 = MP.variables(partial_poly2)
-    vars1 = [poly_to_bs[v] for v in pvars1]
-    vars2 = [poly_to_bs[v] for v in pvars2]
-    return subs_poly(partial_poly1, vars1), subs_poly(partial_poly2, vars2)
+    vars1 = BasicSymbolic{T}[poly_to_bs[v] for v in pvars1]
+    vars2 = BasicSymbolic{T}[poly_to_bs[v] for v in pvars2]
+    return subs_poly(partial_poly1, vars1)::BasicSymbolic{T}, subs_poly(partial_poly2, vars2)::BasicSymbolic{T}
 end
 
 """

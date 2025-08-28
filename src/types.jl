@@ -1664,11 +1664,27 @@ and 2 arg `h`. The second argument to `h` must be a one argument function-like
 variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)
+    _vartype = SymReal
+    if Meta.isexpr(xs[end], :(=))
+        x = xs[end]
+        key, val = x.args
+        @assert key == :vartype
+        if val == :SymReal
+            _vartype = SymReal
+        elseif val == :SafeReal
+            _vartype = SafeReal
+        elseif val == :TreeReal
+            _vartype = TreeReal
+        else
+            error("Invalid vartype $val")
+        end
+        xs = Base.front(xs)
+    end
     defs = map(xs) do x
         nt = _name_type(x)
         n, t = nt.name, nt.type
         T = esc(t)
-        :($(esc(n)) = Sym{$T}($(Expr(:quote, n))))
+        :($(esc(n)) = Sym{$_vartype}($(Expr(:quote, n)); type = $T))
     end
     Expr(:block, defs...,
          :(tuple($(map(x->esc(_name_type(x).name), xs)...))))

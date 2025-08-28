@@ -11,7 +11,7 @@ import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
                       symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
-                      ArgsT, maybe_const
+                      ArgsT, Const, SymVariant
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -142,12 +142,12 @@ function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     end
 end
 
-function function_to_expr(op::typeof(^), O, st)
+function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
     base = unwrap_const(base)
     exp = unwrap_const(exp)
     if exp isa Real && exp < 0
-        base = Term(inv, ArgsT((base,)))
+        base = Term{T}(inv, ArgsT{T}((base,)); type = symtype(O))
         if isone(-exp)
             return toexpr(base, st)
         else
@@ -156,7 +156,7 @@ function function_to_expr(op::typeof(^), O, st)
     end
     if get(st.rewrites, :nanmath, false) === true && !(exp isa Integer)
         op = NaNMath.pow
-        return toexpr(Term(op, ArgsT((maybe_const(base), maybe_const(exp)))), st)
+        return toexpr(Term{T}(op, ArgsT{T}((Const{T}(base), Const{T}(exp))); type = symtype(O)), st)
     end
     return nothing
 end
@@ -753,10 +753,11 @@ end
 
 Generates new symbol of type `T` with unique name in `state`.
 """
-@inline function newsym!(state, ::Type{T}) where T 
+@inline function newsym!(state, ::Type{T}, symtype) where {T <: SymVariant}
+    @nospecialize symtype
     name = "##cse#$(state.varid[])"
     state.varid[] += 1
-    Sym{T}(Symbol(name))
+    Sym{T}(Symbol(name); type = symtype)
 end
 
 """
@@ -875,7 +876,7 @@ function cse! end
 indextype(::AbstractSparseArray{Tv, Ti}) where {Tv, Ti} = Ti
 
 
-function cse!(expr::BasicSymbolic, state::CSEState)
+function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
     get!(state.visited, expr.id) do
         iscall(expr) || return expr
 
@@ -888,13 +889,13 @@ function cse!(expr::BasicSymbolic, state::CSEState)
                 (_is_array_of_symbolics(arg) || _is_tuple_of_symbolics(arg))
                 if arg isa Tuple
                     new_arg = cse!(MakeTuple(arg), state)
-                    sym = newsym!(state, Tuple{symtype.(arg)...})
+                    sym = newsym!(state, T, Tuple{symtype.(arg)...})
                 elseif issparse(arg)
                     new_arg = cse!(MakeSparseArray(arg), state)
-                    sym = newsym!(state, AbstractSparseArray{symtype(eltype(arg)), indextype(arg), ndims(arg)})
+                    sym = newsym!(state, T, AbstractSparseArray{symtype(eltype(arg)), indextype(arg), ndims(arg)})
                 else
                     new_arg = cse!(MakeArray(arg, typeof(arg)), state)
-                    sym = newsym!(state, AbstractArray{symtype(eltype(arg)), ndims(arg)})
+                    sym = newsym!(state, T, AbstractArray{symtype(eltype(arg)), ndims(arg)})
                 end
                 push!(state.sorted_exprs, sym ← new_arg)
                 state.visited[arg] = sym
@@ -904,8 +905,8 @@ function cse!(expr::BasicSymbolic, state::CSEState)
         end
         # use `term` instead of `maketerm` because we only care about the operation being performed
         # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-        new_expr = term(operation(expr), args...; type = symtype(expr))
-        sym = newsym!(state, symtype(new_expr))
+        new_expr = Term{T}(operation(expr), args; type = symtype(expr))
+        sym = newsym!(state, T, symtype(new_expr))
         push!(state.sorted_exprs, sym ← new_expr)
         return sym
     end

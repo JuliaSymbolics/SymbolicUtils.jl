@@ -114,44 +114,28 @@ for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{Integer},
                    S::Type{<:Complex{<:Rational}}) = Complex{Rational}
-    for R in [SafeRealImpl, LiteralRealImpl]
-        @eval function promote_symtype(::$(typeof(f)),
-                T::Type{<:$R},
-                S::Type{<:Real})
-            X = promote_type(T, Real)
-            X == Real ? $R : X
-        end
-        @eval function promote_symtype(::$(typeof(f)),
-                T::Type{<:Real},
-                S::Type{<:$R})
-            X = promote_type(Real, S)
-            X == Real ? $R : X
-        end
-        @eval function promote_symtype(::$(typeof(f)),
-                T::Type{<:$R},
-                S::Type{<:$R})
-            $R
-        end
-    end
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
 error_f_symbolic(f, T) = error("$f is not defined for T.")
 
-function Base.rem2pi(x::BasicSymbolic, mode::Base.RoundingMode)
-    T = symtype(x)
-    T <: Number ? term(rem2pi, x, mode) : error_f_symbolic(rem2pi, T)
+function Base.rem2pi(x::BasicSymbolic{T}, mode::Base.RoundingMode) where {T}
+    type = symtype(x)
+    type <: Number || error_f_symbolic(rem2pi, type)
+    return Term{T}(rem2pi, ArgsT{T}((x, Const{T}(mode))); type)
 end
 
 # Specially handle inv and literal pow
-function Base.inv(x::BasicSymbolic)
-    T = symtype(x)
-    T <: Number ? Base.:^(x, -1) : error_f_symbolic(rem2pi, T)
+function Base.inv(x::BasicSymbolic{T}) where {T}
+    type = symtype(x)
+    type <: Number || error_f_symbolic(inv, type)
+    return Const{T}(x ^ -1)
 end
-function Base.literal_pow(::typeof(^), x::BasicSymbolic, ::Val{p}) where {p}
-    T = symtype(x)
-    T <: Number ? Base.:^(x, p) : error_f_symbolic(^, T)
+function Base.literal_pow(::typeof(^), x::BasicSymbolic{T}, ::Val{p}) where {T, p}
+    type = symtype(x)
+    type <: Number || error_f_symbolic(^, type)
+    return Const{T}(x ^ p)
 end
 function promote_symtype(::typeof(Base.literal_pow), _, ::Type{T}, ::Type{Val{S}}) where{T<:Number,S}
     return promote_symtype(^, T, typeof(S))

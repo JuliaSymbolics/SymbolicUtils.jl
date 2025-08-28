@@ -644,7 +644,8 @@ const ENABLE_HASHCONSING = Ref(true)
 # const WKD = TaskLocalValue{WeakKeyDict{HashconsingWrapper, Nothing}}(WeakKeyDict{HashconsingWrapper, Nothing})
 const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})
 const WVD = TaskLocalValue{WeakValueDict{UInt, BSImpl.Type}}(WeakValueDict{UInt, BSImpl.Type})
-const WCS = TaskLocalValue{WeakCacheSet{BSImpl.Type}}(WeakCacheSet{BSImpl.Type})
+const AllBasicSymbolics = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}
+const WCS = TaskLocalValue{WeakCacheSet{AllBasicSymbolics}}(WeakCacheSet{AllBasicSymbolics})
 const TASK_ID = TaskLocalValue{UInt}(() -> rand(UInt))
 
 function generate_id()
@@ -686,7 +687,7 @@ function hashcons(s::BSImpl.Type)
     end
     @manually_scope COMPARE_FULL => true begin
         cache = WCS[]
-        k = getkey!(cache, s)
+        k = getkey!(cache, s)::typeof(s)
         # cache = WVD[]
         # h = hash(s)
         # k = get(cache, h, nothing)

@@ -64,12 +64,10 @@ end
     @test istotal(ρ(), -1z())
 
     @syms b(t) a(t) t
-    @test a(t) <ₑ b(t)
-    @test !(b(t) <ₑ a(t))
+    @test istotal(a(t), b(t))
 
     @syms y() x()
-    @test y() <ₑ x()
-    @test !(x() <ₑ y())
+    @test istotal(x(), y())
 end
 
 @testset "Sym vs Term" begin

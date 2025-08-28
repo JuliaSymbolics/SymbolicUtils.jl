@@ -32,11 +32,11 @@ function matcher(slot::Slot, acSets)
         val = get(bindings, slot.name, nothing)
         # if slot name already is in bindings, check if it matches
         if val !== nothing
-            if isequal(val, car(data))
+            if isequal(val, car(data))::Bool
                 return next(bindings, 1)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
-        elseif slot.predicate(unwrap_const(car(data)))
+        elseif slot.predicate(unwrap_const(car(data)))::Bool
             rest = car(data)
             binds = assoc(bindings, slot.name, rest)
             next(binds, 1)

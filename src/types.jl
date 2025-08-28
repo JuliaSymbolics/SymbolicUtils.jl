@@ -636,60 +636,14 @@ const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
 const PLY_SALT = 0x36ee940e7fa431a3 % UInt
 
-@eval Base.@nospecializeinfer function hash_anyscalar(x::Any, h::UInt, full::Bool)
-    @nospecialize x
-    $(begin
-        conds = Expr[]
-        bodys = Expr[]
-        for T in SYMTYPE_VARIANTS
-            push!(conds, :(x isa BasicSymbolic{$T}))
-            push!(bodys, :(hash_bsimpl(x, h, full)))
-        end
-        for T in SCALAR_SYMTYPE_VARIANTS
-            isconcretetype(T) || continue
-            push!(conds, :(x isa $T))
-            push!(bodys, :(hash(x, h)))
-        end
-        for A in ARR_VARIANTS, T in SCALAR_SYMTYPE_VARIANTS
-            push!(conds, :(x isa $A{$T}))
-            push!(bodys, :(hash(x, h)))
-        end
-
-        expr = :()
-        if !isempty(conds)
-            root_cond, rest_conds = Iterators.peel(conds)
-            root_body, rest_bodys = Iterators.peel(bodys)
-            expr = Expr(:if, root_cond, root_body)
-            cur_expr = expr
-            for (cond, body) in zip(rest_conds, rest_bodys)
-                global cur_expr
-                new_chain = Expr(:elseif, cond, body)
-                push!(cur_expr.args, new_chain)
-                cur_expr = new_chain
-            end
-            push!(cur_expr.args, :(hash(x, h)::UInt))
-        end
-
-        expr
-    end)
-end
-
-function hashargs(x::ArgsT, h::UInt, full)
-    h += Base.hash_abstractarray_seed
-    h = hash(length(x), h)
-    for val in x
-        h = hash_anyscalar(val, h, full)
-    end
-    return h
-end
-
-function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
+function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     if !iszero(h)
         return hash(hash_bsimpl(s, zero(h), full), h)::UInt
     end
+    h = hash(T, h)
     @match s begin
         BSImpl.Const(; val) => begin
-            h = hash_anyscalar(val, h, full)
+            h = hash(val, h)::UInt
             if full
                 h = Base.hash(typeof(val), h)::UInt
             end
@@ -703,32 +657,33 @@ function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
     end
 
     partial::UInt = @match s begin
-        BSImpl.Sym(; name, shape) => begin
+        BSImpl.Sym(; name, shape, type) => begin
             h = Base.hash(name, h)
             h = Base.hash(shape, h)
+            h = Base.hash(type, h)
             h ⊻ SYM_SALT
         end
-        BSImpl.Term(; f, args, shape, hash) => begin
+        BSImpl.Term(; f, args, shape, hash, type) => begin
             # use/update cached hash
             if iszero(hash)
-                hash = s.hash = Base.hash(f, hashargs(args, Base.hash(shape, h), full))::UInt
+                hash = s.hash = Base.hash(f, Base.hash(args, Base.hash(shape, Base.hash(type, h))))::UInt
             else
                 hash
             end
         end
-        BSImpl.Polyform(; poly, partial_polyvars, shape, hash) => begin
+        BSImpl.Polyform(; poly, partial_polyvars, shape, hash, type) => begin
             if full
-                Base.hash(poly, Base.hash(shape, h))
+                Base.hash(poly, Base.hash(shape, Base.hash(type, h)))
             else
                 if iszero(hash)
-                    hash = s.hash = Base.hash(swap_polynomial_vars(poly, partial_polyvars), Base.hash(shape, h))
+                    hash = s.hash = Base.hash(swap_polynomial_vars(poly, partial_polyvars), Base.hash(shape, Base.hash(type, h)))
                 else
                     hash
                 end
             end
         end
-        BSImpl.Div(; num, den) => begin
-            hash_anyscalar(num, hash_anyscalar(den, h, full), full) ⊻ DIV_SALT
+        BSImpl.Div(; num, den, type) => begin
+            Base.hash(num, Base.hash(den, Base.hash(type, h))) ⊻ DIV_SALT
         end
     end
 

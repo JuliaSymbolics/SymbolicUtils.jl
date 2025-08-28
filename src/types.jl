@@ -1349,15 +1349,6 @@ function promote_symtype(f::BasicSymbolic, args...)
     return Y
 end
 
-function Base.show(io::IO, f::BasicSymbolic{<:FnType{X,Y}}) where {X,Y}
-    print(io, nameof(f))
-    # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
-    # best printing, but it's better than erroring.
-    argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")
-    print(io, "(", argrepr, ")")
-    print(io, "::", Y)
-end
-
 @inline isassociative(op) = op === (+) || op === (*)
 
 function _promote_symtype(f, args)

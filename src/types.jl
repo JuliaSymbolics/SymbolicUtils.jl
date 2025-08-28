@@ -1487,7 +1487,7 @@ function show_term(io::IO, t)
 
     f = operation(t)
     args = sorted_arguments(t)
-    if symtype(t) == LiteralReal
+    if vartype(t) === TreeReal
         show_call(io, f, args)
     elseif f === (+)
         show_add(io, args)

@@ -10,6 +10,7 @@ using Pkg, Test, SafeTestsets
         @safetestset "PolyForm" begin include("polyform.jl") end
         @safetestset "Rewrite" begin include("rewrite.jl") end
         @safetestset "Rulesets" begin include("rulesets.jl") end
+        @safetestset "Inference" begin include("inference.jl") end
         @safetestset "Code" begin include("code.jl") end
         @safetestset "CSE" begin include("cse.jl") end
         @safetestset "Interface" begin include("interface.jl") end

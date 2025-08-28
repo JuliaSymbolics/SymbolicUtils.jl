@@ -2000,10 +2000,40 @@ function coeff_dict_to_term(::Type{T}, type::TypeT, coeff, dict)::BasicSymbolic{
     end
 
     mvec = DP.MonomialVector{PolyVarOrder, MonomialOrder}(pvars, [exps])
-    Polyform{T}(PolynomialT(coeff, mvec), partial_pvars, vars; type)
+    Polyform{T}(PolynomialT(copy(coeff), mvec), partial_pvars, vars; type)
 end
 
-function mul_worker(::Type{T}, terms) where {T <: Union{SymReal, SafeReal}}
+struct MulWorkerBuffer{T}
+    num_dict::Dict{BasicSymbolic{T}, Any}
+    den_dict::Dict{BasicSymbolic{T}, Any}
+    num_coeff::Vector{PolyCoeffT}
+    den_coeff::Vector{PolyCoeffT}
+end
+
+function MulWorkerBuffer{T}() where {T}
+    MulWorkerBuffer{T}(Dict{BasicSymbolic{T}, Any}(), Dict{BasicSymbolic{T}, Any}(), PolyCoeffT[1], PolyCoeffT[1])
+end
+
+function Base.empty!(mwb::MulWorkerBuffer)
+    empty!(mwb.num_dict)
+    empty!(mwb.den_dict)
+    empty!(mwb.num_coeff)
+    empty!(mwb.den_coeff)
+    push!(mwb.num_coeff, 1)
+    push!(mwb.den_coeff, 1)
+    return mwb
+end
+
+const SYMREAL_BUFFER = TaskLocalValue{MulWorkerBuffer{SymReal}}(MulWorkerBuffer{SymReal})
+const SAFEREAL_BUFFER = TaskLocalValue{MulWorkerBuffer{SafeReal}}(MulWorkerBuffer{SafeReal})
+
+function (mwb::MulWorkerBuffer{T})(terms) where {T}
+    empty!(mwb)
+    num_dict = mwb.num_dict
+    num_coeff = mwb.num_coeff
+    den_dict = mwb.den_dict
+    den_coeff = mwb.den_coeff
+
     length(terms) == 1 && return Const{T}(only(terms))
     a, bs = Iterators.peel(terms)
     a = unwrap(a)
@@ -2012,10 +2042,6 @@ function mul_worker(::Type{T}, terms) where {T <: Union{SymReal, SafeReal}}
         type = promote_symtype(*, type, symtype(b))
     end
     unsafes = ArgsT{T}()
-    num_coeff = PolyCoeffT[1]
-    den_coeff = PolyCoeffT[1]
-    num_dict = Dict{BasicSymbolic{T}, Any}()
-    den_dict = Dict{BasicSymbolic{T}, Any}()
 
     for term in terms
         term = unwrap_const(unwrap(term))
@@ -2050,6 +2076,9 @@ function mul_worker(::Type{T}, terms) where {T <: Union{SymReal, SafeReal}}
 
     return Div{T}(num, den, false; type)
 end
+
+mul_worker(::Type{SymReal}, terms) = SYMREAL_BUFFER[](terms)
+mul_worker(::Type{SafeReal}, terms) = SAFEREAL_BUFFER[](terms)
 
 function *(a::T, b::T) where {T <: NonTreeSym}
     if !(symtype(a) <: Number) || !(symtype(b) <: Number)

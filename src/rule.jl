@@ -583,14 +583,19 @@ function (acr::ACRule)(term)
         # different operations -> try deflsot
         r(term)
     else
-        f = operation(term)
-        T = symtype(term)
+        f =  operation(term)
+        # Assume that the matcher was formed by closing over a term
+        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
+            return nothing
+        end
+
+        T = vartype(term)
         args = arguments(term)
         is_full_perm = acr.arity == length(args)
         if is_full_perm
             args_buf = copy(parent(args))
         else
-            args_buf = ArgsT(@view args[1:acr.arity])
+            args_buf = ArgsT{T}(@view args[1:acr.arity])
         end
 
         itr = acr.sets(eachindex(args), acr.arity)
@@ -601,22 +606,22 @@ function (acr::ACRule)(term)
             end
             # this is temporary and only constructed so the rule can
             # try and match it - no need to hashcons it.
-            tempterm = BSImpl.Term{T}(f, args_buf; unsafe = true)
+            tempterm = BSImpl.Term{T}(f, args_buf; unsafe = true, type = symtype(term))
             # this term will be hashconsed regardless
             result = r(tempterm)
             if result !== nothing
                 # Assumption: inds are unique
                 is_full_perm && return result
                 inds_set = BitSet(inds)
-                full_args_buf = ArgsT(@view args[1:(length(args)-acr.arity+1)])
+                full_args_buf = ArgsT{T}(@view args[1:(length(args)-acr.arity+1)])
                 idx = 1
                 for i in eachindex(args)
                     i in inds_set && continue
                     full_args_buf[idx] = args[i]
                     idx += 1
                 end
-                full_args_buf[idx] = maybe_const(result)
-                return maketerm(typeof(term), f, full_args_buf, metadata(term))
+                full_args_buf[idx] = Const{T}(result)
+                return maketerm(typeof(term), f, full_args_buf, metadata(term); type = symtype(term))
             end
         end
     end

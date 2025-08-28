@@ -101,8 +101,8 @@ end
 
 const BSImpl = BasicSymbolicImpl
 const BasicSymbolic = BSImpl.Type
-const ArgsT = SmallV{BasicSymbolic}
-const ROArgsT = ReadOnlyVector{BasicSymbolic, ArgsT}
+const ArgsT{T} = SmallV{BasicSymbolic{T}}
+const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
 
 const POLYVAR_LOCK = ReadWriteLock()
 # NOTE: All of these are accessed via POLYVAR_LOCK

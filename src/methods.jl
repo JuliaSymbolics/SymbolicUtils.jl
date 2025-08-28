@@ -237,8 +237,22 @@ end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
 
 # Array-like operations
-Base.size(x::BasicSymbolic{<:Number}) = ()
-Base.length(x::BasicSymbolic{<:Number}) = 1
-Base.ndims(x::BasicSymbolic{T}) where {T} = Base.ndims(T)
-Base.ndims(::Type{<:BasicSymbolic{T}}) where {T} = Base.ndims(T)
-Base.broadcastable(x::BasicSymbolic{T}) where {T<:Number} = Ref(x)
+function Base.size(x::BasicSymbolic)
+    @match x begin
+        BSImpl.Const(; val) => size(val)
+        BSImpl.Sym(; shape) => shape === Unknown() ? shape : map(length, shape)
+        BSImpl.Term(; shape) => shape === Unknown() ? shape : map(length, shape)
+        BSImpl.Polyform(; shape) => shape === Unknown() ? shape : map(length, shape)
+        BSImpl.Div(; shape) => shape === Unknown() ? shape : map(length, shape)
+    end
+end
+Base.length(x::BasicSymbolic) = prod(size(x))
+Base.ndims(x::BasicSymbolic) = length(size(x))
+function Base.broadcastable(x::BasicSymbolic)
+    type = symtype(x)
+    if type <: Number
+        Ref(x)
+    else
+        x
+    end
+end

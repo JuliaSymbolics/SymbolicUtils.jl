@@ -390,6 +390,7 @@ julia> sorted_arguments(expr)
 ```
 """
 @cache function TermInterface.sorted_arguments(x::BSImpl.Type)::ROArgsT
+    T = vartype(x)
     @match x begin
         BSImpl.Polyform(; poly) => begin
             variant = polyform_variant(poly)
@@ -399,7 +400,7 @@ julia> sorted_arguments(expr)
                 PolyformVariant.MUL => sort!(args, by = get_degrees)
                 _ => nothing
             end
-            return ROArgsT(ArgsT(args))
+            return ROArgsT{T}(ArgsT{T}(args))
         end
         _ => return arguments(x)
     end
@@ -439,13 +440,13 @@ arguments(arguments(expr4)[1])  # returns collection containing x and y
 
 See also: [`iscall`](@ref), [`operation`](@ref)
 """
-function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
+function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
     @match x begin
         BSImpl.Const(_) => throw(ArgumentError("`Const` does not have arguments."))
         BSImpl.Sym(_) => throw(ArgumentError("`Sym` does not have arguments."))
-        BSImpl.Term(; args) => ROArgsT(args)
-        BSImpl.Polyform(; poly, partial_polyvars, vars, args, shape) => begin
-            isempty(args) || return ROArgsT(args)
+        BSImpl.Term(; args) => ROArgsT{T}(args)
+        BSImpl.Polyform(; poly, partial_polyvars, vars, args, shape, type) => begin
+            isempty(args) || return ROArgsT{T}(args)
             @match polyform_variant(poly) begin
                 PolyformVariant.ADD => begin
                     for term in MP.terms(poly)
@@ -453,12 +454,12 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                         mono = MP.monomial(term)
                         exps = MP.exponents(mono)
                         if MP.isconstant(term)
-                            push!(args, closest_const(coeff))
+                            push!(args, Const{T}(coeff))
                         elseif isone(coeff) && isone(count(!iszero, exps))
                             idx = findfirst(!iszero, exps)
                             push!(args, vars[idx] ^ exps[idx])
                         else
-                            push!(args, Polyform{T}(MP.polynomial(term, T), partial_polyvars, vars; shape))
+                            push!(args, Polyform{T}(MP.polynomial(term, PolyCoeffT), copy(partial_polyvars), copy(vars); shape, type))
                         end
                     end
                 end
@@ -467,9 +468,9 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                     coeff = MP.coefficient(term)
                     mono = MP.monomial(term)
                     if !isone(coeff)
-                        push!(args, closest_const(coeff))
+                        push!(args, Const{T}(coeff))
                     end
-                    _new_coeffs = ones(T, 1)
+                    _new_coeffs = ones(PolyCoeffT, 1)
                     for (i, (var, pow)) in enumerate(zip(vars, MP.exponents(mono)))
                         iszero(pow) && continue
                         if isone(pow)
@@ -477,9 +478,9 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                         else
                             exps = zeros(Int, length(vars))
                             exps[i] = pow
-                            mvec = DP.MonomialVector(MP.variables(poly), [exps])
-                            newpoly = PolynomialT{T}(_new_coeffs, mvec)
-                            push!(args, Polyform{T}(newpoly, partial_polyvars, vars))
+                            mvec = DP.MonomialVector(copy(MP.variables(poly)), [exps])
+                            newpoly = PolynomialT(_new_coeffs, mvec)
+                            push!(args, Polyform{T}(newpoly, copy(partial_polyvars), copy(vars); type))
                         end
                     end
                 end
@@ -492,12 +493,12 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                     @assert !iszero(pow)
                     # @assert !isone(pow)
                     push!(args, vars[idx])
-                    push!(args, closest_const(pow))
+                    push!(args, Const{T}(pow))
                 end
             end
-            return ROArgsT(args)
+            return ROArgsT{T}(args)
         end
-        BSImpl.Div(num, den) => ROArgsT(ArgsT((num, den)))
+        BSImpl.Div(num, den) => ROArgsT{T}(ArgsT{T}((num, den)))
         _ => throw(UnimplementedForVariantError(arguments, MData.variant_type(x)))
     end
 end

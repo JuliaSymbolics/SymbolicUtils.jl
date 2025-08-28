@@ -144,8 +144,6 @@ end
 promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeRealImpl}) = SafeReal
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralRealImpl}) = LiteralReal
 end
 
 Base.:*(a::AbstractArray, b::BasicSymbolic{<:Number}) = map(x->x*b, a)

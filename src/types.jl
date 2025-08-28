@@ -991,10 +991,27 @@ Return the denominator of expression `x` as an array of multiplied terms.
 """
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : SmallV{Any}((1,))
 
-function unwrap_const(x::BasicSymbolic)
-    isconst(x) ? x.val : x
+@inline function unwrap_const(x::Any)
+    @nospecialize x
+    if x isa BasicSymbolic{SymReal}
+        @match x begin
+            BSImpl.Const(; val) => val
+            _ => x
+        end
+    elseif x isa BasicSymbolic{SafeReal}
+        @match x begin
+            BSImpl.Const(; val) => val
+            _ => x
+        end
+    elseif x isa BasicSymbolic{TreeReal}
+        @match x begin
+            BSImpl.Const(; val) => val
+            _ => x
+        end
+    else
+        x
+    end
 end
-unwrap_const(x) = x
 
 """
     $(TYPEDSIGNATURES)

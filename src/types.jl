@@ -479,6 +479,27 @@ function swap_polynomial_vars(_::PolyVarT, new_vars::Vector{PolyVarT})
     MP.polynomial(only(new_vars), PolyCoeffT)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Custom `isequal` implementation for DynamicPolynomials.jl polynomials but using
+BasicSymbolic variables. This allows comparing polynomials properly, but respecting
+the COMPARE_FULL value. It is also designed to accompany the custom `hash` implementation,
+which makes the hash independent of DynamicPolynomials variable ordering. Ordering of
+those variables is dependent on creation order which makes `hash` values non-deterministic,
+especially in multithreaded environments.
+"""
+function _custom_polyequal(p1::PolynomialT, p2::PolynomialT, vars1::ArgsT, vars2::ArgsT)
+    MP.nterms(p1) == MP.nterms(p2) || return false
+    length(vars1) == length(vars2) || return false
+    isequal(vars1, vars2) || return false
+    for (t1, t2) in zip(MP.terms(p1), MP.terms(p2))
+        isequal(MP.coefficient(t1), MP.coefficient(t2)) || return false
+        iszero(cmp(MonomialOrder(), MP.exponents(t1), MP.exponents(t2))) || return false
+    end
+    return true
+end
+
 isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false
 
 function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where {T}
@@ -506,20 +527,8 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
         (BSImpl.Term(; f = f1, args = args1, shape = s1, type = t1), BSImpl.Term(; f = f2, args = args2, shape = s2, type = t2)) => begin
             isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2 && t1 === t2
         end
-        (BSImpl.Polyform(; poly = p1, partial_polyvars = part1, shape = s1, type = t1), BSImpl.Polyform(; poly = p2, partial_polyvars = part2, shape = s2, type = t2)) => begin
-            # Polyform is special. If we're doing a full comparison, checking equality of
-            # the contained `poly` works (even if they represent the same polynomials but
-            # `MP.variables` is different). Since the MP variables in the polynomial are
-            # based on the full comparison identity, their equality represents true equality.
-            # For partial equality checking, we simply replace `poly.x.vars` with `partial_polyvars`
-            # and compare those polynomials.
-            s1 == s2 && if full
-                isequal(p1, p2)
-            else
-                poly1 = swap_polynomial_vars(p1, part1)
-                poly2 = swap_polynomial_vars(p2, part2)
-                isequal(poly1, poly2)
-            end && t1 === t2
+        (BSImpl.Polyform(; poly = p1, vars = v1, shape = s1, type = t1), BSImpl.Polyform(; poly = p2, vars = v2, shape = s2, type = t2)) => begin
+            s1 == s2 && _custom_polyequal(p1, p2, v1, v2) && t1 === t2
         end
         (BSImpl.Div(; num = n1, den = d1, type = t1), BSImpl.Div(; num = n2, den = d2, type = t2)) => begin
             isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && t1 === t2
@@ -545,6 +554,19 @@ const MUL_SALT = 0xaaaaaaaaaaaaaaaa % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
 const PLY_SALT = 0x36ee940e7fa431a3 % UInt
+
+"""
+    $(TYPEDSIGNATURES)
+
+Custom `hash` implementation for `Polyform`s, see `_custom_polyequal`.
+"""
+function _custom_polyhash(p::PolynomialT, vars, h::UInt)
+    h = hash(vars, h)
+    for t in MP.terms(p)
+        h = hash(MP.coefficient(t), hash(MP.exponents(t), h))
+    end
+    return h
+end
 
 function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     if !iszero(h)
@@ -581,16 +603,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
                 hash
             end
         end
-        BSImpl.Polyform(; poly, partial_polyvars, shape, hash, type) => begin
-            if full
-                Base.hash(poly, Base.hash(shape, Base.hash(type, h)))
-            else
-                if iszero(hash)
-                    hash = s.hash = Base.hash(swap_polynomial_vars(poly, partial_polyvars), Base.hash(shape, Base.hash(type, h)))
-                else
-                    hash
-                end
-            end
+        BSImpl.Polyform(; poly, vars, shape, hash, type) => begin
+            _custom_polyhash(poly, vars, Base.hash(shape, Base.hash(type, h)))
         end
         BSImpl.Div(; num, den, type) => begin
             Base.hash(num, Base.hash(den, Base.hash(type, h))) ⊻ DIV_SALT

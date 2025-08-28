@@ -946,55 +946,34 @@ unwrap_const(x) = x
 """
     $(TYPEDSIGNATURES)
 """
-function term(f, args...; type = nothing)
+function term(f, args...; vartype = SymReal, type = promote_symtype(f, symtype.(args)...))
     @nospecialize f
-    if type === nothing
-        T = _promote_symtype(f, args)
-    else
-        T = type
-    end
-    Term{T}(f, args)
+    Term{vartype}(f, args; type)
 end
 
-function TermInterface.maketerm(::Type{T}, head, args, metadata) where {T<:BasicSymbolic}
+function TermInterface.maketerm(::Type{BasicSymbolic{T}}, head, args, metadata; type = _promote_symtype(head, args)) where {T}
     @nospecialize head
     args = unwrap_args(args)
-    st = symtype(T)
-    pst = _promote_symtype(head, args)
-    # Use promoted symtype only if not a subtype of the existing symtype of T.
-    # This is useful when calling `maketerm(BasicSymbolic{Number}, (==), [true, false])` 
-    # Where the result would have a symtype of Bool. 
-    # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609 
-    # TODO this should be optimized.
-    new_st = if st <: AbstractArray
-        st
-    elseif pst === Bool
-        pst
-    elseif pst === Any || (st === Number && pst <: st)
-        st
-    else
-        pst
-    end
-    basicsymbolic(head, args, new_st, metadata)
+    basicsymbolic(T, head, args, type, metadata)
 end
 
-function basicsymbolic(f, args, ::Type{T}, metadata) where {T}
-    @nospecialize f
+function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
+    @nospecialize f type
     if f isa Symbol
         error("$f must not be a Symbol")
     end
     args = unwrap_args(args)
-    if T === LiteralReal
+    if T === TreeReal
         @goto FALLBACK
-    elseif all(x->x isa Union{Number, BasicSymbolic{<:Number}}, args)
+    elseif type <: Number
         if f === (+)
-            res = add_worker(args)
+            res = add_worker(T, args)
             if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
                 @set! res.metadata = metadata
             end
             return res
         elseif f === (*)
-            res = mul_worker(args)
+            res = mul_worker(T, args)
             if metadata !== nothing && (ismul(res) || (isterm(res) && operation(res) == (*)))
                 @set! res.metadata = metadata
             end
@@ -1017,7 +996,7 @@ function basicsymbolic(f, args, ::Type{T}, metadata) where {T}
         end
     else
         @label FALLBACK
-        Term{T}(f, args, metadata=metadata)
+        Term{T}(f, args; type, metadata=metadata)
     end
 end
 

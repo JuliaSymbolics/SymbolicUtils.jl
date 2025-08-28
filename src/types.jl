@@ -566,7 +566,7 @@ function swap_polynomial_vars(poly::PolynomialT, new_vars::Vector{PolyVarT})
 end
 
 function swap_polynomial_vars(_::PolyVarT, new_vars::Vector{PolyVarT})
-    MP.polynomial(only(new_vars))
+    MP.polynomial(only(new_vars), PolyCoeffT)
 end
 
 isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false

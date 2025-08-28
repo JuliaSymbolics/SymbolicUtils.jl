@@ -16,6 +16,7 @@ Slot(s) = Slot(s, alwaystrue)
 Base.isequal(s1::Slot, s2::Slot) = s1.name == s2.name
 
 Base.show(io::IO, s::Slot) = (print(io, "~"); print(io, s.name))
+Base.nameof(x::Slot) = x.name
 
 # for when the slot is a symbol, like `~x`
 makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
@@ -71,6 +72,7 @@ end
 DefSlot(s) = DefSlot(s, alwaystrue, nothing, 0)
 Base.isequal(s1::DefSlot, s2::DefSlot) = s1.name == s2.name
 Base.show(io::IO, s::DefSlot) = (print(io, "~!"); print(io, s.name))
+Base.nameof(x::DefSlot) = x.name
 
 makeDefSlot(s::Symbol, keys, op) = (push!(keys, s); DefSlot(s, alwaystrue, op, defaultValOfCall(op)))
 
@@ -102,6 +104,7 @@ ismatch(s::Segment, t) = s.predicate(unwrap_const(t))
 Segment(s) = Segment(s, alwaystrue)
 
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
+Base.nameof(x::Segment) = x.name
 
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
 

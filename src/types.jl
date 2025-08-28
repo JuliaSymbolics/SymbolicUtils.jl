@@ -121,10 +121,7 @@ function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
                 return pvar
             end
 
-            inner_name = @match x begin
-                BSImpl.Sym(; name) => name
-                _ => nameof(operation(x))
-            end
+            inner_name = _name_as_operator(x)
             name = Symbol(inner_name, :_, hash(x))
             while (cur = get(PVAR_TO_BS, name, nothing); cur !== nothing && cur.value !== nothing)
                 # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
@@ -833,6 +830,14 @@ end
 Base.one( s::BSImpl.Type) = one( symtype(s))
 Base.zero(s::BSImpl.Type) = zero(symtype(s))
 
+function _name_as_operator(x::BasicSymbolic)
+    @match x begin
+        BSImpl.Sym(; name) => name
+        BSImpl.Term(; f) => _name_as_operator(f)
+        _ => _name_as_operator(operation(x))
+    end
+end
+_name_as_operator(x) = nameof(x)
 
 Base.nameof(s::Union{BasicSymbolic, BSImpl.Type}) = issym(s) ? s.name : error("Non-Sym BasicSymbolic doesn't have a name")
 

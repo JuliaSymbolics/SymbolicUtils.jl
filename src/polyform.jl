@@ -76,15 +76,12 @@ Expand expressions by distributing multiplication over addition, e.g.,
 multivariate polynomials implementation.
 `variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
 """
-function expand(expr)
-    if !(expr isa BasicSymbolic)
-        return expr
-    end
+function expand(expr::BasicSymbolic{T})::BasicSymbolic{T} where {T}
     iscall(expr) || return expr
-    poly_to_bs = Dict{PolyVarT, BasicSymbolic}()
+    poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
     partial_poly = to_poly!(poly_to_bs, expr)
     partial_pvars = MP.variables(partial_poly)
-    vars = SmallV{BasicSymbolic}()
+    vars = SmallV{BasicSymbolic{T}}()
     pvars = PolyVarT[]
     sizehint!(vars, length(partial_pvars))
     sizehint!(pvars, length(partial_pvars))
@@ -94,8 +91,9 @@ function expand(expr)
         push!(pvars, basicsymbolic_to_polyvar(var))
     end
     poly = swap_polynomial_vars(partial_poly, pvars)
-    return Polyform{symtype(expr)}(poly)
+    return Polyform{T}(poly; type = symtype(expr))
 end
+expand(x) = x
 
 ## Rational Polynomial form with Div
 

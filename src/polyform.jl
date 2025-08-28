@@ -181,25 +181,26 @@ But it will simplify `(x - 5)^2*(x - 3) / (x - 5)` to `(x - 5)*(x - 3)`.
 Has optimized processes for `Mul` and `Pow` terms.
 """
 quick_cancel(d) = d
-function quick_cancel(d::BSImpl.Type{T}) where {T}
+function quick_cancel(d::BasicSymbolic{T})::BasicSymbolic{T} where {T}
     iscall(d) || return d
     op = operation(d)
+    type = symtype(d)
     if op === (^)
         base, exp = arguments(d)
         isconst(base) && return d
         isdiv(base) || return d
         num, den = quick_cancel(base.num, base.den)
-        return Div{T}(num ^ exp, den ^ exp, false)
+        return Div{T}(num ^ exp, den ^ exp, false; type)
     elseif op === (/)
         num, den = arguments(d)
         num, den = quick_cancel(num, den)
-        return Div{T}(num, den, false)
+        return Div{T}(num, den, false; type)
     else
         return d
     end
 end
 
-function quick_cancel(x, y)
+function quick_cancel(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
     opx = iscall(x) ? operation(x) : nothing
     opy = iscall(y) ? operation(y) : nothing
     if opx === (^) && opy === (^)
@@ -219,22 +220,22 @@ function quick_cancel(x, y)
     elseif opy === (*)
         return reverse(quick_mul(y, x))
     elseif isequal(x, y)
-        return 1, 1
+        return Const{T}(1), Const{T}(1)
     else
         return x, y
     end
 end
 
 # ispow(x) case
-function quick_pow(x, y)
+function quick_pow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
     base, exp = arguments(x)
     exp = unwrap_const(exp)
     exp isa Number || return (x, y)
-    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), 1) : (x, y)
+    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), Const{T}(1)) : (x, y)
 end
 
 # Double Pow case
-function quick_powpow(x, y)
+function quick_powpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
     base1, exp1 = arguments(x)
     base2, exp2 = arguments(y)
     isequal(base1, base2) || return x, y
@@ -242,23 +243,23 @@ function quick_powpow(x, y)
     exp2 = unwrap_const(exp2)
     !(exp1 isa Number && exp2 isa Number) && return (x, y)
     if exp1 > exp2
-        return base1 ^ (exp1 - exp2), 1
+        return base1 ^ (exp1 - exp2), Const{T}(1)
     elseif exp1 == exp2
-        return 1, 1
+        return Const{T}(1), Const{T}(1)
     else # exp1 < exp2
-        return 1, base2 ^ (exp2 - exp1)
+        return Const{T}(1), base2 ^ (exp2 - exp1)
     end
 end
 
 # ismul(x)
-function quick_mul(x, y)
-    yy = BSImpl.Term{symtype(y)}(^, ArgsT((maybe_const(y), maybe_const(1))))
+function quick_mul(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
+    yy = BSImpl.Term{T}(^, ArgsT{T}((y, Const{T}(1))); type = symtype(y))
     newx, newy = quick_mulpow(x, yy)
     return isequal(newy, yy) ? (x, y) : (newx, newy)
 end
 
 # mul, pow case
-function quick_mulpow(x, y)
+function quick_mulpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
     base, exp = arguments(y)
     exp = unwrap_const(exp)
     exp isa Number || return (x, y)
@@ -287,20 +288,20 @@ function quick_mulpow(x, y)
     oldval = args[idx]
     if argexp > exp
         args[idx] = argbase ^ (argexp - exp)
-        result = mul_worker(args), 1
+        result = mul_worker(T, args), Const{T}(1)
     elseif argexp == exp
-        args[idx] = closest_const(1)
-        result = mul_worker(args), 1
+        args[idx] = Const{T}(1)
+        result = mul_worker(T, args), Const{T}(1)
     else
-        args[idx] = closest_const(1)
-        result = mul_worker(args), base ^ (exp - argexp)
+        args[idx] = Const{T}(1)
+        result = mul_worker(T, args), base ^ (exp - argexp)
     end
     args[idx] = oldval
     return result
 end
 
 # Double mul case
-function quick_mulmul(x, y)
+function quick_mulmul(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
     yargs = arguments(y)
     for (i, arg) in enumerate(yargs)
         newx, newarg = quick_cancel(x, arg)
@@ -308,13 +309,13 @@ function quick_mulmul(x, y)
         if yargs isa ROArgsT
             yargs = copy(parent(yargs))
         end
-        yargs[i] = maybe_const(newarg)
+        yargs[i] = Const{T}(newarg)
         x = newx
     end
     if yargs isa ROArgsT
         return x, y
     else
-        return x, mul_worker(yargs)
+        return x, mul_worker(T, yargs)
     end
 end
 

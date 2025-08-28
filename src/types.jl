@@ -109,7 +109,6 @@ const POLYVAR_LOCK = ReadWriteLock()
 const BS_TO_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
 const BS_TO_PARTIAL_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
 const PVAR_TO_BS = Dict{Symbol, WeakRef}()
-const PARTIAL_PVARS = Set{Symbol}()
 
 # TODO: manage scopes better here
 function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
@@ -137,11 +136,6 @@ function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
                 # do the same thing, but for the partial hash
                 partial_name = Symbol(inner_name, :_, hash(x))
             end true
-            while partial_name in PARTIAL_PVARS
-                # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
-                # a valid mapping for the polyvar (name)
-                partial_name = Symbol(partial_name, :_)
-            end
         end
         @lock POLYVAR_LOCK begin
             # NOTE: This _MUST NOT_ give away the lock between creating the polyvar
@@ -156,7 +150,6 @@ function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
             BS_TO_PARTIAL_PVAR[x] = partial_pvar
             BS_TO_PVAR[x] = pvar
             PVAR_TO_BS[name] = WeakRef(x)
-            push!(PARTIAL_PVARS, partial_name)
         end
     end
     return pvar

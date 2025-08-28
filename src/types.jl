@@ -801,48 +801,40 @@ struct Term{T} end
 struct Polyform{T} end
 struct Div{T} end
 
-function Const{T}(val) where {T}
-    val = unwrap(val)
-    val isa BasicSymbolic && return val
-    BSImpl.Const{T}(convert(T, val))
-end
+@inline Const{T}(val; kw...) where {T} = BSImpl.Const{T}(val; kw...)
 
-Sym{T}(name; kw...) where {T} = BSImpl.Sym{T}(name; kw...)
+@inline Sym{T}(name; kw...) where {T} = BSImpl.Sym{T}(name; kw...)
 
-function Term{T}(f, args; kw...) where {T}
+@inline function Term{T}(f, args; type = _promote_symtype(f, args), kw...) where {T}
     args = unwrap_args(args)
-    BSImpl.Term{T}(f, args; kw...)
-end
-
-function Term(f, args; kw...)
-    Term{_promote_symtype(f, args)}(f, args; kw...)
+    BSImpl.Term{T}(f, args; type, kw...)
 end
 
 function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
     nterms = MP.nterms(poly)
     if iszero(nterms)
-        return zero(T)
+        return Const{T}(0)
     elseif MP.isconstant(poly)
-        return MP.leading_coefficient(poly)
+        return Const{T}(MP.leading_coefficient(poly))
     elseif isone(nterms)
         term = MP.terms(poly)[1]
         coeff = MP.coefficient(term)
         mono = MP.monomial(term)
         exps = MP.exponents(mono)
         nnz = count(!iszero, exps)
-        if isone(coeff) && isone(nnz) 
+        if isone(coeff) && isone(nnz)
             idx = findfirst(!iszero, exps)
-            isone(exps[idx]) && return polyvar_to_basicsymbolic(MP.variables(mono)[idx])
+            isone(exps[idx]) && return polyvar_to_basicsymbolic(MP.variables(mono)[idx])::BasicSymbolic{T}
         elseif isone(-coeff) && isone(nnz)
             idx = findfirst(!iszero, exps)
             if isone(exps[idx])
                 pvars = MP.variables(poly)
-                var = polyvar_to_basicsymbolic(pvars[idx])
+                var = polyvar_to_basicsymbolic(pvars[idx])::BasicSymbolic{T}
                 @match var begin
                     BSImpl.Term(; f, args) && if f === (+) end => begin
-                        args = copy(parent(args))
+                        args = copy(args)
                         map!(x -> coeff * x, args, args)
-                        return BSImpl.Term(; f, args)
+                        return BSImpl.Term{T}(; f, args)
                     end
                     BSImpl.Polyform(;) => return -var
                     _ => nothing
@@ -851,25 +843,6 @@ function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
         end
     end
     BSImpl.Polyform{T}(poly, args...; kw...)
-end
-
-Polyform(poly::PolynomialT{T}, args...; kw...) where {T} = Polyform{T}(poly, args...; kw...)
-
-"""
-    $(TYPEDSIGNATURES)
-
-Create a generic division term. Does not assume anything about the division algebra beyond
-the ability to check for zero and one elements (via [`_iszero`](@ref) and [`_isone`](@ref)).
-
-If the numerator is zero or denominator is one, the numerator is returned.
-"""
-function Div{T}(n, d, simplified; kw...) where {T}
-    n = unwrap_const(unwrap(n))
-    d = unwrap_const(unwrap(d))
-    # TODO: This used to return `zero(typeof(n))`, maybe there was a reason?
-    _iszero(n) && return maybe_const(T, n)
-    _isone(d) && return maybe_const(T, n)
-    return BSImpl.Div{T}(n, d, simplified; kw...)
 end
 
 const Rat = Union{Rational, Integer}
@@ -909,44 +882,42 @@ end
 
 """
     $(TYPEDSIGNATURES)
-
-Create a division term specifically for the real or complex algebra. Performs additional
-simplification and cancellation.
 """
-function Div{T}(n, d, simplified; kw...) where {T <: Number}
-    n = unwrap_const(unwrap(n))
-    d = unwrap_const(unwrap(d))
+function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(d)), kw...) where {T}
+    n = unwrap(n)
+    d = unwrap(d)
 
-    if !(T == SafeReal)
-        n, d = quick_cancel(n, d)
+    if !(type <: Number)
+        _iszero(n) && return Const{T}(n)
+        _isone(d) && return Const{T}(n)
+    end
+
+    if !(T === SafeReal)
+        n, d = quick_cancel(Const{T}(n), Const{T}(d))
     end
     n = unwrap_const(n)
     d = unwrap_const(d)
 
-    _iszero(n) && return Const{T}(zero(typeof(n)))
-    _isone(d) && return maybe_const(T, n)
+    _iszero(n) && return Const{T}(n)
+    _isone(d) && return Const{T}(n)
 
     if isdiv(n) && isdiv(d)
-        return Div{T}(n.num * d.den, n.den * d.num, simplified; kw...)
+        return Div{T}(n.num * d.den, n.den * d.num, simplified; type, kw...)
     elseif isdiv(n)
-        return Div{T}(n.num, n.den * d, simplified; kw...)
+        return Div{T}(n.num, n.den * d, simplified; type, kw...)
     elseif isdiv(d)
-        return Div{T}(n * d.den, d.num, simplified; kw...)
+        return Div{T}(n * d.den, d.num, simplified; type, kw...)
     end
 
-    d isa Number && _isone(-d) && return maybe_const(T, -n)
+    d isa Number && _isone(-d) && return Const{T}(-n)
     n isa Rat && d isa Rat && return Const{T}(n // d)
 
     n, d = simplify_coefficients(n, d)
 
-    _isone(d) && return maybe_const(T, n)
-    _isone(-d) && return maybe_const(T, -n)
+    _isone(d) && return Const{T}(n)
+    _isone(-d) && return Const{T}(-n)
 
-    BSImpl.Div{T}(n, d, simplified; kw...)
-end
-
-function Div(n, d, simplified; kw...)
-    Div{promote_symtype((/), symtype(n), symtype(d))}(n, d, simplified; kw...)
+    BSImpl.Div{T}(n, d, simplified; type, kw...)
 end
 
 """

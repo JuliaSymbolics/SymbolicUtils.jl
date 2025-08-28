@@ -559,46 +559,6 @@ Base.isequal(x, ::BasicSymbolic) = false
 Base.isequal(::BasicSymbolic, ::Missing) = false
 Base.isequal(::Missing, ::BasicSymbolic) = false
 
-const SCALAR_SYMTYPE_VARIANTS = [Number, Real, SafeReal, LiteralReal, Int, Float64, Bool]
-const ARR_VARIANTS = [Vector, Matrix]
-const SYMTYPE_VARIANTS = [SCALAR_SYMTYPE_VARIANTS; [A{T} for A in ARR_VARIANTS for T in SCALAR_SYMTYPE_VARIANTS]]
-
-@eval Base.@nospecializeinfer function isequal_maybe_scal(a, b, full::Bool)
-    @nospecialize a b
-    $(begin
-        conds = Expr[]
-        bodys = Expr[]
-        for T in SYMTYPE_VARIANTS
-            push!(conds, :(a isa BasicSymbolic{$T} && b isa BasicSymbolic{$T}))
-            push!(bodys, :(isequal_bsimpl(a, b, full)))
-        end
-        for T1 in SCALAR_SYMTYPE_VARIANTS, T2 in SCALAR_SYMTYPE_VARIANTS
-            isconcretetype(T1) && isconcretetype(T2) || continue
-            push!(conds, :(a isa $T1 && b isa $T2))
-            push!(bodys, :(isequal(a, b)))
-        end
-        for A in ARR_VARIANTS, T in SCALAR_SYMTYPE_VARIANTS
-            push!(conds, :(a isa $A{$T} && b isa $A{$T}))
-            push!(bodys, :(isequal(a, b)))
-        end
-        expr = :()
-        if !isempty(conds)
-            root_cond, rest_conds = Iterators.peel(conds)
-            root_body, rest_bodys = Iterators.peel(bodys)
-            expr = Expr(:if, root_cond, root_body)
-            cur_expr = expr
-            for (cond, body) in zip(rest_conds, rest_bodys)
-                global cur_expr
-                new_chain = Expr(:elseif, cond, body)
-                push!(cur_expr.args, new_chain)
-                cur_expr = new_chain
-            end
-            push!(cur_expr.args, :(isequal(a, b)::Bool))
-        end
-        expr
-    end)
-end
-
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
 function swap_polynomial_vars(poly::PolynomialT, new_vars::Vector{PolyVarT})
@@ -609,7 +569,9 @@ function swap_polynomial_vars(_::PolyVarT, new_vars::Vector{PolyVarT})
     MP.polynomial(only(new_vars))
 end
 
-function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
+isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false
+
+function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where {T}
     a === b && return true
     taskida, ida = a.id
     taskidb, idb = b.id
@@ -626,15 +588,15 @@ function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
 
     partial = @match (a, b) begin
         (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => begin
-            isequal_maybe_scal(v1, v2, full) && (!full || typeof(v1) == typeof(v2))
+            isequal(v1, v2)::Bool && (!full || typeof(v1) == typeof(v2))
         end
-        (BSImpl.Sym(; name = n1, shape = s1), BSImpl.Sym(; name = n2, shape = s2)) => begin
-            n1 === n2 && s1 == s2
+        (BSImpl.Sym(; name = n1, shape = s1, type = t1), BSImpl.Sym(; name = n2, shape = s2, type = t2)) => begin
+            n1 === n2 && s1 == s2 && t1 === t2
         end
-        (BSImpl.Term(; f = f1, args = args1, shape = s1), BSImpl.Term(; f = f2, args = args2, shape = s2)) => begin
-            isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2
+        (BSImpl.Term(; f = f1, args = args1, shape = s1, type = t1), BSImpl.Term(; f = f2, args = args2, shape = s2, type = t2)) => begin
+            isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2 && t1 === t2
         end
-        (BSImpl.Polyform(; poly = p1, partial_polyvars = part1, shape = s1), BSImpl.Polyform(; poly = p2, partial_polyvars = part2, shape = s2)) => begin
+        (BSImpl.Polyform(; poly = p1, partial_polyvars = part1, shape = s1, type = t1), BSImpl.Polyform(; poly = p2, partial_polyvars = part2, shape = s2, type = t2)) => begin
             # Polyform is special. If we're doing a full comparison, checking equality of
             # the contained `poly` works (even if they represent the same polynomials but
             # `MP.variables` is different). Since the MP variables in the polynomial are
@@ -647,10 +609,10 @@ function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
                 poly1 = swap_polynomial_vars(p1, part1)
                 poly2 = swap_polynomial_vars(p2, part2)
                 isequal(poly1, poly2)
-            end
+            end && t1 === t2
         end
-        (BSImpl.Div(; num = n1, den = d1), BSImpl.Div(; num = n2, den = d2)) => begin
-            isequal_maybe_scal(n1, n2, full) && isequal_maybe_scal(d1, d2, full)
+        (BSImpl.Div(; num = n1, den = d1, type = t1), BSImpl.Div(; num = n2, den = d2, type = t2)) => begin
+            isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && t1 === t2
         end
     end
     if full && partial && !(Ta <: BSImpl.Const)

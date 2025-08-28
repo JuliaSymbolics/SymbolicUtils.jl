@@ -90,8 +90,13 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
 
-@number_methods(BasicSymbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
-@number_methods(BasicSymbolic{LiteralReal}, term(f, a), term(f, a, b), onlybasics)
+@number_methods(BasicSymbolic{SymReal},
+                Term{SymReal}(f, ArgsT{SymReal}((Const{SymReal}(a),)); type = promote_symtype(f, symtype(a))),
+                Term{SymReal}(f, ArgsT{SymReal}((Const{SymReal}(a), Const{SymReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))),
+                skipbasics)
+@number_methods(BasicSymbolic{TreeReal},
+                Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a),)); type = promote_symtype(f, symtype(a))),
+                Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a), Const{TreeReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))))
 
 for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),

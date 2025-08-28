@@ -709,7 +709,7 @@ function _name_as_operator(x::BasicSymbolic)
 end
 _name_as_operator(x) = nameof(x)
 
-Base.nameof(s::Union{BasicSymbolic, BSImpl.Type}) = issym(s) ? s.name : error("Non-Sym BasicSymbolic doesn't have a name")
+Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic doesn't have a name")
 
 ###
 ### Constructors

@@ -1586,12 +1586,13 @@ promote_symtype(f, Ts...) = Any
 
 struct FnType{X<:Tuple,Y,Z} end
 
-(f::BasicSymbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, SmallV{Any}(args))
-
-function (f::BasicSymbolic)(args...)
-    error("Sym $f is not callable. " *
+function (f::BasicSymbolic{T})(args...) where {T}
+    symtype(f) <: FnType || error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable.")
+    Term{T}(f, args; type = promote_symtype(f, symtype.(args)...))
 end
+
+fntype_X_Y(::Type{<: FnType{X, Y}}) where {X, Y} = (X, Y)
 
 """
     promote_symtype(f::FnType{X,Y}, arg_symtypes...)
@@ -1599,7 +1600,10 @@ end
 The output symtype of applying variable `f` to arguments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
-function promote_symtype(f::BasicSymbolic{<:FnType{X,Y}}, args...) where {X, Y}
+function promote_symtype(f::BasicSymbolic, args...)
+    T = symtype(f)
+    X, Y = fntype_X_Y(T)
+
     if X === Tuple
         return Y
     end

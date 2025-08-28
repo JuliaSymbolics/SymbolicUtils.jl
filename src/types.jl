@@ -189,12 +189,23 @@ function subs_poly(poly::Union{PolynomialT, MP.Term}, vars)
     return add_worker(add_buffer)
 end
 
-function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
-    ScalarSymbolic()
+function symtype(x::BasicSymbolic)
+    # use `@match` instead of `x.type` since it is faster
+    @match x begin
+        BSImpl.Const(; val) => typeof(val)
+        BSImpl.Sym(; type) => type
+        BSImpl.Term(; type) => type
+        BSImpl.Polyform(; type) => type
+        BSImpl.Div(; type) => type
+    end
 end
+symtype(x) = typeof(x)
 
-function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic{<:AbstractArray}})
-    ArraySymbolic()
+vartype(x::BasicSymbolic{T}) where {T} = T
+vartype(::Type{BasicSymbolic{T}}) where {T} = T
+
+function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
+    symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
 end
 
 """
@@ -271,59 +282,6 @@ end
 ###
 ### Term interface
 ###
-
-"""
-$(SIGNATURES)
-
-Returns the [numeric type](https://docs.julialang.org/en/v1/base/numbers/#Standard-Numeric-Types) 
-of `x`. By default this is just `typeof(x)`.
-Define this for your symbolic types if you want [`SymbolicUtils.simplify`](@ref) to apply rules
-specific to numbers (such as commutativity of multiplication). Or such
-rules that may be implemented in the future.
-"""
-# symtype(x) = typeof(x)
-# @inline symtype(::Symbolic{T}) where T = T
-# @inline symtype(::Type{<:Symbolic{T}}) where T = T
-# @inline symtype(::BSImpl.Type{T}) where T = T
-# @inline symtype(::Type{<:BSImpl.Type{T}}) where T = T
-function symtype(x)
-    @nospecialize x
-    if x isa BasicSymbolic{Number}
-        return Number
-    elseif x isa BasicSymbolic{Int}
-        return Int
-    elseif x isa BasicSymbolic{Float64}
-        return Float64
-    elseif x isa Int
-        return Int
-    elseif x isa Float64
-        return Float64
-    elseif x isa Type{Number}
-        return Number
-    elseif x isa Type{Int}
-        return Int
-    elseif x isa Type{Float64}
-        return Float64
-    elseif x isa Type{BasicSymbolic{Number}}
-        return Number
-    elseif x isa Type{BasicSymbolic{Int}}
-        return Int
-    elseif x isa Type{BasicSymbolic{Float64}}
-        return Float64
-    elseif x isa Slot
-        return Any
-    elseif x isa Segment
-        return Any
-    elseif x isa BasicSymbolic
-        return typeof(x).parameters[1]
-    elseif x isa Type{<:BasicSymbolic}
-        return x.parameters[1]
-    elseif x isa Type
-        return x
-    else
-        return typeof(x)
-    end
-end
 
 @enumx PolyformVariant::UInt8 begin
     ADD

@@ -165,9 +165,17 @@ function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: 
     canonicalize_coeffs!(MP.coefficients(partial_poly1))
     canonicalize_coeffs!(MP.coefficients(partial_poly2))
     pvars1 = MP.variables(partial_poly1)
+    vars1 = ArgsT{T}()
+    sizehint!(vars1, length(pvars1))
+    for x in pvars1
+        push!(vars1, poly_to_bs[x])
+    end
     pvars2 = MP.variables(partial_poly2)
-    vars1 = BasicSymbolic{T}[poly_to_bs[v] for v in pvars1]
-    vars2 = BasicSymbolic{T}[poly_to_bs[v] for v in pvars2]
+    vars2 = ArgsT{T}()
+    sizehint!(vars2, length(pvars2))
+    for x in pvars2
+        push!(vars2, poly_to_bs[x])
+    end
     return subs_poly(partial_poly1, vars1)::BasicSymbolic{T}, subs_poly(partial_poly2, vars2)::BasicSymbolic{T}
 end
 

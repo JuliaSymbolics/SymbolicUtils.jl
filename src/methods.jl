@@ -191,9 +191,24 @@ for (f, Domain) in [(==) => Number, (!=) => Number,
                     xor => Bool]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:$Domain}, ::Type{<:$Domain}) = Bool
-        (::$(typeof(f)))(a::BasicSymbolic{<:$Domain}, b::$Domain) = term($f, a, b, type=Bool)
-        (::$(typeof(f)))(a::BasicSymbolic{<:$Domain}, b::BasicSymbolic{<:$Domain}) = term($f, a, b, type=Bool)
-        (::$(typeof(f)))(a::$Domain, b::BasicSymbolic{<:$Domain}) = term($f, a, b, type=Bool)
+        function (::$(typeof(f)))(a::BasicSymbolic{T}, b::$Domain) where {T}
+            if !(symtype(a) <: $Domain)
+                throw(MethodError($f, (a, b)))
+            end
+            Term{T}($f, ArgsT{T}((a, Const{T}(b))); type = Bool)
+        end
+        function (::$(typeof(f)))(a::$Domain, b::BasicSymbolic{T}) where {T}
+                if !(symtype(b) <: $Domain)
+                    throw(MethodError($f, (a, b)))
+                end
+                Term{T}($f, ArgsT{T}((Const{T}(a), b)); type = Bool)
+        end
+        function (::$(typeof(f)))(a::BasicSymbolic{T}, b::BasicSymbolic{T}) where {T}
+                if !(symtype(b) <: $Domain) || !(symtype(a) <: $Domain)
+                    throw(MethodError($f, (a, b)))
+                end
+                Term{T}($f, ArgsT{T}((a, b)); type = Bool)
+        end
     end
 end
 

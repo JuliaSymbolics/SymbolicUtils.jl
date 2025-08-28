@@ -17,8 +17,8 @@ end
 @testset "expand" begin
     @syms a b c d
 
-    @test expand(term(*, 0, a)) == 0
-    @test expand(a * (b + -1 * c) + -1 * (b * a + -1 * c * a)) == 0
+    @test unwrap_const(expand(term(*, 0, a))) == 0
+    @test unwrap_const(expand(a * (b + -1 * c) + -1 * (b * a + -1 * c * a))) == 0
     @eqtest simplify(expand(sin((a+b)^2)^2)) == simplify(sin(a^2+2*(b*a)+b^2)^2)
     @test unwrap_const(simplify(expand(sin((a+b)^2)^2 + cos((a+b)^2)^2))) == 1
     @syms x1::Real f(::Real)::Real
@@ -33,11 +33,11 @@ end
    #@test expand(Term{Number}(one, 0)) == 1
    #@test expand(Term{Number}(zero, 0)) == 0
    #@test expand(identity(a * b) - b * a) == 0
-    @test expand(a * b - b * a) == 0
+    @test unwrap_const(expand(a * b - b * a)) == 0
 
     @syms A::Vector{Real}
     # test that the following works
-    expand(Term{Real}(getindex, [A, 3]) - 3)
+    expand(Term{SymReal}(getindex, [A, 3]; type = Real) - 3)
 end
 
 @testset "simplify_fractions with quick-cancel" begin

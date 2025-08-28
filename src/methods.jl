@@ -154,12 +154,30 @@ for f in [identity, one, zero, *, +, -]
 end
 
 promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
-Base.real(s::BasicSymbolic{<:Number}) = islike(s, Real) ? s : term(real, s)
+function Base.real(s::BasicSymbolic{T}) where {T}
+    islike(s, Real) && return s
+    @match s begin
+        BSImpl.Const(; val) => Const{T}(real(val))
+        _ => Term{T}(real, ArgsT{T}((s,)); type = Real)
+    end
+end
 promote_symtype(::typeof(Base.conj), T::Type{<:Number}) = T
-Base.conj(s::BasicSymbolic{<:Number}) = islike(s, Real) ? s : term(conj, s)
+function Base.conj(s::BasicSymbolic{T}) where {T}
+    islike(s, Real) && return s
+    @match s begin
+        BSImpl.Const(; val) => Const{T}(conj(val))
+        _ => Term{T}(conj, ArgsT{T}((s,)); type = symtype(s))
+    end
+end
 promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real
-Base.imag(s::BasicSymbolic{<:Number}) = islike(s, Real) ? zero(symtype(s)) : term(imag, s)
-Base.adjoint(s::BasicSymbolic{<:Number}) = conj(s)
+function Base.imag(s::BasicSymbolic{T}) where {T}
+    islike(s, Real) && return s
+    @match s begin
+        BSImpl.Const(; val) => Const{T}(imag(val))
+        _ => Term{T}(imag, ArgsT{T}((s,)); type = Real)
+    end
+end
+Base.adjoint(s::BasicSymbolic) = conj(s)
 
 
 ## Booleans

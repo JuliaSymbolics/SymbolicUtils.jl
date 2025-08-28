@@ -172,21 +172,21 @@ function polyvar_to_basicsymbolic(x::PolyVarT)
     return bs::BasicSymbolic
 end
 
-function subs_poly(poly::Union{PolynomialT, MP.Term}, vars)
-    add_buffer = ArgsT()
-    mul_buffer = ArgsT()
+function subs_poly(poly::Union{_PolynomialT, MP.Term}, vars::AbstractVector{BasicSymbolic{T}}) where {T}
+    add_buffer = ArgsT{T}()
+    mul_buffer = ArgsT{T}()
     for term in MP.terms(poly)
         empty!(mul_buffer)
         coeff = MP.coefficient(term)
-        push!(mul_buffer, closest_const(coeff))
+        push!(mul_buffer, Const{T}(coeff))
         mono = MP.monomial(term)
         for (i, exp) in enumerate(MP.exponents(mono))
             iszero(exp) && continue
             push!(mul_buffer, (vars[i] ^ exp))
         end
-        push!(add_buffer, mul_worker(mul_buffer))
+        push!(add_buffer, mul_worker(T, mul_buffer))
     end
-    return add_worker(add_buffer)
+    return add_worker(T, add_buffer)
 end
 
 function symtype(x::BasicSymbolic)

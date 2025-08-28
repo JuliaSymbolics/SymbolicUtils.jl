@@ -32,12 +32,8 @@ rewriters.
 module Rewriters
 using TermInterface
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT, maybe_const, SmallV, BSImpl, unwrap_const, BasicSymbolic
+import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT, Const, SmallV, BSImpl, unwrap_const, BasicSymbolic
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
-
-# Cache of printed rules to speed up @timer
-const repr_cache = IdDict()
-cached_repr(x) = Base.get!(()->repr(x), repr_cache, x)
 
 """
     Empty()
@@ -87,7 +83,7 @@ end
 instrument(x::IfElse, f) = IfElse(x.cond, instrument(x.yes, f), instrument(x.no, f))
 
 function (rw::IfElse)(x)
-    rw.cond(x) ?  rw.yes(x) : rw.no(x)
+    rw.cond(x)::Bool ?  rw.yes(x) : rw.no(x)
 end
 
 """
@@ -187,8 +183,8 @@ julia> chain = RestartedChain([r1, r2])
 julia> chain(x + x)  # Applies r1, then restarts and applies r2
 ```
 """
-struct RestartedChain{Cs}
-    rws::Cs
+mutable struct RestartedChain{Cs}
+    const rws::Cs
 end
 
 instrument(c::RestartedChain, f) = RestartedChain(map(x->instrument(x,f), c.rws))
@@ -386,75 +382,75 @@ instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 (p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
 
 passthrough(x, default) = x === nothing ? default : x
-function (p::Walk{ord, C, F, false})(x::BasicSymbolic) where {ord, C, F}
+function (p::Walk{ord, C, F, false})(x::BasicSymbolic{T}) where {ord, C, F, T}
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
-            x = maybe_const(p.rw(x))::BasicSymbolic
+            x = Const{T}(p.rw(x))
         end
 
         if iscall(x)
-            args = arguments(x)
+            args = arguments(x)::ROArgsT{T}
             op = PassThrough(p)
             for i in eachindex(args)
                 arg = args[i]
                 newarg = op(arg)
-                if args isa ROArgsT
+                if args isa ROArgsT{T}
                     if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool
                         continue
                     end
-                    args = copy(parent(args))::ArgsT
+                    args = copy(parent(args))::ArgsT{T}
                 end
-                args[i] = maybe_const(newarg)
+                args[i] = Const{T}(newarg)
             end
-            if args isa ArgsT
+            if args isa ArgsT{T}
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))
             end
         end
 
-        return ord === :post ? maybe_const(p.rw(x))::BasicSymbolic : x
+        return ord === :post ? Const{T}(p.rw(x)) : x
     else
-        return maybe_const(p.rw(x))::BasicSymbolic
+        return Const{T}(p.rw(x))
     end
 end
 (p::Walk{ord, C, F, false})(x) where {ord, C, F} = x
 
-function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
+function (p::Walk{ord, C, F, true})(x::BasicSymbolic{T}) where {ord, C, F, T}
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
             x = p.rw(x)
         end
         if iscall(x)
-            args = arguments(x)
+            args = arguments(x)::ROArgsT{T}
             op = PassThrough(p)
             for i in eachindex(args)
                 arg = args[i]
                 newarg = if node_count(arg) > p.thread_cutoff
-                    BSImpl.Const{Any}(Threads.@spawn op(arg); unsafe=true)
+                    Const{T}(Threads.@spawn op(arg); unsafe=true)
                 else
-                    maybe_const(op(arg))
+                    Const{T}(op(arg))
                 end
-                if args isa ROArgsT
-                    if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)
+                if args isa ROArgsT{T}
+                    if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool
                         continue
                     end
-                    args = copy(parent(args))::ArgsT
+                    args = copy(parent(args))::ArgsT{T}
                 end
                 args[i] = newarg
             end
-            if args isa ArgsT
+            if args isa ArgsT{T}
                 for i in eachindex(args)
                     if unwrap_const(args[i]) isa Task
-                        args[i] = maybe_const(fetch(unwrap_const(args[i])))
+                        args[i] = Const{T}(fetch(unwrap_const(args[i])))
                     end
                 end
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))
             end
         end
-        return ord === :post ? p.rw(x) : x
+        return ord === :post ? Const{T}(p.rw(x)) : x
     else
-        return p.rw(x)
+        return Const{T}(p.rw(x))
     end
 end
 

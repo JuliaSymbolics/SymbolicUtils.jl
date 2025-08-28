@@ -367,7 +367,7 @@ const QUICK_CANCELER = Rewriters.Postwalk(quick_cancel)
 Find `Div` nodes and simplify them by cancelling a set of factors of numerators
 and denominators.
 """
-function simplify_fractions(x)
+function simplify_fractions(x::BasicSymbolic{T})::BasicSymbolic{T} where {T}
 
     x = QUICK_CANCELER(x)
 
@@ -375,6 +375,7 @@ function simplify_fractions(x)
 
     return FRAC_SIMPLIFIER(x)
 end
+simplify_fractions(x) = x
 
 const FRACTION_FLATTENER = Rewriters.Fixpoint(Rewriters.Postwalk(add_with_div))
 
@@ -388,7 +389,7 @@ julia> flatten_fractions((1+(1+1/a)/a)/a)
 (1 + a + a^2) / (a^3)
 ```
 """
-function flatten_fractions(x)
+function flatten_fractions(x::BasicSymbolic{T})::BasicSymbolic{T} where {T}
     FRACTION_FLATTENER(x)
 end
 
@@ -406,7 +407,7 @@ function fraction_isone(x)
 end
 
 function needs_div_rules(x)
-    (isdiv(x) && !(x.num isa Number) && !(x.den isa Number)) ||
+    (isdiv(x) && !(unwrap_const(x.num) isa Number) && !(unwrap_const(x.den) isa Number)) ||
     (iscall(x) && operation(x) === (+) && count(has_div, arguments(x)) > 1) ||
     (iscall(x) && any(needs_div_rules, arguments(x)))
 end

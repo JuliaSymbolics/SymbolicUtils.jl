@@ -25,18 +25,17 @@ r1(sin(2z))
 
 The `@rule` macro takes a pair of patterns -- the _matcher_ and the _consequent_ (`@rule matcher => consequent`). If an expression matches the matcher pattern, it is rewritten to the consequent pattern. `@rule` returns a callable object that applies the rule to an expression.
 
-`~x` in the example is what is a **slot variable** named `x`. In a matcher pattern, slot variables are placeholders that match exactly one expression. When used on the consequent side, they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, all corresponding matches must be equal (as tested by `Base.isequal` function). Hence this rule says: if you see something added to itself, make it twice of that thing, and works as such.
+`~x` in the example is what is a **slot variable** named `x`. In a matcher pattern, slot variables are placeholders that match exactly one expression. When used on the consequent side, they stand in for the matched expression. If a slot variable appears twice in a matcher pattern, all corresponding matches must be equal (as tested by `Base.isequal` function).
 
 If you try to apply this rule to an expression with triple angle, it will return `nothing` -- this is the way a rule signifies failure to match.
-```jldoctest rewrite
-r1(sin(3z)) === nothing
+```julia
+r1(sin(3z))
 
 # output
-true
+nothing
 ```
 
-Slot variable (matcher) is not necessary a single variable
-
+Slot variable (matcher) is not necessary a single variable:
 ```jldoctest rewrite
 r1(sin(2*(w-z)))
 
@@ -44,15 +43,16 @@ r1(sin(2*(w-z)))
 2cos(w - z)*sin(w - z)
 ```
 
-but it must be a single expression
+And can also match a function:
+```julia
+r = @rule (~f)(z+1) => ~f
 
-```jldoctest rewrite
-r1(sin(2*(w+z)*(α+β))) === nothing
+r(sin(z+1))
 
 # output
-true
-```
+sin (generic function with 20 methods)
 
+```
 Rules are of course not limited to single slot variable
 
 ```jldoctest rewrite
@@ -63,6 +63,37 @@ r2(sin(α+β))
 # output
 sin(β)*cos(α) + cos(β)*sin(α)
 ```
+
+Now let's say you want to catch the coefficients of a second degree polynomial in z. You can do that with:
+```jldoctest rewrite
+c2d = @rule ~a + ~b*z + ~c*z^2 => (~a, ~b, ~c)
+
+c2d(3 + 2z + 5z^2)
+# output
+(3, 2, 5)
+```
+Great! But if you try:
+```julia
+c2d(3 + 2z + z^2)
+
+#output
+nothing
+```
+the rule is not applied. This is because in the input polynomial there isn't a multiplication in front of the `z^2`. For this you can use **defslot variables**, with syntax `~!a`:
+```jldoctest rewrite
+c2d = @rule ~!a + ~!b*z + ~!c*z^2 => (~a, ~b, ~c)
+
+c2d(3 + 2z + z^2)
+# output
+(3, 2, 1)
+```
+They work like normal slot variables, but if they are not present they take a default value depending on the operation they are in, in the above example `~b = 1`. Currently defslot variables can be defined in:
+
+Operation | Default value
+----------|--------------
+multiplication `*` | 1
+addition `+` | 0
+2nd argument of `^` | 1
 
 If you want to match a variable number of subexpressions at once, you will need a **segment variable**. `~~xs` in the following example is a segment variable:
 

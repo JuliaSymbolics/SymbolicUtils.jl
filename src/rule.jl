@@ -248,24 +248,6 @@ If an expression matches LHS entirely, then it is rewritten to the pattern in th
 Slot, DefSlot and Segment variables on the RHS will substitute the result of the
 matches found for these variables in the LHS.
 
-If the RHS is a single tilde `~`, then the rule returns a a dictionary of
-[slot variable, expression matched].
-
-_Example:_
-
-```julia
-julia> r = @rule (~x + (~y)^(~m)) => ~
-~x + (~y) ^ ~m => (~)
-
-julia> r(a + b^2)
-Base.ImmutableDict{Symbol, Any} with 5 entries:
-  :MATCH => a + b^2
-  :m     => 2
-  :y     => b
-  :x     => a
-  :____  => nothing
-```
-
 **Slot**:
 
 A Slot variable is written as `~x` and matches a single expression. `x` is the name of the variable. If a slot appears more than once in an LHS expression then expression matched at every such location must be equal (as shown by `isequal`).
@@ -310,7 +292,7 @@ julia> r(sin(2a)^2 + cos(a)^2)
 
 **DefSlot**:
 
-A DefSlot variable is written as `~!x`. Works like a normal slot, but can also take additional values if not present in the expression.
+A DefSlot variable is written as `~!x`. Works like a normal slot, but can also take default values if not present in the expression.
 
 _Example in power:_
 ```julia
@@ -337,10 +319,11 @@ julia> r_sum(x)
 ```
 
 Currently DefSlot is implemented in:
-Operation | Default value
+
+Operation | Default value<br>
 ----------|--------------
-* | 1
-+ | 0
+\\* | 1
+\\+ | 0
 2nd argument of ^ | 1
 
 **Segment**:
@@ -409,6 +392,24 @@ true
 
 Note that this is syntactic sugar and that it is the same as something like
 `@rule ~x => f(~x) ? ~x : nothing`.
+
+**Debugging Rules**:
+Note that if the RHS is a single tilde `~`, then the rule returns a a dictionary of all [slot variable, expression matched], this is useful for debugging.
+
+_Example:_
+
+```julia
+julia> r = @rule (~x + (~y)^(~m)) => ~
+~x + (~y) ^ ~m => (~)
+
+julia> r(a + b^2)
+Base.ImmutableDict{Symbol, Any} with 5 entries:
+  :MATCH => a + b^2
+  :m     => 2
+  :y     => b
+  :x     => a
+  :____  => nothing
+```
 
 **Context**:
 

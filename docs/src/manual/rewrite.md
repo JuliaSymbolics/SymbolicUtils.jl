@@ -35,8 +35,7 @@ r1(sin(3z))
 nothing
 ```
 
-Slot variable (matcher) is not necessary a single variable
-
+Slot variable (matcher) is not necessary a single variable:
 ```jldoctest rewrite
 r1(sin(2*(w-z)))
 
@@ -44,6 +43,16 @@ r1(sin(2*(w-z)))
 2cos(w - z)*sin(w - z)
 ```
 
+And can also match a function:
+```julia
+r = @rule (~f)(z+1) => ~f
+
+r(sin(z+1))
+
+# output
+sin (generic function with 20 methods)
+
+```
 Rules are of course not limited to single slot variable
 
 ```jldoctest rewrite
@@ -55,7 +64,7 @@ r2(sin(α+β))
 sin(β)*cos(α) + cos(β)*sin(α)
 ```
 
-Let's say you want to catch the coefficients of a second degree polynomial in z. You can do that with:
+Now let's say you want to catch the coefficients of a second degree polynomial in z. You can do that with:
 ```jldoctest rewrite
 c2d = @rule ~a + ~b*z + ~c*z^2 => (~a, ~b, ~c)
 
@@ -70,7 +79,7 @@ c2d(3 + 2z + z^2)
 #output
 nothing
 ```
-the rule is not applied. This is because in the input polynomial there isnt a multiplication in front of the `z^2`. If you want to solve this you must use **defslot variables**, with syntax `~!a`:
+the rule is not applied. This is because in the input polynomial there isn't a multiplication in front of the `z^2`. For this you can use **defslot variables**, with syntax `~!a`:
 ```jldoctest rewrite
 c2d = @rule ~!a + ~!b*z + ~!c*z^2 => (~a, ~b, ~c)
 
@@ -78,7 +87,7 @@ c2d(3 + 2z + z^2)
 # output
 (3, 2, 1)
 ```
-They work like normal slot variables, but if not present take a default value depending on the operation they are in, in the above example `~b = 1`. Currently defslot variables can be defined in:
+They work like normal slot variables, but if they are not present they take a default value depending on the operation they are in, in the above example `~b = 1`. Currently defslot variables can be defined in:
 
 Operation | Default value
 ----------|--------------

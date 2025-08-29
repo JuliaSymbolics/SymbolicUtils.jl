@@ -111,6 +111,8 @@ export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Add, Mul and Pow
 include("types.jl")
 
+include("syms.jl")
+
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
 include("methods.jl")

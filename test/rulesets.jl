@@ -86,10 +86,10 @@ end
     @eqtest simplify(ifelse(false, a, b)) == b
 
     # abs
-    @test simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => -1))) == 1
-    @test simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => 1))) == 1
-    @test simplify(substitute(ifelse(a < 0, -a, a), Dict(a => -1))) == 1
-    @test simplify(substitute(ifelse(a < 0, -a, a), Dict(a => 1))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => -1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => 1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(a < 0, -a, a), Dict(a => -1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(a < 0, -a, a), Dict(a => 1)))) == 1
 end
 
 @testset "Pythagorean Identities" begin

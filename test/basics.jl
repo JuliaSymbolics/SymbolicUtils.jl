@@ -183,7 +183,7 @@ end
     @test unwrap_const(substitute(a, Dict(a=>1))) == 1
     @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(b+1))
     @test unwrap_const(substitute(a+b, Dict(a=>1, b=>3))) == 4
-    @test substitute(exp(a), Dict(a=>2)) ≈ exp(2)
+    @test unwrap_const(substitute(exp(a), Dict(a=>2))) ≈ exp(2)
 end
 
 @testset "occursin" begin

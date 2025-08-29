@@ -1948,7 +1948,9 @@ function -(a::S, b::S) where {S <: NonTreeSym}
             return Const{T}(val1 - val2)
         end
         (BSImpl.Polyform(; poly = poly1), BSImpl.Polyform(; poly = poly2)) => begin
-            return Polyform{T}(poly1 - poly2; type)
+            poly = copy(poly1)
+            MA.operate!(-, poly, poly2)
+            return Polyform{T}(poly; type)
         end
         _ => return add_worker(T, (a, -b))
     end

@@ -152,9 +152,4 @@ include("substitute.jl")
 
 include("code.jl")
 
-
-# Adjoints
-include("adjoints.jl")
-
-
 end # module

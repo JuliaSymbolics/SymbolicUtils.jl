@@ -10,7 +10,7 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
             get!(poly_to_bs, pvar, expr)
             return pvar
         end
-        BSImpl.Polyform(; poly, partial_polyvars, vars) => begin
+        BSImpl.Polyform(; poly, vars) => begin
             pvars = MP.variables(poly)
             subs = PolynomialT[]
             for var in vars

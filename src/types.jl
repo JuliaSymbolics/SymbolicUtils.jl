@@ -69,8 +69,6 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
     struct Polyform
         # polynomial in terms of full hashed variables
         const poly::PolynomialT
-        # corresponding to poly.x.vars, the partially hashed variables
-        const partial_polyvars::Vector{PolyVarT}
         # corresponding to poly.x.vars, the BasicSymbolic variables
         const vars::SmallV{BasicSymbolicImpl.Type{T}}
         const metadata::MetadataT
@@ -104,7 +102,7 @@ const BasicSymbolic = BSImpl.Type
 const ArgsT{T} = SmallV{BasicSymbolic{T}}
 const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
 
-function cleanpoly!(p::PolynomialT, partial_polyvars, vars)
+function cleanpoly!(p::PolynomialT, vars)
     pvars = MP.variables(p)
     nvars = length(pvars)
     unused = BitSet(1:nvars)
@@ -131,12 +129,10 @@ function cleanpoly!(p::PolynomialT, partial_polyvars, vars)
     write_to = first_idx
     @inbounds for i in first_idx+1:nvars
         pvars[write_to] = pvars[i]
-        partial_polyvars[write_to] = partial_polyvars[i]
         vars[write_to] = vars[i]
         write_to += !(i in unused)
     end
     resize!(pvars, new_len)
-    resize!(partial_polyvars, new_len)
     resize!(vars, new_len)
     return nothing
 end
@@ -294,7 +290,7 @@ function ConstructionBase.getproperties(obj::BSImpl.Type)
         BSImpl.Const(; val, id) => (; val, id)
         BSImpl.Sym(; name, metadata, hash2, shape, type, id) => (; name, metadata, hash2, shape, type, id)
         BSImpl.Term(; f, args, metadata, hash, hash2, shape, type, id) => (; f, args, metadata, hash, hash2, shape, type, id)
-        BSImpl.Polyform(; poly, partial_polyvars, vars, metadata, shape, type, args, hash, hash2, id) => (; poly, partial_polyvars, vars, metadata, shape, type, args, hash, hash2, id)
+        BSImpl.Polyform(; poly, vars, metadata, shape, type, args, hash, hash2, id) => (; poly, vars, metadata, shape, type, args, hash, hash2, id)
         BSImpl.Div(; num, den, simplified, metadata, hash2, shape, type, id) => (; num, den, simplified, metadata, hash2, shape, type, id)
     end
 end
@@ -482,7 +478,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
         BSImpl.Const(_) => throw(ArgumentError("`Const` does not have arguments."))
         BSImpl.Sym(_) => throw(ArgumentError("`Sym` does not have arguments."))
         BSImpl.Term(; args) => ROArgsT{T}(args)
-        BSImpl.Polyform(; poly, partial_polyvars, vars, args, shape, type) => begin
+        BSImpl.Polyform(; poly, vars, args, shape, type) => begin
             isempty(args) || return ROArgsT{T}(args)
             @match polyform_variant(poly) begin
                 PolyformVariant.ADD => begin
@@ -496,7 +492,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                             idx = findfirst(!iszero, exps)
                             push!(args, vars[idx] ^ exps[idx])
                         else
-                            push!(args, Polyform{T}(MP.polynomial(term, PolyCoeffT), copy(partial_polyvars), copy(vars); shape, type))
+                            push!(args, Polyform{T}(MP.polynomial(term, PolyCoeffT), copy(vars); shape, type))
                         end
                     end
                 end
@@ -517,7 +513,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                             exps[i] = pow
                             mvec = DP.MonomialVector(copy(MP.variables(poly)), [exps])
                             newpoly = PolynomialT(_new_coeffs, mvec)
-                            push!(args, Polyform{T}(newpoly, copy(partial_polyvars), copy(vars); type))
+                            push!(args, Polyform{T}(newpoly, copy(vars); type))
                         end
                     end
                 end
@@ -941,24 +937,21 @@ end
 @inline function BSImpl.Polyform{T}(poly::PolynomialT; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     vars = SmallV{BasicSymbolic{T}}()
     pvars = MP.variables(poly)
-    partial_polyvars = Vector{PolyVarT}()
     sizehint!(vars, length(pvars))
-    sizehint!(partial_polyvars, length(pvars))
     @manually_scope COMPARE_FULL => true begin
         for pvar in pvars
             var = polyvar_to_basicsymbolic(pvar)::BasicSymbolic{T}
             push!(vars, var)
-            push!(partial_polyvars, basicsymbolic_to_partial_polyvar(var))
         end
     end
-    return BSImpl.Polyform{T}(poly, partial_polyvars, vars; metadata, shape, type, unsafe)
+    return BSImpl.Polyform{T}(poly, vars; metadata, shape, type, unsafe)
 end
 
-@inline function BSImpl.Polyform{T}(poly::PolynomialT, partial_polyvars::Vector{PolyVarT}, vars::SmallV{BasicSymbolic{T}}; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
+@inline function BSImpl.Polyform{T}(poly::PolynomialT, vars::SmallV{BasicSymbolic{T}}; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     props = ordered_override_properties(BSImpl.Polyform{T})
-    cleanpoly!(poly, partial_polyvars, vars)
-    var = BSImpl.Polyform{T}(poly, partial_polyvars, vars, metadata, shape, type, props...)
+    cleanpoly!(poly, vars)
+    var = BSImpl.Polyform{T}(poly, vars, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end
@@ -1880,10 +1873,10 @@ function -(a::BasicSymbolic{T}) where {T}
     type::TypeT = promote_symtype(-, symtype(a))
     !issafecanon(*, a) && return Term{T}(-, ArgsT{T}((a,)); type)
     @match a begin
-        BSImpl.Polyform(; poly, vars, partial_polyvars, shape, type) => begin
+        BSImpl.Polyform(; poly, vars, shape, type) => begin
             result = copy(poly)
             MP.map_coefficients_to!(result, (-), poly; nonzero = true)
-            Polyform{T}(result, partial_polyvars, vars; shape, type)
+            Polyform{T}(result, vars; shape, type)
         end
         _ => (-1 * a)
     end
@@ -1966,11 +1959,9 @@ function coeff_dict_to_term(::Type{T}, type::TypeT, coeff, dict)::BasicSymbolic{
         return (k ^ v)
     end
     pvars = PolyVarT[]
-    partial_pvars = PolyVarT[]
     vars = ArgsT{T}()
     exps = Int[]
     sizehint!(pvars, length(dict))
-    sizehint!(partial_pvars, length(dict))
     sizehint!(vars, length(dict))
     sizehint!(exps, length(dict))
     for (k, v) in dict
@@ -1980,7 +1971,6 @@ function coeff_dict_to_term(::Type{T}, type::TypeT, coeff, dict)::BasicSymbolic{
         end
         push!(vars, k)
         push!(pvars, basicsymbolic_to_polyvar(k))
-        push!(partial_pvars, basicsymbolic_to_partial_polyvar(k))
         push!(exps, Int(v))
     end
 
@@ -1988,20 +1978,18 @@ function coeff_dict_to_term(::Type{T}, type::TypeT, coeff, dict)::BasicSymbolic{
     if N == 2
         if pvars[1] < pvars[2]
             pvars[1], pvars[2] = pvars[2], pvars[1]
-            partial_pvars[1], partial_pvars[2] = partial_pvars[2], partial_pvars[1]
             vars[1], vars[2] = vars[2], vars[1]
             exps[1], exps[2] = exps[2], exps[1]
         end
     elseif N > 2
         perm = sortperm(pvars; rev=true)
         pvars = pvars[perm]
-        partial_pvars = partial_pvars[perm]
         vars = vars[perm]
         exps = exps[perm]
     end
 
     mvec = DP.MonomialVector{PolyVarOrder, MonomialOrder}(pvars, [exps])
-    Polyform{T}(PolynomialT(copy(coeff), mvec), partial_pvars, vars; type)
+    Polyform{T}(PolynomialT(copy(coeff), mvec), vars; type)
 end
 
 struct MulWorkerBuffer{T}
@@ -2155,9 +2143,9 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
     end
     if b isa Number && isinteger(b)
         @match a begin
-            BSImpl.Polyform(; poly, partial_polyvars, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
+            BSImpl.Polyform(; poly, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
                 poly = MP.polynomial(poly ^ Int(b), PolyCoeffT)
-                return Polyform{T}(poly, copy(partial_polyvars), copy(vars); type)
+                return Polyform{T}(poly, copy(vars); type)
             end
             _ => return Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), PolyCoeffT); type)
         end

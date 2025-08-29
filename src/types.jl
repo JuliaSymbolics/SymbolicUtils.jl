@@ -1,25 +1,9 @@
-#-------------------
-#--------------------
-#### Symbolic
-#--------------------
+export SymReal, SafeReal, TreeReal, vartype
 
-#################### SafeReal #########################
-export SafeReal, LiteralReal
-
-# ideally the relationship should be the other way around
-abstract type SafeRealImpl <: Number end
-const SafeReal = Union{SafeRealImpl, Real}
-Base.one(::Type{SafeReal}) = true
-Base.zero(::Type{SafeReal}) = false
-Base.convert(::Type{<:SafeRealImpl}, x::Number) = convert(Real, x)
-
-################### LiteralReal #######################
-
-abstract type LiteralRealImpl <: Number end
-const LiteralReal = Union{LiteralRealImpl, Real}
-Base.one(::Type{LiteralReal}) = true
-Base.zero(::Type{LiteralReal}) = false
-Base.convert(::Type{<:LiteralRealImpl}, x::Number) = convert(Real, x)
+abstract type SymVariant end
+abstract type SymReal <: SymVariant end
+abstract type SafeReal <: SymVariant end
+abstract type TreeReal <: SymVariant end
 
 ###
 ### Uni-type design
@@ -36,17 +20,22 @@ const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
 const PolyVarOrder = DP.Commutative{DP.CreationOrder}
 const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=MonomialOrder)
 const PolyVarT = typeof(ExamplePolyVar)
-const PolynomialT{T} = DP.Polynomial{DP.Commutative{DP.CreationOrder}, MonomialOrder, T}
+const PolyCoeffT = Number
+const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
+# we can't actually print a zero polynomial of this type, since it attempts to call
+# `zero(Any)` but that doesn't matter because we shouldn't ever store a zero polynomial
+const PolynomialT = _PolynomialT{PolyCoeffT}
+const TypeT = Union{DataType, UnionAll, Union}
 
-function zeropoly(::Type{T}) where {T}
+function zeropoly()
     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}()
-    PolynomialT{T}(T[], mv)
+    PolynomialT(PolyCoeffT[], mv)
 end
 
-function onepoly(::Type{T}) where {T}
+function onepoly()
     V = DP.Commutative{DP.CreationOrder}
     mv = DP.MonomialVector{V, MonomialOrder}(DP.Variable{V, MonomialOrder}[], [Int[]])
-    PolynomialT{T}(T[one(T)], mv)
+    PolynomialT(PolyCoeffT[1], mv)
 end
 
 """
@@ -54,44 +43,45 @@ end
 
 Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
 """
-@data mutable BasicSymbolicImpl{T} begin 
+@data mutable BasicSymbolicImpl{T <: SymVariant} begin 
     struct Const
-        const val::T
+        const val::Any
         id::IdentT
     end
     struct Sym
         const name::Symbol
         const metadata::MetadataT
         const shape::ShapeT
+        const type::TypeT
         hash2::UInt
         id::IdentT
     end
     struct Term
         const f::Any
-        const args::SmallV{BasicSymbolicImpl.Type}
+        const args::SmallV{BasicSymbolicImpl.Type{T}}
         const metadata::MetadataT
         const shape::ShapeT
+        const type::TypeT
         hash::UInt
         hash2::UInt
         id::IdentT
     end
     struct Polyform
         # polynomial in terms of full hashed variables
-        const poly::PolynomialT{T}
-        # corresponding to poly.x.vars, the partially hashed variables
-        const partial_polyvars::Vector{PolyVarT}
+        const poly::PolynomialT
         # corresponding to poly.x.vars, the BasicSymbolic variables
-        const vars::SmallV{BasicSymbolicImpl.Type}
+        const vars::SmallV{BasicSymbolicImpl.Type{T}}
         const metadata::MetadataT
         const shape::ShapeT
-        const args::SmallV{BasicSymbolicImpl.Type}
+        const type::TypeT
+        const args::SmallV{BasicSymbolicImpl.Type{T}}
         hash::UInt
         hash2::UInt
         id::IdentT
     end
     struct Div
-        const num::BasicSymbolicImpl.Type
-        const den::BasicSymbolicImpl.Type
+        const num::BasicSymbolicImpl.Type{T}
+        const den::BasicSymbolicImpl.Type{T}
         # TODO: Keep or remove?
         # Flag for whether this div is in the most simplified form we can compute.
         # This being false doesn't mean no elimination is performed. Trivials such as
@@ -101,6 +91,7 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
         const simplified::Bool
         const metadata::MetadataT
         const shape::ShapeT
+        const type::TypeT
         hash2::UInt
         id::IdentT
     end
@@ -108,15 +99,63 @@ end
 
 const BSImpl = BasicSymbolicImpl
 const BasicSymbolic = BSImpl.Type
-const ArgsT = SmallV{BasicSymbolic}
-const ROArgsT = ReadOnlyVector{BasicSymbolic, ArgsT}
+const ArgsT{T} = SmallV{BasicSymbolic{T}}
+const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a polynomial `p` and array of `BasicSymbolic`s corresponding to
+`MP.variables(p)`, remove unused variables from both `p` and `vars`.
+
+NOTE:
+This isn't used anywhere right now. Previously, it was used in the `BSImpl.Polyform`
+constructor to canonicalize polynomials. Consequently, creating a new `Polyform` needed to
+ensure that no part of the polynomial or `vars` aliases data in another `BasicSymbolic`,
+requiring `copy` in several places in `arguments` and `^`. This was a slowdown, and
+removing it doesn't seem to affect stability of `hash` values. If `hash` seems to start
+depending on execution order again, this might be a place to look.
+"""
+function cleanpoly!(p::PolynomialT, vars)
+    pvars = MP.variables(p)
+    nvars = length(pvars)
+    unused = BitSet(1:nvars)
+    @inbounds for mono in MP.monomials(p)
+        checker = let exps = MP.exponents(mono)
+            function (i)
+                iszero(exps[i])
+            end
+        end
+        filter!(checker, unused)
+        isempty(unused) && return p
+    end
+    first_idx = first(unused)
+    new_len = nvars - length(unused)
+    @inbounds for mono in MP.monomials(p)
+        write_to = first_idx
+        exps = MP.exponents(mono)
+        for i in first_idx+1:nvars
+            exps[write_to] = exps[i]
+            write_to += !(i in unused)
+        end
+        resize!(exps, new_len)
+    end
+    write_to = first_idx
+    @inbounds for i in first_idx+1:nvars
+        pvars[write_to] = pvars[i]
+        vars[write_to] = vars[i]
+        write_to += !(i in unused)
+    end
+    resize!(pvars, new_len)
+    resize!(vars, new_len)
+    return nothing
+end
 
 const POLYVAR_LOCK = ReadWriteLock()
 # NOTE: All of these are accessed via POLYVAR_LOCK
 const BS_TO_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
 const BS_TO_PARTIAL_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
 const PVAR_TO_BS = Dict{Symbol, WeakRef}()
-const PARTIAL_PVARS = Set{Symbol}()
 
 # TODO: manage scopes better here
 function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
@@ -129,10 +168,7 @@ function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
                 return pvar
             end
 
-            inner_name = @match x begin
-                BSImpl.Sym(; name) => name
-                _ => nameof(operation(x))
-            end
+            inner_name = _name_as_operator(x)
             name = Symbol(inner_name, :_, hash(x))
             while (cur = get(PVAR_TO_BS, name, nothing); cur !== nothing && cur.value !== nothing)
                 # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
@@ -144,11 +180,6 @@ function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
                 # do the same thing, but for the partial hash
                 partial_name = Symbol(inner_name, :_, hash(x))
             end true
-            while partial_name in PARTIAL_PVARS
-                # `cache` didn't have a mapping for `x`, so `rev_cache` cannot have
-                # a valid mapping for the polyvar (name)
-                partial_name = Symbol(partial_name, :_)
-            end
         end
         @lock POLYVAR_LOCK begin
             # NOTE: This _MUST NOT_ give away the lock between creating the polyvar
@@ -163,7 +194,6 @@ function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
             BS_TO_PARTIAL_PVAR[x] = partial_pvar
             BS_TO_PVAR[x] = pvar
             PVAR_TO_BS[name] = WeakRef(x)
-            push!(PARTIAL_PVARS, partial_name)
         end
     end
     return pvar
@@ -189,29 +219,40 @@ function polyvar_to_basicsymbolic(x::PolyVarT)
     return bs::BasicSymbolic
 end
 
-function subs_poly(poly::Union{PolynomialT, MP.Term}, vars)
-    add_buffer = ArgsT()
-    mul_buffer = ArgsT()
+function subs_poly(poly::Union{_PolynomialT, MP.Term}, vars::AbstractVector{BasicSymbolic{T}}) where {T}
+    add_buffer = ArgsT{T}()
+    mul_buffer = ArgsT{T}()
     for term in MP.terms(poly)
         empty!(mul_buffer)
         coeff = MP.coefficient(term)
-        push!(mul_buffer, closest_const(coeff))
+        push!(mul_buffer, Const{T}(coeff))
         mono = MP.monomial(term)
         for (i, exp) in enumerate(MP.exponents(mono))
             iszero(exp) && continue
             push!(mul_buffer, (vars[i] ^ exp))
         end
-        push!(add_buffer, mul_worker(mul_buffer))
+        push!(add_buffer, mul_worker(T, mul_buffer))
     end
-    return add_worker(add_buffer)
+    return add_worker(T, add_buffer)
 end
 
-function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic})
-    ScalarSymbolic()
+function symtype(x::BasicSymbolic)
+    # use `@match` instead of `x.type` since it is faster
+    @match x begin
+        BSImpl.Const(; val) => typeof(val)
+        BSImpl.Sym(; type) => type
+        BSImpl.Term(; type) => type
+        BSImpl.Polyform(; type) => type
+        BSImpl.Div(; type) => type
+    end
 end
+symtype(x) = typeof(x)
 
-function SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic{<:AbstractArray}})
-    ArraySymbolic()
+vartype(x::BasicSymbolic{T}) where {T} = T
+vartype(::Type{BasicSymbolic{T}}) where {T} = T
+
+function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
+    symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
 end
 
 """
@@ -252,95 +293,37 @@ function override_properties(obj::Type{<:BSImpl.Variant})
     end
 end
 
-function ordered_override_properties(obj::Type{<:BSImpl.Variant})
-    @match obj begin
-        ::Type{<:BSImpl.Const} => ((nothing, nothing),)
-        ::Type{<:BSImpl.Sym} => (0, (nothing, nothing))
-        ::Type{<:BSImpl.Term} => (0, 0, (nothing, nothing))
-        ::Type{<:BSImpl.Polyform} => (ArgsT(), 0, 0, (nothing, nothing))
-        ::Type{<:BSImpl.Div} => (0, (nothing, nothing))
-        _ => throw(UnimplementedForVariantError(override_properties, obj))
-    end
-end
+ordered_override_properties(::Type{<:BSImpl.Const}) = ((nothing, nothing),)
+ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, (nothing, nothing))
+ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, (nothing, nothing))
+ordered_override_properties(::Type{BSImpl.Polyform{T}}) where {T} = (ArgsT{T}(), 0, 0, (nothing, nothing))
+ordered_override_properties(::Type{<:BSImpl.Div}) = (0, (nothing, nothing))
 
 function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
         BSImpl.Const(; val, id) => (; val, id)
-        BSImpl.Sym(; name, metadata, hash2, shape, id) => (; name, metadata, hash2, shape, id)
-        BSImpl.Term(; f, args, metadata, hash, hash2, shape, id) => (; f, args, metadata, hash, hash2, shape, id)
-        BSImpl.Polyform(; poly, partial_polyvars, vars, metadata, shape, args, hash, hash2, id) => (; poly, partial_polyvars, vars, metadata, shape, args, hash, hash2, id)
-        BSImpl.Div(; num, den, simplified, metadata, hash2, shape, id) => (; num, den, simplified, metadata, hash2, shape, id)
+        BSImpl.Sym(; name, metadata, hash2, shape, type, id) => (; name, metadata, hash2, shape, type, id)
+        BSImpl.Term(; f, args, metadata, hash, hash2, shape, type, id) => (; f, args, metadata, hash, hash2, shape, type, id)
+        BSImpl.Polyform(; poly, vars, metadata, shape, type, args, hash, hash2, id) => (; poly, vars, metadata, shape, type, args, hash, hash2, id)
+        BSImpl.Div(; num, den, simplified, metadata, hash2, shape, type, id) => (; num, den, simplified, metadata, hash2, shape, type, id)
     end
 end
 
-function ConstructionBase.setproperties(obj::BSImpl.Type, patch::NamedTuple)
+function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple) where {T}
     props = getproperties(obj)
     overrides = override_properties(obj)
     # We only want to invalidate `args` if we're updating `coeff` or `dict`.
     if ispolyform(obj)
-        extras = (; args = ArgsT())
+        extras = (; args = ArgsT{T}())
     else
         extras = (;)
     end
-    hashcons(MData.variant_type(obj)(; props..., patch..., overrides..., extras...)::typeof(obj))
+    hashcons(MData.variant_type(obj)(; props..., patch..., overrides..., extras...)::BasicSymbolic{T})
 end
 
 ###
 ### Term interface
 ###
-
-"""
-$(SIGNATURES)
-
-Returns the [numeric type](https://docs.julialang.org/en/v1/base/numbers/#Standard-Numeric-Types) 
-of `x`. By default this is just `typeof(x)`.
-Define this for your symbolic types if you want [`SymbolicUtils.simplify`](@ref) to apply rules
-specific to numbers (such as commutativity of multiplication). Or such
-rules that may be implemented in the future.
-"""
-# symtype(x) = typeof(x)
-# @inline symtype(::Symbolic{T}) where T = T
-# @inline symtype(::Type{<:Symbolic{T}}) where T = T
-# @inline symtype(::BSImpl.Type{T}) where T = T
-# @inline symtype(::Type{<:BSImpl.Type{T}}) where T = T
-function symtype(x)
-    @nospecialize x
-    if x isa BasicSymbolic{Number}
-        return Number
-    elseif x isa BasicSymbolic{Int}
-        return Int
-    elseif x isa BasicSymbolic{Float64}
-        return Float64
-    elseif x isa Int
-        return Int
-    elseif x isa Float64
-        return Float64
-    elseif x isa Type{Number}
-        return Number
-    elseif x isa Type{Int}
-        return Int
-    elseif x isa Type{Float64}
-        return Float64
-    elseif x isa Type{BasicSymbolic{Number}}
-        return Number
-    elseif x isa Type{BasicSymbolic{Int}}
-        return Int
-    elseif x isa Type{BasicSymbolic{Float64}}
-        return Float64
-    elseif x isa Slot
-        return Any
-    elseif x isa Segment
-        return Any
-    elseif x isa BasicSymbolic
-        return typeof(x).parameters[1]
-    elseif x isa Type{<:BasicSymbolic}
-        return x.parameters[1]
-    elseif x isa Type
-        return x
-    else
-        return typeof(x)
-    end
-end
 
 @enumx PolyformVariant::UInt8 begin
     ADD
@@ -390,6 +373,7 @@ end
 end
 
 @cache function TermInterface.sorted_arguments(x::BSImpl.Type)::ROArgsT
+    T = vartype(x)
     @match x begin
         BSImpl.Polyform(; poly) => begin
             variant = polyform_variant(poly)
@@ -399,19 +383,19 @@ end
                 PolyformVariant.MUL => sort!(args, by = get_degrees)
                 _ => nothing
             end
-            return ROArgsT(ArgsT(args))
+            return ROArgsT{T}(ArgsT{T}(args))
         end
         _ => return arguments(x)
     end
 end
 
-function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
+function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
     @match x begin
         BSImpl.Const(_) => throw(ArgumentError("`Const` does not have arguments."))
         BSImpl.Sym(_) => throw(ArgumentError("`Sym` does not have arguments."))
-        BSImpl.Term(; args) => ROArgsT(args)
-        BSImpl.Polyform(; poly, partial_polyvars, vars, args, shape) => begin
-            isempty(args) || return ROArgsT(args)
+        BSImpl.Term(; args) => ROArgsT{T}(args)
+        BSImpl.Polyform(; poly, vars, args, shape, type) => begin
+            isempty(args) || return ROArgsT{T}(args)
             @match polyform_variant(poly) begin
                 PolyformVariant.ADD => begin
                     for term in MP.terms(poly)
@@ -419,12 +403,12 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                         mono = MP.monomial(term)
                         exps = MP.exponents(mono)
                         if MP.isconstant(term)
-                            push!(args, closest_const(coeff))
+                            push!(args, Const{T}(coeff))
                         elseif isone(coeff) && isone(count(!iszero, exps))
                             idx = findfirst(!iszero, exps)
                             push!(args, vars[idx] ^ exps[idx])
                         else
-                            push!(args, Polyform{T}(MP.polynomial(term, T), partial_polyvars, vars; shape))
+                            push!(args, Polyform{T}(MP.polynomial(term, PolyCoeffT), vars; shape, type))
                         end
                     end
                 end
@@ -433,9 +417,9 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                     coeff = MP.coefficient(term)
                     mono = MP.monomial(term)
                     if !isone(coeff)
-                        push!(args, closest_const(coeff))
+                        push!(args, Const{T}(coeff))
                     end
-                    _new_coeffs = ones(T, 1)
+                    _new_coeffs = ones(PolyCoeffT, 1)
                     for (i, (var, pow)) in enumerate(zip(vars, MP.exponents(mono)))
                         iszero(pow) && continue
                         if isone(pow)
@@ -444,8 +428,8 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                             exps = zeros(Int, length(vars))
                             exps[i] = pow
                             mvec = DP.MonomialVector(MP.variables(poly), [exps])
-                            newpoly = PolynomialT{T}(_new_coeffs, mvec)
-                            push!(args, Polyform{T}(newpoly, partial_polyvars, vars))
+                            newpoly = PolynomialT(_new_coeffs, mvec)
+                            push!(args, Polyform{T}(newpoly, vars; type))
                         end
                     end
                 end
@@ -458,12 +442,12 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT where {T}
                     @assert !iszero(pow)
                     # @assert !isone(pow)
                     push!(args, vars[idx])
-                    push!(args, closest_const(pow))
+                    push!(args, Const{T}(pow))
                 end
             end
-            return ROArgsT(args)
+            return ROArgsT{T}(args)
         end
-        BSImpl.Div(num, den) => ROArgsT(ArgsT((num, den)))
+        BSImpl.Div(num, den) => ROArgsT{T}(ArgsT{T}((num, den)))
         _ => throw(UnimplementedForVariantError(arguments, MData.variant_type(x)))
     end
 end
@@ -495,46 +479,6 @@ Base.isequal(x, ::BasicSymbolic) = false
 Base.isequal(::BasicSymbolic, ::Missing) = false
 Base.isequal(::Missing, ::BasicSymbolic) = false
 
-const SCALAR_SYMTYPE_VARIANTS = [Number, Real, SafeReal, LiteralReal, Int, Float64, Bool]
-const ARR_VARIANTS = [Vector, Matrix]
-const SYMTYPE_VARIANTS = [SCALAR_SYMTYPE_VARIANTS; [A{T} for A in ARR_VARIANTS for T in SCALAR_SYMTYPE_VARIANTS]]
-
-@eval Base.@nospecializeinfer function isequal_maybe_scal(a, b, full::Bool)
-    @nospecialize a b
-    $(begin
-        conds = Expr[]
-        bodys = Expr[]
-        for T in SYMTYPE_VARIANTS
-            push!(conds, :(a isa BasicSymbolic{$T} && b isa BasicSymbolic{$T}))
-            push!(bodys, :(isequal_bsimpl(a, b, full)))
-        end
-        for T1 in SCALAR_SYMTYPE_VARIANTS, T2 in SCALAR_SYMTYPE_VARIANTS
-            isconcretetype(T1) && isconcretetype(T2) || continue
-            push!(conds, :(a isa $T1 && b isa $T2))
-            push!(bodys, :(isequal(a, b)))
-        end
-        for A in ARR_VARIANTS, T in SCALAR_SYMTYPE_VARIANTS
-            push!(conds, :(a isa $A{$T} && b isa $A{$T}))
-            push!(bodys, :(isequal(a, b)))
-        end
-        expr = :()
-        if !isempty(conds)
-            root_cond, rest_conds = Iterators.peel(conds)
-            root_body, rest_bodys = Iterators.peel(bodys)
-            expr = Expr(:if, root_cond, root_body)
-            cur_expr = expr
-            for (cond, body) in zip(rest_conds, rest_bodys)
-                global cur_expr
-                new_chain = Expr(:elseif, cond, body)
-                push!(cur_expr.args, new_chain)
-                cur_expr = new_chain
-            end
-            push!(cur_expr.args, :(isequal(a, b)::Bool))
-        end
-        expr
-    end)
-end
-
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
 function swap_polynomial_vars(poly::PolynomialT, new_vars::Vector{PolyVarT})
@@ -542,15 +486,73 @@ function swap_polynomial_vars(poly::PolynomialT, new_vars::Vector{PolyVarT})
 end
 
 function swap_polynomial_vars(_::PolyVarT, new_vars::Vector{PolyVarT})
-    MP.polynomial(only(new_vars))
+    MP.polynomial(only(new_vars), PolyCoeffT)
 end
 
-function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
+"""
+    $(TYPEDSIGNATURES)
+
+Custom `isequal` implementation for DynamicPolynomials.jl polynomials but using
+BasicSymbolic variables. This allows comparing polynomials properly, but respecting
+the COMPARE_FULL value. It is also designed to accompany the custom `hash` implementation,
+which makes the hash independent of DynamicPolynomials variable ordering. Ordering of
+those variables is dependent on creation order which makes `hash` values non-deterministic,
+especially in multithreaded environments.
+"""
+function _custom_polyequal(p1::PolynomialT, p2::PolynomialT, vars1::ArgsT, vars2::ArgsT)
+    # INVARIANT: no coefficients are zero
+    MP.nterms(p1) == MP.nterms(p2) || return false
+    for (t1, t2) in zip(MP.terms(p1), MP.terms(p2))
+        isequal(MP.coefficient(t1), MP.coefficient(t2)) || return false
+        i = 1
+        j = 1
+        expsi = MP.exponents(t1)
+        expsj = MP.exponents(t2)
+        nI = length(expsi)
+        nJ = length(expsj)
+        iseq = true
+        # Both lists of exponents are sorted by the same ordering. So, the `k`th non-zero
+        # exponent in both lists should be equal and correspond to the same variable.
+        #
+        # Continue to iterate while the two terms are still equal, and we haven't
+        # reached the end of either.
+        while iseq && i <= nI && j <= nJ
+            # "invalid" exponent is zero
+            invalidi = iszero(expsi[i])
+            invalidj = iszero(expsj[j])
+            # if either `i` or `j` are at an "invalid" exponent, we can't compare so as far
+            # as we know the terms are still equal. If both are "valid", then the
+            # corresponding variables and exponents must be equal.
+            iseq &= invalidi || invalidj || (isequal(vars1[i], vars2[j]) && isequal(expsi[i], expsj[j]))
+            # increment `i` if it is at an invalid position, or both `i` and `j` are at a
+            # valid position. `!invalidi` in the second clause is implied by the failure of
+            # the first clause to short-circuit.
+            i += invalidi || !invalidj
+            # similarly for `j`
+            j += invalidj || !invalidi
+        end
+        iseq || return false
+        # We reached the end of one of the list of exponents. The other must not contain
+        # any non-zero entries.
+        while i <= nI
+            iszero(expsi[i]) || return false
+            i += 1
+        end
+        while j <= nJ
+            iszero(expsj[j]) || return false
+            j += 1
+        end
+    end
+    return true
+end
+
+isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false
+
+function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where {T}
     a === b && return true
     taskida, ida = a.id
     taskidb, idb = b.id
     ida === idb && ida !== nothing && return true
-    typeof(a) === typeof(b) || return false
 
     Ta = MData.variant_type(a)
     Tb = MData.variant_type(b)
@@ -562,31 +564,19 @@ function isequal_bsimpl(a::BSImpl.Type, b::BSImpl.Type, full)
 
     partial = @match (a, b) begin
         (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => begin
-            isequal_maybe_scal(v1, v2, full) && (!full || typeof(v1) == typeof(v2))
+            isequal(v1, v2)::Bool && (!full || (typeof(v1) === typeof(v2))::Bool)
         end
-        (BSImpl.Sym(; name = n1, shape = s1), BSImpl.Sym(; name = n2, shape = s2)) => begin
-            n1 === n2 && s1 == s2
+        (BSImpl.Sym(; name = n1, shape = s1, type = t1), BSImpl.Sym(; name = n2, shape = s2, type = t2)) => begin
+            n1 === n2 && s1 == s2 && t1 === t2
         end
-        (BSImpl.Term(; f = f1, args = args1, shape = s1), BSImpl.Term(; f = f2, args = args2, shape = s2)) => begin
-            isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2
+        (BSImpl.Term(; f = f1, args = args1, shape = s1, type = t1), BSImpl.Term(; f = f2, args = args2, shape = s2, type = t2)) => begin
+            isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2 && t1 === t2
         end
-        (BSImpl.Polyform(; poly = p1, partial_polyvars = part1, shape = s1), BSImpl.Polyform(; poly = p2, partial_polyvars = part2, shape = s2)) => begin
-            # Polyform is special. If we're doing a full comparison, checking equality of
-            # the contained `poly` works (even if they represent the same polynomials but
-            # `MP.variables` is different). Since the MP variables in the polynomial are
-            # based on the full comparison identity, their equality represents true equality.
-            # For partial equality checking, we simply replace `poly.x.vars` with `partial_polyvars`
-            # and compare those polynomials.
-            s1 == s2 && if full
-                isequal(p1, p2)
-            else
-                poly1 = swap_polynomial_vars(p1, part1)
-                poly2 = swap_polynomial_vars(p2, part2)
-                isequal(poly1, poly2)
-            end
+        (BSImpl.Polyform(; poly = p1, vars = v1, shape = s1, type = t1), BSImpl.Polyform(; poly = p2, vars = v2, shape = s2, type = t2)) => begin
+            s1 == s2 && _custom_polyequal(p1, p2, v1, v2) && t1 === t2
         end
-        (BSImpl.Div(; num = n1, den = d1), BSImpl.Div(; num = n2, den = d2)) => begin
-            isequal_maybe_scal(n1, n2, full) && isequal_maybe_scal(d1, d2, full)
+        (BSImpl.Div(; num = n1, den = d1, type = t1), BSImpl.Div(; num = n2, den = d2, type = t2)) => begin
+            isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && t1 === t2
         end
     end
     if full && partial && !(Ta <: BSImpl.Const)
@@ -610,60 +600,30 @@ const DIV_SALT = 0x334b218e73bbba53 % UInt
 const POW_SALT = 0x2b55b97a6efb080c % UInt
 const PLY_SALT = 0x36ee940e7fa431a3 % UInt
 
-@eval Base.@nospecializeinfer function hash_anyscalar(x::Any, h::UInt, full::Bool)
-    @nospecialize x
-    $(begin
-        conds = Expr[]
-        bodys = Expr[]
-        for T in SYMTYPE_VARIANTS
-            push!(conds, :(x isa BasicSymbolic{$T}))
-            push!(bodys, :(hash_bsimpl(x, h, full)))
-        end
-        for T in SCALAR_SYMTYPE_VARIANTS
-            isconcretetype(T) || continue
-            push!(conds, :(x isa $T))
-            push!(bodys, :(hash(x, h)))
-        end
-        for A in ARR_VARIANTS, T in SCALAR_SYMTYPE_VARIANTS
-            push!(conds, :(x isa $A{$T}))
-            push!(bodys, :(hash(x, h)))
-        end
+"""
+    $(TYPEDSIGNATURES)
 
-        expr = :()
-        if !isempty(conds)
-            root_cond, rest_conds = Iterators.peel(conds)
-            root_body, rest_bodys = Iterators.peel(bodys)
-            expr = Expr(:if, root_cond, root_body)
-            cur_expr = expr
-            for (cond, body) in zip(rest_conds, rest_bodys)
-                global cur_expr
-                new_chain = Expr(:elseif, cond, body)
-                push!(cur_expr.args, new_chain)
-                cur_expr = new_chain
-            end
-            push!(cur_expr.args, :(hash(x, h)::UInt))
+Custom `hash` implementation for `Polyform`s, see `_custom_polyequal`.
+"""
+function _custom_polyhash(p::PolynomialT, vars, h::UInt)
+    for t in MP.terms(p)
+        for (v, e) in zip(vars, MP.exponents(t))
+            iszero(e) && continue
+            h = hash(v, hash(e, h))
         end
-
-        expr
-    end)
-end
-
-function hashargs(x::ArgsT, h::UInt, full)
-    h += Base.hash_abstractarray_seed
-    h = hash(length(x), h)
-    for val in x
-        h = hash_anyscalar(val, h, full)
+        h = hash(MP.coefficient(t), h)
     end
     return h
 end
 
-function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
+function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     if !iszero(h)
         return hash(hash_bsimpl(s, zero(h), full), h)::UInt
     end
+    h = hash(T, h)
     @match s begin
         BSImpl.Const(; val) => begin
-            h = hash_anyscalar(val, h, full)
+            h = hash(val, h)::UInt
             if full
                 h = Base.hash(typeof(val), h)::UInt
             end
@@ -677,32 +637,25 @@ function hash_bsimpl(s::BSImpl.Type, h::UInt, full)
     end
 
     partial::UInt = @match s begin
-        BSImpl.Sym(; name, shape) => begin
+        BSImpl.Sym(; name, shape, type) => begin
             h = Base.hash(name, h)
             h = Base.hash(shape, h)
+            h = Base.hash(type, h)
             h ⊻ SYM_SALT
         end
-        BSImpl.Term(; f, args, shape, hash) => begin
+        BSImpl.Term(; f, args, shape, hash, type) => begin
             # use/update cached hash
             if iszero(hash)
-                hash = s.hash = Base.hash(f, hashargs(args, Base.hash(shape, h), full))::UInt
+                hash = s.hash = Base.hash(f, Base.hash(args, Base.hash(shape, Base.hash(type, h))))::UInt
             else
                 hash
             end
         end
-        BSImpl.Polyform(; poly, partial_polyvars, shape, hash) => begin
-            if full
-                Base.hash(poly, Base.hash(shape, h))
-            else
-                if iszero(hash)
-                    hash = s.hash = Base.hash(swap_polynomial_vars(poly, partial_polyvars), Base.hash(shape, h))
-                else
-                    hash
-                end
-            end
+        BSImpl.Polyform(; poly, vars, shape, hash, type) => begin
+            _custom_polyhash(poly, vars, Base.hash(shape, Base.hash(type, h)))
         end
-        BSImpl.Div(; num, den) => begin
-            hash_anyscalar(num, hash_anyscalar(den, h, full), full) ⊻ DIV_SALT
+        BSImpl.Div(; num, den, type) => begin
+            Base.hash(num, Base.hash(den, Base.hash(type, h))) ⊻ DIV_SALT
         end
     end
 
@@ -719,18 +672,28 @@ end
 Base.one( s::BSImpl.Type) = one( symtype(s))
 Base.zero(s::BSImpl.Type) = zero(symtype(s))
 
+function _name_as_operator(x::BasicSymbolic)
+    @match x begin
+        BSImpl.Sym(; name) => name
+        BSImpl.Term(; f) => _name_as_operator(f)
+        _ => _name_as_operator(operation(x))
+    end
+end
+_name_as_operator(x) = nameof(x)
 
-Base.nameof(s::Union{BasicSymbolic, BSImpl.Type}) = issym(s) ? s.name : error("Non-Sym BasicSymbolic doesn't have a name")
+Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic doesn't have a name")
 
 ###
 ### Constructors
 ###
 
+# TODO: split into 3 caches based on `SymVariant`
 const ENABLE_HASHCONSING = Ref(true)
 # const WKD = TaskLocalValue{WeakKeyDict{HashconsingWrapper, Nothing}}(WeakKeyDict{HashconsingWrapper, Nothing})
 const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})
 const WVD = TaskLocalValue{WeakValueDict{UInt, BSImpl.Type}}(WeakValueDict{UInt, BSImpl.Type})
-const WCS = TaskLocalValue{WeakCacheSet{BSImpl.Type}}(WeakCacheSet{BSImpl.Type})
+const AllBasicSymbolics = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}
+const WCS = TaskLocalValue{WeakCacheSet{AllBasicSymbolics}}(WeakCacheSet{AllBasicSymbolics})
 const TASK_ID = TaskLocalValue{UInt}(() -> rand(UInt))
 
 function generate_id()
@@ -772,7 +735,7 @@ function hashcons(s::BSImpl.Type)
     end
     @manually_scope COMPARE_FULL => true begin
         cache = WCS[]
-        k = getkey!(cache, s)
+        k = getkey!(cache, s)::typeof(s)
         # cache = WVD[]
         # h = hash(s)
         # k = get(cache, h, nothing)
@@ -794,9 +757,13 @@ function hashcons(s::BSImpl.Type)
     end true
 end
 
-const SMALLV_DEFAULT = hashcons(BSImpl.Const{Int}(0, (nothing, nothing)))
+const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, (nothing, nothing)))
+const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, (nothing, nothing)))
+const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, (nothing, nothing)))
 
-defaultval(::Type{<:BasicSymbolic}) = SMALLV_DEFAULT
+defaultval(::Type{BasicSymbolic{SymReal}}) = SMALLV_DEFAULT_SYMREAL
+defaultval(::Type{BasicSymbolic{SafeReal}}) = SMALLV_DEFAULT_SAFEREAL
+defaultval(::Type{BasicSymbolic{TreeReal}}) = SMALLV_DEFAULT_TREEREAL
 
 function get_mul_coefficient(x)
     iscall(x) && operation(x) === (*) || throw(ArgumentError("$x is not a multiplication"))
@@ -837,56 +804,15 @@ function maybe_integer(x)
     return (x isa Rational && isone(x.den)) ? x.num : x
 end
 
-@eval Base.@nospecializeinfer function closest_const(arg)
-    @nospecialize arg
-    $(begin
-        conds = Expr[]
-        bodys = Expr[]
-
-        for T in SYMTYPE_VARIANTS
-            isconcretetype(T) || continue
-            push!(conds, :(arg isa $T))
-            push!(bodys, :(Const{$T}(arg)))
-        end
-
-        expr = :()
-        if !isempty(conds)
-            root_cond, rest_conds = Iterators.peel(conds)
-            root_body, rest_bodys = Iterators.peel(bodys)
-            expr = Expr(:if, root_cond, root_body)
-            cur_expr = expr
-            for (cond, body) in zip(rest_conds, rest_bodys)
-                global cur_expr
-                new_chain = Expr(:elseif, cond, body)
-                push!(cur_expr.args, new_chain)
-                cur_expr = new_chain
-            end
-            push!(cur_expr.args, :(Const{typeof(arg)}(arg)::BasicSymbolic))
-        end
-        
-        expr
-    end)
-end
-
-Base.@nospecializeinfer function maybe_const(arg)
-    @nospecialize arg
-    arg isa BasicSymbolic ? arg : closest_const(arg)
-end
-
-Base.@nospecializeinfer function maybe_const(::Type{T}, arg) where {T}
-    @nospecialize arg
-    arg isa BasicSymbolic ? arg : Const{T}(arg)
-end
-
-function parse_args(args::Union{Tuple, AbstractVector})
-    args isa ROArgsT && return parent(args)
-    args isa ArgsT && return args
-    _args = ArgsT()
+function parse_args(::Type{T}, args::Union{Tuple, AbstractVector}) where {T <: SymVariant}
+    args isa ROArgsT{T} && return parent(args)::ArgsT{T}
+    args isa ArgsT{T} && return args
+    _args = ArgsT{T}()
     sizehint!(_args, length(args))
     for arg in args
-        push!(_args, arg isa BasicSymbolic ? arg : closest_const(arg))
+        push!(_args, Const{T}(arg))
     end
-    return _args::ArgsT
+    return _args::ArgsT{T}
 end
 
 function unwrap_args(args)
@@ -898,67 +824,75 @@ function unwrap_args(args)
 end
 
 @inline function BSImpl.Const{T}(val; unsafe = false) where {T}
-    props = ordered_override_properties(BSImpl.Const)
-    var = BSImpl.Const{T}(val, props...)
-    if !unsafe
-        var = hashcons(var)
+    @nospecialize val
+    if val isa BasicSymbolic{T}
+        return val
+    elseif val isa BasicSymbolic{SymReal}
+        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
+    elseif val isa BasicSymbolic{SafeReal}
+        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
+    elseif val isa BasicSymbolic{TreeReal}
+        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
+    else
+        props = ordered_override_properties(BSImpl.Const)
+        var = BSImpl.Const{T}(val, props...)
+        if !unsafe
+            var = hashcons(var)
+        end
+        return var
     end
-    return var
 end
 
-@inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     props = ordered_override_properties(BSImpl.Sym)
-    var = BSImpl.Sym{T}(name, metadata, shape, props...)
+    var = BSImpl.Sym{T}(name, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end
     return var
 end
 
-@inline function BSImpl.Term{T}(f, args; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Term{T}(f, args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    args = parse_args(args)
+    args = parse_args(T, args)
     props = ordered_override_properties(BSImpl.Term)
-    var = BSImpl.Term{T}(f, args, metadata, shape, props...)
+    var = BSImpl.Term{T}(f, args, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end
     return var
 end
 
-@inline function BSImpl.Polyform{T}(poly::PolynomialT{T}; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
-    vars = SmallV{BasicSymbolic}()
+@inline function BSImpl.Polyform{T}(poly::PolynomialT; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
+    vars = SmallV{BasicSymbolic{T}}()
     pvars = MP.variables(poly)
-    partial_polyvars = Vector{PolyVarT}()
     sizehint!(vars, length(pvars))
-    sizehint!(partial_polyvars, length(pvars))
     @manually_scope COMPARE_FULL => true begin
         for pvar in pvars
-            var = polyvar_to_basicsymbolic(pvar)
+            var = polyvar_to_basicsymbolic(pvar)::BasicSymbolic{T}
             push!(vars, var)
-            push!(partial_polyvars, basicsymbolic_to_partial_polyvar(var))
         end
     end
-    return BSImpl.Polyform{T}(poly, partial_polyvars, vars; metadata, shape, unsafe)
+    return BSImpl.Polyform{T}(poly, vars; metadata, shape, type, unsafe)
 end
 
-@inline function BSImpl.Polyform{T}(poly::PolynomialT{T}, partial_polyvars::Vector{PolyVarT}, vars::SmallV{BasicSymbolic}; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Polyform{T}(poly::PolynomialT, vars::SmallV{BasicSymbolic{T}}; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    props = ordered_override_properties(BSImpl.Polyform)
-    var = BSImpl.Polyform{T}(poly, partial_polyvars, vars, metadata, shape, props...)
+    props = ordered_override_properties(BSImpl.Polyform{T})
+    var = BSImpl.Polyform{T}(poly, vars, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end
     return var
 end
 
-@inline function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, shape = default_shape(T), unsafe = false) where {T}
+@inline function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
-    num = maybe_const(num)
-    den = maybe_const(den)
+    num = Const{T}(num)
+    den = Const{T}(den)
     props = ordered_override_properties(BSImpl.Div)
-    var = BSImpl.Div{T}(num, den, simplified, metadata, shape, props...)
+    var = BSImpl.Div{T}(num, den, simplified, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
     end
@@ -971,48 +905,40 @@ struct Term{T} end
 struct Polyform{T} end
 struct Div{T} end
 
-function Const{T}(val) where {T}
-    val = unwrap(val)
-    val isa BasicSymbolic && return val
-    BSImpl.Const{T}(convert(T, val))
-end
+@inline Const{T}(val; kw...) where {T} = BSImpl.Const{T}(val; kw...)
 
-Sym{T}(name; kw...) where {T} = BSImpl.Sym{T}(name; kw...)
+@inline Sym{T}(name; kw...) where {T} = BSImpl.Sym{T}(name; kw...)
 
-function Term{T}(f, args; kw...) where {T}
+@inline function Term{T}(f, args; type = _promote_symtype(f, args), kw...) where {T}
     args = unwrap_args(args)
-    BSImpl.Term{T}(f, args; kw...)
-end
-
-function Term(f, args; kw...)
-    Term{_promote_symtype(f, args)}(f, args; kw...)
+    BSImpl.Term{T}(f, args; type, kw...)
 end
 
 function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
     nterms = MP.nterms(poly)
     if iszero(nterms)
-        return zero(T)
+        return Const{T}(0)
     elseif MP.isconstant(poly)
-        return MP.leading_coefficient(poly)
+        return Const{T}(MP.leading_coefficient(poly))
     elseif isone(nterms)
         term = MP.terms(poly)[1]
         coeff = MP.coefficient(term)
         mono = MP.monomial(term)
         exps = MP.exponents(mono)
         nnz = count(!iszero, exps)
-        if isone(coeff) && isone(nnz) 
+        if isone(coeff) && isone(nnz)
             idx = findfirst(!iszero, exps)
-            isone(exps[idx]) && return polyvar_to_basicsymbolic(MP.variables(mono)[idx])
+            isone(exps[idx]) && return polyvar_to_basicsymbolic(MP.variables(mono)[idx])::BasicSymbolic{T}
         elseif isone(-coeff) && isone(nnz)
             idx = findfirst(!iszero, exps)
             if isone(exps[idx])
                 pvars = MP.variables(poly)
-                var = polyvar_to_basicsymbolic(pvars[idx])
+                var = polyvar_to_basicsymbolic(pvars[idx])::BasicSymbolic{T}
                 @match var begin
                     BSImpl.Term(; f, args) && if f === (+) end => begin
-                        args = copy(parent(args))
+                        args = copy(args)
                         map!(x -> coeff * x, args, args)
-                        return BSImpl.Term(; f, args)
+                        return BSImpl.Term{T}(; f, args)
                     end
                     BSImpl.Polyform(;) => return -var
                     _ => nothing
@@ -1021,25 +947,6 @@ function Polyform{T}(poly::PolynomialT, args...; kw...) where {T}
         end
     end
     BSImpl.Polyform{T}(poly, args...; kw...)
-end
-
-Polyform(poly::PolynomialT{T}, args...; kw...) where {T} = Polyform{T}(poly, args...; kw...)
-
-"""
-    $(TYPEDSIGNATURES)
-
-Create a generic division term. Does not assume anything about the division algebra beyond
-the ability to check for zero and one elements (via [`_iszero`](@ref) and [`_isone`](@ref)).
-
-If the numerator is zero or denominator is one, the numerator is returned.
-"""
-function Div{T}(n, d, simplified; kw...) where {T}
-    n = unwrap_const(unwrap(n))
-    d = unwrap_const(unwrap(d))
-    # TODO: This used to return `zero(typeof(n))`, maybe there was a reason?
-    _iszero(n) && return maybe_const(T, n)
-    _isone(d) && return maybe_const(T, n)
-    return BSImpl.Div{T}(n, d, simplified; kw...)
 end
 
 const Rat = Union{Rational, Integer}
@@ -1079,44 +986,42 @@ end
 
 """
     $(TYPEDSIGNATURES)
-
-Create a division term specifically for the real or complex algebra. Performs additional
-simplification and cancellation.
 """
-function Div{T}(n, d, simplified; kw...) where {T <: Number}
-    n = unwrap_const(unwrap(n))
-    d = unwrap_const(unwrap(d))
+function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(d)), kw...) where {T}
+    n = unwrap(n)
+    d = unwrap(d)
 
-    if !(T == SafeReal)
-        n, d = quick_cancel(n, d)
+    if !(type <: Number)
+        _iszero(n) && return Const{T}(n)
+        _isone(d) && return Const{T}(n)
+    end
+
+    if !(T === SafeReal)
+        n, d = quick_cancel(Const{T}(n), Const{T}(d))
     end
     n = unwrap_const(n)
     d = unwrap_const(d)
 
-    _iszero(n) && return Const{T}(zero(typeof(n)))
-    _isone(d) && return maybe_const(T, n)
+    _iszero(n) && return Const{T}(n)
+    _isone(d) && return Const{T}(n)
 
     if isdiv(n) && isdiv(d)
-        return Div{T}(n.num * d.den, n.den * d.num, simplified; kw...)
+        return Div{T}(n.num * d.den, n.den * d.num, simplified; type, kw...)
     elseif isdiv(n)
-        return Div{T}(n.num, n.den * d, simplified; kw...)
+        return Div{T}(n.num, n.den * d, simplified; type, kw...)
     elseif isdiv(d)
-        return Div{T}(n * d.den, d.num, simplified; kw...)
+        return Div{T}(n * d.den, d.num, simplified; type, kw...)
     end
 
-    d isa Number && _isone(-d) && return maybe_const(T, -n)
+    d isa Number && _isone(-d) && return Const{T}(-n)
     n isa Rat && d isa Rat && return Const{T}(n // d)
 
     n, d = simplify_coefficients(n, d)
 
-    _isone(d) && return maybe_const(T, n)
-    _isone(-d) && return maybe_const(T, -n)
+    _isone(d) && return Const{T}(n)
+    _isone(-d) && return Const{T}(-n)
 
-    BSImpl.Div{T}(n, d, simplified; kw...)
-end
-
-function Div(n, d, simplified; kw...)
-    Div{promote_symtype((/), symtype(n), symtype(d))}(n, d, simplified; kw...)
+    BSImpl.Div{T}(n, d, simplified; type, kw...)
 end
 
 """
@@ -1137,62 +1042,59 @@ Return the denominator of expression `x` as an array of multiplied terms.
 """
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : SmallV{Any}((1,))
 
-function unwrap_const(x)
-    isconst(x) ? x.val : x
+@inline function unwrap_const(x::Any)
+    @nospecialize x
+    if x isa BasicSymbolic{SymReal}
+        @match x begin
+            BSImpl.Const(; val) => val
+            _ => x
+        end
+    elseif x isa BasicSymbolic{SafeReal}
+        @match x begin
+            BSImpl.Const(; val) => val
+            _ => x
+        end
+    elseif x isa BasicSymbolic{TreeReal}
+        @match x begin
+            BSImpl.Const(; val) => val
+            _ => x
+        end
+    else
+        x
+    end
 end
 
 """
     $(TYPEDSIGNATURES)
 """
-function term(f, args...; type = nothing)
+function term(f, args...; vartype = SymReal, type = promote_symtype(f, symtype.(args)...))
     @nospecialize f
-    if type === nothing
-        T = _promote_symtype(f, args)
-    else
-        T = type
-    end
-    Term{T}(f, args)
+    Term{vartype}(f, args; type)
 end
 
-function TermInterface.maketerm(::Type{T}, head, args, metadata) where {T<:BasicSymbolic}
+function TermInterface.maketerm(::Type{BasicSymbolic{T}}, head, args, metadata; type = _promote_symtype(head, args)) where {T}
     @nospecialize head
     args = unwrap_args(args)
-    st = symtype(T)
-    pst = _promote_symtype(head, args)
-    # Use promoted symtype only if not a subtype of the existing symtype of T.
-    # This is useful when calling `maketerm(BasicSymbolic{Number}, (==), [true, false])` 
-    # Where the result would have a symtype of Bool. 
-    # Please see discussion in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/609 
-    # TODO this should be optimized.
-    new_st = if st <: AbstractArray
-        st
-    elseif pst === Bool
-        pst
-    elseif pst === Any || (st === Number && pst <: st)
-        st
-    else
-        pst
-    end
-    basicsymbolic(head, args, new_st, metadata)
+    basicsymbolic(T, head, args, type, metadata)
 end
 
-function basicsymbolic(f, args, ::Type{T}, metadata) where {T}
-    @nospecialize f
+function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
+    @nospecialize f type
     if f isa Symbol
         error("$f must not be a Symbol")
     end
     args = unwrap_args(args)
-    if T === LiteralReal
+    if T === TreeReal
         @goto FALLBACK
-    elseif all(x->x isa Union{Number, BasicSymbolic{<:Number}}, args)
+    elseif type <: Number
         if f === (+)
-            res = add_worker(args)
+            res = add_worker(T, args)
             if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
                 @set! res.metadata = metadata
             end
             return res
         elseif f === (*)
-            res = mul_worker(args)
+            res = mul_worker(T, args)
             if metadata !== nothing && (ismul(res) || (isterm(res) && operation(res) == (*)))
                 @set! res.metadata = metadata
             end
@@ -1215,7 +1117,7 @@ function basicsymbolic(f, args, ::Type{T}, metadata) where {T}
         end
     else
         @label FALLBACK
-        Term{T}(f, args, metadata=metadata)
+        Term{T}(f, args; type, metadata=metadata)
     end
 end
 
@@ -1304,9 +1206,6 @@ function isnegative(t)
 end
 
 # Term{}
-setargs(t, args) = Term{symtype(t)}(operation(t), args)
-cdrargs(args) = setargs(t, cdr(args))
-
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
 isbinop(f) = iscall(f) && !iscall(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
 function print_arg(io, x; paren=false)
@@ -1445,7 +1344,7 @@ function show_term(io::IO, t)
 
     f = operation(t)
     args = sorted_arguments(t)
-    if symtype(t) == LiteralReal
+    if vartype(t) === TreeReal
         show_call(io, f, args)
     elseif f === (+)
         show_add(io, args)
@@ -1519,12 +1418,13 @@ promote_symtype(f, Ts...) = Any
 
 struct FnType{X<:Tuple,Y,Z} end
 
-(f::BasicSymbolic{<:FnType})(args...) = Term{promote_symtype(f, symtype.(args)...)}(f, SmallV{Any}(args))
-
-function (f::BasicSymbolic)(args...)
-    error("Sym $f is not callable. " *
+function (f::BasicSymbolic{T})(args...) where {T}
+    symtype(f) <: FnType || error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable.")
+    Term{T}(f, args; type = promote_symtype(f, symtype.(args)...))
 end
+
+fntype_X_Y(::Type{<: FnType{X, Y}}) where {X, Y} = (X, Y)
 
 """
     promote_symtype(f::FnType{X,Y}, arg_symtypes...)
@@ -1532,7 +1432,10 @@ end
 The output symtype of applying variable `f` to arguments of symtype `arg_symtypes...`.
 if the arguments are of the wrong type then this function will error.
 """
-function promote_symtype(f::BasicSymbolic{<:FnType{X,Y}}, args...) where {X, Y}
+function promote_symtype(f::BasicSymbolic, args...)
+    T = symtype(f)
+    X, Y = fntype_X_Y(T)
+
     if X === Tuple
         return Y
     end
@@ -1544,15 +1447,6 @@ function promote_symtype(f::BasicSymbolic{<:FnType{X,Y}}, args...) where {X, Y}
         error("$t is not a subtype of $X.")
     end
     return Y
-end
-
-function Base.show(io::IO, f::BasicSymbolic{<:FnType{X,Y}}) where {X,Y}
-    print(io, nameof(f))
-    # Use `Base.unwrap_unionall` to handle `Tuple{T} where T`. This is not the
-    # best printing, but it's better than erroring.
-    argrepr = join(map(t->"::"*string(t), Base.unwrap_unionall(X).parameters), ", ")
-    print(io, "(", argrepr, ")")
-    print(io, "::", Y)
 end
 
 @inline isassociative(op) = op === (+) || op === (*)
@@ -1602,11 +1496,27 @@ and 2 arg `h`. The second argument to `h` must be a one argument function-like
 variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)
+    _vartype = SymReal
+    if Meta.isexpr(xs[end], :(=))
+        x = xs[end]
+        key, val = x.args
+        @assert key == :vartype
+        if val == :SymReal
+            _vartype = SymReal
+        elseif val == :SafeReal
+            _vartype = SafeReal
+        elseif val == :TreeReal
+            _vartype = TreeReal
+        else
+            error("Invalid vartype $val")
+        end
+        xs = Base.front(xs)
+    end
     defs = map(xs) do x
         nt = _name_type(x)
         n, t = nt.name, nt.type
         T = esc(t)
-        :($(esc(n)) = Sym{$T}($(Expr(:quote, n))))
+        :($(esc(n)) = Sym{$_vartype}($(Expr(:quote, n)); type = $T))
     end
     Expr(:block, defs...,
          :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
@@ -1655,175 +1565,220 @@ end
 ###
 ### Arithmetic
 ###
-const SN = BasicSymbolic{<:Number}
+const NonTreeSym = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}}
 # integration. Constructors of `Add, Mul, Pow...` from Base (+, *, ^, ...)
-
-add_t(a::Number,b::Number) = promote_symtype(+, symtype(a), symtype(b))
-add_t(a,b) = promote_symtype(+, symtype(a), symtype(b))
-sub_t(a,b) = promote_symtype(-, symtype(a), symtype(b))
-sub_t(a) = promote_symtype(-, symtype(a))
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 
-function +(a::SN, bs::SN...)
-    add_worker((a, bs...))
+function +(x::T...) where {T <: NonTreeSym}
+    if !all(y -> symtype(y) <: Number, x)
+        throw(MethodError(+, x))
+    end
+    add_worker(vartype(T), x)
 end
 
-function add_worker(terms)
-    isempty(terms) && return 0
+@noinline Base.@nospecializeinfer function promoted_symtype(terms)
+    a, bs = Iterators.peel(terms)
+    type::TypeT = symtype(a)
+    for b in bs
+        type = promote_symtype(+, type, symtype(b))
+    end
+    return type
+end
+
+@inline function rmzeros!(p::PolynomialT)
+    write_to = 1
+    coeffs = MP.coefficients(p)
+    monos = MP.monomials(p)
+    for i in eachindex(coeffs)
+        coeffs[write_to] = coeffs[i]
+        monos.Z[write_to] = monos.Z[i]
+        write_to += !iszero(coeffs[i])
+    end
+    resize!(coeffs, write_to - 1)
+    resize!(monos.Z, write_to - 1)
+    return nothing
+end
+
+function add_worker(::Type{T}, terms) where {T <: Union{SymReal, SafeReal}}
+    isempty(terms) && return Const{T}(0)
     if isone(length(terms))
-        return only(terms)
+        return Const{T}(only(terms))
     end
     # entries where `!issafecanon`
-    unsafes = SmallV{Any}()
-    a, bs = Iterators.peel(terms)
-    T = symtype(a)
-    for b in bs
-        T = promote_symtype(+, T, symtype(b))
-    end
-    result = zeropoly(T)::PolynomialT
+    unsafes = ArgsT{T}()
+    type = promoted_symtype(terms)
+    result = zeropoly()
     for term in terms
-        term = unwrap_const(unwrap(term))
+        term = unwrap(term)
         if !issafecanon(+, term)
-            push!(unsafes, term)
+            push!(unsafes, Const{T}(term))
             continue
         end
-        @match term begin
-            x::Number => begin
-                # DynamicPolynomials will mutate number types if it can. SymbolicUtils
-                # doesn't assume ownership of values passed to it, so we copy the ones
-                # we need to.
-                x = MA.copy_if_mutable(x)
-                MA.operate!(+, result, x)
+        if term isa BasicSymbolic{T}
+            @match term begin
+                BSImpl.Const(; val) => MA.operate!(+, result, MA.copy_if_mutable(val))
+                BSImpl.Polyform(; poly) => begin
+                    MA.operate!(+, result, poly)
+                end
+                x => begin
+                    pvar = basicsymbolic_to_polyvar(x)
+                    MA.operate!(+, result, pvar)
+                end
             end
-            BSImpl.Polyform(; poly) => begin
-                MA.operate!(+, result, poly)
-            end
-            x::BasicSymbolic => begin
-                pvar = basicsymbolic_to_polyvar(x)
-                MA.operate!(+, result, pvar)
-            end
+        elseif term isa BasicSymbolic
+            error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(x))`.")
+        else
+            # DynamicPolynomials will mutate number types if it can. SymbolicUtils
+            # doesn't assume ownership of values passed to it, so we copy the ones
+            # we need to.
+            x = MA.copy_if_mutable(term)
+            MA.operate!(+, result, x)
         end
     end
+    rmzeros!(result)
     nterms = MP.nterms(result)
-    if any(iszero, MP.coefficients(result))
-        mask = (!iszero).(MP.coefficients(result))
-        result = PolynomialT{T}(MP.coefficients(result)[mask], MP.monomials(result)[mask])
-    end
     if iszero(nterms) && isempty(unsafes)
-        return zero(T)
+        return Const{T}(0)
     elseif iszero(nterms)
-        return Term{T}(+, unsafes)
+        return BSImpl.Term{T}(+, unsafes; type)
     elseif isempty(unsafes)
-        return Polyform{T}(result)
+        return Polyform{T}(result; type)
     else
-        push!(unsafes, Polyform{T}(result))
+        push!(unsafes, Polyform{T}(result; type))
         # ensure `result` is always the first
         unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
-        return Term{T}(+, unsafes)
+        return BSImpl.Term{T}(+, unsafes; type)
     end
 end
 
-function +(a::Number, b::SN, bs::SN...)
-    return add_worker((a, b, bs...))
+function +(a::Number, b::T, bs::T...) where {T <: NonTreeSym}
+    if !all(y -> symtype(y) <: Number, bs) || !(symtype(b) <: Number) || !(symtype(a) <: Number)
+        throw(MethodError(+, symtype.((a, b, bs...))))
+    end
+    @assert !(unwrap(a) isa BasicSymbolic{TreeReal})
+    return add_worker(vartype(T), (a, b, bs...))
 end
 
-function +(a::SN, b::Number, bs::SN...)
+function +(a::T, b::Number, bs::T...) where {T <: NonTreeSym}
+    if !all(y -> symtype(y) <: Number, bs) || !(symtype(b) <: Number) || !(symtype(a) <: Number)
+        throw(MethodError(+, symtype.((a, b, bs...))))
+    end
+    @assert !(unwrap(b) isa BasicSymbolic{TreeReal})
     return +(b, a, bs...)
 end
 
-function -(a::SN)
-    a = unwrap_const(a)
-    a isa SN || return -a
-    !issafecanon(*, a) && return term(-, a)
-    T = sub_t(a)
+function -(a::BasicSymbolic{T}) where {T}
+    if !(symtype(a) <: Number)
+        throw(MethodError(-, (symtype(a),)))
+    end
     @match a begin
-        BSImpl.Polyform(; poly, vars, partial_polyvars, shape) => begin
+        BSImpl.Const(; val) => Const{T}(-val)
+        _ => nothing
+    end
+    type::TypeT = promote_symtype(-, symtype(a))
+    !issafecanon(*, a) && return Term{T}(-, ArgsT{T}((a,)); type)
+    @match a begin
+        BSImpl.Polyform(; poly, vars, shape, type) => begin
             result = copy(poly)
             MP.map_coefficients_to!(result, (-), poly; nonzero = true)
-            Polyform{T}(result, partial_polyvars, vars; shape)
+            Polyform{T}(result, vars; shape, type)
         end
         _ => (-1 * a)
     end
 end
 
-function -(a::SN, b::SN)
-    (!issafecanon(+, a) || !issafecanon(*, b)) && return term(-, a, b)
+function -(a::S, b::S) where {S <: NonTreeSym}
+    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+        throw(MethodError(-, (a, b)))
+    end
+    T = vartype(S)
+    type::TypeT = promote_symtype(-, symtype(a), symtype(b))
+    if !issafecanon(+, a) || !issafecanon(*, b)
+        return Term{T}(-, ArgsT{T}((a, b)); type)
+    end
     @match (a, b) begin
-        (BSImpl.Polyform(; poly = poly1), BSImpl.Polyform(; poly = poly2)) => begin
-            T = sub_t(a, b)
-            return Polyform{T}(poly1 - poly2)
+        (BSImpl.Const(; val = val1), BSImpl.Const(; val = val2)) => begin
+            return Const{T}(val1 - val2)
         end
-        _ => return add_worker((a, -b))
+        (BSImpl.Polyform(; poly = poly1), BSImpl.Polyform(; poly = poly2)) => begin
+            poly = copy(poly1)
+            MA.operate!(-, poly, poly2)
+            return Polyform{T}(poly; type)
+        end
+        _ => return add_worker(T, (a, -b))
     end
 end
 
--(a::Number, b::SN) = a + (-b)
--(a::SN, b::Number) = a + (-b)
+-(a::Number, b::BasicSymbolic) = a + (-b)
+-(a::BasicSymbolic, b::Number) = a + (-b)
 
 
 mul_t(a,b) = promote_symtype(*, symtype(a), symtype(b))
 mul_t(a) = promote_symtype(*, symtype(a))
 
-*(a::SN) = a
+*(a::BasicSymbolic) = a
 
-function _mul_worker!(num_coeff, den_coeff, num_dict, den_dict, term)
-    @match term begin
-        x::Number => (num_coeff[] *= x)
-        BSImpl.Polyform(; poly, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
-            pterm = only(MP.terms(poly))
-            num_coeff[] *= MP.coefficient(pterm)
-            mono = MP.monomial(pterm)
-            for (i, exp) in enumerate(MP.exponents(mono))
-                base = vars[i]
-                if iscall(base) && operation(base) === ^
-                    _base, _exp = arguments(base)
-                    if _base isa BasicSymbolic && !(_exp isa BasicSymbolic)
-                        base = _base
-                        exp *= _exp
+function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term) where {T}
+    if term isa BasicSymbolic{T}
+        @match term begin
+            BSImpl.Const(; val) => (num_coeff[] *= val)
+            BSImpl.Polyform(; poly, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
+                pterm = only(MP.terms(poly))
+                num_coeff[] *= MP.coefficient(pterm)
+                mono = MP.monomial(pterm)
+                for (i, exp) in enumerate(MP.exponents(mono))
+                    base = vars[i]
+                    if iscall(base) && operation(base) === ^
+                        _base, _exp = arguments(base)
+                        if _base isa BasicSymbolic && !(_exp isa BasicSymbolic)
+                            base = _base
+                            exp *= _exp
+                        end
                     end
+                    num_dict[base] = get(num_dict, base, 0) + exp
                 end
-                num_dict[base] = get(num_dict, base, 0) + exp
+            end
+            BSImpl.Term(; f, args) && if f === (^) && !isconst(args[1]) && isconst(args[2]) end => begin
+                base, exp = args
+                num_dict[base] = get(num_dict, base, 0) + unwrap_const(exp)
+            end
+            BSImpl.Div(; num, den) => begin
+                _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, num)
+                _mul_worker!(T, den_coeff, num_coeff, den_dict, num_dict, den)
+            end
+            x => begin
+                num_dict[x] = get(num_dict, x, 0) + 1
             end
         end
-        BSImpl.Term(; f, args) && if f === (^) && args[1] isa BasicSymbolic && !(args[2] isa BasicSymbolic) end => begin
-            base, exp = args
-            num_dict[base] = get(num_dict, base, 0) + exp
-        end
-        BSImpl.Div(; num, den) => begin
-            _mul_worker!(num_coeff, den_coeff, num_dict, den_dict, unwrap_const(num))
-            _mul_worker!(den_coeff, num_coeff, den_dict, num_dict, unwrap_const(den))
-        end
-        x::BasicSymbolic => begin
-            num_dict[x] = get(num_dict, x, 0) + 1
-        end
+    elseif term isa BasicSymbolic
+        error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
+    else
+        num_coeff[] *= term
     end
     return nothing
-    # return (num_coeff, den_coeff)::Tuple{Number, Number}
 end
 
-function coeff_dict_to_term(::Type{T}, coeff, dict) where {T}
-    isempty(dict) && return coeff[]::T
+function coeff_dict_to_term(::Type{T}, type::TypeT, coeff, dict)::BasicSymbolic{T} where {T}
+    @nospecialize type
+    isempty(dict) && return Const{T}(coeff[])
     if isone(coeff[]) && length(dict) == 1
         k, v = first(dict)
         return (k ^ v)
     end
     pvars = PolyVarT[]
-    partial_pvars = PolyVarT[]
-    vars = SmallV{BasicSymbolic}()
+    vars = ArgsT{T}()
     exps = Int[]
     sizehint!(pvars, length(dict))
-    sizehint!(partial_pvars, length(dict))
     sizehint!(vars, length(dict))
     sizehint!(exps, length(dict))
     for (k, v) in dict
         if !isinteger(v)
-            k = Term{T}(^, ArgsT((k, v)))
+            k = Term{T}(^, ArgsT{T}((k, Const{T}(v))); type)
             v = 1
         end
         push!(vars, k)
         push!(pvars, basicsymbolic_to_polyvar(k))
-        push!(partial_pvars, basicsymbolic_to_partial_polyvar(k))
         push!(exps, Int(v))
     end
 
@@ -1831,47 +1786,67 @@ function coeff_dict_to_term(::Type{T}, coeff, dict) where {T}
     if N == 2
         if pvars[1] < pvars[2]
             pvars[1], pvars[2] = pvars[2], pvars[1]
-            partial_pvars[1], partial_pvars[2] = partial_pvars[2], partial_pvars[1]
             vars[1], vars[2] = vars[2], vars[1]
             exps[1], exps[2] = exps[2], exps[1]
         end
     elseif N > 2
         perm = sortperm(pvars; rev=true)
         pvars = pvars[perm]
-        partial_pvars = partial_pvars[perm]
         vars = vars[perm]
         exps = exps[perm]
     end
 
     mvec = DP.MonomialVector{PolyVarOrder, MonomialOrder}(pvars, [exps])
-    Polyform{T}(PolynomialT{T}(coeff, mvec), partial_pvars, vars)
+    Polyform{T}(PolynomialT(copy(coeff), mvec), vars; type)
 end
 
-function mul_worker(terms)
-    length(terms) == 1 && return only(terms)
+struct MulWorkerBuffer{T}
+    num_dict::Dict{BasicSymbolic{T}, Any}
+    den_dict::Dict{BasicSymbolic{T}, Any}
+    num_coeff::Vector{PolyCoeffT}
+    den_coeff::Vector{PolyCoeffT}
+end
+
+function MulWorkerBuffer{T}() where {T}
+    MulWorkerBuffer{T}(Dict{BasicSymbolic{T}, Any}(), Dict{BasicSymbolic{T}, Any}(), PolyCoeffT[1], PolyCoeffT[1])
+end
+
+function Base.empty!(mwb::MulWorkerBuffer)
+    empty!(mwb.num_dict)
+    empty!(mwb.den_dict)
+    empty!(mwb.num_coeff)
+    empty!(mwb.den_coeff)
+    push!(mwb.num_coeff, 1)
+    push!(mwb.den_coeff, 1)
+    return mwb
+end
+
+const SYMREAL_BUFFER = TaskLocalValue{MulWorkerBuffer{SymReal}}(MulWorkerBuffer{SymReal})
+const SAFEREAL_BUFFER = TaskLocalValue{MulWorkerBuffer{SafeReal}}(MulWorkerBuffer{SafeReal})
+
+function (mwb::MulWorkerBuffer{T})(terms) where {T}
+    empty!(mwb)
+    num_dict = mwb.num_dict
+    num_coeff = mwb.num_coeff
+    den_dict = mwb.den_dict
+    den_coeff = mwb.den_coeff
+
+    length(terms) == 1 && return Const{T}(only(terms))
     a, bs = Iterators.peel(terms)
     a = unwrap(a)
-    T = symtype(a)
+    type::TypeT = symtype(a)
     for b in bs
-        T = promote_symtype(*, T, symtype(b))
+        type = promote_symtype(*, type, symtype(b))
     end
-    mul_worker(T, terms)
-end
-
-function mul_worker(::Type{T}, terms) where {T}
-    unsafes = SmallV{Any}()
-    num_coeff = T[1]
-    den_coeff = T[1]
-    num_dict = Dict{BasicSymbolic, Any}()
-    den_dict = Dict{BasicSymbolic, Any}()
+    unsafes = ArgsT{T}()
 
     for term in terms
         term = unwrap_const(unwrap(term))
         if !issafecanon(*, term)
-            push!(unsafes, term)
+            push!(unsafes, Const{T}(term))
             continue
         end
-        _mul_worker!(num_coeff, den_coeff, num_dict, den_dict, term)
+        _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, term)
     end
     for k in keys(num_dict)
         haskey(den_dict, k) || continue
@@ -1887,86 +1862,109 @@ function mul_worker(::Type{T}, terms) where {T}
     end
     filter!(kvp -> !iszero(kvp[2]), num_dict)
     filter!(kvp -> !iszero(kvp[2]), den_dict)
-    num = coeff_dict_to_term(T, num_coeff, num_dict)# ::Union{T, BasicSymbolic{T}}
-    den = coeff_dict_to_term(T, den_coeff, den_dict)# ::Union{T, BasicSymbolic{T}}
+    num = coeff_dict_to_term(T, type, num_coeff, num_dict)
+    den = coeff_dict_to_term(T, type, den_coeff, den_dict)
     if !isempty(unsafes)
         push!(unsafes, num)
         # ensure `num` is always the first
         unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
-        num = Term{T}(*, unsafes)
+        num = Term{T}(*, unsafes; type)
     end
 
-    return Div{T}(num, den, false)
+    return Div{T}(num, den, false; type)
 end
 
-function *(a::SN, b::SN)
-    mul_worker(mul_t(a, b), (a, b))
+mul_worker(::Type{SymReal}, terms) = SYMREAL_BUFFER[](terms)
+mul_worker(::Type{SafeReal}, terms) = SAFEREAL_BUFFER[](terms)
+
+function *(a::T, b::T) where {T <: NonTreeSym}
+    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+        throw(MethodError(*, (a, b)))
+    end
+    mul_worker(vartype(T), (a, b))
 end
 
-function *(a::Number, b::SN)
-    mul_worker(mul_t(a, b), (a, b))
+function *(a::Number, b::NonTreeSym)
+    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+        throw(MethodError(*, (a, b)))
+    end
+    mul_worker(vartype(b), (a, b))
 end
 
 ###
 ### Div
 ###
 
-function /(a::Union{SN,Number}, b::SN)
-    if isconst(a) || isconst(b)
-        return unwrap_const(a) / unwrap_const(b)
+function /(a::Union{S,Number}, b::S) where {S <: NonTreeSym}
+    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+        throw(MethodError(/, (a, b)))
     end
-    Div{promote_symtype(/, symtype(a), symtype(b))}(a, b, false)
+    T = vartype(S)
+    if isconst(a) || isconst(b)
+        return Const{T}(unwrap_const(a) / unwrap_const(b))
+    end
+    type = promote_symtype(/, symtype(a), symtype(b))
+    Div{T}(a, b, false; type)
 end
 
-*(a::SN, b::Number) = b * a
+*(a::NonTreeSym, b::Number) = b * a
 
-\(a::SN, b::Union{Number, SN}) = b / a
+\(a::T, b::Union{Number, T}) where {T <: NonTreeSym} = b / a
 
-\(a::Number, b::SN) = b / a
+\(a::Number, b::NonTreeSym) = b / a
 
-/(a::SN, b::Number) = (isone(abs(b)) ? b : (b isa Integer ? 1//b : inv(b))) * a
+/(a::NonTreeSym, b::Number) = (isone(abs(b)) ? b : (b isa Integer ? 1//b : inv(b))) * a
 
-//(a::Union{SN, Number}, b::SN) = a / b
+//(a::Union{NonTreeSym, Number}, b::NonTreeSym) = a / b
 
-//(a::SN, b::Number) = (one(b) // b) * a
+//(a::NonTreeSym, b::Number) = (one(b) // b) * a
 
 
 ###
 ### Pow
 ###
 
-function ^(a::SN, b)
-    isconst(a) && return ^(unwrap_const(a), b)
+function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
+    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+        throw(MethodError(^, (a, b)))
+    end
+    isconst(a) && return Const{T}(^(unwrap_const(a), b))
     a = unwrap_const(a)
     b = unwrap_const(unwrap(b))
-    T = promote_symtype(^, symtype(a), symtype(b))
-    !issafecanon(^, a, b) && return Term{T}(^, ArgsT((a, maybe_const(b))))
+    type = promote_symtype(^, symtype(a), symtype(b))
+    !issafecanon(^, a, b) && return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type)
     if b isa Number
-        iszero(b) && return 1
-        isone(b) && return a
+        iszero(b) && return Const{T}(1)
+        isone(b) && return Const{T}(a)
     end
     if b isa Real && b < 0
-        return Div{T}(1, a ^ (-b), false)
+        return Div{T}(1, a ^ (-b), false; type)
     end
-    if b isa Number && iscall(a) && operation(a) === (^) && isconst(arguments(a)[2]) && unwrap_const(arguments(a)[2]) isa Number
+    if b isa Number && iscall(a) && operation(a) === (^) && isconst(arguments(a)[2]) && symtype(arguments(a)[2]) <: Number
         base, exp = arguments(a)
         exp = unwrap_const(exp)
-        return base ^ (exp * b)
+        return Const{T}(base ^ (exp * b))
     end
     @match a begin
-        BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false)
+        BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false; type)
         _ => nothing
     end
     if b isa Number && isinteger(b)
         @match a begin
-            BSImpl.Polyform(; poly, partial_polyvars, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
-                poly = MP.polynomial(poly ^ Int(b), T)
-                return Polyform{T}(poly, partial_polyvars, vars)
+            BSImpl.Polyform(; poly, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
+                poly = MP.polynomial(poly ^ Int(b), PolyCoeffT)
+                return Polyform{T}(poly, vars; type)
             end
-            _ => return Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), T))
+            _ => return Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), PolyCoeffT); type)
         end
     end
-    return BSImpl.Term{T}(^, ArgsT((a, maybe_const(b))))
+    return BSImpl.Term{T}(^, ArgsT{T}((a, Const{T}(b))); type)
 end
 
-^(a::Number, b::SN) = Term{promote_symtype(^, symtype(a), symtype(b))}(^, ArgsT((closest_const(a), b)))
+function ^(a::Number, b::BasicSymbolic{T}) where {T}
+    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+        throw(MethodError(^, (a, b)))
+    end
+    type = promote_symtype(^, symtype(a), symtype(b))
+    Term{T}(^, ArgsT{T}((Const{T}(a), b)); type)
+end

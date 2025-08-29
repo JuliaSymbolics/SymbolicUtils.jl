@@ -21,10 +21,10 @@ end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number
-    @eqtest simplify(Term{Real}(conj, [x])) == x
-    @eqtest simplify(Term{Real}(real, [x])) == x
-    @eqtest unwrap_const(simplify(Term{Real}(imag, [x]))) == 0
-    @eqtest simplify(Term{Real}(imag, [y])) == imag(y)
+    @eqtest simplify(Term{SymReal}(conj, [x]; type = Real)) == x
+    @eqtest simplify(Term{SymReal}(real, [x]; type = Real)) == x
+    @eqtest unwrap_const(simplify(Term{SymReal}(imag, [x]; type = Real))) == 0
+    @eqtest simplify(Term{SymReal}(imag, [y]; type = Real)) == imag(y)
     @eqtest simplify(x - y) == x + -1 * y
     @eqtest simplify(x - sin(y)) == x + -1 * sin(y)
     @eqtest simplify(-sin(x)) == -1 * sin(x)
@@ -47,18 +47,18 @@ end
     @eqtest simplify(a * b * 1 * c * d) == simplify(a * b * c * d)
     @eqtest simplify_fractions(x^2.0 / (x * y)^2.0) == simplify_fractions(1 / (y^2.0))
 
-    @test unwrap_const(simplify(Term(one, [a]))) == 1
-    @test unwrap_const(simplify(Term(one, [b + 1]))) == 1
-    @test unwrap_const(simplify(Term(one, [x + 2]))) == 1
+    @test unwrap_const(simplify(Term{SymReal}(one, [a]))) == 1
+    @test unwrap_const(simplify(Term{SymReal}(one, [b + 1]))) == 1
+    @test unwrap_const(simplify(Term{SymReal}(one, [x + 2]))) == 1
 
 
-    @test unwrap_const(simplify(Term(zero, [a]))) == 0
-    @test unwrap_const(simplify(Term(zero, [b + 1]))) == 0
-    @test unwrap_const(simplify(Term(zero, [x + 2]))) == 0
+    @test unwrap_const(simplify(Term{SymReal}(zero, [a]))) == 0
+    @test unwrap_const(simplify(Term{SymReal}(zero, [b + 1]))) == 0
+    @test unwrap_const(simplify(Term{SymReal}(zero, [x + 2]))) == 0
 end
 
 @testset "LiteralReal" begin
-    @syms x1::LiteralReal x2::LiteralReal
+    @syms x1 x2 vartype=TreeReal
     s = cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2
     @eqtest s == cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2
 
@@ -80,16 +80,16 @@ end
     @eqtest simplify(true & (0 < a)) == (0 < a)
     @eqtest unwrap_const(simplify(false & (0 < a))) == false
     @eqtest unwrap_const(simplify((0 < a) & false)) == false
-    @eqtest unwrap_const(simplify(Term{Bool}(!, [true]))) == false
-    @eqtest unwrap_const(simplify(Term{Bool}(|, [false, true]))) == true
+    @eqtest unwrap_const(simplify(Term{SymReal}(!, [true]; type = Bool))) == false
+    @eqtest unwrap_const(simplify(Term{SymReal}(|, [false, true]; type = Bool))) == true
     @eqtest simplify(ifelse(true, a, b)) == a
     @eqtest simplify(ifelse(false, a, b)) == b
 
     # abs
-    @test simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => -1))) == 1
-    @test simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => 1))) == 1
-    @test simplify(substitute(ifelse(a < 0, -a, a), Dict(a => -1))) == 1
-    @test simplify(substitute(ifelse(a < 0, -a, a), Dict(a => 1))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => -1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => 1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(a < 0, -a, a), Dict(a => -1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(a < 0, -a, a), Dict(a => 1)))) == 1
 end
 
 @testset "Pythagorean Identities" begin

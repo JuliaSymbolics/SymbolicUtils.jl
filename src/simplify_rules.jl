@@ -4,7 +4,7 @@ using .Rewriters
 Returns a single argument anonymous function predicate, that returns `true` if and only if
 the argument to the predicate satisfies `iscall` and `operation(x) == f` 
 """
-is_operation(f) = @nospecialize(x) -> iscall(x) && (operation(x) == f)
+is_operation(f) = @nospecialize(x) -> iscall(x) && (operation(x) === f)
 
 const CANONICALIZE_PLUS = (
     @rule(~x::isnotflat(+) => flatten_term(+, ~x)),

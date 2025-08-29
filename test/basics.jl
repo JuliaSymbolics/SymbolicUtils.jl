@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Polyform, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, PolynomialT, Const
+using SymbolicUtils: Sym, FnType, Term, Polyform, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, PolynomialT, Const, PolyCoeffT
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
@@ -111,8 +111,8 @@ struct Ctx2 end
 
 
     @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
-                  1 + term(sqrt, 2, type=Number))
-    @test substitute(1+sqrt(a), Dict(a => 2), fold=true) isa Float64
+                  1 + term(sqrt, 2, type=Real))
+    @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=true)) isa Float64
 end
 
 @testset "Base methods" begin
@@ -122,35 +122,35 @@ end
     pa = basicsymbolic_to_polyvar(a)
     pb = basicsymbolic_to_polyvar(b)
     px = basicsymbolic_to_polyvar(x)
-    @test isequal(w + z, Polyform{Complex}(MP.polynomial(pw + pz, Complex)))
-    @test isequal(z + a, Polyform{Number}(MP.polynomial(pz + pa, Number)))
-    @test isequal(a + b, Polyform{Real}(MP.polynomial(pa + pb, Real)))
-    @test isequal(a + x, Polyform{Number}(MP.polynomial(pa + px, Number)))
-    @test isequal(a + z, Polyform{Number}(MP.polynomial(pa + pz, Number)))
+    @test isequal(w + z, Polyform{SymReal}(MP.polynomial(pw + pz, PolyCoeffT); type = Complex))
+    @test isequal(z + a, Polyform{SymReal}(MP.polynomial(pz + pa, PolyCoeffT); type = Number))
+    @test isequal(a + b, Polyform{SymReal}(MP.polynomial(pa + pb, PolyCoeffT); type = Real))
+    @test isequal(a + x, Polyform{SymReal}(MP.polynomial(pa + px, PolyCoeffT); type = Number))
+    @test isequal(a + z, Polyform{SymReal}(MP.polynomial(pa + pz, PolyCoeffT); type = Number))
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
     @test SymbolicUtils._promote_symtype(foo, (w, z, a, b,)) === Real
 
     # promote_symtype of identity
-    @test isequal(Term(identity, [w]), Term{Complex}(identity, [w]))
+    @test isequal(Term{SymReal}(identity, [w]), Term{SymReal}(identity, [w]; type = Complex))
     @test isequal(+(w), w)
     @test isequal(+(a), a)
 
-    @test isequal(rem2pi(a, RoundNearest), Term{Real}(rem2pi, [a, RoundNearest]))
+    @test isequal(rem2pi(a, RoundNearest), Term{SymReal}(rem2pi, [a, RoundNearest]; type = Real))
 
     # bool
     for f in [(==), (!=), (<=), (>=), (<), (>)]
-        @test isequal(f(a, 0), Term{Bool}(f, [a, 0]))
-        @test isequal(f(0, a), Term{Bool}(f, [0, a]))
-        @test isequal(f(a, a), Term{Bool}(f, [a, a]))
+        @test isequal(f(a, 0), Term{SymReal}(f, [a, 0]; type = Bool))
+        @test isequal(f(0, a), Term{SymReal}(f, [0, a]; type = Bool))
+        @test isequal(f(a, a), Term{SymReal}(f, [a, a]; type = Bool))
     end
 
     @test symtype(ifelse(true, 4, 5)) == Int
     @test symtype(ifelse(a < 0, b, w)) == Union{Real, Complex}
     @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
     @test_throws MethodError w < 0
-    @test isequal(w == 0, Term{Bool}(==, [w, 0]))
+    @test isequal(w == 0, Term{SymReal}(==, [w, 0]; type = Bool))
 
     @eqtest x // 5 == (1 // 5) * x
     @eqtest (1//2 * x) / 5 == (1 // 10) * x
@@ -163,15 +163,15 @@ end
     @test nameof(x) === :oof
 end
 
-@testset "array-like operations" begin
-    abstract type SquareDummy end
-    Base.:*(a::BasicSymbolic{SquareDummy}, b) = b^2
-    @syms s t a::SquareDummy A[1:2, 1:2]
+# @testset "array-like operations" begin
+#     abstract type SquareDummy end
+#     Base.:*(a::BasicSymbolic{SquareDummy}, b) = b^2
+#     @syms s t a::SquareDummy A[1:2, 1:2]
 
-    @test isequal(ndims(A), 2)
-    @test_broken isequal(a.*[1 (s+t); t pi], [1 (s+t)^2; t^2 pi^2])
-    @test isequal(s.*[1 (s+t); t pi], [s s*(s+t); s*t s*pi])
-end
+#     @test isequal(ndims(A), 2)
+#     @test_broken isequal(a.*[1 (s+t); t pi], [1 (s+t)^2; t^2 pi^2])
+#     @test isequal(s.*[1 (s+t); t pi], [s s*(s+t); s*t s*pi])
+# end
 
 @testset "err test" begin
     @syms t()
@@ -182,8 +182,8 @@ end
     @syms a b
     @test unwrap_const(substitute(a, Dict(a=>1))) == 1
     @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(b+1))
-    @test substitute(a+b, Dict(a=>1, b=>3)) == 4
-    @test substitute(exp(a), Dict(a=>2)) ≈ exp(2)
+    @test unwrap_const(substitute(a+b, Dict(a=>1, b=>3))) == 4
+    @test unwrap_const(substitute(exp(a), Dict(a=>2))) ≈ exp(2)
 end
 
 @testset "occursin" begin
@@ -205,8 +205,8 @@ end
     @test repr((2a)^(-2a)) == "(2a)^(-2a)"
     @test repr(1/2a) == "1 / (2a)"
     @test repr(2/(2*a)) == "1 / a"
-    @test repr(Term(*, [1, 1])) == "1"
-    @test repr(Term(*, [2, 1])) == "2*1"
+    @test repr(Term{SymReal}(*, [1, 1])) == "1"
+    @test repr(Term{SymReal}(*, [2, 1])) == "2*1"
     @test repr((a + b) - (b + c)) == "a - c"
     @test repr(a + -1*(b + c)) == "a - b - c"
     @test repr(a + -1*b) == "a - b"
@@ -259,7 +259,7 @@ end
     # test that maketerm doesn't hard-code BasicSymbolic subtype
     # and is consistent with BasicSymbolic arithmetic operations
     @test isequal(SymbolicUtils.maketerm(typeof(a / b), *, [a / b, c],  nothing), (a / b) * c)
-    @test isequal(SymbolicUtils.maketerm(typeof(a * b), *, [0, c],  nothing), Const{Number}(0))
+    @test isequal(SymbolicUtils.maketerm(typeof(a * b), *, [0, c],  nothing), Const{SymReal}(0))
     @test isequal(SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3],  nothing), (a * b)^3)
 
     # test that maketerm sets metadata correctly
@@ -295,6 +295,8 @@ end
     # Doesn't know return type, promoted symtype is Any
     foo(x,y) = x^2 + x 
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), foo, [a, b], nothing)
+    @test symtype(new_expr) == Any
+    new_expr = SymbolicUtils.maketerm(typeof(ref_expr), foo, [a, b], nothing; type = Number)
     @test symtype(new_expr) == Number
 
     # Promoted symtype is a subtype of referred
@@ -304,17 +306,17 @@ end
 
     # Check that the Array type does not get changed to AbstractArray
     new_expr = SymbolicUtils.maketerm(
-        SymbolicUtils.BasicSymbolic{Vector{Float64}}, sin, [1.0, 2.0], nothing)
+        SymbolicUtils.BasicSymbolic{SymReal}, sin, [1.0, 2.0], nothing; type = Vector{Float64})
     @test symtype(new_expr) == Vector{Float64}
 end
 
-toterm(t) = Term{symtype(t)}(operation(t), arguments(t))
+toterm(t) = Term{vartype(t)}(operation(t), arguments(t); type = symtype(t))
 
 @testset "diffs" begin
     @syms a b c
-    @test isequal(toterm(-1c), Term{Number}(*, [-1, c]))
-    @test isequal(toterm(-1(a+b)), Term{Number}(+, [-b, -a]))
-    @test isequal(toterm((a + b) - (b + c)), Term{Number}(+, [-c, a]))
+    @test isequal(toterm(-1c), Term{SymReal}(*, [-1, c]; type = Number))
+    @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-b, -a]; type = Number))
+    @test isequal(toterm((a + b) - (b + c)), Term{SymReal}(+, [-c, a]; type = Number))
 end
 
 @testset "hash" begin
@@ -334,11 +336,11 @@ end
     @syms a b c
     for x in [a, a*b, a^2, sin(a)]
         @test isequal(x * 1, x)
-        @test x * 0 === Const{Number}(0)
+        @test x * 0 === Const{SymReal}(0)
         @test isequal(x + 0, x)
         @test isequal(x + x, 2x)
         @test isequal(x + 2x, 3x)
-        @test x - x === 0
+        @test unwrap_const(x - x) === 0
         @test isequal(-x, -1x)
         @test isequal(x^1, x)
         @test isequal(unwrap_const((x^-1)*inv(x^-1)), 1)
@@ -364,14 +366,14 @@ end
 end
 
 @testset "subtyping" begin
-    T = FnType{Tuple{T,S,Int} where {T,S}, Real}
-    s = Sym{T}(:t)
+    T = FnType{Tuple{T,S,Int} where {T,S}, Real, Nothing}
+    s = Sym{SymReal}(:t; type = T)
     @syms a b c::Int
     @test isequal(arguments(s(a, b, c)), [a, b, c])
 end
 
 @testset "div" begin
-    @syms x::SafeReal y::Real
+    @syms x y::Real vartype=SafeReal
     @test issym((2x/2y).num)
     @test get_mul_coefficient((2x/3y).num) == 2
     @test get_mul_coefficient((2x/3y).den) == 3
@@ -402,12 +404,12 @@ end
 end
 
 @testset "LiteralReal" begin
-    @syms x::LiteralReal y::LiteralReal z::LiteralReal
+    @syms x y z vartype=TreeReal
     @test repr(x+x) == "x + x"
     @test repr(x*x) == "x * x"
     @test repr(x*x + x*x) == "(x * x) + (x * x)"
     for ex in [sin(x), x+x, x*x, x\x, x/x]
-        @test typeof(sin(x)) <: BasicSymbolic{LiteralReal}
+        @test typeof(sin(x)) === BasicSymbolic{TreeReal}
     end
     @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
 end

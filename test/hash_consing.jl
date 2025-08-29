@@ -1,5 +1,6 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul, Div, Pow, metadata, BasicSymbolic, Symbolic
+using SymbolicUtils: Term, Add, Mul, Div, Pow, metadata, BasicSymbolic, Symbolic, PolyCoeffT
+import MultivariatePolynomials as MP
 import TermInterface
 
 hash2(a) = SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true hash(a)
@@ -36,10 +37,10 @@ end
     t1 = sin(a)
     t2 = sin(a)
     @test t1.id === t2.id
-    t3 = Term(identity,[a])
-    t4 = Term(identity,[a])
+    t3 = Term{SymReal}(identity,[a])
+    t4 = Term{SymReal}(identity,[a])
     @test t3.id === t4.id
-    t5 = Term{Int}(identity,[a])
+    t5 = Term{SymReal}(identity,[a]; type = Int)
     @test t3.id !== t5.id
     tm1 = setmetadata(t1, Ctx1, "meta_1")
     @test t1.id !== tm1.id
@@ -54,7 +55,7 @@ end
     @test d3.id === d4.id
     pa = SymbolicUtils.basicsymbolic_to_polyvar(a)
     pb = SymbolicUtils.basicsymbolic_to_polyvar(b)
-    d5 = SymbolicUtils.Polyform{Int}(pa + pb)
+    d5 = SymbolicUtils.Polyform{SymReal}(MP.polynomial(pa + pb, PolyCoeffT); type = Int)
     @test d5.id !== d1.id
 
     dm1 = setmetadata(d1,Ctx1,"meta_1")
@@ -70,7 +71,7 @@ end
     @test m3.id === m4.id
     pa = SymbolicUtils.basicsymbolic_to_polyvar(a)
     pb = SymbolicUtils.basicsymbolic_to_polyvar(b)
-    m5 = SymbolicUtils.Polyform{Int}(pa * pb + 0)
+    m5 = SymbolicUtils.Polyform{SymReal}(MP.polynomial(pa * pb + 0, PolyCoeffT); type = Int)
     @test m5.id !== m1.id
 
     mm1 = setmetadata(m1, Ctx1, "meta_1")
@@ -87,7 +88,7 @@ end
     v5 = 3a/6
     v6 = 2a/4
     @test v5.id === v6.id
-    v7 = Div{Float64}(-1,a, false)
+    v7 = Div{SymReal}(-1,a, false; type = Float64)
     @test v7.id !== v3.id
 
     vm1 = setmetadata(v1,Ctx1, "meta_1")

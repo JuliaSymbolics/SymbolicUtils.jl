@@ -12,27 +12,31 @@ end
 
 function combine_fold(::Type{BasicSymbolic{T}}, op, args::ArgsT{T}, meta) where {T}
     @nospecialize op args meta
-    can_fold = !(op isa BasicSymbolic{T}) && all(_const_or_not_symbolic, args)
-    if can_fold
-        if op === (+)
-            add_worker(T, args)
-        elseif op === (*)
-            mul_worker(T, args)
-        elseif op === (/)
-            args[1] / args[2]
-        elseif op === (^)
-            args[1] ^ args[2]
-        elseif length(args) == 1
-            op(unwrap_const(args[1]))
+    can_fold = !(op isa BasicSymbolic{T}) # && all(_const_or_not_symbolic, args)
+    for arg in args
+        can_fold &= _const_or_not_symbolic(arg)
+        can_fold || break
+    end
+    if op === (+)
+        add_worker(T, args)
+    elseif op === (*)
+        mul_worker(T, args)
+    elseif op === (/)
+        args[1] / args[2]
+    elseif op === (^)
+        args[1] ^ args[2]
+    elseif can_fold
+        if length(args) == 1
+            Const{T}(op(unwrap_const(args[1])))
         elseif length(args) == 2
-            op(unwrap_const(args[1]), unwrap_const(args[2]))
+            Const{T}(op(unwrap_const(args[1]), unwrap_const(args[2])))
         elseif length(args) == 3
-            op(unwrap_const(args[1]), unwrap_const(args[2]), unwrap_const(args[3]))
+            Const{T}(op(unwrap_const(args[1]), unwrap_const(args[2]), unwrap_const(args[3])))
         else
-            op(unwrap_const.(args)...)
+            Const{T}(op(unwrap_const.(args)...))
         end
     else
-        maketerm(BasicSymbolic{T}, op, args, meta)
+        maketerm(BasicSymbolic{T}, op, args, meta)::BasicSymbolic{T}
     end
 end
 

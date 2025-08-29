@@ -553,7 +553,6 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
     taskida, ida = a.id
     taskidb, idb = b.id
     ida === idb && ida !== nothing && return true
-    typeof(a) === typeof(b) || return false
 
     Ta = MData.variant_type(a)
     Tb = MData.variant_type(b)
@@ -565,7 +564,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
 
     partial = @match (a, b) begin
         (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => begin
-            isequal(v1, v2)::Bool && (!full || typeof(v1) == typeof(v2))
+            isequal(v1, v2)::Bool && (!full || (typeof(v1) === typeof(v2))::Bool)
         end
         (BSImpl.Sym(; name = n1, shape = s1, type = t1), BSImpl.Sym(; name = n2, shape = s2, type = t2)) => begin
             n1 === n2 && s1 == s2 && t1 === t2
@@ -824,18 +823,24 @@ function unwrap_args(args)
     end
 end
 
-@inline BSImpl.Const{T}(val::BasicSymbolic{T}; kw...) where {T} = val
-@inline function BSImpl.Const{T}(val::BasicSymbolic{V}; kw...) where {T, V}
-    error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{$V}`.")
-end
-
 @inline function BSImpl.Const{T}(val; unsafe = false) where {T}
-    props = ordered_override_properties(BSImpl.Const)
-    var = BSImpl.Const{T}(val, props...)
-    if !unsafe
-        var = hashcons(var)
+    @nospecialize val
+    if val isa BasicSymbolic{T}
+        return val
+    elseif val isa BasicSymbolic{SymReal}
+        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
+    elseif val isa BasicSymbolic{SafeReal}
+        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
+    elseif val isa BasicSymbolic{TreeReal}
+        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
+    else
+        props = ordered_override_properties(BSImpl.Const)
+        var = BSImpl.Const{T}(val, props...)
+        if !unsafe
+            var = hashcons(var)
+        end
+        return var
     end
-    return var
 end
 
 @inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
@@ -1572,6 +1577,29 @@ function +(x::T...) where {T <: NonTreeSym}
     add_worker(vartype(T), x)
 end
 
+@noinline Base.@nospecializeinfer function promoted_symtype(terms)
+    a, bs = Iterators.peel(terms)
+    type::TypeT = symtype(a)
+    for b in bs
+        type = promote_symtype(+, type, symtype(b))
+    end
+    return type
+end
+
+@inline function rmzeros!(p::PolynomialT)
+    write_to = 1
+    coeffs = MP.coefficients(p)
+    monos = MP.monomials(p)
+    for i in eachindex(coeffs)
+        coeffs[write_to] = coeffs[i]
+        monos.Z[write_to] = monos.Z[i]
+        write_to += !iszero(coeffs[i])
+    end
+    resize!(coeffs, write_to - 1)
+    resize!(monos.Z, write_to - 1)
+    return nothing
+end
+
 function add_worker(::Type{T}, terms) where {T <: Union{SymReal, SafeReal}}
     isempty(terms) && return Const{T}(0)
     if isone(length(terms))
@@ -1579,20 +1607,17 @@ function add_worker(::Type{T}, terms) where {T <: Union{SymReal, SafeReal}}
     end
     # entries where `!issafecanon`
     unsafes = ArgsT{T}()
-    a, bs = Iterators.peel(terms)
-    type::TypeT = symtype(a)
-    for b in bs
-        type = promote_symtype(+, type, symtype(b))
-    end
+    type = promoted_symtype(terms)
     result = zeropoly()
     for term in terms
-        term = unwrap_const(unwrap(term))
+        term = unwrap(term)
         if !issafecanon(+, term)
             push!(unsafes, Const{T}(term))
             continue
         end
         if term isa BasicSymbolic{T}
             @match term begin
+                BSImpl.Const(; val) => MA.operate!(+, result, MA.copy_if_mutable(val))
                 BSImpl.Polyform(; poly) => begin
                     MA.operate!(+, result, poly)
                 end
@@ -1611,22 +1636,19 @@ function add_worker(::Type{T}, terms) where {T <: Union{SymReal, SafeReal}}
             MA.operate!(+, result, x)
         end
     end
+    rmzeros!(result)
     nterms = MP.nterms(result)
-    if any(iszero, MP.coefficients(result))
-        mask = (!iszero).(MP.coefficients(result))
-        result = PolynomialT(MP.coefficients(result)[mask], MP.monomials(result)[mask])
-    end
     if iszero(nterms) && isempty(unsafes)
         return Const{T}(0)
     elseif iszero(nterms)
-        return Term{T}(+, unsafes; type)
+        return BSImpl.Term{T}(+, unsafes; type)
     elseif isempty(unsafes)
         return Polyform{T}(result; type)
     else
         push!(unsafes, Polyform{T}(result; type))
         # ensure `result` is always the first
         unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
-        return Term{T}(+, unsafes; type)
+        return BSImpl.Term{T}(+, unsafes; type)
     end
 end
 

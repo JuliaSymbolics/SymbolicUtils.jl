@@ -55,7 +55,7 @@ r2(sin(α+β))
 sin(β)*cos(α) + cos(β)*sin(α)
 ```
 
-Let's say you want to catch the coefficents of a second degree polynomial in z. You can do that with:
+Let's say you want to catch the coefficients of a second degree polynomial in z. You can do that with:
 ```jldoctest rewrite
 c2d = @rule ~a + ~b*z + ~c*z^2 => (~a, ~b, ~c)
 
@@ -78,7 +78,7 @@ c2d(3 + 2z + z^2)
 # output
 (3, 2, 1)
 ```
-They work like normal slot variables, but if not present take a default value depending on the operation they are in, in the above example `~b = 1`. Currently defslot variables can be definied in:
+They work like normal slot variables, but if not present take a default value depending on the operation they are in, in the above example `~b = 1`. Currently defslot variables can be defined in:
 
 Operation | Default value
 ----------|--------------

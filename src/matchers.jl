@@ -169,15 +169,20 @@ function term_matcher_constructor(term, acSets)
         return pow_term_matcher
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
     elseif acSets!==nothing && operation(term) in [+, *]
+        has_segment = any([isa(a,Segment) for a in arguments(term)])
         function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
-            !iscall(car(data)) && return nothing # if first element is not a call, return nothing
-            operation(term) !== operation(car(data)) && return nothing # if the operation of data is not the correct one, don't even try
+            data = car(data)
+            !iscall(data) && return nothing # if first element is not a call, return nothing
+            operation(term) !== operation(data) && return nothing # if the operation of data is not the correct one, don't even try
+            data_args = arguments(data)
+            # if the number of arguments is different, and the rule doesnt have a segment, return nothing
+            !has_segment && length(matchers)-1 !== length(data_args) && return nothing
+
             
-            T = symtype(car(data))
-            if T <: Number
-                f = operation(car(data))
-                data_args = arguments(car(data))
+            T = symtype(data)
+            if T <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
+                f = operation(data)
                 
                 for inds in acSets(eachindex(data_args), length(data_args))
                     candidate = Term{T}(f, @views data_args[inds])
@@ -185,10 +190,10 @@ function term_matcher_constructor(term, acSets)
                     result = loop(candidate, bindings, matchers)                
                     result !== nothing && return success(result,1)
                 end
-            # if car(data) does not subtype to number, it might not be commutative
+            # if data does not subtype to number, it might not be commutative
             else
                 # call the normal matcher
-                result = loop(car(data), bindings, matchers)
+                result = loop(data, bindings, matchers)
                 result !== nothing && return success(result, 1)
             end
             return nothing

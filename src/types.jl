@@ -1750,7 +1750,7 @@ function coeff_dict_to_term(::Type{T}, type::TypeT, coeff, dict)::BasicSymbolic{
     sizehint!(exps, length(dict))
     for (k, v) in dict
         if !isinteger(v)
-            k = Term{T}(^, ArgsT{T}((k, v)); type)
+            k = Term{T}(^, ArgsT{T}((k, Const{T}(v))); type)
             v = 1
         end
         push!(vars, k)

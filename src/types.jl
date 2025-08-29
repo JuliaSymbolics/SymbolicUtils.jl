@@ -102,6 +102,20 @@ const BasicSymbolic = BSImpl.Type
 const ArgsT{T} = SmallV{BasicSymbolic{T}}
 const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
 
+"""
+    $(TYPEDSIGNATURES)
+
+Given a polynomial `p` and array of `BasicSymbolic`s corresponding to
+`MP.variables(p)`, remove unused variables from both `p` and `vars`.
+
+NOTE:
+This isn't used anywhere right now. Previously, it was used in the `BSImpl.Polyform`
+constructor to canonicalize polynomials. Consequently, creating a new `Polyform` needed to
+ensure that no part of the polynomial or `vars` aliases data in another `BasicSymbolic`,
+requiring `copy` in several places in `arguments` and `^`. This was a slowdown, and
+removing it doesn't seem to affect stability of `hash` values. If `hash` seems to start
+depending on execution order again, this might be a place to look.
+"""
 function cleanpoly!(p::PolynomialT, vars)
     pvars = MP.variables(p)
     nvars = length(pvars)
@@ -492,7 +506,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                             idx = findfirst(!iszero, exps)
                             push!(args, vars[idx] ^ exps[idx])
                         else
-                            push!(args, Polyform{T}(MP.polynomial(term, PolyCoeffT), copy(vars); shape, type))
+                            push!(args, Polyform{T}(MP.polynomial(term, PolyCoeffT), vars; shape, type))
                         end
                     end
                 end
@@ -511,9 +525,9 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                         else
                             exps = zeros(Int, length(vars))
                             exps[i] = pow
-                            mvec = DP.MonomialVector(copy(MP.variables(poly)), [exps])
+                            mvec = DP.MonomialVector(MP.variables(poly), [exps])
                             newpoly = PolynomialT(_new_coeffs, mvec)
-                            push!(args, Polyform{T}(newpoly, copy(vars); type))
+                            push!(args, Polyform{T}(newpoly, vars; type))
                         end
                     end
                 end
@@ -989,7 +1003,6 @@ end
 @inline function BSImpl.Polyform{T}(poly::PolynomialT, vars::SmallV{BasicSymbolic{T}}; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     props = ordered_override_properties(BSImpl.Polyform{T})
-    cleanpoly!(poly, vars)
     var = BSImpl.Polyform{T}(poly, vars, metadata, shape, type, props...)
     if !unsafe
         var = hashcons(var)
@@ -2184,7 +2197,7 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
         @match a begin
             BSImpl.Polyform(; poly, vars) && if polyform_variant(poly) != PolyformVariant.ADD end => begin
                 poly = MP.polynomial(poly ^ Int(b), PolyCoeffT)
-                return Polyform{T}(poly, copy(vars); type)
+                return Polyform{T}(poly, vars; type)
             end
             _ => return Polyform{T}(MP.polynomial(basicsymbolic_to_polyvar(a) ^ Int(b), PolyCoeffT); type)
         end

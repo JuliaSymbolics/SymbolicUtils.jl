@@ -689,9 +689,6 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic
 
 # TODO: split into 3 caches based on `SymVariant`
 const ENABLE_HASHCONSING = Ref(true)
-# const WKD = TaskLocalValue{WeakKeyDict{HashconsingWrapper, Nothing}}(WeakKeyDict{HashconsingWrapper, Nothing})
-const WKD = TaskLocalValue{WeakKeyDict{BSImpl.Type, Nothing}}(WeakKeyDict{BSImpl.Type, Nothing})
-const WVD = TaskLocalValue{WeakValueDict{UInt, BSImpl.Type}}(WeakValueDict{UInt, BSImpl.Type})
 const AllBasicSymbolics = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}
 const WCS = TaskLocalValue{WeakCacheSet{AllBasicSymbolics}}(WeakCacheSet{AllBasicSymbolics})
 const TASK_ID = TaskLocalValue{UInt}(() -> rand(UInt))
@@ -699,11 +696,6 @@ const TASK_ID = TaskLocalValue{UInt}(() -> rand(UInt))
 function generate_id()
     return (TASK_ID[], IDType())
 end
-
-const TOTAL = TaskLocalValue{Int}(Returns(0))
-const HITS = TaskLocalValue{Int}(Returns(0))
-const MISSES = TaskLocalValue{Int}(Returns(0))
-const COLLISIONS = TaskLocalValue{Int}(Returns(0))
 
 """
 $(TYPEDSIGNATURES)
@@ -726,8 +718,6 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 `Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
 original behavior of those functions.
 """
-
-const collides = TaskLocalValue{Any}(Returns(Dict()))
 
 function hashcons(s::BSImpl.Type)
     if !ENABLE_HASHCONSING[]

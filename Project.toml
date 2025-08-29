@@ -6,7 +6,6 @@ version = "3.29.0"
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
-Bijections = "e2ed5e7c-b2de-5872-ae92-c73ca462fb04"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 ConcurrentUtilities = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
@@ -24,7 +23,6 @@ MultivariatePolynomials = "102ac46a-7ee4-5c85-9060-abc95bfdeaa3"
 MutableArithmetics = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
 NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 ReadOnlyArrays = "988b38a3-91fc-5605-94a2-ee2116b3bd83"
-ReadOnlyDicts = "795d4caa-f5a7-4580-b5d8-c01d53451803"
 Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
@@ -32,13 +30,16 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 TaskLocalValues = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
 TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
-TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 WeakCacheSets = "d30d5f5c-d141-4870-aa07-aabb0f5fe7d5"
-WeakValueDicts = "897b6980-f191-5a31-bcb0-bf3c4585e0c1"
 
 [weakdeps]
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+
+[sources]
+DynamicPolynomials = {rev = "as/new-poly-merge", url = "https://github.com/AayushSabharwal/DynamicPolynomials.jl"}
+MultivariatePolynomials = {rev = "as/poly-merge-nonconcrete", url = "https://github.com/AayushSabharwal/MultivariatePolynomials.jl"}
+MutableArithmetics = {rev = "as+bl/simplify_promote_type_fallback", url = "https://github.com/AayushSabharwal/MutableArithmetics.jl"}
 
 [extensions]
 SymbolicUtilsLabelledArraysExt = "LabelledArrays"
@@ -47,7 +48,6 @@ SymbolicUtilsReverseDiffExt = "ReverseDiff"
 [compat]
 AbstractTrees = "0.4"
 ArrayInterface = "7.8"
-Bijections = "0.1.2, 0.2"
 ChainRulesCore = "1"
 Combinatorics = "1.0"
 ConcurrentUtilities = "2.5.0"
@@ -65,7 +65,6 @@ MutableArithmetics = "1.6.4"
 NaNMath = "0.3, 1.1.2"
 OhMyThreads = "0.7"
 ReadOnlyArrays = "0.2.0"
-ReadOnlyDicts = "1.0.0"
 ReverseDiff = "1"
 RuntimeGeneratedFunctions = "0.5.13"
 Setfield = "0.7, 0.8, 1"
@@ -74,8 +73,6 @@ StaticArrays = "0.12, 1.0"
 SymbolicIndexingInterface = "0.3"
 TaskLocalValues = "0.1.2"
 TermInterface = "2.0"
-TimerOutputs = "0.5"
-WeakValueDicts = "0.1.0"
 julia = "1.10"
 
 [extras]
@@ -95,8 +92,3 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
 test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "SafeTestsets", "Test", "Zygote", "OhMyThreads", "RuntimeGeneratedFunctions"]
-
-[sources]
-DynamicPolynomials = {url = "https://github.com/AayushSabharwal/DynamicPolynomials.jl", rev = "as/new-poly-merge"}
-MultivariatePolynomials = {url = "https://github.com/AayushSabharwal/MultivariatePolynomials.jl", rev = "as/poly-merge-nonconcrete"}
-MutableArithmetics = {url = "https://github.com/AayushSabharwal/MutableArithmetics.jl", rev="as+bl/simplify_promote_type_fallback"}

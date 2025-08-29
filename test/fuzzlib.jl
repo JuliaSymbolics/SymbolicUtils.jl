@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, Term, showraw, issym
+using SymbolicUtils: BasicSymbolic, Term, showraw, issym, symtype
 using SpecialFunctions
 using Test
 using NaNMath
@@ -30,7 +30,7 @@ function rand_input(T)
     end
 end
 
-rand_input(i::BasicSymbolic{T}) where {T} = rand_input(T)
+rand_input(i::BasicSymbolic{T}) where {T} = rand_input(symtype(i))
 
 const num_spec = let
     @syms a b::Real c::Integer d::Float64 e::Rational f
@@ -208,7 +208,7 @@ function gen_expr(lvl=5)
         n = rand(1:5)
         args = [gen_expr(lvl-1) for i in 1:n]
 
-        Term{Number}(f, first.(args)), f(last.(args)...)
+        Term{SymReal}(f, first.(args); type = Number), f(last.(args)...)
     else
         f = rand((-,/))
         l = gen_expr(lvl-1)
@@ -218,7 +218,7 @@ function gen_expr(lvl=5)
         end
         args = [l, r]
 
-        Term{Number}(f, first.(args)), f(last.(args)...)
+        Term{SymReal}(f, first.(args); type = Number), f(last.(args)...)
     end
 end
 

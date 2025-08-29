@@ -150,6 +150,16 @@ function Base.copy(x::Backing{T}) where {T}
     end
 end
 
+function Base.resize!(x::Backing, sz::Integer)
+    if sz > 3
+        throw(ArgumentError("New length must be <= 3"))
+    elseif sz < 0
+        throw(ArgumentError("New length must be >= 0"))
+    end
+    x.len = sz
+    return x
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -239,3 +249,4 @@ function Base.map(f, x::SmallVec{T, Vector{T}}) where {T}
 end
 Base.empty!(x::SmallVec) = empty!(x.data)
 Base.copy(x::SmallVec{T, V}) where {T, V} = SmallVec{T, V}(copy(x.data))
+Base.resize!(x::SmallVec, sz::Integer) = resize!(x.data, sz)

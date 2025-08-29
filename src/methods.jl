@@ -90,8 +90,13 @@ macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
 
-@number_methods(BasicSymbolic{<:Number}, term(f, a), term(f, a, b), skipbasics)
-@number_methods(BasicSymbolic{LiteralReal}, term(f, a), term(f, a, b), onlybasics)
+@number_methods(BasicSymbolic{SymReal},
+                Term{SymReal}(f, ArgsT{SymReal}((Const{SymReal}(a),)); type = promote_symtype(f, symtype(a))),
+                Term{SymReal}(f, ArgsT{SymReal}((Const{SymReal}(a), Const{SymReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))),
+                skipbasics)
+@number_methods(BasicSymbolic{TreeReal},
+                Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a),)); type = promote_symtype(f, symtype(a))),
+                Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a), Const{TreeReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))))
 
 for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
@@ -109,44 +114,28 @@ for f in vcat(diadic, [+, -, *, \, /, ^])
     @eval promote_symtype(::$(typeof(f)),
                    T::Type{Integer},
                    S::Type{<:Complex{<:Rational}}) = Complex{Rational}
-    for R in [SafeRealImpl, LiteralRealImpl]
-        @eval function promote_symtype(::$(typeof(f)),
-                T::Type{<:$R},
-                S::Type{<:Real})
-            X = promote_type(T, Real)
-            X == Real ? $R : X
-        end
-        @eval function promote_symtype(::$(typeof(f)),
-                T::Type{<:Real},
-                S::Type{<:$R})
-            X = promote_type(Real, S)
-            X == Real ? $R : X
-        end
-        @eval function promote_symtype(::$(typeof(f)),
-                T::Type{<:$R},
-                S::Type{<:$R})
-            $R
-        end
-    end
 end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
 error_f_symbolic(f, T) = error("$f is not defined for $T.")
 
-function Base.rem2pi(x::BasicSymbolic, mode::Base.RoundingMode)
-    T = symtype(x)
-    T <: Number ? term(rem2pi, x, mode) : error_f_symbolic(rem2pi, T)
+function Base.rem2pi(x::BasicSymbolic{T}, mode::Base.RoundingMode) where {T}
+    type = symtype(x)
+    type <: Number || error_f_symbolic(rem2pi, type)
+    return Term{T}(rem2pi, ArgsT{T}((x, Const{T}(mode))); type)
 end
 
 # Specially handle inv and literal pow
-function Base.inv(x::BasicSymbolic)
-    T = symtype(x)
-    T <: Number ? Base.:^(x, -1) : error_f_symbolic(rem2pi, T)
+function Base.inv(x::BasicSymbolic{T}) where {T}
+    type = symtype(x)
+    type <: Number || error_f_symbolic(inv, type)
+    return Const{T}(x ^ -1)
 end
-function Base.literal_pow(::typeof(^), x::BasicSymbolic, ::Val{p}) where {p}
-    T = symtype(x)
-    T <: Number ? Base.:^(x, p) : error_f_symbolic(^, T)
+function Base.literal_pow(::typeof(^), x::BasicSymbolic{T}, ::Val{p}) where {T, p}
+    type = symtype(x)
+    type <: Number || error_f_symbolic(^, type)
+    return Const{T}(x ^ p)
 end
 function promote_symtype(::typeof(Base.literal_pow), _, ::Type{T}, ::Type{Val{S}}) where{T<:Number,S}
     return promote_symtype(^, T, typeof(S))
@@ -155,24 +144,40 @@ end
 promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:SafeRealImpl}) = SafeReal
-    @eval promote_symtype(::$(typeof(f)), T::Type{<:LiteralRealImpl}) = LiteralReal
 end
 
-Base.:*(a::AbstractArray, b::BasicSymbolic{<:Number}) = map(x->x*b, a)
-Base.:*(a::BasicSymbolic{<:Number}, b::AbstractArray) = map(x->a*x, b)
+Base.:*(a::AbstractArray, b::BasicSymbolic) = map(x->x*b, a)
+Base.:*(a::BasicSymbolic, b::AbstractArray) = map(x->a*x, b)
 
 for f in [identity, one, zero, *, +, -]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
 end
 
 promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
-Base.real(s::BasicSymbolic{<:Number}) = islike(s, Real) ? s : term(real, s)
+function Base.real(s::BasicSymbolic{T}) where {T}
+    islike(s, Real) && return s
+    @match s begin
+        BSImpl.Const(; val) => Const{T}(real(val))
+        _ => Term{T}(real, ArgsT{T}((s,)); type = Real)
+    end
+end
 promote_symtype(::typeof(Base.conj), T::Type{<:Number}) = T
-Base.conj(s::BasicSymbolic{<:Number}) = islike(s, Real) ? s : term(conj, s)
+function Base.conj(s::BasicSymbolic{T}) where {T}
+    islike(s, Real) && return s
+    @match s begin
+        BSImpl.Const(; val) => Const{T}(conj(val))
+        _ => Term{T}(conj, ArgsT{T}((s,)); type = symtype(s))
+    end
+end
 promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real
-Base.imag(s::BasicSymbolic{<:Number}) = islike(s, Real) ? zero(symtype(s)) : term(imag, s)
-Base.adjoint(s::BasicSymbolic{<:Number}) = conj(s)
+function Base.imag(s::BasicSymbolic{T}) where {T}
+    islike(s, Real) && return s
+    @match s begin
+        BSImpl.Const(; val) => Const{T}(imag(val))
+        _ => Term{T}(imag, ArgsT{T}((s,)); type = Real)
+    end
+end
+Base.adjoint(s::BasicSymbolic) = conj(s)
 
 
 ## Booleans
@@ -186,29 +191,68 @@ for (f, Domain) in [(==) => Number, (!=) => Number,
                     xor => Bool]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:$Domain}, ::Type{<:$Domain}) = Bool
-        (::$(typeof(f)))(a::BasicSymbolic{<:$Domain}, b::$Domain) = term($f, a, b, type=Bool)
-        (::$(typeof(f)))(a::BasicSymbolic{<:$Domain}, b::BasicSymbolic{<:$Domain}) = term($f, a, b, type=Bool)
-        (::$(typeof(f)))(a::$Domain, b::BasicSymbolic{<:$Domain}) = term($f, a, b, type=Bool)
+        function (::$(typeof(f)))(a::BasicSymbolic{T}, b::$Domain) where {T}
+            if !(symtype(a) <: $Domain)
+                throw(MethodError($f, (a, b)))
+            end
+            Term{T}($f, ArgsT{T}((a, Const{T}(b))); type = Bool)
+        end
+        function (::$(typeof(f)))(a::$Domain, b::BasicSymbolic{T}) where {T}
+                if !(symtype(b) <: $Domain)
+                    throw(MethodError($f, (a, b)))
+                end
+                Term{T}($f, ArgsT{T}((Const{T}(a), b)); type = Bool)
+        end
+        function (::$(typeof(f)))(a::BasicSymbolic{T}, b::BasicSymbolic{T}) where {T}
+                if !(symtype(b) <: $Domain) || !(symtype(a) <: $Domain)
+                    throw(MethodError($f, (a, b)))
+                end
+                Term{T}($f, ArgsT{T}((a, b)); type = Bool)
+        end
     end
 end
 
 for f in [!, ~]
     @eval begin
         promote_symtype(::$(typeof(f)), ::Type{<:Bool}) = Bool
-        (::$(typeof(f)))(s::BasicSymbolic{Bool}) = Term{Bool}(!, [s])
+        function (::$(typeof(f)))(s::BasicSymbolic{T}) where {T}
+            type = symtype(s)
+            if type !== Bool
+                throw(MethodError(!, (s,)))
+            end
+            Term{T}(!, ArgsT{T}((s,)); type)
+        end
     end
 end
 
 
 # An ifelse node
-function Base.ifelse(_if::BasicSymbolic{Bool}, _then, _else)
-    Term{Union{symtype(_then), symtype(_else)}}(ifelse, Any[_if, _then, _else])
+function Base.ifelse(_if::BasicSymbolic{T}, _then::BasicSymbolic{T}, _else::BasicSymbolic{T}) where {T}
+    if symtype(_if) !== Bool
+        throw(MethodError(!, (_if, _then, _else)))
+    end
+    type = Union{symtype(_then), symtype(_else)}
+    Term{T}(ifelse, ArgsT{T}((_if, _then, _else)); type)
 end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
 
 # Array-like operations
-Base.size(x::BasicSymbolic{<:Number}) = ()
-Base.length(x::BasicSymbolic{<:Number}) = 1
-Base.ndims(x::BasicSymbolic{T}) where {T} = Base.ndims(T)
-Base.ndims(::Type{<:BasicSymbolic{T}}) where {T} = Base.ndims(T)
-Base.broadcastable(x::BasicSymbolic{T}) where {T<:Number} = Ref(x)
+function Base.size(x::BasicSymbolic)
+    @match x begin
+        BSImpl.Const(; val) => size(val)
+        BSImpl.Sym(; shape) => shape === Unknown() ? shape : map(length, shape)
+        BSImpl.Term(; shape) => shape === Unknown() ? shape : map(length, shape)
+        BSImpl.Polyform(; shape) => shape === Unknown() ? shape : map(length, shape)
+        BSImpl.Div(; shape) => shape === Unknown() ? shape : map(length, shape)
+    end
+end
+Base.length(x::BasicSymbolic) = prod(size(x))
+Base.ndims(x::BasicSymbolic) = length(size(x))
+function Base.broadcastable(x::BasicSymbolic)
+    type = symtype(x)
+    if type <: Number
+        Ref(x)
+    else
+        x
+    end
+end

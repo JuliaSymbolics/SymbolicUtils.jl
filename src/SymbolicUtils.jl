@@ -104,6 +104,8 @@ export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Add, Mul and Pow
 include("types.jl")
 
+include("printing.jl")
+
 include("syms.jl")
 
 # Methods on symbolic objects

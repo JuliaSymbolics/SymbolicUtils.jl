@@ -486,12 +486,48 @@ those variables is dependent on creation order which makes `hash` values non-det
 especially in multithreaded environments.
 """
 function _custom_polyequal(p1::PolynomialT, p2::PolynomialT, vars1::ArgsT, vars2::ArgsT)
+    # INVARIANT: no coefficients are zero
     MP.nterms(p1) == MP.nterms(p2) || return false
-    length(vars1) == length(vars2) || return false
-    isequal(vars1, vars2) || return false
     for (t1, t2) in zip(MP.terms(p1), MP.terms(p2))
         isequal(MP.coefficient(t1), MP.coefficient(t2)) || return false
-        iszero(cmp(MonomialOrder(), MP.exponents(t1), MP.exponents(t2))) || return false
+        i = 1
+        j = 1
+        expsi = MP.exponents(t1)
+        expsj = MP.exponents(t2)
+        nI = length(expsi)
+        nJ = length(expsj)
+        iseq = true
+        # Both lists of exponents are sorted by the same ordering. So, the `k`th non-zero
+        # exponent in both lists should be equal and correspond to the same variable.
+        #
+        # Continue to iterate while the two terms are still equal, and we haven't
+        # reached the end of either.
+        while iseq && i <= nI && j <= nJ
+            # "invalid" exponent is zero
+            invalidi = iszero(expsi[i])
+            invalidj = iszero(expsj[j])
+            # if either `i` or `j` are at an "invalid" exponent, we can't compare so as far
+            # as we know the terms are still equal. If both are "valid", then the
+            # corresponding variables and exponents must be equal.
+            iseq &= invalidi || invalidj || (isequal(vars1[i], vars2[j]) && isequal(expsi[i], expsj[j]))
+            # increment `i` if it is at an invalid position, or both `i` and `j` are at a
+            # valid position. `!invalidi` in the second clause is implied by the failure of
+            # the first clause to short-circuit.
+            i += invalidi || !invalidj
+            # similarly for `j`
+            j += invalidj || !invalidi
+        end
+        iseq || return false
+        # We reached the end of one of the list of exponents. The other must not contain
+        # any non-zero entries.
+        while i <= nI
+            iszero(expsi[i]) || return false
+            i += 1
+        end
+        while j <= nJ
+            iszero(expsj[j]) || return false
+            j += 1
+        end
     end
     return true
 end
@@ -557,9 +593,12 @@ const PLY_SALT = 0x36ee940e7fa431a3 % UInt
 Custom `hash` implementation for `Polyform`s, see `_custom_polyequal`.
 """
 function _custom_polyhash(p::PolynomialT, vars, h::UInt)
-    h = hash(vars, h)
     for t in MP.terms(p)
-        h = hash(MP.coefficient(t), hash(MP.exponents(t), h))
+        for (v, e) in zip(vars, MP.exponents(t))
+            iszero(e) && continue
+            h = hash(v, hash(e, h))
+        end
+        h = hash(MP.coefficient(t), h)
     end
     return h
 end

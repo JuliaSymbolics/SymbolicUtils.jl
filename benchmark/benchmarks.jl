@@ -111,7 +111,8 @@ let
     elseif isdefined(SymbolicUtils, :add_worker)
         arith["addition"] = @benchmarkable SymbolicUtils.add_worker($exs)
     else
-        arith["addition"] = @benchmarkable +($(exs...))
+        exs = Tuple(exs)
+        arith["addition"] = @benchmarkable +($(exs)...)
     end
 
     funs = [*, /]
@@ -121,7 +122,8 @@ let
     elseif isdefined(SymbolicUtils, :mul_worker)
         arith["multiplication"] = @benchmarkable SymbolicUtils.mul_worker($exs)
     else
-        arith["multiplication"] = @benchmarkable *($(exs...))
+        exs = Tuple(exs)
+        arith["multiplication"] = @benchmarkable *($(exs)...)
     end
 
     ex1 = random_term(50; atoms, funs)

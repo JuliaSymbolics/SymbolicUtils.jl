@@ -11,7 +11,6 @@ using Moshi.Data: @data
 import Moshi.Data as MData
 using Moshi.Match: @match
 using ReadOnlyArrays
-using ReadOnlyDicts
 using EnumX: @enumx
 using TermInterface
 using DataStructures
@@ -27,7 +26,6 @@ import TermInterface: iscall, isexpr, head, children,
 import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
-using WeakValueDicts: WeakValueDict
 using WeakCacheSets: WeakCacheSet, getkey!
 using Base: RefValue
 import MacroTools
@@ -111,6 +109,10 @@ export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Add, Mul and Pow
 include("types.jl")
 
+include("printing.jl")
+
+include("syms.jl")
+
 # Methods on symbolic objects
 using SpecialFunctions, NaNMath
 include("methods.jl")
@@ -151,10 +153,5 @@ export substitute
 include("substitute.jl")
 
 include("code.jl")
-
-
-# Adjoints
-include("adjoints.jl")
-
 
 end # module

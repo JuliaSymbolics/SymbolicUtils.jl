@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
@@ -52,6 +52,30 @@ include("utils.jl")
         @test_throws "not a subtype of" g(a, f)
         @syms (f::typeof(identity))(::Real)::Number
         @test symtype(g(a, f)) == Number
+
+        @syms a[1:2] b[1:2]::String c[1:2, 3:4] d::Vector e::Vector{Int} f::Matrix g::Matrix{Int} h::Array i::Array{Int, 3} j::Array{Int} k(..)[1:2]::Int
+        @test shape(a) == ShapeVecT([1:2])
+        @test a.type == Vector{Number}
+        @test shape(b) == ShapeVecT([1:2])
+        @test b.type == Vector{String}
+        @test shape(c) == ShapeVecT([1:2, 3:4])
+        @test c.type == Matrix{Number}
+        @test shape(d) == SymbolicUtils.Unknown(1)
+        @test d.type == Vector
+        @test shape(e) == SymbolicUtils.Unknown(1)
+        @test e.type == Vector{Int}
+        @test shape(f) == SymbolicUtils.Unknown(2)
+        @test f.type == Matrix
+        @test shape(g) == SymbolicUtils.Unknown(2)
+        @test g.type == Matrix{Int}
+        @test shape(h) == SymbolicUtils.Unknown(0)
+        @test h.type == Array
+        @test shape(i) == SymbolicUtils.Unknown(3)
+        @test i.type == Array{Int, 3}
+        @test shape(j) == SymbolicUtils.Unknown(0)
+        @test j.type == Array{Int}
+        @test shape(k) == ShapeVecT([1:2])
+        @test k.type == FnType{Tuple, Vector{Int}, Nothing}
     end
 end
 

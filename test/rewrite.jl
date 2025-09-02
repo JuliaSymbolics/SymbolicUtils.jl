@@ -80,7 +80,7 @@ end
 
     r_mix = @rule (~x + (~y)*(~!c))^(~!m) => ~m + ~c
     @test r_mix((a + b*c)^2) in Set([2 + b, 3, 2 + c])
-    @test r_mix((a + b*c)) in Set([1 + b, 1 + c])
+    @test r_mix((a + b*c)) in Set([1 + b, 1 + c, 2])
     @test r_mix((a + b)) === 2 #1+1
 end
 

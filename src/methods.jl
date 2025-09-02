@@ -242,7 +242,7 @@ function Base.size(x::BasicSymbolic)
         BSImpl.Const(; val) => size(val)
         BSImpl.Sym(; shape) => shape === Unknown() ? shape : map(length, shape)
         BSImpl.Term(; shape) => shape === Unknown() ? shape : map(length, shape)
-        BSImpl.Polyform(; shape) => shape === Unknown() ? shape : map(length, shape)
+        BSImpl.AddMul(; shape) => shape === Unknown() ? shape : map(length, shape)
         BSImpl.Div(; shape) => shape === Unknown() ? shape : map(length, shape)
     end
 end

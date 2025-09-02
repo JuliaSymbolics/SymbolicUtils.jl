@@ -342,6 +342,31 @@ Base.isequal(::Missing, ::BasicSymbolic) = false
 
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
+const SCALARS = [Int, Int32, BigInt, Float64, Float32, BigFloat, Rational{Int}, Rational{Int32}, Rational{BigInt}, ComplexF32, ComplexF64, Complex{BigFloat}]
+
+@generated function isequal_somescalar(a, b)
+    @nospecialize a b
+    
+    expr = Expr(:if)
+    cur_expr = expr
+
+    N = length(SCALARS)
+    for (i, (t1, t2)) in enumerate(Iterators.product(SCALARS, SCALARS))
+        push!(cur_expr.args, :(a isa $t1 && b isa $t2))
+        push!(cur_expr.args, :(isequal(a, b)))
+        i == N * N && continue
+        new_expr = Expr(:elseif)
+        push!(cur_expr.args, new_expr)
+        cur_expr = new_expr
+    end
+    
+    push!(cur_expr.args, :(isequal(a, b)::Bool))
+    quote
+        @nospecialize a b
+        $expr
+    end
+end
+
 function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full) where {T}
     full || return isequal(d1, d2)
     length(d1) == length(d2) || return false
@@ -353,7 +378,7 @@ function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full) where {T}
             k2 === nothing && return false
             v2 = d2[k2]
         end true
-        v == v2 && isequal_bsimpl(k, k2, true) || return false
+        isequal_somescalar(v, v2) && isequal_bsimpl(k, k2, true) || return false
     end
     return true
 end
@@ -382,7 +407,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
             n1 === n2 && s1 == s2 && t1 === t2
         end
         (BSImpl.Term(; f = f1, args = args1, shape = s1, type = t1), BSImpl.Term(; f = f2, args = args2, shape = s2, type = t2)) => begin
-            isequal(f1, f2)::Bool && isequal(args1, args2) && s1 == s2 && t1 === t2
+            isequal(f1, f2) && isequal(args1, args2) && s1 == s2 && t1 === t2
         end
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
             isequal(c1, c2) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && s1 == s2 && t1 === t2
@@ -407,6 +432,38 @@ Base.isequal(a::WeakRef, b::BSImpl.Type) = isequal(a.value, b)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 
+@generated function hash_somescalar(a, h::UInt)
+    @nospecialize a
+    expr = Expr(:if)
+    cur_expr = expr
+
+    N = length(SCALARS)
+    for (i, t1) in enumerate(SCALARS)
+        push!(cur_expr.args, :(a isa $t1))
+        push!(cur_expr.args, :(hash(a, h)))
+        i == N && continue
+        new_expr = Expr(:elseif)
+        push!(cur_expr.args, new_expr)
+        cur_expr = new_expr
+    end
+    
+    push!(cur_expr.args, :(hash(a, h)::UInt))
+    quote
+        @nospecialize a
+        $expr
+    end
+end
+
+function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
+    hv = Base.hasha_seed
+    for (k, v) in d
+        h1 = hash_bsimpl(k, zero(UInt), full)
+        h1 = hash_somescalar(v, h1)
+        hv ⊻= h1
+    end
+    return hash(hv, h)
+end
+
 function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     if !iszero(h)
         return hash(hash_bsimpl(s, zero(h), full), h)::UInt
@@ -414,7 +471,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     h = hash(T, h)
     @match s begin
         BSImpl.Const(; val) => begin
-            h = hash(val, h)::UInt
+            h = hash_somescalar(val, h)::UInt
             if full
                 h = Base.hash(typeof(val), h)::UInt
             end
@@ -444,7 +501,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash) => begin
             if iszero(hash)
-                s.hash = Base.hash(coeff, Base.hash(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h)))))
+                s.hash = Base.hash(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
             else
                 hash
             end
@@ -1256,6 +1313,7 @@ end
 *(a::BasicSymbolic) = a
 
 function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term) where {T}
+    @nospecialize term
     if term isa BasicSymbolic{T}
         @match term begin
             BSImpl.Const(; val) => (num_coeff[] *= val)
@@ -1277,7 +1335,7 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
                 num_dict[x] = get(num_dict, x, 0) + 1
             end
         end
-    elseif term isa BasicSymbolic
+    elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal}
         error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
     else
         num_coeff[] *= term
@@ -1316,13 +1374,8 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     den_dict = mwb.den_dict
     den_coeff = mwb.den_coeff
 
-    length(terms) == 1 && return Const{T}(only(terms))
-    a, bs = Iterators.peel(terms)
-    a = unwrap(a)
-    type::TypeT = symtype(a)
-    for b in bs
-        type = promote_symtype(*, type, symtype(b))
-    end
+    length(terms) == 1 && return Const{T}(terms[1])
+    type = promoted_symtype(terms)
     unsafes = ArgsT{T}()
 
     for term in terms

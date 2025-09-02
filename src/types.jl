@@ -134,6 +134,40 @@ symtype(x) = typeof(x)
 @inline symtype(::Symbolic{T}) where T = T
 @inline symtype(::Type{<:Symbolic{T}}) where T = T
 
+"""
+    operation(expr)
+
+Extract the operation (function) from a symbolic function call expression.
+Only valid for expressions where `iscall(expr)` returns `true`.
+
+Returns the function/operator that is being applied in the expression. For basic
+arithmetic, this returns the operator function (+, -, *, /, ^). For function calls
+like `sin(x)`, this returns the function `sin`.
+
+# Examples
+```julia
+using SymbolicUtils
+@variables x y
+
+# Arithmetic operations
+expr1 = x + y
+operation(expr1)    # returns +
+
+expr2 = x * y  
+operation(expr2)    # returns *
+
+# Function calls
+expr3 = sin(x)
+operation(expr3)    # returns sin
+
+# Nested expressions
+expr4 = sin(x + y)
+operation(expr4)    # returns sin
+operation(arguments(expr4)[1])  # returns +
+```
+
+See also: [`iscall`](@ref), [`arguments`](@ref)
+"""
 # We're returning a function pointer
 @inline function operation(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
@@ -200,6 +234,41 @@ end
 
 TermInterface.children(x::BasicSymbolic) = arguments(x)
 TermInterface.sorted_children(x::BasicSymbolic) = sorted_arguments(x)
+
+"""
+    arguments(expr)
+
+Extract the arguments from a symbolic function call expression.
+Only valid for expressions where `iscall(expr)` returns `true`.
+
+Returns a collection (typically a vector) containing the arguments passed to the operation.
+For binary operations like `+` or `*`, this returns a collection of all operands.
+For function calls, this returns the function arguments.
+
+# Examples
+```julia
+using SymbolicUtils
+@variables x y z
+
+# Binary arithmetic operations
+expr1 = x + y
+arguments(expr1)    # returns collection containing x and y
+
+expr2 = x * y * z  
+arguments(expr2)    # returns collection containing x, y, and z
+
+# Function calls
+expr3 = sin(x)
+arguments(expr3)    # returns collection containing x
+
+# Nested expressions
+expr4 = sin(x + y)
+arguments(expr4)             # returns collection containing (x + y)
+arguments(arguments(expr4)[1])  # returns collection containing x and y
+```
+
+See also: [`iscall`](@ref), [`operation`](@ref)
+"""
 function TermInterface.arguments(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Term => return x.arguments
@@ -249,6 +318,36 @@ function TermInterface.arguments(x::BasicSymbolic)
 end
 
 isexpr(s::BasicSymbolic) = !issym(s)
+
+"""
+    iscall(expr)
+
+Check if a symbolic expression `expr` represents a function call. Returns `true` if the 
+expression is a composite expression with an operation and arguments, `false` otherwise.
+
+This function is fundamental for traversing and analyzing symbolic expressions. In 
+SymbolicUtils.jl, an expression is considered a "call" if it represents a function 
+application (including operators like +, -, *, etc.).
+
+# Examples
+```julia
+using SymbolicUtils
+@variables x y
+
+# Basic variables are not calls
+iscall(x)           # false
+
+# Function calls are calls  
+expr = sin(x + y)
+iscall(expr)        # true
+
+# Arithmetic expressions are calls
+iscall(x + y)       # true
+iscall(x * y)       # true
+```
+
+See also: [`operation`](@ref), [`arguments`](@ref)
+"""
 iscall(s::BasicSymbolic) = isexpr(s)
 
 @inline isa_SymType(T::Val{S}, x) where {S} = x isa BasicSymbolic ? Unityper.isa_type_fun(Val(SymbolicUtils.BasicSymbolic), T, x) : false

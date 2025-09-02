@@ -1,5 +1,5 @@
 using SymbolicUtils, Test
-using SymbolicUtils: Term, Add, Mul, Div, Pow, metadata, BasicSymbolic, Symbolic, PolyCoeffT
+using SymbolicUtils: Term, Add, Mul, Div, metadata, BasicSymbolic, PolyCoeffT, ACDict
 import MultivariatePolynomials as MP
 import TermInterface
 
@@ -53,9 +53,7 @@ end
     d3 = b - 2 + a
     d4 = a + b  - 2
     @test d3.id === d4.id
-    pa = SymbolicUtils.basicsymbolic_to_polyvar(a)
-    pb = SymbolicUtils.basicsymbolic_to_polyvar(b)
-    d5 = SymbolicUtils.Polyform{SymReal}(MP.polynomial(pa + pb, PolyCoeffT); type = Int)
+    d5 = Add{SymReal}(0, ACDict{SymReal}(a => 1, b => 1); type = Int)
     @test d5.id !== d1.id
 
     dm1 = setmetadata(d1,Ctx1,"meta_1")
@@ -69,9 +67,7 @@ end
     m3 = 6*a*b
     m4 = 3*a*2*b
     @test m3.id === m4.id
-    pa = SymbolicUtils.basicsymbolic_to_polyvar(a)
-    pb = SymbolicUtils.basicsymbolic_to_polyvar(b)
-    m5 = SymbolicUtils.Polyform{SymReal}(MP.polynomial(pa * pb + 0, PolyCoeffT); type = Int)
+    m5 = Mul{SymReal}(1, ACDict{SymReal}(a => 1, b => 1); type = Int)
     @test m5.id !== m1.id
 
     mm1 = setmetadata(m1, Ctx1, "meta_1")

@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Polyform, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, PolynomialT, Const, PolyCoeffT
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
@@ -117,16 +117,11 @@ end
 
 @testset "Base methods" begin
     @syms w::Complex z::Complex a::Real b::Real x
-    pw = basicsymbolic_to_polyvar(w)
-    pz = basicsymbolic_to_polyvar(z)
-    pa = basicsymbolic_to_polyvar(a)
-    pb = basicsymbolic_to_polyvar(b)
-    px = basicsymbolic_to_polyvar(x)
-    @test isequal(w + z, Polyform{SymReal}(MP.polynomial(pw + pz, PolyCoeffT); type = Complex))
-    @test isequal(z + a, Polyform{SymReal}(MP.polynomial(pz + pa, PolyCoeffT); type = Number))
-    @test isequal(a + b, Polyform{SymReal}(MP.polynomial(pa + pb, PolyCoeffT); type = Real))
-    @test isequal(a + x, Polyform{SymReal}(MP.polynomial(pa + px, PolyCoeffT); type = Number))
-    @test isequal(a + z, Polyform{SymReal}(MP.polynomial(pa + pz, PolyCoeffT); type = Number))
+    @test isequal(w + z, Add{SymReal}(0, ACDict{SymReal}(w => 1, z => 1); type = Complex))
+    @test isequal(z + a, Add{SymReal}(0, ACDict{SymReal}(z => 1, a => 1); type = Number))
+    @test isequal(a + b, Add{SymReal}(0, ACDict{SymReal}(a => 1, b => 1); type = Real))
+    @test isequal(a + x, Add{SymReal}(0, ACDict{SymReal}(a => 1, x => 1); type = Number))
+    @test isequal(a + z, Add{SymReal}(0, ACDict{SymReal}(a => 1, z => 1); type = Number))
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
@@ -248,12 +243,8 @@ end
 
 @testset "maketerm" begin
     @syms a b c
-    pa = basicsymbolic_to_polyvar(a)
-    pb = basicsymbolic_to_polyvar(b)
-    pc = basicsymbolic_to_polyvar(c)
-    poly = MP.polynomial(pa + pb + pc, Number)
     t = SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing)
-    @test isequal(t.poly, poly)
+    @test isequal(t.dict, ACDict{SymReal}(a => 1, b => 1, c => 1))
     @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  1//2],  nothing), b)
 
     # test that maketerm doesn't hard-code BasicSymbolic subtype
@@ -316,7 +307,7 @@ toterm(t) = Term{vartype(t)}(operation(t), arguments(t); type = symtype(t))
     @syms a b c
     @test isequal(toterm(-1c), Term{SymReal}(*, [-1, c]; type = Number))
     @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-b, -a]; type = Number))
-    @test isequal(toterm((a + b) - (b + c)), Term{SymReal}(+, [-c, a]; type = Number))
+    @test isequal(toterm((a + b) - (b + c)), Term{SymReal}(+, [a, -c]; type = Number))
 end
 
 @testset "hash" begin
@@ -424,9 +415,6 @@ end
 
 @testset "`setproperties` clears hash" begin
     @syms a b c
-    pa = basicsymbolic_to_polyvar(a)
-    pb = basicsymbolic_to_polyvar(b)
-    pc = basicsymbolic_to_polyvar(c)
     hash(a)
     hash(b)
     hash(c)
@@ -438,16 +426,15 @@ end
     @test hash(var) != hash(setproperties(var; f = bar))
     var = a + b
     hash(var)
-    @test hash(var) != hash(setproperties(var; poly = pa + pb + 2))
+    @test hash(var) != hash(setproperties(var; dict = ACDict{SymReal}(a => 2, b => 2)))
+    @test hash(var) != hash(setproperties(var; coeff = 4))
     var = a * b
     hash(var)
-    @test hash(var) != hash(setproperties(var; poly = pa * pb * 2))
+    @test hash(var) != hash(setproperties(var; dict = ACDict{SymReal}(a => 2, b => 2)))
+    @test hash(var) != hash(setproperties(var; coeff = 4))
     var = a / b
     hash(var)
     @test hash(var) != hash(setproperties(var; num = c))
-    var = a ^ 3
-    hash(var)
-    @test hash(var) != hash(setproperties(var; poly = pa ^ 4))
 end
 
 @testset "`substitute` handles identity of */+" begin

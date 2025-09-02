@@ -1115,7 +1115,7 @@ struct FnType{X<:Tuple,Y,Z} end
 function (f::BasicSymbolic{T})(args...) where {T}
     symtype(f) <: FnType || error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable.")
-    Term{T}(f, args; type = promote_symtype(f, symtype.(args)...))
+    Term{T}(f, args; type = promote_symtype(f, symtype.(args)...), shape = f.shape)
 end
 
 fntype_X_Y(::Type{<: FnType{X, Y}}) where {X, Y} = (X, Y)

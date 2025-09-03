@@ -387,7 +387,7 @@ Base.isequal(::Missing, ::BasicSymbolic) = false
 
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
-const SCALARS = [Int, Int32, BigInt, Float64, Float32, BigFloat, Rational{Int}, Rational{Int32}, Rational{BigInt}, ComplexF32, ComplexF64, Complex{BigFloat}]
+const SCALARS = [Bool, Int, Int32, BigInt, Float64, Float32, BigFloat, Rational{Int}, Rational{Int32}, Rational{BigInt}, ComplexF32, ComplexF64, Complex{BigFloat}]
 
 @generated function isequal_somescalar(a, b)
     @nospecialize a b

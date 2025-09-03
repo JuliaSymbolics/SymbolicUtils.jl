@@ -192,6 +192,31 @@ end
 #     @test isequal(s.*[1 (s+t); t pi], [s s*(s+t); s*t s*pi])
 # end
 
+@testset "array addition" begin
+    @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number}
+    var = a + a2
+    @test var.dict == ACDict{SymReal}(a => 1, a2 => 1)
+    @test shape(var) == ShapeVecT([1:2])
+    var = a + a3
+    @test var.dict == ACDict{SymReal}(a => 1, a3 => 1)
+    # result is always 1-indexed
+    @test shape(var) == ShapeVecT([1:2])
+    var = a + d
+    @test var.dict == ACDict{SymReal}(a => 1, d => 1)
+    # result retains known shape
+    @test shape(var) == ShapeVecT([1:2])
+    var = d + d2
+    @test var.dict == ACDict{SymReal}(d => 1, d2 => 1)
+    @test shape(var) == SymbolicUtils.Unknown(1)
+
+    @test_throws ArgumentError a + b
+    @test_throws ArgumentError a3 + b
+    @test_throws ArgumentError a + c
+    @test_throws ArgumentError a3 + c
+    @test_throws ArgumentError a + e
+    @test_throws ArgumentError a3 + e
+end
+
 @testset "err test" begin
     @syms t()
     @test_throws ErrorException t(2)

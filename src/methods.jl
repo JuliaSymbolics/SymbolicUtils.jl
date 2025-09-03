@@ -237,17 +237,37 @@ end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
 
 # Array-like operations
-function Base.size(x::BasicSymbolic)
-    @match x begin
-        BSImpl.Const(; val) => size(val)
-        BSImpl.Sym(; shape) => shape === Unknown() ? shape : map(length, shape)
-        BSImpl.Term(; shape) => shape === Unknown() ? shape : map(length, shape)
-        BSImpl.AddMul(; shape) => shape === Unknown() ? shape : map(length, shape)
-        BSImpl.Div(; shape) => shape === Unknown() ? shape : map(length, shape)
+function _size_from_shape(shape::ShapeT)
+    @nospecialize shape
+    if shape isa Unknown
+        return shape
+    else
+        return map(length, shape)
     end
 end
-Base.length(x::BasicSymbolic) = prod(size(x))
-Base.ndims(x::BasicSymbolic) = length(size(x))
+Base.size(x::BasicSymbolic) = _size_from_shape(shape(x))
+function _length_from_shape(sh::ShapeT)
+    @nospecialize sh
+    if sh isa Unknown
+        return sh
+    else
+        len = 1
+        for dim in sh
+            len *= length(dim)
+        end
+        return len
+    end
+end
+Base.length(x::BasicSymbolic) = _length_from_shape(shape(x))
+function _ndims_from_shape(sh::ShapeT)
+    @nospecialize sh
+    if sh isa Unknown
+        return sh.ndims
+    else
+        return length(sh)
+    end
+end
+Base.ndims(x::BasicSymbolic) = _ndims_from_shape(shape(x))
 function Base.broadcastable(x::BasicSymbolic)
     type = symtype(x)
     if type <: Number

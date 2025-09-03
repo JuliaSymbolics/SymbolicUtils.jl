@@ -1421,10 +1421,40 @@ const NonTreeSym = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}}
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 
-function +(x::T...) where {T <: NonTreeSym}
-    if !all(y -> symtype(y) <: Number, x)
-        throw(MethodError(+, x))
+function _numeric_or_arrnumeric_symtype(x)
+    symtype(x) <: Union{Number, AbstractArray{<:Number}}
+end
+
+@noinline function throw_unequal_shape_error(x, y)
+    throw(ArgumentError("Cannot add arguments of different sizes - encountered shapes $x and $y."))
+end
+
+promote_shape(::typeof(+), shape::ShapeT) = shape
+function promote_shape(::typeof(+), sh1::ShapeT, sh2::ShapeT, shs::ShapeT...)
+    @nospecialize sh1 sh2 shs
+    nd1 = _ndims_from_shape(sh1)
+    nd2 = _ndims_from_shape(sh2)
+    nd1 == nd2 || throw_unequal_shape_error(sh1, sh2)
+    if sh1 isa Unknown && sh2 isa Unknown
+        promote_shape(+, sh1, shs...)
+    elseif sh1 isa Unknown
+        promote_shape(+, sh2, shs...)
+    elseif sh2 isa Unknown
+        promote_shape(+, sh1, shs...)
+    else
+        new_shape = ShapeVecT()
+        sizehint!(new_shape, length(sh1))
+        for (shi, shj) in zip(sh1, sh2)
+            length(shi) == length(shj) || throw_unequal_shape_error(sh1, sh2)
+            # resultant shape is always 1-indexed for consistency
+            push!(new_shape, 1:length(shi))
+        end
+        promote_shape(+, new_shape, shs...)
     end
+end
+promote_shape(::typeof(-), args::ShapeT...) = promote_shape(+, args...)
+
+function +(x::T...) where {T <: NonTreeSym}
     add_worker(vartype(T), x)
 end
 
@@ -1451,12 +1481,31 @@ const SAFEREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SafeReal}}(AddWorkerBu
 add_worker(::Type{SymReal}, terms) = SYMREAL_ADDBUFFER[](terms)
 add_worker(::Type{SafeReal}, terms) = SAFEREAL_ADDBUFFER[](terms)
 
+function _added_shape(terms::Tuple)
+    promote_shape(+, ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms)))...)
+end
+
+function _added_shape(terms)
+    isempty(terms) && return Unknown(0)
+    length(terms) == 1 && return shape(terms[1])
+    a, bs = Iterators.peel(terms)
+    sh::ShapeT = shape(a)
+    for t in bs
+        sh = promote_shape(+, sh, shape(t))
+    end
+    return sh
+end
+
 function (awb::AddWorkerBuffer{T})(terms) where {T}
+    if !all(_numeric_or_arrnumeric_symtype, terms)
+        throw(MethodError(+, Tuple(terms)))
+    end
     isempty(terms) && return Const{T}(0)
     if isone(length(terms))
         return Const{T}(only(terms))
     end
     empty!(awb)
+    shape = _added_shape(terms)
     type = promoted_symtype(+, terms)
     newcoeff = 0
     result = awb.dict
@@ -1483,7 +1532,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                     result[term] = get(result, term, 0) + 1
                 end
             end
-        elseif term isa BasicSymbolic
+        elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal} || term isa BasicSymbolic{TreeReal}
             error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
         else
             newcoeff += term
@@ -1491,7 +1540,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
     end
     filter!(!(iszero ∘ last), result)
     isempty(result) && return Const{T}(newcoeff)
-    var = Add{T}(newcoeff, result; type)
+    var = Add{T}(newcoeff, result; type, shape)
     @match var begin
         BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
         _ => nothing
@@ -1500,30 +1549,21 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
 end
 
 function +(a::Number, b::T, bs::T...) where {T <: NonTreeSym}
-    if !all(y -> symtype(y) <: Number, bs) || !(symtype(b) <: Number) || !(symtype(a) <: Number)
-        throw(MethodError(+, symtype.((a, b, bs...))))
-    end
-    @assert !(unwrap(a) isa BasicSymbolic{TreeReal})
     return add_worker(vartype(T), (a, b, bs...))
 end
 
 function +(a::T, b::Number, bs::T...) where {T <: NonTreeSym}
-    if !all(y -> symtype(y) <: Number, bs) || !(symtype(b) <: Number) || !(symtype(a) <: Number)
-        throw(MethodError(+, symtype.((a, b, bs...))))
-    end
-    @assert !(unwrap(b) isa BasicSymbolic{TreeReal})
-    return +(b, a, bs...)
+    return add_worker(vartype(T), (a, b, bs...))
 end
 
 function -(a::BasicSymbolic{T}) where {T}
-    if !(symtype(a) <: Number)
+    if !_numeric_or_arrnumeric_symtype(a)
         throw(MethodError(-, (symtype(a),)))
     end
     @match a begin
         BSImpl.Const(; val) => Const{T}(-val)
         _ => nothing
     end
-    type::TypeT = promote_symtype(-, symtype(a))
     @match a begin
         BSImpl.AddMul(; coeff, dict, variant, shape, type) => begin
             @match variant begin
@@ -1543,11 +1583,10 @@ function -(a::BasicSymbolic{T}) where {T}
 end
 
 function -(a::S, b::S) where {S <: NonTreeSym}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+    if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(-, (a, b)))
     end
     T = vartype(S)
-    type::TypeT = promote_symtype(-, symtype(a), symtype(b))
     @match (a, b) begin
         (BSImpl.Const(; val = val1), BSImpl.Const(; val = val2)) => begin
             return Const{T}(val1 - val2)

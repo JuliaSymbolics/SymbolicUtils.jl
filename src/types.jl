@@ -1442,18 +1442,6 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
             den_dict[k] = denexp - numexp
         end
     end
-    for k in keys(num_dict)
-        haskey(den_dict, k) || continue
-        numexp = num_dict[k]
-        denexp = den_dict[k]
-        if numexp >= denexp
-            num_dict[k] = numexp - denexp
-            den_dict[k] = 0
-        else
-            num_dict[k] = 0
-            den_dict[k] = denexp - numexp
-        end
-    end
     filter!(kvp -> !iszero(kvp[2]), num_dict)
     filter!(kvp -> !iszero(kvp[2]), den_dict)
     num = Mul{T}(num_coeff[], num_dict; type)

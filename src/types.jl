@@ -1109,6 +1109,13 @@ When constructing [`Term`](#Term)s without an explicit symtype,
 """
 promote_symtype(f, Ts...) = Any
 
+"""
+    promote_shape(f, shs::ShapeT...)
+
+The shape of the result of applying `f` to arguments of [`shape`](@ref) `shs...`.
+"""
+promote_shape(f, szs::ShapeT...) = Unknown(0)
+
 #---------------------------
 #---------------------------
 #### Function-like variables

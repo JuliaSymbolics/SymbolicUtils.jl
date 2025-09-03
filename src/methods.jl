@@ -116,6 +116,10 @@ for f in vcat(diadic, [+, -, *, \, /, ^])
                    S::Type{<:Complex{<:Rational}}) = Complex{Rational}
 end
 
+function promote_symtype(::typeof(+), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, eS <: Number, S <: AbstractArray{eS, N}}
+    return Array{promote_symtype(+, eT, eS), N}
+end
+
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
 error_f_symbolic(f, T) = error("$f is not defined for T.")

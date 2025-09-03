@@ -9,7 +9,11 @@ abstract type TreeReal <: SymVariant end
 ### Uni-type design
 ###
 
-struct Unknown end
+# Unknown(0) is an array of unknown ndims
+# Empty ShapeVecT is a scalar
+struct Unknown
+    ndims::Int
+end
 
 const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
 const SmallV{T} = SmallVec{T, Vector{T}}
@@ -165,6 +169,45 @@ symtype(x) = typeof(x)
 
 vartype(x::BasicSymbolic{T}) where {T} = T
 vartype(::Type{BasicSymbolic{T}}) where {T} = T
+
+Base.@nospecializeinfer @generated function _shape_notsymbolic(x)
+    @nospecialize x
+    
+    expr = Expr(:if)
+    cur_expr = expr
+    i = 0
+    N = length(SCALARS)
+    for t1 in SCALARS
+        for T in [t1, Vector{t1}, Matrix{t1}, LinearAlgebra.UniformScaling{t1}]
+            i += 1
+            push!(cur_expr.args, :(x isa $T))
+            push!(cur_expr.args, T <: LinearAlgebra.UniformScaling ? Unknown(2) : :($ShapeVecT(axes(x))))
+            new_expr = Expr(:elseif)
+            push!(cur_expr.args, new_expr)
+            cur_expr = new_expr
+        end
+    end
+    push!(cur_expr.args, :(x isa $(LinearAlgebra.UniformScaling)))
+    push!(cur_expr.args, Unknown(2))
+    push!(cur_expr.args, :($ShapeVecT(axes(x))))
+    quote
+        @nospecialize x
+        $expr
+    end
+end
+
+function shape(x::BasicSymbolic)
+    # use `@match` instead of `x.type` since it is faster
+    @match x begin
+        BSImpl.Const(; val) => _shape_notsymbolic(val)::ShapeT
+        BSImpl.Sym(; shape) => shape
+        BSImpl.Term(; shape) => shape
+        BSImpl.AddMul(; shape) => shape
+        BSImpl.Div(; shape) => shape
+    end
+end
+
+shape(x) = _shape_notsymbolic(x)::ShapeT
 
 function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
     symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
@@ -755,7 +798,8 @@ function parse_metadata(x)
     return meta
 end
 
-default_shape(::Type{<:AbstractArray}) = Unknown()
+default_shape(::Type{T}) where {E, N, T <: AbstractArray{E, N}} = Unknown(N)
+default_shape(::Type{T}) where {T <: AbstractArray} = Unknown(0)
 default_shape(_) = ShapeVecT()
 
 """

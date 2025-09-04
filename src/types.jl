@@ -1189,11 +1189,11 @@ function +(x::T...) where {T <: NonTreeSym}
     add_worker(vartype(T), x)
 end
 
-@noinline Base.@nospecializeinfer function promoted_symtype(terms)
+@noinline Base.@nospecializeinfer function promoted_symtype(op, terms)
     a, bs = Iterators.peel(terms)
     type::TypeT = symtype(a)
     for b in bs
-        type = promote_symtype(+, type, symtype(b))
+        type = promote_symtype(op, type, symtype(b))
     end
     return type
 end
@@ -1218,7 +1218,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
         return Const{T}(only(terms))
     end
     empty!(awb)
-    type = promoted_symtype(terms)
+    type = promoted_symtype(+, terms)
     newcoeff = 0
     result = awb.dict
     for term in terms
@@ -1385,7 +1385,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     den_coeff = mwb.den_coeff
 
     length(terms) == 1 && return Const{T}(terms[1])
-    type = promoted_symtype(terms)
+    type = promoted_symtype(*, terms)
 
     for term in terms
         term = unwrap_const(unwrap(term))

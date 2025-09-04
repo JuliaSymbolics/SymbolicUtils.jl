@@ -502,8 +502,8 @@ end
 function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
     hv = Base.hasha_seed
     for (k, v) in d
-        h1 = hash_bsimpl(k, zero(UInt), full)
-        h1 = hash_somescalar(v, h1)
+        h1 = hash_somescalar(v, zero(UInt))
+        h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
     end
     return hash(hv, h)

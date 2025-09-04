@@ -32,6 +32,8 @@ GC'ed when removed.
 defaultval(::Type{T}) where {T <: Number} = zero(T)
 defaultval(::Type{Any}) = nothing
 
+_unreachable() = error("Unreachable reached.")
+
 Base.@propagate_inbounds function Base.getindex(x::Backing, i::Int)
     @boundscheck 1 <= i <= x.len
     if i == 1
@@ -40,6 +42,8 @@ Base.@propagate_inbounds function Base.getindex(x::Backing, i::Int)
         x.x2
     elseif i == 3
         x.x3
+    else
+        _unreachable()
     end
 end
 

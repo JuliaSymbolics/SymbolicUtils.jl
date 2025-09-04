@@ -1182,8 +1182,33 @@ const NonTreeSym = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}}
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 
+@generated function _numeric_or_arrnumeric_type(S::TypeT)
+    @nospecialize S
+    
+    expr = Expr(:if)
+    cur_expr = expr
+    i = 0
+    N = length(SCALARS)
+    for t1 in SCALARS
+        for T in [t1, Vector{t1}, Matrix{t1}, LinearAlgebra.UniformScaling{t1}]
+            i += 1
+            push!(cur_expr.args, :(S === $T))
+            push!(cur_expr.args, true)
+            i == 4N && continue
+            new_expr = Expr(:elseif)
+            push!(cur_expr.args, new_expr)
+            cur_expr = new_expr
+        end
+    end
+    push!(cur_expr.args, :(S <: Union{Number, AbstractArray{<:Number}}))
+    quote
+        @nospecialize S
+        $expr
+    end
+end
+
 function _numeric_or_arrnumeric_symtype(x)
-    symtype(x) <: Union{Number, AbstractArray{<:Number}}
+    _numeric_or_arrnumeric_type(symtype(x))
 end
 
 @noinline function throw_unequal_shape_error(x, y)

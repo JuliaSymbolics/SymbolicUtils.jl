@@ -1,9 +1,10 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT, ArgsT
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
 using Setfield
 using Test, ReferenceTests
+import LinearAlgebra
 
 include("utils.jl")
 
@@ -192,22 +193,26 @@ end
 #     @test isequal(s.*[1 (s+t); t pi], [s s*(s+t); s*t s*pi])
 # end
 
-@testset "array addition" begin
-    @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number}
+@testset "array arithmetic" begin
+    @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number} f[1:2, 1:2, 1:2] g[1:3, 1:3] h q[1:2, 1:3]
     var = a + a2
     @test var.dict == ACDict{SymReal}(a => 1, a2 => 1)
     @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
     var = a + a3
     @test var.dict == ACDict{SymReal}(a => 1, a3 => 1)
     # result is always 1-indexed
     @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
     var = a + d
     @test var.dict == ACDict{SymReal}(a => 1, d => 1)
     # result retains known shape
     @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
     var = d + d2
     @test var.dict == ACDict{SymReal}(d => 1, d2 => 1)
     @test shape(var) == SymbolicUtils.Unknown(1)
+    @test symtype(var) == Vector{Number}
 
     @test_throws ArgumentError a + b
     @test_throws ArgumentError a3 + b
@@ -215,6 +220,177 @@ end
     @test_throws ArgumentError a3 + c
     @test_throws ArgumentError a + e
     @test_throws ArgumentError a3 + e
+
+    var = a + a
+    @test isequal(var.args, ArgsT{SymReal}([Const{SymReal}(2), a]))
+    @test var.f === *
+    @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
+
+    var = c * a
+    @test isequal(var.args, ArgsT{SymReal}([c, a]))
+    @test var.f === *
+    @test symtype(var) == Vector{Number}
+    @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
+
+    var = 2 * c * h * c * im
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((2 * h * im, c ^ 2)))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+    var = var * a
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((2 * h * im, c ^ 2, a)))
+    @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
+
+    var = c * e * c
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((c, e, c)))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+    var = c * e
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((c, e)))
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = var * c
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((c, e, c)))
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = var * a
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((c, e, c, a)))
+    @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
+
+    var = c * e
+    var = var * d
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((c, e, d)))
+    @test shape(var) == SymbolicUtils.Unknown(1)
+    @test symtype(var) == Vector{Number}
+
+    var = e * a
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((e, a)))
+    @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
+
+    var = e * d
+    @test var.f === *
+    @test isequal(var.args, ArgsT{SymReal}((e, d)))
+    @test shape(var) == SymbolicUtils.Unknown(1)
+    @test symtype(var) == Vector{Number}
+
+    var = c * c
+    var = var * var
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((c, Const{SymReal}(4))))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+
+    @test unwrap_const(1 ^ c) == LinearAlgebra.I(2)
+    @test unwrap_const(1 ^ e) == LinearAlgebra.I
+
+    var = 2 ^ c
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((Const{SymReal}(2), c)))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+
+    var = 2 ^ e
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((Const{SymReal}(2), e)))
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+
+    var = c ^ 2
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((c, Const{SymReal}(2))))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+
+    var = e ^ 2
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((e, Const{SymReal}(2))))
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+
+    var = h ^ c
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((h, c)))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+
+    var = h ^ e
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((h, e)))
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+
+    var = c ^ h
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((c, h)))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+
+    var = e ^ h
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((e, h)))
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+
+    @test_throws ArgumentError c * b
+    @test_throws ArgumentError b * c
+    @test_throws ArgumentError f * g
+    @test_throws ArgumentError f * a
+    @test_throws ArgumentError c * a * c
+    @test_throws ArgumentError c * a * a
+    @test_throws ArgumentError 2 ^ a
+    @test_throws ArgumentError 2 ^ f
+    @test_throws ArgumentError a ^ 2
+    @test_throws ArgumentError f ^ 2
+    @test_throws ArgumentError 2 ^ d
+    @test_throws ArgumentError d ^ 2
+    @test_throws ArgumentError q ^ 2
+    @test_throws ArgumentError 2 ^ q
+
+    @syms r[1:2, 1:2]::Real r2::Matrix{Real} i::Int j::Real
+
+    var = r ^ 2
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Real}
+    var = r ^ i
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Real}
+    var = r ^ 2.4
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Complex{Real}}
+    var = r ^ h
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = r ^ j
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Complex{Real}}
+
+    var = r2 ^ 2
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Real}
+    var = r2 ^ i
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Real}
+    var = r2 ^ 2.4
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Complex{Real}}
+    var = r2 ^ h
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = r2 ^ j
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Complex{Real}}
 end
 
 @testset "err test" begin

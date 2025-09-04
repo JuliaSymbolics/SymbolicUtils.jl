@@ -190,6 +190,23 @@ function Base.insert!(x::Backing{T}, i::Integer, val::T) where {T}
     return x
 end
 
+function Base.hash(x::Backing{T}, h::UInt) where {T}
+    h += Base.hash_abstractarray_seed
+    h = hash((1,), h)
+    h = hash((3,), h)
+    if x.len == 1
+        h = hash(x.x1, h)
+    elseif x.len == 2
+        h = hash(x.x1, h)
+        h = hash(x.x2, h)
+    elseif x.len == 3
+        h = hash(x.x1, h)
+        h = hash(x.x2, h)
+        h = hash(x.x3, h)
+    end
+    return h
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -286,4 +303,7 @@ function Base.insert!(x::SmallVec{T, V}, i::Integer, val) where {T, V}
     end
     insert!(x.data, i, val)
     return x
+end
+function Base.hash(x::SmallVec{T, V}, h::UInt) where {T, V}
+    return hash(x.data, h)
 end

@@ -160,6 +160,32 @@ function Base.resize!(x::Backing, sz::Integer)
     return x
 end
 
+function Base.insert!(x::Backing{T}, i::Integer, val::T) where {T}
+    @boundscheck !isfull(x)
+    @boundscheck 1 <= i <= x.len + 1
+    x.len += 1
+    if x.len == 1 && i == 1
+        x.x1 = val
+    elseif x.len == 2 && i == 1
+        x.x2 = x.x1
+        x.x1 = val
+    elseif x.len == 2 && i == 2
+        x.x2 = val
+    elseif x.len == 3 && i == 1
+        x.x3 = x.x2
+        x.x2 = x.x1
+        x.x1 = val
+    elseif x.len == 3 && i == 2
+        x.x3 = x.x2
+        x.x2 = val
+    elseif x.len == 3 && i == 3
+        x.x3 = val
+    else
+        error("Unreachable")
+    end
+    return x
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -250,3 +276,10 @@ end
 Base.empty!(x::SmallVec) = empty!(x.data)
 Base.copy(x::SmallVec{T, V}) where {T, V} = SmallVec{T, V}(copy(x.data))
 Base.resize!(x::SmallVec, sz::Integer) = resize!(x.data, sz)
+function Base.insert!(x::SmallVec{T, V}, i::Integer, val) where {T, V}
+    if x.data isa Backing{T} && isfull(x.data)
+        x.data = V(x.data)
+    end
+    insert!(x.data, i, val)
+    return x
+end

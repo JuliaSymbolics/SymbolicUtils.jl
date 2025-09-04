@@ -120,6 +120,18 @@ function promote_symtype(::typeof(+), ::Type{T}, ::Type{S}) where {eT <: Number,
     return Array{promote_symtype(+, eT, eS), N}
 end
 
+function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractMatrix{eT}, eS <: Number, S <: AbstractVecOrMat{eS}}
+    return Array{promote_symtype(*, eT, eS), ndims(S)}
+end
+
+function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, S <: Number}
+    return Array{promote_symtype(*, eT, S), N}
+end
+
+function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, N, S <: AbstractArray{eS, N}}
+    return Array{promote_symtype(*, T, eS), N}
+end
+
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
 error_f_symbolic(f, T) = error("$f is not defined for $T.")

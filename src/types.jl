@@ -283,8 +283,8 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                     end
                     for (k, v) in dict
                         newterm = @match k begin
-                            BSImpl.AddMul(; dict = d2, variant = v2) && if v2 == AddMulVariant.MUL end => begin
-                                Mul{T}(v, d2; shape, type)
+                            BSImpl.AddMul(; dict = d2, variant = v2, type, shape, metadata) && if v2 == AddMulVariant.MUL end => begin
+                                Mul{T}(v, d2; shape, type, metadata)
                             end
                             _ => Mul{T}(v, ACDict{T}(k => 1); shape, type)
                         end

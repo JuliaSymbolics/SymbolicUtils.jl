@@ -132,6 +132,18 @@ function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {T <: Number, 
     return Array{promote_symtype(*, T, eS), N}
 end
 
+function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {T <: Number, E <: Number, S <: AbstractMatrix{E}}
+    Matrix{promote_type(T, E)}
+end
+function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {E <: Number, T <: AbstractMatrix{E}, S <: Integer}
+    T
+end
+_complex(::Type{Number}) = Number
+_complex(::Type{T}) where {T} = complex(T)
+function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {E <: Number, T <: AbstractMatrix{E}, S <: Number}
+    Matrix{_complex(promote_type(E, S))}
+end
+
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
 error_f_symbolic(f, T) = error("$f is not defined for T.")
@@ -149,8 +161,7 @@ function Base.inv(x::BasicSymbolic{T}) where {T}
     return Const{T}(x ^ -1)
 end
 function Base.literal_pow(::typeof(^), x::BasicSymbolic{T}, ::Val{p}) where {T, p}
-    type = symtype(x)
-    type <: Number || error_f_symbolic(^, type)
+    _numeric_or_arrnumeric_symtype(x) || error_f_symbolic(^, symtype(x))
     return Const{T}(x ^ p)
 end
 function promote_symtype(::typeof(Base.literal_pow), _, ::Type{T}, ::Type{Val{S}}) where{T<:Number,S}

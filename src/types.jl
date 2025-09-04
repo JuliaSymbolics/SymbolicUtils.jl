@@ -1645,14 +1645,95 @@ end
 ### Pow
 ###
 
+@noinline function throw_matmatpow(x, y)
+    throw(ArgumentError("""
+    Cannot raise matrix to matrix power - tried to raise array of shape $x to array of \
+    shape $y.
+    """))
+end
+
+@noinline function throw_nonmatbase(x)
+    throw(ArgumentError("""
+    Matrices are the only arrays that can be raised to a power. Found array of shape $x.
+    """))
+end
+
+@noinline function throw_nonmatexp(x)
+    throw(ArgumentError("""
+    Matrices are the only arrays that can be an exponent. Found array of shape $x.
+    """))
+end
+
+@noinline function throw_nonsquarebase(x)
+    throw(ArgumentError("""
+    Only square matrices can be raised to a power. Found array of shape $x.
+    """))
+end
+
+@noinline function throw_nonsquareexp(x)
+    throw(ArgumentError("""
+    Only a square matrix can be an exponent. Found array of shape $x.
+    """))
+end
+
+function promote_shape(::typeof(^), sh1::ShapeT, sh2::ShapeT)
+    @nospecialize sh1 sh2
+    if sh1 isa Unknown && sh2 isa Unknown
+        throw_matmatpow(sh1, sh2)
+    elseif sh1 isa Unknown && sh2 isa ShapeVecT
+        isempty(sh2) || throw_matmatpow(sh1, sh2)
+        sh1.ndims == 2 || sh1.ndims == 0 || throw_nonmatbase(sh1)
+        return Unknown(2) # either the result is a matrix or the operation will error
+    elseif sh1 isa ShapeVecT && sh2 isa Unknown
+        isempty(sh1) || throw_matmatpow(sh1, sh2)
+        sh2.ndims == 2 || sh2.ndims == 0 || throw_nonmatexp(sh2)
+        return Unknown(2) # either the result is a matrix or the operation will error
+    elseif sh1 isa ShapeVecT && sh2 isa ShapeVecT
+        if isempty(sh1) && isempty(sh2)
+            return sh1
+        elseif isempty(sh1)
+            length(sh2) == 2 || throw_nonmatexp(sh2)
+            length(sh2[1]) == length(sh2[2]) || throw_nonsquareexp(sh2)
+            return sh2
+        elseif isempty(sh2)
+            length(sh1) == 2 || throw_nonmatbase(sh1)
+            length(sh1[1]) == length(sh1[2]) || throw_nonsquarebase(sh1)
+            return sh1
+        else
+            throw_matmatpow(sh1, sh2)
+        end
+    end
+end
+
 function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+    if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(^, (a, b)))
     end
     isconst(a) && return Const{T}(^(unwrap_const(a), b))
-    a = unwrap_const(a)
     b = unwrap_const(unwrap(b))
+    sha = shape(a)
+    shb = shape(b)
+    newshape = promote_shape(^, sha, shb)
     type = promote_symtype(^, symtype(a), symtype(b))
+
+    if _is_array_shape(sha)
+        @match a begin
+            BSImpl.Term(; f, args) && if f === (^) && isconst(args[1]) end => begin
+                base, exp = args
+                return Term{T}(^, ArgsT{T}((base, exp * b)); type, shape = newshape)
+            end
+            BSImpl.Term(; f) && if f === (*) end => begin
+                coeff, rest = _split_arrterm_scalar_coeff(a)
+                if _isone(coeff)
+                    return Term{T}(^, ArgsT{T}((rest, Const{T}(b))); type, shape = newshape)
+                end
+                return coeff ^ b * rest ^ b
+            end
+            _ => return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
+        end
+    elseif _is_array_shape(shb)
+        return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
+    end
     if b isa Number
         iszero(b) && return Const{T}(1)
         isone(b) && return Const{T}(a)
@@ -1690,10 +1771,16 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
     return BSImpl.Term{T}(^, ArgsT{T}((a, Const{T}(b))); type)
 end
 
-function ^(a::Number, b::BasicSymbolic{T}) where {T}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
-        throw(MethodError(^, (a, b)))
-    end
+function ^(a::Union{Number, Matrix{<:Number}}, b::BasicSymbolic{T}) where {T}
+    _numeric_or_arrnumeric_symtype(b) || throw(MethodError(^, (a, b)))
+    newshape = promote_shape(^, shape(a), shape(b))
     type = promote_symtype(^, symtype(a), symtype(b))
-    Term{T}(^, ArgsT{T}((Const{T}(a), b)); type)
+    if _is_array_shape(newshape) && _isone(a)
+        if newshape isa Unknown
+            return Const{T}(LinearAlgebra.I)
+        else
+            return Const{T}(LinearAlgebra.I(length(newshape[1])))
+        end
+    end
+    Term{T}(^, ArgsT{T}((Const{T}(a), b)); type, shape = newshape)
 end

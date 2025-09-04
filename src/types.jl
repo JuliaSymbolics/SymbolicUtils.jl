@@ -1361,6 +1361,104 @@ end
 
 *(a::BasicSymbolic) = a
 
+@noinline function throw_expected_matrix(x)
+    throw(ArgumentError("Expected matrix in multiplication, got argument of shape $x."))
+end
+@noinline function throw_expected_matvec(x)
+    throw(ArgumentError("""
+    Expected matrix or vector in multiplication, got argument of shape $x.
+    """))
+end
+@noinline function throw_incompatible_shapes(x, y)
+    throw(ArgumentError("""
+    Encountered incompatible shapes $x and $y when multiplying.
+    """))
+end
+
+_is_array_shape(sh::ShapeT) = sh isa Unknown || _ndims_from_shape(sh) > 0
+function _multiplied_shape(shapes)
+    first_arr = findfirst(_is_array_shape, shapes)
+    first_arr === nothing && return ShapeVecT()
+    last_arr::Int = findlast(_is_array_shape, shapes)
+    first_arr == last_arr && return shapes[first_arr]
+
+    sh1::ShapeT = shapes[first_arr]
+    shend::ShapeT = shapes[last_arr]
+    ndims_1 = _ndims_from_shape(sh1)
+    ndims_end = _ndims_from_shape(shend)
+    ndims_1 == 0 || ndims_1 == 2 || throw_expected_matrix(sh1)
+    ndims_end <= 2 || throw_expected_matvec(shend)
+    if ndims_end == 1
+        result = shend
+    elseif sh1 isa Unknown || shend isa Unknown
+        result = Unknown(ndims_end)
+    else
+        result = ShapeVecT((first(sh1), last(shend)))
+    end
+    cur_shape = sh1
+    is_matmatmul = true
+    for i in (first_arr + 1):last_arr
+        sh = shapes[i]
+        ndims_sh = _ndims_from_shape(sh)
+        _is_array_shape(sh) || continue
+        ndims_sh <= 2 || throw_expected_matvec(shend)
+        is_matmatmul || throw_incompatible_shapes(cur_shape, sh)
+        is_matmatmul = ndims_sh != 1
+        if cur_shape isa ShapeVecT && sh isa ShapeVecT
+            if length(last(cur_shape)) != length(first(sh))
+                throw_incompatible_shapes(cur_shape, sh)
+            end
+        end
+        cur_shape = sh
+    end
+
+    return result
+end
+
+function promote_shape(::typeof(*), shs::ShapeT...)
+    _multiplied_shape(shs)
+end
+
+function _multiplied_terms_shape(terms::Tuple)
+    _multiplied_shape(ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms))))
+end
+
+function _multiplied_terms_shape(terms)
+    shapes = SmallV{ShapeT}()
+    sizehint!(shapes, length(terms))
+    for t in terms
+        push!(shapes, shape(t))
+    end
+    return _multiplied_shape(shapes)
+end
+
+function _split_arrterm_scalar_coeff(term::BasicSymbolic{T}) where {T}
+    sh = shape(term)
+    _is_array_shape(sh) || return term, Const{T}(1)
+    @match term begin
+        BSImpl.Term(; f, args, type) && if f === (*) && !_is_array_shape(shape(first(args))) end => begin
+            if length(args) == 2
+                return args[1], args[2]
+            end
+            rest = ArgsT{T}()
+            sizehint!(rest, length(args) - 1)
+            coeff, restargs = Iterators.peel(args)
+            for arg in restargs
+                push!(rest, arg)
+            end
+            return coeff, Term{T}(f, rest; type, shape = sh)
+        end
+        _ => (Const{T}(1), term)
+    end
+end
+
+function _as_base_exp(term::BasicSymbolic{T}) where {T}
+    @match term begin
+        BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) end => (args[1], args[2])
+        _ => (term, Const{T}(1))
+    end
+end
+
 function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term) where {T}
     @nospecialize term
     if term isa BasicSymbolic{T}
@@ -1417,17 +1515,34 @@ const SYMREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SymReal}}(MulWorkerBuff
 const SAFEREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SafeReal}}(MulWorkerBuffer{SafeReal})
 
 function (mwb::MulWorkerBuffer{T})(terms) where {T}
+    if !all(_numeric_or_arrnumeric_symtype, terms)
+        throw(MethodError(*, Tuple(terms)))
+    end
+    isempty(terms) && return Const{T}(1)
+    length(terms) == 1 && return Const{T}(terms[1])
     empty!(mwb)
+    newshape = _multiplied_terms_shape(terms)
     num_dict = mwb.num_dict
     num_coeff = mwb.num_coeff
     den_dict = mwb.den_dict
     den_coeff = mwb.den_coeff
 
-    length(terms) == 1 && return Const{T}(terms[1])
     type = promoted_symtype(*, terms)
+    arrterms = ArgsT{T}()
 
     for term in terms
-        term = unwrap_const(unwrap(term))
+        term = unwrap(term)
+        sh = shape(term)
+        if _is_array_shape(sh)
+            coeff, arrterm = _split_arrterm_scalar_coeff(term)
+            _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, coeff)
+            if iscall(arrterm) && operation(arrterm) == (*)
+                append!(arrterms, arguments(arrterm))
+            else
+                push!(arrterms, arrterm)
+            end
+            continue
+        end
         _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, term)
     end
     for k in keys(num_dict)
@@ -1444,14 +1559,14 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     end
     filter!(kvp -> !iszero(kvp[2]), num_dict)
     filter!(kvp -> !iszero(kvp[2]), den_dict)
-    num = Mul{T}(num_coeff[], num_dict; type)
+    num = Mul{T}(num_coeff[], num_dict; type = eltype(type))
     @match num begin
         BSImpl.AddMul(; dict) && if dict === num_dict end => begin
             mwb.num_dict = ACDict{T}()
         end
         _ => nothing
     end
-    den = Mul{T}(den_coeff[], den_dict; type)
+    den = Mul{T}(den_coeff[], den_dict; type = eltype(type))
     @match den begin
         BSImpl.AddMul(; dict) && if dict === den_dict end => begin
             mwb.den_dict = ACDict{T}()
@@ -1459,24 +1574,46 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         _ => nothing
     end
 
-    return Div{T}(num, den, false; type)
+    result = Div{T}(num, den, false; type = eltype(type))
+    if !isempty(arrterms)
+        new_arrterms = ArgsT{T}()
+        if !_isone(result)
+            push!(new_arrterms, result)
+        end
+        fterm, rest = Iterators.peel(arrterms)
+        push!(new_arrterms, fterm)
+        for arrterm in rest
+            prev = last(new_arrterms)
+            termbase, termexp = _as_base_exp(arrterm)
+            prevbase, prevexp = _as_base_exp(prev)
+            if isequal(termbase, prevbase)
+                new_arrterms[end] = Term{T}(^, ArgsT{T}((termbase, prevexp + termexp)); type, shape = newshape)
+            else
+                push!(new_arrterms, arrterm)
+            end
+        end
+        if length(new_arrterms) == 1
+            result = new_arrterms[1]
+        else
+            result = Term{T}(*, new_arrterms; type, shape = newshape)
+        end
+    end
+    return result
 end
 
 mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)
 mul_worker(::Type{SafeReal}, terms) = SAFEREAL_MULBUFFER[](terms)
 
-function *(a::T, b::T) where {T <: NonTreeSym}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
-        throw(MethodError(*, (a, b)))
-    end
-    mul_worker(vartype(T), (a, b))
+function *(x::T...) where {T <: NonTreeSym}
+    mul_worker(vartype(T), x)
 end
 
-function *(a::Number, b::NonTreeSym)
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
-        throw(MethodError(*, (a, b)))
-    end
-    mul_worker(vartype(b), (a, b))
+function *(a::Union{Number, Array{<:Number}}, b::T, bs::T...) where {T <: NonTreeSym}
+    return mul_worker(vartype(T), (a, b, bs...))
+end
+
+function *(a::T, b::Union{Number, Array{<:Number}}, bs::T...) where {T <: NonTreeSym}
+    return mul_worker(vartype(T), (a, b, bs...))
 end
 
 ###

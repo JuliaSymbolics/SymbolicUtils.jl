@@ -544,7 +544,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash) => begin
             if iszero(hash)
-                s.hash = Base.hash(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
+                s.hash = hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
             else
                 hash
             end

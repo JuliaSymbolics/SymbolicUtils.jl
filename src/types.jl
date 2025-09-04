@@ -1621,7 +1621,7 @@ end
 ###
 
 function /(a::Union{S,Number}, b::S) where {S <: NonTreeSym}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+    if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(/, (a, b)))
     end
     T = vartype(S)

@@ -283,8 +283,8 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                     end
                     for (k, v) in dict
                         newterm = @match k begin
-                            BSImpl.AddMul(; dict = d2, variant = v2) && if v2 == AddMulVariant.MUL end => begin
-                                Mul{T}(v, d2; shape, type)
+                            BSImpl.AddMul(; dict = d2, variant = v2, type, shape, metadata) && if v2 == AddMulVariant.MUL end => begin
+                                Mul{T}(v, d2; shape, type, metadata)
                             end
                             _ => Mul{T}(v, ACDict{T}(k => 1); shape, type)
                         end
@@ -991,20 +991,6 @@ function hasmetadata(s::BasicSymbolic, ctx)
     metadata(s) isa AbstractDict && haskey(metadata(s), ctx)
 end
 
-issafecanon(f, s) = true
-function issafecanon(f, s::BasicSymbolic)
-    if metadata(s) === nothing || isempty(metadata(s)) || issym(s)
-        return true
-    else
-        _issafecanon(f, s)
-    end
-end
-_issafecanon(::typeof(*), s) = !iscall(s) || !(operation(s) in (+,*,^))
-_issafecanon(::typeof(+), s) = !iscall(s) || !(operation(s) in (+,*))
-_issafecanon(::typeof(^), s) = !iscall(s) || !(operation(s) in (*, ^))
-
-issafecanon(f, ss...) = all(x->issafecanon(f, x), ss)
-
 function getmetadata(s::BasicSymbolic, ctx)
     md = metadata(s)
     if md isa AbstractDict
@@ -1181,21 +1167,15 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
         return Const{T}(only(terms))
     end
     empty!(awb)
-    # entries where `!issafecanon`
-    unsafes = ArgsT{T}()
     type = promoted_symtype(terms)
     newcoeff = 0
     result = awb.dict
     for term in terms
         term = unwrap(term)
-        if !issafecanon(+, term)
-            push!(unsafes, Const{T}(term))
-            continue
-        end
         if term isa BasicSymbolic{T}
             @match term begin
                 BSImpl.Const(; val) => (newcoeff += val)
-                BSImpl.AddMul(; coeff, dict, variant, shape, type) => begin
+                BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
                             newcoeff += coeff
@@ -1204,7 +1184,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                             end
                         end
                         AddMulVariant.MUL => begin
-                            newterm = Mul{T}(1, dict; shape, type)
+                            newterm = Mul{T}(1, dict; shape, type, metadata)
                             result[newterm] = get(result, newterm, 0) + coeff
                         end
                     end
@@ -1220,30 +1200,13 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
         end
     end
     filter!(!(iszero ∘ last), result)
-    if isempty(result) && isempty(unsafes)
-        return Const{T}(newcoeff)
-    elseif isempty(result)
-        push!(unsafes, Const{T}(newcoeff))
-        unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
-        return BSImpl.Term{T}(+, unsafes; type)
-    elseif isempty(unsafes)
-        var = Add{T}(newcoeff, result; type)
-        @match var begin
-            BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
-            _ => nothing
-        end
-        return var
-    else
-        var = Add{T}(newcoeff, result; type)
-        @match var begin
-            BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
-            _ => nothing
-        end
-        push!(unsafes, var)
-        # ensure `result` is always the first
-        unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
-        return BSImpl.Term{T}(+, unsafes; type)
+    isempty(result) && return Const{T}(newcoeff)
+    var = Add{T}(newcoeff, result; type)
+    @match var begin
+        BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
+        _ => nothing
     end
+    return var
 end
 
 function +(a::Number, b::T, bs::T...) where {T <: NonTreeSym}
@@ -1271,7 +1234,6 @@ function -(a::BasicSymbolic{T}) where {T}
         _ => nothing
     end
     type::TypeT = promote_symtype(-, symtype(a))
-    !issafecanon(*, a) && return Term{T}(-, ArgsT{T}((a,)); type)
     @match a begin
         BSImpl.AddMul(; coeff, dict, variant, shape, type) => begin
             @match variant begin
@@ -1296,9 +1258,6 @@ function -(a::S, b::S) where {S <: NonTreeSym}
     end
     T = vartype(S)
     type::TypeT = promote_symtype(-, symtype(a), symtype(b))
-    if !issafecanon(+, a) || !issafecanon(*, b)
-        return Term{T}(-, ArgsT{T}((a, b)); type)
-    end
     @match (a, b) begin
         (BSImpl.Const(; val = val1), BSImpl.Const(; val = val2)) => begin
             return Const{T}(val1 - val2)
@@ -1376,14 +1335,9 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
 
     length(terms) == 1 && return Const{T}(terms[1])
     type = promoted_symtype(terms)
-    unsafes = ArgsT{T}()
 
     for term in terms
         term = unwrap_const(unwrap(term))
-        if !issafecanon(*, term)
-            push!(unsafes, Const{T}(term))
-            continue
-        end
         _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, term)
     end
     for k in keys(num_dict)
@@ -1425,12 +1379,6 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
             mwb.den_dict = ACDict{T}()
         end
         _ => nothing
-    end
-    if !isempty(unsafes)
-        push!(unsafes, num)
-        # ensure `num` is always the first
-        unsafes[1], unsafes[end] = unsafes[end], unsafes[1]
-        num = Term{T}(*, unsafes; type)
     end
 
     return Div{T}(num, den, false; type)
@@ -1494,7 +1442,6 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
     a = unwrap_const(a)
     b = unwrap_const(unwrap(b))
     type = promote_symtype(^, symtype(a), symtype(b))
-    !issafecanon(^, a, b) && return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type)
     if b isa Number
         iszero(b) && return Const{T}(1)
         isone(b) && return Const{T}(a)

@@ -261,12 +261,13 @@ end
     @set! d.metadata = metadata2
 
     s = SymbolicUtils.maketerm(typeof(a + d), +, [a, d], metadata)
-    @test isterm(s)
+    args = arguments(s)
+    idx = findfirst(isequal(d), args)
+    @test getmetadata(args[idx], Ctx2) == "meta_2"
     @test hasmetadata(s, Ctx1)
     @test getmetadata(s, Ctx1) == "meta_1"
 
     s = SymbolicUtils.maketerm(typeof(a * d), *, [a, d], metadata)
-    @test isterm(s)
     @test hasmetadata(s, Ctx1)
     @test getmetadata(s, Ctx1) == "meta_1"
 

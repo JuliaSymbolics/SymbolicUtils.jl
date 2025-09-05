@@ -894,6 +894,7 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
     if !(type <: Number)
         _iszero(n) && return Const{T}(n)
         _isone(d) && return Const{T}(n)
+        return BSImpl.Div{T}(n, d, simplified; type, kw...)
     end
 
     if !(T === SafeReal)

@@ -617,6 +617,97 @@ end
     @test_throws ArgumentError g \ c
 end
 
+@testset "Symbolic getindex" begin
+    @syms a b[1:4] c[1:4, 1:4] e::Vector{Number} f::Matrix{Number}
+    @syms ii::Integer i[1:2]::Int32 j[2:3]::Int k::Vector{Int} l[1:2, 1:2]::Int m
+
+    @testset "$(shape(x))" for x in [b, e]
+        @testset "idx = $idx" for idx in [2, ii]
+            var = x[idx]
+            @test symtype(var) == Number
+            @test shape(var) == ShapeVecT()
+        end
+
+        @testset "idx = $idx" for idx in [1:2, 3:4, i, j]
+            var = x[idx]
+            @test symtype(var) == Vector{Number}
+            @test shape(var) == ShapeVecT((1:2,))
+        end
+
+        if shape(x) isa SymbolicUtils.Unknown
+            @test_throws ArgumentError x[:]
+        else
+            var = x[:]
+            @test symtype(var) == Vector{Number}
+            @test shape(var) == ShapeVecT((1:4,))
+        end
+
+        @test_throws ArgumentError x[]
+        @test_throws ArgumentError x[1, 2]
+        @test_throws ArgumentError x[[1 2; 3 4]]
+        @test_throws ArgumentError x[k]
+        @test_throws ArgumentError x[l]
+        @test_throws ArgumentError x[m]
+    end
+    @testset "$(shape(x))" for x in [c, f]
+        scalidxs = [ii, 3]
+        @testset "idx = $idx" for idx in Iterators.product(scalidxs, scalidxs)
+            var = x[idx...]
+            @test symtype(var) == Number
+            @test shape(var) == ShapeVecT()
+        end
+        arridxs = [1:2, 3:4, i, j]
+        @testset "idx = $idx" for idx in Iterators.product(arridxs, arridxs)
+            var = x[idx...]
+            @test symtype(var) == Matrix{Number}
+            @test shape(var) == ShapeVecT((1:2, 1:2))
+        end
+
+        @testset "idx = $idx" for idx in Iterators.product(scalidxs, arridxs)
+            var = x[idx...]
+            @test symtype(var) == Vector{Number}
+            @test shape(var) == ShapeVecT((1:2,))
+        end
+        @testset "idx = $idx" for idx in Iterators.product(arridxs, scalidxs)
+            var = x[idx...]
+            @test symtype(var) == Vector{Number}
+            @test shape(var) == ShapeVecT((1:2,))
+        end
+
+        if shape(x) isa SymbolicUtils.Unknown
+            @test_throws ArgumentError x[:, :]
+            @test_throws ArgumentError x[1, :]
+            @test_throws ArgumentError x[:, 1]
+        else
+            var = x[:, :]
+            @test symtype(var) == Matrix{Number}
+            @test shape(var) == ShapeVecT((1:4, 1:4))
+            @testset "idx = ($idx, :)" for idx in scalidxs
+                var = x[idx, :]
+                @test symtype(var) == Vector{Number}
+                @test shape(var) == ShapeVecT((1:4,))
+                var = x[:, idx]
+                @test symtype(var) == Vector{Number}
+                @test shape(var) == ShapeVecT((1:4,))
+            end
+            @testset "idx = ($idx, :)" for idx in arridxs
+                var = x[idx, :]
+                @test symtype(var) == Matrix{Number}
+                @test shape(var) == ShapeVecT((1:2, 1:4))
+                var = x[:, idx]
+                @test symtype(var) == Matrix{Number}
+                @test shape(var) == ShapeVecT((1:4, 1:2))
+            end
+        end
+        @test_throws ArgumentError x[]
+        @test_throws ArgumentError x[[1 2; 3 4], 1]
+        @test_throws ArgumentError x[k, 1]
+        @test_throws ArgumentError x[l, 1]
+        @test_throws ArgumentError x[m, 1]
+        @test_throws ArgumentError x[1]
+    end
+end
+
 @testset "err test" begin
     @syms t()
     @test_throws ErrorException t(2)

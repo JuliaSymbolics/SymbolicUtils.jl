@@ -2028,3 +2028,64 @@ function ^(a::Union{Number, Matrix{<:Number}}, b::BasicSymbolic{T}) where {T}
     end
     Term{T}(^, ArgsT{T}((Const{T}(a), b)); type, shape = newshape)
 end
+
+@inline _indexed_ndims() = 0
+@inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)
+@inline _indexed_ndims(::Type{T}, rest...) where {eT <: Integer, T <: AbstractVector{eT}} = 1 + _indexed_ndims(rest...)
+@inline _indexed_ndims(::Type{Colon}, rest...) = 1 + _indexed_ndims(rest...)
+@inline _indexed_ndims(::Type{T}, rest...) where {T} = throw(ArgumentError("Invalid index type $T."))
+
+function promote_symtype(::typeof(getindex), ::Type{T}, Ts::Vararg{Any, N}) where {N, eT, T <: AbstractArray{eT, N}}
+    nD = _indexed_ndims(Ts...)
+    nD == 0 ? eT : Array{eT, nD}
+end
+
+function promote_symtype(::typeof(getindex), ::Type{T}, Ts...) where {T}
+    throw(ArgumentError("Symbolic `getindex` requires cartesian indexing."))
+end
+
+@noinline function throw_no_unknown_colon()
+    throw(ArgumentError("Cannot index array of unknown shape with `Colon` (`:`)."))
+end
+
+@noinline function throw_index_larger_than_shape(i, ii, shi)
+    throw(ArgumentError("""
+    Tried to index array whose `$i`th dimension has shape $shi with index $ii.
+    """))
+end
+
+@noinline function throw_not_array(x)
+    throw(ArgumentError("""
+    Cannot call `getindex` on non-array symbolics - found array of shape $x.
+    """))
+end
+
+function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
+    @nospecialize sharr
+    # `promote_symtype` rules out the presence of multidimensional indices - each index
+    # is either an integer, Colon or vector of integers.
+    _is_array_shape(sharr) || throw_not_array(sharr)
+    ndims_arr = _ndims_from_shape(sharr)
+    result = ShapeVecT()
+    for (i, idx) in enumerate(shidxs)
+        isempty(idx) && continue
+        idx[1] == 1:0 && sharr isa Unknown && throw_no_unknown_colon()
+        ii = idx[1] == 1:0 ? sharr[i] : 1:length(idx[1])
+        push!(result, ii)
+        if sharr isa ShapeVecT && length(ii) > length(sharr[i])
+            throw_index_larger_than_shape(i, ii, sharr[i])
+        end
+    end
+
+    return result
+end
+
+function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
+    throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
+end
+
+function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractArray{<:Integer}, Colon}...) where {T}
+    type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
+    newshape = promote_shape(getindex, shape(arr), shape.(idxs)...)
+    return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
+end

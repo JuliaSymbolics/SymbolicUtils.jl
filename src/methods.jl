@@ -144,6 +144,36 @@ function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {E <: Number, 
     Matrix{_complex(promote_type(E, S))}
 end
 
+function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, N, S <: AbstractArray{eS, N}}
+    Array{promote_symtype(/, eS, T), N}
+end
+
+function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVector{eT}, eS <: Number, S <: AbstractVector{eS}}
+    promote_symtype(/, eS, eT)
+end
+
+function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVecOrMat{eT}, eS <: Number, S <: AbstractMatrix{eS}}
+    Matrix{promote_symtype(/, eS, eT)}
+end
+
+function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractMatrix{eT}, eS <: Number, S <: AbstractVector{eS}}
+    Vector{promote_symtype(/, eS, eT)}
+end
+
+# we don't actually care about specifically making the Mat/Vec case error because
+# `promote_shape` handles it with a much nicer error message than we can give here.
+function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVecOrMat{eT}, eS <: Number, S <: AbstractVecOrMat{eS}}
+    Matrix{promote_symtype(/, eT, eS)}
+end
+
+function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, S <: AbstractVector{eS}}
+    Matrix{promote_symtype(/, T, eS)}
+end
+
+function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, S <: Number}
+    Array{promote_symtype(/, eT, S), N}
+end
+
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
 error_f_symbolic(f, T) = error("$f is not defined for T.")

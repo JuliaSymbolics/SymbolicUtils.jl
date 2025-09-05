@@ -32,6 +32,8 @@ GC'ed when removed.
 defaultval(::Type{T}) where {T <: Number} = zero(T)
 defaultval(::Type{Any}) = nothing
 
+_unreachable() = error("Unreachable reached.")
+
 Base.@propagate_inbounds function Base.getindex(x::Backing, i::Int)
     @boundscheck 1 <= i <= x.len
     if i == 1
@@ -40,6 +42,8 @@ Base.@propagate_inbounds function Base.getindex(x::Backing, i::Int)
         x.x2
     elseif i == 3
         x.x3
+    else
+        _unreachable()
     end
 end
 
@@ -160,6 +164,49 @@ function Base.resize!(x::Backing, sz::Integer)
     return x
 end
 
+function Base.insert!(x::Backing{T}, i::Integer, val::T) where {T}
+    @boundscheck !isfull(x)
+    @boundscheck 1 <= i <= x.len + 1
+    x.len += 1
+    if x.len == 1 && i == 1
+        x.x1 = val
+    elseif x.len == 2 && i == 1
+        x.x2 = x.x1
+        x.x1 = val
+    elseif x.len == 2 && i == 2
+        x.x2 = val
+    elseif x.len == 3 && i == 1
+        x.x3 = x.x2
+        x.x2 = x.x1
+        x.x1 = val
+    elseif x.len == 3 && i == 2
+        x.x3 = x.x2
+        x.x2 = val
+    elseif x.len == 3 && i == 3
+        x.x3 = val
+    else
+        error("Unreachable")
+    end
+    return x
+end
+
+function Base.hash(x::Backing{T}, h::UInt) where {T}
+    h += Base.hash_abstractarray_seed
+    h = hash((1,), h)
+    h = hash((3,), h)
+    if x.len == 1
+        h = hash(x.x1, h)
+    elseif x.len == 2
+        h = hash(x.x1, h)
+        h = hash(x.x2, h)
+    elseif x.len == 3
+        h = hash(x.x1, h)
+        h = hash(x.x2, h)
+        h = hash(x.x3, h)
+    end
+    return h
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -250,3 +297,13 @@ end
 Base.empty!(x::SmallVec) = empty!(x.data)
 Base.copy(x::SmallVec{T, V}) where {T, V} = SmallVec{T, V}(copy(x.data))
 Base.resize!(x::SmallVec, sz::Integer) = resize!(x.data, sz)
+function Base.insert!(x::SmallVec{T, V}, i::Integer, val) where {T, V}
+    if x.data isa Backing{T} && isfull(x.data)
+        x.data = V(x.data)
+    end
+    insert!(x.data, i, val)
+    return x
+end
+function Base.hash(x::SmallVec{T, V}, h::UInt) where {T, V}
+    return hash(x.data, h)
+end

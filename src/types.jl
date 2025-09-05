@@ -906,6 +906,7 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
 
     _iszero(n) && return Const{T}(n)
     _isone(d) && return Const{T}(n)
+    _iszero(d) && return Const{T}(1 // 0)
 
     if isdiv(n) && isdiv(d)
         return Div{T}(n.num * d.den, n.den * d.num, simplified; type, kw...)

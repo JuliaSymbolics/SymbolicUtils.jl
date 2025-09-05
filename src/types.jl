@@ -206,6 +206,7 @@ function shape(x::BasicSymbolic)
 end
 
 shape(x) = _shape_notsymbolic(x)::ShapeT
+shape(::Colon) = ShapeVecT((1:0,))
 
 function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
     symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()

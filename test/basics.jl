@@ -172,6 +172,7 @@ end
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{SymReal}(==, [w, 0]; type = Bool))
 
+    @syms x::Integer a::Integer
     @eqtest x // 5 == (1 // 5) * x
     @eqtest (1//2 * x) / 5 == (1 // 10) * x
     @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
@@ -391,6 +392,223 @@ end
     var = r2 ^ j
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Complex{Real}}
+
+    # FSLASH
+    # * / Scalar
+    var = a / h
+    @test shape(var) == shape(a)
+    @test symtype(var) == symtype(a)
+    var = a3 / h
+    @test shape(var) == shape(a3)
+    @test symtype(var) == symtype(a3)
+    var = c / h
+    @test shape(var) == shape(c)
+    @test symtype(var) == symtype(c)
+    var = d / h
+    @test shape(var) == shape(d)
+    @test symtype(var) == symtype(d)
+    var = f / h
+    @test shape(var) == shape(f)
+    @test symtype(var) == symtype(f)
+
+    # Scalar / Vector
+    var = h / a
+    @test shape(var) == ShapeVecT((1:1, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = h / a3
+    @test shape(var) == ShapeVecT((1:1, 2:3))
+    @test symtype(var) == Matrix{Number}
+    var = h / d
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    # Scalar / Array
+    @test_throws ArgumentError h / c
+    @test_throws ArgumentError h / e
+    @test_throws ArgumentError h / f
+
+    # Vector / Vector
+    var = a / a
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = a / a3
+    @test shape(var) == ShapeVecT((1:2, 2:3))
+    @test symtype(var) == Matrix{Number}
+    var = a3 / a
+    @test shape(var) == ShapeVecT((2:3, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = a3 / b
+    @test shape(var) == ShapeVecT((2:3, 1:3))
+    @test symtype(var) == Matrix{Number}
+    var = a / d
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = d / a
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+
+    @syms cmat[1:3, 1:1] cmat2::Matrix{Number}
+    # Vector / Matrix
+    var = a / cmat
+    @test shape(var) == ShapeVecT((1:2, 1:3))
+    @test symtype(var) == Matrix{Number}
+    var = a3 / cmat
+    @test shape(var) == ShapeVecT((2:3, 1:3))
+    @test symtype(var) == Matrix{Number}
+    var = d / cmat
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = a / cmat2
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = a3 / cmat2
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = d / cmat2
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    @test_throws ArgumentError a / c
+    @test_throws ArgumentError a3 / c
+
+    # Matrix / Vector
+    @test_throws ArgumentError c / a
+    @test_throws ArgumentError c / a3
+    @test_throws ArgumentError e / a
+    @test_throws ArgumentError e / a3
+    @test_throws ArgumentError c / d
+    @test_throws ArgumentError e / d
+
+    # Matrix / Matrix
+    var = c / c
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = g / q
+    @test shape(var) == ShapeVecT((1:3, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = q / g
+    @test shape(var) == ShapeVecT((1:2, 1:3))
+    @test symtype(var) == Matrix{Number}
+    var = c / e
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = e / c
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    @test_throws ArgumentError c / g
+    @test_throws ArgumentError g / c
+
+    # BSLASH
+    # Scalar \ *
+    var = h \ a
+    @test shape(var) == ShapeVecT((1:2,))
+    @test symtype(var) == Vector{Number}
+    var = h \ a3
+    @test shape(var) == ShapeVecT((2:3,))
+    @test symtype(var) == Vector{Number}
+    var = h \ c
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = h \ q
+    @test shape(var) == ShapeVecT((1:2, 1:3))
+    @test symtype(var) == Matrix{Number}
+    var = h \ f
+    @test shape(var) == ShapeVecT((1:2, 1:2, 1:2))
+    @test symtype(var) == Array{Number, 3}
+    var = h \ d
+    @test shape(var) == SymbolicUtils.Unknown(1)
+    @test symtype(var) == Vector{Number}
+    var = h \ e
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+
+    # Vector \ Scalar
+    @test_throws ArgumentError a \ h
+    @test_throws ArgumentError a3 \ h
+    @test_throws ArgumentError d \ h
+
+    # Vector \ Vector
+    var = a \ a
+    @test shape(var) == ShapeVecT()
+    @test symtype(var) == Number
+    var = a \ a3
+    @test shape(var) == ShapeVecT()
+    @test symtype(var) == Number
+    var = a3 \ a
+    @test shape(var) == ShapeVecT()
+    @test symtype(var) == Number
+    var = a \ d
+    @test shape(var) == ShapeVecT()
+    @test symtype(var) == Number
+    var = d \ a
+    @test shape(var) == ShapeVecT()
+    @test symtype(var) == Number
+    var = d \ d
+    @test shape(var) == ShapeVecT()
+    @test symtype(var) == Number
+    @test_throws ArgumentError b \ a
+    @test_throws ArgumentError a \ b
+
+    # Vector \ Matrix
+    var = a \ c
+    @test shape(var) == ShapeVecT((1:1, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = a3 \ c
+    @test shape(var) == ShapeVecT((1:1, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = d \ c
+    @test shape(var) == ShapeVecT((1:1, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = a \ e
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = d \ e
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    @test_throws ArgumentError a \ g
+    @test_throws ArgumentError a3 \ g
+
+    # Matrix \ Scalar
+    @test_throws ArgumentError c \ h
+    @test_throws ArgumentError e \ h
+
+    # Matrix \ Vector
+    var = c \ a
+    @test shape(var) == ShapeVecT((1:2,))
+    @test symtype(var) == Vector{Number}
+    var = c \ a3
+    @test shape(var) == ShapeVecT((1:2,))
+    @test symtype(var) == Vector{Number}
+    var = c \ d
+    @test shape(var) == ShapeVecT((1:2,))
+    @test symtype(var) == Vector{Number}
+    var = e \ a
+    @test shape(var) == SymbolicUtils.Unknown(1)
+    @test symtype(var) == Vector{Number}
+    var = e \ d
+    @test shape(var) == SymbolicUtils.Unknown(1)
+    @test symtype(var) == Vector{Number}
+    @test_throws ArgumentError c \ b
+
+    # Matrix \ Matrix
+    var = c \ c
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = c \ e
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = e \ c
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = e \ e
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = c \ q
+    @test shape(var) == ShapeVecT((1:2, 1:3))
+    @test symtype(var) == Matrix{Number}
+    var = q \ c
+    @test shape(var) == ShapeVecT((1:3, 1:2))
+    @test symtype(var) == Matrix{Number}
+    @test_throws ArgumentError c \ g
+    @test_throws ArgumentError g \ c
 end
 
 @testset "err test" begin

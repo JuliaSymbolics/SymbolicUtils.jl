@@ -729,8 +729,35 @@ function unwrap_dict(dict)
     end
 end
 
+function _is_tuple_or_array_of_symbolics(O)
+    return O isa Code.CodegenPrimitive ||
+        (symbolic_type(O) != NotSymbolic() && !(O isa Union{Symbol, Expr})) ||
+        _is_array_of_symbolics(O) ||
+        _is_tuple_of_symbolics(O)
+end
+
+function _is_array_of_symbolics(O)
+    # O is an array, not a symbolic array, and either has a non-symbolic eltype or contains elements that are
+    # symbolic or arrays of symbolics
+    return O isa AbstractArray && symbolic_type(O) == NotSymbolic() &&
+        (symbolic_type(eltype(O)) != NotSymbolic() && !(eltype(O) <: Union{Symbol, Expr}) ||
+        any(_is_tuple_or_array_of_symbolics, O))
+end
+
+# workaround for https://github.com/JuliaSparse/SparseArrays.jl/issues/599
+function _is_array_of_symbolics(O::SparseMatrixCSC)
+    return symbolic_type(eltype(O)) != NotSymbolic() && !(eltype(O) <: Union{Symbol, Expr}) ||
+        any(_is_tuple_or_array_of_symbolics, findnz(O)[3])
+end
+
+function _is_tuple_of_symbolics(O::Tuple)
+    return any(_is_tuple_or_array_of_symbolics, O)
+end
+_is_tuple_of_symbolics(O) = false
+
 @inline function BSImpl.Const{T}(val; unsafe = false) where {T}
     @nospecialize val
+    val = unwrap(val)
     if val isa BasicSymbolic{T}
         return val
     elseif val isa BasicSymbolic{SymReal}
@@ -739,6 +766,16 @@ end
         error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
     elseif val isa BasicSymbolic{TreeReal}
         error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
+    elseif val isa AbstractArray && _is_array_of_symbolics(val)
+        args = ArgsT{T}((BSImpl.Const{T}(size(val); unsafe), BSImpl.Const{T}(false; unsafe)))
+        sizehint!(args, length(val) + 2)
+        type = Union{}
+        for v in val
+            push!(args, BSImpl.Const{T}(v))
+            type = promote_type(type, symtype(v))
+        end
+        shape = ShapeVecT(axes(val))
+        return BSImpl.Term{T}(hvncat, args; type = Array{type, ndims(val)}, shape, unsafe)
     else
         props = ordered_override_properties(BSImpl.Const)
         var = BSImpl.Const{T}(val, props...)

@@ -2110,7 +2110,6 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
     # `promote_symtype` rules out the presence of multidimensional indices - each index
     # is either an integer, Colon or vector of integers.
     _is_array_shape(sharr) || throw_not_array(sharr)
-    ndims_arr = _ndims_from_shape(sharr)
     result = ShapeVecT()
     for (i, idx) in enumerate(shidxs)
         isempty(idx) && continue

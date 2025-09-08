@@ -1698,8 +1698,15 @@ function -(a::S, b::S) where {S <: NonTreeSym}
     end
 end
 
--(a::Number, b::BasicSymbolic) = a + (-b)
--(a::BasicSymbolic, b::Number) = a + (-b)
+-(a::Union{Number, AbstractArray{<:Number}}, b::BasicSymbolic) = a + (-b)
+-(a::BasicSymbolic, b::Union{Number, AbstractArray{<:Number}}) = a + (-b)
+function -(a::AbstractArray{<:BasicSymbolic}, b::BasicSymbolic)
+    Const{vartype(b)}(a) + (-b)
+end
+function -(a::BasicSymbolic, b::AbstractArray{<:BasicSymbolic})
+    a - Const{vartype(a)}(b)
+end
+
 
 *(a::BasicSymbolic) = a
 

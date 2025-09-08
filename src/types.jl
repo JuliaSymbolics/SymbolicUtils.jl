@@ -1616,6 +1616,9 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     end
     filter!(kvp -> !iszero(kvp[2]), num_dict)
     filter!(kvp -> !iszero(kvp[2]), den_dict)
+
+    num_coeff[], den_coeff[] = simplify_coefficients(num_coeff[], den_coeff[])
+
     num = Mul{T}(num_coeff[], num_dict; type = eltype(type))
     @match num begin
         BSImpl.AddMul(; dict) && if dict === num_dict end => begin

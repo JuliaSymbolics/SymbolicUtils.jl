@@ -675,6 +675,11 @@ default_shape(::Type{T}) where {E, N, T <: AbstractArray{E, N}} = Unknown(N)
 default_shape(::Type{T}) where {T <: AbstractArray} = Unknown(0)
 default_shape(_) = ShapeVecT()
 
+Base.promote_rule(::Type{T}, ::Type{B}) where {T, R, B <: BasicSymbolic{R}} = B
+Base.promote_rule(::Type{Any}, ::Type{B}) where {R, B <: BasicSymbolic{R}} = B
+Base.convert(::Type{B}, x) where {R, B <: BasicSymbolic{R}} = BSImpl.Const{R}(unwrap(x))
+Base.convert(::Type{B}, x::B) where {R, B <: BasicSymbolic{R}} = x
+
 """
     $(METHODLIST)
 

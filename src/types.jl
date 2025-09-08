@@ -2108,6 +2108,12 @@ function ^(a::Union{Number, Matrix{<:Number}}, b::BasicSymbolic{T}) where {T}
     end
     Term{T}(^, ArgsT{T}((Const{T}(a), b)); type, shape = newshape)
 end
+function ^(a::Matrix{BasicSymbolic{T}}, b::BasicSymbolic{T}) where {T <: Union{SafeReal, SymReal}}
+    Const{T}(a) ^ b
+end
+function ^(a::BasicSymbolic{T}, b::Matrix{BasicSymbolic{T}}) where {T <: Union{SafeReal, SymReal}}
+    a ^ Const{T}(b)
+end
 
 @inline _indexed_ndims() = 0
 @inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)

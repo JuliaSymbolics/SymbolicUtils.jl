@@ -1561,8 +1561,8 @@ function promote_shape(::typeof(+), sh1::ShapeT, sh2::ShapeT, shs::ShapeT...)
 end
 promote_shape(::typeof(-), args::ShapeT...) = promote_shape(+, args...)
 
-function +(x::T...) where {T <: NonTreeSym}
-    add_worker(vartype(T), x)
+function +(x::T, args...) where {T <: NonTreeSym}
+    add_worker(vartype(T), (x, args...))
 end
 
 @noinline Base.@nospecializeinfer function promoted_symtype(op, terms)
@@ -1603,7 +1603,9 @@ function _added_shape(terms)
     return sh
 end
 
-function (awb::AddWorkerBuffer{T})(terms) where {T}
+(awb::AddWorkerBuffer{T})(terms) where {T} = awb(Const{T}.(terms))
+
+function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}}, AbstractArray{BasicSymbolic{T}}}) where {T}
     if !all(_numeric_or_arrnumeric_symtype, terms)
         throw(MethodError(+, Tuple(terms)))
     end
@@ -1618,31 +1620,25 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
     result = awb.dict
     for term in terms
         term = unwrap(term)
-        if term isa BasicSymbolic{T}
-            @match term begin
-                BSImpl.Const(; val) => (newcoeff += val)
-                BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
-                    @match variant begin
-                        AddMulVariant.ADD => begin
-                            newcoeff += coeff
-                            for (k, v) in dict
-                                result[k] = get(result, k, 0) + v
-                            end
-                        end
-                        AddMulVariant.MUL => begin
-                            newterm = Mul{T}(1, dict; shape, type, metadata)
-                            result[newterm] = get(result, newterm, 0) + coeff
+        @match term begin
+            BSImpl.Const(; val) => (newcoeff += val)
+            BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
+                @match variant begin
+                    AddMulVariant.ADD => begin
+                        newcoeff += coeff
+                        for (k, v) in dict
+                            result[k] = get(result, k, 0) + v
                         end
                     end
-                end
-                _ => begin
-                    result[term] = get(result, term, 0) + 1
+                    AddMulVariant.MUL => begin
+                        newterm = Mul{T}(1, dict; shape, type, metadata)
+                        result[newterm] = get(result, newterm, 0) + coeff
+                    end
                 end
             end
-        elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal} || term isa BasicSymbolic{TreeReal}
-            error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
-        else
-            newcoeff += term
+            _ => begin
+                result[term] = get(result, term, 0) + 1
+            end
         end
     end
     filter!(!(iszero ∘ last), result)
@@ -1655,11 +1651,11 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
     return var
 end
 
-function +(a::Number, b::T, bs::T...) where {T <: NonTreeSym}
+function +(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
     return add_worker(vartype(T), (a, b, bs...))
 end
 
-function +(a::T, b::Number, bs::T...) where {T <: NonTreeSym}
+function +(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
     return add_worker(vartype(T), (a, b, bs...))
 end
 

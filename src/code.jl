@@ -128,8 +128,10 @@ end
 
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.rewrites, O, nothing)
+    @show out
     out === nothing || return out
     args = map(Base.Fix2(toexpr, st), sorted_arguments(O))
+    @show args
     if length(args) >= 3 && symtype(O) <: Number
         x, xs = Iterators.peel(args)
         foldl(xs, init=x) do a, b
@@ -180,6 +182,84 @@ function substitute_name(O, st)
     end
 end
 
+function find_mul(x::Symbol)
+    false
+end
+
+function find_mul(e::Expr)
+    if e.head == :call
+        if e.args[1] == *
+            return true
+        else
+            return false
+        end
+    end
+    false
+end
+
+function generate_mul(args)
+    # args[1] is the + operator
+    # Need to find which argument is the multiplication and which is the addition term
+    
+    mul_expr = nothing
+    C_expr = nothing
+    
+    # Check both orders: A*B + C and C + A*B
+    if length(args) >= 3
+        for i in 2:3
+            candidate = args[i]
+            if isa(candidate, Expr) && candidate.head == :call && candidate.args[1] == *
+                mul_expr = candidate
+                C_expr = args[i == 2 ? 3 : 2]  # Get the other argument
+                break
+            end
+        end
+    end
+    
+    if mul_expr !== nothing
+        # Extract A and B from the multiplication expression
+        A = mul_expr.args[2]  # First argument of multiplication
+        B = mul_expr.args[3]  # Second argument of multiplication
+        
+        # Check if C is an expression (needs temporary) or simple variable
+        if isa(C_expr, Symbol)
+            # C is a simple variable, can use directly
+            # Generate: mul!(C, A, B, 1, 1) which computes C = 1*A*B + 1*C = A*B + C
+            return :(LinearAlgebra.mul!($C_expr, $A, $B, 1, 1))
+        else
+            # C is an expression, need to create temporary
+            temp_var = gensym("temp_C")
+            return quote
+                $temp_var = $C_expr
+                LinearAlgebra.mul!($temp_var, $A, $B, 1, 1)
+            end
+        end
+    else
+        # Not a valid A*B + C pattern, return original expression
+        return :($(args[1])($(args[2:end]...)))
+    end
+end
+
+function mul5(ex)
+    if ex.head == :call
+        if (ex.args[1] == +) && (length(ex.args) >= 3)
+            # Check if any of the addition arguments contains multiplication
+            mul_found = false
+            for i in 2:length(ex.args)
+                if find_mul(ex.args[i])
+                    mul_found = true
+                    break
+                end
+            end
+            
+            if mul_found
+                return generate_mul(ex.args)
+            end
+        end
+    end
+    ex
+end
+
 function toexpr(O, st)
     O = unwrap_const(O)
     O = substitute_name(O, st)
@@ -193,6 +273,7 @@ function toexpr(O, st)
     !iscall(O) && return O
     op = operation(O)
     expr′ = function_to_expr(op, O, st)
+    expr′ = mul5(expr′)
     if expr′ !== nothing
         return expr′
     else
@@ -375,6 +456,8 @@ Func
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 function toexpr(f::Func, st)
+    @show st
+    @show f.args
     funkyargs = get_rewrites(vcat(f.args, map(lhs, f.kwargs)))
     union_rewrites!(st.rewrites, funkyargs)
     dargs = filter(x->x isa DestructuredArgs, f.args)

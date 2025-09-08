@@ -1824,9 +1824,15 @@ end
 function /(a::Union{S,Number,AbstractArray{<:Number}}, b::S) where {S <: NonTreeSym}
     _fslash_worker(vartype(S), a, b)
 end
+function /(a::AbstractArray{S}, b::S) where {S <: NonTreeSym}
+    _fslash_worker(vartype(S), Const{vartype(S)}(a), b)
+end
 
 function /(a::S, b::Union{Number,AbstractArray{<:Number}}) where {S <: NonTreeSym}
     _fslash_worker(vartype(S), a, b)
+end
+function /(a::S, b::AbstractArray{S}) where {S <: NonTreeSym}
+    _fslash_worker(vartype(S), a, Const{vartype(S)}(b))
 end
 
 function //(a::Union{S,Number,AbstractArray{<:Number}}, b::S) where {S <: NonTreeSym}
@@ -1835,8 +1841,22 @@ function //(a::Union{S,Number,AbstractArray{<:Number}}, b::S) where {S <: NonTre
     end
     _fslash_worker(vartype(S), a, b)
 end
+function //(a::AbstractArray{S}, b::S) where {S <: NonTreeSym}
+    a = Const{vartype(S)}(a)
+    if !_rational_or_arrrational_symtype(a) || !_rational_or_arrrational_symtype(b)
+        throw(MethodError(//, (a, b)))
+    end
+    _fslash_worker(vartype(S), a, b)
+end
 
 function //(a::S, b::Union{Number,AbstractArray{<:Number}}) where {S <: NonTreeSym}
+    if !_rational_or_arrrational_symtype(a) || !_rational_or_arrrational_symtype(b)
+        throw(MethodError(//, (a, b)))
+    end
+    _fslash_worker(vartype(S), a, b)
+end
+function //(a::S, b::AbstractArray{S}) where {S <: NonTreeSym}
+    b = Const{vartype(S)}(b)
     if !_rational_or_arrrational_symtype(a) || !_rational_or_arrrational_symtype(b)
         throw(MethodError(//, (a, b)))
     end
@@ -1943,6 +1963,14 @@ function \(a::Union{S,Number,AbstractArray{<:Number}}, b::S) where {S <: NonTree
     _bslash_worker(vartype(S), a, b)
 end
 function \(a::T, b::Union{Number, <:AbstractArray{<:Number}}) where {T <: NonTreeSym}
+    _bslash_worker(vartype(T), a, b)
+end
+function \(a::AbstractArray{S}, b::S) where {S <: NonTreeSym}
+    a = Const{vartype(S)}(a)
+    _bslash_worker(vartype(S), a, b)
+end
+function \(a::T, b::AbstractArray{T}) where {T <: NonTreeSym}
+    b = Const{vartype(T)}(b)
     _bslash_worker(vartype(T), a, b)
 end
 

@@ -195,9 +195,32 @@ end
 # end
 
 @testset "array arithmetic" begin
-    @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number} f[1:2, 1:2, 1:2] g[1:3, 1:3] h q[1:2, 1:3]
+    @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number} f[1:2, 1:2, 1:2] g[1:3, 1:3] h q[1:2, 1:3] x y z
+    symvec = [h, x]
+    symmat = [h x; y z]
+    @test symvec isa Vector{BasicSymbolic{SymReal}}
+    @test symmat isa Matrix{BasicSymbolic{SymReal}}
+    var = Const{SymReal}(symvec)
+    @test var isa BasicSymbolic{SymReal}
+    @test isterm(var)
+    @test isequal(arguments(var), Const{SymReal}.([(2,), false, h, x]))
+    @test symtype(var) == Vector{Number}
+    @test shape(var) == ShapeVecT((1:2,))
+    var = Const{SymReal}(symmat)
+    @test var isa BasicSymbolic{SymReal}
+    @test isterm(var)
+    @test isequal(arguments(var), Const{SymReal}.([(2, 2), false, h, y, x, z]))
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    csymvec = Const{SymReal}(symvec)
+    csymmat = Const{SymReal}(symmat)
+
     var = a + a2
     @test var.dict == ACDict{SymReal}(a => 1, a2 => 1)
+    @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
+    var = a + symvec
+    @test var.dict == ACDict{SymReal}(a => 1, csymvec => 1)
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
     var = a + a3
@@ -217,10 +240,13 @@ end
 
     @test_throws ArgumentError a + b
     @test_throws ArgumentError a3 + b
+    @test_throws ArgumentError symvec + b
     @test_throws ArgumentError a + c
     @test_throws ArgumentError a3 + c
+    @test_throws ArgumentError symvec + c
     @test_throws ArgumentError a + e
     @test_throws ArgumentError a3 + e
+    @test_throws ArgumentError symvec + e
 
     var = a + a
     @test isequal(var.args, ArgsT{SymReal}([Const{SymReal}(2), a]))
@@ -230,6 +256,20 @@ end
 
     var = c * a
     @test isequal(var.args, ArgsT{SymReal}([c, a]))
+    @test var.f === *
+    @test symtype(var) == Vector{Number}
+    @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
+
+    var = c * symvec
+    @test isequal(var.args, ArgsT{SymReal}([c, csymvec]))
+    @test var.f === *
+    @test symtype(var) == Vector{Number}
+    @test shape(var) == ShapeVecT([1:2])
+    @test symtype(var) == Vector{Number}
+
+    var = symmat * a
+    @test isequal(var.args, ArgsT{SymReal}([csymmat, a]))
     @test var.f === *
     @test symtype(var) == Vector{Number}
     @test shape(var) == ShapeVecT([1:2])
@@ -302,6 +342,9 @@ end
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
+    # we can't support this without committing type piracy
+    @test_throws MethodError 2 ^ symmat
+
     var = 2 ^ e
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((Const{SymReal}(2), e)))
@@ -314,6 +357,10 @@ end
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
+    var = symmat ^ 2
+    @test var isa Matrix{BasicSymbolic{SymReal}}
+    @test size(var) == size(symmat)
+
     var = e ^ 2
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((e, Const{SymReal}(2))))
@@ -323,6 +370,12 @@ end
     var = h ^ c
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((h, c)))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+
+    var = h ^ symmat
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((h, csymmat)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
@@ -338,6 +391,12 @@ end
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
+    var = symmat ^ h
+    @test var.f === ^
+    @test isequal(var.args, ArgsT{SymReal}((csymmat, h)))
+    @test shape(var) == ShapeVecT([1:2, 1:2])
+    @test symtype(var) == Matrix{Number}
+
     var = e ^ h
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((e, h)))
@@ -346,6 +405,8 @@ end
 
     @test_throws ArgumentError c * b
     @test_throws ArgumentError b * c
+    @test_throws ArgumentError symmat * b
+    @test_throws ArgumentError b * symmat
     @test_throws ArgumentError f * g
     @test_throws ArgumentError f * a
     @test_throws ArgumentError c * a * c
@@ -398,12 +459,18 @@ end
     var = a / h
     @test shape(var) == shape(a)
     @test symtype(var) == symtype(a)
+    var = symvec / h
+    @test shape(var) == shape(symvec)
+    @test symtype(var) == symtype(csymvec)
     var = a3 / h
     @test shape(var) == shape(a3)
     @test symtype(var) == symtype(a3)
     var = c / h
     @test shape(var) == shape(c)
     @test symtype(var) == symtype(c)
+    var = symmat / h
+    @test shape(var) == shape(symmat)
+    @test symtype(var) == symtype(csymmat)
     var = d / h
     @test shape(var) == shape(d)
     @test symtype(var) == symtype(d)
@@ -415,6 +482,9 @@ end
     var = h / a
     @test shape(var) == ShapeVecT((1:1, 1:2))
     @test symtype(var) == Matrix{Number}
+    var = h / symvec
+    @test shape(var) == ShapeVecT((1:1, 1:2))
+    @test symtype(var) == Matrix{Number}
     var = h / a3
     @test shape(var) == ShapeVecT((1:1, 2:3))
     @test symtype(var) == Matrix{Number}
@@ -423,6 +493,7 @@ end
     @test symtype(var) == Matrix{Number}
     # Scalar / Array
     @test_throws ArgumentError h / c
+    @test_throws ArgumentError h / symmat
     @test_throws ArgumentError h / e
     @test_throws ArgumentError h / f
 
@@ -430,10 +501,16 @@ end
     var = a / a
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Number}
+    var = a / symvec
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
     var = a / a3
     @test shape(var) == ShapeVecT((1:2, 2:3))
     @test symtype(var) == Matrix{Number}
     var = a3 / a
+    @test shape(var) == ShapeVecT((2:3, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = a3 / symvec
     @test shape(var) == ShapeVecT((2:3, 1:2))
     @test symtype(var) == Matrix{Number}
     var = a3 / b
@@ -451,6 +528,9 @@ end
     var = a / cmat
     @test shape(var) == ShapeVecT((1:2, 1:3))
     @test symtype(var) == Matrix{Number}
+    var = symvec / cmat
+    @test shape(var) == ShapeVecT((1:2, 1:3))
+    @test symtype(var) == Matrix{Number}
     var = a3 / cmat
     @test shape(var) == ShapeVecT((2:3, 1:3))
     @test symtype(var) == Matrix{Number}
@@ -458,6 +538,9 @@ end
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
     var = a / cmat2
+    @test shape(var) == SymbolicUtils.Unknown(2)
+    @test symtype(var) == Matrix{Number}
+    var = symvec / cmat2
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
     var = a3 / cmat2
@@ -468,6 +551,8 @@ end
     @test symtype(var) == Matrix{Number}
     @test_throws ArgumentError a / c
     @test_throws ArgumentError a3 / c
+    @test_throws ArgumentError symvec / c
+    @test_throws ArgumentError a / symmat
 
     # Matrix / Vector
     @test_throws ArgumentError c / a
@@ -476,9 +561,17 @@ end
     @test_throws ArgumentError e / a3
     @test_throws ArgumentError c / d
     @test_throws ArgumentError e / d
+    @test_throws ArgumentError symmat / a
+    @test_throws ArgumentError c / symvec
 
     # Matrix / Matrix
     var = c / c
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = c / symmat
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = symmat / c
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Number}
     var = g / q
@@ -495,16 +588,24 @@ end
     @test symtype(var) == Matrix{Number}
     @test_throws ArgumentError c / g
     @test_throws ArgumentError g / c
+    @test_throws ArgumentError symmat / g
+    @test_throws ArgumentError g / symmat
 
     # BSLASH
     # Scalar \ *
     var = h \ a
     @test shape(var) == ShapeVecT((1:2,))
     @test symtype(var) == Vector{Number}
+    var = h \ symvec
+    @test shape(var) == ShapeVecT((1:2,))
+    @test symtype(var) == Vector{Number}
     var = h \ a3
     @test shape(var) == ShapeVecT((2:3,))
     @test symtype(var) == Vector{Number}
     var = h \ c
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = h \ symmat
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Number}
     var = h \ q
@@ -522,6 +623,7 @@ end
 
     # Vector \ Scalar
     @test_throws ArgumentError a \ h
+    @test_throws ArgumentError symvec \ h
     @test_throws ArgumentError a3 \ h
     @test_throws ArgumentError d \ h
 
@@ -529,10 +631,16 @@ end
     var = a \ a
     @test shape(var) == ShapeVecT()
     @test symtype(var) == Number
+    var = a \ symvec
+    @test shape(var) == ShapeVecT()
+    @test symtype(var) == Number
     var = a \ a3
     @test shape(var) == ShapeVecT()
     @test symtype(var) == Number
     var = a3 \ a
+    @test shape(var) == ShapeVecT()
+    @test symtype(var) == Number
+    var = symvec \ a
     @test shape(var) == ShapeVecT()
     @test symtype(var) == Number
     var = a \ d
@@ -546,9 +654,17 @@ end
     @test symtype(var) == Number
     @test_throws ArgumentError b \ a
     @test_throws ArgumentError a \ b
+    @test_throws ArgumentError b \ symvec
+    @test_throws ArgumentError symvec \ b
 
     # Vector \ Matrix
     var = a \ c
+    @test shape(var) == ShapeVecT((1:1, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = symvec \ c
+    @test shape(var) == ShapeVecT((1:1, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = a \ symmat
     @test shape(var) == ShapeVecT((1:1, 1:2))
     @test symtype(var) == Matrix{Number}
     var = a3 \ c
@@ -565,13 +681,21 @@ end
     @test symtype(var) == Matrix{Number}
     @test_throws ArgumentError a \ g
     @test_throws ArgumentError a3 \ g
+    @test_throws ArgumentError symvec \ g
 
     # Matrix \ Scalar
     @test_throws ArgumentError c \ h
     @test_throws ArgumentError e \ h
+    @test_throws ArgumentError symmat \ h
 
     # Matrix \ Vector
     var = c \ a
+    @test shape(var) == ShapeVecT((1:2,))
+    @test symtype(var) == Vector{Number}
+    var = c \ symvec
+    @test shape(var) == ShapeVecT((1:2,))
+    @test symtype(var) == Vector{Number}
+    var = symmat \ a
     @test shape(var) == ShapeVecT((1:2,))
     @test symtype(var) == Vector{Number}
     var = c \ a3
@@ -590,6 +714,12 @@ end
 
     # Matrix \ Matrix
     var = c \ c
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = c \ symmat
+    @test shape(var) == ShapeVecT((1:2, 1:2))
+    @test symtype(var) == Matrix{Number}
+    var = symmat \ c
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Number}
     var = c \ e
@@ -615,7 +745,9 @@ end
     @syms a b[1:4] c[1:4, 1:4] e::Vector{Number} f::Matrix{Number}
     @syms ii::Integer i[1:2]::Int32 j[2:3]::Int k::Vector{Int} l[1:2, 1:2]::Int m
 
-    @testset "$(shape(x))" for x in [b, e]
+    csymvec = Const{SymReal}([a, m, a, m])
+    csymmat = Const{SymReal}([a m a m; m a m a; a m a m; m a m a])
+    @testset "$x - $(shape(x))" for x in [b, e, csymvec]
         @testset "idx = $idx" for idx in [2, ii]
             var = x[idx]
             @test symtype(var) == Number
@@ -636,14 +768,19 @@ end
             @test shape(var) == ShapeVecT((1:4,))
         end
 
-        @test_throws ArgumentError x[]
-        @test_throws ArgumentError x[1, 2]
-        @test_throws ArgumentError x[[1 2; 3 4]]
+        if isequal(x, csymvec)
+            @test_throws BoundsError x[]
+            @test_throws BoundsError x[1, 2]
+        else
+            @test_throws ArgumentError x[]
+            @test_throws ArgumentError x[1, 2]
+            @test_throws ArgumentError x[[1 2; 3 4]]
+        end
         @test_throws ArgumentError x[k]
         @test_throws ArgumentError x[l]
         @test_throws ArgumentError x[m]
     end
-    @testset "$(shape(x))" for x in [c, f]
+    @testset "$x - $(shape(x))" for x in [c, f, csymmat]
         scalidxs = [ii, 3]
         @testset "idx = $idx" for idx in Iterators.product(scalidxs, scalidxs)
             var = x[idx...]
@@ -693,12 +830,16 @@ end
                 @test shape(var) == ShapeVecT((1:4, 1:2))
             end
         end
-        @test_throws ArgumentError x[]
-        @test_throws ArgumentError x[[1 2; 3 4], 1]
+        if isequal(x, csymmat)
+            @test_throws BoundsError x[]
+        else
+            @test_throws ArgumentError x[]
+            @test_throws ArgumentError x[[1 2; 3 4], 1]
+            @test_throws ArgumentError x[1]
+        end
         @test_throws ArgumentError x[k, 1]
         @test_throws ArgumentError x[l, 1]
         @test_throws ArgumentError x[m, 1]
-        @test_throws ArgumentError x[1]
     end
 end
 

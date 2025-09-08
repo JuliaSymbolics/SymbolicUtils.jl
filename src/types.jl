@@ -1571,31 +1571,25 @@ end
 
 function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term) where {T}
     @nospecialize term
-    if term isa BasicSymbolic{T}
-        @match term begin
-            BSImpl.Const(; val) => (num_coeff[] *= val)
-            BSImpl.AddMul(; coeff, dict, variant) && if variant == AddMulVariant.MUL end => begin
-                num_coeff[] *= coeff
-                for (k, v) in dict
-                    num_dict[k] = get(num_dict, k, 0) + v
-                end
-            end
-            BSImpl.Term(; f, args) && if f === (^) && !isconst(args[1]) && isconst(args[2]) end => begin
-                base, exp = args
-                num_dict[base] = get(num_dict, base, 0) + unwrap_const(exp)
-            end
-            BSImpl.Div(; num, den) => begin
-                _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, num)
-                _mul_worker!(T, den_coeff, num_coeff, den_dict, num_dict, den)
-            end
-            x => begin
-                num_dict[x] = get(num_dict, x, 0) + 1
+    @match term begin
+        BSImpl.Const(; val) => (num_coeff[] *= val)
+        BSImpl.AddMul(; coeff, dict, variant) && if variant == AddMulVariant.MUL end => begin
+            num_coeff[] *= coeff
+            for (k, v) in dict
+                num_dict[k] = get(num_dict, k, 0) + v
             end
         end
-    elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal}
-        error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
-    else
-        num_coeff[] *= term
+        BSImpl.Term(; f, args) && if f === (^) && !isconst(args[1]) && isconst(args[2]) end => begin
+            base, exp = args
+            num_dict[base] = get(num_dict, base, 0) + unwrap_const(exp)
+        end
+        BSImpl.Div(; num, den) => begin
+            _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, num)
+            _mul_worker!(T, den_coeff, num_coeff, den_dict, num_dict, den)
+        end
+        x => begin
+            num_dict[x] = get(num_dict, x, 0) + 1
+        end
     end
     return nothing
 end
@@ -1624,7 +1618,9 @@ end
 const SYMREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SymReal}}(MulWorkerBuffer{SymReal})
 const SAFEREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SafeReal}}(MulWorkerBuffer{SafeReal})
 
-function (mwb::MulWorkerBuffer{T})(terms) where {T}
+(mwb::MulWorkerBuffer{T})(terms) where {T} = mwb(Const{T}.(terms))
+
+function (mwb::MulWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}}, AbstractArray{BasicSymbolic{T}}}) where {T}
     if !all(_numeric_or_arrnumeric_symtype, terms)
         throw(MethodError(*, Tuple(terms)))
     end
@@ -1717,15 +1713,15 @@ end
 mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)
 mul_worker(::Type{SafeReal}, terms) = SAFEREAL_MULBUFFER[](terms)
 
-function *(x::T...) where {T <: NonTreeSym}
-    mul_worker(vartype(T), x)
+function *(x::T, args...) where {T <: NonTreeSym}
+    mul_worker(vartype(T), (x, args...))
 end
 
-function *(a::Union{Number, Array{<:Number}}, b::T, bs::T...) where {T <: NonTreeSym}
+function *(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
     return mul_worker(vartype(T), (a, b, bs...))
 end
 
-function *(a::T, b::Union{Number, Array{<:Number}}, bs::T...) where {T <: NonTreeSym}
+function *(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
     return mul_worker(vartype(T), (a, b, bs...))
 end
 

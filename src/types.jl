@@ -1492,7 +1492,11 @@ import Base: (+), (-), (*), (//), (/), (\), (^)
 end
 
 function _numeric_or_arrnumeric_symtype(x)
-    _numeric_or_arrnumeric_type(symtype(x))
+    if x isa Array{<:BasicSymbolic}
+        all(_numeric_or_arrnumeric_symtype, x)
+    else
+        _numeric_or_arrnumeric_type(symtype(x))
+    end
 end
 
 @generated function _rational_or_arrrational_type(S::TypeT)
@@ -1521,7 +1525,11 @@ end
 end
 
 function _rational_or_arrrational_symtype(x)
-    _rational_or_arrrational_type(symtype(x))
+    if x isa Array{<:BasicSymbolic}
+        all(_rational_or_arrrational_symtype, x)
+    else
+        _rational_or_arrrational_type(symtype(x))
+    end
 end
 
 @noinline function throw_unequal_shape_error(x, y)

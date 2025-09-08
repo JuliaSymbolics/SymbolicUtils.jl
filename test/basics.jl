@@ -77,6 +77,13 @@ end
     ex1 = sin(a+1)
     hash(asin(ex1), UInt(0))
     @test ex1.hash[] == h
+
+    @testset "hash is same with and without hashconsing" begin
+        @syms a b
+        t1 = Term{SymReal}(+, [a, b])
+        t2 = Term{SymReal}(+, [a, b]; unsafe = true)
+        @test hash(t1) == hash(t2)
+    end
 end
 
 struct Ctx1 end

@@ -1633,16 +1633,25 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     den_dict = mwb.den_dict
     den_coeff = mwb.den_coeff
 
-    type = promoted_symtype(*, terms)
+    # We're multiplying numbers here. If we don't take the `eltype`
+    # and the first element is an array, `promote_symtype` may fail
+    # so we take the eltype, since `scalar * scalar` and `scalar * array`
+    # both give the correct result regardless of whether the first element
+    # is a scalar or array.
+    type::TypeT = eltype(symtype(Const{T}(first(terms))))
     arrterms = ArgsT{T}()
 
     for term in terms
         term = unwrap(term)
+        if _is_array_of_symbolics(term)
+            term = Const{T}(term)
+        end
         sh = shape(term)
+        type = promote_symtype(*, type, symtype(term))
         if _is_array_shape(sh)
             coeff, arrterm = _split_arrterm_scalar_coeff(term)
             _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, coeff)
-            if iscall(arrterm) && operation(arrterm) == (*)
+            if iscall(arrterm) && operation(arrterm) === (*)
                 append!(arrterms, arguments(arrterm))
             else
                 push!(arrterms, arrterm)
@@ -1655,7 +1664,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         haskey(den_dict, k) || continue
         numexp = num_dict[k]
         denexp = den_dict[k]
-        if numexp >= denexp
+        if (numexp >= denexp)::Bool
             num_dict[k] = numexp - denexp
             den_dict[k] = 0
         else
@@ -1668,14 +1677,14 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
 
     num_coeff[], den_coeff[] = simplify_coefficients(num_coeff[], den_coeff[])
 
-    num = Mul{T}(num_coeff[], num_dict; type = eltype(type))
+    num = Mul{T}(num_coeff[], num_dict; type = eltype(type)::TypeT)
     @match num begin
         BSImpl.AddMul(; dict) && if dict === num_dict end => begin
             mwb.num_dict = ACDict{T}()
         end
         _ => nothing
     end
-    den = Mul{T}(den_coeff[], den_dict; type = eltype(type))
+    den = Mul{T}(den_coeff[], den_dict; type = eltype(type)::TypeT)
     @match den begin
         BSImpl.AddMul(; dict) && if dict === den_dict end => begin
             mwb.den_dict = ACDict{T}()
@@ -1683,7 +1692,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         _ => nothing
     end
 
-    result = Div{T}(num, den, false; type = eltype(type))
+    result = Div{T}(num, den, false; type = eltype(type)::TypeT)
     if !isempty(arrterms)
         new_arrterms = ArgsT{T}()
         if !_isone(result)
@@ -1713,15 +1722,15 @@ end
 mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)
 mul_worker(::Type{SafeReal}, terms) = SAFEREAL_MULBUFFER[](terms)
 
-function *(x::T...) where {T <: NonTreeSym}
-    mul_worker(vartype(T), x)
+function *(x::T, args...) where {T <: NonTreeSym}
+    mul_worker(vartype(T), (x, args...))
 end
 
-function *(a::Union{Number, Array{<:Number}}, b::T, bs::T...) where {T <: NonTreeSym}
+function *(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
     return mul_worker(vartype(T), (a, b, bs...))
 end
 
-function *(a::T, b::Union{Number, Array{<:Number}}, bs::T...) where {T <: NonTreeSym}
+function *(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
     return mul_worker(vartype(T), (a, b, bs...))
 end
 

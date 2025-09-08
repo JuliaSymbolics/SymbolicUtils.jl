@@ -58,6 +58,7 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
         const metadata::MetadataT
         const shape::ShapeT
         const type::TypeT
+        hash::UInt
         hash2::UInt
         id::IdentT
     end
@@ -96,6 +97,7 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
         const metadata::MetadataT
         const shape::ShapeT
         const type::TypeT
+        hash::UInt
         hash2::UInt
         id::IdentT
     end
@@ -198,27 +200,27 @@ override_properties(obj::BSImpl.Type) = override_properties(MData.variant_type(o
 function override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
         ::Type{<:BSImpl.Const} => (; id = (nothing, nothing))
-        ::Type{<:BSImpl.Sym} => (; id = (nothing, nothing), hash2 = 0)
+        ::Type{<:BSImpl.Sym} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
         ::Type{<:BSImpl.AddMul} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
         ::Type{<:BSImpl.Term} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.Div} => (; id = (nothing, nothing), hash2 = 0)
+        ::Type{<:BSImpl.Div} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
 
 ordered_override_properties(::Type{<:BSImpl.Const}) = ((nothing, nothing),)
-ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, (nothing, nothing))
+ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, 0, (nothing, nothing))
 ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, (nothing, nothing))
 ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsT{T}(), 0, 0, (nothing, nothing))
-ordered_override_properties(::Type{<:BSImpl.Div}) = (0, (nothing, nothing))
+ordered_override_properties(::Type{<:BSImpl.Div}) = (0, 0, (nothing, nothing))
 
 function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
         BSImpl.Const(; val, id) => (; val, id)
-        BSImpl.Sym(; name, metadata, hash2, shape, type, id) => (; name, metadata, hash2, shape, type, id)
+        BSImpl.Sym(; name, metadata, hash, hash2, shape, type, id) => (; name, metadata, hash, hash2, shape, type, id)
         BSImpl.Term(; f, args, metadata, hash, hash2, shape, type, id) => (; f, args, metadata, hash, hash2, shape, type, id)
         BSImpl.AddMul(; coeff, dict, variant, metadata, shape, type, args, hash, hash2, id) => (; coeff, dict, variant, metadata, shape, type, args, hash, hash2, id)
-        BSImpl.Div(; num, den, simplified, metadata, hash2, shape, type, id) => (; num, den, simplified, metadata, hash2, shape, type, id)
+        BSImpl.Div(; num, den, simplified, metadata, hash, hash2, shape, type, id) => (; num, den, simplified, metadata, hash, hash2, shape, type, id)
     end
 end
 
@@ -469,7 +471,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         return hash(hash_bsimpl(s, zero(h), full), h)::UInt
     end
     h = hash(T, h)
-    @match s begin
+
+    partial::UInt = @match s begin
         BSImpl.Const(; val) => begin
             h = hash_somescalar(val, h)::UInt
             if full
@@ -477,42 +480,35 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             end
             return h
         end
-        _ => nothing
-    end
-    if full
-        cache = s.hash2
-        !iszero(cache) && return cache
-    end
-
-    partial::UInt = @match s begin
-        BSImpl.Sym(; name, shape, type) => begin
+        BSImpl.Sym(; name, shape, type, hash, hash2) => begin
+            full && !iszero(hash2) && return hash2
+            !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
             h = Base.hash(shape, h)
             h = Base.hash(type, h)
             h ⊻ SYM_SALT
         end
-        BSImpl.Term(; f, args, shape, hash, type) => begin
-            # use/update cached hash
-            if iszero(hash)
-                hash = s.hash = Base.hash(f, Base.hash(args, Base.hash(shape, Base.hash(type, h))))::UInt
-            else
-                hash
-            end
+        BSImpl.Term(; f, args, shape, hash, hash2, type) => begin
+            full && !iszero(hash2) && return hash2
+            !full && !iszero(hash) && return hash
+            Base.hash(f, Base.hash(args, Base.hash(shape, Base.hash(type, h))))::UInt
         end
-        BSImpl.AddMul(; coeff, dict, variant, shape, type, hash) => begin
-            if iszero(hash)
-                s.hash = Base.hash(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
-            else
-                hash
-            end
+        BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
+            full && !iszero(hash2) && return hash2
+            !full && !iszero(hash) && return hash
+            Base.hash(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
         end
-        BSImpl.Div(; num, den, type) => begin
+        BSImpl.Div(; num, den, type, hash, hash2) => begin
+            full && !iszero(hash2) && return hash2
+            !full && !iszero(hash) && return hash
             Base.hash(num, Base.hash(den, Base.hash(type, h))) ⊻ DIV_SALT
         end
     end
 
-    if full && !isconst(s)
+    if full
         partial = s.hash2 = Base.hash(metadata(s), partial)::UInt
+    else
+        s.hash = partial
     end
     return partial
 end

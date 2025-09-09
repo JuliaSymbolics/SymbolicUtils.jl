@@ -2186,3 +2186,4 @@ function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int,
     newshape = promote_shape(getindex, shape(arr), shape.(idxs)...)
     return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
 end
+Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]

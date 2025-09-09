@@ -225,7 +225,11 @@ function generate_mul(args)
         if isa(C_expr, Symbol)
             # C is a simple variable, can use directly
             # Generate: mul!(C, A, B, 1, 1) which computes C = 1*A*B + 1*C = A*B + C
-            return :(LinearAlgebra.mul!($C_expr, $A, $B, 1, 1))
+            temp_var = gensym("temp_C")
+            return quote
+                $temp_var = copy($C_expr)  # Make a copy to avoid modifying original C
+                LinearAlgebra.mul!($temp_var, $A, $B, 1, 1)
+            end
         else
             # C is an expression, need to create temporary
             temp_var = gensym("temp_C")

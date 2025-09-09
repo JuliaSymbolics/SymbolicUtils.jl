@@ -330,3 +330,13 @@ function Base.broadcastable(x::BasicSymbolic)
         x
     end
 end
+function Base.eachindex(x::BasicSymbolic)
+    sh = shape(x)
+    if sh isa Unknown
+        throw(ArgumentError("Indices of variable $x with unknown shape $sh are not defined."))
+    end
+    CartesianIndices(Tuple(sh))
+end
+function Base.collect(x::BasicSymbolic)
+    [x[i] for i in eachindex(x)]
+end

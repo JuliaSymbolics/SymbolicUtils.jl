@@ -113,6 +113,7 @@ include("types.jl")
 
 include("printing.jl")
 
+export BS
 include("syms.jl")
 
 # Methods on symbolic objects

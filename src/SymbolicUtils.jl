@@ -33,6 +33,8 @@ import MultivariatePolynomials as MP
 import DynamicPolynomials as DP
 import MutableArithmetics as MA
 import ConcurrentUtilities: ReadWriteLock, readlock, readunlock
+import LinearAlgebra
+import SparseArrays: SparseMatrixCSC, findnz
 
 function hash2 end
 function isequal_with_metadata end
@@ -111,6 +113,7 @@ include("types.jl")
 
 include("printing.jl")
 
+export BS
 include("syms.jl")
 
 # Methods on symbolic objects

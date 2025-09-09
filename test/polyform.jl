@@ -43,7 +43,7 @@ end
 @testset "simplify_fractions with quick-cancel" begin
     @syms x y
     @test unwrap_const(simplify_fractions(x/2x)) == 1//2
-    @test unwrap_const(simplify_fractions(2x//x)) == 2
+    @test unwrap_const(simplify_fractions(2x/x)) == 2
     @eqtest simplify_fractions((x+y) * (x-y) / (x+y)) == (x-y)
     @eqtest simplify_fractions(x^3 * y / x) == y*x^2
     @eqtest simplify_fractions(2x^3 * y / x) == 2y*x^2

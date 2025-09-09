@@ -21,6 +21,7 @@ and 2 arg `h`. The second argument to `h` must be a one argument function-like
 variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 """
 macro syms(xs...)
+    isempty(xs) && return ()
     _vartype = SymReal
     if Meta.isexpr(xs[end], :(=))
         x = xs[end]
@@ -37,53 +38,170 @@ macro syms(xs...)
         end
         xs = Base.front(xs)
     end
-    defs = map(xs) do x
-        nt = _name_type(x)
-        n, t = nt.name, nt.type
+    expr = Expr(:block)
+    allofem = Expr(:tuple)
+    ntss = []
+    for x in xs
+        nts = _name_type_shape(x)
+        push!(ntss, nts)
+        n, t, s = nts.name, nts.type, nts.shape
         T = esc(t)
-        :($(esc(n)) = Sym{$_vartype}($(Expr(:quote, n)); type = $T))
+        s = esc(s)
+        res = :($(esc(n)) = $Sym{$_vartype}($(Expr(:quote, n)); type = $T, shape = $s))
+        push!(expr.args, res)
+        push!(allofem.args, esc(n))
     end
-    Expr(:block, defs...,
-         :(tuple($(map(x->esc(_name_type(x).name), xs)...))))
+    push!(expr.args, allofem)
+    return expr
 end
 
-function syms_syntax_error()
-    error("Incorrect @syms syntax. Try `@syms x::Real y::Complex g(a) f(::Real)::Real` for instance.")
+function syms_syntax_error(x)
+    error("Incorrect @syms syntax $x. Try `@syms x::Real y::Complex g(a) f(::Real)::Real` for instance.")
 end
 
-function _name_type(x)
+Base.@nospecializeinfer function _name_type_shape(x)
+    @nospecialize x
     if x isa Symbol
-        return (name=x, type=Number)
-    elseif x isa Expr && x.head === :(::)
-        if length(x.args) == 1
-            return (name=nothing, type=x.args[1])
-        end
-        lhs, rhs = x.args[1:2]
-        if lhs isa Expr && lhs.head === :call
-            # e.g. f(::Real)::Unreal
-            if lhs.args[1] isa Expr
-                func_name_and_type = _name_type(lhs.args[1])
-                name = func_name_and_type.name
-                functype = func_name_and_type.type
-            else
-                name = lhs.args[1]
-                functype = Nothing
-            end
-            type = map(x->_name_type(x).type, lhs.args[2:end])
-            return (name=name, type=:($FnType{Tuple{$(type...)}, $rhs, $functype}))
+        # just a symbol
+        return (; name = x, type = Number, shape = ShapeVecT())
+    elseif Meta.isexpr(x, :call)
+        # a function
+        head = x.args[1]
+        args = x.args[2:end]
+        if head isa Expr
+            head_nts = _name_type_shape(head)
+            fname = head_nts.name
+            ftype = head_nts.type
         else
-            return (name=lhs, type=rhs)
+            fname = head
+            ftype = Nothing
         end
-    elseif x isa Expr && x.head === :ref
-        ntype = _name_type(x.args[1]) # a::Number
-        N = length(x.args)-1
-        return (name=ntype.name,
-                type=:(Array{$(ntype.type), $N}),
-                array_metadata=:(Base.Slice.(($(x.args[2:end]...),))))
-    elseif x isa Expr && x.head === :call
-        return _name_type(:($x::Number))
+        if length(args) == 1 && args[1] == :..
+            signature = Tuple
+        else
+            arg_types = map(arg -> _name_type_shape(arg).type, args)
+            signature = :(Tuple{$(arg_types...)})
+        end
+        return (; name = fname, type = :($FnType{$signature, Number, $ftype}), shape = ShapeVecT())
+    elseif Meta.isexpr(x, :ref)
+        nts = _name_type_shape(x.args[1])
+        shape = Expr(:call, ShapeVecT, Expr(:tuple, x.args[2:end]...))
+        ntype = nts.type
+        if Meta.isexpr(ntype, :curly) && ntype.args[1] === FnType
+            ntype.args[3] = :($Array{$(ntype.args[2]), $(length(x.args) - 1)})
+        else
+            ntype = :($Array{$ntype, $(length(x.args) - 1)})
+        end
+        return (name = nts.name, type = ntype, shape = shape)
+    elseif Meta.isexpr(x, :(::))
+        if length(x.args) == 1
+            type = x.args[1]
+            shape = shape_from_type(type, ShapeVecT())
+            return (; name = nothing, type = x.args[1], shape = shape)
+        end
+        head, type = x.args
+        nts = _name_type_shape(head)
+        shape = shape_from_type(type, nts.shape)
+        ntype = nts.type
+        if Meta.isexpr(ntype, :curly) && ntype.args[1] === FnType
+            if Meta.isexpr(ntype.args[3], :curly) && ntype.args[3].args[1] === Array
+                ntype.args[3].args[2] = type
+            else
+                ntype.args[3] = type
+            end
+        elseif Meta.isexpr(ntype, :curly) && ntype.args[1] === Array
+            ntype.args[2] = type
+        else
+            ntype = type
+        end
+        return (name = nts.name, type = ntype, shape = shape)
     else
-        syms_syntax_error()
+        syms_syntax_error(x)
     end
+end
+
+function shape_from_type(type::Union{Expr, Symbol}, default)
+    if type == :Vector
+        return Unknown(1)
+    elseif type == :Matrix
+        return Unknown(2)
+    elseif type == :Array
+        return Unknown(0)
+    elseif Meta.isexpr(type, :curly)
+        if type.args[1] == :Vector
+            return Unknown(1)
+        elseif type.args[1] == :Matrix
+            return Unknown(2)
+        elseif type.args[1] == :Array
+            return Expr(:call, Unknown, length(type.args) == 3 ? type.args[3] : 0)
+        else
+            return default
+        end
+    else
+        return default
+    end
+end
+
+struct BS{T} end
+
+@inline vartype_from_literal(::BasicSymbolic{T}, xs...) where {T} = T
+@inline vartype_from_literal(_, xs...) = vartype_from_literal(xs...)
+@inline function vartype_from_literal()
+    error("Cannot infer `vartype` from array literal - use `BS{T}[...]` instead of `BS[...]`")
+end
+
+@inline function Base.getindex(::Type{BS}, xs...)
+    BasicSymbolic{vartype_from_literal(xs...)}[xs...]
+end
+@inline function Base.getindex(::Type{BS{T}}, xs...) where {T}
+    BasicSymbolic{T}[xs...]
+end
+@inline function Base.typed_vcat(::Type{BS}, xs...)
+    Base.typed_vcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+end
+@inline function Base.typed_vcat(::Type{BS{T}}, xs...) where {T}
+    Base.typed_vcat(BasicSymbolic{T}, xs...)
+end
+@inline function Base.typed_vcat(::Type{BS}, xs::Number...)
+    Base.typed_vcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+end
+@inline function Base.typed_vcat(::Type{BS{T}}, xs::Number...) where {T}
+    Base.typed_vcat(BasicSymbolic{T}, xs...)
+end
+@inline function Base.typed_hcat(::Type{BS}, xs...)
+    Base.typed_hcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+end
+@inline function Base.typed_hcat(::Type{BS{T}}, xs...) where {T}
+    Base.typed_hcat(BasicSymbolic{T}, xs...)
+end
+@inline function Base.typed_hcat(::Type{BS}, xs::Number...)
+    Base.typed_hcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+end
+@inline function Base.typed_hcat(::Type{BS{T}}, xs::Number...) where {T}
+    Base.typed_hcat(BasicSymbolic{T}, xs...)
+end
+@inline function Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs...)
+    Base.typed_hvcat(BasicSymbolic{vartype_from_literal(xs...)}, dims, xs...)
+end
+@inline function Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims, xs...) where {T}
+    Base.typed_hvcat(BasicSymbolic{T}, dims, xs...)
+end
+@inline function Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs::Number...)
+    Base.typed_hvcat(BasicSymbolic{vartype_from_literal(xs...)}, dims, xs::Number...)
+end
+@inline function Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims, xs::Number...) where {T}
+    Base.typed_hvcat(BasicSymbolic{T}, dims, xs...)
+end
+@inline function Base.typed_hvncat(::Type{BS}, dims::Base.Dims, rf::Bool, xs...)
+    Base.typed_hvncat(BasicSymbolic{vartype_from_literal(xs...)}, dims, rf, xs...)
+end
+@inline function Base.typed_hvncat(::Type{BS{T}}, dims::Base.Dims, rf::Bool, xs...) where {T}
+    Base.typed_hvncat(BasicSymbolic{T}, dims, rf, xs...)
+end
+@inline function Base.typed_hvncat(::Type{BS}, dim::Int, xs...)
+    Base.typed_hvncat(BasicSymbolic{vartype_from_literal(xs...)}, dim, xs...)
+end
+@inline function Base.typed_hvncat(::Type{BS{T}}, dim::Int, xs...) where {T}
+    Base.typed_hvncat(BasicSymbolic{T}, dim, xs...)
 end
 

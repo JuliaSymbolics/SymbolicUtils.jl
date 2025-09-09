@@ -116,6 +116,64 @@ for f in vcat(diadic, [+, -, *, \, /, ^])
                    S::Type{<:Complex{<:Rational}}) = Complex{Rational}
 end
 
+function promote_symtype(::typeof(+), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, eS <: Number, S <: AbstractArray{eS, N}}
+    return Array{promote_symtype(+, eT, eS), N}
+end
+
+function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractMatrix{eT}, eS <: Number, S <: AbstractVecOrMat{eS}}
+    return Array{promote_symtype(*, eT, eS), ndims(S)}
+end
+
+function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, S <: Number}
+    return Array{promote_symtype(*, eT, S), N}
+end
+
+function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, N, S <: AbstractArray{eS, N}}
+    return Array{promote_symtype(*, T, eS), N}
+end
+
+function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {T <: Number, E <: Number, S <: AbstractMatrix{E}}
+    Matrix{promote_type(T, E)}
+end
+function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {E <: Number, T <: AbstractMatrix{E}, S <: Integer}
+    T
+end
+_complex(::Type{Number}) = Number
+_complex(::Type{T}) where {T} = complex(T)
+function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {E <: Number, T <: AbstractMatrix{E}, S <: Number}
+    Matrix{_complex(promote_type(E, S))}
+end
+
+function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, N, S <: AbstractArray{eS, N}}
+    Array{promote_symtype(/, eS, T), N}
+end
+
+function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVector{eT}, eS <: Number, S <: AbstractVector{eS}}
+    promote_symtype(/, eS, eT)
+end
+
+function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVecOrMat{eT}, eS <: Number, S <: AbstractMatrix{eS}}
+    Matrix{promote_symtype(/, eS, eT)}
+end
+
+function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractMatrix{eT}, eS <: Number, S <: AbstractVector{eS}}
+    Vector{promote_symtype(/, eS, eT)}
+end
+
+# we don't actually care about specifically making the Mat/Vec case error because
+# `promote_shape` handles it with a much nicer error message than we can give here.
+function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVecOrMat{eT}, eS <: Number, S <: AbstractVecOrMat{eS}}
+    Matrix{promote_symtype(/, eT, eS)}
+end
+
+function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, S <: AbstractVector{eS}}
+    Matrix{promote_symtype(/, T, eS)}
+end
+
+function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, S <: Number}
+    Array{promote_symtype(/, eT, S), N}
+end
+
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
 error_f_symbolic(f, T) = error("$f is not defined for T.")
@@ -133,8 +191,7 @@ function Base.inv(x::BasicSymbolic{T}) where {T}
     return Const{T}(x ^ -1)
 end
 function Base.literal_pow(::typeof(^), x::BasicSymbolic{T}, ::Val{p}) where {T, p}
-    type = symtype(x)
-    type <: Number || error_f_symbolic(^, type)
+    _numeric_or_arrnumeric_symtype(x) || error_f_symbolic(^, symtype(x))
     return Const{T}(x ^ p)
 end
 function promote_symtype(::typeof(Base.literal_pow), _, ::Type{T}, ::Type{Val{S}}) where{T<:Number,S}
@@ -145,9 +202,6 @@ promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
 end
-
-Base.:*(a::AbstractArray, b::BasicSymbolic) = map(x->x*b, a)
-Base.:*(a::BasicSymbolic, b::AbstractArray) = map(x->a*x, b)
 
 for f in [identity, one, zero, *, +, -]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
@@ -237,17 +291,37 @@ end
 promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
 
 # Array-like operations
-function Base.size(x::BasicSymbolic)
-    @match x begin
-        BSImpl.Const(; val) => size(val)
-        BSImpl.Sym(; shape) => shape === Unknown() ? shape : map(length, shape)
-        BSImpl.Term(; shape) => shape === Unknown() ? shape : map(length, shape)
-        BSImpl.AddMul(; shape) => shape === Unknown() ? shape : map(length, shape)
-        BSImpl.Div(; shape) => shape === Unknown() ? shape : map(length, shape)
+function _size_from_shape(shape::ShapeT)
+    @nospecialize shape
+    if shape isa Unknown
+        return shape
+    else
+        return map(length, shape)
     end
 end
-Base.length(x::BasicSymbolic) = prod(size(x))
-Base.ndims(x::BasicSymbolic) = length(size(x))
+Base.size(x::BasicSymbolic) = _size_from_shape(shape(x))
+function _length_from_shape(sh::ShapeT)
+    @nospecialize sh
+    if sh isa Unknown
+        return sh
+    else
+        len = 1
+        for dim in sh
+            len *= length(dim)
+        end
+        return len
+    end
+end
+Base.length(x::BasicSymbolic) = _length_from_shape(shape(x))
+function _ndims_from_shape(sh::ShapeT)
+    @nospecialize sh
+    if sh isa Unknown
+        return sh.ndims
+    else
+        return length(sh)
+    end
+end
+Base.ndims(x::BasicSymbolic) = _ndims_from_shape(shape(x))
 function Base.broadcastable(x::BasicSymbolic)
     type = symtype(x)
     if type <: Number
@@ -255,4 +329,14 @@ function Base.broadcastable(x::BasicSymbolic)
     else
         x
     end
+end
+function Base.eachindex(x::BasicSymbolic)
+    sh = shape(x)
+    if sh isa Unknown
+        throw(ArgumentError("Indices of variable $x with unknown shape $sh are not defined."))
+    end
+    CartesianIndices(Tuple(sh))
+end
+function Base.collect(x::BasicSymbolic)
+    [x[i] for i in eachindex(x)]
 end

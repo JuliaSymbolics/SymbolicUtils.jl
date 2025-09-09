@@ -9,7 +9,11 @@ abstract type TreeReal <: SymVariant end
 ### Uni-type design
 ###
 
-struct Unknown end
+# Unknown(0) is an array of unknown ndims
+# Empty ShapeVecT is a scalar
+struct Unknown
+    ndims::Int
+end
 
 const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
 const SmallV{T} = SmallVec{T, Vector{T}}
@@ -165,6 +169,46 @@ symtype(x) = typeof(x)
 
 vartype(x::BasicSymbolic{T}) where {T} = T
 vartype(::Type{BasicSymbolic{T}}) where {T} = T
+
+Base.@nospecializeinfer @generated function _shape_notsymbolic(x)
+    @nospecialize x
+    
+    expr = Expr(:if)
+    cur_expr = expr
+    i = 0
+    N = length(SCALARS)
+    for t1 in SCALARS
+        for T in [t1, Vector{t1}, Matrix{t1}, LinearAlgebra.UniformScaling{t1}]
+            i += 1
+            push!(cur_expr.args, :(x isa $T))
+            push!(cur_expr.args, T <: LinearAlgebra.UniformScaling ? Unknown(2) : :($ShapeVecT(axes(x))))
+            new_expr = Expr(:elseif)
+            push!(cur_expr.args, new_expr)
+            cur_expr = new_expr
+        end
+    end
+    push!(cur_expr.args, :(x isa $(LinearAlgebra.UniformScaling)))
+    push!(cur_expr.args, Unknown(2))
+    push!(cur_expr.args, :($ShapeVecT(axes(x))))
+    quote
+        @nospecialize x
+        $expr
+    end
+end
+
+function shape(x::BasicSymbolic)
+    # use `@match` instead of `x.type` since it is faster
+    @match x begin
+        BSImpl.Const(; val) => _shape_notsymbolic(val)::ShapeT
+        BSImpl.Sym(; shape) => shape
+        BSImpl.Term(; shape) => shape
+        BSImpl.AddMul(; shape) => shape
+        BSImpl.Div(; shape) => shape
+    end
+end
+
+shape(x) = _shape_notsymbolic(x)::ShapeT
+shape(::Colon) = ShapeVecT((1:0,))
 
 function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
     symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
@@ -344,7 +388,7 @@ Base.isequal(::Missing, ::BasicSymbolic) = false
 
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
-const SCALARS = [Int, Int32, BigInt, Float64, Float32, BigFloat, Rational{Int}, Rational{Int32}, Rational{BigInt}, ComplexF32, ComplexF64, Complex{BigFloat}]
+const SCALARS = [Bool, Int, Int32, BigInt, Float64, Float32, BigFloat, Rational{Int}, Rational{Int32}, Rational{BigInt}, ComplexF32, ComplexF64, Complex{BigFloat}]
 
 @generated function isequal_somescalar(a, b)
     @nospecialize a b
@@ -459,8 +503,8 @@ end
 function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
     hv = Base.hasha_seed
     for (k, v) in d
-        h1 = hash_bsimpl(k, zero(UInt), full)
-        h1 = hash_somescalar(v, h1)
+        h1 = hash_somescalar(v, zero(UInt))
+        h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
     end
     return hash(hv, h)
@@ -496,7 +540,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
+            hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
         end
         BSImpl.Div(; num, den, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
@@ -627,8 +671,12 @@ function parse_metadata(x)
     return meta
 end
 
-default_shape(::Type{<:AbstractArray}) = Unknown()
+default_shape(::Type{T}) where {E, N, T <: AbstractArray{E, N}} = Unknown(N)
+default_shape(::Type{T}) where {T <: AbstractArray} = Unknown(0)
 default_shape(_) = ShapeVecT()
+
+Base.convert(::Type{B}, x) where {R, B <: BasicSymbolic{R}} = BSImpl.Const{R}(unwrap(x))
+Base.convert(::Type{B}, x::B) where {R, B <: BasicSymbolic{R}} = x
 
 """
     $(METHODLIST)
@@ -675,8 +723,35 @@ function unwrap_dict(dict)
     end
 end
 
+function _is_tuple_or_array_of_symbolics(O)
+    return O isa Code.CodegenPrimitive ||
+        (symbolic_type(O) != NotSymbolic() && !(O isa Union{Symbol, Expr})) ||
+        _is_array_of_symbolics(O) ||
+        _is_tuple_of_symbolics(O)
+end
+
+function _is_array_of_symbolics(O)
+    # O is an array, not a symbolic array, and either has a non-symbolic eltype or contains elements that are
+    # symbolic or arrays of symbolics
+    return O isa AbstractArray && symbolic_type(O) == NotSymbolic() &&
+        (symbolic_type(eltype(O)) != NotSymbolic() && !(eltype(O) <: Union{Symbol, Expr}) ||
+        any(_is_tuple_or_array_of_symbolics, O))
+end
+
+# workaround for https://github.com/JuliaSparse/SparseArrays.jl/issues/599
+function _is_array_of_symbolics(O::SparseMatrixCSC)
+    return symbolic_type(eltype(O)) != NotSymbolic() && !(eltype(O) <: Union{Symbol, Expr}) ||
+        any(_is_tuple_or_array_of_symbolics, findnz(O)[3])
+end
+
+function _is_tuple_of_symbolics(O::Tuple)
+    return any(_is_tuple_or_array_of_symbolics, O)
+end
+_is_tuple_of_symbolics(O) = false
+
 @inline function BSImpl.Const{T}(val; unsafe = false) where {T}
     @nospecialize val
+    val = unwrap(val)
     if val isa BasicSymbolic{T}
         return val
     elseif val isa BasicSymbolic{SymReal}
@@ -685,6 +760,16 @@ end
         error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
     elseif val isa BasicSymbolic{TreeReal}
         error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
+    elseif val isa AbstractArray && _is_array_of_symbolics(val)
+        args = ArgsT{T}((BSImpl.Const{T}(size(val); unsafe), BSImpl.Const{T}(false; unsafe)))
+        sizehint!(args, length(val) + 2)
+        type = Union{}
+        for v in val
+            push!(args, BSImpl.Const{T}(v))
+            type = promote_type(type, symtype(v))
+        end
+        shape = ShapeVecT(axes(val))
+        return BSImpl.Term{T}(hvncat, args; type = Array{type, ndims(val)}, shape, unsafe)
     else
         props = ordered_override_properties(BSImpl.Const)
         var = BSImpl.Const{T}(val, props...)
@@ -850,6 +935,7 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
     if !(type <: Number)
         _iszero(n) && return Const{T}(n)
         _isone(d) && return Const{T}(n)
+        return BSImpl.Div{T}(n, d, simplified; type, kw...)
     end
 
     if !(T === SafeReal)
@@ -860,6 +946,7 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
 
     _iszero(n) && return Const{T}(n)
     _isone(d) && return Const{T}(n)
+    _iszero(d) && return Const{T}(1 // 0)
 
     if isdiv(n) && isdiv(d)
         return Div{T}(n.num * d.den, n.den * d.num, simplified; type, kw...)
@@ -1061,6 +1148,13 @@ When constructing [`Term`](#Term)s without an explicit symtype,
 """
 promote_symtype(f, Ts...) = Any
 
+"""
+    promote_shape(f, shs::ShapeT...)
+
+The shape of the result of applying `f` to arguments of [`shape`](@ref) `shs...`.
+"""
+promote_shape(f, szs::ShapeT...) = Unknown(0)
+
 #---------------------------
 #---------------------------
 #### Function-like variables
@@ -1071,7 +1165,7 @@ struct FnType{X<:Tuple,Y,Z} end
 function (f::BasicSymbolic{T})(args...) where {T}
     symtype(f) <: FnType || error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable.")
-    Term{T}(f, args; type = promote_symtype(f, symtype.(args)...))
+    Term{T}(f, args; type = promote_symtype(f, symtype.(args)...), shape = f.shape)
 end
 
 fntype_X_Y(::Type{<: FnType{X, Y}}) where {X, Y} = (X, Y)
@@ -1127,18 +1221,110 @@ const NonTreeSym = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}}
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 
-function +(x::T...) where {T <: NonTreeSym}
-    if !all(y -> symtype(y) <: Number, x)
-        throw(MethodError(+, x))
+@generated function _numeric_or_arrnumeric_type(S::TypeT)
+    @nospecialize S
+    
+    expr = Expr(:if)
+    cur_expr = expr
+    i = 0
+    N = length(SCALARS)
+    for t1 in SCALARS
+        for T in [t1, Vector{t1}, Matrix{t1}, LinearAlgebra.UniformScaling{t1}]
+            i += 1
+            push!(cur_expr.args, :(S === $T))
+            push!(cur_expr.args, true)
+            i == 4N && continue
+            new_expr = Expr(:elseif)
+            push!(cur_expr.args, new_expr)
+            cur_expr = new_expr
+        end
     end
-    add_worker(vartype(T), x)
+    push!(cur_expr.args, :(S <: Union{Number, AbstractArray{<:Number}}))
+    quote
+        @nospecialize S
+        $expr
+    end
 end
 
-@noinline Base.@nospecializeinfer function promoted_symtype(terms)
+function _numeric_or_arrnumeric_symtype(x)
+    if x isa Array{<:BasicSymbolic}
+        all(_numeric_or_arrnumeric_symtype, x)
+    else
+        _numeric_or_arrnumeric_type(symtype(x))
+    end
+end
+
+@generated function _rational_or_arrrational_type(S::TypeT)
+    @nospecialize S
+    
+    expr = Expr(:if)
+    cur_expr = expr
+    i = 0
+    N = length(SCALARS)
+    for t1 in SCALARS
+        for T in [t1, Vector{t1}, Matrix{t1}, LinearAlgebra.UniformScaling{t1}]
+            i += 1
+            push!(cur_expr.args, :(S === $T))
+            push!(cur_expr.args, t1 <: Rat)
+            i == 4N && continue
+            new_expr = Expr(:elseif)
+            push!(cur_expr.args, new_expr)
+            cur_expr = new_expr
+        end
+    end
+    push!(cur_expr.args, :(S <: Union{Rat, AbstractArray{<:Rat}}))
+    quote
+        @nospecialize S
+        $expr
+    end
+end
+
+function _rational_or_arrrational_symtype(x)
+    if x isa Array{<:BasicSymbolic}
+        all(_rational_or_arrrational_symtype, x)
+    else
+        _rational_or_arrrational_type(symtype(x))
+    end
+end
+
+@noinline function throw_unequal_shape_error(x, y)
+    throw(ArgumentError("Cannot add arguments of different sizes - encountered shapes $x and $y."))
+end
+
+promote_shape(::typeof(+), shape::ShapeT) = shape
+function promote_shape(::typeof(+), sh1::ShapeT, sh2::ShapeT, shs::ShapeT...)
+    @nospecialize sh1 sh2 shs
+    nd1 = _ndims_from_shape(sh1)
+    nd2 = _ndims_from_shape(sh2)
+    nd1 == nd2 || throw_unequal_shape_error(sh1, sh2)
+    if sh1 isa Unknown && sh2 isa Unknown
+        promote_shape(+, sh1, shs...)
+    elseif sh1 isa Unknown
+        promote_shape(+, sh2, shs...)
+    elseif sh2 isa Unknown
+        promote_shape(+, sh1, shs...)
+    else
+        new_shape = ShapeVecT()
+        sizehint!(new_shape, length(sh1))
+        for (shi, shj) in zip(sh1, sh2)
+            length(shi) == length(shj) || throw_unequal_shape_error(sh1, sh2)
+            # resultant shape is always 1-indexed for consistency
+            push!(new_shape, 1:length(shi))
+        end
+        promote_shape(+, new_shape, shs...)
+    end
+end
+promote_shape(::typeof(-), args::ShapeT...) = promote_shape(+, args...)
+
+function +(x::T, args...) where {T <: NonTreeSym}
+    add_worker(vartype(T), (x, args...))
+end
+
+@noinline Base.@nospecializeinfer function promoted_symtype(op, terms)
     a, bs = Iterators.peel(terms)
     type::TypeT = symtype(a)
     for b in bs
-        type = promote_symtype(+, type, symtype(b))
+        type = promote_symtype(op, type, symtype(b))
     end
     return type
 end
@@ -1157,47 +1343,62 @@ const SAFEREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SafeReal}}(AddWorkerBu
 add_worker(::Type{SymReal}, terms) = SYMREAL_ADDBUFFER[](terms)
 add_worker(::Type{SafeReal}, terms) = SAFEREAL_ADDBUFFER[](terms)
 
-function (awb::AddWorkerBuffer{T})(terms) where {T}
+function _added_shape(terms::Tuple)
+    promote_shape(+, ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms)))...)
+end
+
+function _added_shape(terms)
+    isempty(terms) && return Unknown(0)
+    length(terms) == 1 && return shape(terms[1])
+    a, bs = Iterators.peel(terms)
+    sh::ShapeT = shape(a)
+    for t in bs
+        sh = promote_shape(+, sh, shape(t))
+    end
+    return sh
+end
+
+(awb::AddWorkerBuffer{T})(terms) where {T} = awb(Const{T}.(terms))
+
+function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}}, AbstractArray{BasicSymbolic{T}}}) where {T}
+    if !all(_numeric_or_arrnumeric_symtype, terms)
+        throw(MethodError(+, Tuple(terms)))
+    end
     isempty(terms) && return Const{T}(0)
     if isone(length(terms))
         return Const{T}(only(terms))
     end
     empty!(awb)
-    type = promoted_symtype(terms)
+    shape = _added_shape(terms)
+    type = promoted_symtype(+, terms)
     newcoeff = 0
     result = awb.dict
     for term in terms
         term = unwrap(term)
-        if term isa BasicSymbolic{T}
-            @match term begin
-                BSImpl.Const(; val) => (newcoeff += val)
-                BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
-                    @match variant begin
-                        AddMulVariant.ADD => begin
-                            newcoeff += coeff
-                            for (k, v) in dict
-                                result[k] = get(result, k, 0) + v
-                            end
-                        end
-                        AddMulVariant.MUL => begin
-                            newterm = Mul{T}(1, dict; shape, type, metadata)
-                            result[newterm] = get(result, newterm, 0) + coeff
+        @match term begin
+            BSImpl.Const(; val) => (newcoeff += val)
+            BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
+                @match variant begin
+                    AddMulVariant.ADD => begin
+                        newcoeff += coeff
+                        for (k, v) in dict
+                            result[k] = get(result, k, 0) + v
                         end
                     end
-                end
-                _ => begin
-                    result[term] = get(result, term, 0) + 1
+                    AddMulVariant.MUL => begin
+                        newterm = Mul{T}(1, dict; shape, type, metadata)
+                        result[newterm] = get(result, newterm, 0) + coeff
+                    end
                 end
             end
-        elseif term isa BasicSymbolic
-            error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
-        else
-            newcoeff += term
+            _ => begin
+                result[term] = get(result, term, 0) + 1
+            end
         end
     end
     filter!(!(iszero ∘ last), result)
     isempty(result) && return Const{T}(newcoeff)
-    var = Add{T}(newcoeff, result; type)
+    var = Add{T}(newcoeff, result; type, shape)
     @match var begin
         BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
         _ => nothing
@@ -1205,31 +1406,22 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
     return var
 end
 
-function +(a::Number, b::T, bs::T...) where {T <: NonTreeSym}
-    if !all(y -> symtype(y) <: Number, bs) || !(symtype(b) <: Number) || !(symtype(a) <: Number)
-        throw(MethodError(+, symtype.((a, b, bs...))))
-    end
-    @assert !(unwrap(a) isa BasicSymbolic{TreeReal})
+function +(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
     return add_worker(vartype(T), (a, b, bs...))
 end
 
-function +(a::T, b::Number, bs::T...) where {T <: NonTreeSym}
-    if !all(y -> symtype(y) <: Number, bs) || !(symtype(b) <: Number) || !(symtype(a) <: Number)
-        throw(MethodError(+, symtype.((a, b, bs...))))
-    end
-    @assert !(unwrap(b) isa BasicSymbolic{TreeReal})
-    return +(b, a, bs...)
+function +(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
+    return add_worker(vartype(T), (a, b, bs...))
 end
 
 function -(a::BasicSymbolic{T}) where {T}
-    if !(symtype(a) <: Number)
+    if !_numeric_or_arrnumeric_symtype(a)
         throw(MethodError(-, (symtype(a),)))
     end
     @match a begin
         BSImpl.Const(; val) => Const{T}(-val)
         _ => nothing
     end
-    type::TypeT = promote_symtype(-, symtype(a))
     @match a begin
         BSImpl.AddMul(; coeff, dict, variant, shape, type) => begin
             @match variant begin
@@ -1249,11 +1441,10 @@ function -(a::BasicSymbolic{T}) where {T}
 end
 
 function -(a::S, b::S) where {S <: NonTreeSym}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+    if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(-, (a, b)))
     end
     T = vartype(S)
-    type::TypeT = promote_symtype(-, symtype(a), symtype(b))
     @match (a, b) begin
         (BSImpl.Const(; val = val1), BSImpl.Const(; val = val2)) => begin
             return Const{T}(val1 - val2)
@@ -1262,10 +1453,115 @@ function -(a::S, b::S) where {S <: NonTreeSym}
     end
 end
 
--(a::Number, b::BasicSymbolic) = a + (-b)
--(a::BasicSymbolic, b::Number) = a + (-b)
+-(a::Union{Number, AbstractArray{<:Number}}, b::BasicSymbolic) = a + (-b)
+-(a::BasicSymbolic, b::Union{Number, AbstractArray{<:Number}}) = a + (-b)
+function -(a::AbstractArray{<:BasicSymbolic}, b::BasicSymbolic)
+    Const{vartype(b)}(a) + (-b)
+end
+function -(a::BasicSymbolic, b::AbstractArray{<:BasicSymbolic})
+    a - Const{vartype(a)}(b)
+end
+
 
 *(a::BasicSymbolic) = a
+
+@noinline function throw_expected_matrix(x)
+    throw(ArgumentError("Expected matrix in multiplication, got argument of shape $x."))
+end
+@noinline function throw_expected_matvec(x)
+    throw(ArgumentError("""
+    Expected matrix or vector in multiplication, got argument of shape $x.
+    """))
+end
+@noinline function throw_incompatible_shapes(x, y)
+    throw(ArgumentError("""
+    Encountered incompatible shapes $x and $y when multiplying.
+    """))
+end
+
+_is_array_shape(sh::ShapeT) = sh isa Unknown || _ndims_from_shape(sh) > 0
+function _multiplied_shape(shapes)
+    first_arr = findfirst(_is_array_shape, shapes)
+    first_arr === nothing && return ShapeVecT()
+    last_arr::Int = findlast(_is_array_shape, shapes)
+    first_arr == last_arr && return shapes[first_arr]
+
+    sh1::ShapeT = shapes[first_arr]
+    shend::ShapeT = shapes[last_arr]
+    ndims_1 = _ndims_from_shape(sh1)
+    ndims_end = _ndims_from_shape(shend)
+    ndims_1 == 0 || ndims_1 == 2 || throw_expected_matrix(sh1)
+    ndims_end <= 2 || throw_expected_matvec(shend)
+    if ndims_end == 1
+        result = shend
+    elseif sh1 isa Unknown || shend isa Unknown
+        result = Unknown(ndims_end)
+    else
+        result = ShapeVecT((first(sh1), last(shend)))
+    end
+    cur_shape = sh1
+    is_matmatmul = true
+    for i in (first_arr + 1):last_arr
+        sh = shapes[i]
+        ndims_sh = _ndims_from_shape(sh)
+        _is_array_shape(sh) || continue
+        ndims_sh <= 2 || throw_expected_matvec(shend)
+        is_matmatmul || throw_incompatible_shapes(cur_shape, sh)
+        is_matmatmul = ndims_sh != 1
+        if cur_shape isa ShapeVecT && sh isa ShapeVecT
+            if length(last(cur_shape)) != length(first(sh))
+                throw_incompatible_shapes(cur_shape, sh)
+            end
+        end
+        cur_shape = sh
+    end
+
+    return result
+end
+
+function promote_shape(::typeof(*), shs::ShapeT...)
+    _multiplied_shape(shs)
+end
+
+function _multiplied_terms_shape(terms::Tuple)
+    _multiplied_shape(ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms))))
+end
+
+function _multiplied_terms_shape(terms)
+    shapes = SmallV{ShapeT}()
+    sizehint!(shapes, length(terms))
+    for t in terms
+        push!(shapes, shape(t))
+    end
+    return _multiplied_shape(shapes)
+end
+
+function _split_arrterm_scalar_coeff(term::BasicSymbolic{T}) where {T}
+    sh = shape(term)
+    _is_array_shape(sh) || return term, Const{T}(1)
+    @match term begin
+        BSImpl.Term(; f, args, type) && if f === (*) && !_is_array_shape(shape(first(args))) end => begin
+            if length(args) == 2
+                return args[1], args[2]
+            end
+            rest = ArgsT{T}()
+            sizehint!(rest, length(args) - 1)
+            coeff, restargs = Iterators.peel(args)
+            for arg in restargs
+                push!(rest, arg)
+            end
+            return coeff, Term{T}(f, rest; type, shape = sh)
+        end
+        _ => (Const{T}(1), term)
+    end
+end
+
+function _as_base_exp(term::BasicSymbolic{T}) where {T}
+    @match term begin
+        BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) end => (args[1], args[2])
+        _ => (term, Const{T}(1))
+    end
+end
 
 function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term) where {T}
     @nospecialize term
@@ -1323,36 +1619,50 @@ const SYMREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SymReal}}(MulWorkerBuff
 const SAFEREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SafeReal}}(MulWorkerBuffer{SafeReal})
 
 function (mwb::MulWorkerBuffer{T})(terms) where {T}
+    if !all(_numeric_or_arrnumeric_symtype, terms)
+        throw(MethodError(*, Tuple(terms)))
+    end
+    isempty(terms) && return Const{T}(1)
+    length(terms) == 1 && return Const{T}(terms[1])
     empty!(mwb)
+    newshape = _multiplied_terms_shape(terms)
     num_dict = mwb.num_dict
     num_coeff = mwb.num_coeff
     den_dict = mwb.den_dict
     den_coeff = mwb.den_coeff
 
-    length(terms) == 1 && return Const{T}(terms[1])
-    type = promoted_symtype(terms)
+    # We're multiplying numbers here. If we don't take the `eltype`
+    # and the first element is an array, `promote_symtype` may fail
+    # so we take the eltype, since `scalar * scalar` and `scalar * array`
+    # both give the correct result regardless of whether the first element
+    # is a scalar or array.
+    type::TypeT = eltype(symtype(Const{T}(first(terms))))
+    arrterms = ArgsT{T}()
 
     for term in terms
-        term = unwrap_const(unwrap(term))
+        term = unwrap(term)
+        if _is_array_of_symbolics(term)
+            term = Const{T}(term)
+        end
+        sh = shape(term)
+        type = promote_symtype(*, type, symtype(term))
+        if _is_array_shape(sh)
+            coeff, arrterm = _split_arrterm_scalar_coeff(term)
+            _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, coeff)
+            if iscall(arrterm) && operation(arrterm) === (*)
+                append!(arrterms, arguments(arrterm))
+            else
+                push!(arrterms, arrterm)
+            end
+            continue
+        end
         _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, term)
     end
     for k in keys(num_dict)
         haskey(den_dict, k) || continue
         numexp = num_dict[k]
         denexp = den_dict[k]
-        if numexp >= denexp
-            num_dict[k] = numexp - denexp
-            den_dict[k] = 0
-        else
-            num_dict[k] = 0
-            den_dict[k] = denexp - numexp
-        end
-    end
-    for k in keys(num_dict)
-        haskey(den_dict, k) || continue
-        numexp = num_dict[k]
-        denexp = den_dict[k]
-        if numexp >= denexp
+        if (numexp >= denexp)::Bool
             num_dict[k] = numexp - denexp
             den_dict[k] = 0
         else
@@ -1362,14 +1672,17 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     end
     filter!(kvp -> !iszero(kvp[2]), num_dict)
     filter!(kvp -> !iszero(kvp[2]), den_dict)
-    num = Mul{T}(num_coeff[], num_dict; type)
+
+    num_coeff[], den_coeff[] = simplify_coefficients(num_coeff[], den_coeff[])
+
+    num = Mul{T}(num_coeff[], num_dict; type = eltype(type)::TypeT)
     @match num begin
         BSImpl.AddMul(; dict) && if dict === num_dict end => begin
             mwb.num_dict = ACDict{T}()
         end
         _ => nothing
     end
-    den = Mul{T}(den_coeff[], den_dict; type)
+    den = Mul{T}(den_coeff[], den_dict; type = eltype(type)::TypeT)
     @match den begin
         BSImpl.AddMul(; dict) && if dict === den_dict end => begin
             mwb.den_dict = ACDict{T}()
@@ -1377,67 +1690,381 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         _ => nothing
     end
 
-    return Div{T}(num, den, false; type)
+    result = Div{T}(num, den, false; type = eltype(type)::TypeT)
+    if !isempty(arrterms)
+        new_arrterms = ArgsT{T}()
+        if !_isone(result)
+            push!(new_arrterms, result)
+        end
+        fterm, rest = Iterators.peel(arrterms)
+        push!(new_arrterms, fterm)
+        for arrterm in rest
+            prev = last(new_arrterms)
+            termbase, termexp = _as_base_exp(arrterm)
+            prevbase, prevexp = _as_base_exp(prev)
+            if isequal(termbase, prevbase)
+                new_arrterms[end] = Term{T}(^, ArgsT{T}((termbase, prevexp + termexp)); type, shape = newshape)
+            else
+                push!(new_arrterms, arrterm)
+            end
+        end
+        if length(new_arrterms) == 1
+            result = new_arrterms[1]
+        else
+            result = Term{T}(*, new_arrterms; type, shape = newshape)
+        end
+    end
+    return result
 end
 
 mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)
 mul_worker(::Type{SafeReal}, terms) = SAFEREAL_MULBUFFER[](terms)
 
-function *(a::T, b::T) where {T <: NonTreeSym}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
-        throw(MethodError(*, (a, b)))
-    end
-    mul_worker(vartype(T), (a, b))
+function *(x::T, args...) where {T <: NonTreeSym}
+    mul_worker(vartype(T), (x, args...))
 end
 
-function *(a::Number, b::NonTreeSym)
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
-        throw(MethodError(*, (a, b)))
-    end
-    mul_worker(vartype(b), (a, b))
+function *(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
+    return mul_worker(vartype(T), (a, b, bs...))
+end
+
+function *(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
+    return mul_worker(vartype(T), (a, b, bs...))
 end
 
 ###
 ### Div
 ###
 
-function /(a::Union{S,Number}, b::S) where {S <: NonTreeSym}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+@noinline function throw_bad_div_shape(x, y)
+    throw(ArgumentError("""
+    Arguments have invalid shapes for division - found shapes $x and $y.
+    """))
+end
+
+@noinline function throw_vecdiv(x, y)
+    throw(ArgumentError("""
+    When dividing a vector, the denominator must be a scalar, vector or column matrix. \
+    Found arguments with shapes $x and $y.
+    """))
+end
+
+@noinline function throw_scalardiv(x, y)
+    throw(ArgumentError("""
+    When dividing a scalar, the denominator must be a scalar or vector. Found arguments \
+    with shapes $x and $y.
+    """))
+end
+
+# S = Scalar, * = Any, V = Vector, M = Matrix
+# * / S -> *
+# S / V -> (1, length(B))
+# S / M -> ERR
+# V / V -> (length(A), length(B))
+# V / M -> (length(A), size(B, 1))    ; size(B, 2) == 1
+# M / V -> ERR
+# M / M -> (size(A, 1), size(B, 1))   ; size(A, 2) == size(B, 2)
+function promote_shape(::typeof(/), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    ndims_a = _ndims_from_shape(sha)
+    ndims_b = _ndims_from_shape(shb)
+    if sha isa Unknown && shb isa Unknown
+        ndims_a <= 2 || throw_bad_div_shape(sha, shb)
+        ndims_b <= 2 || throw_bad_div_shape(sha, shb)
+        ndims_a != 2 || ndims_b != 1 || throw_bad_dims(sha, shb)
+        # either we get a matrix or the operation errors
+        return Unknown(2)
+    elseif sha isa Unknown && shb isa ShapeVecT
+        ndims_b == 0 && return sha
+        ndims_a <= 2 || throw_bad_div_shape(sha, shb)
+        ndims_b <= 2 || throw_bad_div_shape(sha, shb)
+        ndims_a != 1 || (ndims_b == 1 || length(shb[2]) == 1) || throw_vecdiv(sha, shb)
+        ndims_a != 2 || ndims_b != 1 || throw_bad_dims(sha, shb)
+        return Unknown(2)
+    elseif sha isa ShapeVecT && shb isa Unknown
+        ndims_a <= 2 || throw_bad_div_shape(sha, shb)
+        ndims_b <= 2 || throw_bad_div_shape(sha, shb)
+        ndims_a != 0 || ndims_b <= 1 || throw_scalardiv(sha, shb)
+        ndims_a != 2 || ndims_b != 1 || throw_bad_dims(sha, shb)
+        return Unknown(2)
+    elseif sha isa ShapeVecT && shb isa ShapeVecT
+        ndims_b == 0 && return sha
+        ndims_a <= 2 || throw_bad_div_shape(sha, shb)
+        ndims_b <= 2 || throw_bad_div_shape(sha, shb)
+        if ndims_a == 0
+            ndims_b == 1 && return ShapeVecT((1:1, shb[1]))
+            throw_scalardiv(sha, shb)
+        elseif ndims_a == 1
+            ndims_b == 1 || length(shb[2]) == 1 || throw_vecdiv(sha, shb)
+            return ShapeVecT((sha[1], shb[1]))
+        else
+            # ndims_a == 2
+            ndims_b == 1 && throw_bad_div_shape(sha, shb)
+            length(sha[2]) == length(shb[2]) || throw_bad_div_shape(sha, shb)
+            return ShapeVecT((sha[1], shb[1]))
+        end
+    end
+    _unreachable()
+end
+
+function _fslash_worker(::Type{T}, a, b) where {T}
+    if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(/, (a, b)))
     end
-    T = vartype(S)
     if isconst(a) || isconst(b)
         return Const{T}(unwrap_const(a) / unwrap_const(b))
     end
     type = promote_symtype(/, symtype(a), symtype(b))
-    Div{T}(a, b, false; type)
+    newshape = promote_shape(/, shape(a), shape(b))
+    Div{T}(a, b, false; type, shape = newshape)
 end
 
-*(a::NonTreeSym, b::Number) = b * a
+function /(a::Union{S,Number,AbstractArray{<:Number}}, b::S) where {S <: NonTreeSym}
+    _fslash_worker(vartype(S), a, b)
+end
+function /(a::AbstractArray{S}, b::S) where {S <: NonTreeSym}
+    _fslash_worker(vartype(S), Const{vartype(S)}(a), b)
+end
 
-\(a::T, b::Union{Number, T}) where {T <: NonTreeSym} = b / a
+function /(a::S, b::Union{Number,AbstractArray{<:Number}}) where {S <: NonTreeSym}
+    _fslash_worker(vartype(S), a, b)
+end
+function /(a::S, b::AbstractArray{S}) where {S <: NonTreeSym}
+    _fslash_worker(vartype(S), a, Const{vartype(S)}(b))
+end
 
-\(a::Number, b::NonTreeSym) = b / a
+function //(a::Union{S,Number,AbstractArray{<:Number}}, b::S) where {S <: NonTreeSym}
+    if !_rational_or_arrrational_symtype(a) || !_rational_or_arrrational_symtype(b)
+        throw(MethodError(//, (a, b)))
+    end
+    _fslash_worker(vartype(S), a, b)
+end
+function //(a::AbstractArray{S}, b::S) where {S <: NonTreeSym}
+    a = Const{vartype(S)}(a)
+    if !_rational_or_arrrational_symtype(a) || !_rational_or_arrrational_symtype(b)
+        throw(MethodError(//, (a, b)))
+    end
+    _fslash_worker(vartype(S), a, b)
+end
 
-/(a::NonTreeSym, b::Number) = (isone(abs(b)) ? b : (b isa Integer ? 1//b : inv(b))) * a
+function //(a::S, b::Union{Number,AbstractArray{<:Number}}) where {S <: NonTreeSym}
+    if !_rational_or_arrrational_symtype(a) || !_rational_or_arrrational_symtype(b)
+        throw(MethodError(//, (a, b)))
+    end
+    _fslash_worker(vartype(S), a, b)
+end
+function //(a::S, b::AbstractArray{S}) where {S <: NonTreeSym}
+    b = Const{vartype(S)}(b)
+    if !_rational_or_arrrational_symtype(a) || !_rational_or_arrrational_symtype(b)
+        throw(MethodError(//, (a, b)))
+    end
+    _fslash_worker(vartype(S), a, b)
+end
 
-//(a::Union{NonTreeSym, Number}, b::NonTreeSym) = a / b
+@noinline function throw_bad_dims(x, y)
+    throw(ArgumentError("""
+    Both arguments to \\ must have <= 2 dimensions. Found arguments with shapes $x and $y.
+    """))
+end
 
-//(a::NonTreeSym, b::Number) = (one(b) // b) * a
+@noinline function throw_scalar_rhs(x, y)
+    throw(ArgumentError("""
+    The second argument to \\ cannot be a scalar if the first argument is an array. Found
+    arguments with shapes $x and $y.
+    """))
+end
 
+@noinline function throw_first_dim_different(x, y)
+    throw(ArgumentError("""
+    The length of the first dimension of both arguments to \\ must be identical. Found
+    arguments with shapes $x and $y.
+    """))
+end
+
+# S = Scalar, * = Any, V = Vector, M = Matrix
+# S \ * -> *
+# V \ S -> ERR
+# V \ V -> S                        ; len(A) == len(B)
+# V \ M -> (1, shape(B, 2))         ; len(A) == size(B, 1)
+# M \ S -> ERR
+# M \ V -> (size(A, 2))             ; size(A, 1) == length(B)
+# M \ M -> (size(A, 2), size(B, 2)) ; size(A, 1) == size(B, 1)
+function promote_shape(::typeof(\), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    ndims_a = _ndims_from_shape(sha)
+    ndims_b = _ndims_from_shape(shb)
+    if sha isa Unknown && shb isa Unknown
+        sha.ndims <= 2 || throw_bad_dims(sha, shb)
+        shb.ndims <= 2 || throw_bad_dims(sha, shb)
+        sha.ndims == 0 && return Unknown(0)
+        shb.ndims == 0 && return Unknown(0)
+        sha.ndims == 1 && shb.ndims == 1 && return ShapeVecT()
+        return shb
+    elseif sha isa Unknown && shb isa ShapeVecT
+        sha.ndims <= 2 || throw_bad_dims(sha, shb)
+        length(shb) <= 2 || throw_bad_dims(sha, shb)
+        length(shb) == 0 && throw_scalar_rhs(sha, shb)
+        sha.ndims == 0 && return Unknown(0)
+        sha.ndims == 1 && ndims_b == 1 && return ShapeVecT()
+        sha.ndims == 1 && ndims_b == 2 && return ShapeVecT((1:1, shb[2]))
+        sha.ndims == 2 && return Unknown(ndims_b)
+        _unreachable()
+    elseif sha isa ShapeVecT && shb isa Unknown
+        shb.ndims == 0 && return Unknown(0)
+        ndims_a == 0 && return shb
+        ndims_a <= 2 || throw_bad_dims(sha, shb)
+        shb.ndims <= 2 || throw_bad_dims(sha, shb)
+        ndims_a == 1 && shb.ndims == 1 && return ShapeVecT()
+        ndims_a == 1 && shb.ndims == 2 && return shb
+        ndims_a == 2 && shb.ndims == 1 && return ShapeVecT((sha[1],))
+        ndims_a == 2 && shb.ndims == 2 && return shb
+        _unreachable()
+    elseif sha isa ShapeVecT && shb isa ShapeVecT
+        ndims_a == 0 && return shb
+        ndims_b == 0 && throw_scalar_rhs(sha, shb)
+        length(sha[1]) == length(shb[1]) || throw_first_dim_different(sha, shb)
+        ndims_a <= 2 || throw_bad_dims(sha, shb)
+        ndims_b <= 2 || throw_bad_dims(sha, shb)
+        if ndims_a == 1 && ndims_b == 1
+            return ShapeVecT()
+        elseif ndims_a == 1 && ndims_b == 2
+            return ShapeVecT((1:1, shb[2]))
+        elseif ndims_a == 2 && ndims_b == 1
+            return ShapeVecT((sha[2],))
+        elseif ndims_a == 2 && ndims_b == 2
+            return ShapeVecT((sha[2], shb[2]))
+        end
+        _unreachable()
+    end
+    _unreachable()
+end
+
+function _bslash_worker(::Type{T}, a, b) where {T}
+    if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
+        throw(MethodError(\, (a, b)))
+    end
+    if isconst(a) || isconst(b)
+        return Const{T}(unwrap_const(a) \ unwrap_const(b))
+    end
+    sha = shape(a)
+    type = promote_symtype(\, symtype(a), symtype(b))
+    newshape = promote_shape(\, shape(a), shape(b))
+    if _is_array_shape(newshape) || _is_array_shape(sha)
+        # Scalar \ Anything == Anything / Scalar
+        return Term{T}(\, ArgsT{T}((a, b)); type, shape = newshape)
+    else
+        return Div{T}(b, a, false; type, shape = newshape)
+    end
+end
+
+function \(a::Union{S,Number,AbstractArray{<:Number}}, b::S) where {S <: NonTreeSym}
+    _bslash_worker(vartype(S), a, b)
+end
+function \(a::T, b::Union{Number, <:AbstractArray{<:Number}}) where {T <: NonTreeSym}
+    _bslash_worker(vartype(T), a, b)
+end
+function \(a::AbstractArray{S}, b::S) where {S <: NonTreeSym}
+    a = Const{vartype(S)}(a)
+    _bslash_worker(vartype(S), a, b)
+end
+function \(a::T, b::AbstractArray{T}) where {T <: NonTreeSym}
+    b = Const{vartype(T)}(b)
+    _bslash_worker(vartype(T), a, b)
+end
 
 ###
 ### Pow
 ###
 
+@noinline function throw_matmatpow(x, y)
+    throw(ArgumentError("""
+    Cannot raise matrix to matrix power - tried to raise array of shape $x to array of \
+    shape $y.
+    """))
+end
+
+@noinline function throw_nonmatbase(x)
+    throw(ArgumentError("""
+    Matrices are the only arrays that can be raised to a power. Found array of shape $x.
+    """))
+end
+
+@noinline function throw_nonmatexp(x)
+    throw(ArgumentError("""
+    Matrices are the only arrays that can be an exponent. Found array of shape $x.
+    """))
+end
+
+@noinline function throw_nonsquarebase(x)
+    throw(ArgumentError("""
+    Only square matrices can be raised to a power. Found array of shape $x.
+    """))
+end
+
+@noinline function throw_nonsquareexp(x)
+    throw(ArgumentError("""
+    Only a square matrix can be an exponent. Found array of shape $x.
+    """))
+end
+
+function promote_shape(::typeof(^), sh1::ShapeT, sh2::ShapeT)
+    @nospecialize sh1 sh2
+    if sh1 isa Unknown && sh2 isa Unknown
+        throw_matmatpow(sh1, sh2)
+    elseif sh1 isa Unknown && sh2 isa ShapeVecT
+        isempty(sh2) || throw_matmatpow(sh1, sh2)
+        sh1.ndims == 2 || sh1.ndims == 0 || throw_nonmatbase(sh1)
+        return Unknown(2) # either the result is a matrix or the operation will error
+    elseif sh1 isa ShapeVecT && sh2 isa Unknown
+        isempty(sh1) || throw_matmatpow(sh1, sh2)
+        sh2.ndims == 2 || sh2.ndims == 0 || throw_nonmatexp(sh2)
+        return Unknown(2) # either the result is a matrix or the operation will error
+    elseif sh1 isa ShapeVecT && sh2 isa ShapeVecT
+        if isempty(sh1) && isempty(sh2)
+            return sh1
+        elseif isempty(sh1)
+            length(sh2) == 2 || throw_nonmatexp(sh2)
+            length(sh2[1]) == length(sh2[2]) || throw_nonsquareexp(sh2)
+            return sh2
+        elseif isempty(sh2)
+            length(sh1) == 2 || throw_nonmatbase(sh1)
+            length(sh1[1]) == length(sh1[2]) || throw_nonsquarebase(sh1)
+            return sh1
+        else
+            throw_matmatpow(sh1, sh2)
+        end
+    end
+end
+
 function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
+    if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(^, (a, b)))
     end
     isconst(a) && return Const{T}(^(unwrap_const(a), b))
-    a = unwrap_const(a)
     b = unwrap_const(unwrap(b))
+    sha = shape(a)
+    shb = shape(b)
+    newshape = promote_shape(^, sha, shb)
     type = promote_symtype(^, symtype(a), symtype(b))
+
+    if _is_array_shape(sha)
+        @match a begin
+            BSImpl.Term(; f, args) && if f === (^) && isconst(args[1]) end => begin
+                base, exp = args
+                return Term{T}(^, ArgsT{T}((base, exp * b)); type, shape = newshape)
+            end
+            BSImpl.Term(; f) && if f === (*) end => begin
+                coeff, rest = _split_arrterm_scalar_coeff(a)
+                if _isone(coeff)
+                    return Term{T}(^, ArgsT{T}((rest, Const{T}(b))); type, shape = newshape)
+                end
+                return coeff ^ b * rest ^ b
+            end
+            _ => return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
+        end
+    elseif _is_array_shape(shb)
+        return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
+    end
     if b isa Number
         iszero(b) && return Const{T}(1)
         isone(b) && return Const{T}(a)
@@ -1475,10 +2102,86 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
     return BSImpl.Term{T}(^, ArgsT{T}((a, Const{T}(b))); type)
 end
 
-function ^(a::Number, b::BasicSymbolic{T}) where {T}
-    if !(symtype(a) <: Number) || !(symtype(b) <: Number)
-        throw(MethodError(^, (a, b)))
-    end
+function ^(a::Union{Number, Matrix{<:Number}}, b::BasicSymbolic{T}) where {T}
+    _numeric_or_arrnumeric_symtype(b) || throw(MethodError(^, (a, b)))
+    newshape = promote_shape(^, shape(a), shape(b))
     type = promote_symtype(^, symtype(a), symtype(b))
-    Term{T}(^, ArgsT{T}((Const{T}(a), b)); type)
+    if _is_array_shape(newshape) && _isone(a)
+        if newshape isa Unknown
+            return Const{T}(LinearAlgebra.I)
+        else
+            return Const{T}(LinearAlgebra.I(length(newshape[1])))
+        end
+    end
+    Term{T}(^, ArgsT{T}((Const{T}(a), b)); type, shape = newshape)
 end
+function ^(a::Matrix{BasicSymbolic{T}}, b::BasicSymbolic{T}) where {T <: Union{SafeReal, SymReal}}
+    Const{T}(a) ^ b
+end
+function ^(a::BasicSymbolic{T}, b::Matrix{BasicSymbolic{T}}) where {T <: Union{SafeReal, SymReal}}
+    a ^ Const{T}(b)
+end
+
+@inline _indexed_ndims() = 0
+@inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)
+@inline _indexed_ndims(::Type{T}, rest...) where {eT <: Integer, T <: AbstractVector{eT}} = 1 + _indexed_ndims(rest...)
+@inline _indexed_ndims(::Type{Colon}, rest...) = 1 + _indexed_ndims(rest...)
+@inline _indexed_ndims(::Type{T}, rest...) where {T} = throw(ArgumentError("Invalid index type $T."))
+
+function promote_symtype(::typeof(getindex), ::Type{T}, Ts::Vararg{Any, N}) where {N, eT, T <: AbstractArray{eT, N}}
+    nD = _indexed_ndims(Ts...)
+    nD == 0 ? eT : Array{eT, nD}
+end
+
+function promote_symtype(::typeof(getindex), ::Type{T}, Ts...) where {T}
+    throw(ArgumentError("Symbolic `getindex` requires cartesian indexing."))
+end
+
+@noinline function throw_no_unknown_colon()
+    throw(ArgumentError("Cannot index array of unknown shape with `Colon` (`:`)."))
+end
+
+@noinline function throw_index_larger_than_shape(i, ii, shi)
+    throw(ArgumentError("""
+    Tried to index array whose `$i`th dimension has shape $shi with index $ii.
+    """))
+end
+
+@noinline function throw_not_array(x)
+    throw(ArgumentError("""
+    Cannot call `getindex` on non-array symbolics - found array of shape $x.
+    """))
+end
+
+function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
+    @nospecialize sharr
+    # `promote_symtype` rules out the presence of multidimensional indices - each index
+    # is either an integer, Colon or vector of integers.
+    _is_array_shape(sharr) || throw_not_array(sharr)
+    result = ShapeVecT()
+    for (i, idx) in enumerate(shidxs)
+        isempty(idx) && continue
+        idx[1] == 1:0 && sharr isa Unknown && throw_no_unknown_colon()
+        ii = idx[1] == 1:0 ? sharr[i] : 1:length(idx[1])
+        push!(result, ii)
+        if sharr isa ShapeVecT && length(ii) > length(sharr[i])
+            throw_index_larger_than_shape(i, ii, sharr[i])
+        end
+    end
+
+    return result
+end
+
+function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
+    throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
+end
+
+function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractArray{<:Integer}, Colon}...) where {T}
+    if isterm(arr) && operation(arr) === hvncat && !any(x -> x isa BasicSymbolic, idxs)
+        return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[idxs...])
+    end
+    type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
+    newshape = promote_shape(getindex, shape(arr), shape.(idxs)...)
+    return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
+end
+Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]

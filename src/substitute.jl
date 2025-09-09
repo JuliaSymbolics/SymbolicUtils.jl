@@ -87,3 +87,31 @@ function _occursin(needle, haystack)
     end
     return false
 end
+
+search_variables!(buffer, expr; kw...) = nothing
+
+function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = issym, recurse::G = iscall) where {F, G}
+    if is_atomic(expr)
+        push!(buffer, expr)
+        return
+    end
+    recurse(expr) || return
+    @match expr begin
+        BSImpl.Term(; f, args) => begin
+            search_variables!(buffer, f; is_atomic, recurse)
+            for arg in args
+                search_variables!(buffer, arg; is_atomic, recurse)
+            end
+        end
+        BSImpl.AddMul(; dict) => begin
+            for k in keys(dict)
+                search_variables!(buffer, k; is_atomic, recurse)
+            end
+        end
+        BSImpl.Div(; num, den) => begin
+            search_variables!(buffer, num; is_atomic, recurse)
+            search_variables!(buffer, den; is_atomic, recurse)
+        end
+    end
+    return nothing
+end

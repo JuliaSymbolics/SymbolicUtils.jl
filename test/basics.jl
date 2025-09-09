@@ -203,8 +203,28 @@ end
 
 @testset "array arithmetic" begin
     @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number} f[1:2, 1:2, 1:2] g[1:3, 1:3] h q[1:2, 1:3] x y z
-    symvec = [h, x]
-    symmat = [h x; y z]
+
+    @test_throws ErrorException BS[1, 2]
+    # getindex
+    @test BS{SymReal}[1, 2] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[1, a] isa Vector{BasicSymbolic{SymReal}}
+    # typed_vcat
+    @test BS{SymReal}[1; 2] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[1; a] isa Vector{BasicSymbolic{SymReal}}
+    # typed_hcat
+    @test BS{SymReal}[1 2] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1 a] isa Matrix{BasicSymbolic{SymReal}}
+    # typed_hvcat
+    @test BS{SymReal}[1 2; 3 4] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1 a; 3 4] isa Matrix{BasicSymbolic{SymReal}}
+    # typed_hvncat, ::Int
+    @test BS{SymReal}[1;; 2] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1;; a] isa Matrix{BasicSymbolic{SymReal}}
+    # typed_hvncat, ::Dims ::Bool
+    @test BS{SymReal}[1; 2;; 3; 4] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1; a;; 3; 4] isa Matrix{BasicSymbolic{SymReal}}
+    symvec = BS[h, x]
+    symmat = BS[h x; y z]
     @test symvec isa Vector{BasicSymbolic{SymReal}}
     @test symmat isa Matrix{BasicSymbolic{SymReal}}
     var = Const{SymReal}(symvec)

@@ -322,14 +322,7 @@ function _ndims_from_shape(sh::ShapeT)
     end
 end
 Base.ndims(x::BasicSymbolic) = _ndims_from_shape(shape(x))
-function Base.broadcastable(x::BasicSymbolic)
-    type = symtype(x)
-    if type <: Number
-        Ref(x)
-    else
-        x
-    end
-end
+Base.broadcastable(x::BasicSymbolic) = _is_array_shape(shape(x)) ? x : Ref(x)
 function Base.eachindex(x::BasicSymbolic)
     sh = shape(x)
     if sh isa Unknown
@@ -339,4 +332,131 @@ function Base.eachindex(x::BasicSymbolic)
 end
 function Base.collect(x::BasicSymbolic)
     [x[i] for i in eachindex(x)]
+end
+struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
+Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
+Broadcast.result_style(::SymBroadcast{T}) where {T} = SymBroadcast{T}()
+Broadcast.BroadcastStyle(::SymBroadcast{T}, ::Broadcast.BroadcastStyle) where {T} = SymBroadcast{T}()
+Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{T}) where {T} = SymBroadcast{T}()
+function Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{R}) where {T, R}
+    throw(ArgumentError("Cannot broadcast symbolics of different `vartype`s $T and $R."))
+end
+
+mutable struct BroadcastBuffer{T}
+    canonical_args::Vector{BasicSymbolic{T}}
+    args::ArgsT{T}
+    getindex_args::ArgsT{T}
+end
+
+BroadcastBuffer{T}() where {T} = BroadcastBuffer{T}(BasicSymbolic{T}[], ArgsT{T}(), ArgsT{T}())
+
+function Base.empty!(bb::BroadcastBuffer)
+    empty!(bb.canonical_args)
+    empty!(bb.args)
+    empty!(bb.getindex_args)
+    return bb
+end
+
+function maybe_reallocate_getindex_buffer!(bb::BroadcastBuffer{T}, term::BasicSymbolic{T}) where {T}
+    @match term begin
+        BSImpl.Term(; args) && if args === bb.getindex_args end => begin
+            bb.getindex_args = ArgsT{T}()
+        end
+        _ => empty!(bb.getindex_args)
+    end
+    return nothing
+end
+function maybe_reallocate_args_buffer!(bb::BroadcastBuffer{T}, term::BasicSymbolic{T}) where {T}
+    @match term begin
+        BSImpl.Term(; args) && if args === bb.args end => begin
+            bb.args = ArgsT{T}()
+        end
+        _ => empty!(bb.args)
+    end
+    return nothing
+end
+
+const SYMREAL_BROADCAST_BUFFER = TaskLocalValue{BroadcastBuffer{SymReal}}(BroadcastBuffer{SymReal})
+const SAFEREAL_BROADCAST_BUFFER = TaskLocalValue{BroadcastBuffer{SafeReal}}(BroadcastBuffer{SafeReal})
+const TREEREAL_BROADCAST_BUFFER = TaskLocalValue{BroadcastBuffer{TreeReal}}(BroadcastBuffer{TreeReal})
+
+broadcast_buffer(::Type{SymReal}) = SYMREAL_BROADCAST_BUFFER[]
+broadcast_buffer(::Type{SafeReal}) = SAFEREAL_BROADCAST_BUFFER[]
+broadcast_buffer(::Type{TreeReal}) = TREEREAL_BROADCAST_BUFFER[]
+
+function Broadcast.copy(bc::Broadcast.Broadcasted{SymBroadcast{T}}) where {T}
+    buffer = broadcast_buffer(T)
+    empty!(buffer)
+    _copy_broadcast!(buffer, bc)
+end
+
+function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{SymBroadcast{T}}) where {T}
+    offset = length(buffer.canonical_args)
+    for arg in bc.args
+        if arg isa Broadcast.Broadcasted
+            push!(buffer.canonical_args, _copy_broadcast!(buffer, Broadcast.instantiate(arg)))
+        elseif arg isa Base.RefValue
+            push!(buffer.canonical_args, Const{T}(arg[]))
+        else
+            push!(buffer.canonical_args, Const{T}(arg))
+        end
+    end
+    canonical_args = view(buffer.canonical_args, (offset+1):(offset+length(bc.args)))
+    # Do the thing here
+    ndim = length(bc.axes)
+    if ndim == 0
+        return maketerm(BasicSymbolic{T}, bc.f, bc.args, nothing)
+    end
+    subscripts = idxs_for_arrayop(T)
+
+    args = buffer.args
+
+    for arg in canonical_args
+        sh = shape(arg)
+        is_arr = _is_array_shape(sh)
+        if !is_arr
+            push!(args, arg)
+            continue
+        end
+        getindex_args = buffer.getindex_args
+        push!(getindex_args, arg)
+        if sh isa Unknown
+            # unknown ndims, assume full shape
+            limit = sh.ndims == -1 ? ndim : sh.ndims
+            for i in 1:limit
+                push!(getindex_args,  length(bc.axes[i]) == 1 ? Const{T}(1) : subscripts[i])
+            end
+        elseif sh isa ShapeVecT
+            for (i, (target_ax, cur_ax)) in enumerate(zip(bc.axes, sh))
+                len1 = length(cur_ax)
+                len2 = length(target_ax)
+                push!(getindex_args, len1 < len2 ? Const{T}(first(cur_ax)) : subscripts[i])
+            end
+        end
+        # manual construction is faster than calling `getindex`
+        indexed_arg = Term{T}(getindex, getindex_args; type = eltype(symtype(arg)), shape = ShapeVecT())
+        maybe_reallocate_getindex_buffer!(buffer, indexed_arg)
+        push!(args, indexed_arg)
+    end
+    output_idxs = OutIdxT{T}()
+    for (i, ax) in enumerate(bc.axes)
+        push!(output_idxs, length(ax) == 1 ? 1 : subscripts[i])
+    end
+    expr = maketerm(BasicSymbolic{T}, bc.f, args, nothing)
+    maybe_reallocate_args_buffer!(buffer, expr)
+    args = buffer.args
+    push!(args, Const{T}(bc.f))
+    for arg in canonical_args
+        push!(args, Const{T}(arg))
+    end
+    sh = ShapeVecT()
+    for ax in bc.axes
+        push!(sh, 1:length(ax))
+    end
+    type = Array{eltype(symtype(expr)), ndim}
+    term = Term{T}(broadcast, args; type, shape = sh)
+    maybe_reallocate_args_buffer!(buffer, term)
+    resize!(buffer.canonical_args, length(buffer.canonical_args) - length(bc.args))
+
+    return BSImpl.ArrayOp{T}(output_idxs, expr, +, term; type, shape = sh)
 end

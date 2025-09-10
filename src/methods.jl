@@ -296,7 +296,7 @@ function _size_from_shape(shape::ShapeT)
     if shape isa Unknown
         return shape
     else
-        return map(length, shape)
+        return Tuple(map(length, shape))
     end
 end
 Base.size(x::BasicSymbolic) = _size_from_shape(shape(x))

@@ -2467,6 +2467,8 @@ function promote_symtype(::typeof(getindex), ::Type{T}, Ts::Vararg{Any, N}) wher
     nD == 0 ? eT : Array{eT, nD}
 end
 
+promote_symtype(::typeof(getindex), ::Type{Symbol}, Ts...) = Any
+
 function promote_symtype(::typeof(getindex), ::Type{T}, Ts...) where {T}
     throw(ArgumentError("Symbolic `getindex` requires cartesian indexing."))
 end

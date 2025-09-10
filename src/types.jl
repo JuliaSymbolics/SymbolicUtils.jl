@@ -9,10 +9,15 @@ abstract type TreeReal <: SymVariant end
 ### Uni-type design
 ###
 
-# Unknown(0) is an array of unknown ndims
+# Unknown(-1) is an array of unknown ndims
 # Empty ShapeVecT is a scalar
 struct Unknown
     ndims::Int
+
+    function Unknown(x::Int)
+        x >= -1 || throw(ArgumentError("Unknown ndims must be -1."))
+        new(x)
+    end
 end
 
 const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
@@ -758,7 +763,7 @@ function parse_metadata(x)
 end
 
 default_shape(::Type{T}) where {E, N, T <: AbstractArray{E, N}} = Unknown(N)
-default_shape(::Type{T}) where {T <: AbstractArray} = Unknown(0)
+default_shape(::Type{T}) where {T <: AbstractArray} = Unknown(-1)
 default_shape(_) = ShapeVecT()
 
 Base.convert(::Type{B}, x) where {R, B <: BasicSymbolic{R}} = BSImpl.Const{R}(unwrap(x))
@@ -1482,7 +1487,7 @@ promote_symtype(f, Ts...) = Any
 
 The shape of the result of applying `f` to arguments of [`shape`](@ref) `shs...`.
 """
-promote_shape(f, szs::ShapeT...) = Unknown(0)
+promote_shape(f, szs::ShapeT...) = Unknown(-1)
 
 #---------------------------
 #---------------------------
@@ -1625,9 +1630,9 @@ function promote_shape(::typeof(+), sh1::ShapeT, sh2::ShapeT, shs::ShapeT...)
     @nospecialize sh1 sh2 shs
     nd1 = _ndims_from_shape(sh1)
     nd2 = _ndims_from_shape(sh2)
-    nd1 == nd2 || throw_unequal_shape_error(sh1, sh2)
+    nd1 == -1 || nd2 == -1 || nd1 == nd2 || throw_unequal_shape_error(sh1, sh2)
     if sh1 isa Unknown && sh2 isa Unknown
-        promote_shape(+, sh1, shs...)
+        promote_shape(+, Unknown(max(nd1, nd2)), shs...)
     elseif sh1 isa Unknown
         promote_shape(+, sh2, shs...)
     elseif sh2 isa Unknown
@@ -1677,7 +1682,7 @@ function _added_shape(terms::Tuple)
 end
 
 function _added_shape(terms)
-    isempty(terms) && return Unknown(0)
+    isempty(terms) && return Unknown(-1)
     length(terms) == 1 && return shape(terms[1])
     a, bs = Iterators.peel(terms)
     sh::ShapeT = shape(a)
@@ -1819,7 +1824,7 @@ function _multiplied_shape(shapes)
     shend::ShapeT = shapes[last_arr]
     ndims_1 = _ndims_from_shape(sh1)
     ndims_end = _ndims_from_shape(shend)
-    ndims_1 == 0 || ndims_1 == 2 || throw_expected_matrix(sh1)
+    ndims_1 == -1 || ndims_1 == 2 || throw_expected_matrix(sh1)
     ndims_end <= 2 || throw_expected_matvec(shend)
     if ndims_end == 1
         result = shend
@@ -2225,21 +2230,21 @@ function promote_shape(::typeof(\), sha::ShapeT, shb::ShapeT)
     if sha isa Unknown && shb isa Unknown
         sha.ndims <= 2 || throw_bad_dims(sha, shb)
         shb.ndims <= 2 || throw_bad_dims(sha, shb)
-        sha.ndims == 0 && return Unknown(0)
-        shb.ndims == 0 && return Unknown(0)
+        sha.ndims == -1 && return Unknown(-1)
+        shb.ndims == -1 && return Unknown(-1)
         sha.ndims == 1 && shb.ndims == 1 && return ShapeVecT()
         return shb
     elseif sha isa Unknown && shb isa ShapeVecT
         sha.ndims <= 2 || throw_bad_dims(sha, shb)
         length(shb) <= 2 || throw_bad_dims(sha, shb)
         length(shb) == 0 && throw_scalar_rhs(sha, shb)
-        sha.ndims == 0 && return Unknown(0)
+        sha.ndims == -1 && return Unknown(-1)
         sha.ndims == 1 && ndims_b == 1 && return ShapeVecT()
         sha.ndims == 1 && ndims_b == 2 && return ShapeVecT((1:1, shb[2]))
         sha.ndims == 2 && return Unknown(ndims_b)
         _unreachable()
     elseif sha isa ShapeVecT && shb isa Unknown
-        shb.ndims == 0 && return Unknown(0)
+        shb.ndims == -1 && return Unknown(-1)
         ndims_a == 0 && return shb
         ndims_a <= 2 || throw_bad_dims(sha, shb)
         shb.ndims <= 2 || throw_bad_dims(sha, shb)
@@ -2342,11 +2347,11 @@ function promote_shape(::typeof(^), sh1::ShapeT, sh2::ShapeT)
         throw_matmatpow(sh1, sh2)
     elseif sh1 isa Unknown && sh2 isa ShapeVecT
         isempty(sh2) || throw_matmatpow(sh1, sh2)
-        sh1.ndims == 2 || sh1.ndims == 0 || throw_nonmatbase(sh1)
+        sh1.ndims == 2 || sh1.ndims == -1 || throw_nonmatbase(sh1)
         return Unknown(2) # either the result is a matrix or the operation will error
     elseif sh1 isa ShapeVecT && sh2 isa Unknown
         isempty(sh1) || throw_matmatpow(sh1, sh2)
-        sh2.ndims == 2 || sh2.ndims == 0 || throw_nonmatexp(sh2)
+        sh2.ndims == 2 || sh2.ndims == -1 || throw_nonmatexp(sh2)
         return Unknown(2) # either the result is a matrix or the operation will error
     elseif sh1 isa ShapeVecT && sh2 isa ShapeVecT
         if isempty(sh1) && isempty(sh2)

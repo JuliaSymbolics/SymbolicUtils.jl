@@ -2479,9 +2479,18 @@ function promote_symtype(::typeof(getindex), ::Type{T}, Ts::Vararg{Any, N}) wher
     nD == 0 ? eT : Array{eT, nD}
 end
 
+function promote_symtype(::typeof(getindex), ::Type{T}, Ts...) where {eT, T <: AbstractArray{eT}}
+    nD = _indexed_ndims(Ts...)
+    nD == 0 ? eT : Array{eT, nD}
+end
+
+function promote_symtype(::typeof(getindex), ::Type{T}) where {T <: Number}
+    T
+end
+
 promote_symtype(::typeof(getindex), ::Type{Symbol}, Ts...) = Any
 
-function promote_symtype(::typeof(getindex), ::Type{T}, Ts...) where {T}
+function promote_symtype(::typeof(getindex), ::Type{T}, Ts...) where {N, eT, T <: AbstractArray{eT, N}}
     throw(ArgumentError("Symbolic `getindex` requires cartesian indexing."))
 end
 
@@ -2505,7 +2514,7 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
     @nospecialize sharr
     # `promote_symtype` rules out the presence of multidimensional indices - each index
     # is either an integer, Colon or vector of integers.
-    _is_array_shape(sharr) || throw_not_array(sharr)
+    _is_array_shape(sharr) || isempty(shidxs) || throw_not_array(sharr)
     result = ShapeVecT()
     for (i, idx) in enumerate(shidxs)
         isempty(idx) && continue

@@ -2693,6 +2693,7 @@ end
 
 function ^(a::Union{Number, Matrix{<:Number}}, b::BasicSymbolic{T}) where {T}
     _numeric_or_arrnumeric_symtype(b) || throw(MethodError(^, (a, b)))
+    isconst(b) && return Const{T}(a ^ unwrap_const(b))
     newshape = promote_shape(^, shape(a), shape(b))
     type = promote_symtype(^, symtype(a), symtype(b))
     if _is_array_shape(newshape) && _isone(a)

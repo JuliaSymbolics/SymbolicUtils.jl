@@ -1882,10 +1882,10 @@ function _multiplied_terms_shape(terms)
     return _multiplied_shape(shapes)
 end
 
-function _split_arrterm_scalar_coeff(term::BasicSymbolic{T}) where {T}
-    sh = shape(term)
-    _is_array_shape(sh) || return term, Const{T}(1)
-    @match term begin
+function _split_arrterm_scalar_coeff(ex::BasicSymbolic{T}) where {T}
+    sh = shape(ex)
+    _is_array_shape(sh) || return ex, Const{T}(1)
+    @match ex begin
         BSImpl.Term(; f, args, type) && if f === (*) && !_is_array_shape(shape(first(args))) end => begin
             if length(args) == 2
                 return args[1], args[2]
@@ -1898,7 +1898,31 @@ function _split_arrterm_scalar_coeff(term::BasicSymbolic{T}) where {T}
             end
             return coeff, Term{T}(f, rest; type, shape = sh)
         end
-        _ => (Const{T}(1), term)
+        BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type) => begin
+            coeff, rest = @match expr begin
+                BSImpl.Term(; f, args, type, shape) && if f === (*) end => begin
+                    if query!(isequal(idxs_for_arrayop(T)), args[1])
+                        Const{T}(1), expr
+                    elseif length(args) == 2
+                        args[1], args[2]
+                    else
+                        newargs = ArgsT{T}()
+                        _coeff, rest = Iterators.peel(args)
+                        append!(newargs, rest)
+                        _coeff, BSImpl.Term{T}(*, newargs; type, shape)
+                    end
+                end
+                _ => (Const{T}(1), expr)
+            end
+            if term === nothing
+                termrest = nothing
+            else
+                termcoeff, termrest = _split_arrterm_scalar_coeff(term)
+                @assert isequal(termcoeff, coeff)
+            end
+            return coeff, BSImpl.ArrayOp{T}(output_idx, rest, reduce, termrest, ranges; shape, type)
+        end
+        _ => (Const{T}(1), ex)
     end
 end
 
@@ -2039,7 +2063,8 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     result = Div{T}(num, den, false; type = eltype(type)::TypeT)
     if !isempty(arrterms)
         new_arrterms = ArgsT{T}()
-        if !_isone(result)
+        _nontrivial_coeff = !_isone(result)
+        if _nontrivial_coeff
             push!(new_arrterms, result)
         end
         fterm, rest = Iterators.peel(arrterms)
@@ -2055,9 +2080,43 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
             end
         end
         if length(new_arrterms) == 1
-            result = new_arrterms[1]
-        else
-            result = Term{T}(*, new_arrterms; type, shape = newshape)
+            return new_arrterms[1]
+        end
+        term = Term{T}(*, new_arrterms; type, shape = newshape)
+        if newshape === Unknown(-1)
+            return term
+        end
+        @match term begin
+            BSImpl.Term(; args) => begin
+                if args === new_arrterms
+                    new_arrterms = ArgsT{T}()
+                else
+                    empty!(new_arrterms)
+                end
+                offset = 0
+                if _nontrivial_coeff
+                    offset = 1
+                    push!(new_arrterms, result)
+                end
+                idxs = idxs_for_arrayop(T)
+                for i in (offset + 1):(length(args) - 1)
+                    push!(new_arrterms, args[i][idxs[i - offset], idxs[i - offset + 1]])
+                end
+                N = length(args)
+                if _ndims_from_shape(newshape) == 2
+                    push!(new_arrterms, last(args)[idxs[N - offset], idxs[N - offset + 1]])
+                    output_idxs = OutIdxT{T}((idxs[1], idxs[N - offset + 1]))
+                else
+                    push!(new_arrterms, last(args)[idxs[N - offset]])
+                    output_idxs = OutIdxT{T}((idxs[1],))
+                end
+                expr = if length(new_arrterms) == 1
+                    new_arrterms[1]
+                else
+                    Term{T}(*, new_arrterms; type = eltype(type), shape = ShapeVecT())
+                end
+                return BSImpl.ArrayOp{T}(output_idxs, expr, +, term; type, shape = newshape)
+            end
         end
     end
     return result

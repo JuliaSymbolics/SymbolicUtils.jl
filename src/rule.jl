@@ -135,7 +135,7 @@ function makepattern(expr, keys, parentCall=nothing)
                 end
             else
                 # make a pattern for every argument of the expr.
-                :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any))
+                :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any, shape=$ShapeVecT()))
             end
         elseif expr.head === :ref
             :(term(getindex, $(map(x->makepattern(x, keys), expr.args)...); type=Any))

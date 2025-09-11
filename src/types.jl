@@ -2208,7 +2208,7 @@ const SYMREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SymReal}}(MulWorkerBuff
 const SAFEREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SafeReal}}(MulWorkerBuffer{SafeReal})
 
 function (mwb::MulWorkerBuffer{T})(terms) where {T}
-    if !all(_numeric_or_arrnumeric_symtype, terms)
+    if !all(x -> _is_array_of_symbolics(x) || _numeric_or_arrnumeric_symtype(x), terms)
         throw(MethodError(*, Tuple(terms)))
     end
     isempty(terms) && return Const{T}(1)

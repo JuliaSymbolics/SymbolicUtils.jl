@@ -229,10 +229,10 @@ function Base.real(s::BasicSymbolic{T}) where {T}
 end
 promote_symtype(::typeof(Base.conj), T::Type{<:Number}) = T
 function Base.conj(s::BasicSymbolic{T}) where {T}
-    islike(s, Real) && return s
+    eltype(symtype(s)) <: Real && return s
     @match s begin
         BSImpl.Const(; val) => Const{T}(conj(val))
-        _ => Term{T}(conj, ArgsT{T}((s,)); type = symtype(s))
+        _ => Term{T}(conj, ArgsT{T}((s,)); type = symtype(s), shape = shape(s))
     end
 end
 promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real

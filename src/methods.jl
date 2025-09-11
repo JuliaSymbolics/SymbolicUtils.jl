@@ -334,13 +334,13 @@ end
 
 # An ifelse node
 function Base.ifelse(_if::BasicSymbolic{T}, _then::BasicSymbolic{T}, _else::BasicSymbolic{T}) where {T}
-    if symtype(_if) !== Bool
-        throw(MethodError(!, (_if, _then, _else)))
-    end
     type = Union{symtype(_then), symtype(_else)}
     Term{T}(ifelse, ArgsT{T}((_if, _then, _else)); type)
 end
-promote_symtype(::typeof(ifelse), _, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
+promote_symtype(::typeof(ifelse), ::Type{Bool}, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
+function promote_symtype(::typeof(ifelse), ::Type{B}, ::Type{T}, ::Type{S}) where {B, T,S}
+    throw(ArgumentError("Condition of `ifelse` must be a `Bool`"))
+end
 
 # Array-like operations
 function _size_from_shape(shape::ShapeT)

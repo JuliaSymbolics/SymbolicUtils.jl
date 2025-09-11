@@ -103,7 +103,11 @@ end
 function show_ref(io, f, args)
     x = args[1]
     idx = args[2:end]
-
+    if issym(x) && nameof(x) == IDXS_SYM
+        @assert length(idx) == 1
+        print(io, "_", idx[1])
+        return
+    end
     iscall(x) && print(io, "(")
     print(io, x)
     iscall(x) && print(io, ")")
@@ -167,6 +171,23 @@ function show_term(io::IO, t)
     return nothing
 end
 
+const SHOW_ARRAYOP = Ref{Bool}(false)
+function show_arrayop(io::IO, aop::BasicSymbolic)
+    if iscall(aop.term) && !SHOW_ARRAYOP[]
+        show(io, aop.term)
+    else
+        print(io, "@arrayop")
+        print(io, "(_[$(join(string.(aop.output_idx), ","))] := $(aop.expr))")
+        if aop.reduce != +
+            print(io, " ($(aop.reduce))")
+        end
+
+        if !isempty(aop.ranges)
+            print(io, " ", join(["$k in $v" for (k, v) in aop.ranges], ", "))
+        end
+    end
+end
+
 """
     showraw([io::IO], t)
 
@@ -207,6 +228,8 @@ function Base.show(io::IO, v::BSImpl.Type)
         if v isa Complex
             printstyled(io, ")"; color = :blue)
         end
+    elseif isarrayop(v)
+        show_arrayop(io, v)
     else
         show_term(io, v)
     end

@@ -63,6 +63,14 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
     rw(expr)
 end
 
+@inline function substitute(expr::AbstractArray, dict; fold=true)
+    if _is_array_of_symbolics(expr)
+        [substitute(x, dict; fold) for x in expr]
+    else
+        expr
+    end
+end
+
 """
     occursin(needle::BasicSymbolic, haystack::BasicSymbolic)
 
@@ -87,3 +95,91 @@ function _occursin(needle, haystack)
     end
     return false
 end
+
+function query!(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
+    predicate(expr) && return true
+    recurse(expr) || return default
+
+    @match expr begin
+        BSImpl.Term(; f, args) => any(args) do arg
+            query!(predicate, arg; recurse, default)
+        end
+        BSImpl.AddMul(; dict) => any(keys(dict)) do arg
+            query!(predicate, arg; recurse, default)
+        end
+        BSImpl.Div(; num, den) => query!(predicate, num; recurse, default) || query!(predicate, den; recurse, default)
+    end
+end
+
+search_variables!(buffer, expr; kw...) = nothing
+
+function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = issym, recurse::G = iscall) where {F, G}
+    if is_atomic(expr)
+        push!(buffer, expr)
+        return
+    end
+    recurse(expr) || return
+    @match expr begin
+        BSImpl.Term(; f, args) => begin
+            search_variables!(buffer, f; is_atomic, recurse)
+            for arg in args
+                search_variables!(buffer, arg; is_atomic, recurse)
+            end
+        end
+        BSImpl.AddMul(; dict) => begin
+            for k in keys(dict)
+                search_variables!(buffer, k; is_atomic, recurse)
+            end
+        end
+        BSImpl.Div(; num, den) => begin
+            search_variables!(buffer, num; is_atomic, recurse)
+            search_variables!(buffer, den; is_atomic, recurse)
+        end
+    end
+    return nothing
+end
+
+function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce; subrules = Dict()) where {T}
+    new_ranges = RangesT{T}()
+    new_expr = Code.unidealize_indices(expr, ranges, new_ranges)
+    merge!(new_ranges, ranges)
+    collapsed = setdiff(collect(keys(new_ranges)), output_idx)
+    collapsed_ranges = [new_ranges[k] for k in collapsed]
+    return mapreduce(reduce, Iterators.product(collapsed_ranges...)) do iidxs
+        for (idx, ii) in zip(iidxs, collapsed)
+            subrules[ii] = idx
+        end
+        return substitute(new_expr, subrules; fold = true)
+    end
+    
+end
+
+function scalarize(x::BasicSymbolic{T}) where {T}
+    sh = shape(x)
+    sh isa Unknown && return x
+    @match x begin
+        BSImpl.Const(; val) => _is_array_shape(sh) ? Const{T}.(val) : x
+        BSImpl.Sym(;) => _is_array_shape(sh) ? collect(x) : x
+        BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
+            term === nothing || return scalarize(term)
+            subrules = Dict()
+            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce; subrules)
+            empty!(subrules)
+            map(Iterators.product(sh...)) do idxs
+                for (i, ii) in enumerate(output_idx)
+                    ii isa Int && continue
+                    subrules[ii] = idxs[i]
+                end
+                scalarize(substitute(new_expr, subrules; fold = true))
+            end
+        end
+        _ => begin
+            f = operation(x)
+            f === inv && _is_array_shape(sh) && return collect(x)
+            f isa BasicSymbolic{T} && return collect(x)
+            args = arguments(x)
+            f(map(unwrap_const ∘ scalarize, args)...)
+        end
+    end
+end
+scalarize(arr::Array) = map(scalarize, arr)

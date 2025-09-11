@@ -88,7 +88,7 @@ Base.@nospecializeinfer function _name_type_shape(x)
         shape = Expr(:call, ShapeVecT, Expr(:tuple, x.args[2:end]...))
         ntype = nts.type
         if Meta.isexpr(ntype, :curly) && ntype.args[1] === FnType
-            ntype.args[3] = :($Array{$(ntype.args[2]), $(length(x.args) - 1)})
+            ntype.args[3] = :($Array{$(ntype.args[3]), $(length(x.args) - 1)})
         else
             ntype = :($Array{$ntype, $(length(x.args) - 1)})
         end

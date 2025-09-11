@@ -1504,9 +1504,9 @@ julia> term(^, x, 2)
 x^2
 ```
 """
-function term(f, args...; vartype = SymReal, type = promote_symtype(f, symtype.(args)...))
+function term(f, args...; vartype = SymReal, type = promote_symtype(f, symtype.(args)...), shape = promote_shape(f, SymbolicUtils.shape.(args)...))
     @nospecialize f
-    Term{vartype}(f, args; type)
+    Term{vartype}(f, args; type, shape)
 end
 
 function TermInterface.maketerm(::Type{BasicSymbolic{T}}, head, args, metadata; type = _promote_symtype(head, args)) where {T}

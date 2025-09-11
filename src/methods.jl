@@ -243,7 +243,47 @@ function Base.imag(s::BasicSymbolic{T}) where {T}
         _ => Term{T}(imag, ArgsT{T}((s,)); type = Real)
     end
 end
-Base.adjoint(s::BasicSymbolic) = conj(s)
+
+promote_symtype(::typeof(adjoint), ::Type{T}) where {T <: Number} = T
+function promote_symtype(::typeof(adjoint), ::Type{T}) where {eT <: Number, T <: AbstractVecOrMat{eT}}
+    Matrix{eT}
+end
+
+@noinline function _throw_adjont_vec_or_mat(sh)
+    throw(ArgumentError("""
+    `adjoint` is only applicable to vectors and matrices - found argument of shape $sh.
+    """))
+end
+
+function promote_shape(::typeof(adjoint), sh::ShapeT)
+    ndims = _ndims_from_shape(sh)
+    ndims > 2 && _throw_adjont_vec_or_mat(sh)
+    if sh isa Unknown
+        ndims == 0 && _throw_adjont_vec_or_mat(sh)
+        return Unknown(2)
+    elseif sh isa ShapeVecT
+        ndims == 0 && return ShapeVecT()
+        return ShapeVecT((ndims == 1 ? (1:1) : sh[2], sh[1]))
+    end
+end
+
+function Base.adjoint(s::BasicSymbolic{T}) where {T}
+    @match s begin
+        BSImpl.Const(; val) => return Const{T}(adjoint(val))
+        _ => nothing
+    end
+    sh = shape(s)
+    stype = symtype(s)
+    if _is_array_shape(sh)
+        type = promote_symtype(adjoint, stype)
+        newsh = promote_shape(adjoint, sh)
+        return Term{T}(adjoint, ArgsT{T}((s,)); type, shape = newsh)
+    elseif stype <: Real
+        return s
+    else
+        return Term{T}(conj, ArgsT{T}((s,)); type = stype, shape = sh)
+    end
+end
 
 
 ## Booleans

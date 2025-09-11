@@ -1839,7 +1839,7 @@ function _multiplied_shape(shapes)
     ndims_1 == -1 || ndims_1 == 2 || throw_expected_matrix(sh1)
     ndims_end <= 2 || throw_expected_matvec(shend)
     if ndims_end == 1
-        result = shend
+        result = sh1 isa Unknown ? Unknown(1) : ShapeVecT((sh1[1],))
     elseif sh1 isa Unknown || shend isa Unknown
         result = Unknown(ndims_end)
     else

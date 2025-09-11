@@ -2773,6 +2773,24 @@ function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int,
     end
     type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
     newshape = promote_shape(getindex, shape(arr), shape.(idxs)...)
+    if !_is_array_shape(newshape)
+        @match arr begin
+            BSImpl.ArrayOp(; output_idx, expr, ranges, reduce) => begin
+                subrules = Dict()
+                new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce; subrules)
+                empty!(subrules)
+                for (i, ii) in enumerate(output_idx)
+                    ii isa Int && continue
+                    subrules[ii] = idxs[i]
+                end
+                return substitute(new_expr, subrules; fold = false)
+            end
+            _ => nothing
+        end
+    end
     return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
 end
 Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]
+function Base.getindex(x::AbstractArray, idx::BasicSymbolic{T}, idxs::BasicSymbolic{T}...) where {T}
+    getindex(Const{T}(x), idx, idxs...)
+end

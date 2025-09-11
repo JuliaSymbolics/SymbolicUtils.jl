@@ -96,6 +96,21 @@ function _occursin(needle, haystack)
     return false
 end
 
+function query!(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
+    predicate(expr) && return true
+    recurse(expr) || return default
+
+    @match expr begin
+        BSImpl.Term(; f, args) => any(args) do arg
+            query!(predicate, arg; recurse, default)
+        end
+        BSImpl.AddMul(; dict) => any(keys(dict)) do arg
+            query!(predicate, arg; recurse, default)
+        end
+        BSImpl.Div(; num, den) => query!(predicate, num; recurse, default) || query!(predicate, den; recurse, default)
+    end
+end
+
 search_variables!(buffer, expr; kw...) = nothing
 
 function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = issym, recurse::G = iscall) where {F, G}

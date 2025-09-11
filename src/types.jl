@@ -221,7 +221,19 @@ Base.@nospecializeinfer @generated function _shape_notsymbolic(x)
     end
     push!(cur_expr.args, :(x isa $(LinearAlgebra.UniformScaling)))
     push!(cur_expr.args, Unknown(2))
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
+    push!(cur_expr.args, :(x isa $(Number)))
+    push!(cur_expr.args, ShapeVecT())
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
+    push!(cur_expr.args, :(x isa $(AbstractArray)))
     push!(cur_expr.args, :($ShapeVecT(axes(x))))
+    push!(cur_expr.args, :($ShapeVecT()))
     quote
         @nospecialize x
         $expr

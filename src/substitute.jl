@@ -123,3 +123,48 @@ function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = issym, re
     end
     return nothing
 end
+
+function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce; subrules = Dict()) where {T}
+    new_ranges = RangesT{T}()
+    new_expr = Code.unidealize_indices(expr, ranges, new_ranges)
+    merge!(new_ranges, ranges)
+    collapsed = setdiff(collect(keys(new_ranges)), output_idx)
+    collapsed_ranges = [new_ranges[k] for k in collapsed]
+    return mapreduce(reduce, Iterators.product(collapsed_ranges...)) do iidxs
+        for (idx, ii) in zip(iidxs, collapsed)
+            subrules[ii] = idx
+        end
+        return substitute(new_expr, subrules; fold = true)
+    end
+    
+end
+
+function scalarize(x::BasicSymbolic{T}) where {T}
+    sh = shape(x)
+    sh isa Unknown && return x
+    @match x begin
+        BSImpl.Const(; val) => _is_array_shape(sh) ? Const{T}.(val) : x
+        BSImpl.Sym(;) => _is_array_shape(sh) ? collect(x) : x
+        BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
+            term === nothing || return scalarize(term)
+            subrules = Dict()
+            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce; subrules)
+            empty!(subrules)
+            map(Iterators.product(sh...)) do idxs
+                for (i, ii) in enumerate(output_idx)
+                    ii isa Int && continue
+                    subrules[ii] = idxs[i]
+                end
+                scalarize(substitute(new_expr, subrules; fold = true))
+            end
+        end
+        _ => begin
+            f = operation(x)
+            f === inv && _is_array_shape(sh) && return collect(x)
+            f isa BasicSymbolic{T} && return collect(x)
+            args = arguments(x)
+            f(map(unwrap_const ∘ scalarize, args)...)
+        end
+    end
+end
+scalarize(arr::Array) = map(scalarize, arr)

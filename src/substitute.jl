@@ -63,6 +63,14 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
     rw(expr)
 end
 
+@inline function substitute(expr::AbstractArray, dict; fold=true)
+    if _is_array_of_symbolics(expr)
+        [substitute(x, dict; fold) for x in expr]
+    else
+        expr
+    end
+end
+
 """
     occursin(needle::BasicSymbolic, haystack::BasicSymbolic)
 

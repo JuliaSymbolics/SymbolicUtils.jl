@@ -6,6 +6,7 @@ using Pkg, Test, SafeTestsets
     else
         @safetestset "Doc" begin include("doctest.jl") end
         @safetestset "Basics" begin include("basics.jl") end
+        @safetestset "Basics" begin include("arrayop.jl") end
         @safetestset "Order" begin include("order.jl") end
         @safetestset "PolyForm" begin include("polyform.jl") end
         @safetestset "Rewrite" begin include("rewrite.jl") end

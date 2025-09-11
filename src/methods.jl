@@ -184,11 +184,23 @@ function Base.rem2pi(x::BasicSymbolic{T}, mode::Base.RoundingMode) where {T}
     return Term{T}(rem2pi, ArgsT{T}((x, Const{T}(mode))); type)
 end
 
+promote_symtype(::typeof(inv), ::Type{T}) where {T <: Number} = promote_symtype(/, T, T)
+function promote_symtype(::typeof(inv), ::Type{T}) where {eT <: Number, T <: AbstractMatrix{eT}}
+    Matrix{promote_symtype(/, eT, eT)}
+end
+function promote_symtype(::typeof(inv), ::Type{T}) where {T}
+    error("Cannot call `inv` on $T.")
+end
+
 # Specially handle inv and literal pow
 function Base.inv(x::BasicSymbolic{T}) where {T}
-    type = symtype(x)
-    type <: Number || error_f_symbolic(inv, type)
-    return Const{T}(x ^ -1)
+    sh = shape(x)
+    type = promote_symtype(inv, symtype(x))
+    if _is_array_shape(sh)
+        return Term{T}(inv, ArgsT{T}((x,)); type = type, shape = sh)
+    else
+        return x ^ (-1)
+    end
 end
 function Base.literal_pow(::typeof(^), x::BasicSymbolic{T}, ::Val{p}) where {T, p}
     _numeric_or_arrnumeric_symtype(x) || error_f_symbolic(^, symtype(x))

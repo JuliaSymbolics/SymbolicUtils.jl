@@ -176,8 +176,49 @@ end
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
+@noinline function _throw_array(f, shs...)
+    throw(ArgumentError("Invalid shapes for $f: $shs."))
+end
+
+for f in diadic
+    f === NaNMath.pow && continue
+    @eval function promote_shape(::$(typeof(f)), sh1::ShapeT, sh2::ShapeT)
+        @nospecialize sh1 sh2
+        _is_array_shape(sh1) && _throw_array($f, sh1, sh2)
+        _is_array_shape(sh2) && _throw_array($f, sh1, sh2)
+        return ShapeVecT()
+    end
+end
+promote_shape(::typeof(NaNMath.pow), @nospecialize(shs::ShapeT...)) = promote_shape(^, shs...)
+
+for f in monadic
+    if f === log || f === NaNMath.log
+        @eval function promote_shape(::$(typeof(f)), sh::ShapeT)
+            @nospecialize sh
+            if sh isa Unknown
+                sh.ndims == -1 && return sh
+                sh.ndims == 2 && return sh
+            elseif sh isa ShapeVecT
+                length(sh) == 0 && return sh
+                length(sh) == 2 && return sh
+            end
+            _throw_array($f, sh)
+        end
+    else
+        @eval function promote_shape(::$(typeof(f)), sh::ShapeT)
+            @nospecialize sh
+            _is_array_shape(sh) && _throw_array($f, sh)
+            return ShapeVecT()
+        end
+    end
+end
+
 error_f_symbolic(f, T) = error("$f is not defined for T.")
 
+function promote_shape(::typeof(rem2pi), sha::ShapeT, shb::ShapeT)
+    _is_array_shape(sha) && _throw_array(rem2pi, sha, shb)
+    ShapeVecT()
+end
 function Base.rem2pi(x::BasicSymbolic{T}, mode::Base.RoundingMode) where {T}
     type = symtype(x)
     type <: Number || error_f_symbolic(rem2pi, type)
@@ -190,6 +231,17 @@ function promote_symtype(::typeof(inv), ::Type{T}) where {eT <: Number, T <: Abs
 end
 function promote_symtype(::typeof(inv), ::Type{T}) where {T}
     error("Cannot call `inv` on $T.")
+end
+function promote_shape(::typeof(inv), sh::ShapeT)
+    @nospecialize sh
+    if sh isa Unknown
+        sh.ndims == -1 && return sh
+        sh.ndims == 2 && return sh
+    elseif sh isa ShapeVecT
+        length(sh) == 0 && return sh
+        length(sh) == 2 && return ShapeVecT((sh[2], sh[1]))
+    end
+    _throw_array(inv, sh)
 end
 
 # Specially handle inv and literal pow

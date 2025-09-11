@@ -140,25 +140,25 @@ function term_matcher_constructor(term, acSets)
             if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && isequal(arguments(arguments(data)[1])[1], 1)
                 # if data is of the alternative form (1/...)^(...)
                 one_over_smth = arguments(data)[1]
-                T = symtype(one_over_smth)
+                T = vartype(one_over_smth)
                 frankestein = Term{T}(^, [arguments(one_over_smth)[2], -arguments(data)[2]])
             elseif (operation(data) === /) && isequal(arguments(data)[1], 1) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
                 # if data is of the alternative form 1/(...)^(...)
                 denominator = arguments(data)[2]
-                T = symtype(denominator)
+                T = vartype(denominator)
                 frankestein = Term{T}(^, [arguments(denominator)[1], -arguments(denominator)[2]])
             elseif (operation(data) === /) && isequal(arguments(data)[1], 1)
                 # if data is of the alternative form 1/(...), it might match with exponent = -1
                 denominator = arguments(data)[2]
-                T = symtype(denominator)
+                T = vartype(denominator)
                 frankestein = Term{T}(^, [denominator, -1])
             elseif operation(data)===exp
                 # if data is a exp call, it might match with base e
-                T = symtype(arguments(data)[1])
+                T = vartype(arguments(data)[1])
                 frankestein = Term{T}(^,[ℯ, arguments(data)[1]])
             elseif operation(data)===sqrt
                 # if data is a sqrt call, it might match with exponent 1//2
-                T = symtype(arguments(data)[1])
+                T = vartype(arguments(data)[1])
                 frankestein = Term{T}(^,[arguments(data)[1], 1//2])
             end
 
@@ -183,8 +183,8 @@ function term_matcher_constructor(term, acSets)
             !has_segment && length(matchers)-1 !== length(data_args) && return nothing
 
             
-            T = symtype(data)
-            if T <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
+            T = vartype(data)
+            if symtype(data) <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
                 f = operation(data)
                 
                 for inds in acSets(eachindex(data_args), length(data_args))
@@ -214,7 +214,7 @@ function term_matcher_constructor(term, acSets)
             result !== nothing && return success(result, 1)
 
             if (operation(data) === ^) && (arguments(data)[2] === 1//2)
-                T = symtype(arguments(data)[1])
+                T = vartype(arguments(data)[1])
                 frankestein = Term{T}(sqrt,[arguments(data)[1]])
                 result = loop(frankestein, bindings, matchers)
                 result !== nothing && return success(result, 1)
@@ -234,7 +234,7 @@ function term_matcher_constructor(term, acSets)
             result !== nothing && return success(result, 1)
 
             if (operation(data) === ^) && (arguments(data)[1] === ℯ)
-                T = symtype(arguments(data)[2])
+                T = vartype(arguments(data)[2])
                 frankestein = Term{T}(exp,[arguments(data)[2]])
                 result = loop(frankestein, bindings, matchers)
                 result !== nothing && return success(result, 1)
@@ -273,7 +273,7 @@ function defslot_term_matcher_constructor(term, acSets)
         # (because ^ cannot have more than 2 terms).
         # creates the term matcher of the multiplication or sum of n-1 terms
         others = [a[i] for i in eachindex(a) if i != defslot_index]
-        T = symtype(term)
+        T = vartype(term)
         f = operation(term)
         other_part_matcher = term_matcher_constructor(Term{T}(f, others), acSets)
     end

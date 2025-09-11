@@ -385,6 +385,19 @@ end
 function Base.collect(x::BasicSymbolic)
     [x[i] for i in eachindex(x)]
 end
+function Base.iterate(x::BasicSymbolic)
+    sh = shape(x)
+    _is_array_shape(sh) || return x, nothing
+    idxs = eachindex(x)
+    idx, state = iterate(idxs)
+    return x[idx], (idxs, state)
+end
+function Base.iterate(x::BasicSymbolic, _state)
+    idxs, state = _state
+    idx, state = iterate(idxs, state)
+    return x[idx], (idxs, state)
+end
+
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
 Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
 Broadcast.result_style(::SymBroadcast{T}) where {T} = SymBroadcast{T}()

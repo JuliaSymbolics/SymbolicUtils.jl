@@ -35,9 +35,6 @@ import MutableArithmetics as MA
 import LinearAlgebra
 import SparseArrays: SparseMatrixCSC, findnz
 
-function hash2 end
-function isequal_with_metadata end
-
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)
     @assert val.args[1] == :(=>)

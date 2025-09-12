@@ -98,22 +98,46 @@ end
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a),)); type = promote_symtype(f, symtype(a))),
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a), Const{TreeReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))))
 
-for f in vcat(diadic, [+, -, *, \, /, ^])
+for f in vcat(diadic, [+, -, *, ^])
     @eval promote_symtype(::$(typeof(f)),
-                   T::Type{<:Number},
-                   S::Type{<:Number}) = promote_type(T, S)
+                   ::Type{T},
+                   ::Type{S}) where {T <: Number, S <: Number} = promote_type(T, S)
     @eval promote_symtype(::$(typeof(f)),
-                   T::Type{<:Rational},
-                   S::Type{Integer}) = Rational
+                   ::Type{T},
+                   ::Type{S}) where {eT, T <: Rational{eT}, S <: Integer} = Real
     @eval promote_symtype(::$(typeof(f)),
-                   T::Type{Integer},
-                   S::Type{<:Rational}) = Rational
+                   ::Type{T},
+                   ::Type{S}) where {T <: Integer, eS, S <: Rational{eS}} = Real
     @eval promote_symtype(::$(typeof(f)),
-                   T::Type{<:Complex{<:Rational}},
-                   S::Type{Integer}) = Complex{Rational}
+                   ::Type{T},
+                   ::Type{S}) where {eT, T <: Complex{Rational{eT}}, S <: Integer} = Complex{Real}
     @eval promote_symtype(::$(typeof(f)),
-                   T::Type{Integer},
-                   S::Type{<:Complex{<:Rational}}) = Complex{Rational}
+                   ::Type{T},
+                   ::Type{S}) where {T <: Integer, eS, S <: Complex{Rational{eS}}} = Complex{Real}
+end
+
+for f in [/, \]
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Number, S <: Number} = promote_type(T, S)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Integer, S <: Integer} = Real
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Rational, S <: Integer} = Real
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Integer, S <: Rational} = Real
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {eT, T <: Complex{eT}, S <: Union{Integer, Rational}} = Complex{promote_type(eT, Real)}
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Union{Integer, Rational}, eS, S <: Complex{eS}} = Complex{promote_type(Real, eS)}
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {eT, T <: Complex{eT}, eS, S <: Complex{eS}} = Complex{promote_type(promote_type(eT, eS), Real)}
 end
 
 function promote_symtype(::typeof(+), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, eS <: Number, S <: AbstractArray{eS, N}}

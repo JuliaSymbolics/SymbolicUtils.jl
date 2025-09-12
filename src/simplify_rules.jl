@@ -99,6 +99,12 @@ let
         @acrule(cosh(~x)^2 + sinh(~x)^2 => cosh(2 * ~x))
         @acrule(cosh(~x) * sinh(~x) => sinh(2 * ~x)/2)
 
+        # Trigonometric product-to-sum identities
+        @acrule(cos(~x) * cos(~y) => (cos(~x - ~y) + cos(~x + ~y)) / 2)
+        @acrule(sin(~x) * sin(~y) => (cos(~x - ~y) - cos(~x + ~y)) / 2)
+        @acrule(sin(~x) * cos(~y) => (sin(~x + ~y) + sin(~x - ~y)) / 2)
+        @acrule(cos(~x) * sin(~y) => (sin(~x + ~y) - sin(~x - ~y)) / 2)
+
         @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y))
         @rule(exp(~x)^(~y) => exp(~x * ~y))
     ]

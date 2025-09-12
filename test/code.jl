@@ -20,11 +20,11 @@ nanmath_st.rewrites[:nanmath] = true
     @test toexpr(a*b*c*d*e) == :($(*)($(*)($(*)($(*)(a, b), c), d), e))
     @test toexpr(a+b+c+d+e) == :($(+)($(+)($(+)($(+)(a, b), c), d), e))
     @test toexpr(a+b) == :($(+)(a, b))
-    @test toexpr(x(t)+y(t)) == :($(+)(y(t), x(t)))
-    @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)($(+)(x($(+)(1, t)), y(t)), x(t)))
+    @test toexpr(x(t)+y(t)) == :($(+)(x(t), y(t)))
+    @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)($(+)(x(t), y(t)), x($(+)(1, t))))
     s = LazyState()
     Code.union_rewrites!(s.rewrites, [x(t), y(t)])
-    @test toexpr(x(t)+y(t)+x(t+1), s) == :($(+)($(+)(x($(+)(1, t)), var"y(t)"), var"x(t)"))
+    @test toexpr(x(t)+y(t)+x(t+1), s) == :($(+)($(+)(var"x(t)", var"y(t)"), x($(+)(1, t))))
 
     ex = :(let a = 3, b = $(+)(1,a)
                $(+)(a, b)
@@ -38,7 +38,7 @@ nanmath_st.rewrites[:nanmath] = true
 
     test_repr(toexpr(Func([x(t), x],[b ← a+2, y(t) ← b], x(t)+x(t+1)+b+y(t))),
               :(function (var"x(t)", x; b = $(+)(2, a), var"y(t)" = b)
-                    $(+)($(+)($(+)(b, x($(+)(1, t))), var"y(t)"), var"x(t)")
+                    $(+)($(+)($(+)(b, var"x(t)"), var"y(t)"), x($(+)(1, t)))
                 end))
     test_repr(toexpr(Func([DestructuredArgs([x, x(t)], :state),
                            DestructuredArgs((a, b), :params)], [],
@@ -49,7 +49,7 @@ nanmath_st.rewrites[:nanmath] = true
                         var"x(t)" = state[2]
                         a = params[1]
                         b = params[2]
-                        $(+)($(+)($(+)(a, b), x($(+)(1, t))), var"x(t)")
+                        $(+)($(+)($(+)(a, b), var"x(t)"), x($(+)(1, t)))
                     end
                 end))
 
@@ -58,7 +58,7 @@ nanmath_st.rewrites[:nanmath] = true
                           x(t+1) + x(t) + a  + b)),
               :(function (state, params)
                     begin
-                        $(+)($(+)($(+)(params[1], params[2]), state[1]($(+)(1, t))), state[2])
+                        $(+)($(+)($(+)(params[1], params[2]), state[2]), state[1]($(+)(1, t)))
                     end
                 end))
 

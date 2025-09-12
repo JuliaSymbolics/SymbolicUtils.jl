@@ -24,7 +24,7 @@ const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
 const SmallV{T} = SmallVec{T, Vector{T}}
 const ShapeVecT = SmallV{UnitRange{Int}}
 const ShapeT = Union{Unknown, ShapeVecT}
-const IdentT = Union{Tuple{UInt, IDType}, Tuple{Nothing, Nothing}}
+const IdentT = Union{IDType, Nothing}
 const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
 const PolyVarOrder = DP.Commutative{DP.CreationOrder}
 const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=MonomialOrder)
@@ -274,22 +274,22 @@ override_properties(obj::BSImpl.Type) = override_properties(MData.variant_type(o
 
 function override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
-        ::Type{<:BSImpl.Const} => (; id = (nothing, nothing))
-        ::Type{<:BSImpl.Sym} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.AddMul} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.Term} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.Div} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.ArrayOp} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Const} => (; id = nothing)
+        ::Type{<:BSImpl.Sym} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.AddMul} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Term} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Div} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.ArrayOp} => (; id = nothing, hash = 0, hash2 = 0)
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
 
-ordered_override_properties(::Type{<:BSImpl.Const}) = ((nothing, nothing),)
-ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, 0, (nothing, nothing))
-ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, (nothing, nothing))
-ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsT{T}(), 0, 0, (nothing, nothing))
-ordered_override_properties(::Type{<:BSImpl.Div}) = (0, 0, (nothing, nothing))
-ordered_override_properties(::Type{<:BSImpl.ArrayOp{T}}) where {T} = (ArgsT{T}(), 0, 0, (nothing, nothing))
+ordered_override_properties(::Type{<:BSImpl.Const}) = (nothing,)
+ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, nothing)
+ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.Div}) = (0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.ArrayOp{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
 
 function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
@@ -632,15 +632,15 @@ isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false
 
 function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where {T}
     a === b && return true
-    taskida, ida = a.id
-    taskidb, idb = b.id
+    ida = a.id
+    idb = b.id
     ida === idb && ida !== nothing && return true
 
     Ta = MData.variant_type(a)
     Tb = MData.variant_type(b)
     Ta === Tb || return false
 
-    if full && ida !== idb && ida !== nothing && idb !== nothing && taskida == taskidb
+    if full && ida !== idb && ida !== nothing && idb !== nothing
         return false
     end
 
@@ -799,11 +799,10 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic
 # TODO: split into 3 caches based on `SymVariant`
 const ENABLE_HASHCONSING = Ref(true)
 const AllBasicSymbolics = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}
-const WCS = TaskLocalValue{WeakCacheSet{AllBasicSymbolics}}(WeakCacheSet{AllBasicSymbolics})
-const TASK_ID = TaskLocalValue{UInt}(() -> rand(UInt))
+const WCS = Base.Lockable(WeakCacheSet{AllBasicSymbolics}(), ReentrantLock())
 
 function generate_id()
-    return (TASK_ID[], IDType())
+    IDType()
 end
 
 """
@@ -833,32 +832,17 @@ function hashcons(s::BSImpl.Type)
         return s
     end
     @manually_scope COMPARE_FULL => true begin
-        cache = WCS[]
-        k = getkey!(cache, s)::typeof(s)
-        # cache = WVD[]
-        # h = hash(s)
-        # k = get(cache, h, nothing)
-
-        # if k === nothing || !isequal(k, s)
-        #     if k !== nothing
-        #         buffer = collides[]
-        #         buffer2 = get!(() -> [], buffer, h)
-        #         push!(buffer2, k => s)
-        #     end
-        
-        #     cache[h] = s
-        #     k = s
-        # end
-        if k.id === (nothing, nothing)
+        k = (@lock WCS getkey!(WCS[], s))::typeof(s)
+        if k.id === nothing
             k.id = generate_id()
         end
         return k::typeof(s)
     end true
 end
 
-const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, (nothing, nothing)))
-const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, (nothing, nothing)))
-const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, (nothing, nothing)))
+const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, nothing))
+const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, nothing))
+const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, nothing))
 
 defaultval(::Type{BasicSymbolic{SymReal}}) = SMALLV_DEFAULT_SYMREAL
 defaultval(::Type{BasicSymbolic{SafeReal}}) = SMALLV_DEFAULT_SAFEREAL

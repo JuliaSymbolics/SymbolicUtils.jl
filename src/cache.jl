@@ -27,7 +27,7 @@ The key stored in the cache for a particular value. Returns a `SymbolicKey` for
 # can't dispatch because `BasicSymbolic` isn't defined here
 function get_cache_key(x)
     if x isa BasicSymbolic
-        id = x.id[2]
+        id = x.id
         if id === nothing
             return CacheSentinel()
         end

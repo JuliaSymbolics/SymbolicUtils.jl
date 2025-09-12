@@ -8,10 +8,10 @@ function AbstractTrees.nodevalue(x::BSImpl.Type)
         string(T, "(", x, ")")
     elseif isadd(x)
         string(T, 
-            (variant=string(x.variant), scalar=x.coeff, coeffs=Tuple(k=>v for (k,v) in x.dict)))
+            (variant=string(x.variant),))
     elseif ismul(x)
         string(T,
-            (variant=string(x.variant), scalar=x.coeff, powers=Tuple(k=>v for (k,v) in x.dict)))
+            (variant=string(x.variant),))
     elseif isdiv(x) || ispow(x)
         string(T)
     else

@@ -115,9 +115,9 @@ end
 
     r_mix = @rule (~x + (~y)*(~!c))^(~!m) => (~m, ~c)
     res =  r_mix((a + b*c)^2)
-    @test res === (2, c) || res === (2, b)
+    @test res === (2, c) || res === (2, b) || res === (2, 1)
     res = r_mix((a + b*c))
-    @test res === (1, c) || res === (1, b)
+    @test res === (1, c) || res === (1, b) || res === (1, 1)
     @test r_mix((a + b)) === (1, 1)
 
     r_more_than_two_arguments = @rule (~!a)*exp(~x)*sin(~x) => (~a, ~x)

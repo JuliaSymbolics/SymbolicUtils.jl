@@ -32,7 +32,7 @@ function matcher(slot::Slot, acSets)
         val = get(bindings, slot.name, nothing)
         # if slot name already is in bindings, check if it matches
         if val !== nothing
-            if isequal(val, car(data))::Bool
+            if isequal(val, unwrap_const(car(data)))::Bool
                 return next(bindings, 1)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
@@ -74,7 +74,7 @@ function trymatchexpr(data, value, n)
         end
 
         return !islist(value) ? n : nothing
-    elseif isequal(value, data)
+    elseif isequal(unwrap_const(value), unwrap_const(data))
         return n + 1
     end
 end
@@ -137,17 +137,17 @@ function term_matcher_constructor(term, acSets)
             result !== nothing && return success(result, 1)
             
             frankestein = nothing
-            if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && isequal(arguments(arguments(data)[1])[1], 1)
+            if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && _isone(arguments(arguments(data)[1])[1])
                 # if data is of the alternative form (1/...)^(...)
                 one_over_smth = arguments(data)[1]
                 T = vartype(one_over_smth)
                 frankestein = Term{T}(^, [arguments(one_over_smth)[2], -arguments(data)[2]])
-            elseif (operation(data) === /) && isequal(arguments(data)[1], 1) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
+            elseif (operation(data) === /) && _isone(arguments(data)[1]) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
                 # if data is of the alternative form 1/(...)^(...)
                 denominator = arguments(data)[2]
                 T = vartype(denominator)
                 frankestein = Term{T}(^, [arguments(denominator)[1], -arguments(denominator)[2]])
-            elseif (operation(data) === /) && isequal(arguments(data)[1], 1)
+            elseif (operation(data) === /) && _isone(arguments(data)[1])
                 # if data is of the alternative form 1/(...), it might match with exponent = -1
                 denominator = arguments(data)[2]
                 T = vartype(denominator)
@@ -172,7 +172,7 @@ function term_matcher_constructor(term, acSets)
         return pow_term_matcher
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
     elseif acSets!==nothing && operation(term) in [+, *]
-        has_segment = any([isa(a,Segment) for a in arguments(term)])
+        has_segment = any([isa(unwrap_const(a),Segment) for a in arguments(term)])
         function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data)
@@ -213,7 +213,7 @@ function term_matcher_constructor(term, acSets)
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
 
-            if (operation(data) === ^) && (arguments(data)[2] === 1//2)
+            if (operation(data) === ^) && (unwrap_const(arguments(data)[2]) === 1//2)
                 T = vartype(arguments(data)[1])
                 frankestein = Term{T}(sqrt,[arguments(data)[1]])
                 result = loop(frankestein, bindings, matchers)
@@ -233,7 +233,7 @@ function term_matcher_constructor(term, acSets)
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
 
-            if (operation(data) === ^) && (arguments(data)[1] === ℯ)
+            if (operation(data) === ^) && (unwrap_const(arguments(data)[1]) === ℯ)
                 T = vartype(arguments(data)[2])
                 frankestein = Term{T}(exp,[arguments(data)[2]])
                 result = loop(frankestein, bindings, matchers)

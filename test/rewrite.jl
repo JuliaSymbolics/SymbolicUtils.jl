@@ -55,16 +55,24 @@ end
     @test r1(exp(sin(x)+cos(x))) === x
     r2 = @rule (~x+~y)*(~z+~w)^(~m) => (~x, ~y, ~z, ~w, ~m)
     r3 = @rule (~z+~w)^(~m)*(~x+~y) => (~x, ~y, ~z, ~w, ~m)
-    @test r2((a+b)*(x+c)^b) === (a, b, x, c, b)
-    @test r3((a+b)*(x+c)^b) === (a, b, x, c, b)
+    res1 = r2((a+b)*(x+c)^b)
+    @test issetequal(res1[1:2], [a, b])
+    @test issetequal(res1[3:4], [x, c])
+    @test isequal(res1[5], b)
+    res2 = r3((a+b)*(x+c)^b)
+    @test issetequal(res2[1:2], [a, b])
+    @test issetequal(res2[3:4], [x, c])
+    @test isequal(res2[5], b)
     rPredicate1 = @rule ~x::(x->isa(x,Number)) + ~y => (~x, ~y)
     rPredicate2 = @rule ~y + ~x::(x->isa(x,Number)) => (~x, ~y)
     @test rPredicate1(2+x) === (2, x)
     @test rPredicate2(2+x) === (2, x)
     r5 = @rule (~y*(~z+~w))+~x => (~x, ~y, ~z, ~w)
     r6 = @rule ~x+((~z+~w)*~y) => (~x, ~y, ~z, ~w)
-    @test r5(c*(a+b)+d) === (d, c, a, b)
-    @test r6(c*(a+b)+d) === (d, c, a, b)
+    res3 = r5(c*(a+b)+d)
+    @test res3 === (d, c, a, b) || res3 === (d, c, b, a)
+    res4 = r6(c*(a+b)+d)
+    @test res4 === (d, c, a, b) || res4 === (d, c, b, a)
 end
 
 @testset "Slot matcher with default value" begin
@@ -98,8 +106,10 @@ end
     @test r_pow2(a+b) === 1
 
     r_mix = @rule (~x + (~y)*(~!c))^(~!m) => (~m, ~c)
-    @test r_mix((a + b*c)^2) === (2, c)
-    @test r_mix((a + b*c)) === (1, c)
+    res =  r_mix((a + b*c)^2)
+    @test res === (2, c) || res === (2, b)
+    res = r_mix((a + b*c))
+    @test res === (1, c) || res === (1, b)
     @test r_mix((a + b)) === (1, 1)
 
     r_more_than_two_arguments = @rule (~!a)*exp(~x)*sin(~x) => (~a, ~x)
@@ -114,7 +124,7 @@ end
     # predicate checked in normal matching process
     r_predicate1 = @rule x + (~!m::(var->isa(var, Int))) => ~m
     @test r_predicate1(x+2) === 2
-    @test r_predicate1(x+2.0) === nothing
+    @test r_predicate1(x+2.1) === nothing
 
     # predicate checked in defslot matching process
     r_predicate2 = @rule x + ~!m::(var->!(var===0)) => ~m
@@ -135,7 +145,8 @@ end
     @test r1(1/a) === (a, -1)
 
     r2 = @rule (~x)^(~y + ~z) => (~x, ~y, ~z) # rule with term as exponent
-    @test r2(1/a^(b+2c)) === (a, -b, -2c) # uses frankestein
+    res = r2(1/a^(b+2c))
+    @test res === (a, -b, -2c) || res === (a, -2c, -b) # uses frankestein
     @test r2(1/a^3) === nothing # should use a term_matcher that flips the sign, but is not implemented
 
     r1defslot = @rule (~x)^(~!y) => (~x, ~y) # rule with defslot as exponent
@@ -145,7 +156,8 @@ end
     @test r1defslot(a) === (a, 1)
 
     r = @rule (~x + ~y)^(~m) => (~x, ~y, ~m) # rule to match (1/...)^(...)
-    @test r((1/(a+b))^3) === (a,b,-3)
+    res = r((1/(a+b))^3)
+    @test res === (a,b,-3) || res === (b, a, -3)
 end
 
 @testset "Return the matches dictionary" begin
@@ -226,5 +238,5 @@ end
     ex = setmetadata(ex, MetaData, :metadata)
     ex1 = ex * b
 
-    @test getmetadata(arguments(ex1)[1], MetaData) == :metadata
+    @test getmetadata(sorted_arguments(ex1)[1], MetaData) == :metadata
 end

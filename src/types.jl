@@ -2734,9 +2734,14 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
             BSImpl.AddMul(; coeff, dict, variant, shape, type) && if variant == AddMulVariant.MUL end => begin
                 if coeff isa Real && coeff < 0 && !isinteger(b)
                     coeff = (-coeff) ^ b
-                    newmul = BSImpl.AddMul{T}(1, dict, variant; shape, type)
-                    newpow = Term{T}(^, ArgsT{T}((newmul, b)); shape, type)
-                    return mul_worker(T, (coeff, newpow))
+                    newmul = BSImpl.AddMul{T}(-1, dict, variant; shape, type)
+                    # newpow = Term{T}(^, ArgsT{T}((newmul, b)); shape, type)
+                    if _isone(coeff)
+                        return Term{T}(^, ArgsT{T}((newmul, b)); shape, type)
+                    else
+                        return BSImpl.AddMul{T}(coeff, ACDict{T}(newmul => b), AddMulVariant.MUL; shape, type)
+                    end
+                    # return mul_worker(T, (coeff, newpow))
                 else
                     coeff = coeff ^ b
                     dict = copy(dict)

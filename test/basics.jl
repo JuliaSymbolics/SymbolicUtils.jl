@@ -937,7 +937,7 @@ end
     @test_reference "inspect_output/ex.txt" sprint(io->SymbolicUtils.inspect(io, ex))
     @test_reference "inspect_output/ex-md.txt" sprint(io->SymbolicUtils.inspect(io, ex, metadata=true))
     @test_reference "inspect_output/ex-nohint.txt" sprint(io->SymbolicUtils.inspect(io, ex, hint=false))
-    @test SymbolicUtils.pluck(ex, 12) == 2
+    @test unwrap_const(SymbolicUtils.pluck(ex, 12)) == 2
     @test_reference "inspect_output/sub10.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 9)))
     @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
 end
@@ -1156,7 +1156,7 @@ end
 
 @testset "Negative coefficient to fractional power" begin
     @syms a
-    @test isequal((-5a)^0.5, sqrt(5) * Pow{Number}(-a, 0.5))
+    @test isequal((-5a)^0.5, sqrt(5) * Term{SymReal}(^, [-a, 0.5]; type = Number, shape = ShapeVecT()))
 end
 
 @testset "Equivalent expressions across tasks are equal" begin

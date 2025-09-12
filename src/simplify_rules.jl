@@ -167,7 +167,7 @@ let
     global serial_simplifier
     global serial_expand_simplifier
 
-    function default_simplifier(; trigexpand=false, kw...)
+    function default_simplifier(; trigexpand=true, kw...)
         # Build the chain of simplifiers conditionally
         trig_simplifiers = trigexpand ? 
             (trig_exp_simplifier(), trigexpand_simplifier()) :
@@ -190,13 +190,13 @@ let
     end
 
     # reduce overhead of simplify by defining these as constant
-    serial_simplifier = If(iscall, Fixpoint(default_simplifier()))
+    serial_simplifier = If(iscall, Fixpoint(default_simplifier(trigexpand=true)))
 
     threaded_simplifier(cutoff) = Fixpoint(default_simplifier(threaded=true,
                                                               thread_cutoff=cutoff))
 
     serial_expand_simplifier = If(iscall,
                                   Fixpoint(Chain((expand,
-                                                  Fixpoint(default_simplifier())))))
+                                                  Fixpoint(default_simplifier(trigexpand=true))))))
 
 end

@@ -4,37 +4,39 @@ using SymbolicUtils
 @testset "Trigonometric product-to-sum rules" begin
     @syms A B t ω φ ψ
 
-    # Test that product-to-sum is NOT applied by default
-    @test isequal(simplify(cos(A) * cos(B)), cos(A) * cos(B))  # Should remain unchanged
-    
-    # Test basic product-to-sum identities with trigexpand=true
-    @test isequal(simplify(cos(A) * cos(B), trigexpand=true), (cos(A - B) + cos(A + B)) / 2)
-    @test isequal(simplify(sin(A) * sin(B), trigexpand=true), (cos(A - B) - cos(A + B)) / 2)
-    @test isequal(simplify(sin(A) * cos(B), trigexpand=true), (sin(A + B) + sin(A - B)) / 2)
+    # Test that product-to-sum IS applied by default now
+    @test isequal(simplify(cos(A) * cos(B)), (cos(A - B) + cos(A + B)) / 2)
+    @test isequal(simplify(sin(A) * sin(B)), (cos(A - B) - cos(A + B)) / 2)
+    @test isequal(simplify(sin(A) * cos(B)), (sin(A + B) + sin(A - B)) / 2)
     
     # Note: cos(A) * sin(B) produces sin(-A + B) instead of sin(B - A) due to ordering
     # but they are mathematically equivalent: sin(-A + B) = sin(B - A)
-    result = simplify(cos(A) * sin(B), trigexpand=true)
+    result = simplify(cos(A) * sin(B))
     expected1 = (sin(A + B) - sin(A - B)) / 2
     expected2 = (sin(A + B) + sin(-A + B)) / 2
     @test isequal(result, expected1) || isequal(result, expected2)
 
     # Test with constants
-    @test isequal(simplify(2 * cos(A) * cos(B), trigexpand=true), (cos(A - B) + cos(A + B)))
+    @test isequal(simplify(2 * cos(A) * cos(B)), (cos(A - B) + cos(A + B)))
+    
+    # Test that trigexpand=false disables the transformation
+    @test isequal(simplify(cos(A) * cos(B), trigexpand=false), cos(A) * cos(B))
     
     # Test issue #1644 scenario - energy systems
     expr = cos(ω*t + φ) * cos(ω*t + φ - ψ)
     
-    # Without trigexpand - should remain unchanged
-    unchanged = simplify(expr)
+    # Default behavior now applies trigexpand
+    expanded = simplify(expr)
+    @test occursin("cos(ψ)", string(expanded)) || occursin("cos(-ψ)", string(expanded))
+    @test occursin("cos(2", string(expanded))
+    
+    # With trigexpand=false - should remain unchanged
+    unchanged = simplify(expr, trigexpand=false)
     @test isequal(unchanged, expr)
     
-    # With trigexpand - should be expanded
-    simplified = simplify(expr, trigexpand=true)
-    
-    # The result should contain cos(ψ) and cos(2ω*t + 2φ - ψ) terms
-    @test occursin("cos(ψ)", string(simplified)) || occursin("cos(-ψ)", string(simplified))
-    @test occursin("cos(2", string(simplified))
+    # Test that trigexpand() function still works
+    trigexpand_result = trigexpand(expr)
+    @test isequal(expanded, trigexpand_result)
     
     println("All trigonometric product-to-sum tests passed!")
 end

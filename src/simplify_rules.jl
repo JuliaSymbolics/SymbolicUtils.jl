@@ -99,14 +99,16 @@ let
         @acrule(cosh(~x)^2 + sinh(~x)^2 => cosh(2 * ~x))
         @acrule(cosh(~x) * sinh(~x) => sinh(2 * ~x)/2)
 
+        @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y))
+        @rule(exp(~x)^(~y) => exp(~x * ~y))
+    ]
+
+    TRIGEXPAND_RULES = [
         # Trigonometric product-to-sum identities
         @acrule(cos(~x) * cos(~y) => (cos(~x - ~y) + cos(~x + ~y)) / 2)
         @acrule(sin(~x) * sin(~y) => (cos(~x - ~y) - cos(~x + ~y)) / 2)
         @acrule(sin(~x) * cos(~y) => (sin(~x + ~y) + sin(~x - ~y)) / 2)
         @acrule(cos(~x) * sin(~y) => (sin(~x + ~y) - sin(~x - ~y)) / 2)
-
-        @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y))
-        @rule(exp(~x)^(~y) => exp(~x * ~y))
     ]
 
     BOOLEAN_RULES = [
@@ -155,6 +157,8 @@ let
 
     trig_exp_simplifier(;kw...) = Chain(TRIG_EXP_RULES)
 
+    trigexpand_simplifier(;kw...) = Chain(TRIGEXPAND_RULES)
+
     bool_simplifier() = Chain(BOOLEAN_RULES)
 
     global default_simplifier
@@ -163,11 +167,16 @@ let
     global serial_simplifier
     global serial_expand_simplifier
 
-    function default_simplifier(; kw...)
+    function default_simplifier(; trigexpand=false, kw...)
+        # Build the chain of simplifiers conditionally
+        trig_simplifiers = trigexpand ? 
+            (trig_exp_simplifier(), trigexpand_simplifier()) :
+            (trig_exp_simplifier(),)
+            
         IfElse(has_trig_exp,
             Postwalk(
                 IfElse(x->symtype(x) <: Number,
-                    Chain((number_simplifier(), trig_exp_simplifier())),
+                    Chain((number_simplifier(), trig_simplifiers...)),
                     If(x->symtype(x) <: Bool, bool_simplifier())
                 ); kw...
             ),

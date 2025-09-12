@@ -4,24 +4,33 @@ using SymbolicUtils
 @testset "Trigonometric product-to-sum rules" begin
     @syms A B t ω φ ψ
 
-    # Test basic product-to-sum identities
-    @test isequal(simplify(cos(A) * cos(B)), (cos(A - B) + cos(A + B)) / 2)
-    @test isequal(simplify(sin(A) * sin(B)), (cos(A - B) - cos(A + B)) / 2)
-    @test isequal(simplify(sin(A) * cos(B)), (sin(A + B) + sin(A - B)) / 2)
+    # Test that product-to-sum is NOT applied by default
+    @test isequal(simplify(cos(A) * cos(B)), cos(A) * cos(B))  # Should remain unchanged
+    
+    # Test basic product-to-sum identities with trigexpand=true
+    @test isequal(simplify(cos(A) * cos(B), trigexpand=true), (cos(A - B) + cos(A + B)) / 2)
+    @test isequal(simplify(sin(A) * sin(B), trigexpand=true), (cos(A - B) - cos(A + B)) / 2)
+    @test isequal(simplify(sin(A) * cos(B), trigexpand=true), (sin(A + B) + sin(A - B)) / 2)
     
     # Note: cos(A) * sin(B) produces sin(-A + B) instead of sin(B - A) due to ordering
     # but they are mathematically equivalent: sin(-A + B) = sin(B - A)
-    result = simplify(cos(A) * sin(B))
+    result = simplify(cos(A) * sin(B), trigexpand=true)
     expected1 = (sin(A + B) - sin(A - B)) / 2
     expected2 = (sin(A + B) + sin(-A + B)) / 2
     @test isequal(result, expected1) || isequal(result, expected2)
 
     # Test with constants
-    @test isequal(simplify(2 * cos(A) * cos(B)), (cos(A - B) + cos(A + B)))
+    @test isequal(simplify(2 * cos(A) * cos(B), trigexpand=true), (cos(A - B) + cos(A + B)))
     
     # Test issue #1644 scenario - energy systems
     expr = cos(ω*t + φ) * cos(ω*t + φ - ψ)
-    simplified = simplify(expr)
+    
+    # Without trigexpand - should remain unchanged
+    unchanged = simplify(expr)
+    @test isequal(unchanged, expr)
+    
+    # With trigexpand - should be expanded
+    simplified = simplify(expr, trigexpand=true)
     
     # The result should contain cos(ψ) and cos(2ω*t + 2φ - ψ) terms
     @test occursin("cos(ψ)", string(simplified)) || occursin("cos(-ψ)", string(simplified))

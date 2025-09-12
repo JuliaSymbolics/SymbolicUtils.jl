@@ -1003,12 +1003,12 @@ end
     @test symtype(new_expr) == Vector{Float64}
 end
 
-toterm(t) = Term{vartype(t)}(operation(t), arguments(t); type = symtype(t))
+toterm(t) = Term{vartype(t)}(operation(t), sorted_arguments(t); type = symtype(t))
 
 @testset "diffs" begin
     @syms a b c
     @test isequal(toterm(-1c), Term{SymReal}(*, [-1, c]; type = Number))
-    @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-b, -a]; type = Number))
+    @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-a, -b]; type = Number))
     @test isequal(toterm((a + b) - (b + c)), Term{SymReal}(+, [a, -c]; type = Number))
 end
 

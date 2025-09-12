@@ -1,12 +1,12 @@
 export simplify_fractions, quick_cancel, flatten_fractions
 
-to_poly!(_, expr, _...) = MA.operate!(+, zeropoly(), expr)
-function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Union{PolyVarT, PolynomialT} where {T}
+to_poly!(::Dict, ::Dict, expr, ::Bool) = MA.operate!(+, zeropoly(), expr)
+function to_poly!(poly_to_bs::Dict, bs_to_poly::Dict, expr::BasicSymbolic{T}, recurse::Bool = true)::Union{PolyVarT, PolynomialT} where {T}
     type = symtype(expr)
     @match expr begin
-        BSImpl.Const(; val) => to_poly!(poly_to_bs, val, recurse)
+        BSImpl.Const(; val) => to_poly!(poly_to_bs, bs_to_poly, val, recurse)
         BSImpl.Sym(;) => begin
-            pvar = basicsymbolic_to_polyvar(expr)
+            pvar = basicsymbolic_to_polyvar(bs_to_poly, expr)
             get!(poly_to_bs, pvar, expr)
             return pvar
         end
@@ -16,7 +16,7 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
                     poly = zeropoly()
                     MA.operate!(+, poly, MA.copy_if_mutable(coeff))
                     for (k, v) in dict
-                        tpoly = to_poly!(poly_to_bs, k, recurse)
+                        tpoly = to_poly!(poly_to_bs, bs_to_poly, k, recurse)
                         if tpoly isa PolyVarT
                             tpoly = tpoly * v
                         else
@@ -31,9 +31,9 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
                     MA.operate!(*, poly, MA.copy_if_mutable(coeff))
                     for (k, v) in dict
                         if isinteger(v)
-                            tpoly = to_poly!(poly_to_bs, k, recurse) ^ v
+                            tpoly = to_poly!(poly_to_bs, bs_to_poly, k, recurse) ^ v
                         else
-                            tpoly = to_poly!(poly_to_bs, k ^ v, recurse)
+                            tpoly = to_poly!(poly_to_bs, bs_to_poly, k ^ v, recurse)
                         end
                         MA.operate!(*, poly, tpoly)
                     end
@@ -45,7 +45,7 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
             if f === (^) && isconst(args[2]) && symtype(args[2]) <: Real && isinteger(unwrap_const(args[2]))
                 base, exp = args
                 exp = unwrap_const(exp)
-                poly = to_poly!(poly_to_bs, base)
+                poly = to_poly!(poly_to_bs, bs_to_poly, base)
                 return if poly isa PolyVarT
                     isone(exp) && return poly
                     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}([poly], [Int[exp]])
@@ -55,21 +55,21 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
                 end
             elseif f === (*) || f === (+)
                 arg1, restargs = Iterators.peel(args)
-                poly = to_poly!(poly_to_bs, arg1)
+                poly = to_poly!(poly_to_bs, bs_to_poly, arg1)
                 if !(poly isa PolynomialT)
                     _poly = zeropoly()
                     MA.operate!(+, _poly, poly)
                     poly = _poly
                 end
                 for arg in restargs
-                    MA.operate!(f, poly, to_poly!(poly_to_bs, arg))
+                    MA.operate!(f, poly, to_poly!(poly_to_bs, bs_to_poly, arg))
                 end
                 return poly
             else
                 if recurse
                     expr = BSImpl.Term{T}(f, map(expand, args); type)
                 end
-                pvar = basicsymbolic_to_polyvar(expr)
+                pvar = basicsymbolic_to_polyvar(bs_to_poly, expr)
                 get!(poly_to_bs, pvar, expr)
                 return pvar
             end
@@ -78,7 +78,7 @@ function to_poly!(poly_to_bs::Dict, expr::BasicSymbolic{T}, recurse = true)::Uni
             if recurse
                 expr = BSImpl.Div{T}(expand(num), expand(den), false; type)
             end
-            pvar = basicsymbolic_to_polyvar(expr)
+            pvar = basicsymbolic_to_polyvar(bs_to_poly, expr)
             get!(poly_to_bs, pvar, expr)
             return pvar
         end
@@ -99,7 +99,8 @@ multivariate polynomials implementation.
 function expand(expr::BasicSymbolic{T})::BasicSymbolic{T} where {T}
     iscall(expr) || return expr
     poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
-    partial_poly = to_poly!(poly_to_bs, expr)
+    bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
+    partial_poly = to_poly!(poly_to_bs, bs_to_poly, expr)
     partial_pvars = MP.variables(partial_poly)
     vars = SmallV{BasicSymbolic{T}}()
     sizehint!(vars, length(partial_pvars))
@@ -168,8 +169,9 @@ function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: 
     isconst(num) && return num, den
     isconst(den) && return num, den
     poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
-    partial_poly1 = to_poly!(poly_to_bs, num, false)
-    partial_poly2 = to_poly!(poly_to_bs, den, false)
+    bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
+    partial_poly1 = to_poly!(poly_to_bs, bs_to_poly, num, false)
+    partial_poly2 = to_poly!(poly_to_bs, bs_to_poly, den, false)
     factor = safe_gcd(partial_poly1, partial_poly2)
     if isone(factor)
         return num, den

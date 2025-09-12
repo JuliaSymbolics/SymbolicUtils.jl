@@ -144,26 +144,12 @@ const ACDict{T} = Dict{BasicSymbolic{T}, Number}
 const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
 const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
 
-const POLYVAR_LOCK = ReadWriteLock()
-# NOTE: All of these are accessed via POLYVAR_LOCK
-const BS_TO_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
-
-# TODO: manage scopes better here
-function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
-    pvar = nothing
-    @readlock POLYVAR_LOCK begin
-        pvar = get(BS_TO_PVAR, x, nothing)
+function basicsymbolic_to_polyvar(bs_to_poly::Dict, x::BasicSymbolic)::PolyVarT
+    get!(bs_to_poly, x) do
+        inner_name = _name_as_operator(x)
+        name = Symbol(inner_name, :_, hash(x))
+        MP.similar_variable(ExamplePolyVar, name)
     end
-    if pvar !== nothing
-        return pvar
-    end
-    inner_name = _name_as_operator(x)
-    name = Symbol(inner_name, :_, hash(x))
-    pvar = MP.similar_variable(ExamplePolyVar, name)
-    @lock POLYVAR_LOCK begin
-        BS_TO_PVAR[x] = pvar
-    end
-    return pvar
 end
 
 function subs_poly(poly::Union{_PolynomialT, MP.Term}, vars::AbstractVector{BasicSymbolic{T}}) where {T}

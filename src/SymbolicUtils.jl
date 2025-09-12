@@ -32,7 +32,6 @@ import MacroTools
 import MultivariatePolynomials as MP
 import DynamicPolynomials as DP
 import MutableArithmetics as MA
-import ConcurrentUtilities: ReadWriteLock, readlock, readunlock
 import LinearAlgebra
 import SparseArrays: SparseMatrixCSC, findnz
 

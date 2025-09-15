@@ -608,3 +608,47 @@ function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{
 
     return BSImpl.ArrayOp{T}(output_idxs, expr, +, term; type, shape = sh)
 end
+
+@noinline function _throw_unequal_lengths(x, y)
+    throw(ArgumentError("""
+    Arguments must have equal lengths. Got arguments with shapes $x and $y.
+    """))
+end
+
+function promote_shape(::typeof(LinearAlgebra.dot), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    if sha isa ShapeVecT && shb isa ShapeVecT
+        _length_from_shape(sha) == _length_from_shape(shb) 
+    end
+    ShapeVecT()
+end
+
+promote_symtype(::typeof(LinearAlgebra.dot), ::Type{T}, ::Type{S}) where {T <: Number, S <: Number} = promote_type(T, S)
+promote_symtype(::typeof(LinearAlgebra.dot), ::Type{T}, ::Type{S}) where {eT, T <: AbstractArray{eT}, eS, S <: AbstractArray{eS}} = promote_symtype(LinearAlgebra.dot, eT, eS)
+
+function LinearAlgebra.dot(x::BasicSymbolic{T}, y::BasicSymbolic{T}) where {T}
+    shx = shape(x)
+    if _is_array_shape(shx)
+        sh = promote_shape(LinearAlgebra.dot, shx, shape(y))
+        type = promote_symtype(LinearAlgebra.dot, symtype(x), symtype(y))
+        BSImpl.Term{T}(LinearAlgebra.dot, ArgsT{T}((x, y)); type, shape = sh)
+    else
+        conj(x) * y
+    end
+end
+function LinearAlgebra.dot(x::Number, y::BasicSymbolic{T}) where {T}
+    x = unwrap(x)
+    promote_shape(LinearAlgebra.dot, ShapeVecT(), shape(y))
+    return conj(x) * y
+end
+function LinearAlgebra.dot(x::BasicSymbolic{T}, y::Number) where {T}
+    y = unwrap(y)
+    promote_shape(LinearAlgebra.dot, shape(x), ShapeVecT())
+    return conj(x) * y
+end
+function LinearAlgebra.dot(x::AbstractArray, y::BasicSymbolic{T}) where {T}
+    LinearAlgebra.dot(Const{T}(x), y)
+end
+function LinearAlgebra.dot(x::BasicSymbolic{T}, y::AbstractArray) where {T}
+    LinearAlgebra.dot(x, Const{T}(y))
+end

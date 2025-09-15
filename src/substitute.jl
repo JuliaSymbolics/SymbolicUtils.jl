@@ -64,6 +64,13 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
     rw(expr)
 end
 
+function substitute(expr::SparseMatrixCSC, subs; kw...)
+    I, J, V = findnz(expr)
+    V = substitute(V, subs; kw...)
+    m, n = size(expr)
+    return sparse(I, J, V, m, n)
+end
+
 @inline function substitute(expr::AbstractArray, dict; kw...)
     if _is_array_of_symbolics(expr)
         [substitute(x, dict; kw...) for x in expr]

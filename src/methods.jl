@@ -98,7 +98,7 @@ end
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a),)); type = promote_symtype(f, symtype(a))),
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a), Const{TreeReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))))
 
-for f in vcat(diadic, [+, -, *, ^])
+for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
     @eval promote_symtype(::$(typeof(f)),
                    ::Type{T},
                    ::Type{S}) where {T <: Number, S <: Number} = promote_type(T, S)
@@ -197,6 +197,9 @@ end
 function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, S <: Number}
     Array{promote_symtype(/, eT, S), N}
 end
+
+promote_symtype(::typeof(identity), ::Type{T}) where {T} = T
+promote_shape(::typeof(identity), @nospecialize(sh::ShapeT)) = sh
 
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
@@ -764,6 +767,67 @@ for fT in [Any, :(BasicSymbolic{T})]
     for x1T in [Any, :(BasicSymbolic{T})]
         @eval function Base.map(f::$fT, x1::$x1T, x::BasicSymbolic{T}, xs...) where {T}
             _map(T, f, x1, x, xs...)
+        end
+    end
+end
+
+struct Mapreducer{F, R}
+    f::F
+    reduce::R
+end
+
+function (f::Mapreducer)(xs...)
+    mapreduce(f.f, f.reduce, xs...)
+end
+
+function promote_symtype(f::Mapreducer, ::Type{T}, Ts...) where {eT, N, T <: AbstractArray{eT, N}}
+    mappedT = promote_symtype(f.f, eT, eltype.(Ts)...)
+    return promote_symtype(f.reduce, mappedT, mappedT)
+end
+
+function promote_shape(f::Mapreducer, shs::ShapeT...)
+    @nospecialize shs
+    promote_shape(Mapper(f.f), shs...)
+    return ShapeVecT()
+end
+
+function _mapreduce(::Type{T}, f, red, xs...) where {T}
+    f = Mapreducer(f, red)
+    xs = Const{T}.(xs)
+    type = promote_symtype(f, symtype.(xs)...)
+    sh = promote_shape(f, shape.(xs)...)
+    nd = ndims(sh)
+    term = BSImpl.Term{T}(f, ArgsT{T}(xs); type, shape = sh)
+    idxsym = idxs_for_arrayop(T)
+    idxs = OutIdxT{T}()
+    sizehint!(idxs, nd)
+    for i in 1:nd
+        push!(idxs, idxsym[i])
+    end
+    idxs = ntuple(Base.Fix1(getindex, idxsym), nd)
+
+    indexed = ntuple(Val(length(xs))) do i
+        xs[i][idxs...]
+    end
+    exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
+    return BSImpl.ArrayOp{T}(idxs, exp, red, term; type = type, shape = sh)
+end
+
+for (Tf, Tr) in Iterators.product([:(BasicSymbolic{T}), Any], [:(BasicSymbolic{T}), Any])
+    if Tf != Any || Tr != Any
+        @eval function Base.mapreduce(f::$Tf, red::$Tr, xs...) where {T}
+            return _mapreduce(T, f, red, xs...)
+        end
+        @eval function Base.mapreduce(f::$Tf, red::$Tr, x::AbstractArray, xs...) where {T}
+            return _mapreduce(T, f, red, x, xs...)
+        end
+    end
+    @eval function Base.mapreduce(f::$Tf, red::$Tr, x::BasicSymbolic{T}, xs...) where {T}
+        _mapreduce(T, f, red, x, xs...)
+    end
+    for x1T in [Any, :(BasicSymbolic{T})]
+        @eval function Base.mapreduce(f::$Tf, red::$Tr, x1::$x1T, x::BasicSymbolic{T}, xs...) where {T}
+            _mapreduce(T, f, red, x1, x, xs...)
         end
     end
 end

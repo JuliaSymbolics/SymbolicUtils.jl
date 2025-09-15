@@ -295,11 +295,13 @@ for f in [identity, one, zero, *, +, -]
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = T
 end
 
-promote_symtype(::typeof(Base.real), T::Type{<:Number}) = Real
+promote_symtype(::typeof(Base.real), ::Type{T}) where {eT, T <: Complex{eT}} = eT
+promote_symtype(::typeof(Base.real), ::Type{T}) where {T <: Real} = T
 function Base.real(s::BasicSymbolic{T}) where {T}
     islike(s, Real) && return s
     @match s begin
         BSImpl.Const(; val) => Const{T}(real(val))
+        BSImpl.Term(; f, args) && if f === complex && length(args) == 2 end => args[1]
         _ => Term{T}(real, ArgsT{T}((s,)); type = Real)
     end
 end
@@ -308,14 +310,19 @@ function Base.conj(s::BasicSymbolic{T}) where {T}
     eltype(symtype(s)) <: Real && return s
     @match s begin
         BSImpl.Const(; val) => Const{T}(conj(val))
+        BSImpl.Term(; f, args, type, shape) && if f === complex && length(args) == 2 end => begin
+            BSImpl.Term{T}(f, ArgsT{T}(args[1], -args[2]); type, shape)
+        end
         _ => Term{T}(conj, ArgsT{T}((s,)); type = symtype(s), shape = shape(s))
     end
 end
-promote_symtype(::typeof(Base.imag), T::Type{<:Number}) = Real
+promote_symtype(::typeof(Base.imag), ::Type{T}) where {eT, T <: Complex{eT}} = eT
+promote_symtype(::typeof(Base.imag), ::Type{T}) where {T <: Real} = T
 function Base.imag(s::BasicSymbolic{T}) where {T}
     islike(s, Real) && return s
     @match s begin
         BSImpl.Const(; val) => Const{T}(imag(val))
+        BSImpl.Term(; f, args) && if f === complex && length(args) == 2 end => args[2]
         _ => Term{T}(imag, ArgsT{T}((s,)); type = Real)
     end
 end
@@ -357,7 +364,7 @@ function Base.adjoint(s::BasicSymbolic{T}) where {T}
     elseif stype <: Real
         return s
     else
-        return Term{T}(conj, ArgsT{T}((s,)); type = stype, shape = sh)
+        return conj(s)
     end
 end
 

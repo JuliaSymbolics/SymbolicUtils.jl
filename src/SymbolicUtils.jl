@@ -33,7 +33,7 @@ import MultivariatePolynomials as MP
 import DynamicPolynomials as DP
 import MutableArithmetics as MA
 import LinearAlgebra
-import SparseArrays: SparseMatrixCSC, findnz
+import SparseArrays: SparseMatrixCSC, findnz, sparse
 
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)

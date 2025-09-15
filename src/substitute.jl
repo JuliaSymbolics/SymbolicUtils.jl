@@ -1,9 +1,10 @@
-struct Substituter{D <: AbstractDict}
+struct Substituter{D <: AbstractDict, F}
     dict::D
+    filterer::F
 end
 
 function (s::Substituter)(expr)
-    get(s.dict, expr, expr)
+    s.filterer(expr) ? get(s.dict, expr, expr) : expr
 end
 
 function _const_or_not_symbolic(x)
@@ -54,18 +55,18 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 1 + sqrt(2)
 ```
 """
-@inline function substitute(expr, dict; fold=true)
+@inline function substitute(expr, dict; fold=true, filterer=Returns(true))
     rw = if fold
-        Prewalk(Substituter(dict); maketerm = combine_fold)
+        Prewalk(Substituter(dict, filterer); maketerm = combine_fold)
     else
-        Prewalk(Substituter(dict))
+        Prewalk(Substituter(dict, filterer))
     end
     rw(expr)
 end
 
-@inline function substitute(expr::AbstractArray, dict; fold=true)
+@inline function substitute(expr::AbstractArray, dict; kw...)
     if _is_array_of_symbolics(expr)
-        [substitute(x, dict; fold) for x in expr]
+        [substitute(x, dict; kw...) for x in expr]
     else
         expr
     end

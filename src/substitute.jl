@@ -162,6 +162,23 @@ function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, 
     
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Given a function `f`, return a function that will scalarize an expression with `f` as the
+head. The returned function is passed `f` and the expression with `f` as the head.
+"""
+scalarization_function(@nospecialize(_)) = _default_scalarize
+
+function _default_scalarize(f, x::BasicSymbolic{T}) where {T}
+    @nospecialize f
+
+    f isa BasicSymbolic{T} && return collect(x)
+
+    args = arguments(x)
+    f(map(unwrap_const ∘ scalarize, args)...)
+end
+
 function scalarize(x::BasicSymbolic{T}) where {T}
     sh = shape(x)
     sh isa Unknown && return x
@@ -183,11 +200,38 @@ function scalarize(x::BasicSymbolic{T}) where {T}
         end
         _ => begin
             f = operation(x)
-            f === inv && _is_array_shape(sh) && return collect(x)
             f isa BasicSymbolic{T} && return collect(x)
-            args = arguments(x)
-            f(map(unwrap_const ∘ scalarize, args)...)
+            return scalarization_function(f)(f, x)
         end
     end
 end
 scalarize(arr::Array) = map(scalarize, arr)
+
+scalarization_function(::typeof(inv)) = _inv_scal
+
+function _inv_scal(::typeof(inv), x::BasicSymbolic{T}) where {T}
+    sh = shape(x)
+    (sh isa ShapeVecT && !isempty(sh)) ? collect(x) : x
+end
+
+scalarization_function(::typeof(LinearAlgebra.det)) = _det_scal
+
+function _det_scal(::typeof(LinearAlgebra.det), x::BasicSymbolic{T}) where {T}
+    arg = arguments(x)[1]
+    sh = shape(arg)
+    sh isa Unknown && return collect(x)
+    sh = sh::ShapeVecT
+    isempty(sh) && return x
+    sarg = scalarize(arg)
+    _det_scal(LinearAlgebra.det, T, sarg)
+end
+
+function _det_scal(::typeof(LinearAlgebra.det), ::Type{T}, x::AbstractMatrix) where {T}
+    length(x) == 1 && return x[]
+    add_buffer = BasicSymbolic{T}[]
+    for i in 1:size(x, 1)
+        ex = _det_scal(LinearAlgebra.det, T, view(x, setdiff(axes(x, 1), i), 2:size(x, 2)))
+        push!(add_buffer, (isodd(i) ? 1 : -1) * x[i, 1] * ex)
+    end
+    return add_worker(T, add_buffer)
+end

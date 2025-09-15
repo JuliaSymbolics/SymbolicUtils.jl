@@ -652,3 +652,26 @@ end
 function LinearAlgebra.dot(x::BasicSymbolic{T}, y::AbstractArray) where {T}
     LinearAlgebra.dot(x, Const{T}(y))
 end
+
+promote_symtype(::typeof(LinearAlgebra.det), ::Type{T}) where {T <: Number} = T
+promote_symtype(::typeof(LinearAlgebra.det), ::Type{T}) where {eT, T <: AbstractMatrix{eT}} = eT
+
+@noinline function _throw_not_matrix(x)
+    throw(ArgumentError("Expected argument to be a matrix, got argument of shape $x."))
+end
+
+function promote_shape(::typeof(LinearAlgebra.det), sh::ShapeT)
+    @nospecialize sh
+    if sh isa Unknown
+        sh.ndims == -1 || sh.ndims == 2 || _throw_not_matrix(sh)
+    elseif sh isa ShapeVecT
+        length(sh) == 0 || length(sh) == 2 || _throw_not_matrix(sh)
+    end
+    return ShapeVecT()
+end
+
+function LinearAlgebra.det(A::BasicSymbolic{T}) where {T}
+    type = promote_symtype(LinearAlgebra.det, symtype(A))
+    sh = promote_shape(LinearAlgebra.det, shape(A))
+    BSImpl.Term{T}(LinearAlgebra.det, ArgsT{T}((A,)); type, shape = sh)
+end

@@ -2011,11 +2011,9 @@ function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}},
     return var
 end
 
-function +(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
-    return add_worker(vartype(T), (a, b, bs...))
-end
+const PolyadicNumericOpFirstArgT{T} = Union{Number, AbstractArray{<:Number}, AbstractArray{T}}
 
-function +(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
+function +(a::PolyadicNumericOpFirstArgT{T}, b::T, bs...) where {T <: NonTreeSym}
     return add_worker(vartype(T), (a, b, bs...))
 end
 
@@ -2388,11 +2386,7 @@ function *(x::T, args...) where {T <: NonTreeSym}
     mul_worker(vartype(T), (x, args...))
 end
 
-function *(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
-    return mul_worker(vartype(T), (a, b, bs...))
-end
-
-function *(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
+function *(a::PolyadicNumericOpFirstArgT{T}, b::T, bs...) where {T <: NonTreeSym}
     return mul_worker(vartype(T), (a, b, bs...))
 end
 

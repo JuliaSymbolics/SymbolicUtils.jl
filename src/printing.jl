@@ -120,6 +120,9 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
+    if f isa Mapper
+        return show_call(io, map, [[f.f]; args])
+    end
     fname = iscall(f) ? Symbol(repr(f)) : nameof(f)
     len_args = length(args)
     if Base.isunaryoperator(fname) && len_args == 1

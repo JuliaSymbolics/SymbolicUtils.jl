@@ -704,3 +704,66 @@ function LinearAlgebra.det(A::BasicSymbolic{T}) where {T}
     sh = promote_shape(LinearAlgebra.det, shape(A))
     BSImpl.Term{T}(LinearAlgebra.det, ArgsT{T}((A,)); type, shape = sh)
 end
+
+struct Mapper{F}
+    f::F
+end
+
+function (f::Mapper)(xs...)
+    map(f.f, xs...)
+end
+
+function promote_symtype(f::Mapper, ::Type{T}, Ts...) where {eT, N, T <: AbstractArray{eT, N}}
+    Array{promote_symtype(f.f, eT, eltype.(Ts)...), N}
+end
+
+function promote_shape(::Mapper, shs::ShapeT...)
+    @nospecialize shs
+    @assert allequal(Iterators.map(_size_from_shape, shs))
+    sz = _size_from_shape(shs[1])
+    if sz isa Unknown
+        sz.ndims == -1 && error("Cannot `map` when first argument has unknown `ndims`.")
+        return sz
+    end
+    return ShapeVecT((:).(1, sz))
+end
+
+function _map(::Type{T}, f, xs...) where {T}
+    f = Mapper(f)
+    xs = Const{T}.(xs)
+    type = promote_symtype(f, symtype.(xs)...)
+    sh = promote_shape(f, shape.(xs)...)
+    nd = ndims(sh)
+    term = BSImpl.Term{T}(f, ArgsT{T}(xs); type, shape = sh)
+    idxsym = idxs_for_arrayop(T)
+    idxs = OutIdxT{T}()
+    sizehint!(idxs, nd)
+    for i in 1:nd
+        push!(idxs, idxsym[i])
+    end
+    idxs = ntuple(Base.Fix1(getindex, idxsym), nd)
+
+    indexed = ntuple(Val(length(xs))) do i
+        xs[i][idxs...]
+    end
+    exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
+    return BSImpl.ArrayOp{T}(idxs, exp, +, term; type = type, shape = sh)
+end
+
+function Base.map(f::BasicSymbolic{T}, xs...) where {T}
+    _map(T, f, xs...)
+end
+function Base.map(f::BasicSymbolic{T}, x::AbstractArray, xs...) where {T}
+    _map(T, f, x, xs...)
+end
+
+for fT in [Any, :(BasicSymbolic{T})]
+    @eval function Base.map(f::$fT, x::BasicSymbolic{T}, xs...) where {T}
+        _map(T, f, x, xs...)
+    end
+    for x1T in [Any, :(BasicSymbolic{T})]
+        @eval function Base.map(f::$fT, x1::$x1T, x::BasicSymbolic{T}, xs...) where {T}
+            _map(T, f, x1, x, xs...)
+        end
+    end
+end

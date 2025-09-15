@@ -1730,6 +1730,52 @@ end
 fntype_X_Y(::Type{<: FnType{X, Y}}) where {X, Y} = (X, Y)
 
 """
+    $(TYPEDSIGNATURES)
+
+Check if `x` is a symbolic representing a function (as opposed to a dependent variable).
+A symbolic function either has a defined signature or the function type defined. For
+example, all of the below are considered symbolic functions:
+
+```julia
+@syms f(::Real, ::Real) g(::Real)::Integer h(::Real)[1:2]::Integer (ff::MyCallableT)(..)
+```
+
+However, the following is considered a dependent variable with unspecified independent
+variable:
+
+```julia
+@syms x(..)
+```
+
+See also: [`SymbolicUtils.is_function_symtype`](@ref).
+"""
+is_function_symbolic(x::BasicSymbolic) = is_function_symtype(symtype(x))
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the given `symtype` represents a function (as opposed to a dependent variable).
+
+See also: [`SymbolicUtils.is_function_symbolic`](@ref).
+"""
+is_function_symtype(::Type{T}) where {T} = false
+is_function_symtype(::Type{FnType{Tuple, Y, Nothing}}) where {Y} = false
+is_function_symtype(::Type{FnType{X, Y, Z}}) where {X, Y, Z} = true
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the given symbolic `x` is the result of calling a symbolic function (as opposed
+to a dependent variable).
+
+See also: [`SymbolicUtils.is_function_symbolic`](@ref).
+"""
+function is_called_function_symbolic(x::BasicSymbolic{T}) where {T}
+    @match x begin
+        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => is_function_symtype(f)
+        _ => false
+    end
+end
+
+"""
     promote_symtype(f::FnType{X,Y}, arg_symtypes...)
 
 The output symtype of applying variable `f` to arguments of symtype `arg_symtypes...`.

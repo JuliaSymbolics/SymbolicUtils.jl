@@ -2858,8 +2858,14 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
 end
 
 function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractArray{<:Integer}, Colon}...) where {T}
+    @match arr begin
+        BSImpl.Term(; f) && if f === hvncat && !any(x -> x isa BasicSymbolic{T}, idxs) end => begin
+            return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[idxs...])
+        end
+        BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
+        _ => nothing
+    end
     if isterm(arr) && operation(arr) === hvncat && !any(x -> x isa BasicSymbolic, idxs)
-        return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[idxs...])
     end
     type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
     newshape = promote_shape(getindex, shape(arr), shape.(idxs)...)

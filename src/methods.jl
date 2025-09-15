@@ -490,6 +490,26 @@ function Base.isempty(x::BasicSymbolic)
     _unreachable()
 end
 
+promote_symtype(::Type{CartesianIndex}, xs...) = CartesianIndex{length(xs)}
+promote_symtype(::Type{CartesianIndex{N}}, xs::Vararg{T, N}) where {T, N} = CartesianIndex{N}
+function promote_shape(::Type{CartesianIndex}, xs::ShapeT...)
+    @nospecialize xs
+    @assert all(!_is_array_shape, xs)
+    return ShapeVecT((1:length(xs),))
+end
+function promote_shape(::Type{CartesianIndex{N}}, xs::Vararg{ShapeT, N}) where {N}
+    @nospecialize xs
+    @assert all(!_is_array_shape, xs)
+    return ShapeVecT((1:length(xs),))
+end
+function Base.CartesianIndex(x::BasicSymbolic{T}, xs::BasicSymbolic{T}...) where {T}
+    @assert symtype(x) <: Integer
+    @assert all(x -> symtype(x) <: Integer, xs)
+    type = promote_symtype(CartesianIndex, symtype(x), symtype.(xs)...)
+    sh = promote_shape(CartesianIndex, shape(x), shape.(xs)...)
+    BSImpl.Term{T}(CartesianIndex{length(xs) + 1}, ArgsT{T}((x, xs...)); type, shape = sh)
+end
+
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
 Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
 Broadcast.result_style(::SymBroadcast{T}) where {T} = SymBroadcast{T}()

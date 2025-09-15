@@ -480,6 +480,15 @@ function Base.iterate(x::BasicSymbolic, _state)
     idx, state = iterate(idxs, state)
     return x[idx], (idxs, state)
 end
+function Base.isempty(x::BasicSymbolic)
+    sh = shape(x)
+    if sh isa Unknown
+        return false
+    elseif sh isa ShapeVecT
+        return _length_from_shape(sh) == 0
+    end
+    _unreachable()
+end
 
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
 Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()

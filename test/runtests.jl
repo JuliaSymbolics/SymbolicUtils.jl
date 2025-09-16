@@ -18,5 +18,6 @@ using Pkg, Test, SafeTestsets
         @safetestset "Adjoints" begin include("adjoints.jl") end
         @safetestset "Hash Consing" begin include("hash_consing.jl") end
         @safetestset "Cache macro" begin include("cache_macro.jl") end
+        @safetestset "Cache macro" begin include("mutable_arithmetics.jl") end
     end
 end

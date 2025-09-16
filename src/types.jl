@@ -245,6 +245,22 @@ function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
     symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
 end
 
+function SymbolicIndexingInterface.getname(x::BasicSymbolic{T}) where {T}
+    @match x begin
+        BSImpl.Sym(; name) => name
+        BSImpl.Term(; f, args) && if f === getindex end => getname(args[1])
+        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => getname(f)
+    end
+end
+
+function SymbolicIndexingInterface.hasname(x::BasicSymbolic{T}) where {T}
+    @match x begin
+        BSImpl.Sym(;) => true
+        BSImpl.Term(; f) && if f === getindex || f isa BasicSymbolic{T} end => true
+        _ => false
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 

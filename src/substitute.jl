@@ -184,6 +184,15 @@ function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = default_i
     return nothing
 end
 
+_default_buffer(::BasicSymbolic{T}) where {T} = Set{BasicSymbolic{T}}()
+_default_buffer(x::Any) = unwrap(x) === x ? Set() : _default_buffer(unwrap(x))
+
+function search_variables(expr; kw...)
+    buffer = _default_buffer(expr)
+    search_variables!(buffer, expr; kw...)
+    return buffer
+end
+
 function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce; subrules = Dict()) where {T}
     new_ranges = RangesT{T}()
     new_expr = Code.unidealize_indices(expr, ranges, new_ranges)

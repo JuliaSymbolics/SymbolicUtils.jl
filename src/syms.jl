@@ -28,8 +28,15 @@ Following is a semi-formal CFG of the syntax accepted by this macro:
 # any variable accepted by this macro must be a `var`.
 # `var` can represent a quantity (`value`) or a function `(fn)`.
 var = value | fn
-# A `value` is represented as an identifier followed by a suffix
-value = ident suffix
+# A `value` is represented as a name followed by a suffix
+value = name suffix
+# A `name` can be a valid Julia identifier
+name = ident |
+# Or it can be an interpolated variable, in which case `ident` is assumed to refer to
+# a variable in the current scope of type `Symbol` containing the name of this variable.
+# Note that in this case the created symbolic variable will be bound to a randomized
+# Julia identifier.
+       "\$" ident
 # The `suffix` can be empty (no suffix) which defaults the type to `Number`
 suffix = "" |
 # or it can be a type annotation (setting the type of the prefix). The shape of the result
@@ -47,7 +54,13 @@ ranges = range | range "," ranges
 # A `range` is simply two bounds separated by a colon, as standard Julia ranges work.
 # The range must be non-empty. Each bound can be a literal integer or an identifier
 # representing an integer in the current scope.
-range = (int | ident) ":" (int | ident)
+range = (int | ident) ":" (int | ident) |
+# Alternatively, a range can be a Julia expression that evaluates to a range. All identifiers
+# used in `expr` are assumed to exist in the current scope.
+        expr |
+# Alternatively, a range can be a Julia expression evaluating to an iterable of ranges,
+# followed by the splat operator.
+        expr "..."
 # A function is represented by a function-call syntax `fncall` followed by the `suffix`
 # above. The type and shape from `suffix` represent the type and shape of the value
 # returned by the symbolic function.
@@ -61,12 +74,8 @@ head = ident |
 # function were to be replaced by an "actual" function, the type-annotation constrains the
 # type of the "actual" function.
        "(" ident "::" type ")"
-# Arguments to a function can be ".." representing an unknown number of arguments of
-# unknown types
-args = ".." |
-# Or it can be a list of one or more arguments
-       one_or_more_args
-one_or_more_args = arg | arg "," one_or_more_args
+# Arguments to a function is a list of one or more arguments
+args = arg | arg "," args
 # An argument can take the syntax of a variable (which means we can represent functions of
 # functions of functions of...). The type of the variable constrains the type of the
 # corresponding argument of the function. The name and shape information is discarded.
@@ -74,12 +83,17 @@ arg = var |
 # Or an argument can be an unnamed type-annotation, which constrains the type without
 # requiring a name.
       "::" type |
-# Or an argument can be an argument followed by a splat operator. This can only be the last
-# argument of the function. The type of the last argument is constrained to be `Vararg{T}`
-# where `T` is the type from `arg`. This allows the symbolic function to be called with
-# an arbitrary number of trailing arguments of the specified type `T`. Note that multiple
-# splat operations are not allowed - `x......` or `(x...)...` is invalid Julia syntax.
-      arg "..."
+# Or an argument can be the identifier `..`, which is used as a stand-in for `Vararg{Any}`
+      ".." |
+# Or an argument can be a type-annotated `..`, representing `Vararg{type}`. Note that this
+# and the previous version of `arg` can only be the last element in `args` due to Julia's
+# `Tuple` semantics.
+      "(..)::" type |
+# Or an argument can be a Julia expression followed by a splat operator. This assumes the
+# expression evaluates to an iterable of symbolic variables whose `symtype` should be used
+# as the argument types. Note that `expr` may be evaluated multiple times in the macro
+# expansion.
+      expr "..."
 ```
 """
 macro syms(xs...)
@@ -106,12 +120,15 @@ macro syms(xs...)
     for x in xs
         nts = parse_variable(x)
         push!(ntss, nts)
-        n, t, s = nts[:name], nts[:type], nts[:shape]
-        T = esc(t)
-        s = esc(s)
-        res = :($(esc(n)) = $Sym{$_vartype}($(Expr(:quote, n)); type = $T, shape = $s))
+        res = sym_from_parse_result(nts, _vartype)
+        if nts[:isruntime]
+            varname = Symbol(nts[:name])
+        else
+            varname = esc(nts[:name])
+        end
+        res = :($varname = $res)
         push!(expr.args, res)
-        push!(allofem.args, esc(n))
+        push!(allofem.args, varname)
     end
     push!(expr.args, allofem)
     return expr
@@ -123,6 +140,14 @@ end
 
 const ParseDictT = Dict{Symbol, Any}
 
+function sym_from_parse_result(result::ParseDictT, vartype)::Expr
+    n, t, s = result[:name], result[:type], result[:shape]
+    T = esc(t)
+    s = esc(s)
+    varname = result[:isruntime] ? esc(n) : Expr(:quote, n)
+    return :($Sym{$vartype}($(varname); type = $T, shape = $s))
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -131,7 +156,8 @@ Returns a `$ParseDictT` with the following keys guaranteed to exist:
 
 - `:name`: The name of the variable. `nothing` if not specified.
 - `:type`: The type of the variable. `default_type` if not specified.
-- `:shape`: The shape of the variable
+- `:shape`: The shape of the variable.
+- `:isruntime`: Whether the name is a runtime value (comes from a `\$name` interpolation syntax).
 
 This does not attempt to `eval` to interpret types. Values in the above keys are concrete
 values when possible and `Expr`s when not.
@@ -149,47 +175,44 @@ this function.
 """
 Base.@nospecializeinfer function parse_variable(x; default_type = Number)::ParseDictT
     @nospecialize x
-    @show x
     if x isa Symbol
         # just a symbol
-        return ParseDictT(:name => x, :type => default_type, :shape => ShapeVecT())
+        type = if x == :..
+            Vararg{Any}
+        else
+            default_type
+        end
+        return ParseDictT(:name => x, :type => type, :shape => ShapeVecT(), :isruntime => false)
+    elseif Meta.isexpr(x, :$)
+        return ParseDictT(:name => x.args[1], :type => default_type, :shape => ShapeVecT(), :isruntime => true)
     elseif Meta.isexpr(x, :call)
         # a function
         head = x.args[1]
         args = x.args[2:end]
         result = ParseDictT()
-        if head isa Expr
-            head_nts = result[:head] = parse_variable(head)
-            fname = head_nts[:name]
-            ftype = head_nts[:type]
-        else
-            fname = head
-            ftype = Nothing
-            result[:head] = ParseDictT(:name => fname, :type => ftype)
-        end
-        if length(args) == 1 && args[1] == :..
-            signature = Tuple
-            result[:args] = [ParseDictT(:name => :..)]
-        else
-            if any(isequal(:..), args)
-                syms_syntax_error(x)
-            end
-            result[:args] = map(parse_variable, args)
-            arg_types = [arg[:type] for arg in result[:args]]
-            signature = :(Tuple{$(arg_types...)})
-        end
+        result[:head] = parse_variable(head; default_type = Nothing)
+        fname = result[:head][:name]
+        ftype = result[:head][:type]
+        result[:args] = [parse_variable(arg; default_type) for arg in args]
+        arg_types = [arg[:type] for arg in result[:args]]
+        signature = :(Tuple{$(arg_types...)})
         result[:name] = fname
-        result[:type] = :($FnType{$signature, Number, $ftype})
+        result[:type] = :($FnType{$signature, $default_type, $ftype})
         result[:shape] = ShapeVecT()
+        result[:isruntime] = result[:head][:isruntime]
         return result
     elseif Meta.isexpr(x, :ref)
-        result = parse_variable(x.args[1])
+        result = parse_variable(x.args[1]; default_type)
         shape = Expr(:call, ShapeVecT, Expr(:tuple, x.args[2:end]...))
         ntype = result[:type]
+        ndim = length(x.args) - 1
+        if ndim > 0 && Meta.isexpr(x.args[end], :...)
+            ndim = :($(ndim - 1) + length($(x.args[end].args[1])))
+        end
         if Meta.isexpr(ntype, :curly) && ntype.args[1] === FnType
-            ntype.args[3] = :($Array{$(ntype.args[3]), $(length(x.args) - 1)})
+            ntype.args[3] = :($Array{$(ntype.args[3]), $(ndim)})
         else
-            ntype = :($Array{$ntype, $(length(x.args) - 1)})
+            ntype = :($Array{$ntype, $(ndim)})
         end
         result[:type] = ntype
         result[:shape] = shape
@@ -201,7 +224,7 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
             return ParseDictT(:name => nothing, :type => x.args[1], :shape => shape)
         end
         head, type = x.args
-        result = parse_variable(head)
+        result = parse_variable(head; default_type)
         shape = shape_from_type(type, result[:shape])
         ntype = result[:type]
         if Meta.isexpr(ntype, :curly) && ntype.args[1] === FnType
@@ -212,6 +235,8 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
             end
         elseif Meta.isexpr(ntype, :curly) && ntype.args[1] === Array
             ntype.args[2] = type
+        elseif head == :..
+            ntype = :(Vararg{$type})
         else
             ntype = type
         end
@@ -219,8 +244,11 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
         result[:shape] = shape
         return result
     elseif Meta.isexpr(x, :...)
-        result = parse_variable(x.args[1])
-        result[:type] = :(Vararg{$(result[:type])})
+        result = ParseDictT()
+        result[:name] = x
+        result[:type] = :($symtype.($(x.args[1]))...)
+        result[:shape] = nothing
+        result[:isruntime] = false
         return result
     else
         syms_syntax_error(x)

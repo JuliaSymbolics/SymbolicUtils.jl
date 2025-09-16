@@ -438,6 +438,15 @@ function _size_from_shape(shape::ShapeT)
     end
 end
 Base.size(x::BasicSymbolic) = _size_from_shape(shape(x))
+function Base.size(x::BasicSymbolic, i::Integer)
+    sh = shape(x)
+    if sh isa Unknown
+        return sh
+    elseif sh isa ShapeVecT
+        return length(sh[i])
+    end
+    _unreachable()
+end
 function _length_from_shape(sh::ShapeT)
     @nospecialize sh
     if sh isa Unknown

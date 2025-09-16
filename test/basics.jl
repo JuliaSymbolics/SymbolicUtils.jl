@@ -374,6 +374,8 @@ end
     @test (2x/3y).num.coeff == 2
     @test (2x/3y).den.coeff == 3
     @test (2x/-3x) == -2//3
+    @test isequal((2x*y/-3x), -2y/3)
+    @test isequal((x*y/2x), y/2)
     @test (2.5x/3x).num == 2.5
     @test (2.5x/3x).den == 3
     @test (x/3x) == 1//3

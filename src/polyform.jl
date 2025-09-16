@@ -1,7 +1,7 @@
 export simplify_fractions, quick_cancel, flatten_fractions
 
-to_poly!(::Dict, ::Dict, expr, ::Bool) = MA.operate!(+, zeropoly(), expr)
-function to_poly!(poly_to_bs::Dict, bs_to_poly::Dict, expr::BasicSymbolic{T}, recurse::Bool = true)::Union{PolyVarT, PolynomialT} where {T}
+to_poly!(::AbstractDict, ::AbstractDict, expr, ::Bool) = MA.operate!(+, zeropoly(), expr)
+function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::BasicSymbolic{T}, recurse::Bool = true)::Union{PolyVarT, PolynomialT} where {T}
     type = symtype(expr)
     @match expr begin
         BSImpl.Const(; val) => to_poly!(poly_to_bs, bs_to_poly, val, recurse)

@@ -85,6 +85,17 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
     end
 end
 
+function from_poly(poly_to_bs::AbstractDict{PolyVarT, BasicSymbolic{T}}, poly::Union{_PolynomialT, PolyVarT}) where {T}
+    partial_pvars = MP.variables(poly)
+    vars = SmallV{BasicSymbolic{T}}()
+    sizehint!(vars, length(partial_pvars))
+    for ppvar in partial_pvars
+        var = poly_to_bs[ppvar]
+        push!(vars, var)
+    end
+    return subs_poly(poly, vars)::BasicSymbolic{T}
+end
+
 """
     expand(expr)
 
@@ -101,14 +112,7 @@ function expand(expr::BasicSymbolic{T})::BasicSymbolic{T} where {T}
     poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
     bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
     partial_poly = to_poly!(poly_to_bs, bs_to_poly, expr)
-    partial_pvars = MP.variables(partial_poly)
-    vars = SmallV{BasicSymbolic{T}}()
-    sizehint!(vars, length(partial_pvars))
-    for ppvar in partial_pvars
-        var = poly_to_bs[ppvar]
-        push!(vars, var)
-    end
-    return subs_poly(partial_poly, vars)::BasicSymbolic{T}
+    return from_poly(poly_to_bs, partial_poly)
 end
 expand(x) = x
 
@@ -182,19 +186,7 @@ function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: 
     partial_poly2 = MP.div_multiple(partial_poly2, factor, MA.IsMutable())
     canonicalize_coeffs!(MP.coefficients(partial_poly1))
     canonicalize_coeffs!(MP.coefficients(partial_poly2))
-    pvars1 = MP.variables(partial_poly1)
-    vars1 = ArgsT{T}()
-    sizehint!(vars1, length(pvars1))
-    for x in pvars1
-        push!(vars1, poly_to_bs[x])
-    end
-    pvars2 = MP.variables(partial_poly2)
-    vars2 = ArgsT{T}()
-    sizehint!(vars2, length(pvars2))
-    for x in pvars2
-        push!(vars2, poly_to_bs[x])
-    end
-    return subs_poly(partial_poly1, vars1)::BasicSymbolic{T}, subs_poly(partial_poly2, vars2)::BasicSymbolic{T}
+    return from_poly(poly_to_bs, partial_poly1), from_poly(poly_to_bs, partial_poly2)
 end
 
 """

@@ -2867,7 +2867,7 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
     throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
 end
 
-function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractArray{<:Integer}, Colon}...) where {T}
+Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractArray{<:Integer}, Colon}...) where {T}
     @match arr begin
         BSImpl.Term(; f) && if f === hvncat && !any(x -> x isa BasicSymbolic{T}, idxs) end => begin
             return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[idxs...])
@@ -2875,10 +2875,17 @@ function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int,
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
         _ => nothing
     end
-    if isterm(arr) && operation(arr) === hvncat && !any(x -> x isa BasicSymbolic, idxs)
-    end
+
+    sh = shape(arr)
     type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
-    newshape = promote_shape(getindex, shape(arr), shape.(idxs)...)
+    newshape = promote_shape(getindex, sh, shape.(idxs)...)
+    @boundscheck if sh isa ShapeVecT
+        for (ax, idx) in zip(sh, idxs)
+            idx isa BasicSymbolic{T} && continue
+            idx isa Colon && continue
+            checkindex(Bool, ax, idx) || throw(BoundsError(arr, idxs))
+        end
+    end
     if !_is_array_shape(newshape)
         @match arr begin
             BSImpl.ArrayOp(; output_idx, expr, ranges, reduce) => begin

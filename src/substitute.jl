@@ -116,6 +116,9 @@ function query!(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default:
             query!(predicate, arg; recurse, default)
         end
         BSImpl.Div(; num, den) => query!(predicate, num; recurse, default) || query!(predicate, den; recurse, default)
+        BSImpl.ArrayOp(; expr = inner_expr, term) => begin
+            query!(predicate, @something(term, inner_expr); recurse, default)
+        end
     end
 end
 

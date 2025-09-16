@@ -124,7 +124,38 @@ end
 
 search_variables!(buffer, expr; kw...) = nothing
 
-function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = issym, recurse::G = iscall) where {F, G}
+"""
+    $(TYPEDSIGNATURES)
+
+The default `is_atomic` predicate for [`search_variables!`](@ref). `ex` is considered
+atomic if one of the following conditions is true:
+- It is a `Sym` and not an internal index variable for an arrayop
+- It is a `Term`, the operation is a `BasicSymbolic` and the operation represents a
+  dependent variable according to [`is_function_symbolic`](@ref).
+- It is a `Term`, the operation is `getindex` and the variable being indexed is atomic.
+"""
+function default_is_atomic(ex::BasicSymbolic{T}) where {T}
+    @match ex begin
+        BSImpl.Sym(; name) => name !== IDXS_SYM
+        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => !is_function_symbolic(f)
+        BSImpl.Term(; f, args) && if f === getindex end => default_is_atomic(args[1])
+        _ => false
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Find all variables used in `expr` and add them to `buffer`. A variable is identified by the
+predicate `is_atomic`. The predicate `recurse` determines whether to search further inside
+`expr` if it is not a variable. Note that `recurse` must at least return `false` if
+`iscall` returns `false`.
+
+Wrappers for [`BasicSymbolic`](@ref) should implement this function by unwrapping.
+
+See also: [`default_is_atomic`](@ref).
+"""
+function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = default_is_atomic, recurse::G = iscall) where {F, G}
     if is_atomic(expr)
         push!(buffer, expr)
         return
@@ -145,6 +176,9 @@ function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = issym, re
         BSImpl.Div(; num, den) => begin
             search_variables!(buffer, num; is_atomic, recurse)
             search_variables!(buffer, den; is_atomic, recurse)
+        end
+        BSImpl.ArrayOp(; expr = inner_expr, term) => begin
+            search_variables!(buffer, @something(term, inner_expr); is_atomic, recurse)
         end
     end
     return nothing

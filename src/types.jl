@@ -1124,7 +1124,7 @@ end
         if _isone(v)
             return k
         else
-            return k * v
+            return (k * v)::BasicSymbolic{T}
         end
     end
 
@@ -1143,7 +1143,7 @@ end
         if _isone(v)
             return k
         else
-            return k ^ v
+            return (k ^ v)::BasicSymbolic{T}
         end
     elseif _isone(-coeff) && length(dict) == 1
         k, v = first(dict)

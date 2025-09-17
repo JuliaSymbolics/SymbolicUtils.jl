@@ -800,7 +800,7 @@ end
         else
             @test_throws ArgumentError x[]
             @test_throws ArgumentError x[1, 2]
-            @test_throws ArgumentError x[[1 2; 3 4]]
+            @test_throws MethodError x[[1 2; 3 4]]
         end
         @test_throws ArgumentError x[k]
         @test_throws ArgumentError x[l]
@@ -860,7 +860,7 @@ end
             @test_throws BoundsError x[]
         else
             @test_throws ArgumentError x[]
-            @test_throws ArgumentError x[[1 2; 3 4], 1]
+            @test_throws MethodError x[[1 2; 3 4], 1]
             @test_throws ArgumentError x[1]
         end
         @test_throws ArgumentError x[k, 1]

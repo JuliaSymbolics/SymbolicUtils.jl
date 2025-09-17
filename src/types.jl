@@ -1555,6 +1555,13 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
         else
             @goto FALLBACK
         end
+    elseif f === broadcast
+        _f, _args = Iterators.peel(args)
+        res = broadcast(unwrap_const(_f), _args...)
+        if metadata !== nothing && iscall(res)
+            @set! res.metadata = metadata
+        end
+        return res
     else
         @label FALLBACK
         Term{T}(f, args; type, metadata=metadata)

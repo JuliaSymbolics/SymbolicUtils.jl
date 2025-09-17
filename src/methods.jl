@@ -579,6 +579,10 @@ function Broadcast.copy(bc::Broadcast.Broadcasted{SymBroadcast{T}}) where {T}
     _copy_broadcast!(buffer, bc)
 end
 
+function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{SymBroadcast{T}, A, typeof(Base.literal_pow), Tuple{Base.RefValue{typeof(^)}, B, Base.RefValue{Val{N}}}}) where {T, A, B, N}
+    _copy_broadcast!(buffer, Broadcast.Broadcasted{SymBroadcast{T}}(^, (bc.args[2], N), bc.axes))
+end
+
 function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{SymBroadcast{T}}) where {T}
     offset = length(buffer.canonical_args)
     for arg in bc.args

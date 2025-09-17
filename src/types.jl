@@ -2826,7 +2826,7 @@ end
 
 @inline _indexed_ndims() = 0
 @inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)
-@inline _indexed_ndims(::Type{T}, rest...) where {eT <: Integer, T <: AbstractVector{eT}} = 1 + _indexed_ndims(rest...)
+@inline _indexed_ndims(::Type{<:AbstractVector{<:Integer}}, rest...) = 1 + _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{Colon}, rest...) = 1 + _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{T}, rest...) where {T} = throw(ArgumentError("Invalid index type $T."))
 
@@ -2889,7 +2889,24 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
     throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
 end
 
-Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractArray{<:Integer}, Colon}...) where {T}
+function _getindex_metadata(metadata::MetadataT, idxs...)
+    @nospecialize metadata
+    if metadata === nothing
+        return metadata
+    elseif metadata isa Base.ImmutableDict{DataType, Any}
+        newmeta = Base.ImmutableDict{DataType, Any}()
+        for (k, v) in metadata
+            if v isa AbstractArray
+                v = v[idxs...]
+            end
+            newmeta = Base.ImmutableDict(newmeta, k, v)
+        end
+        return newmeta
+    end
+    _unreachable()
+end
+
+Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     @match arr begin
         BSImpl.Term(; f) && if f === hvncat && !any(x -> x isa BasicSymbolic{T}, idxs) end => begin
             return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[idxs...])
@@ -2908,22 +2925,94 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
             checkindex(Bool, ax, idx) || throw(BoundsError(arr, idxs))
         end
     end
-    if !_is_array_shape(newshape)
-        @match arr begin
-            BSImpl.ArrayOp(; output_idx, expr, ranges, reduce) => begin
-                subrules = Dict()
-                new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce; subrules)
-                empty!(subrules)
-                for (i, ii) in enumerate(output_idx)
-                    ii isa Int && continue
-                    subrules[ii] = idxs[i]
+    @match arr begin
+        BSImpl.ArrayOp(; output_idx, expr, ranges, reduce, term, metadata) => begin
+            subrules = Dict{BasicSymbolic{T}, Union{BasicSymbolic{T}, Int}}()
+            empty!(subrules)
+            new_output_idx = OutIdxT{T}()
+            copied_ranges = false
+            idxsym_idx = 1
+            idxsym = idxs_for_arrayop(T)
+            for (i, (newidx, outidx)) in enumerate(zip(idxs, output_idx))
+                if outidx isa Int
+                    newidx isa Colon && push!(new_output_idx, outidx)
+                elseif outidx isa BasicSymbolic{T}
+                    if newidx isa Colon
+                        new_out_idx = idxsym[idxsym_idx]
+                        subrules[outidx] = new_out_idx
+                        push!(new_output_idx, new_out_idx)
+                        idxsym_idx += 1
+                    elseif newidx isa AbstractRange{Int}
+                        if !copied_ranges
+                            ranges = copy(ranges)
+                            copied_ranges = true
+                        end
+                        ranges[outidx] = newidx
+                    else
+                        if haskey(ranges, outidx)
+                            subrules[outidx] = ranges[outidx][newidx]
+                        else
+                            subrules[outidx] = newidx
+                        end
+                    end
                 end
-                return substitute(new_expr, subrules; fold = false)
             end
-            _ => nothing
+            new_expr = substitute(expr, subrules; fold = false)
+            empty!(subrules)
+            if isempty(new_output_idx)
+                result = reduce_eliminated_idxs(new_expr, output_idx, ranges, reduce; subrules)
+                metadata = _getindex_metadata(metadata, idxs...)
+                @set! result.metadata = metadata
+                return result
+            else
+                if term !== nothing
+                    term_args = ArgsT{T}((term,))
+                    for idx in idxs
+                        push!(term_args, Const{T}(idx))
+                    end
+                    term = BSImpl.Term{T}(getindex, term_args; type, shape = newshape)
+                end
+                metadata = _getindex_metadata(metadata, idxs...)
+                return BSImpl.ArrayOp{T}(new_output_idx, new_expr, reduce, term, ranges; type, shape = newshape, metadata)
+            end
+        end
+        _ => begin
+            if _is_array_shape(newshape)
+                new_output_idx = OutIdxT{T}()
+                expr_args = ArgsT{T}((arr,))
+                term_args = ArgsT{T}((arr,))
+                ranges = RangesT{T}()
+                idxsym_idx = 1
+                idxsym = idxs_for_arrayop(T)
+                for idx in idxs
+                    push!(term_args, Const{T}(idx))
+                    if idx isa Int
+                        push!(expr_args, Const{T}(idx))
+                    elseif idx isa Colon
+                        new_idx = idxsym[idxsym_idx]
+                        push!(new_output_idx, new_idx)
+                        push!(expr_args, new_idx)
+                        idxsym_idx += 1
+                    elseif idx isa AbstractRange{Int}
+                        new_idx = idxsym[idxsym_idx]
+                        push!(new_output_idx, new_idx)
+                        push!(expr_args, new_idx)
+                        ranges[new_idx] = idx
+                        idxsym_idx += 1
+                    elseif idx isa BasicSymbolic{T}
+                        push!(expr_args, idx)
+                    end
+                end
+                new_expr = BSImpl.Term{T}(getindex, expr_args; type = eltype(type), shape = ShapeVecT())
+                new_term = BSImpl.Term{T}(getindex, term_args; type, shape = newshape)
+                metadata = _getindex_metadata(SymbolicUtils.metadata(arr), idxs...)
+                return BSImpl.ArrayOp{T}(new_output_idx, new_expr, +, new_term, ranges; type, shape = newshape, metadata)
+            else
+                metadata = _getindex_metadata(SymbolicUtils.metadata(arr), idxs...)
+                return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape, metadata)
+            end
         end
     end
-    return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
 end
 Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]
 function Base.getindex(x::AbstractArray, idx::BasicSymbolic{T}, idxs::BasicSymbolic{T}...) where {T}

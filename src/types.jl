@@ -1552,12 +1552,24 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
                 @set! res.metadata = metadata
             end
             return res
+        elseif f === getindex
+            res = getindex(args...)
+            if metadata !== nothing && iscall(res)
+                @set! res.metadata = metadata
+            end
+            return res
         else
             @goto FALLBACK
         end
     elseif f === broadcast
         _f, _args = Iterators.peel(args)
         res = broadcast(unwrap_const(_f), _args...)
+        if metadata !== nothing && iscall(res)
+            @set! res.metadata = metadata
+        end
+        return res
+    elseif f === getindex
+        res = getindex(args...)
         if metadata !== nothing && iscall(res)
             @set! res.metadata = metadata
         end

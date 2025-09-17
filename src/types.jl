@@ -951,6 +951,16 @@ function parse_output_idxs(::Type{T}, outidxs::Union{Tuple, AbstractVector}) whe
     return _outidxs::OutIdxT{T}
 end
 
+function parse_shape(sh)
+    sh isa Unknown && return sh
+    sh isa ShapeVecT && return sh
+    _sh = ShapeVecT()
+    for dim in sh
+        push!(_sh, dim)
+    end
+    return _sh
+end
+
 function parse_rangedict(::Type{T}, dict::AbstractDict) where {T}
     dict isa RangesT{T} && return dict
     _dict = RangesT{T}()
@@ -1019,6 +1029,7 @@ end
 
 @inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     props = ordered_override_properties(BSImpl.Sym)
     var = BSImpl.Sym{T}(name, metadata, shape, type, props...)
     if !unsafe
@@ -1029,6 +1040,7 @@ end
 
 @inline function BSImpl.Term{T}(f, args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     args = parse_args(T, args)
     props = ordered_override_properties(BSImpl.Term)
     var = BSImpl.Term{T}(f, args, metadata, shape, type, props...)
@@ -1040,6 +1052,7 @@ end
 
 @inline function BSImpl.AddMul{T}(coeff, dict, variant::AddMulVariant.T; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     dict = parse_dict(T, dict)
     props = ordered_override_properties(BSImpl.AddMul{T})
     var = BSImpl.AddMul{T}(coeff, dict, variant, metadata, shape, type, props...)
@@ -1051,6 +1064,7 @@ end
 
 @inline function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     num = Const{T}(num)
     den = Const{T}(den)
     props = ordered_override_properties(BSImpl.Div)
@@ -1071,6 +1085,7 @@ default_ranges(::Type{TreeReal}) = DEFAULT_RANGES_TREEREAL
 
 @inline function BSImpl.ArrayOp{T}(output_idx, expr::BasicSymbolic{T}, reduce, term, ranges = default_ranges(T); metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     output_idx = parse_output_idxs(T, output_idx)
     term = unwrap_const(unwrap(term))
     ranges = parse_rangedict(T, ranges)

@@ -1533,6 +1533,16 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
                 @set! res.metadata = metadata
             end
             return res
+        elseif f === (-)
+            if length(args) == 1
+                res = mul_worker(T, (-1, args[1]))
+            else
+                res = add_worker(T, (args[1], -args[2]))
+            end
+            if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
+                @set! res.metadata = metadata
+            end
+            return res
         elseif f === (*)
             res = mul_worker(T, args)
             if metadata !== nothing && (ismul(res) || (isterm(res) && operation(res) == (*)))

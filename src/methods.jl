@@ -890,3 +890,14 @@ macro mapreduce_methods(T, arg_f, result_f)
     end
     return esc(result)
 end
+
+function operator_to_term(::Operator, ex::BasicSymbolic{T}) where {T}
+    return ex
+end
+
+function Base.Symbol(ex::BasicSymbolic{T}) where {T}
+    @match ex begin
+        BSImpl.Term(; f) && if f isa Operator end => Symbol(string(operator_to_term(f, ex)::BasicSymbolic{T}))
+        _ => Symbol(string(ex))
+    end
+end

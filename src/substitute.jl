@@ -1,10 +1,9 @@
-struct Substituter{D <: AbstractDict, F}
+struct Substituter{D <: AbstractDict}
     dict::D
-    filterer::F
 end
 
 function (s::Substituter)(expr)
-    s.filterer(expr) ? get(s.dict, expr, expr) : expr
+    get(s.dict, expr, expr)
 end
 
 function _const_or_not_symbolic(x)
@@ -57,9 +56,9 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 """
 @inline function substitute(expr, dict; fold=true, filterer=Returns(true))
     rw = if fold
-        Prewalk(Substituter(dict, filterer); maketerm = combine_fold)
+        Prewalk(Substituter(dict); filter=filterer, maketerm = combine_fold)
     else
-        Prewalk(Substituter(dict, filterer))
+        Prewalk(Substituter(dict); filter=filterer,)
     end
     rw(expr)
 end

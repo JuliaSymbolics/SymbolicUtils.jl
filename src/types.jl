@@ -2847,6 +2847,10 @@ function ^(a::BasicSymbolic{T}, b::Matrix{BasicSymbolic{T}}) where {T <: Union{S
     a ^ Const{T}(b)
 end
 
+abstract type Operator end
+promote_shape(::Operator, @nospecialize(shx::ShapeT)) = shx
+promote_symtype(::Operator, ::Type{T}) where {T} = T
+
 @inline _indexed_ndims() = 0
 @inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{<:AbstractVector{<:Integer}}, rest...) = 1 + _indexed_ndims(rest...)

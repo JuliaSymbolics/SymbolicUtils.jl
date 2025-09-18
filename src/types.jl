@@ -1586,7 +1586,8 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
         return res
     else
         @label FALLBACK
-        Term{T}(f, args; type, metadata=metadata)
+        sh = promote_shape(f, shape.(args)...)
+        Term{T}(f, args; type, shape=sh, metadata=metadata)
     end
 end
 

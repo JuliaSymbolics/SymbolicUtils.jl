@@ -250,7 +250,7 @@ function scalarize(x::BasicSymbolic{T}) where {T}
         end
     end
 end
-scalarize(arr::Array) = map(scalarize, arr)
+scalarize(arr::AbstractArray) = map(scalarize, arr)
 
 scalarization_function(::typeof(inv)) = _inv_scal
 

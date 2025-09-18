@@ -284,15 +284,17 @@ function (rw::FixpointNoCycle)(x)
     return x
 end
 
-struct Walk{ord, C, F, threaded}
+struct Walk{ord, C, F, M, threaded}
     rw::C
+    filter::F
     thread_cutoff::Int
-    maketerm::F
+    maketerm::M
 end
 
-function instrument(x::Walk{ord, C,F,threaded}, f) where {ord,C,F,threaded}
+function instrument(x::Walk{ord, C,F, M,threaded}, f) where {ord,C,F, M,threaded}
     irw = instrument(x.rw, f)
-    Walk{ord, typeof(irw), typeof(x.maketerm), threaded}(irw,
+    Walk{ord, typeof(irw), typeof(x.filter), typeof(x.maketerm), threaded}(irw,
+                                                            x.filter,
                                                             x.thread_cutoff,
                                                             x.maketerm)
 end
@@ -313,6 +315,7 @@ simplification of subexpressions before the containing expression.
 - `threaded`: If true, use multi-threading for large expressions
 - `thread_cutoff`: Minimum node count to trigger threading
 - `maketerm`: Function to construct terms (defaults to `maketerm`)
+- `filter`: Function which returns whether to search into a subtree
 
 # Examples
 ```julia
@@ -324,8 +327,8 @@ julia> pw((x + x) * (y + y))  # Simplifies both additions
 
 See also: [`Prewalk`](@ref)
 """
-function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm)
-    Walk{:post, typeof(rw), typeof(maketerm), threaded}(rw, thread_cutoff, maketerm)
+function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm, filter=Returns(true))
+    Walk{:post, typeof(rw), typeof(filter), typeof(maketerm), threaded}(rw, filter, thread_cutoff, maketerm)
 end
 
 """
@@ -341,6 +344,7 @@ transformation of the overall structure before processing subexpressions.
 - `threaded`: If true, use multi-threading for large expressions
 - `thread_cutoff`: Minimum node count to trigger threading
 - `maketerm`: Function to construct terms (defaults to `maketerm`)
+- `filter`: Function which returns whether to search into a subtree
 
 # Examples
 ```julia
@@ -352,8 +356,8 @@ cos(cos(x))
 
 See also: [`Postwalk`](@ref)
 """
-function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm)
-    Walk{:pre, typeof(rw), typeof(maketerm), threaded}(rw, thread_cutoff, maketerm)
+function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm, filter=Returns(true))
+    Walk{:pre, typeof(rw), typeof(filter), typeof(maketerm), threaded}(rw, filter, thread_cutoff, maketerm)
 end
 
 """
@@ -382,14 +386,14 @@ instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 (p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
 
 passthrough(x, default) = x === nothing ? default : x
-function (p::Walk{ord, C, F, false})(x::BasicSymbolic{T}) where {ord, C, F, T}
+function (p::Walk{ord, C, F, M, false})(x::BasicSymbolic{T}) where {ord, C, F, M, T}
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
             x = Const{T}(p.rw(x))
         end
 
-        if iscall(x)
+        if iscall(x) && p.filter(x)
             args = arguments(x)::ROArgsT{T}
             op = PassThrough(p)
             for i in eachindex(args)
@@ -415,13 +419,13 @@ function (p::Walk{ord, C, F, false})(x::BasicSymbolic{T}) where {ord, C, F, T}
 end
 (p::Walk{ord, C, F, false})(x) where {ord, C, F} = x
 
-function (p::Walk{ord, C, F, true})(x::BasicSymbolic{T}) where {ord, C, F, T}
+function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M, T}
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
             x = p.rw(x)
         end
-        if iscall(x)
+        if iscall(x) && p.filter(x)
             args = arguments(x)::ROArgsT{T}
             op = PassThrough(p)
             for i in eachindex(args)

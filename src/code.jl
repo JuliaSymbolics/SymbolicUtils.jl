@@ -151,6 +151,7 @@ function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
 
     # TODO: better infer default eltype from `O`
     output_eltype = get(st.rewrites, :arrayop_eltype, Float64)
+    delete!(st.rewrites, :arrayop_eltype)
     sh = shape(O)
     default_output_buffer = if _is_array_shape(sh)
         term(zeros, output_eltype, size(O))
@@ -158,6 +159,7 @@ function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
         term(zero, output_eltype)
     end
     output_buffer = get(st.rewrites, :arrayop_output, default_output_buffer)
+    delete!(st.rewrites, :arrayop_output)
     toexpr(Let(
         [
             Assignment(ARRAYOP_OUTSYM, output_buffer),

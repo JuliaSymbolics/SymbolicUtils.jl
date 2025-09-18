@@ -2981,21 +2981,22 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
                         ranges[outidx] = newidx
                     else
                         if haskey(ranges, outidx)
-                            subrules[outidx] = ranges[outidx][newidx]
+                            subrules[outidx] = ranges[outidx][unwrap_const(newidx)::Union{BasicSymbolic{T}, Int}]
                         else
-                            subrules[outidx] = newidx
+                            subrules[outidx] = unwrap_const(newidx)::Union{BasicSymbolic{T}, Int}
                         end
                     end
                 end
             end
-            new_expr = substitute(expr, subrules; fold = false)
-            empty!(subrules)
             if isempty(new_output_idx)
+                new_expr = substitute(expr, subrules; fold = true, filterer = !isarrayop)
+                empty!(subrules)
                 result = reduce_eliminated_idxs(new_expr, output_idx, ranges, reduce; subrules)
                 metadata = _getindex_metadata(metadata, idxs...)
                 @set! result.metadata = metadata
                 return result
             else
+                new_expr = substitute(expr, subrules; fold = false, filterer = !isarrayop)
                 if term !== nothing
                     term_args = ArgsT{T}((term,))
                     for idx in idxs

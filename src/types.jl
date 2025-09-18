@@ -2939,6 +2939,10 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
             return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            inner = args[1][idxs...]
+            return BSImpl.Term{T}(f, ArgsT{T}((inner,)); type = symtype(inner), shape = shape(inner))
+        end
         _ => nothing
     end
 

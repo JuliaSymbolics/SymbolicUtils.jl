@@ -2935,8 +2935,8 @@ end
 
 Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     @match arr begin
-        BSImpl.Term(; f) && if f === hvncat && !any(x -> x isa BasicSymbolic{T}, idxs) end => begin
-            return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[idxs...])
+        BSImpl.Term(; f) && if f === hvncat && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
+            return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
         _ => nothing

@@ -2792,10 +2792,24 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
     if b isa Real && b < 0
         return Div{T}(1, a ^ (-b), false; type)
     end
-    if b isa Number && iscall(a) && operation(a) === (^) && isconst(arguments(a)[2]) && symtype(arguments(a)[2]) <: Number
-        base, exp = arguments(a)
-        exp = unwrap_const(exp)
-        return Const{T}(base ^ (exp * b))
+    if b isa Number
+        @match a begin
+            BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) && symtype(args[2]) <: Number end => begin
+                base, exp = args
+                base, exp = arguments(a)
+                exp = unwrap_const(exp)
+                return Const{T}(base ^ (exp * b))
+            end
+            BSImpl.Term(; f, args) && if f === sqrt && (isinteger(b) && Int(b) % 2 == 0 || b isa Rational && numerator(b)%2 == 0) end => begin
+                exp = isinteger(b) ? (Int(b) // 2) : (b // 2)
+                return Const{T}(args[1] ^ exp)
+            end
+            BSImpl.Term(; f, args) && if f === cbrt && (isinteger(b) && Int(b) % 3 == 0 || b isa Rational && numerator(b)%3 == 0) end => begin
+                exp = isinteger(b) ? (Int(b) // 3) : (b // 3)
+                return Const{T}(args[1] ^ exp)
+            end
+            _ => nothing
+        end
     end
     @match a begin
         BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false; type)

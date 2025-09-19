@@ -40,6 +40,10 @@ function combine_fold(::Type{BasicSymbolic{T}}, op, args::ArgsT{T}, meta) where 
     end
 end
 
+function default_substitute_filter(ex::BasicSymbolic{T}) where {T}
+    iscall(ex) && !(operation(ex) isa Operator)
+end
+
 """
     substitute(expr, dict; fold=true)
 
@@ -54,7 +58,7 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 1 + sqrt(2)
 ```
 """
-@inline function substitute(expr, dict; fold=true, filterer=Returns(true))
+@inline function substitute(expr, dict; fold=true, filterer=default_substitute_filter)
     rw = if fold
         Prewalk(Substituter(dict); filter=filterer, maketerm = combine_fold)
     else

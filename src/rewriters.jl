@@ -417,7 +417,7 @@ function (p::Walk{ord, C, F, M, false})(x::BasicSymbolic{T}) where {ord, C, F, M
         return Const{T}(p.rw(x))
     end
 end
-(p::Walk{ord, C, F, false})(x) where {ord, C, F} = x
+(p::Walk)(x) = x
 
 function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M, T}
     @assert ord === :pre || ord === :post

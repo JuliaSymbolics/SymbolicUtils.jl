@@ -31,7 +31,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                     MA.operate!(*, poly, MA.copy_if_mutable(coeff))
                     for (k, v) in dict
                         if isinteger(v)
-                            tpoly = to_poly!(poly_to_bs, bs_to_poly, k, recurse) ^ v
+                            tpoly = to_poly!(poly_to_bs, bs_to_poly, k, recurse) ^ Int(v)
                         else
                             tpoly = to_poly!(poly_to_bs, bs_to_poly, k ^ v, recurse)
                         end
@@ -46,13 +46,17 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 base, exp = args
                 exp = unwrap_const(exp)
                 poly = to_poly!(poly_to_bs, bs_to_poly, base)
-                return if poly isa PolyVarT
+                if poly isa PolyVarT
                     isone(exp) && return poly
                     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}([poly], [Int[exp]])
-                    PolynomialT(PolyCoeffT[1], mv)
-                else
-                    MP.polynomial(poly ^ exp, PolyCoeffT)
+                    return PolynomialT(PolyCoeffT[1], mv)
                 end
+                poly = poly ^ Int(exp)
+                new_expr = from_poly(poly_to_bs, poly)
+                if !isequal(expr, new_expr)
+                    poly = to_poly!(poly_to_bs, bs_to_poly, from_poly(poly_to_bs, poly), recurse)
+                end
+                return poly
             elseif f === (*) || f === (+)
                 arg1, restargs = Iterators.peel(args)
                 poly = to_poly!(poly_to_bs, bs_to_poly, arg1)
@@ -107,11 +111,11 @@ Expand expressions by distributing multiplication over addition, e.g.,
 multivariate polynomials implementation.
 `variable_type` can be any subtype of `MultivariatePolynomials.AbstractVariable`.
 """
-function expand(expr::BasicSymbolic{T})::BasicSymbolic{T} where {T}
+function expand(expr::BasicSymbolic{T}, recurse = true)::BasicSymbolic{T} where {T}
     iscall(expr) || return expr
     poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
     bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
-    partial_poly = to_poly!(poly_to_bs, bs_to_poly, expr)
+    partial_poly = to_poly!(poly_to_bs, bs_to_poly, expr, recurse)
     return from_poly(poly_to_bs, partial_poly)
 end
 expand(x) = x

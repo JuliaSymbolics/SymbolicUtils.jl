@@ -16,7 +16,8 @@ const monadic = [deg2rad, rad2deg, transpose, asind, log1p, acsch,
                  airybiprime, besselj0, besselj1, bessely0, bessely1, isfinite,
                  NaNMath.sin, NaNMath.cos, NaNMath.tan, NaNMath.asin, NaNMath.acos,
                  NaNMath.acosh, NaNMath.atanh, NaNMath.log, NaNMath.log2,
-                 NaNMath.log10, NaNMath.lgamma, NaNMath.log1p, NaNMath.sqrt]
+                 NaNMath.log10, NaNMath.lgamma, NaNMath.log1p, NaNMath.sqrt, sign,
+                 signbit, ceil, floor, factorial]
 
 const diadic = [max, min, hypot, atan, NaNMath.atanh, mod, rem, copysign,
                 besselj, bessely, besseli, besselk, hankelh1, hankelh2,
@@ -301,6 +302,9 @@ end
 
 promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
+    if f in [sign, signbit, ceil, floor, factorial]
+        continue
+    end
     @eval promote_symtype(::$(typeof(f)), T::Type{<:Number}) = promote_type(T, Real)
 end
 
@@ -533,6 +537,67 @@ function Base.CartesianIndex(x::BasicSymbolic{T}, xs::BasicSymbolic{T}...) where
     type = promote_symtype(CartesianIndex, symtype(x), symtype.(xs)...)
     sh = promote_shape(CartesianIndex, shape(x), shape.(xs)...)
     BSImpl.Term{T}(CartesianIndex{length(xs) + 1}, ArgsT{T}((x, xs...)); type, shape = sh)
+end
+
+for (f, vT) in [(sign, Number), (signbit, Number), (ceil, Number), (floor, Number), (factorial, Integer)]
+    @eval promote_symtype(::typeof($f), ::Type{T}) where {T <: $vT} = T
+end
+
+function promote_symtype(::typeof(clamp),
+                         ::Type{T},
+                         ::Type{S},
+                         ::Type{R}) where {T <: Number, S <: Number, R <: Number}
+    promote_type(T, S, R)
+end
+function promote_symtype(::typeof(clamp),
+                         ::Type{T},
+                         ::Type{S},
+                         ::Type{R}) where {T <: AbstractVector{<:Number},
+                                           S <: AbstractVector{<:Number},
+                                           R <: AbstractVector{<:Number}}
+    Vector{promote_type(eltype(T), eltype(S), eltype(R))}
+end
+
+function promote_shape(::typeof(clamp), sh1::ShapeT, sh2::ShapeT, sh3::ShapeT)
+    @nospecialize sh1 sh2 sh3
+    nd1 = _ndims_from_shape(sh1)
+    nd2 = _ndims_from_shape(sh2)
+    nd3 = _ndims_from_shape(sh3)
+    maxd = max(nd1, nd2, nd3)
+    @assert maxd <= 1
+    if maxd >= 0
+        @assert nd1 == -1 || nd1 == maxd
+        @assert nd2 == -1 || nd2 == maxd
+        @assert nd3 == -1 || nd3 == maxd
+    end
+    if maxd == 0
+        return ShapeVecT()
+    elseif sh1 isa ShapeVecT
+        return ShapeVecT((1:length(sh1[1])))
+    elseif sh2 isa ShapeVecT
+        return ShapeVecT((1:length(sh2[1])))
+    elseif sh3 isa ShapeVecT
+        return ShapeVecT((1:length(sh3[1])))
+    else
+        return Unknown(1)
+    end
+end
+
+for valT in [Number, AbstractVector{<:Number}]
+    for (T1, T2, T3) in Iterators.product(Iterators.repeated((valT, :(BasicSymbolic{T})), 3)...)
+        if T1 == T2 == T3 == valT
+            continue
+        end
+        if valT != Number && T1 == T2 == T3
+            continue
+        end
+        @eval function Base.clamp(a::$T1, b::$T2, c::$T3) where {T}
+            isconst(a) && isconst(b) && isconst(c) && return Const{T}(clamp(unwrap_const(a), unwrap_const(b), unwrap_const(c)))
+            sh = promote_shape(clamp, shape(a), shape(b), shape(c))
+            type = promote_symtype(clamp, symtype(a), symtype(b), symtype(c))
+            return BSImpl.Term{T}(clamp, ArgsT{T}((Const{T}(a), Const{T}(b), Const{T}(c))); type, shape = sh)
+        end
+    end
 end
 
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end

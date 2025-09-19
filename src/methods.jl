@@ -448,6 +448,8 @@ function Base.size(x::BasicSymbolic, i::Integer)
     end
     _unreachable()
 end
+Base.axes(x::BasicSymbolic) = Tuple(shape(x))
+Base.axes(x::BasicSymbolic, i::Integer) = shape(x)[i]
 function _length_from_shape(sh::ShapeT)
     @nospecialize sh
     if sh isa Unknown

@@ -35,6 +35,7 @@ const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
 # `zero(Any)` but that doesn't matter because we shouldn't ever store a zero polynomial
 const PolynomialT = _PolynomialT{PolyCoeffT}
 const TypeT = Union{DataType, UnionAll, Union}
+const MonomialT = DP.Monomial{PolyVarOrder, MonomialOrder}
 
 function zeropoly()
     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}()
@@ -144,7 +145,7 @@ const ACDict{T} = Dict{BasicSymbolic{T}, Number}
 const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
 const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
 
-function basicsymbolic_to_polyvar(bs_to_poly::Dict, x::BasicSymbolic)::PolyVarT
+function basicsymbolic_to_polyvar(bs_to_poly::AbstractDict, x::BasicSymbolic)::PolyVarT
     get!(bs_to_poly, x) do
         inner_name = _name_as_operator(x)
         name = Symbol(inner_name, :_, hash(x))
@@ -152,7 +153,7 @@ function basicsymbolic_to_polyvar(bs_to_poly::Dict, x::BasicSymbolic)::PolyVarT
     end
 end
 
-function subs_poly(poly::Union{_PolynomialT, MP.Term}, vars::AbstractVector{BasicSymbolic{T}}) where {T}
+function subs_poly(poly, vars::AbstractVector{BasicSymbolic{T}}) where {T}
     add_buffer = ArgsT{T}()
     mul_buffer = ArgsT{T}()
     for term in MP.terms(poly)

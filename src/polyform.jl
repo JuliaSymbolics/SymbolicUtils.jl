@@ -89,7 +89,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
     end
 end
 
-function from_poly(poly_to_bs::AbstractDict{PolyVarT, BasicSymbolic{T}}, poly::Union{_PolynomialT, PolyVarT}) where {T}
+function from_poly(poly_to_bs::AbstractDict{PolyVarT, BasicSymbolic{T}}, poly) where {T}
     partial_pvars = MP.variables(poly)
     vars = SmallV{BasicSymbolic{T}}()
     sizehint!(vars, length(partial_pvars))

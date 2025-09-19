@@ -1,16 +1,47 @@
-struct Substituter{D <: AbstractDict}
+struct Substituter{Fold, D <: AbstractDict, F}
     dict::D
+    filter::F
 end
 
-function (s::Substituter)(expr)
-    get(s.dict, expr, expr)
+function (s::Substituter)(ex)
+    return get(s.dict, ex, ex)
+end
+
+function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
+    result = get(s.dict, ex, nothing)
+    result === nothing || return result
+    iscall(ex) || return ex
+    s.filter(ex) || return ex
+    op = operation(ex)
+    _op = s(op)
+
+    args = arguments(ex)::ROArgsT{T}
+    for i in eachindex(args)
+        arg = args[i]
+        newarg = s(arg)
+        if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool
+            continue
+        end
+        if args isa ROArgsT{T}
+            args = copy(parent(args))::ArgsT{T}
+        end
+        args[i] = Const{T}(newarg)
+    end
+    if args isa ArgsT{T} || _op !== op
+        if Fold
+            return combine_fold(T, _op, args, metadata(ex))
+        else
+            return maketerm(BasicSymbolic{T}, _op, args, metadata(ex))
+        end
+    end
+    return ex
 end
 
 function _const_or_not_symbolic(x)
     isconst(x) || !(x isa BasicSymbolic)
 end
 
-function combine_fold(::Type{BasicSymbolic{T}}, op, args::ArgsT{T}, meta) where {T}
+function combine_fold(::Type{T}, op, args::ArgsT{T}, meta) where {T}
     @nospecialize op args meta
     can_fold = !(op isa BasicSymbolic{T}) # && all(_const_or_not_symbolic, args)
     for arg in args
@@ -59,12 +90,7 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 ```
 """
 @inline function substitute(expr, dict; fold=true, filterer=default_substitute_filter)
-    rw = if fold
-        Prewalk(Substituter(dict); filter=filterer, maketerm = combine_fold)
-    else
-        Prewalk(Substituter(dict); filter=filterer,)
-    end
-    rw(expr)
+    return Substituter{fold, typeof(dict), typeof(filterer)}(dict, filterer)(expr)
 end
 
 function substitute(expr::SparseMatrixCSC, subs; kw...)

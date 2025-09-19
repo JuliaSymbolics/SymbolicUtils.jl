@@ -1527,6 +1527,19 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
         @goto FALLBACK
     elseif f === ArrayOp{T}
         return ArrayOp{T}(args...)
+    elseif f === broadcast
+        _f, _args = Iterators.peel(args)
+        res = broadcast(unwrap_const(_f), _args...)
+        if metadata !== nothing && iscall(res)
+            @set! res.metadata = metadata
+        end
+        return res
+    elseif f === getindex
+        res = getindex(unwrap_const.(args)...)
+        if metadata !== nothing && iscall(res)
+            @set! res.metadata = metadata
+        end
+        return res
     elseif _numeric_or_arrnumeric_type(type)
         if f === (+)
             res = add_worker(T, args)
@@ -1563,28 +1576,9 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
                 @set! res.metadata = metadata
             end
             return res
-        elseif f === getindex
-            res = getindex(args...)
-            if metadata !== nothing && iscall(res)
-                @set! res.metadata = metadata
-            end
-            return res
         else
             @goto FALLBACK
         end
-    elseif f === broadcast
-        _f, _args = Iterators.peel(args)
-        res = broadcast(unwrap_const(_f), _args...)
-        if metadata !== nothing && iscall(res)
-            @set! res.metadata = metadata
-        end
-        return res
-    elseif f === getindex
-        res = getindex(args...)
-        if metadata !== nothing && iscall(res)
-            @set! res.metadata = metadata
-        end
-        return res
     else
         @label FALLBACK
         sh = promote_shape(f, shape.(args)...)

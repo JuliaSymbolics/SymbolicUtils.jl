@@ -429,6 +429,7 @@ function promote_symtype(::typeof(ifelse), ::Type{B}, ::Type{T}, ::Type{S}) wher
 end
 
 # Array-like operations
+Base.IndexStyle(::Type{<:BasicSymbolic}) = Base.IndexCartesian()
 function _size_from_shape(shape::ShapeT)
     @nospecialize shape
     if shape isa Unknown

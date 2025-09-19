@@ -419,7 +419,7 @@ end
 
 
 # An ifelse node
-function Base.ifelse(_if::BasicSymbolic{T}, _then::BasicSymbolic{T}, _else::BasicSymbolic{T}) where {T}
+function Base.ifelse(_if::BasicSymbolic{T}, _then, _else) where {T}
     type = Union{symtype(_then), symtype(_else)}
     Term{T}(ifelse, ArgsT{T}((_if, _then, _else)); type)
 end

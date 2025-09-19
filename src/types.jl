@@ -2091,7 +2091,7 @@ function -(a::BasicSymbolic{T}) where {T}
                     return BSImpl.AddMul{T}(coeff, dict, variant; shape, type)
                 end
                 AddMulVariant.MUL => begin
-                    return BSImpl.AddMul{T}(-coeff, dict, variant; shape, type)
+                    return Mul{T}(-coeff, dict; shape, type)
                 end
             end
         end

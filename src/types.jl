@@ -2016,7 +2016,7 @@ end
 
 function _added_shape(terms)
     isempty(terms) && return Unknown(-1)
-    length(terms) == 1 && return shape(terms[1])
+    length(terms) == 1 && return shape(first(terms))
     a, bs = Iterators.peel(terms)
     sh::ShapeT = shape(a)
     for t in bs

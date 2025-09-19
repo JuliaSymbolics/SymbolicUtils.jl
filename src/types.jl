@@ -816,7 +816,8 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic
 # TODO: split into 3 caches based on `SymVariant`
 const ENABLE_HASHCONSING = Ref(true)
 const AllBasicSymbolics = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}
-const WCS = Base.Lockable(WeakCacheSet{AllBasicSymbolics}(), ReentrantLock())
+const WCS_LOCK = ReentrantLock()
+const WCS = WeakCacheSet{AllBasicSymbolics}()
 
 function generate_id()
     IDType()
@@ -849,7 +850,7 @@ function hashcons(s::BSImpl.Type)
         return s
     end
     @manually_scope COMPARE_FULL => true begin
-        k = (@lock WCS getkey!(WCS[], s))::typeof(s)
+        k = (@lock WCS_LOCK getkey!(WCS, s))::typeof(s)
         if k.id === nothing
             k.id = generate_id()
         end

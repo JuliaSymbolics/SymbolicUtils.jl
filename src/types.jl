@@ -2147,9 +2147,9 @@ end
 _is_array_shape(sh::ShapeT) = sh isa Unknown || _ndims_from_shape(sh) > 0
 function _multiplied_shape(shapes)
     first_arr = findfirst(_is_array_shape, shapes)
-    first_arr === nothing && return ShapeVecT()
+    first_arr === nothing && return ShapeVecT(), first_arr
     last_arr::Int = findlast(_is_array_shape, shapes)
-    first_arr == last_arr && return shapes[first_arr]
+    first_arr == last_arr && return shapes[first_arr], first_arr
 
     sh1::ShapeT = shapes[first_arr]
     shend::ShapeT = shapes[last_arr]
@@ -2158,6 +2158,9 @@ function _multiplied_shape(shapes)
     ndims_1 == -1 || ndims_1 == 2 || throw_expected_matrix(sh1)
     ndims_end <= 2 || throw_expected_matvec(shend)
     if ndims_end == 1
+        # NOTE: This lies because the shape of a matvec mul isn't solely determined by the
+        # shapes of inputs. If the first array is an adjoint or transpose, the result
+        # is a scalar.
         result = sh1 isa Unknown ? Unknown(1) : ShapeVecT((sh1[1],))
     elseif sh1 isa Unknown || shend isa Unknown
         result = Unknown(ndims_end)
@@ -2181,15 +2184,28 @@ function _multiplied_shape(shapes)
         cur_shape = sh
     end
 
-    return result
+    return result, first_arr
 end
 
 function promote_shape(::typeof(*), shs::ShapeT...)
-    _multiplied_shape(shs)
+    _multiplied_shape(shs)[1]
+end
+
+const AdjointOrTranspose = Union{LinearAlgebra.Adjoint, LinearAlgebra.Transpose}
+
+function _check_adjoint_or_transpose(terms, result::ShapeT, first_arr::Union{Int, Nothing})
+    @nospecialize first_arr result
+    first_arr === nothing && return result
+    farr = terms[first_arr]
+    if result isa ShapeVecT && length(result) == 1 && length(result[1]) == 1 && (farr isa AdjointOrTranspose || iscall(farr) && (operation(farr) === adjoint || operation(farr) === transpose))
+        return ShapeVecT()
+    end
+    return result
 end
 
 function _multiplied_terms_shape(terms::Tuple)
-    _multiplied_shape(ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms))))
+    result, first_arr = _multiplied_shape(ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms))))
+    return _check_adjoint_or_transpose(terms, result, first_arr)
 end
 
 function _multiplied_terms_shape(terms)
@@ -2198,7 +2214,8 @@ function _multiplied_terms_shape(terms)
     for t in terms
         push!(shapes, shape(t))
     end
-    return _multiplied_shape(shapes)
+    result, first_arr = _multiplied_shape(shapes)
+    return _check_adjoint_or_transpose(terms, result, first_arr)
 end
 
 function _split_arrterm_scalar_coeff(ex::BasicSymbolic{T}) where {T}

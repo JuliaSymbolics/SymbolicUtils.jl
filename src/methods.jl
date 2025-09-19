@@ -478,7 +478,7 @@ function Base.eachindex(x::BasicSymbolic)
     CartesianIndices(Tuple(sh))
 end
 function Base.collect(x::BasicSymbolic)
-    [x[i] for i in eachindex(x)]
+    scalarize(x, Val{true}())
 end
 function Base.iterate(x::BasicSymbolic)
     sh = shape(x)

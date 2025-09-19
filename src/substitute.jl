@@ -211,27 +211,32 @@ end
     $(TYPEDSIGNATURES)
 
 Given a function `f`, return a function that will scalarize an expression with `f` as the
-head. The returned function is passed `f` and the expression with `f` as the head.
+head. The returned function is passed `f`, the expression with `f` as the head, and
+`Val(true)` or `Val(false)` indicating whether to recursively scalarize or not.
 """
 scalarization_function(@nospecialize(_)) = _default_scalarize
 
-function _default_scalarize(f, x::BasicSymbolic{T}) where {T}
+function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
 
     f isa BasicSymbolic{T} && return collect(x)
 
     args = arguments(x)
-    f(map(unwrap_const ∘ scalarize, args)...)
+    if toplevel && f !== broadcast
+        f(map(unwrap_const, args)...)
+    else
+        f(map(unwrap_const ∘ scalarize, args)...)
+    end
 end
 
-function scalarize(x::BasicSymbolic{T}) where {T}
+function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T, toplevel}
     sh = shape(x)
     sh isa Unknown && return x
     @match x begin
         BSImpl.Const(; val) => _is_array_shape(sh) ? Const{T}.(val) : x
-        BSImpl.Sym(;) => _is_array_shape(sh) ? collect(x) : x
+        BSImpl.Sym(;) => _is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
-            term === nothing || return scalarize(term)
+            term === nothing || return scalarize(term, Val{toplevel}())
             subrules = Dict()
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce; subrules)
             empty!(subrules)
@@ -240,34 +245,41 @@ function scalarize(x::BasicSymbolic{T}) where {T}
                     ii isa Int && continue
                     subrules[ii] = idxs[i]
                 end
-                scalarize(substitute(new_expr, subrules; fold = true))
+                if toplevel
+                    substitute(new_expr, subrules; fold = true)
+                else
+                    scalarize(substitute(new_expr, subrules; fold = true))
+                end
             end
         end
         _ => begin
             f = operation(x)
-            f isa BasicSymbolic{T} && return collect(x)
-            return scalarization_function(f)(f, x)
+            f isa BasicSymbolic{T} && return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]
+            return scalarization_function(f)(f, x, Val{toplevel}())
         end
     end
 end
-scalarize(arr::AbstractArray) = map(scalarize, arr)
+function scalarize(arr::AbstractArray, ::Val{toplevel} = Val{false}()) where {toplevel}
+    map(Base.Fix2(scalarize, Val{toplevel}()), arr)
+end
+scalarize(x, _...) = x
 
 scalarization_function(::typeof(inv)) = _inv_scal
 
-function _inv_scal(::typeof(inv), x::BasicSymbolic{T}) where {T}
+function _inv_scal(::typeof(inv), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     sh = shape(x)
-    (sh isa ShapeVecT && !isempty(sh)) ? collect(x) : x
+    (sh isa ShapeVecT && !isempty(sh)) ? [x[idx] for idx in eachindex(x)] : x
 end
 
 scalarization_function(::typeof(LinearAlgebra.det)) = _det_scal
 
-function _det_scal(::typeof(LinearAlgebra.det), x::BasicSymbolic{T}) where {T}
+function _det_scal(::typeof(LinearAlgebra.det), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     arg = arguments(x)[1]
     sh = shape(arg)
     sh isa Unknown && return collect(x)
     sh = sh::ShapeVecT
     isempty(sh) && return x
-    sarg = scalarize(arg)
+    sarg = toplevel ? collect(arg) : scalarize(arg)
     _det_scal(LinearAlgebra.det, T, sarg)
 end
 

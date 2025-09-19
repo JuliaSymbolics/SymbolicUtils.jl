@@ -201,6 +201,16 @@ end
 promote_symtype(::typeof(identity), ::Type{T}) where {T} = T
 promote_shape(::typeof(identity), @nospecialize(sh::ShapeT)) = sh
 
+function _sequential_promote(::Type{T}, ::Type{S}, Ts...) where {T, S}
+    _sequential_promote(promote_type(T, S), Ts...)
+end
+_sequential_promote(::Type{T}) where {T} = T
+
+
+function promote_symtype(::typeof(hvncat), ::Type{NTuple{N, Int}}, Ts...) where {N}
+    return Array{_sequential_promote(Ts...), N}
+end
+
 promote_symtype(::typeof(rem2pi), T::Type{<:Number}, mode) = T
 
 @noinline function _throw_array(f, shs...)

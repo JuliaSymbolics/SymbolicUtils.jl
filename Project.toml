@@ -35,11 +35,6 @@ ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 
-[sources]
-DynamicPolynomials = {rev = "as/new-poly-merge", url = "https://github.com/AayushSabharwal/DynamicPolynomials.jl"}
-MultivariatePolynomials = {rev = "as/poly-merge-nonconcrete", url = "https://github.com/AayushSabharwal/MultivariatePolynomials.jl"}
-MutableArithmetics = {rev = "as+bl/simplify_promote_type_fallback", url = "https://github.com/AayushSabharwal/MutableArithmetics.jl"}
-
 [extensions]
 SymbolicUtilsChainRulesCoreExt = "ChainRulesCore"
 SymbolicUtilsLabelledArraysExt = "LabelledArrays"
@@ -53,15 +48,15 @@ Combinatorics = "1 - 1.0.2"
 ConstructionBase = "1.5.7"
 DataStructures = "0.18, 0.19"
 DocStringExtensions = "0.8, 0.9"
-DynamicPolynomials = "0.5, 0.6"
+DynamicPolynomials = "0.6.4"
 EnumX = "1.0.5"
 ExproniconLite = "0.10.14"
 LabelledArrays = "1.5"
 LinearAlgebra = "1"
 MacroTools = "0.5.16"
 Moshi = "0.3.6"
-MultivariatePolynomials = "0.5"
-MutableArithmetics = "1.6.4"
+MultivariatePolynomials = "0.5.12"
+MutableArithmetics = "1.6.5"
 NaNMath = "0.3, 1.1.2"
 OhMyThreads = "0.7"
 ReadOnlyArrays = "0.2.0"

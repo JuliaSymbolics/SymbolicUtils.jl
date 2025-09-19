@@ -41,7 +41,7 @@ function _const_or_not_symbolic(x)
     isconst(x) || !(x isa BasicSymbolic)
 end
 
-function combine_fold(::Type{T}, op, args::ArgsT{T}, meta) where {T}
+function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta) where {T}
     @nospecialize op args meta
     can_fold = !(op isa BasicSymbolic{T}) # && all(_const_or_not_symbolic, args)
     for arg in args

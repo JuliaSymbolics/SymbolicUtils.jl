@@ -166,6 +166,7 @@ atomic if one of the following conditions is true:
 function default_is_atomic(ex::BasicSymbolic{T}) where {T}
     @match ex begin
         BSImpl.Sym(; name) => name !== IDXS_SYM
+        BSImpl.Term(; f) && if f isa Operator end => ex
         BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => !is_function_symbolic(f)
         BSImpl.Term(; f, args) && if f === getindex end => default_is_atomic(args[1])
         _ => false

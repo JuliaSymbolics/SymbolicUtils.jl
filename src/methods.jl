@@ -602,7 +602,6 @@ end
 
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
 Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
-Broadcast.result_style(::SymBroadcast{T}) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::Broadcast.BroadcastStyle) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{T}) where {T} = SymBroadcast{T}()
 function Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{R}) where {T, R}

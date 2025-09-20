@@ -581,8 +581,8 @@ end
 ### Base interface
 ###
 
-Base.isequal(::BasicSymbolic, x) = false
-Base.isequal(x, ::BasicSymbolic) = false
+Base.isequal(::BasicSymbolic, x::Union{Number, AbstractArray}) = false
+Base.isequal(x::Union{Number, AbstractArray}, ::BasicSymbolic) = false
 Base.isequal(::BasicSymbolic, ::Missing) = false
 Base.isequal(::Missing, ::BasicSymbolic) = false
 

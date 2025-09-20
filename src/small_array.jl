@@ -265,9 +265,6 @@ mutable struct SmallVec{T, V <: AbstractVector{T}} <: AbstractVector{T}
     end
 end
 
-Base.convert(::Type{SmallVec{T, V}}, x::V) where {T, V} = SmallVec{T}(x)
-Base.convert(::Type{SmallVec{T, V}}, x) where {T, V} = SmallVec{T}(V(x))
-Base.convert(::Type{SmallVec{T, V}}, x::SmallVec{T, V}) where {T, V} = x
 
 Base.size(x::SmallVec) = size(x.data)
 Base.isempty(x::SmallVec) = isempty(x.data)

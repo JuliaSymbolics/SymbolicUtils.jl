@@ -30,7 +30,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                     poly = onepoly()
                     MA.operate!(*, poly, MA.copy_if_mutable(coeff))
                     for (k, v) in dict
-                        if isinteger(v)
+                        if safe_isinteger(v)
                             tpoly = to_poly!(poly_to_bs, bs_to_poly, k, recurse) ^ Int(v)
                         else
                             tpoly = to_poly!(poly_to_bs, bs_to_poly, k ^ v, recurse)
@@ -42,9 +42,8 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
             end
         end
         BSImpl.Term(; f, args) => begin
-            if f === (^) && isconst(args[2]) && symtype(args[2]) <: Real && isinteger(unwrap_const(args[2]))
-                base, exp = args
-                exp = unwrap_const(exp)
+            if f === (^) && isconst(args[2]) && (exp = unwrap_const(args[2]); exp isa Real) && safe_isinteger(exp)
+                base = args[1]
                 poly = to_poly!(poly_to_bs, bs_to_poly, base)
                 if poly isa PolyVarT
                     isone(exp) && return poly
@@ -133,7 +132,7 @@ end
 function canonicalize_coeffs!(coeffs::Vector{PolyCoeffT})
     for i in eachindex(coeffs)
         v = coeffs[i]
-        isinteger(v) || continue
+        safe_isinteger(v) || continue
         coeffs[i] = Int(v)
     end
 end
@@ -144,7 +143,7 @@ function poly_to_gcd_form(p::PolynomialT)
     all_rat = true
     any_complex = false
     for c in MP.coefficients(p)
-        isint = isinteger(c)
+        isint = safe_isinteger(c)
         all_int &= isint
         all_rat &= isint || c isa Rational
         any_complex |= c isa Complex

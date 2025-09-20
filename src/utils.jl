@@ -1,5 +1,6 @@
 using Base: ImmutableDict
 
+safe_isinteger(x::Number) = isinteger(x) && abs(x) < typemax(Int)
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::BasicSymbolic,y) = y==0 ? 1 : Base.:^(x,y)

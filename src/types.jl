@@ -2812,12 +2812,12 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
                 exp = unwrap_const(exp)
                 return Const{T}(base ^ (exp * b))
             end
-            BSImpl.Term(; f, args) && if f === sqrt && (isinteger(b) && Int(b) % 2 == 0 || b isa Rational && numerator(b)%2 == 0) end => begin
-                exp = isinteger(b) ? (Int(b) // 2) : (b // 2)
+            BSImpl.Term(; f, args) && if f === sqrt && (safe_isinteger(b) && Int(b) % 2 == 0 || b isa Rational && numerator(b)%2 == 0) end => begin
+                exp = safe_isinteger(b) ? (Int(b) // 2) : (b // 2)
                 return Const{T}(args[1] ^ exp)
             end
-            BSImpl.Term(; f, args) && if f === cbrt && (isinteger(b) && Int(b) % 3 == 0 || b isa Rational && numerator(b)%3 == 0) end => begin
-                exp = isinteger(b) ? (Int(b) // 3) : (b // 3)
+            BSImpl.Term(; f, args) && if f === cbrt && (safe_isinteger(b) && Int(b) % 3 == 0 || b isa Rational && numerator(b)%3 == 0) end => begin
+                exp = safe_isinteger(b) ? (Int(b) // 3) : (b // 3)
                 return Const{T}(args[1] ^ exp)
             end
             _ => nothing
@@ -2830,7 +2830,7 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
     if b isa Number
         @match a begin
             BSImpl.AddMul(; coeff, dict, variant, shape, type) && if variant == AddMulVariant.MUL end => begin
-                if coeff isa Real && coeff < 0 && !isinteger(b)
+                if coeff isa Real && coeff < 0 && !safe_isinteger(b)
                     coeff = (-coeff) ^ b
                     newmul = BSImpl.AddMul{T}(-1, dict, variant; shape, type)
                     # newpow = Term{T}(^, ArgsT{T}((newmul, b)); shape, type)

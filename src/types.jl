@@ -1791,6 +1791,11 @@ end
 
 fntype_X_Y(::Type{<: FnType{X, Y}}) where {X, Y} = (X, Y)
 
+function promote_shape(f::BasicSymbolic{T}, args::ShapeT...) where {T}
+    @nospecialize args
+    return shape(f)
+end
+
 """
     $(TYPEDSIGNATURES)
 

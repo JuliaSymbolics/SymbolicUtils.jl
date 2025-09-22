@@ -982,3 +982,66 @@ function Base.Symbol(ex::BasicSymbolic{T}) where {T}
         _ => Symbol(string(ex))
     end
 end
+
+function promote_symtype(::typeof(in), ::Type{T}, ::Type{S}) where {T, S}
+    return Bool
+end
+function promote_shape(::typeof(in), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    @assert _is_array_shape(shb) || throw(ArgumentError("Symbolic `in` requires an array as the second argument."))
+    return ShapeVecT()
+end
+
+for T1 in [Real, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})]
+    if !(T1 isa Expr) && !(T2 isa Expr)
+        continue
+    end
+    @eval function Base.in(a::$T1, b::$T2) where {T}
+        sh = promote_shape(in, shape(a), shape(b))
+        return BSImpl.Term{T}(in, ArgsT{T}((Const{T}(a), Const{T}(b))); type = Bool, shape = sh)
+    end
+end
+
+function promote_symtype(::typeof(issubset), ::Type{T}, ::Type{S}) where {T <: AbstractArray, S <: AbstractArray}
+    Bool
+end
+function promote_shape(::typeof(issubset), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    @assert _is_array_shape(sha) || throw(ArgumentError("Symbolic `issubset` requires arrays as both arguments."))
+    @assert _is_array_shape(shb) || throw(ArgumentError("Symbolic `issubset` requires arrays as both arguments."))
+    return ShapeVecT()
+end
+
+for T1 in [AbstractArray, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})]
+    if !(T1 isa Expr) && !(T2 isa Expr)
+        continue
+    end
+    @eval function Base.issubset(a::$T1, b::$T2) where {T}
+        sh = promote_shape(issubset, shape(a), shape(b))
+        return BSImpl.Term{T}(issubset, ArgsT{T}((Const{T}(a), Const{T}(b))); type = Bool, shape = sh)
+    end
+end
+
+for f in [union, intersect]
+    @eval function promote_symtype(::$(typeof(f)), ::Type{T},
+                             ::Type{S}) where {eT, T <: AbstractArray{eT}, eS,
+                                               S <: AbstractArray{eS}}
+        return Vector{promote_type(eT, eS)}
+    end
+    @eval function promote_shape(::$(typeof(f)), sha::ShapeT, shb::ShapeT)
+        @nospecialize sha shb
+        @assert _is_array_shape(sha) || throw(ArgumentError("Symbolic `$($f)` requires arrays as both arguments."))
+        @assert _is_array_shape(shb) || throw(ArgumentError("Symbolic `$($f)` requires arrays as both arguments."))
+        return Unknown(1)
+    end
+    for T1 in [AbstractArray, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})]
+        if !(T1 isa Expr) && !(T2 isa Expr)
+            continue
+        end
+        @eval function (::$(typeof(f)))(a::$T1, b::$T2) where {T}
+            sh = promote_shape($f, shape(a), shape(b))
+            type = promote_type($f, symtype(a), symtype(b))
+            return BSImpl.Term{T}($f, ArgsT{T}((Const{T}(a), Const{T}(b))); type, shape = sh)
+        end
+    end
+end

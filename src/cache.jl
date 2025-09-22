@@ -262,6 +262,19 @@ macro cache(args...)
         if Meta.isexpr(arg, :kw)
             arg = arg.args[1]
         end
+        if Meta.isexpr(arg, :...)
+            arg = arg.args[1]
+            if Meta.isexpr(arg, :(::))
+                argname = arg.args[1]
+            else
+                argname = arg
+            end
+            push!(keyexprs, :($get_cache_key.($argname)...))
+            push!(argexprs, Expr(:..., argname))
+            push!(keytypes, Vararg)
+            valid_key_condition = :($valid_key_condition && !any(i -> key[i] isa $CacheSentinel, $(length(keyexprs)):length(key)))
+            continue
+        end
         if !Meta.isexpr(arg, :(::))
             # if the type is `Any`, branch on it being a `BasicSymbolic`
             push!(keyexprs, :($get_cache_key($arg)))

@@ -940,13 +940,13 @@ for (Tf, Tr) in Iterators.product([:(BasicSymbolic{T}), Any], [:(BasicSymbolic{T
     end
 end
 
-function _mapreduce_method(fT, redT, xTs...; kw...)
+function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
     args = [:(f::$fT), :(red::$redT)]
     for (i, xT) in enumerate(xTs)
         name = Symbol(:x, i)
         push!(args, :($name::$xT))
     end
-    push!(args, :(xs::Vararg))
+    splat && push!(args, :(xs::Vararg))
     EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kw...))
 end
 
@@ -960,6 +960,9 @@ macro mapreduce_methods(T, arg_f, result_f)
         else
             nothing
         end
+
+        body = :($result_f($mapreduce(f, red, $arg_f(x1))))
+        push!(result.args, _mapreduce_method(Tf, Tred, T; splat = false, body, whereparams))
         body = :($result_f($mapreduce(f, red, $arg_f(x1), xs...)))
         push!(result.args, _mapreduce_method(Tf, Tred, T; body, whereparams))
         body = :($result_f($mapreduce(f, red, x1, $arg_f(x2), xs...)))

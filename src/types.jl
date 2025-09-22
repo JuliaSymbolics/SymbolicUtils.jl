@@ -2970,6 +2970,21 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
             inner = args[1][idxs...]
             return BSImpl.Term{T}(f, ArgsT{T}((inner,)); type = symtype(inner), shape = shape(inner))
         end
+        BSImpl.Term(; f, args) && if f === getindex && all(isconst, Iterators.drop(args, 1)) && !any(x -> x isa BasicSymbolic{T}, idxs) end => begin
+            newargs = ArgsT{T}()
+            push!(newargs, args[1])
+            sh = shape(arr)
+            type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
+            newshape = promote_shape(getindex, sh, shape.(idxs)...)
+            for (oldidx, idx) in zip(Iterators.drop(args, 1), idxs)
+                if idx isa Colon
+                    push!(newargs, oldidx)
+                else
+                    push!(newargs, Const{T}(unwrap_const(oldidx)[idx]))
+                end
+            end
+            return BSImpl.Term{T}(f, newargs; type, shape = newshape)
+        end
         _ => nothing
     end
 

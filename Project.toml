@@ -32,11 +32,13 @@ WeakCacheSets = "d30d5f5c-d141-4870-aa07-aabb0f5fe7d5"
 
 [weakdeps]
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 
 [extensions]
 SymbolicUtilsChainRulesCoreExt = "ChainRulesCore"
+SymbolicUtilsDistributionsExt = "Distributions"
 SymbolicUtilsLabelledArraysExt = "LabelledArrays"
 SymbolicUtilsReverseDiffExt = "ReverseDiff"
 

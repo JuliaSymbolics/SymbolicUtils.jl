@@ -323,3 +323,10 @@ function _det_scal(::typeof(LinearAlgebra.det), ::Type{T}, x::AbstractMatrix) wh
     end
     return add_worker(T, add_buffer)
 end
+
+scalarization_function(::typeof(getindex)) = _getindex_scal
+
+function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    sh = shape(x)
+    return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]
+end

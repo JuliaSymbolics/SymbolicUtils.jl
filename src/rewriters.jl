@@ -32,7 +32,9 @@ rewriters.
 module Rewriters
 using TermInterface
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT, Const, SmallV, BSImpl, unwrap_const, BasicSymbolic
+import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count,
+                      _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT,
+                      Const, SmallV, BSImpl, unwrap_const, BasicSymbolic, isconst
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 """
@@ -390,7 +392,7 @@ function (p::Walk{ord, C, F, M, false})(x::BasicSymbolic{T}) where {ord, C, F, M
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
-            x = Const{T}(p.rw(x))
+            x = Const{T}(@something(p.rw(x), x))
         end
 
         if iscall(x) && p.filter(x)
@@ -412,9 +414,9 @@ function (p::Walk{ord, C, F, M, false})(x::BasicSymbolic{T}) where {ord, C, F, M
             end
         end
 
-        return ord === :post ? Const{T}(p.rw(x)) : x
+        return ord === :post ? Const{T}(@something(p.rw(x), x)) : x
     else
-        return Const{T}(p.rw(x))
+        return Const{T}(@something(p.rw(x), x))
     end
 end
 (p::Walk)(x) = x

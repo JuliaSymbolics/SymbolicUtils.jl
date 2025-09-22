@@ -309,7 +309,17 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
     sh = shape(x)
     sh isa Unknown && return x
     @match x begin
-        BSImpl.Const(; val) => _is_array_shape(sh) ? Const{T}.(val) : x
+        BSImpl.Const(; val) => begin
+            if _is_array_shape(sh)
+                if val isa SparseMatrixCSC
+                    return val
+                else
+                    Const{T}.(val)
+                end
+            else
+                x
+            end
+        end
         BSImpl.Sym(;) => _is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
             term === nothing || return scalarize(term, Val{toplevel}())

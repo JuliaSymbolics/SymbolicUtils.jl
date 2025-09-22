@@ -90,6 +90,7 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 ```
 """
 @inline function substitute(expr, dict; fold=true, filterer=default_substitute_filter)
+    isempty(dict) && return expr
     return Substituter{fold, typeof(dict), typeof(filterer)}(dict, filterer)(expr)
 end
 

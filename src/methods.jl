@@ -1045,3 +1045,9 @@ for f in [union, intersect]
         end
     end
 end
+
+promote_symtype(::typeof(complex), ::Type{T}) where {T <: Real} = Complex{T}
+promote_symtype(::typeof(complex), ::Type{T}) where {T <: Number} = T
+function promote_symtype(::typeof(complex), ::Type{T}, ::Type{S}) where {T <: Real, S <: Real}
+    Complex{promote_type(T, S)}
+end

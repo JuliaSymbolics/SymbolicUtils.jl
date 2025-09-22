@@ -61,6 +61,7 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
 @data mutable BasicSymbolicImpl{T <: SymVariant} begin 
     struct Const
         const val::Any
+        hash::UInt
         id::IdentT
     end
     struct Sym
@@ -291,7 +292,7 @@ override_properties(obj::BSImpl.Type) = override_properties(MData.variant_type(o
 
 function override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
-        ::Type{<:BSImpl.Const} => (; id = nothing)
+        ::Type{<:BSImpl.Const} => (; id = nothing, hash = 0)
         ::Type{<:BSImpl.Sym} => (; id = nothing, hash = 0, hash2 = 0)
         ::Type{<:BSImpl.AddMul} => (; id = nothing, hash = 0, hash2 = 0)
         ::Type{<:BSImpl.Term} => (; id = nothing, hash = 0, hash2 = 0)
@@ -301,7 +302,7 @@ function override_properties(obj::Type{<:BSImpl.Variant})
     end
 end
 
-ordered_override_properties(::Type{<:BSImpl.Const}) = (nothing,)
+ordered_override_properties(::Type{<:BSImpl.Const}) = (0, nothing,)
 ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, 0, nothing)
 ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, nothing)
 ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
@@ -310,7 +311,7 @@ ordered_override_properties(::Type{<:BSImpl.ArrayOp{T}}) where {T} = (ArgsT{T}()
 
 function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
-        BSImpl.Const(; val, id) => (; val, id)
+        BSImpl.Const(; val, hash, id) => (; val, hash, id)
         BSImpl.Sym(; name, metadata, hash, hash2, shape, type, id) => (; name, metadata, hash, hash2, shape, type, id)
         BSImpl.Term(; f, args, metadata, hash, hash2, shape, type, id) => (; f, args, metadata, hash, hash2, shape, type, id)
         BSImpl.AddMul(; coeff, dict, variant, metadata, shape, type, args, hash, hash2, id) => (; coeff, dict, variant, metadata, shape, type, args, hash, hash2, id)
@@ -746,8 +747,10 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     h = hash(T, h)
 
     partial::UInt = @match s begin
-        BSImpl.Const(; val) => begin
-            h = hash_somescalar(val, h)::UInt
+        BSImpl.Const(; val, hash) => begin
+            if iszero(hash)
+                h = s.hash = hash_somescalar(val, h)::UInt
+            end
             if full
                 h = Base.hash(typeof(val), h)::UInt
             end
@@ -797,6 +800,8 @@ end
 
 Base.one( s::BSImpl.Type) = one( symtype(s))
 Base.zero(s::BSImpl.Type) = zero(symtype(s))
+Base.one( ::Type{<:BSImpl.Type}) = 1
+Base.zero(::Type{<:BSImpl.Type}) = 0
 
 function _name_as_operator(x::BasicSymbolic)
     @match x begin
@@ -858,9 +863,9 @@ function hashcons(s::BSImpl.Type)
     end true
 end
 
-const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, nothing))
-const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, nothing))
-const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, nothing))
+const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, 0, nothing))
+const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, 0, nothing))
+const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, 0, nothing))
 
 defaultval(::Type{BasicSymbolic{SymReal}}) = SMALLV_DEFAULT_SYMREAL
 defaultval(::Type{BasicSymbolic{SafeReal}}) = SMALLV_DEFAULT_SAFEREAL
@@ -883,7 +888,7 @@ end
 parse_metadata(x::MetadataT) = x
 parse_metadata(::Nothing) = nothing
 function parse_metadata(x)
-    meta = MetadataT()
+    meta = Base.ImmutableDict{DataType, Any}()
     for kvp in x
         meta = Base.ImmutableDict(meta, kvp)
     end

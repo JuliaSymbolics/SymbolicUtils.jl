@@ -2967,6 +2967,22 @@ function _getindex_metadata(metadata::MetadataT, idxs...)
 end
 
 Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+    if T === SymReal
+        return _getindex_1(arr, idxs...)
+    elseif T === SafeReal
+        return _getindeX_2(arr, idxs...)
+    end
+    _unreachable()
+end
+
+@cache function _getindex_1(arr::BasicSymbolic{SymReal}, idxs::Union{BasicSymbolic{SymReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SymReal}
+    _getindex(arr, idxs...)
+end
+@cache function _getindex_2(arr::BasicSymbolic{SafeReal}, idxs::Union{BasicSymbolic{SafeReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SafeReal}
+    _getindex(arr, idxs...)
+end
+
+Base.@propagate_inbounds function _getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     @match arr begin
         BSImpl.Term(; f) && if f === hvncat && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
             return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
@@ -3005,11 +3021,11 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
         end
     end
     @match arr begin
-        BSImpl.ArrayOp(; output_idx, expr, ranges, reduce, term, metadata) => begin
+        BSImpl.ArrayOp(; output_idx, expr, ranges, reduce, term) => begin
             subrules = Dict{BasicSymbolic{T}, Union{BasicSymbolic{T}, Int}}()
             empty!(subrules)
             new_output_idx = OutIdxT{T}()
-            copied_ranges = false
+            new_ranges = RangesT{T}()
             idxsym_idx = 1
             idxsym = idxs_for_arrayop(T)
             for (i, (newidx, outidx)) in enumerate(zip(idxs, output_idx))
@@ -3018,15 +3034,23 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
                 elseif outidx isa BasicSymbolic{T}
                     if newidx isa Colon
                         new_out_idx = idxsym[idxsym_idx]
-                        subrules[outidx] = new_out_idx
+                        if !isequal(outidx, new_out_idx)
+                            subrules[outidx] = new_out_idx
+                        end
                         push!(new_output_idx, new_out_idx)
                         idxsym_idx += 1
                     elseif newidx isa AbstractRange{Int}
-                        if !copied_ranges
-                            ranges = copy(ranges)
-                            copied_ranges = true
+                        new_out_idx = idxsym[idxsym_idx]
+                        if !isequal(outidx, new_out_idx)
+                            subrules[outidx] = new_out_idx
                         end
-                        ranges[outidx] = newidx
+                        push!(new_output_idx, new_out_idx)
+                        idxsym_idx += 1
+                        if haskey(ranges, outidx)
+                            new_ranges[new_out_idx] = ranges[outidx][newidx]
+                        else
+                            new_ranges[new_out_idx] = newidx
+                        end
                     else
                         if haskey(ranges, outidx)
                             subrules[outidx] = ranges[outidx][unwrap_const(newidx)::Union{BasicSymbolic{T}, Int}]
@@ -3037,23 +3061,15 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
                 end
             end
             if isempty(new_output_idx)
-                new_expr = substitute(expr, subrules; fold = true, filterer = !isarrayop)
-                empty!(subrules)
-                result = reduce_eliminated_idxs(new_expr, output_idx, ranges, reduce; subrules)
-                metadata = _getindex_metadata(metadata, idxs...)
-                @set! result.metadata = metadata
+                new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+                result = substitute(new_expr, subrules; fold = false, filterer = !isarrayop)
                 return result
             else
                 new_expr = substitute(expr, subrules; fold = false, filterer = !isarrayop)
                 if term !== nothing
-                    term_args = ArgsT{T}((term,))
-                    for idx in idxs
-                        push!(term_args, Const{T}(idx))
-                    end
-                    term = BSImpl.Term{T}(getindex, term_args; type, shape = newshape)
+                    term = getindex(term, idxs...)
                 end
-                metadata = _getindex_metadata(metadata, idxs...)
-                return BSImpl.ArrayOp{T}(new_output_idx, new_expr, reduce, term, ranges; type, shape = newshape, metadata)
+                return BSImpl.ArrayOp{T}(new_output_idx, new_expr, reduce, term, new_ranges; type, shape = newshape)
             end
         end
         _ => begin
@@ -3085,16 +3101,20 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
                 end
                 new_expr = BSImpl.Term{T}(getindex, expr_args; type = eltype(type), shape = ShapeVecT())
                 new_term = BSImpl.Term{T}(getindex, term_args; type, shape = newshape)
-                metadata = _getindex_metadata(SymbolicUtils.metadata(arr), idxs...)
-                return BSImpl.ArrayOp{T}(new_output_idx, new_expr, +, new_term, ranges; type, shape = newshape, metadata)
+                return BSImpl.ArrayOp{T}(new_output_idx, new_expr, +, new_term, ranges; type, shape = newshape)
             else
-                metadata = _getindex_metadata(SymbolicUtils.metadata(arr), idxs...)
-                return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape, metadata)
+                return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
             end
         end
     end
 end
 Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]
-function Base.getindex(x::AbstractArray, idx::BasicSymbolic{T}, idxs::BasicSymbolic{T}...) where {T}
+function Base.getindex(x::AbstractArray, idx::BasicSymbolic{T}, idxs...) where {T}
     getindex(Const{T}(x), idx, idxs...)
+end
+function Base.getindex(x::AbstractArray, i1, idx::BasicSymbolic{T}, idxs...) where {T}
+    getindex(Const{T}(x), i1, idx, idxs...)
+end
+function Base.getindex(x::AbstractArray, i1, i2, idx::BasicSymbolic{T}, idxs...) where {T}
+    getindex(Const{T}(x), i1, i2, idx, idxs...)
 end

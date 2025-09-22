@@ -3,7 +3,8 @@ import SpecialFunctions: gamma, loggamma, erf, erfc, erfcinv, erfi, erfcx,
                          dawson, digamma, trigamma, invdigamma, polygamma,
                          airyai, airyaiprime, airybi, airybiprime, besselj0,
                          besselj1, bessely0, bessely1, besselj, bessely, besseli,
-                         besselk, hankelh1, hankelh2, polygamma, beta, logbeta
+                         besselk, hankelh1, hankelh2, polygamma, beta, logbeta, expint,
+                         expinti, sinint, cosint
 
 const monadic = [deg2rad, rad2deg, transpose, asind, log1p, acsch,
                  acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh,
@@ -17,11 +18,11 @@ const monadic = [deg2rad, rad2deg, transpose, asind, log1p, acsch,
                  NaNMath.sin, NaNMath.cos, NaNMath.tan, NaNMath.asin, NaNMath.acos,
                  NaNMath.acosh, NaNMath.atanh, NaNMath.log, NaNMath.log2,
                  NaNMath.log10, NaNMath.lgamma, NaNMath.log1p, NaNMath.sqrt, sign,
-                 signbit, ceil, floor, factorial]
+                 signbit, ceil, floor, factorial, expint, expinti, sinint, cosint]
 
 const diadic = [max, min, hypot, atan, NaNMath.atanh, mod, rem, copysign,
                 besselj, bessely, besseli, besselk, hankelh1, hankelh2,
-                polygamma, beta, logbeta, NaNMath.pow]
+                polygamma, beta, logbeta, NaNMath.pow, expint]
 const previously_declared_for = Set([])
 
 const basic_monadic = [-, +]

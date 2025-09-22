@@ -2218,7 +2218,7 @@ function _multiplied_terms_shape(terms)
     return _check_adjoint_or_transpose(terms, result, first_arr)
 end
 
-function _split_arrterm_scalar_coeff(ex::BasicSymbolic{T}) where {T}
+function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
     sh = shape(ex)
     _is_array_shape(sh) || return ex, Const{T}(1)
     @match ex begin
@@ -2253,7 +2253,7 @@ function _split_arrterm_scalar_coeff(ex::BasicSymbolic{T}) where {T}
             if term === nothing
                 termrest = nothing
             else
-                termcoeff, termrest = _split_arrterm_scalar_coeff(term)
+                termcoeff, termrest = _split_arrterm_scalar_coeff(T ,term)
                 @assert isequal(termcoeff, coeff)
             end
             return coeff, BSImpl.ArrayOp{T}(output_idx, rest, reduce, termrest, ranges; shape, type)
@@ -2261,6 +2261,7 @@ function _split_arrterm_scalar_coeff(ex::BasicSymbolic{T}) where {T}
         _ => (Const{T}(1), ex)
     end
 end
+_split_arrterm_scalar_coeff(::Type{T}, ex) where {T} = Const{T}(1), Const{T}(ex)
 
 function _as_base_exp(term::BasicSymbolic{T}) where {T}
     @match term begin
@@ -2353,7 +2354,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         sh = shape(term)
         type = promote_symtype(*, type, symtype(term))
         if _is_array_shape(sh)
-            coeff, arrterm = _split_arrterm_scalar_coeff(term)
+            coeff, arrterm = _split_arrterm_scalar_coeff(T, term)
             _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, coeff)
             if iscall(arrterm) && operation(arrterm) === (*)
                 append!(arrterms, arguments(arrterm))

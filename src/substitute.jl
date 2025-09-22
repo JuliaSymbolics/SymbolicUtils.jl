@@ -223,19 +223,64 @@ function search_variables(expr; kw...)
     return buffer
 end
 
-function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce; subrules = Dict()) where {T}
-    new_ranges = RangesT{T}()
+struct ArrayOpReduceCache{T}
+    new_ranges::RangesT{T}
+    subrules::Dict{BasicSymbolic{T}, Int}
+    collapsed_idxs::Set{BasicSymbolic{T}}
+    collapsed_ranges::Vector{StepRange{Int, Int}}
+end
+
+function ArrayOpReduceCache{T}() where {T}
+    ArrayOpReduceCache{T}(RangesT{T}(), Dict{BasicSymbolic{T}, Int}(), Set{BasicSymbolic{T}}(), StepRange{Int, Int}[])
+end
+
+function Base.empty!(x::ArrayOpReduceCache)
+    empty!(x.new_ranges)
+    empty!(x.subrules)
+    empty!(x.collapsed_idxs)
+    empty!(x.collapsed_ranges)
+    return x
+end
+
+const ARRAYOP_REDUCE_SYMREAL = TaskLocalValue{ArrayOpReduceCache{SymReal}}(ArrayOpReduceCache{SymReal})
+const ARRAYOP_REDUCE_SAFEREAL = TaskLocalValue{ArrayOpReduceCache{SafeReal}}(ArrayOpReduceCache{SafeReal})
+
+arrayop_reduce_cache(::Type{SymReal}) = empty!(ARRAYOP_REDUCE_SYMREAL[])
+arrayop_reduce_cache(::Type{SafeReal}) = empty!(ARRAYOP_REDUCE_SAFEREAL[])
+
+function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce) where {T}
+    cache = arrayop_reduce_cache(T)
+    new_ranges = cache.new_ranges
+    subrules = cache.subrules
     new_expr = Code.unidealize_indices(expr, ranges, new_ranges)
     merge!(new_ranges, ranges)
-    collapsed = setdiff(collect(keys(new_ranges)), output_idx)
-    collapsed_ranges = [new_ranges[k] for k in collapsed]
+    collapsed = cache.collapsed_idxs
+    union!(collapsed, keys(new_ranges))
+    setdiff!(collapsed, output_idx)
+    collapsed_ranges = cache.collapsed_ranges
+    for i in collapsed
+        push!(collapsed_ranges, new_ranges[i])
+    end
     return mapreduce(reduce, Iterators.product(collapsed_ranges...)) do iidxs
         for (idx, ii) in zip(iidxs, collapsed)
             subrules[ii] = idx
         end
-        return substitute(new_expr, subrules; fold = true)
+        return substitute(new_expr, subrules; fold = false)
     end
-    
+end
+@cache function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges::RangesT{SymReal}, reduce)::BasicSymbolic{SymReal}
+    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+end
+@cache function reduce_eliminated_idxs_2(expr::BasicSymbolic{SafeReal}, output_idx::OutIdxT{SafeReal}, ranges::RangesT{SafeReal}, reduce)::BasicSymbolic{SafeReal}
+    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+end
+function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce) where {T}
+    if T === SymReal
+        return reduce_eliminated_idxs_1(expr, output_idx, ranges, reduce)
+    elseif T === SafeReal
+        return reduce_eliminated_idxs_2(expr, output_idx, ranges, reduce)
+    end
+    _unreachable()
 end
 
 """
@@ -269,7 +314,7 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
             term === nothing || return scalarize(term, Val{toplevel}())
             subrules = Dict()
-            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce; subrules)
+            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
             empty!(subrules)
             map(Iterators.product(sh...)) do idxs
                 for (i, ii) in enumerate(output_idx)

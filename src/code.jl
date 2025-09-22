@@ -295,6 +295,9 @@ end
 
 function toexpr(O, st)
     O = unwrap_const(O)
+    if O isa CodegenPrimitive
+        return toexpr(O, st)
+    end
     O = substitute_name(O, st)
     if issym(O)
         return nameof(O)

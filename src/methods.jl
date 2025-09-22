@@ -1051,3 +1051,25 @@ promote_symtype(::typeof(complex), ::Type{T}) where {T <: Number} = T
 function promote_symtype(::typeof(complex), ::Type{T}, ::Type{S}) where {T <: Real, S <: Real}
     Complex{promote_type(T, S)}
 end
+
+function promote_symtype(::typeof(binomial), ::Type{T}, ::Type{S}) where {T <: Number,
+                                                                          S <: Integer}
+    return T
+end
+function promote_shape(::typeof(binomial), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    _is_array_shape(sha) && _throw_array(sha)
+    _is_array_shape(shb) && _throw_array(shb)
+
+    return ShapeVecT()
+end
+
+for T1 in [Number, :(BasicSymbolic{T})], T2 in [Integer, :(BasicSymbolic{T})]
+    if !(T1 isa Expr) && !(T2 isa Expr)
+        continue
+    end
+    @eval function Base.binomial(a::$T1, b::$T2) where {T}
+        sh = promote_shape(binomial, shape(a), shape(b))
+        return BSImpl.Term{T}(binomial, ArgsT{T}((Const{T}(a), Const{T}(b))); type = symtype(a), shape = sh)
+    end
+end

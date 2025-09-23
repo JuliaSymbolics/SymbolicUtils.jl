@@ -78,6 +78,25 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
             end
         end
         BSImpl.Div(; num, den) => begin
+            if isconst(den)
+                npoly = to_poly!(poly_to_bs, bs_to_poly, num, recurse)
+                den = unwrap_const(den)
+                if npoly isa PolyVarT
+                    mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}([npoly], [Int[1]])
+                    coeff = den isa Union{Integer, Rational} ? (1 // den) : (1 / den)
+                    return PolynomialT(PolyCoeffT[coeff], mv)
+                elseif den isa Union{Integer, Rational}
+                    coeffs = MP.coefficients(npoly)
+                    for (i, c) in enumerate(coeffs)
+                        coeffs[i] = c isa Union{Integer, Rational} ? (c // den) : (c / den)
+                    end
+                    return npoly
+                else
+                    coeffs = MP.coefficients(npoly)
+                    map!(Base.Fix2(/, den), coeffs, coeffs)
+                    return npoly
+                end
+            end
             if recurse
                 expr = BSImpl.Div{T}(expand(num), expand(den), false; type)
             end
@@ -117,7 +136,7 @@ function expand(expr::BasicSymbolic{T}, recurse = true)::BasicSymbolic{T} where 
     partial_poly = to_poly!(poly_to_bs, bs_to_poly, expr, recurse)
     return from_poly(poly_to_bs, partial_poly)
 end
-expand(x) = x
+expand(x, _...) = x
 
 ## Rational Polynomial form with Div
 

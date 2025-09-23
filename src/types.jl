@@ -2554,9 +2554,6 @@ function _fslash_worker(::Type{T}, a, b) where {T}
     if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(/, (a, b)))
     end
-    if isconst(a) || isconst(b)
-        return Const{T}(unwrap_const(a) / unwrap_const(b))
-    end
     type = promote_symtype(/, symtype(a), symtype(b))
     newshape = promote_shape(/, shape(a), shape(b))
     Div{T}(a, b, false; type, shape = newshape)

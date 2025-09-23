@@ -315,6 +315,12 @@ end
 
 promote_symtype(::typeof(Base.real), ::Type{T}) where {eT, T <: Complex{eT}} = eT
 promote_symtype(::typeof(Base.real), ::Type{T}) where {T <: Real} = T
+for f in [real, imag, conj]
+    @eval function promote_shape(::typeof($f), sh::ShapeT)
+        @nospecialize sh
+        return sh
+    end
+end
 function Base.real(s::BasicSymbolic{T}) where {T}
     islike(s, Real) && return s
     @match s begin

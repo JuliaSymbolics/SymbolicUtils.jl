@@ -171,7 +171,7 @@ function term_matcher_constructor(term, acSets)
         end
         return pow_term_matcher
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
-    elseif acSets!==nothing && operation(term) in [+, *]
+    elseif acSets!==nothing && (operation(term) === (+) || operation(term) === (*))
         has_segment = any([isa(unwrap_const(a),Segment) for a in arguments(term)])
         function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing

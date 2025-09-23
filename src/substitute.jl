@@ -27,7 +27,7 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
         end
         args[i] = Const{T}(newarg)
     end
-    if args isa ArgsT{T} || _op !== op
+    if args isa ArgsT{T} || _op !== op || Fold && all(isconst, args)
         if Fold
             return combine_fold(T, _op, args, metadata(ex))
         else
@@ -53,7 +53,7 @@ function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta) wh
     elseif op === (*)
         mul_worker(T, args)
     elseif op === (/)
-        args[1] / args[2]
+        can_fold ? Const{T}(unwrap_const(args[1]) / unwrap_const(args[2])) : (args[1] / args[2])
     elseif op === (^)
         args[1] ^ args[2]
     elseif can_fold
@@ -90,7 +90,7 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 ```
 """
 @inline function substitute(expr, dict; fold=true, filterer=default_substitute_filter)
-    isempty(dict) && return expr
+    isempty(dict) && !fold && return expr
     return Substituter{fold, typeof(dict), typeof(filterer)}(dict, filterer)(expr)
 end
 

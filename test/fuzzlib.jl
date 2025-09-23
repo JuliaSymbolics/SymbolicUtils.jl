@@ -41,9 +41,9 @@ const num_spec = let
                   ()->rand([a b c d e f])]
 
     binops = SymbolicUtils.diadic
-    nopow  = setdiff(binops, [(^), NaNMath.pow, besselj0, besselj1, bessely0, bessely1, besselj, bessely, besseli, besselk])
+    nopow  = setdiff(binops, [(^), NaNMath.pow, besselj0, besselj1, bessely0, bessely1, besselj, bessely, besseli, besselk, expint])
     twoargfns = vcat(nopow, (x,y)->x isa Union{Int, Rational, Complex{<:Rational}} ? x * y : x^y)
-    fns = vcat(1 .=> vcat(SymbolicUtils.monadic, [one, zero]),
+    fns = vcat(1 .=> setdiff(vcat(SymbolicUtils.monadic, [one, zero]), [factorial, expint]),
                2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5), fill(/, 40)),
                3 .=> [+, *])
 

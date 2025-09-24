@@ -192,8 +192,6 @@ function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, Polynomi
 end
 
 function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: SymVariant}
-    isconst(num) && return num, den
-    isconst(den) && return num, den
     poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
     bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
     partial_poly1 = to_poly!(poly_to_bs, bs_to_poly, num, false)

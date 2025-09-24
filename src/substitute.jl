@@ -293,13 +293,26 @@ head. The returned function is passed `f`, the expression with `f` as the head, 
 """
 scalarization_function(@nospecialize(_)) = _default_scalarize
 
+scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(map), typeof(mapreduce), typeof(broadcast), typeof(adjoint)}) = _default_scalarize_array
+
+function _default_scalarize_array(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = arguments(x)
+    if toplevel && f !== broadcast
+        f(map(unwrap_const, args)...)
+    else
+        f(map(unwrap_const ∘ scalarize, args)...)
+    end
+end
+
 function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
 
-    f isa BasicSymbolic{T} && return collect(x)
+    sh = shape(x)
+    _is_array_shape(sh) && return [x[idx] for idx in eachindex(x)]
 
     args = arguments(x)
-    if toplevel && f !== broadcast
+    if toplevel
         f(map(unwrap_const, args)...)
     else
         f(map(unwrap_const ∘ scalarize, args)...)
@@ -310,17 +323,7 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
     sh = shape(x)
     sh isa Unknown && return x
     @match x begin
-        BSImpl.Const(; val) => begin
-            if _is_array_shape(sh)
-                if val isa SparseMatrixCSC
-                    return val
-                else
-                    Const{T}.(val)
-                end
-            else
-                x
-            end
-        end
+        BSImpl.Const(;) => return x
         BSImpl.Sym(;) => _is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
             term === nothing || return scalarize(term, Val{toplevel}())
@@ -384,5 +387,9 @@ scalarization_function(::typeof(getindex)) = _getindex_scal
 
 function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     sh = shape(x)
-    return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]
+    if length(sh) > 0
+        return [x[idx] for idx in eachindex(x)]
+    end
+    args = arguments(x)
+    return getindex(scalarize(args[1]), Iterators.drop(args, 1)...)
 end

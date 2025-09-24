@@ -1189,6 +1189,8 @@ and the rational/integer factor (or `NaN` otherwise).
 function ratcoeff(x)
     if iscall(x) && operation(x) === (*)
         ratcoeff(get_mul_coefficient(x))
+    elseif safe_isinteger(x)
+        (true, Int(x))
     elseif x isa Rat
         (true, x)
     else
@@ -1202,6 +1204,12 @@ end
 Simplify the coefficients of `n` and `d` (numerator and denominator).
 """
 function simplify_coefficients(n, d)
+    if safe_isinteger(n)
+        n = Int(n)
+    end
+    if safe_isinteger(d)
+        d = Int(d)
+    end
     nrat, nc = ratcoeff(n)
     drat, dc = ratcoeff(d)
     nrat && drat || return n, d

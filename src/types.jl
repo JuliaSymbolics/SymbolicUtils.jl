@@ -246,6 +246,7 @@ shape(::Colon) = ShapeVecT((1:0,))
 function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
     symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
 end
+SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic}) = ScalarSymbolic()
 
 function SymbolicIndexingInterface.getname(x::BasicSymbolic{T}) where {T}
     @match x begin

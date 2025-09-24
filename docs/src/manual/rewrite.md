@@ -11,7 +11,7 @@ Here is a simple rewrite rule, that uses formula for the double angle of the sin
 ```@example rewrite
 using SymbolicUtils
 
-@syms w z α::Real β::Real
+@syms w z α::Real β::Real d(..)
 
 (w, z, α, β) # hide
 
@@ -54,13 +54,12 @@ c2d = @rule ~a + ~b*z + ~c*z^2 => (~a, ~b, ~c)
 
 2d(3 + 2z + 5z^2)
 ```
-Great! But if you try:
-```julia
-c2d(3 + 2z + z^2)
 
-#output
-nothing
+Great! But if you try:
+```@example rewrite
+c2d(3 + 2z + z^2)
 ```
+
 the rule is not applied. This is because in the input polynomial there isn't a multiplication in front of the `z^2`. For this you can use **defslot variables**, with syntax `~!a`:
 ```@example rewrite
 c2d = @rule ~!a + ~!b*z + ~!c*z^2 => (~a, ~b, ~c)

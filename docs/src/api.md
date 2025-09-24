@@ -6,7 +6,6 @@
 ```@docs
 SymbolicUtils.@syms
 SymbolicUtils.term
-SymbolicUtils.Sym
 ```
 
 ### Inspecting Terms
@@ -18,14 +17,6 @@ SymbolicUtils.operation
 SymbolicUtils.arguments
 SymbolicUtils.sorted_arguments
 SymbolicUtils.showraw
-```
-
-### Term Types
-```@docs
-SymbolicUtils.Term
-SymbolicUtils.Add
-SymbolicUtils.Mul
-SymbolicUtils.Pow
 ```
 
 ### Metadata
@@ -74,7 +65,6 @@ SymbolicUtils.substitute
 ## Polynomial Forms
 
 ```@docs
-SymbolicUtils.PolyForm
 SymbolicUtils.simplify_fractions
 SymbolicUtils.quick_cancel
 SymbolicUtils.flatten_fractions
@@ -84,36 +74,30 @@ SymbolicUtils.flatten_fractions
 
 ### Core Functions
 ```@docs
-SymbolicUtils.toexpr
-SymbolicUtils.cse
+SymbolicUtils.Code.toexpr
+SymbolicUtils.Code.cse
 ```
 
 ### Code Generation Types
 ```@docs
-SymbolicUtils.Assignment
-SymbolicUtils.Let
-SymbolicUtils.Func
-SymbolicUtils.DestructuredArgs
-SymbolicUtils.LiteralExpr
-SymbolicUtils.ForLoop
+SymbolicUtils.Code.Assignment
+SymbolicUtils.Code.Let
+SymbolicUtils.Code.Func
+SymbolicUtils.Code.DestructuredArgs
+SymbolicUtils.Code.LiteralExpr
+SymbolicUtils.Code.ForLoop
 ```
 
 ### Array Operations
 ```@docs
-SymbolicUtils.SetArray
-SymbolicUtils.MakeArray
-SymbolicUtils.MakeSparseArray
-SymbolicUtils.MakeTuple
+SymbolicUtils.Code.SetArray
+SymbolicUtils.Code.MakeArray
+SymbolicUtils.Code.MakeSparseArray
+SymbolicUtils.Code.MakeTuple
 ```
 
 ### Parallelism
 ```@docs
-SymbolicUtils.SpawnFetch
-SymbolicUtils.Multithreaded
-```
-
-## Utilities
-
-```@docs
-SymbolicUtils.@timerewrite
+SymbolicUtils.Code.SpawnFetch
+SymbolicUtils.Code.Multithreaded
 ```

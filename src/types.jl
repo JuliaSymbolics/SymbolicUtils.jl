@@ -2070,7 +2070,7 @@ function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}},
     end
     filter!(!(iszero ∘ last), result)
     isempty(result) && return Const{T}(newcoeff)
-    var = Add{T}(newcoeff, result; type, shape)
+    var = Add{T}(newcoeff, result; type, shape)::BasicSymbolic{T}
     @match var begin
         BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
         _ => nothing
@@ -2102,11 +2102,11 @@ function -(a::BasicSymbolic{T}) where {T}
                     return BSImpl.AddMul{T}(coeff, dict, variant; shape, type)
                 end
                 AddMulVariant.MUL => begin
-                    return Mul{T}(-coeff, dict; shape, type)
+                    return Mul{T}(-coeff, dict; shape, type)::BasicSymbolic{T}
                 end
             end
         end
-        _ => (-1 * a)
+        _ => (-1 * a)::BasicSymbolic{T}
     end
 end
 
@@ -2119,7 +2119,7 @@ function -(a::S, b::S) where {S <: NonTreeSym}
         (BSImpl.Const(; val = val1), BSImpl.Const(; val = val2)) => begin
             return Const{T}(val1 - val2)
         end
-        _ => return add_worker(T, (a, -b))
+        _ => return add_worker(T, (a, -b))::BasicSymbolic{T}
     end
 end
 
@@ -2798,19 +2798,19 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
                 if _isone(coeff)
                     return Term{T}(^, ArgsT{T}((rest, Const{T}(b))); type, shape = newshape)
                 end
-                return coeff ^ b * rest ^ b
+                return (coeff ^ b * rest ^ b)
             end
             _ => return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
         end
     elseif _is_array_shape(shb)
-        return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
+        return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)::BasicSymbolic{T}
     end
     if b isa Number
         iszero(b) && return Const{T}(1)
         isone(b) && return Const{T}(a)
     end
     if b isa Real && b < 0
-        return Div{T}(1, a ^ (-b), false; type)
+        return Div{T}(1, a ^ (-b), false; type)::BasicSymbolic{T}
     end
     if b isa Number
         @match a begin

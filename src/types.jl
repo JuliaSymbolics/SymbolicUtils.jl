@@ -3004,13 +3004,25 @@ Base.@propagate_inbounds function _getindex(arr::BasicSymbolic{T}, idxs::Union{B
             sh = shape(arr)
             type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
             newshape = promote_shape(getindex, sh, shape.(idxs)...)
-            for (oldidx, idx) in zip(Iterators.drop(args, 1), idxs)
-                if idx isa Colon
+            idxs_i = 1
+            for oldidx in Iterators.drop(args, 1)
+                oldidx_sh = shape(oldidx)
+                if !_is_array_shape(oldidx_sh)
+                    push!(newargs, oldidx)
+                    continue
+                end
+                idx = idxs[idxs_i]
+                idxs_i += 1
+                # special case when `oldidx` is `Colon()`
+                if length(oldidx_sh) == 1 && oldidx_sh[1] == 1:0
+                    push!(newargs, Const{T}(idx))
+                elseif idx isa Colon
                     push!(newargs, oldidx)
                 else
                     push!(newargs, Const{T}(unwrap_const(oldidx)[idx]))
                 end
             end
+            @assert idxs_i == length(idxs) + 1
             return BSImpl.Term{T}(f, newargs; type, shape = newshape)
         end
         _ => nothing
@@ -3121,6 +3133,15 @@ end
 function Base.getindex(x::AbstractArray, i1, idx::BasicSymbolic{T}, idxs...) where {T}
     getindex(Const{T}(x), i1, idx, idxs...)
 end
+function Base.getindex(x::AbstractArray, i1::BasicSymbolic{T}, idx::BasicSymbolic{T}, idxs...) where {T}
+    getindex(Const{T}(x), i1, idx, idxs...)
+end
 function Base.getindex(x::AbstractArray, i1, i2, idx::BasicSymbolic{T}, idxs...) where {T}
+    getindex(Const{T}(x), i1, i2, idx, idxs...)
+end
+function Base.getindex(x::AbstractArray, i1, i2::BasicSymbolic{T}, idx::BasicSymbolic{T}, idxs...) where {T}
+    getindex(Const{T}(x), i1, i2, idx, idxs...)
+end
+function Base.getindex(x::AbstractArray, i1::BasicSymbolic{T}, i2::BasicSymbolic{T}, idx::BasicSymbolic{T}, idxs...) where {T}
     getindex(Const{T}(x), i1, i2, idx, idxs...)
 end

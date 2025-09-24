@@ -114,8 +114,8 @@ end
 struct Ctx1 end
 struct Ctx2 end
 
-# @testset "metadata" begin
-begin
+# needs to be written like this to avoid a segfault on Julia 1.10
+@noinline function metadata_test()
     @syms a b c
     for a = [a, sin(a), a+b, a*b, a^3]
 
@@ -146,6 +146,10 @@ begin
     @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
                   1 + term(sqrt, 2, type=Real))
     @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=true)) isa Float64
+end
+
+@testset "metadata" begin
+    metadata_test()
 end
 
 @testset "Base methods" begin

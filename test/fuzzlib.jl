@@ -117,7 +117,11 @@ end
 
 function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
-    rstate = Random.getstate(Random.GLOBAL_RNG)
+    @static if isdefined(Random, :getstate)
+        rstate = Random.getstate(Random.GLOBAL_RNG)
+    else
+        rstate = nothing
+    end
     expr = gen_rand_expr(inputs; spec=spec, kwargs...)
     inputs = collect(inputs)
     code = try
@@ -224,7 +228,11 @@ end
 
 test_dict = Dict{Any, Rational{BigInt}}(a=>1,b=>-1,c=>2,d=>-2,e=>5//3,g=>-2//3)
 function fuzz_addmulpow(lvl, d=test_dict)
-    rstate = Random.getstate(Random.GLOBAL_RNG)
+    @static if isdefined(Random, :getstate)
+        rstate = Random.getstate(Random.GLOBAL_RNG)
+    else
+        rstate = nothing
+    end
     l, r = gen_expr(lvl)
     rl = try
         substitute(l, d)

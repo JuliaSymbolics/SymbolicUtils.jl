@@ -4,8 +4,8 @@ using Pkg, Test, SafeTestsets
     if haskey(ENV, "SU_BENCHMARK_ONLY")
         @safetestset "Benchmark" begin include("benchmark.jl") end
     else
-        @safetestset "Doc" begin include("doctest.jl") end
         @safetestset "Basics" begin include("basics.jl") end
+        @safetestset "Basics" begin include("arrayop.jl") end
         @safetestset "Order" begin include("order.jl") end
         @safetestset "PolyForm" begin include("polyform.jl") end
         @safetestset "Rewrite" begin include("rewrite.jl") end

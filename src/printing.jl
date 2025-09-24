@@ -103,7 +103,11 @@ end
 function show_ref(io, f, args)
     x = args[1]
     idx = args[2:end]
-
+    if issym(x) && nameof(x) == IDXS_SYM
+        @assert length(idx) == 1
+        print(io, "_", idx[1])
+        return
+    end
     iscall(x) && print(io, "(")
     print(io, x)
     iscall(x) && print(io, ")")
@@ -116,6 +120,12 @@ function show_ref(io, f, args)
 end
 
 function show_call(io, f, args)
+    if f isa Mapper
+        return show_call(io, map, [[f.f]; args])
+    end
+    if f isa Mapreducer
+        return show_call(io, mapreduce, [[f.f, f.reduce]; args])
+    end
     fname = iscall(f) ? Symbol(repr(f)) : nameof(f)
     len_args = length(args)
     if Base.isunaryoperator(fname) && len_args == 1
@@ -167,6 +177,48 @@ function show_term(io::IO, t)
     return nothing
 end
 
+const SHOW_ARRAYOP = Ref{Bool}(false)
+function show_arrayop(io::IO, aop::BasicSymbolic)
+    if iscall(aop.term) && !SHOW_ARRAYOP[]
+        show(io, aop.term)
+    else
+        print(io, "@arrayop")
+        print(io, "(_[$(join(string.(aop.output_idx), ","))] := $(aop.expr))")
+        if aop.reduce != +
+            print(io, " ($(aop.reduce))")
+        end
+
+        if !isempty(aop.ranges)
+            print(io, " ", join(["$k in $v" for (k, v) in aop.ranges], ", "))
+        end
+    end
+end
+
+"""
+    showraw([io::IO], t)
+
+Display the raw structure of a symbolic expression without simplification.
+
+This function shows the internal structure of symbolic expressions without applying
+any simplification rules, which is useful for debugging and understanding the
+exact form of an expression.
+
+# Arguments
+- `io::IO`: Optional IO stream to write to (defaults to stdout)
+- `t`: The symbolic expression to display
+
+# Examples
+```julia
+julia> @syms x
+x
+
+julia> expr = x + x + x
+3x
+
+julia> showraw(expr)  # Shows the unsimplified structure
+x + x + x
+```
+"""
 showraw(io, t) = Base.show(IOContext(io, :simplify=>false), t)
 showraw(t) = showraw(stdout, t)
 
@@ -182,6 +234,8 @@ function Base.show(io::IO, v::BSImpl.Type)
         if v isa Complex
             printstyled(io, ")"; color = :blue)
         end
+    elseif isarrayop(v)
+        show_arrayop(io, v)
     else
         show_term(io, v)
     end

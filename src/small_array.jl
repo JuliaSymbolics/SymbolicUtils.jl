@@ -129,17 +129,22 @@ function Base.map(f, x::Backing{T}) where {T}
 end
 
 function Base.empty!(x::Backing{T}) where {T}
-    if x.len >= 1
-        x.x1 = defaultval(T)
-    end
-    if x.len >= 2
-        x.x2 = defaultval(T)
-    end
-    if x.len == 3
-        x.x3 = defaultval(T)
-    end
+    x.x1 = defaultval(T)
+    x.x2 = defaultval(T)
+    x.x3 = defaultval(T)
     x.len = 0
     return x
+    # if x.len >= 1
+    #     x.x1 = defaultval(T)
+    # end
+    # if x.len >= 2
+    #     x.x2 = defaultval(T)
+    # end
+    # if x.len == 3
+    #     x.x3 = defaultval(T)
+    # end
+    # x.len = 0
+    # return x
 end
 
 function Base.copy(x::Backing{T}) where {T}
@@ -260,9 +265,6 @@ mutable struct SmallVec{T, V <: AbstractVector{T}} <: AbstractVector{T}
     end
 end
 
-Base.convert(::Type{SmallVec{T, V}}, x::V) where {T, V} = SmallVec{T}(x)
-Base.convert(::Type{SmallVec{T, V}}, x) where {T, V} = SmallVec{T}(V(x))
-Base.convert(::Type{SmallVec{T, V}}, x::SmallVec{T, V}) where {T, V} = x
 
 Base.size(x::SmallVec) = size(x.data)
 Base.isempty(x::SmallVec) = isempty(x.data)

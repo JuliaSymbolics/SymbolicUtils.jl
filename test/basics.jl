@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT, ArgsT
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT, ArgsT, isarrayop
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
@@ -102,12 +102,20 @@ end
     ex1 = sin(a+1)
     hash(asin(ex1), UInt(0))
     @test ex1.hash[] == h
+
+    @testset "hash is same with and without hashconsing" begin
+        @syms a b
+        t1 = Term{SymReal}(+, [a, b])
+        t2 = Term{SymReal}(+, [a, b]; unsafe = true)
+        @test hash(t1) == hash(t2)
+    end
 end
 
 struct Ctx1 end
 struct Ctx2 end
 
-@testset "metadata" begin
+# needs to be written like this to avoid a segfault on Julia 1.10
+@noinline function metadata_test()
     @syms a b c
     for a = [a, sin(a), a+b, a*b, a^3]
 
@@ -138,6 +146,10 @@ struct Ctx2 end
     @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
                   1 + term(sqrt, 2, type=Real))
     @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=true)) isa Float64
+end
+
+@testset "metadata" begin
+    metadata_test()
 end
 
 @testset "Base methods" begin
@@ -196,8 +208,28 @@ end
 
 @testset "array arithmetic" begin
     @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number} f[1:2, 1:2, 1:2] g[1:3, 1:3] h q[1:2, 1:3] x y z
-    symvec = [h, x]
-    symmat = [h x; y z]
+
+    @test_throws ErrorException BS[1, 2]
+    # getindex
+    @test BS{SymReal}[1, 2] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[1, a] isa Vector{BasicSymbolic{SymReal}}
+    # typed_vcat
+    @test BS{SymReal}[1; 2] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[1; a] isa Vector{BasicSymbolic{SymReal}}
+    # typed_hcat
+    @test BS{SymReal}[1 2] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1 a] isa Matrix{BasicSymbolic{SymReal}}
+    # typed_hvcat
+    @test BS{SymReal}[1 2; 3 4] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1 a; 3 4] isa Matrix{BasicSymbolic{SymReal}}
+    # typed_hvncat, ::Int
+    @test BS{SymReal}[1;; 2] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1;; a] isa Matrix{BasicSymbolic{SymReal}}
+    # typed_hvncat, ::Dims ::Bool
+    @test BS{SymReal}[1; 2;; 3; 4] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1; a;; 3; 4] isa Matrix{BasicSymbolic{SymReal}}
+    symvec = BS[h, x]
+    symmat = BS[h x; y z]
     @test symvec isa Vector{BasicSymbolic{SymReal}}
     @test symmat isa Matrix{BasicSymbolic{SymReal}}
     var = Const{SymReal}(symvec)
@@ -249,80 +281,79 @@ end
     @test_throws ArgumentError symvec + e
 
     var = a + a
-    @test isequal(var.args, ArgsT{SymReal}([Const{SymReal}(2), a]))
-    @test var.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}([Const{SymReal}(2), a]))
+    @test isarrayop(var)
+    @test var.expr.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * a
-    @test isequal(var.args, ArgsT{SymReal}([c, a]))
-    @test var.f === *
-    @test symtype(var) == Vector{Number}
+    @test isequal(arguments(var), ArgsT{SymReal}([c, a]))
+    @test var.expr.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * symvec
-    @test isequal(var.args, ArgsT{SymReal}([c, csymvec]))
-    @test var.f === *
-    @test symtype(var) == Vector{Number}
+    @test isequal(arguments(var), ArgsT{SymReal}([c, csymvec]))
+    @test var.expr.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = symmat * a
-    @test isequal(var.args, ArgsT{SymReal}([csymmat, a]))
-    @test var.f === *
-    @test symtype(var) == Vector{Number}
+    @test isequal(arguments(var), ArgsT{SymReal}([csymmat, a]))
+    @test var.expr.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = 2 * c * h * c * im
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((2 * h * im, c ^ 2)))
+    @test var.expr.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, c ^ 2)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
     var = var * a
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((2 * h * im, c ^ 2, a)))
+    @test var.expr.f === *
+    arg2 = @arrayop (i, j) (c^2)[i, j] term=(c^2)
+    @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, arg2, a)))
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * e * c
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((c, e, c)))
+    @test var.expr.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((c, e, c)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
     var = c * e
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((c, e)))
+    @test var.expr.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((c, e)))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
     var = var * c
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((c, e, c)))
+    @test var.expr.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((c, e, c)))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
     var = var * a
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((c, e, c, a)))
-    @test shape(var) == ShapeVecT([1:2])
+    @test var.expr.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((c, e, c, a)))
+    @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = c * e
     var = var * d
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((c, e, d)))
+    @test var.expr.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((c, e, d)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = e * a
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((e, a)))
-    @test shape(var) == ShapeVecT([1:2])
+    @test var.expr.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((e, a)))
+    @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = e * d
-    @test var.f === *
-    @test isequal(var.args, ArgsT{SymReal}((e, d)))
+    @test var.expr.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((e, d)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
@@ -774,7 +805,7 @@ end
         else
             @test_throws ArgumentError x[]
             @test_throws ArgumentError x[1, 2]
-            @test_throws ArgumentError x[[1 2; 3 4]]
+            @test_throws MethodError x[[1 2; 3 4]]
         end
         @test_throws ArgumentError x[k]
         @test_throws ArgumentError x[l]
@@ -834,7 +865,7 @@ end
             @test_throws BoundsError x[]
         else
             @test_throws ArgumentError x[]
-            @test_throws ArgumentError x[[1 2; 3 4], 1]
+            @test_throws MethodError x[[1 2; 3 4], 1]
             @test_throws ArgumentError x[1]
         end
         @test_throws ArgumentError x[k, 1]
@@ -911,7 +942,7 @@ end
     @test_reference "inspect_output/ex.txt" sprint(io->SymbolicUtils.inspect(io, ex))
     @test_reference "inspect_output/ex-md.txt" sprint(io->SymbolicUtils.inspect(io, ex, metadata=true))
     @test_reference "inspect_output/ex-nohint.txt" sprint(io->SymbolicUtils.inspect(io, ex, hint=false))
-    @test SymbolicUtils.pluck(ex, 12) == 2
+    @test unwrap_const(SymbolicUtils.pluck(ex, 12)) == 2
     @test_reference "inspect_output/sub10.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 9)))
     @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
 end
@@ -977,12 +1008,12 @@ end
     @test symtype(new_expr) == Vector{Float64}
 end
 
-toterm(t) = Term{vartype(t)}(operation(t), arguments(t); type = symtype(t))
+toterm(t) = Term{vartype(t)}(operation(t), sorted_arguments(t); type = symtype(t))
 
 @testset "diffs" begin
     @syms a b c
     @test isequal(toterm(-1c), Term{SymReal}(*, [-1, c]; type = Number))
-    @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-b, -a]; type = Number))
+    @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-a, -b]; type = Number))
     @test isequal(toterm((a + b) - (b + c)), Term{SymReal}(+, [a, -c]; type = Number))
 end
 
@@ -1126,6 +1157,11 @@ end
     SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true begin
         @test isequal(res, x)
     end
+end
+
+@testset "Negative coefficient to fractional power" begin
+    @syms a
+    @test isequal((-5a)^0.5, sqrt(5) * Term{SymReal}(^, [-a, 0.5]; type = Number, shape = ShapeVecT()))
 end
 
 @testset "Equivalent expressions across tasks are equal" begin

@@ -12,7 +12,8 @@ import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
                       symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
-                      vartype
+                      ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT,
+                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, _is_array_shape
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -127,6 +128,117 @@ function function_to_expr(op, O, st)
     return expr
 end
 
+const ARRAYOP_OUTSYM = Symbol("_out")
+
+function function_to_expr(::typeof(getindex), O::BasicSymbolic{T}, st) where {T}
+    out = get(st.rewrites, O, nothing)
+    out === nothing || return out
+
+    args = arguments(O)
+    if issym(args[1]) && nameof(args[1]) == IDXS_SYM
+        @assert length(args) == 2
+        return Symbol(:_, unwrap_const(args[2]))
+    end
+    args = map(Base.Fix2(toexpr, st), arguments(O))
+    expr = Expr(:call, getindex)
+    append!(expr.args, args)
+    return expr
+end
+
+function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
+    out = get(st.rewrites, O, nothing)
+    out === nothing || return out
+
+    # TODO: better infer default eltype from `O`
+    output_eltype = get(st.rewrites, :arrayop_eltype, Float64)
+    delete!(st.rewrites, :arrayop_eltype)
+    sh = shape(O)
+    default_output_buffer = if _is_array_shape(sh)
+        term(zeros, output_eltype, size(O))
+    else
+        term(zero, output_eltype)
+    end
+    output_buffer = get(st.rewrites, :arrayop_output, default_output_buffer)
+    delete!(st.rewrites, :arrayop_output)
+    toexpr(Let(
+        [
+            Assignment(ARRAYOP_OUTSYM, output_buffer),
+            Assignment(Symbol("%$ARRAYOP_OUTSYM"), inplace_expr(O, ARRAYOP_OUTSYM))
+        ], ARRAYOP_OUTSYM, false), st)
+end
+
+function unidealize_indices(expr::BasicSymbolic{T}, ranges, new_ranges) where {T}
+    iscall(expr) || return expr
+    op = operation(expr)
+    args = arguments(expr)
+    if op !== getindex
+        for i in eachindex(args)
+            arg = unidealize_indices(args[i], ranges, new_ranges)
+            isequal(arg, args[i]) && continue
+            if args isa ROArgsT
+                args = copy(parent(args))
+            end
+            args[i] = arg
+        end
+        args isa ROArgsT && return expr
+        return maketerm(typeof(expr), op, args, nothing)
+    end
+
+    arr = first(args)
+    sh = shape(arr)
+    sh isa Unknown && return expr
+    sh = sh::ShapeVecT
+
+    for i in eachindex(sh)
+        ax = sh[i]
+        idx = args[i + 1]
+        vars = Set{BasicSymbolic{T}}()
+        search_variables!(vars, idx; is_atomic = _is_index_variable)
+        length(vars) == 1 || continue
+        idxvar = only(vars)
+        haskey(ranges, idxvar) && continue
+        new_ranges[idxvar] = 1:length(ax)
+        first(ax) == 1 && continue
+
+        if args isa ROArgsT
+            args = copy(parent(args))
+        end
+        args[i + 1] = idx - (first(ax) - 1)
+    end
+    args isa ROArgsT && return expr
+    return maketerm(typeof(expr), getindex, args, nothing)
+end
+
+function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
+    # TODO:
+    # if x.term !== nothing
+    #     ex = inplace_builtin(x.term, outsym)
+    #     if ex !== nothing
+    #         return ex
+    #     end
+    # end
+    if outsym isa Symbol
+        outsym = Sym{T}(outsym; type = Array{Any}, shape = Unknown(-1))
+    end
+    sh = shape(x)
+    ranges = x.ranges
+    new_ranges = RangesT{T}()
+    new_expr = unidealize_indices(x.expr, ranges, new_ranges)
+    loopvar_order = unique!(filter(x -> x isa BasicSymbolic{T}, vcat(reverse(x.output_idx), collect(keys(ranges)), collect(keys(new_ranges)))))
+
+    if _is_array_shape(sh)
+        inner_expr = SetArray(false, outsym, [AtIndex(term(CartesianIndex, x.output_idx...), term(x.reduce, term(getindex, outsym, x.output_idx...), new_expr))])
+    else
+        inner_expr = Assignment(outsym, term(x.reduce, outsym, new_expr))
+    end
+    merge!(new_ranges, ranges)
+    loops = foldl(reverse(loopvar_order), init=inner_expr) do acc, k
+        ForLoop(k, new_ranges[k], acc)
+    end
+
+    return loops
+end
+
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.rewrites, O, nothing)
     @show out
@@ -185,6 +297,31 @@ end
 
 function find_mul(x::Symbol)
     false
+end
+
+function toexpr(O, st)
+    O = unwrap_const(O)
+    if O isa CodegenPrimitive
+        return toexpr(O, st)
+    end
+    O = substitute_name(O, st)
+    if issym(O)
+        return nameof(O)
+    end
+
+    if _is_array_of_symbolics(O)
+        return issparse(O) ? toexpr(MakeSparseArray(O)) : toexpr(MakeArray(O, typeof(O)), st)
+    end
+    !iscall(O) && return O
+    op = operation(O)
+    expr′ = function_to_expr(op, O, st)
+    if expr′ !== nothing
+        return expr′
+    else
+        !iscall(O) && return O
+        args = arguments(O)
+        return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
+    end
 end
 
 # Call elements of vector arguments by their name.
@@ -907,20 +1044,20 @@ end
 
 ## SArray
 @inline function create_array(::Type{<:SArray}, ::Nothing, nd::Val, ::Val{dims}, elems...) where dims
-    SArray{Tuple{dims...}}(elems...)
+    SArray{Tuple{dims...}}(elems)
 end
 
 @inline function create_array(::Type{<:SArray}, T, nd::Val, ::Val{dims}, elems...) where dims
-    SArray{Tuple{dims...}, T}(elems...)
+    SArray{Tuple{dims...}, T}(elems)
 end
 
 ## MArray
 @inline function create_array(::Type{<:MArray}, ::Nothing, nd::Val, ::Val{dims}, elems...) where dims
-    MArray{Tuple{dims...}}(elems...)
+    MArray{Tuple{dims...}}(elems)
 end
 
 @inline function create_array(::Type{<:MArray}, T, nd::Val, ::Val{dims}, elems...) where dims
-    MArray{Tuple{dims...}, T}(elems...)
+    MArray{Tuple{dims...}, T}(elems)
 end
 
 ## We use a separate type for Sparse Arrays to sidestep the need for
@@ -971,6 +1108,21 @@ function toexpr(a::MakeTuple, st)
     :(($(toexpr.(a.elems, (st,))...),))
 end
 
+"""
+    Multithreaded
+
+A parallelism type for `SpawnFetch` that uses Julia's threading system.
+
+When used with `SpawnFetch{Multithreaded}`, expressions are executed
+in parallel using `Threads.@spawn`.
+
+# Examples
+```julia
+julia> SpawnFetch{Multithreaded}([func1, func2], combine_func)
+```
+
+See also: [`SpawnFetch`](@ref)
+"""
 struct Multithreaded end
 """
     SpawnFetch{ParallelType}(funcs [, args], reduce)
@@ -1140,8 +1292,22 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Perform Common Subexpression Elimination on the given expression `expr`. Return an
-equivalent `expr` with optimized computation.
+Perform common subexpression elimination on an expression.
+
+This optimization identifies repeated subexpressions and replaces them with
+variables to avoid redundant computation.
+
+# Arguments
+- `expr`: The expression to optimize
+
+# Returns
+An optimized expression with common subexpressions eliminated
+
+# Examples
+```julia
+julia> expr = :(sin(x) + sin(x) * cos(y))
+julia> cse(expr)  # sin(x) is computed only once
+```
 """
 function cse(expr)
     state = CSEState()

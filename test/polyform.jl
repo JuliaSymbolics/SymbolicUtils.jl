@@ -64,7 +64,7 @@ end
     @test isequal(simplify_fractions(a), 7/expand(-(x-2)^2))
 
     # https://github.com/JuliaSymbolics/Symbolics.jl/issues/968
-    @eqtest simplify_fractions((x * y + (1//2) * x) / (2 * x)) == 1//2 * (1//2 + y)
+    @eqtest simplify_fractions((x * y + (1//2) * x) / (2 * x)) == (1 + 2y) / 4
 end
 
 @testset "isone iszero" begin

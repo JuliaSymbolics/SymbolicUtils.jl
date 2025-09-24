@@ -1,26 +1,60 @@
 # API Reference
 
 ## Symbols and Terms
+
+### Creating Symbols and Terms
 ```@docs
 SymbolicUtils.@syms
-SymbolicUtils.Sym
+SymbolicUtils.term
+```
+
+### Inspecting Terms
+```@docs
 SymbolicUtils.issym
 SymbolicUtils.symtype
-SymbolicUtils.Term
-SymbolicUtils.Add
-SymbolicUtils.Mul
-SymbolicUtils.Pow
+SymbolicUtils.iscall
+SymbolicUtils.operation
+SymbolicUtils.arguments
+SymbolicUtils.sorted_arguments
+SymbolicUtils.showraw
+```
+
+### Metadata
+```@docs
+SymbolicUtils.hasmetadata
+SymbolicUtils.getmetadata
+SymbolicUtils.setmetadata
+```
+
+### Type Promotion
+```@docs
 SymbolicUtils.promote_symtype
 ```
 
-## Rewriters
+## Rewriting System
 
+### Rule Creation
 ```@docs
 @rule
-SymbolicUtils.Rewriters
+@acrule
 ```
 
-## Simplify
+### Rewriters
+```@docs
+SymbolicUtils.Rewriters
+SymbolicUtils.Rewriters.Empty
+SymbolicUtils.Rewriters.IfElse
+SymbolicUtils.Rewriters.If
+SymbolicUtils.Rewriters.Chain
+SymbolicUtils.Rewriters.RestartedChain
+SymbolicUtils.Rewriters.Fixpoint
+SymbolicUtils.Rewriters.FixpointNoCycle
+SymbolicUtils.Rewriters.Postwalk
+SymbolicUtils.Rewriters.Prewalk
+SymbolicUtils.Rewriters.PassThrough
+```
+
+## Simplification and Transformation
 
 ```@docs
 SymbolicUtils.simplify
@@ -28,8 +62,42 @@ SymbolicUtils.expand
 SymbolicUtils.substitute
 ```
 
-## Utilities
+## Polynomial Forms
 
 ```@docs
-SymbolicUtils.@timerewrite
+SymbolicUtils.simplify_fractions
+SymbolicUtils.quick_cancel
+SymbolicUtils.flatten_fractions
+```
+
+## Code Generation
+
+### Core Functions
+```@docs
+SymbolicUtils.Code.toexpr
+SymbolicUtils.Code.cse
+```
+
+### Code Generation Types
+```@docs
+SymbolicUtils.Code.Assignment
+SymbolicUtils.Code.Let
+SymbolicUtils.Code.Func
+SymbolicUtils.Code.DestructuredArgs
+SymbolicUtils.Code.LiteralExpr
+SymbolicUtils.Code.ForLoop
+```
+
+### Array Operations
+```@docs
+SymbolicUtils.Code.SetArray
+SymbolicUtils.Code.MakeArray
+SymbolicUtils.Code.MakeSparseArray
+SymbolicUtils.Code.MakeTuple
+```
+
+### Parallelism
+```@docs
+SymbolicUtils.Code.SpawnFetch
+SymbolicUtils.Code.Multithreaded
 ```

@@ -2223,7 +2223,7 @@ function _check_adjoint_or_transpose(terms, result::ShapeT, first_arr::Union{Int
     @nospecialize first_arr result
     first_arr === nothing && return result
     farr = terms[first_arr]
-    if result isa ShapeVecT && length(result) == 1 && length(result[1]) == 1 && (farr isa AdjointOrTranspose || iscall(farr) && (operation(farr) === adjoint || operation(farr) === transpose))
+    if result isa ShapeVecT && length(result) <= 2 && all(==(1) ∘ length, result) && (farr isa AdjointOrTranspose || iscall(farr) && (operation(farr) === adjoint || operation(farr) === transpose))
         return ShapeVecT()
     end
     return result

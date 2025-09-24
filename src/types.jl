@@ -1561,6 +1561,12 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
             @set! res.metadata = metadata
         end
         return res
+    elseif f === hvncat
+        sh = ShapeVecT()
+        for dim in unwrap_const(args[1])
+            push!(sh, 1:dim)
+        end
+        BSImpl.Term{T}(f, args; type, shape = sh)
     elseif _numeric_or_arrnumeric_type(type)
         if f === (+)
             res = add_worker(T, args)

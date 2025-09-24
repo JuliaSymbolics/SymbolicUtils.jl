@@ -207,6 +207,12 @@ Base.@nospecializeinfer @generated function _shape_notsymbolic(x)
             cur_expr = new_expr
         end
     end
+    push!(cur_expr.args, :(x isa $(Colon)))
+    push!(cur_expr.args, :($shape($Colon())))
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
     push!(cur_expr.args, :(x isa $(LinearAlgebra.UniformScaling)))
     push!(cur_expr.args, Unknown(2))
     new_expr = Expr(:elseif)

@@ -1,18 +1,18 @@
  1 Div
- 2 ├─ AddOrMul(variant = "MUL", scalar = 1, powers = (1 + 2x + 3y => 2, z => 1))
- 3 │  ├─ Pow
- 4 │  │  ├─ AddOrMul(variant = "ADD", scalar = 1, coeffs = (x => 2, y => 3))
- 5 │  │  │  ├─ 1
- 6 │  │  │  ├─ AddOrMul(variant = "MUL", scalar = 2, powers = (x => 1,))
- 7 │  │  │  │  ├─ 2
+ 2 ├─ AddMul(variant = "MUL",)
+ 3 │  ├─ Term
+ 4 │  │  ├─ AddMul(variant = "ADD",)
+ 5 │  │  │  ├─ Const(1)
+ 6 │  │  │  ├─ AddMul(variant = "MUL",)
+ 7 │  │  │  │  ├─ Const(2)
  8 │  │  │  │  └─ Sym(x)
- 9 │  │  │  └─ AddOrMul(variant = "MUL", scalar = 3, powers = (y => 1,))
-10 │  │  │     ├─ 3
+ 9 │  │  │  └─ AddMul(variant = "MUL",)
+10 │  │  │     ├─ Const(3)
 11 │  │  │     └─ Sym(y)
-12 │  │  └─ 2
+12 │  │  └─ Const(2)
 13 │  └─ Sym(z)
-14 └─ AddOrMul(variant = "ADD", scalar = 0, coeffs = (x => 2, z => 1))
-15    ├─ AddOrMul(variant = "MUL", scalar = 2, powers = (x => 1,))
-16    │  ├─ 2
+14 └─ AddMul(variant = "ADD",)
+15    ├─ AddMul(variant = "MUL",)
+16    │  ├─ Const(2)
 17    │  └─ Sym(x)
 18    └─ Sym(z)

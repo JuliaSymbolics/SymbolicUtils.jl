@@ -1,6 +1,6 @@
-1 AddOrMul(variant = "ADD", scalar = 0, coeffs = (x => 2, z => 1))
-2 ├─ AddOrMul(variant = "MUL", scalar = 2, powers = (x => 1,))
-3 │  ├─ 2
+1 AddMul(variant = "ADD",)
+2 ├─ AddMul(variant = "MUL",)
+3 │  ├─ Const(2)
 4 │  └─ Sym(x)
 5 └─ Sym(z)
 

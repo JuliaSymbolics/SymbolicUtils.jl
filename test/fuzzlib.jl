@@ -41,9 +41,9 @@ const num_spec = let
                   ()->rand([a b c d e f])]
 
     binops = SymbolicUtils.diadic
-    nopow  = setdiff(binops, [(^), NaNMath.pow, besselj0, besselj1, bessely0, bessely1, besselj, bessely, besseli, besselk])
+    nopow  = setdiff(binops, [(^), NaNMath.pow, besselj0, besselj1, bessely0, bessely1, besselj, bessely, besseli, besselk, expint])
     twoargfns = vcat(nopow, (x,y)->x isa Union{Int, Rational, Complex{<:Rational}} ? x * y : x^y)
-    fns = vcat(1 .=> vcat(SymbolicUtils.monadic, [one, zero]),
+    fns = vcat(1 .=> setdiff(vcat(SymbolicUtils.monadic, [one, zero]), [factorial, expint]),
                2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5), fill(/, 40)),
                3 .=> [+, *])
 
@@ -117,7 +117,11 @@ end
 
 function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
-    rstate = Random.getstate(Random.GLOBAL_RNG)
+    @static if isdefined(Random, :getstate)
+        rstate = Random.getstate(Random.GLOBAL_RNG)
+    else
+        rstate = nothing
+    end
     expr = gen_rand_expr(inputs; spec=spec, kwargs...)
     inputs = collect(inputs)
     code = try
@@ -224,7 +228,11 @@ end
 
 test_dict = Dict{Any, Rational{BigInt}}(a=>1,b=>-1,c=>2,d=>-2,e=>5//3,g=>-2//3)
 function fuzz_addmulpow(lvl, d=test_dict)
-    rstate = Random.getstate(Random.GLOBAL_RNG)
+    @static if isdefined(Random, :getstate)
+        rstate = Random.getstate(Random.GLOBAL_RNG)
+    else
+        rstate = nothing
+    end
     l, r = gen_expr(lvl)
     rl = try
         substitute(l, d)

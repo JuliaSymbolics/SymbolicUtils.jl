@@ -138,7 +138,7 @@ macro arrayop(output_idx, expr, options...)
     oftype(x,T) = :($x::$T)
 
     let_assigns = Expr(:block)
-    push!(let_assigns.args, Expr(:(=), :__vartype, :($vartype($vartype_ref))))
+    push!(let_assigns.args, Expr(:(=), :__vartype, :($vartype($unwrap($vartype_ref)))))
     push!(let_assigns.args, Expr(:(=), :__idx, :($idxs_for_arrayop(__vartype))))
     for (i, idx) in enumerate(idxs)
         push!(let_assigns.args, Expr(:(=), idx, :(__idx[$i])))
@@ -181,18 +181,6 @@ function find_vartype_reference(expr)
     return nothing
 end
 
-function call2term(expr, arrs=[])
-    !(expr isa Expr) && return :($unwrap($expr))
-    if expr.head == :call
-        if expr.args[1] == :(:)
-            return expr
-        end
-        return Expr(:call, term, map(call2term, expr.args)...)
-    elseif expr.head == :ref
-        return Expr(:ref, call2term(expr.args[1]), expr.args[2:end]...)
-    elseif expr.head == Symbol("'")
-        return Expr(:call, term, adjoint, map(call2term, expr.args)...)
-    end
-
-    return Expr(expr.head, map(call2term, expr.args)...)
+function call2term(expr)
+    return :($unwrap($expr))
 end

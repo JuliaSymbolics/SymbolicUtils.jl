@@ -24,7 +24,7 @@ const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
 const SmallV{T} = SmallVec{T, Vector{T}}
 const ShapeVecT = SmallV{UnitRange{Int}}
 const ShapeT = Union{Unknown, ShapeVecT}
-const IdentT = Union{Tuple{UInt, IDType}, Tuple{Nothing, Nothing}}
+const IdentT = Union{IDType, Nothing}
 const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
 const PolyVarOrder = DP.Commutative{DP.CreationOrder}
 const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=MonomialOrder)
@@ -35,6 +35,7 @@ const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
 # `zero(Any)` but that doesn't matter because we shouldn't ever store a zero polynomial
 const PolynomialT = _PolynomialT{PolyCoeffT}
 const TypeT = Union{DataType, UnionAll, Union}
+const MonomialT = DP.Monomial{PolyVarOrder, MonomialOrder}
 
 function zeropoly()
     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}()
@@ -60,6 +61,7 @@ Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
 @data mutable BasicSymbolicImpl{T <: SymVariant} begin 
     struct Const
         const val::Any
+        hash::UInt
         id::IdentT
     end
     struct Sym
@@ -144,29 +146,15 @@ const ACDict{T} = Dict{BasicSymbolic{T}, Number}
 const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
 const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
 
-const POLYVAR_LOCK = ReadWriteLock()
-# NOTE: All of these are accessed via POLYVAR_LOCK
-const BS_TO_PVAR = WeakKeyDict{BasicSymbolic, PolyVarT}()
-
-# TODO: manage scopes better here
-function basicsymbolic_to_polyvar(x::BasicSymbolic)::PolyVarT
-    pvar = nothing
-    @readlock POLYVAR_LOCK begin
-        pvar = get(BS_TO_PVAR, x, nothing)
+function basicsymbolic_to_polyvar(bs_to_poly::AbstractDict, x::BasicSymbolic)::PolyVarT
+    get!(bs_to_poly, x) do
+        inner_name = _name_as_operator(x)
+        name = Symbol(inner_name, :_, hash(x))
+        MP.similar_variable(ExamplePolyVar, name)
     end
-    if pvar !== nothing
-        return pvar
-    end
-    inner_name = _name_as_operator(x)
-    name = Symbol(inner_name, :_, hash(x))
-    pvar = MP.similar_variable(ExamplePolyVar, name)
-    @lock POLYVAR_LOCK begin
-        BS_TO_PVAR[x] = pvar
-    end
-    return pvar
 end
 
-function subs_poly(poly::Union{_PolynomialT, MP.Term}, vars::AbstractVector{BasicSymbolic{T}}) where {T}
+function subs_poly(poly, vars::AbstractVector{BasicSymbolic{T}}) where {T}
     add_buffer = ArgsT{T}()
     mul_buffer = ArgsT{T}()
     for term in MP.terms(poly)
@@ -259,6 +247,22 @@ function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
     symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
 end
 
+function SymbolicIndexingInterface.getname(x::BasicSymbolic{T}) where {T}
+    @match x begin
+        BSImpl.Sym(; name) => name
+        BSImpl.Term(; f, args) && if f === getindex end => getname(args[1])
+        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => getname(f)
+    end
+end
+
+function SymbolicIndexingInterface.hasname(x::BasicSymbolic{T}) where {T}
+    @match x begin
+        BSImpl.Sym(;) => true
+        BSImpl.Term(; f) && if f === getindex || f isa BasicSymbolic{T} end => true
+        _ => false
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -288,26 +292,26 @@ override_properties(obj::BSImpl.Type) = override_properties(MData.variant_type(o
 
 function override_properties(obj::Type{<:BSImpl.Variant})
     @match obj begin
-        ::Type{<:BSImpl.Const} => (; id = (nothing, nothing))
-        ::Type{<:BSImpl.Sym} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.AddMul} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.Term} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.Div} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
-        ::Type{<:BSImpl.ArrayOp} => (; id = (nothing, nothing), hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Const} => (; id = nothing, hash = 0)
+        ::Type{<:BSImpl.Sym} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.AddMul} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Term} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.Div} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.ArrayOp} => (; id = nothing, hash = 0, hash2 = 0)
         _ => throw(UnimplementedForVariantError(override_properties, obj))
     end
 end
 
-ordered_override_properties(::Type{<:BSImpl.Const}) = ((nothing, nothing),)
-ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, 0, (nothing, nothing))
-ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, (nothing, nothing))
-ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsT{T}(), 0, 0, (nothing, nothing))
-ordered_override_properties(::Type{<:BSImpl.Div}) = (0, 0, (nothing, nothing))
-ordered_override_properties(::Type{<:BSImpl.ArrayOp{T}}) where {T} = (ArgsT{T}(), 0, 0, (nothing, nothing))
+ordered_override_properties(::Type{<:BSImpl.Const}) = (0, nothing,)
+ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, nothing)
+ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.Div}) = (0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.ArrayOp{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
 
 function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
-        BSImpl.Const(; val, id) => (; val, id)
+        BSImpl.Const(; val, hash, id) => (; val, hash, id)
         BSImpl.Sym(; name, metadata, hash, hash2, shape, type, id) => (; name, metadata, hash, hash2, shape, type, id)
         BSImpl.Term(; f, args, metadata, hash, hash2, shape, type, id) => (; f, args, metadata, hash, hash2, shape, type, id)
         BSImpl.AddMul(; coeff, dict, variant, metadata, shape, type, args, hash, hash2, id) => (; coeff, dict, variant, metadata, shape, type, args, hash, hash2, id)
@@ -578,8 +582,8 @@ end
 ### Base interface
 ###
 
-Base.isequal(::BasicSymbolic, x) = false
-Base.isequal(x, ::BasicSymbolic) = false
+Base.isequal(::BasicSymbolic, x::Union{Number, AbstractArray}) = false
+Base.isequal(x::Union{Number, AbstractArray}, ::BasicSymbolic) = false
 Base.isequal(::BasicSymbolic, ::Missing) = false
 Base.isequal(::Missing, ::BasicSymbolic) = false
 
@@ -646,15 +650,15 @@ isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false
 
 function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where {T}
     a === b && return true
-    taskida, ida = a.id
-    taskidb, idb = b.id
+    ida = a.id
+    idb = b.id
     ida === idb && ida !== nothing && return true
 
     Ta = MData.variant_type(a)
     Tb = MData.variant_type(b)
     Ta === Tb || return false
 
-    if full && ida !== idb && ida !== nothing && idb !== nothing && taskida == taskidb
+    if full && ida !== idb && ida !== nothing && idb !== nothing
         return false
     end
 
@@ -743,8 +747,10 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     h = hash(T, h)
 
     partial::UInt = @match s begin
-        BSImpl.Const(; val) => begin
-            h = hash_somescalar(val, h)::UInt
+        BSImpl.Const(; val, hash) => begin
+            if iszero(hash)
+                h = s.hash = hash_somescalar(val, h)::UInt
+            end
             if full
                 h = Base.hash(typeof(val), h)::UInt
             end
@@ -794,6 +800,8 @@ end
 
 Base.one( s::BSImpl.Type) = one( symtype(s))
 Base.zero(s::BSImpl.Type) = zero(symtype(s))
+Base.one( ::Type{<:BSImpl.Type}) = 1
+Base.zero(::Type{<:BSImpl.Type}) = 0
 
 function _name_as_operator(x::BasicSymbolic)
     @match x begin
@@ -813,11 +821,11 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic
 # TODO: split into 3 caches based on `SymVariant`
 const ENABLE_HASHCONSING = Ref(true)
 const AllBasicSymbolics = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}
-const WCS = TaskLocalValue{WeakCacheSet{AllBasicSymbolics}}(WeakCacheSet{AllBasicSymbolics})
-const TASK_ID = TaskLocalValue{UInt}(() -> rand(UInt))
+const WCS_LOCK = ReentrantLock()
+const WCS = WeakCacheSet{AllBasicSymbolics}()
 
 function generate_id()
-    return (TASK_ID[], IDType())
+    IDType()
 end
 
 """
@@ -847,32 +855,17 @@ function hashcons(s::BSImpl.Type)
         return s
     end
     @manually_scope COMPARE_FULL => true begin
-        cache = WCS[]
-        k = getkey!(cache, s)::typeof(s)
-        # cache = WVD[]
-        # h = hash(s)
-        # k = get(cache, h, nothing)
-
-        # if k === nothing || !isequal(k, s)
-        #     if k !== nothing
-        #         buffer = collides[]
-        #         buffer2 = get!(() -> [], buffer, h)
-        #         push!(buffer2, k => s)
-        #     end
-        
-        #     cache[h] = s
-        #     k = s
-        # end
-        if k.id === (nothing, nothing)
+        k = (@lock WCS_LOCK getkey!(WCS, s))::typeof(s)
+        if k.id === nothing
             k.id = generate_id()
         end
         return k::typeof(s)
     end true
 end
 
-const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, (nothing, nothing)))
-const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, (nothing, nothing)))
-const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, (nothing, nothing)))
+const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, 0, nothing))
+const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, 0, nothing))
+const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, 0, nothing))
 
 defaultval(::Type{BasicSymbolic{SymReal}}) = SMALLV_DEFAULT_SYMREAL
 defaultval(::Type{BasicSymbolic{SafeReal}}) = SMALLV_DEFAULT_SAFEREAL
@@ -895,7 +888,7 @@ end
 parse_metadata(x::MetadataT) = x
 parse_metadata(::Nothing) = nothing
 function parse_metadata(x)
-    meta = MetadataT()
+    meta = Base.ImmutableDict{DataType, Any}()
     for kvp in x
         meta = Base.ImmutableDict(meta, kvp)
     end
@@ -963,6 +956,16 @@ function parse_output_idxs(::Type{T}, outidxs::Union{Tuple, AbstractVector}) whe
         push!(_outidxs, unwrap_const(unwrap(i)))
     end
     return _outidxs::OutIdxT{T}
+end
+
+function parse_shape(sh)
+    sh isa Unknown && return sh
+    sh isa ShapeVecT && return sh
+    _sh = ShapeVecT()
+    for dim in sh
+        push!(_sh, dim)
+    end
+    return _sh
 end
 
 function parse_rangedict(::Type{T}, dict::AbstractDict) where {T}
@@ -1033,6 +1036,7 @@ end
 
 @inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     props = ordered_override_properties(BSImpl.Sym)
     var = BSImpl.Sym{T}(name, metadata, shape, type, props...)
     if !unsafe
@@ -1043,6 +1047,7 @@ end
 
 @inline function BSImpl.Term{T}(f, args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     args = parse_args(T, args)
     props = ordered_override_properties(BSImpl.Term)
     var = BSImpl.Term{T}(f, args, metadata, shape, type, props...)
@@ -1054,6 +1059,7 @@ end
 
 @inline function BSImpl.AddMul{T}(coeff, dict, variant::AddMulVariant.T; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     dict = parse_dict(T, dict)
     props = ordered_override_properties(BSImpl.AddMul{T})
     var = BSImpl.AddMul{T}(coeff, dict, variant, metadata, shape, type, props...)
@@ -1065,6 +1071,7 @@ end
 
 @inline function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     num = Const{T}(num)
     den = Const{T}(den)
     props = ordered_override_properties(BSImpl.Div)
@@ -1085,6 +1092,7 @@ default_ranges(::Type{TreeReal}) = DEFAULT_RANGES_TREEREAL
 
 @inline function BSImpl.ArrayOp{T}(output_idx, expr::BasicSymbolic{T}, reduce, term, ranges = default_ranges(T); metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
     output_idx = parse_output_idxs(T, output_idx)
     term = unwrap_const(unwrap(term))
     ranges = parse_rangedict(T, ranges)
@@ -1123,7 +1131,7 @@ end
         if _isone(v)
             return k
         else
-            return k * v
+            return (k * v)::BasicSymbolic{T}
         end
     end
 
@@ -1142,7 +1150,7 @@ end
         if _isone(v)
             return k
         else
-            return k ^ v
+            return (k ^ v)::BasicSymbolic{T}
         end
     elseif _isone(-coeff) && length(dict) == 1
         k, v = first(dict)
@@ -1525,9 +1533,32 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
         @goto FALLBACK
     elseif f === ArrayOp{T}
         return ArrayOp{T}(args...)
+    elseif f === broadcast
+        _f, _args = Iterators.peel(args)
+        res = broadcast(unwrap_const(_f), _args...)
+        if metadata !== nothing && iscall(res)
+            @set! res.metadata = metadata
+        end
+        return res
+    elseif f === getindex
+        res = getindex(unwrap_const.(args)...)
+        if metadata !== nothing && iscall(res)
+            @set! res.metadata = metadata
+        end
+        return res
     elseif _numeric_or_arrnumeric_type(type)
         if f === (+)
             res = add_worker(T, args)
+            if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
+                @set! res.metadata = metadata
+            end
+            return res
+        elseif f === (-)
+            if length(args) == 1
+                res = mul_worker(T, (-1, args[1]))
+            else
+                res = add_worker(T, (args[1], -args[2]))
+            end
             if metadata !== nothing && (isadd(res) || (isterm(res) && operation(res) == (+)))
                 @set! res.metadata = metadata
             end
@@ -1556,7 +1587,8 @@ function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
         end
     else
         @label FALLBACK
-        Term{T}(f, args; type, metadata=metadata)
+        sh = promote_shape(f, shape.(args)...)
+        Term{T}(f, args; type, shape=sh, metadata=metadata)
     end
 end
 
@@ -1754,10 +1786,61 @@ struct FnType{X<:Tuple,Y,Z} end
 function (f::BasicSymbolic{T})(args...) where {T}
     symtype(f) <: FnType || error("Sym $f is not callable. " *
           "Use @syms $f(var1, var2,...) to create it as a callable.")
-    Term{T}(f, args; type = promote_symtype(f, symtype.(args)...), shape = f.shape)
+    Term{T}(f, args; type = promote_symtype(f, symtype.(args)...), shape = f.shape, metadata = f.metadata)
 end
 
 fntype_X_Y(::Type{<: FnType{X, Y}}) where {X, Y} = (X, Y)
+
+function promote_shape(f::BasicSymbolic{T}, args::ShapeT...) where {T}
+    @nospecialize args
+    return shape(f)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `x` is a symbolic representing a function (as opposed to a dependent variable).
+A symbolic function either has a defined signature or the function type defined. For
+example, all of the below are considered symbolic functions:
+
+```julia
+@syms f(::Real, ::Real) g(::Real)::Integer h(::Real)[1:2]::Integer (ff::MyCallableT)(..)
+```
+
+However, the following is considered a dependent variable with unspecified independent
+variable:
+
+```julia
+@syms x(..)
+```
+
+See also: [`SymbolicUtils.is_function_symtype`](@ref).
+"""
+is_function_symbolic(x::BasicSymbolic) = is_function_symtype(symtype(x))
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the given `symtype` represents a function (as opposed to a dependent variable).
+
+See also: [`SymbolicUtils.is_function_symbolic`](@ref).
+"""
+is_function_symtype(::Type{T}) where {T} = false
+is_function_symtype(::Type{FnType{Tuple, Y, Nothing}}) where {Y} = false
+is_function_symtype(::Type{FnType{X, Y, Z}}) where {X, Y, Z} = true
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the given symbolic `x` is the result of calling a symbolic function (as opposed
+to a dependent variable).
+
+See also: [`SymbolicUtils.is_function_symbolic`](@ref).
+"""
+function is_called_function_symbolic(x::BasicSymbolic{T}) where {T}
+    @match x begin
+        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => is_function_symtype(f)
+        _ => false
+    end
+end
 
 """
     promote_symtype(f::FnType{X,Y}, arg_symtypes...)
@@ -1938,7 +2021,7 @@ end
 
 function _added_shape(terms)
     isempty(terms) && return Unknown(-1)
-    length(terms) == 1 && return shape(terms[1])
+    length(terms) == 1 && return shape(first(terms))
     a, bs = Iterators.peel(terms)
     sh::ShapeT = shape(a)
     for t in bs
@@ -1987,7 +2070,7 @@ function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}},
     end
     filter!(!(iszero ∘ last), result)
     isempty(result) && return Const{T}(newcoeff)
-    var = Add{T}(newcoeff, result; type, shape)
+    var = Add{T}(newcoeff, result; type, shape)::BasicSymbolic{T}
     @match var begin
         BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
         _ => nothing
@@ -1995,11 +2078,9 @@ function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}},
     return var
 end
 
-function +(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
-    return add_worker(vartype(T), (a, b, bs...))
-end
+const PolyadicNumericOpFirstArgT{T} = Union{Number, AbstractArray{<:Number}, AbstractArray{T}}
 
-function +(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
+function +(a::PolyadicNumericOpFirstArgT{T}, b::T, bs...) where {T <: NonTreeSym}
     return add_worker(vartype(T), (a, b, bs...))
 end
 
@@ -2021,11 +2102,11 @@ function -(a::BasicSymbolic{T}) where {T}
                     return BSImpl.AddMul{T}(coeff, dict, variant; shape, type)
                 end
                 AddMulVariant.MUL => begin
-                    return BSImpl.AddMul{T}(-coeff, dict, variant; shape, type)
+                    return Mul{T}(-coeff, dict; shape, type)::BasicSymbolic{T}
                 end
             end
         end
-        _ => (-1 * a)
+        _ => (-1 * a)::BasicSymbolic{T}
     end
 end
 
@@ -2038,7 +2119,7 @@ function -(a::S, b::S) where {S <: NonTreeSym}
         (BSImpl.Const(; val = val1), BSImpl.Const(; val = val2)) => begin
             return Const{T}(val1 - val2)
         end
-        _ => return add_worker(T, (a, -b))
+        _ => return add_worker(T, (a, -b))::BasicSymbolic{T}
     end
 end
 
@@ -2071,9 +2152,9 @@ end
 _is_array_shape(sh::ShapeT) = sh isa Unknown || _ndims_from_shape(sh) > 0
 function _multiplied_shape(shapes)
     first_arr = findfirst(_is_array_shape, shapes)
-    first_arr === nothing && return ShapeVecT()
+    first_arr === nothing && return ShapeVecT(), first_arr
     last_arr::Int = findlast(_is_array_shape, shapes)
-    first_arr == last_arr && return shapes[first_arr]
+    first_arr == last_arr && return shapes[first_arr], first_arr
 
     sh1::ShapeT = shapes[first_arr]
     shend::ShapeT = shapes[last_arr]
@@ -2082,6 +2163,9 @@ function _multiplied_shape(shapes)
     ndims_1 == -1 || ndims_1 == 2 || throw_expected_matrix(sh1)
     ndims_end <= 2 || throw_expected_matvec(shend)
     if ndims_end == 1
+        # NOTE: This lies because the shape of a matvec mul isn't solely determined by the
+        # shapes of inputs. If the first array is an adjoint or transpose, the result
+        # is a scalar.
         result = sh1 isa Unknown ? Unknown(1) : ShapeVecT((sh1[1],))
     elseif sh1 isa Unknown || shend isa Unknown
         result = Unknown(ndims_end)
@@ -2105,15 +2189,28 @@ function _multiplied_shape(shapes)
         cur_shape = sh
     end
 
-    return result
+    return result, first_arr
 end
 
 function promote_shape(::typeof(*), shs::ShapeT...)
-    _multiplied_shape(shs)
+    _multiplied_shape(shs)[1]
+end
+
+const AdjointOrTranspose = Union{LinearAlgebra.Adjoint, LinearAlgebra.Transpose}
+
+function _check_adjoint_or_transpose(terms, result::ShapeT, first_arr::Union{Int, Nothing})
+    @nospecialize first_arr result
+    first_arr === nothing && return result
+    farr = terms[first_arr]
+    if result isa ShapeVecT && length(result) == 1 && length(result[1]) == 1 && (farr isa AdjointOrTranspose || iscall(farr) && (operation(farr) === adjoint || operation(farr) === transpose))
+        return ShapeVecT()
+    end
+    return result
 end
 
 function _multiplied_terms_shape(terms::Tuple)
-    _multiplied_shape(ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms))))
+    result, first_arr = _multiplied_shape(ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms))))
+    return _check_adjoint_or_transpose(terms, result, first_arr)
 end
 
 function _multiplied_terms_shape(terms)
@@ -2122,10 +2219,11 @@ function _multiplied_terms_shape(terms)
     for t in terms
         push!(shapes, shape(t))
     end
-    return _multiplied_shape(shapes)
+    result, first_arr = _multiplied_shape(shapes)
+    return _check_adjoint_or_transpose(terms, result, first_arr)
 end
 
-function _split_arrterm_scalar_coeff(ex::BasicSymbolic{T}) where {T}
+function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
     sh = shape(ex)
     _is_array_shape(sh) || return ex, Const{T}(1)
     @match ex begin
@@ -2160,7 +2258,7 @@ function _split_arrterm_scalar_coeff(ex::BasicSymbolic{T}) where {T}
             if term === nothing
                 termrest = nothing
             else
-                termcoeff, termrest = _split_arrterm_scalar_coeff(term)
+                termcoeff, termrest = _split_arrterm_scalar_coeff(T ,term)
                 @assert isequal(termcoeff, coeff)
             end
             return coeff, BSImpl.ArrayOp{T}(output_idx, rest, reduce, termrest, ranges; shape, type)
@@ -2168,6 +2266,7 @@ function _split_arrterm_scalar_coeff(ex::BasicSymbolic{T}) where {T}
         _ => (Const{T}(1), ex)
     end
 end
+_split_arrterm_scalar_coeff(::Type{T}, ex) where {T} = Const{T}(1), Const{T}(ex)
 
 function _as_base_exp(term::BasicSymbolic{T}) where {T}
     @match term begin
@@ -2260,7 +2359,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         sh = shape(term)
         type = promote_symtype(*, type, symtype(term))
         if _is_array_shape(sh)
-            coeff, arrterm = _split_arrterm_scalar_coeff(term)
+            coeff, arrterm = _split_arrterm_scalar_coeff(T, term)
             _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, coeff)
             if iscall(arrterm) && operation(arrterm) === (*)
                 append!(arrterms, arguments(arrterm))
@@ -2372,11 +2471,7 @@ function *(x::T, args...) where {T <: NonTreeSym}
     mul_worker(vartype(T), (x, args...))
 end
 
-function *(a::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, b::T, bs...) where {T <: NonTreeSym}
-    return mul_worker(vartype(T), (a, b, bs...))
-end
-
-function *(a::T, b::Union{Number, AbstractArray{<:Number}, AbstractArray{T}}, bs...) where {T <: NonTreeSym}
+function *(a::PolyadicNumericOpFirstArgT{T}, b::T, bs...) where {T <: NonTreeSym}
     return mul_worker(vartype(T), (a, b, bs...))
 end
 
@@ -2458,9 +2553,6 @@ end
 function _fslash_worker(::Type{T}, a, b) where {T}
     if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(/, (a, b)))
-    end
-    if isconst(a) || isconst(b)
-        return Const{T}(unwrap_const(a) / unwrap_const(b))
     end
     type = promote_symtype(/, symtype(a), symtype(b))
     newshape = promote_shape(/, shape(a), shape(b))
@@ -2706,24 +2798,38 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
                 if _isone(coeff)
                     return Term{T}(^, ArgsT{T}((rest, Const{T}(b))); type, shape = newshape)
                 end
-                return coeff ^ b * rest ^ b
+                return (coeff ^ b * rest ^ b)
             end
             _ => return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
         end
     elseif _is_array_shape(shb)
-        return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
+        return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)::BasicSymbolic{T}
     end
     if b isa Number
         iszero(b) && return Const{T}(1)
         isone(b) && return Const{T}(a)
     end
     if b isa Real && b < 0
-        return Div{T}(1, a ^ (-b), false; type)
+        return Div{T}(1, a ^ (-b), false; type)::BasicSymbolic{T}
     end
-    if b isa Number && iscall(a) && operation(a) === (^) && isconst(arguments(a)[2]) && symtype(arguments(a)[2]) <: Number
-        base, exp = arguments(a)
-        exp = unwrap_const(exp)
-        return Const{T}(base ^ (exp * b))
+    if b isa Number
+        @match a begin
+            BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) && symtype(args[2]) <: Number end => begin
+                base, exp = args
+                base, exp = arguments(a)
+                exp = unwrap_const(exp)
+                return Const{T}(base ^ (exp * b))
+            end
+            BSImpl.Term(; f, args) && if f === sqrt && (safe_isinteger(b) && Int(b) % 2 == 0 || b isa Rational && numerator(b)%2 == 0) end => begin
+                exp = safe_isinteger(b) ? (Int(b) // 2) : (b // 2)
+                return Const{T}(args[1] ^ exp)
+            end
+            BSImpl.Term(; f, args) && if f === cbrt && (safe_isinteger(b) && Int(b) % 3 == 0 || b isa Rational && numerator(b)%3 == 0) end => begin
+                exp = safe_isinteger(b) ? (Int(b) // 3) : (b // 3)
+                return Const{T}(args[1] ^ exp)
+            end
+            _ => nothing
+        end
     end
     @match a begin
         BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false; type)
@@ -2732,7 +2838,7 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
     if b isa Number
         @match a begin
             BSImpl.AddMul(; coeff, dict, variant, shape, type) && if variant == AddMulVariant.MUL end => begin
-                if coeff isa Real && coeff < 0 && !isinteger(b)
+                if coeff isa Real && coeff < 0 && !safe_isinteger(b)
                     coeff = (-coeff) ^ b
                     newmul = BSImpl.AddMul{T}(-1, dict, variant; shape, type)
                     # newpow = Term{T}(^, ArgsT{T}((newmul, b)); shape, type)
@@ -2776,9 +2882,13 @@ function ^(a::BasicSymbolic{T}, b::Matrix{BasicSymbolic{T}}) where {T <: Union{S
     a ^ Const{T}(b)
 end
 
+abstract type Operator end
+promote_shape(::Operator, @nospecialize(shx::ShapeT)) = shx
+promote_symtype(::Operator, ::Type{T}) where {T} = T
+
 @inline _indexed_ndims() = 0
 @inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)
-@inline _indexed_ndims(::Type{T}, rest...) where {eT <: Integer, T <: AbstractVector{eT}} = 1 + _indexed_ndims(rest...)
+@inline _indexed_ndims(::Type{<:AbstractVector{<:Integer}}, rest...) = 1 + _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{Colon}, rest...) = 1 + _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{T}, rest...) where {T} = throw(ArgumentError("Invalid index type $T."))
 
@@ -2841,30 +2951,172 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
     throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
 end
 
-function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractArray{<:Integer}, Colon}...) where {T}
-    if isterm(arr) && operation(arr) === hvncat && !any(x -> x isa BasicSymbolic, idxs)
-        return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[idxs...])
-    end
-    type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
-    newshape = promote_shape(getindex, shape(arr), shape.(idxs)...)
-    if !_is_array_shape(newshape)
-        @match arr begin
-            BSImpl.ArrayOp(; output_idx, expr, ranges, reduce) => begin
-                subrules = Dict()
-                new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce; subrules)
-                empty!(subrules)
-                for (i, ii) in enumerate(output_idx)
-                    ii isa Int && continue
-                    subrules[ii] = idxs[i]
-                end
-                return substitute(new_expr, subrules; fold = false)
+function _getindex_metadata(metadata::MetadataT, idxs...)
+    @nospecialize metadata
+    if metadata === nothing
+        return metadata
+    elseif metadata isa Base.ImmutableDict{DataType, Any}
+        newmeta = Base.ImmutableDict{DataType, Any}()
+        for (k, v) in metadata
+            if v isa AbstractArray
+                v = v[idxs...]
             end
-            _ => nothing
+            newmeta = Base.ImmutableDict(newmeta, k, v)
+        end
+        return newmeta
+    end
+    _unreachable()
+end
+
+Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+    if T === SymReal
+        return _getindex_1(arr, idxs...)
+    elseif T === SafeReal
+        return _getindeX_2(arr, idxs...)
+    end
+    _unreachable()
+end
+
+@cache function _getindex_1(arr::BasicSymbolic{SymReal}, idxs::Union{BasicSymbolic{SymReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SymReal}
+    _getindex(arr, idxs...)
+end
+@cache function _getindex_2(arr::BasicSymbolic{SafeReal}, idxs::Union{BasicSymbolic{SafeReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SafeReal}
+    _getindex(arr, idxs...)
+end
+
+Base.@propagate_inbounds function _getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+    @match arr begin
+        BSImpl.Term(; f) && if f === hvncat && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
+            return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
+        end
+        BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            inner = args[1][idxs...]
+            return BSImpl.Term{T}(f, ArgsT{T}((inner,)); type = symtype(inner), shape = shape(inner))
+        end
+        BSImpl.Term(; f, args) && if f === getindex && all(isconst, Iterators.drop(args, 1)) && !any(x -> x isa BasicSymbolic{T}, idxs) end => begin
+            newargs = ArgsT{T}()
+            push!(newargs, args[1])
+            sh = shape(arr)
+            type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
+            newshape = promote_shape(getindex, sh, shape.(idxs)...)
+            for (oldidx, idx) in zip(Iterators.drop(args, 1), idxs)
+                if idx isa Colon
+                    push!(newargs, oldidx)
+                else
+                    push!(newargs, Const{T}(unwrap_const(oldidx)[idx]))
+                end
+            end
+            return BSImpl.Term{T}(f, newargs; type, shape = newshape)
+        end
+        _ => nothing
+    end
+
+    sh = shape(arr)
+    type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
+    newshape = promote_shape(getindex, sh, shape.(idxs)...)
+    @boundscheck if sh isa ShapeVecT
+        for (ax, idx) in zip(sh, idxs)
+            idx isa BasicSymbolic{T} && continue
+            idx isa Colon && continue
+            checkindex(Bool, ax, idx) || throw(BoundsError(arr, idxs))
         end
     end
-    return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
+    @match arr begin
+        BSImpl.ArrayOp(; output_idx, expr, ranges, reduce, term) => begin
+            subrules = Dict{BasicSymbolic{T}, Union{BasicSymbolic{T}, Int}}()
+            empty!(subrules)
+            new_output_idx = OutIdxT{T}()
+            new_ranges = RangesT{T}()
+            idxsym_idx = 1
+            idxsym = idxs_for_arrayop(T)
+            for (i, (newidx, outidx)) in enumerate(zip(idxs, output_idx))
+                if outidx isa Int
+                    newidx isa Colon && push!(new_output_idx, outidx)
+                elseif outidx isa BasicSymbolic{T}
+                    if newidx isa Colon
+                        new_out_idx = idxsym[idxsym_idx]
+                        if !isequal(outidx, new_out_idx)
+                            subrules[outidx] = new_out_idx
+                        end
+                        push!(new_output_idx, new_out_idx)
+                        idxsym_idx += 1
+                    elseif newidx isa AbstractRange{Int}
+                        new_out_idx = idxsym[idxsym_idx]
+                        if !isequal(outidx, new_out_idx)
+                            subrules[outidx] = new_out_idx
+                        end
+                        push!(new_output_idx, new_out_idx)
+                        idxsym_idx += 1
+                        if haskey(ranges, outidx)
+                            new_ranges[new_out_idx] = ranges[outidx][newidx]
+                        else
+                            new_ranges[new_out_idx] = newidx
+                        end
+                    else
+                        if haskey(ranges, outidx)
+                            subrules[outidx] = ranges[outidx][unwrap_const(newidx)::Union{BasicSymbolic{T}, Int}]
+                        else
+                            subrules[outidx] = unwrap_const(newidx)::Union{BasicSymbolic{T}, Int}
+                        end
+                    end
+                end
+            end
+            if isempty(new_output_idx)
+                new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+                result = substitute(new_expr, subrules; fold = false, filterer = !isarrayop)
+                return result
+            else
+                new_expr = substitute(expr, subrules; fold = false, filterer = !isarrayop)
+                if term !== nothing
+                    term = getindex(term, idxs...)
+                end
+                return BSImpl.ArrayOp{T}(new_output_idx, new_expr, reduce, term, new_ranges; type, shape = newshape)
+            end
+        end
+        _ => begin
+            if _is_array_shape(newshape)
+                new_output_idx = OutIdxT{T}()
+                expr_args = ArgsT{T}((arr,))
+                term_args = ArgsT{T}((arr,))
+                ranges = RangesT{T}()
+                idxsym_idx = 1
+                idxsym = idxs_for_arrayop(T)
+                for idx in idxs
+                    push!(term_args, Const{T}(idx))
+                    if idx isa Int
+                        push!(expr_args, Const{T}(idx))
+                    elseif idx isa Colon
+                        new_idx = idxsym[idxsym_idx]
+                        push!(new_output_idx, new_idx)
+                        push!(expr_args, new_idx)
+                        idxsym_idx += 1
+                    elseif idx isa AbstractRange{Int}
+                        new_idx = idxsym[idxsym_idx]
+                        push!(new_output_idx, new_idx)
+                        push!(expr_args, new_idx)
+                        ranges[new_idx] = idx
+                        idxsym_idx += 1
+                    elseif idx isa BasicSymbolic{T}
+                        push!(expr_args, idx)
+                    end
+                end
+                new_expr = BSImpl.Term{T}(getindex, expr_args; type = eltype(type), shape = ShapeVecT())
+                new_term = BSImpl.Term{T}(getindex, term_args; type, shape = newshape)
+                return BSImpl.ArrayOp{T}(new_output_idx, new_expr, +, new_term, ranges; type, shape = newshape)
+            else
+                return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
+            end
+        end
+    end
 end
 Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]
-function Base.getindex(x::AbstractArray, idx::BasicSymbolic{T}, idxs::BasicSymbolic{T}...) where {T}
+function Base.getindex(x::AbstractArray, idx::BasicSymbolic{T}, idxs...) where {T}
     getindex(Const{T}(x), idx, idxs...)
+end
+function Base.getindex(x::AbstractArray, i1, idx::BasicSymbolic{T}, idxs...) where {T}
+    getindex(Const{T}(x), i1, idx, idxs...)
+end
+function Base.getindex(x::AbstractArray, i1, i2, idx::BasicSymbolic{T}, idxs...) where {T}
+    getindex(Const{T}(x), i1, i2, idx, idxs...)
 end

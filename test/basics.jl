@@ -114,7 +114,8 @@ end
 struct Ctx1 end
 struct Ctx2 end
 
-@testset "metadata" begin
+# needs to be written like this to avoid a segfault on Julia 1.10
+@noinline function metadata_test()
     @syms a b c
     for a = [a, sin(a), a+b, a*b, a^3]
 
@@ -145,6 +146,10 @@ struct Ctx2 end
     @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
                   1 + term(sqrt, 2, type=Real))
     @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=true)) isa Float64
+end
+
+@testset "metadata" begin
+    metadata_test()
 end
 
 @testset "Base methods" begin
@@ -800,7 +805,7 @@ end
         else
             @test_throws ArgumentError x[]
             @test_throws ArgumentError x[1, 2]
-            @test_throws ArgumentError x[[1 2; 3 4]]
+            @test_throws MethodError x[[1 2; 3 4]]
         end
         @test_throws ArgumentError x[k]
         @test_throws ArgumentError x[l]
@@ -860,7 +865,7 @@ end
             @test_throws BoundsError x[]
         else
             @test_throws ArgumentError x[]
-            @test_throws ArgumentError x[[1 2; 3 4], 1]
+            @test_throws MethodError x[[1 2; 3 4], 1]
             @test_throws ArgumentError x[1]
         end
         @test_throws ArgumentError x[k, 1]
@@ -1003,12 +1008,12 @@ end
     @test symtype(new_expr) == Vector{Float64}
 end
 
-toterm(t) = Term{vartype(t)}(operation(t), arguments(t); type = symtype(t))
+toterm(t) = Term{vartype(t)}(operation(t), sorted_arguments(t); type = symtype(t))
 
 @testset "diffs" begin
     @syms a b c
     @test isequal(toterm(-1c), Term{SymReal}(*, [-1, c]; type = Number))
-    @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-b, -a]; type = Number))
+    @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-a, -b]; type = Number))
     @test isequal(toterm((a + b) - (b + c)), Term{SymReal}(+, [a, -c]; type = Number))
 end
 

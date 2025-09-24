@@ -32,12 +32,8 @@ import MacroTools
 import MultivariatePolynomials as MP
 import DynamicPolynomials as DP
 import MutableArithmetics as MA
-import ConcurrentUtilities: ReadWriteLock, readlock, readunlock
 import LinearAlgebra
-import SparseArrays: SparseMatrixCSC, findnz
-
-function hash2 end
-function isequal_with_metadata end
+import SparseArrays: SparseMatrixCSC, findnz, sparse
 
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)

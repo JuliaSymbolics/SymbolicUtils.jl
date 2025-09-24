@@ -1,16 +1,47 @@
-struct Substituter{D <: AbstractDict}
+struct Substituter{Fold, D <: AbstractDict, F}
     dict::D
+    filter::F
 end
 
-function (s::Substituter)(expr)
-    get(s.dict, expr, expr)
+function (s::Substituter)(ex)
+    return get(s.dict, ex, ex)
+end
+
+function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
+    result = get(s.dict, ex, nothing)
+    result === nothing || return result
+    iscall(ex) || return ex
+    s.filter(ex) || return ex
+    op = operation(ex)
+    _op = s(op)
+
+    args = arguments(ex)::ROArgsT{T}
+    for i in eachindex(args)
+        arg = args[i]
+        newarg = s(arg)
+        if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool
+            continue
+        end
+        if args isa ROArgsT{T}
+            args = copy(parent(args))::ArgsT{T}
+        end
+        args[i] = Const{T}(newarg)
+    end
+    if args isa ArgsT{T} || _op !== op || Fold && all(isconst, args)
+        if Fold
+            return combine_fold(T, _op, args, metadata(ex))
+        else
+            return maketerm(BasicSymbolic{T}, _op, args, metadata(ex))
+        end
+    end
+    return ex
 end
 
 function _const_or_not_symbolic(x)
     isconst(x) || !(x isa BasicSymbolic)
 end
 
-function combine_fold(::Type{BasicSymbolic{T}}, op, args::ArgsT{T}, meta) where {T}
+function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta) where {T}
     @nospecialize op args meta
     can_fold = !(op isa BasicSymbolic{T}) # && all(_const_or_not_symbolic, args)
     for arg in args
@@ -22,7 +53,7 @@ function combine_fold(::Type{BasicSymbolic{T}}, op, args::ArgsT{T}, meta) where 
     elseif op === (*)
         mul_worker(T, args)
     elseif op === (/)
-        args[1] / args[2]
+        can_fold ? Const{T}(unwrap_const(args[1]) / unwrap_const(args[2])) : (args[1] / args[2])
     elseif op === (^)
         args[1] ^ args[2]
     elseif can_fold
@@ -40,6 +71,10 @@ function combine_fold(::Type{BasicSymbolic{T}}, op, args::ArgsT{T}, meta) where 
     end
 end
 
+function default_substitute_filter(ex::BasicSymbolic{T}) where {T}
+    iscall(ex) && !(operation(ex) isa Operator)
+end
+
 """
     substitute(expr, dict; fold=true)
 
@@ -54,18 +89,21 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 1 + sqrt(2)
 ```
 """
-@inline function substitute(expr, dict; fold=true)
-    rw = if fold
-        Prewalk(Substituter(dict); maketerm = combine_fold)
-    else
-        Prewalk(Substituter(dict))
-    end
-    rw(expr)
+@inline function substitute(expr, dict; fold=true, filterer=default_substitute_filter)
+    isempty(dict) && !fold && return expr
+    return Substituter{fold, typeof(dict), typeof(filterer)}(dict, filterer)(expr)
 end
 
-@inline function substitute(expr::AbstractArray, dict; fold=true)
+function substitute(expr::SparseMatrixCSC, subs; kw...)
+    I, J, V = findnz(expr)
+    V = substitute(V, subs; kw...)
+    m, n = size(expr)
+    return sparse(I, J, V, m, n)
+end
+
+@inline function substitute(expr::AbstractArray, dict; kw...)
     if _is_array_of_symbolics(expr)
-        [substitute(x, dict; fold) for x in expr]
+        [substitute(x, dict; kw...) for x in expr]
     else
         expr
     end
@@ -108,12 +146,47 @@ function query!(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default:
             query!(predicate, arg; recurse, default)
         end
         BSImpl.Div(; num, den) => query!(predicate, num; recurse, default) || query!(predicate, den; recurse, default)
+        BSImpl.ArrayOp(; expr = inner_expr, term) => begin
+            query!(predicate, @something(term, inner_expr); recurse, default)
+        end
     end
 end
 
 search_variables!(buffer, expr; kw...) = nothing
 
-function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = issym, recurse::G = iscall) where {F, G}
+"""
+    $(TYPEDSIGNATURES)
+
+The default `is_atomic` predicate for [`search_variables!`](@ref). `ex` is considered
+atomic if one of the following conditions is true:
+- It is a `Sym` and not an internal index variable for an arrayop
+- It is a `Term`, the operation is a `BasicSymbolic` and the operation represents a
+  dependent variable according to [`is_function_symbolic`](@ref).
+- It is a `Term`, the operation is `getindex` and the variable being indexed is atomic.
+"""
+function default_is_atomic(ex::BasicSymbolic{T}) where {T}
+    @match ex begin
+        BSImpl.Sym(; name) => name !== IDXS_SYM
+        BSImpl.Term(; f) && if f isa Operator end => ex
+        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => !is_function_symbolic(f)
+        BSImpl.Term(; f, args) && if f === getindex end => default_is_atomic(args[1])
+        _ => false
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Find all variables used in `expr` and add them to `buffer`. A variable is identified by the
+predicate `is_atomic`. The predicate `recurse` determines whether to search further inside
+`expr` if it is not a variable. Note that `recurse` must at least return `false` if
+`iscall` returns `false`.
+
+Wrappers for [`BasicSymbolic`](@ref) should implement this function by unwrapping.
+
+See also: [`default_is_atomic`](@ref).
+"""
+function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = default_is_atomic, recurse::G = iscall) where {F, G}
     if is_atomic(expr)
         push!(buffer, expr)
         return
@@ -135,51 +208,181 @@ function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = issym, re
             search_variables!(buffer, num; is_atomic, recurse)
             search_variables!(buffer, den; is_atomic, recurse)
         end
+        BSImpl.ArrayOp(; expr = inner_expr, term) => begin
+            search_variables!(buffer, @something(term, inner_expr); is_atomic, recurse)
+        end
     end
     return nothing
 end
 
-function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce; subrules = Dict()) where {T}
-    new_ranges = RangesT{T}()
+_default_buffer(::BasicSymbolic{T}) where {T} = Set{BasicSymbolic{T}}()
+_default_buffer(x::Any) = unwrap(x) === x ? Set() : _default_buffer(unwrap(x))
+
+function search_variables(expr; kw...)
+    buffer = _default_buffer(expr)
+    search_variables!(buffer, expr; kw...)
+    return buffer
+end
+
+struct ArrayOpReduceCache{T}
+    new_ranges::RangesT{T}
+    subrules::Dict{BasicSymbolic{T}, Int}
+    collapsed_idxs::Set{BasicSymbolic{T}}
+    collapsed_ranges::Vector{StepRange{Int, Int}}
+end
+
+function ArrayOpReduceCache{T}() where {T}
+    ArrayOpReduceCache{T}(RangesT{T}(), Dict{BasicSymbolic{T}, Int}(), Set{BasicSymbolic{T}}(), StepRange{Int, Int}[])
+end
+
+function Base.empty!(x::ArrayOpReduceCache)
+    empty!(x.new_ranges)
+    empty!(x.subrules)
+    empty!(x.collapsed_idxs)
+    empty!(x.collapsed_ranges)
+    return x
+end
+
+const ARRAYOP_REDUCE_SYMREAL = TaskLocalValue{ArrayOpReduceCache{SymReal}}(ArrayOpReduceCache{SymReal})
+const ARRAYOP_REDUCE_SAFEREAL = TaskLocalValue{ArrayOpReduceCache{SafeReal}}(ArrayOpReduceCache{SafeReal})
+
+arrayop_reduce_cache(::Type{SymReal}) = empty!(ARRAYOP_REDUCE_SYMREAL[])
+arrayop_reduce_cache(::Type{SafeReal}) = empty!(ARRAYOP_REDUCE_SAFEREAL[])
+
+function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce) where {T}
+    cache = arrayop_reduce_cache(T)
+    new_ranges = cache.new_ranges
+    subrules = cache.subrules
     new_expr = Code.unidealize_indices(expr, ranges, new_ranges)
     merge!(new_ranges, ranges)
-    collapsed = setdiff(collect(keys(new_ranges)), output_idx)
-    collapsed_ranges = [new_ranges[k] for k in collapsed]
+    collapsed = cache.collapsed_idxs
+    union!(collapsed, keys(new_ranges))
+    setdiff!(collapsed, output_idx)
+    collapsed_ranges = cache.collapsed_ranges
+    for i in collapsed
+        push!(collapsed_ranges, new_ranges[i])
+    end
     return mapreduce(reduce, Iterators.product(collapsed_ranges...)) do iidxs
         for (idx, ii) in zip(iidxs, collapsed)
             subrules[ii] = idx
         end
-        return substitute(new_expr, subrules; fold = true)
+        return substitute(new_expr, subrules; fold = false)
     end
-    
+end
+@cache function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges::RangesT{SymReal}, reduce)::BasicSymbolic{SymReal}
+    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+end
+@cache function reduce_eliminated_idxs_2(expr::BasicSymbolic{SafeReal}, output_idx::OutIdxT{SafeReal}, ranges::RangesT{SafeReal}, reduce)::BasicSymbolic{SafeReal}
+    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+end
+function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce) where {T}
+    if T === SymReal
+        return reduce_eliminated_idxs_1(expr, output_idx, ranges, reduce)
+    elseif T === SafeReal
+        return reduce_eliminated_idxs_2(expr, output_idx, ranges, reduce)
+    end
+    _unreachable()
 end
 
-function scalarize(x::BasicSymbolic{T}) where {T}
+"""
+    $(TYPEDSIGNATURES)
+
+Given a function `f`, return a function that will scalarize an expression with `f` as the
+head. The returned function is passed `f`, the expression with `f` as the head, and
+`Val(true)` or `Val(false)` indicating whether to recursively scalarize or not.
+"""
+scalarization_function(@nospecialize(_)) = _default_scalarize
+
+function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+
+    f isa BasicSymbolic{T} && return collect(x)
+
+    args = arguments(x)
+    if toplevel && f !== broadcast
+        f(map(unwrap_const, args)...)
+    else
+        f(map(unwrap_const ∘ scalarize, args)...)
+    end
+end
+
+function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T, toplevel}
     sh = shape(x)
     sh isa Unknown && return x
     @match x begin
-        BSImpl.Const(; val) => _is_array_shape(sh) ? Const{T}.(val) : x
-        BSImpl.Sym(;) => _is_array_shape(sh) ? collect(x) : x
+        BSImpl.Const(; val) => begin
+            if _is_array_shape(sh)
+                if val isa SparseMatrixCSC
+                    return val
+                else
+                    Const{T}.(val)
+                end
+            else
+                x
+            end
+        end
+        BSImpl.Sym(;) => _is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
-            term === nothing || return scalarize(term)
+            term === nothing || return scalarize(term, Val{toplevel}())
             subrules = Dict()
-            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce; subrules)
+            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
             empty!(subrules)
             map(Iterators.product(sh...)) do idxs
                 for (i, ii) in enumerate(output_idx)
                     ii isa Int && continue
                     subrules[ii] = idxs[i]
                 end
-                scalarize(substitute(new_expr, subrules; fold = true))
+                if toplevel
+                    substitute(new_expr, subrules; fold = true)
+                else
+                    scalarize(substitute(new_expr, subrules; fold = true))
+                end
             end
         end
         _ => begin
             f = operation(x)
-            f === inv && _is_array_shape(sh) && return collect(x)
-            f isa BasicSymbolic{T} && return collect(x)
-            args = arguments(x)
-            f(map(unwrap_const ∘ scalarize, args)...)
+            f isa BasicSymbolic{T} && return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]
+            return scalarization_function(f)(f, x, Val{toplevel}())
         end
     end
 end
-scalarize(arr::Array) = map(scalarize, arr)
+function scalarize(arr::AbstractArray, ::Val{toplevel} = Val{false}()) where {toplevel}
+    map(Base.Fix2(scalarize, Val{toplevel}()), arr)
+end
+scalarize(x, _...) = x
+
+scalarization_function(::typeof(inv)) = _inv_scal
+
+function _inv_scal(::typeof(inv), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    sh = shape(x)
+    (sh isa ShapeVecT && !isempty(sh)) ? [x[idx] for idx in eachindex(x)] : x
+end
+
+scalarization_function(::typeof(LinearAlgebra.det)) = _det_scal
+
+function _det_scal(::typeof(LinearAlgebra.det), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    arg = arguments(x)[1]
+    sh = shape(arg)
+    sh isa Unknown && return collect(x)
+    sh = sh::ShapeVecT
+    isempty(sh) && return x
+    sarg = toplevel ? collect(arg) : scalarize(arg)
+    _det_scal(LinearAlgebra.det, T, sarg)
+end
+
+function _det_scal(::typeof(LinearAlgebra.det), ::Type{T}, x::AbstractMatrix) where {T}
+    length(x) == 1 && return x[]
+    add_buffer = BasicSymbolic{T}[]
+    for i in 1:size(x, 1)
+        ex = _det_scal(LinearAlgebra.det, T, view(x, setdiff(axes(x, 1), i), 2:size(x, 2)))
+        push!(add_buffer, (isodd(i) ? 1 : -1) * x[i, 1] * ex)
+    end
+    return add_worker(T, add_buffer)
+end
+
+scalarization_function(::typeof(getindex)) = _getindex_scal
+
+function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    sh = shape(x)
+    return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]
+end

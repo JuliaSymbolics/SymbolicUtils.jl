@@ -80,7 +80,7 @@ end
     result1 = d_vec' * E
     result2 = d_vec' * inv(E) * d_vec
     @test size(result1) == (1, 3)
-    @test size(result2) == (1,)
+    @test size(result2) == ()
 
     @test isequal(scalarize(sin.(x)),
         sin.([x[i] for i in 1:4]))

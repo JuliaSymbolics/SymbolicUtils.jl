@@ -2951,23 +2951,6 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
     throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
 end
 
-function _getindex_metadata(metadata::MetadataT, idxs...)
-    @nospecialize metadata
-    if metadata === nothing
-        return metadata
-    elseif metadata isa Base.ImmutableDict{DataType, Any}
-        newmeta = Base.ImmutableDict{DataType, Any}()
-        for (k, v) in metadata
-            if v isa AbstractArray
-                v = v[idxs...]
-            end
-            newmeta = Base.ImmutableDict(newmeta, k, v)
-        end
-        return newmeta
-    end
-    _unreachable()
-end
-
 Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     if T === SymReal
         return _getindex_1(arr, idxs...)

@@ -706,7 +706,7 @@ Base.isequal(a::WeakRef, b::BSImpl.Type) = isequal(a.value, b)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 
-@generated function hash_somescalar(a, h::UInt)
+@inline @generated function hash_somescalar(a, h::UInt)
     @nospecialize a
     expr = Expr(:if)
     cur_expr = expr
@@ -758,6 +758,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.Const(; val, hash) => begin
             if iszero(hash)
                 h = s.hash = hash_somescalar(val, h)::UInt
+            else
+                h = hash
             end
             if full
                 h = Base.hash(typeof(val), h)::UInt
@@ -1258,7 +1260,7 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
     n = Const{T}(unwrap(n))
     d = Const{T}(unwrap(d))
 
-    if !_numeric_or_arrnumeric_type(type)
+    if !(type <: Number)
         _iszero(n) && return Const{T}(n)
         _isone(d) && return Const{T}(n)
         return BSImpl.Div{T}(n, d, simplified; type, kw...)

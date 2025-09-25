@@ -830,7 +830,13 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic
 const ENABLE_HASHCONSING = Ref(true)
 const AllBasicSymbolics = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}
 const WCS_LOCK = ReentrantLock()
-const WCS = WeakCacheSet{AllBasicSymbolics}()
+const WCS_SYMREAL = WeakCacheSet{BasicSymbolic{SymReal}}()
+const WCS_SAFEREAL = WeakCacheSet{BasicSymbolic{SafeReal}}()
+const WCS_TREEREAL = WeakCacheSet{BasicSymbolic{TreeReal}}()
+
+@inline wcs_for_vartype(::Type{SymReal}) = WCS_SYMREAL
+@inline wcs_for_vartype(::Type{SafeReal}) = WCS_SAFEREAL
+@inline wcs_for_vartype(::Type{TreeReal}) = WCS_TREEREAL
 
 function generate_id()
     IDType()
@@ -858,12 +864,12 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 original behavior of those functions.
 """
 
-function hashcons(s::BSImpl.Type)
+function hashcons(s::BSImpl.Type{T}) where {T}
     if !ENABLE_HASHCONSING[]
         return s
     end
     @manually_scope COMPARE_FULL => true begin
-        k = (@lock WCS_LOCK getkey!(WCS, s))::typeof(s)
+        k = (@lock WCS_LOCK getkey!(wcs_for_vartype(T), s))::typeof(s)
         if k.id === nothing
             k.id = generate_id()
         end

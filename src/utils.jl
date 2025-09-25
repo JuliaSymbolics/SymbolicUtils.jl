@@ -1,6 +1,6 @@
 using Base: ImmutableDict
 
-safe_isinteger(x::Number) = isinteger(x) && abs(x) < typemax(Int)
+safe_isinteger(@nospecialize(x::Number)) = isinteger(x) && abs(x) < typemax(Int)
 safe_isinteger(x) = false
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
@@ -29,13 +29,15 @@ isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(unwrap_const(x))
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
-function _iszero(x)
+@cache function _iszero(x)::Bool
+    @nospecialize x
     x = unwrap_const(unwrap(x))
     x isa Number && return iszero(x)::Bool
     x isa Array && return iszero(x)::Bool
     return false
 end
-function _isone(x)
+@cache function _isone(x)::Bool
+    @nospecialize x
     x = unwrap_const(unwrap(x))
     x isa Number && return isone(x)::Bool
     x isa Array && return isone(x)::Bool

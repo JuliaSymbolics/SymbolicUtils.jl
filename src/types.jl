@@ -1092,6 +1092,7 @@ end
 end
 
 @inline function BSImpl.AddMul{T}(coeff, dict, variant::AddMulVariant.T; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
+    @nospecialize coeff
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
     dict = parse_dict(T, dict)
@@ -1156,6 +1157,7 @@ struct ArrayOp{T} end
 end
 
 @inline function Add{T}(coeff, dict; kw...) where {T}
+    @nospecialize coeff kw
     coeff = unwrap(coeff)
     dict = unwrap_dict(dict)
     if isempty(dict)
@@ -1173,6 +1175,7 @@ end
 end
 
 @inline function Mul{T}(coeff, dict; kw...) where {T}
+    @nospecialize coeff kw
     coeff = unwrap(coeff)
     dict = unwrap_dict(dict)
     if isempty(dict)
@@ -1190,7 +1193,7 @@ end
         k, v = first(dict)
         if _isone(v)
             @match k begin
-                BSImpl.AddMul(; coeff = c2, dict = d2, variant) && if variant == AddMulVariant.ADD end => begin
+                BSImpl.AddMul(; coeff = c2, dict = d2, variant) && if variant === AddMulVariant.ADD end => begin
                     empty!(dict)
                     for (k, v) in d2
                         dict[k] = -v
@@ -1231,31 +1234,31 @@ end
 Simplify the coefficients of `n` and `d` (numerator and denominator).
 """
 function simplify_coefficients(n, d)
-    if safe_isinteger(n)
-        n = Int(n)
-    end
-    if safe_isinteger(d)
-        d = Int(d)
-    end
-    nrat, nc = ratcoeff(n)
-    drat, dc = ratcoeff(d)
-    nrat && drat || return n, d
-    g = gcd(nc, dc) * sign(dc) # make denominator positive
-    invdc = isone(g) ? g : (1 // g)
-    n = maybe_integer(invdc * n)
-    d = maybe_integer(invdc * d)
-
     return n, d
+end
+
+function safe_div(a::Number, b::Number)::Number
+    # @nospecialize a b
+    if (!(a isa Integer) && safe_isinteger(a))
+        a = Int(a)
+    end
+    if (!(b isa Integer) && safe_isinteger(b))
+        b = Int(b)
+    end
+    if a isa Integer && b isa Integer
+        return a // b
+    end
+    return a / b
 end
 
 """
     $(TYPEDSIGNATURES)
 """
 function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(d)), kw...) where {T}
-    n = unwrap(n)
-    d = unwrap(d)
+    n = Const{T}(unwrap(n))
+    d = Const{T}(unwrap(d))
 
-    if !(type <: Number)
+    if !_numeric_or_arrnumeric_type(type)
         _iszero(n) && return Const{T}(n)
         _isone(d) && return Const{T}(n)
         return BSImpl.Div{T}(n, d, simplified; type, kw...)
@@ -1264,8 +1267,6 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
     if !(T === SafeReal)
         n, d = quick_cancel(Const{T}(n), Const{T}(d))
     end
-    n = unwrap_const(n)
-    d = unwrap_const(d)
 
     _iszero(n) && return Const{T}(n)
     _isone(d) && return Const{T}(n)
@@ -1279,10 +1280,42 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
         return Div{T}(n * d.den, d.num, simplified; type, kw...)
     end
 
-    d isa Number && _isone(-d) && return Const{T}(-n)
-    n isa Rat && d isa Rat && return Const{T}(n // d)
+    isconst(d) && _isone(-d) && return Const{T}(-n)
+    if isconst(n) && isconst(d)
+        nn = unwrap_const(n)
+        dd = unwrap_const(d)
+        nn isa Rat && dd isa Rat && return Const{T}(nn // dd)
+        return Const{T}(nn / dd)
+    end
 
-    n, d = simplify_coefficients(n, d)
+    @match (n, d) begin
+        (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => Const{T}(safe_div(v1, v2))
+        (BSImpl.Const(; val = c1), BSImpl.AddMul(; coeff = c2, dict, type, shape, variant)) && if variant == AddMulVariant.MUL end => begin
+            if c1 isa Rat && c2 isa Rat
+                tmp = c1 // c2
+                c1 = tmp.num
+                c2 = tmp.den
+            end
+            n = Const{T}(c1)
+            d = Mul{T}(c2, dict, ; type, shape)
+        end
+        (BSImpl.AddMul(; coeff, dict, type, shape, variant), BSImpl.Const(; val)) && if variant == AddMulVariant.MUL end => begin
+            return Mul{T}(safe_div(coeff, val), dict, ; type, shape)
+        end
+        (BSImpl.AddMul(; coeff = c1, dict = d1, type = t1, shape = sh1, variant = v1),
+            BSImpl.AddMul(; coeff = c2, dict = d2, type = t2, shape = sh2, variant = v2)) &&
+            if v1 == AddMulVariant.MUL && v2 == AddMulVariant.MUL end => begin
+
+            if c1 isa Rat && c2 isa Rat
+                tmp = c1 // c2
+                c1 = tmp.num
+                c2 = tmp.den
+            end
+            n = Mul{T}(c1, d1, ; type = t1, shape = sh1)
+            d = Mul{T}(c2, d2, ; type = t2, shape = sh2)
+        end
+        _ => nothing
+    end
 
     _isone(d) && return Const{T}(n)
     _isone(-d) && return Const{T}(-n)

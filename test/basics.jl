@@ -185,9 +185,8 @@ end
     @test isequal(w == 0, Term{SymReal}(==, [w, 0]; type = Bool))
 
     @syms x::Integer a::Integer
-    @eqtest x // 5 == (1 // 5) * x
+    @eqtest x // 5 == SymbolicUtils.Div{SymReal}(x, 5, false; type = Real)
     @eqtest (1//2 * x) / 5 == (1 // 10) * x
-    @eqtest x // Int16(5) == Rational{Int16}(1, 5) * x
     @eqtest 5 // x == 5 / x
     @eqtest x // a == x / a
 
@@ -1086,8 +1085,7 @@ end
     @test get_mul_coefficient((2x/3y).num) == 2
     @test get_mul_coefficient((2x/3y).den) == 3
     @test unwrap_const(2x/-3x) == -2//3
-    @test unwrap_const((2.5x/3x).num) == 2.5
-    @test unwrap_const((2.5x/3x).den) == 3
+    @test unwrap_const((2.5x/3x)) == 2.5/3
     @test unwrap_const(x/3x) == 1//3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)

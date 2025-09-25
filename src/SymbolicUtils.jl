@@ -34,6 +34,7 @@ import DynamicPolynomials as DP
 import MutableArithmetics as MA
 import LinearAlgebra
 import SparseArrays: SparseMatrixCSC, findnz, sparse
+import PrecompileTools
 
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)
@@ -101,7 +102,9 @@ include("small_array.jl")
 export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Sym, Term,
 # Add, Mul and Pow
-include("types.jl")
+PrecompileTools.@recompile_invalidations begin
+    include("types.jl")
+end
 
 include("printing.jl")
 
@@ -150,5 +153,27 @@ export substitute
 include("substitute.jl")
 
 include("code.jl")
+
+PrecompileTools.@setup_workload begin
+    PrecompileTools.@compile_workload begin
+        @syms x y f(t) q[1:5]
+        x + y
+        x * y
+        x / y
+        x ^ y
+        x ^ 5
+        6 ^ x
+        x - y
+        -y
+        f(x)
+        (5x / 5)
+        show(devnull, x ^ 2 + y * x + y / 3x)
+        expand((x + y) ^ 2)
+        simplify(x ^ (1//2) + (sin(x) ^ 2 + cos(x) ^ 2) + 2(x + y) - x - y)
+        substitute(x + 2y + sin(x), Dict(x => y); fold = false)
+        substitute(x + 2y + sin(x), Dict(x => 1); fold = true)
+        q[1]
+    end
+end
 
 end # module

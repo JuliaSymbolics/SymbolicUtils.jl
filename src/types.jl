@@ -870,13 +870,33 @@ function hashcons(s::BSImpl.Type)
     end true
 end
 
-const SMALLV_DEFAULT_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, 0, nothing))
-const SMALLV_DEFAULT_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, 0, nothing))
-const SMALLV_DEFAULT_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, 0, nothing))
+const CONST_ZERO_SYMREAL = hashcons(BSImpl.Const{SymReal}(0, 0, nothing))
+const CONST_ZERO_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(0, 0, nothing))
+const CONST_ZERO_TREEREAL = hashcons(BSImpl.Const{TreeReal}(0, 0, nothing))
+const CONST_ONE_SYMREAL = hashcons(BSImpl.Const{SymReal}(1, 0, nothing))
+const CONST_ONE_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(1, 0, nothing))
+const CONST_ONE_TREEREAL = hashcons(BSImpl.Const{TreeReal}(1, 0, nothing))
 
-defaultval(::Type{BasicSymbolic{SymReal}}) = SMALLV_DEFAULT_SYMREAL
-defaultval(::Type{BasicSymbolic{SafeReal}}) = SMALLV_DEFAULT_SAFEREAL
-defaultval(::Type{BasicSymbolic{TreeReal}}) = SMALLV_DEFAULT_TREEREAL
+@inline defaultval(::Type{BasicSymbolic{SymReal}}) =  CONST_ZERO_SYMREAL
+@inline defaultval(::Type{BasicSymbolic{SafeReal}}) = CONST_ZERO_SAFEREAL
+@inline defaultval(::Type{BasicSymbolic{TreeReal}}) = CONST_ZERO_TREEREAL
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return a `Const` representing `0` with the provided `vartype`.
+"""
+@inline zero_of_vartype(::Type{SymReal}) = CONST_ZERO_SYMREAL
+@inline zero_of_vartype(::Type{SafeReal}) = CONST_ZERO_SAFEREAL
+@inline zero_of_vartype(::Type{TreeReal}) = CONST_ZERO_TREEREAL
+"""
+    $(TYPEDSIGNATURES)
+
+Return a `Const` representing `1` with the provided `vartype`.
+"""
+@inline one_of_vartype(::Type{SymReal}) = CONST_ONE_SYMREAL
+@inline one_of_vartype(::Type{SafeReal}) = CONST_ONE_SAFEREAL
+@inline one_of_vartype(::Type{TreeReal}) = CONST_ONE_TREEREAL
 
 function get_mul_coefficient(x)
     iscall(x) && operation(x) === (*) || throw(ArgumentError("$x is not a multiplication"))
@@ -1151,7 +1171,7 @@ end
     if isempty(dict)
         return Const{T}(coeff)
     elseif _iszero(coeff)
-        return Const{T}(0)
+        return zero_of_vartype(T)
     elseif _isone(coeff) && length(dict) == 1
         k, v = first(dict)
         if _isone(v)
@@ -2057,7 +2077,7 @@ function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}},
     if !all(_numeric_or_arrnumeric_symtype, terms)
         throw(MethodError(+, Tuple(terms)))
     end
-    isempty(terms) && return Const{T}(0)
+    isempty(terms) && return zero_of_vartype(T)
     if isone(length(terms))
         return Const{T}(only(terms))
     end
@@ -2246,7 +2266,7 @@ end
 
 function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
     sh = shape(ex)
-    _is_array_shape(sh) || return ex, Const{T}(1)
+    _is_array_shape(sh) || return ex, one_of_vartype(T)
     @match ex begin
         BSImpl.Term(; f, args, type) && if f === (*) && !_is_array_shape(shape(first(args))) end => begin
             if length(args) == 2
@@ -2264,7 +2284,7 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
             coeff, rest = @match expr begin
                 BSImpl.Term(; f, args, type, shape) && if f === (*) end => begin
                     if query!(isequal(idxs_for_arrayop(T)), args[1])
-                        Const{T}(1), expr
+                        one_of_vartype(T), expr
                     elseif length(args) == 2
                         args[1], args[2]
                     else
@@ -2274,7 +2294,7 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
                         _coeff, BSImpl.Term{T}(*, newargs; type, shape)
                     end
                 end
-                _ => (Const{T}(1), expr)
+                _ => (one_of_vartype(T), expr)
             end
             if term === nothing
                 termrest = nothing
@@ -2284,15 +2304,15 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
             end
             return coeff, BSImpl.ArrayOp{T}(output_idx, rest, reduce, termrest, ranges; shape, type)
         end
-        _ => (Const{T}(1), ex)
+        _ => (one_of_vartype(T), ex)
     end
 end
-_split_arrterm_scalar_coeff(::Type{T}, ex) where {T} = Const{T}(1), Const{T}(ex)
+_split_arrterm_scalar_coeff(::Type{T}, ex) where {T} = one_of_vartype(T), Const{T}(ex)
 
 function _as_base_exp(term::BasicSymbolic{T}) where {T}
     @match term begin
         BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) end => (args[1], args[2])
-        _ => (term, Const{T}(1))
+        _ => (term, one_of_vartype(T))
     end
 end
 
@@ -2355,7 +2375,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     if !all(x -> _is_array_of_symbolics(x) || _numeric_or_arrnumeric_symtype(x), terms)
         throw(MethodError(*, Tuple(terms)))
     end
-    isempty(terms) && return Const{T}(1)
+    isempty(terms) && return one_of_vartype(T)
     length(terms) == 1 && return Const{T}(terms[1])
     empty!(mwb)
     newshape = _multiplied_terms_shape(terms)
@@ -2827,7 +2847,7 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
         return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)::BasicSymbolic{T}
     end
     if b isa Number
-        iszero(b) && return Const{T}(1)
+        iszero(b) && return one_of_vartype(T)
         isone(b) && return Const{T}(a)
     end
     if b isa Real && b < 0

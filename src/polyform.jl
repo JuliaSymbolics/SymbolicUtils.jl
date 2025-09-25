@@ -258,7 +258,7 @@ function quick_cancel(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     elseif opy === (*) && !isconst(x)
         return reverse(quick_mul(y, x))
     elseif isequal(x, y)
-        return Const{T}(1), Const{T}(1)
+        return one_of_vartype(T), one_of_vartype(T)
     else
         return x, y
     end
@@ -269,7 +269,7 @@ function quick_pow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSy
     base, exp = arguments(x)
     exp = unwrap_const(exp)
     exp isa Number || return (x, y)
-    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), Const{T}(1)) : (x, y)
+    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), one_of_vartype(T)) : (x, y)
 end
 
 # Double Pow case
@@ -281,17 +281,17 @@ function quick_powpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     exp2 = unwrap_const(exp2)
     !(exp1 isa Number && exp2 isa Number) && return (x, y)
     if exp1 > exp2
-        return base1 ^ (exp1 - exp2), Const{T}(1)
+        return base1 ^ (exp1 - exp2), one_of_vartype(T)
     elseif exp1 == exp2
-        return Const{T}(1), Const{T}(1)
+        return one_of_vartype(T), one_of_vartype(T)
     else # exp1 < exp2
-        return Const{T}(1), base2 ^ (exp2 - exp1)
+        return one_of_vartype(T), base2 ^ (exp2 - exp1)
     end
 end
 
 # ismul(x)
 function quick_mul(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
-    yy = BSImpl.Term{T}(^, ArgsT{T}((y, Const{T}(1))); type = symtype(y))
+    yy = BSImpl.Term{T}(^, ArgsT{T}((y, one_of_vartype(T))); type = symtype(y))
     newx, newy = quick_mulpow(x, yy)
     return isequal(newy, yy) ? (x, y) : (newx, newy)
 end
@@ -326,12 +326,12 @@ function quick_mulpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     oldval = args[idx]
     if argexp > exp
         args[idx] = argbase ^ (argexp - exp)
-        result = mul_worker(T, args), Const{T}(1)
+        result = mul_worker(T, args), one_of_vartype(T)
     elseif argexp == exp
-        args[idx] = Const{T}(1)
-        result = mul_worker(T, args), Const{T}(1)
+        args[idx] = one_of_vartype(T)
+        result = mul_worker(T, args), one_of_vartype(T)
     else
-        args[idx] = Const{T}(1)
+        args[idx] = one_of_vartype(T)
         result = mul_worker(T, args), base ^ (exp - argexp)
     end
     args[idx] = oldval

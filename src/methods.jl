@@ -701,7 +701,7 @@ function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{
             # unknown ndims, assume full shape
             limit = sh.ndims == -1 ? ndim : sh.ndims
             for i in 1:limit
-                push!(getindex_args,  length(bc.axes[i]) == 1 ? Const{T}(1) : subscripts[i])
+                push!(getindex_args,  length(bc.axes[i]) == 1 ? one_of_vartype(T) : subscripts[i])
             end
         elseif sh isa ShapeVecT
             for (i, (target_ax, cur_ax)) in enumerate(zip(bc.axes, sh))

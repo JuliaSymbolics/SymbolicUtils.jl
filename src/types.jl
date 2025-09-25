@@ -36,6 +36,7 @@ const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
 const PolynomialT = _PolynomialT{PolyCoeffT}
 const TypeT = Union{DataType, UnionAll, Union}
 const MonomialT = DP.Monomial{PolyVarOrder, MonomialOrder}
+const MonomialVecT = DP.MonomialVector{PolyVarOrder, MonomialOrder}
 
 function zeropoly()
     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}()

@@ -36,18 +36,31 @@ function find_cse_expr(x, state)
     isnothing(idx) ? nothing : (; expr = rhs(state.sorted_exprs[idx]), x)
 end
 
+function detect_matmul_add_pattern(expr::Let, state::CSEState)
+
+    @show arguments(expr)
+    # detect_matmul_add_pattern(expr, state)
+    error()
+end
+
 function detect_matmul_add_pattern(expr, state::CSEState)
     @warn expr
+    @warn expr.body
+    # error()
+    @show state
     @show state.sorted_exprs
     global gs = state
-
+    global ge = expr
+    error()
     # Must be addition with exactly 2 arguments
     if !iscall(expr) || (operation(expr) !== +) || length(arguments(expr)) != 2
         return nothing
     end
+    error()
 
     args = arguments(expr)
     @show args
+    @show symtype.(args)
 
     if all(x -> x <: AbstractArray, symtype.(args))
         if (operation(expr) === +) && length(args) == 2

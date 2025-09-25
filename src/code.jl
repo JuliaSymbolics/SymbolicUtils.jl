@@ -13,7 +13,8 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT,
-                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, _is_array_shape
+                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, _is_array_shape,
+                      vartype, symtype
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -514,6 +515,7 @@ include("matmuladd.jl")
 
 # Updated mul5_cse2 that uses the rule system
 function mul5_cse2(expr, state::CSEState)
+
     # Try to apply optimization rules
     optimized = apply_optimization_rules(expr, state)
     if optimized !== nothing
@@ -531,71 +533,6 @@ function find_mul2(expr, state)
         return length(args) == 2 && all(x -> symtype(x) <: AbstractArray, args)
     end
     return false
-end
-
-
-function generate_mul(args)
-    # args[1] is the + operator
-    # Need to find which argument is the multiplication and which is the addition term
-
-    mul_expr = nothing
-    C_expr = nothing
-
-    # Check both orders: A*B + C and C + A*B
-    if length(args) >= 3
-        for i in 2:3
-            candidate = args[i]
-            if isa(candidate, Expr) && candidate.head == :call && candidate.args[1] == *
-                mul_expr = candidate
-                C_expr = args[i == 2 ? 3 : 2]  # Get the other argument
-                break
-            end
-        end
-    end
-
-    if mul_expr !== nothing
-        # Extract A and B from the multiplication expression
-        A = mul_expr.args[2]  # First argument of multiplication
-        B = mul_expr.args[3]  # Second argument of multiplication
-
-        # Check if C is an expression (needs temporary) or simple variable
-        if isa(C_expr, Symbol)
-            # C is a simple variable, can use directly
-            # Generate: mul!(C, A, B, 1, 1) which computes C = 1*A*B + 1*C = A*B + C
-            temp_var = gensym("temp_C")
-            return quote
-                $temp_var = copy($C_expr)  # Make a copy to avoid modifying original C
-                LinearAlgebra.mul!($temp_var, $A, $B, 1, 1)
-                $temp_var
-            end
-        else
-            # C is an expression, need to create temporary
-            temp_var = gensym("temp_C")
-            return quote
-                $temp_var = $C_expr
-                LinearAlgebra.mul!($temp_var, $A, $B, 1, 1)
-                $temp_var
-            end
-        end
-    else
-        # Not a valid A*B + C pattern, return original expression
-        return :($(args[1])($(args[2:end]...)))
-    end
-end
-
-mul5(::Nothing) = nothing
-
-function mul5(O::BasicSymbolic)
-    if iscall(O) && (operation(O) === +) && length(arguments(O)) >= 2
-        # Check if any addition argument contains multiplication
-        args = arguments(O)
-        mul_found = any(find_mul, args)
-
-        if mul_found
-            return generate_mul(O)
-        end
-    end
-    O
 end
 
 # CSE-aware version that works with CSE state
@@ -1375,23 +1312,7 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
         new_expr = Term{T}(operation(expr), args; type = symtype(expr))
 
         # Apply mul5 transformation to the new expression
-        transformed_expr = mul5_cse2(new_expr, state)
-        @show transformed_expr
-        # @show new_expr
-        # @show map((x,y) -> x.name == y.name, arguments(new_expr), arguments(transformed_expr))
-        # @show operation(new_expr) == operation(transformed_expr)
-        # error()
-
-        # If mul5 applied a transformation, it may have added assignments and returned a symbol
-        # if transformed_expr != new_expr
-        #     return transformed_expr
-        # end
-        # if all(map((x,y) -> x.name == y.name, arguments(new_expr), arguments(transformed_expr))) && operation(new_expr) == operation(transformed_expr)
-        #     nothing
-        # else
-        #     return transformed_expr
-        # end
-
+        # transformed_expr = mul5_cse2(new_expr, state)
         sym = newsym!(state, T, symtype(new_expr))
         push!(state.sorted_exprs, sym ← new_expr)
         return sym

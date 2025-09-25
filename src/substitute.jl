@@ -309,7 +309,7 @@ function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
     @nospecialize f
 
     sh = shape(x)
-    _is_array_shape(sh) && return [x[idx] for idx in eachindex(x)]
+    is_array_shape(sh) && return [x[idx] for idx in eachindex(x)]
 
     args = arguments(x)
     if toplevel
@@ -324,7 +324,7 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
     sh isa Unknown && return x
     @match x begin
         BSImpl.Const(;) => return x
-        BSImpl.Sym(;) => _is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
+        BSImpl.Sym(;) => is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
             term === nothing || return scalarize(term, Val{toplevel}())
             subrules = Dict()

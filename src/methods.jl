@@ -223,8 +223,8 @@ for f in diadic
     f === NaNMath.pow && continue
     @eval function promote_shape(::$(typeof(f)), sh1::ShapeT, sh2::ShapeT)
         @nospecialize sh1 sh2
-        _is_array_shape(sh1) && _throw_array($f, sh1, sh2)
-        _is_array_shape(sh2) && _throw_array($f, sh1, sh2)
+        is_array_shape(sh1) && _throw_array($f, sh1, sh2)
+        is_array_shape(sh2) && _throw_array($f, sh1, sh2)
         return ShapeVecT()
     end
 end
@@ -246,7 +246,7 @@ for f in monadic
     else
         @eval function promote_shape(::$(typeof(f)), sh::ShapeT)
             @nospecialize sh
-            _is_array_shape(sh) && _throw_array($f, sh)
+            is_array_shape(sh) && _throw_array($f, sh)
             return ShapeVecT()
         end
     end
@@ -255,7 +255,7 @@ end
 error_f_symbolic(f, T) = error("$f is not defined for $T.")
 
 function promote_shape(::typeof(rem2pi), sha::ShapeT, shb::ShapeT)
-    _is_array_shape(sha) && _throw_array(rem2pi, sha, shb)
+    is_array_shape(sha) && _throw_array(rem2pi, sha, shb)
     ShapeVecT()
 end
 function Base.rem2pi(x::BasicSymbolic{T}, mode::Base.RoundingMode) where {T}
@@ -287,7 +287,7 @@ end
 function Base.inv(x::BasicSymbolic{T}) where {T}
     sh = shape(x)
     type = promote_symtype(inv, symtype(x))
-    if _is_array_shape(sh)
+    if is_array_shape(sh)
         return Term{T}(inv, ArgsT{T}((x,)); type = type, shape = sh)
     else
         return x ^ (-1)
@@ -381,7 +381,7 @@ function Base.adjoint(s::BasicSymbolic{T}) where {T}
     end
     sh = shape(s)
     stype = symtype(s)
-    if _is_array_shape(sh)
+    if is_array_shape(sh)
         type = promote_symtype(adjoint, stype)
         newsh = promote_shape(adjoint, sh)
         return Term{T}(adjoint, ArgsT{T}((s,)); type, shape = newsh)
@@ -493,7 +493,7 @@ function _ndims_from_shape(sh::ShapeT)
     end
 end
 Base.ndims(x::BasicSymbolic) = _ndims_from_shape(shape(x))
-Base.broadcastable(x::BasicSymbolic) = _is_array_shape(shape(x)) ? x : Ref(x)
+Base.broadcastable(x::BasicSymbolic) = is_array_shape(shape(x)) ? x : Ref(x)
 function Base.eachindex(x::BasicSymbolic)
     sh = shape(x)
     if sh isa Unknown
@@ -506,7 +506,7 @@ function Base.collect(x::BasicSymbolic)
 end
 function Base.iterate(x::BasicSymbolic)
     sh = shape(x)
-    _is_array_shape(sh) || return x, nothing
+    is_array_shape(sh) || return x, nothing
     idxs = eachindex(x)
     idx, state = iterate(idxs)
     return x[idx], (idxs, state)
@@ -530,12 +530,12 @@ promote_symtype(::Type{CartesianIndex}, xs...) = CartesianIndex{length(xs)}
 promote_symtype(::Type{CartesianIndex{N}}, xs::Vararg{T, N}) where {T, N} = CartesianIndex{N}
 function promote_shape(::Type{CartesianIndex}, xs::ShapeT...)
     @nospecialize xs
-    @assert all(!_is_array_shape, xs)
+    @assert all(!is_array_shape, xs)
     return ShapeVecT((1:length(xs),))
 end
 function promote_shape(::Type{CartesianIndex{N}}, xs::Vararg{ShapeT, N}) where {N}
     @nospecialize xs
-    @assert all(!_is_array_shape, xs)
+    @assert all(!is_array_shape, xs)
     return ShapeVecT((1:length(xs),))
 end
 function Base.CartesianIndex(x::BasicSymbolic{T}, xs::BasicSymbolic{T}...) where {T}
@@ -690,7 +690,7 @@ function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{
 
     for arg in canonical_args
         sh = shape(arg)
-        is_arr = _is_array_shape(sh)
+        is_arr = is_array_shape(sh)
         if !is_arr
             push!(args, arg)
             continue
@@ -757,7 +757,7 @@ promote_symtype(::typeof(LinearAlgebra.dot), ::Type{T}, ::Type{S}) where {eT, T 
 
 function LinearAlgebra.dot(x::BasicSymbolic{T}, y::BasicSymbolic{T}) where {T}
     shx = shape(x)
-    if _is_array_shape(shx)
+    if is_array_shape(shx)
         sh = promote_shape(LinearAlgebra.dot, shx, shape(y))
         type = promote_symtype(LinearAlgebra.dot, symtype(x), symtype(y))
         BSImpl.Term{T}(LinearAlgebra.dot, ArgsT{T}((x, y)); type, shape = sh)
@@ -994,7 +994,7 @@ function promote_symtype(::typeof(in), ::Type{T}, ::Type{S}) where {T, S}
 end
 function promote_shape(::typeof(in), sha::ShapeT, shb::ShapeT)
     @nospecialize sha shb
-    @assert _is_array_shape(shb) || throw(ArgumentError("Symbolic `in` requires an array as the second argument."))
+    @assert is_array_shape(shb) || throw(ArgumentError("Symbolic `in` requires an array as the second argument."))
     return ShapeVecT()
 end
 
@@ -1013,8 +1013,8 @@ function promote_symtype(::typeof(issubset), ::Type{T}, ::Type{S}) where {T <: A
 end
 function promote_shape(::typeof(issubset), sha::ShapeT, shb::ShapeT)
     @nospecialize sha shb
-    @assert _is_array_shape(sha) || throw(ArgumentError("Symbolic `issubset` requires arrays as both arguments."))
-    @assert _is_array_shape(shb) || throw(ArgumentError("Symbolic `issubset` requires arrays as both arguments."))
+    @assert is_array_shape(sha) || throw(ArgumentError("Symbolic `issubset` requires arrays as both arguments."))
+    @assert is_array_shape(shb) || throw(ArgumentError("Symbolic `issubset` requires arrays as both arguments."))
     return ShapeVecT()
 end
 
@@ -1036,8 +1036,8 @@ for f in [union, intersect]
     end
     @eval function promote_shape(::$(typeof(f)), sha::ShapeT, shb::ShapeT)
         @nospecialize sha shb
-        @assert _is_array_shape(sha) || throw(ArgumentError("Symbolic `$($f)` requires arrays as both arguments."))
-        @assert _is_array_shape(shb) || throw(ArgumentError("Symbolic `$($f)` requires arrays as both arguments."))
+        @assert is_array_shape(sha) || throw(ArgumentError("Symbolic `$($f)` requires arrays as both arguments."))
+        @assert is_array_shape(shb) || throw(ArgumentError("Symbolic `$($f)` requires arrays as both arguments."))
         return Unknown(1)
     end
     for T1 in [AbstractArray, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})]
@@ -1064,8 +1064,8 @@ function promote_symtype(::typeof(binomial), ::Type{T}, ::Type{S}) where {T <: N
 end
 function promote_shape(::typeof(binomial), sha::ShapeT, shb::ShapeT)
     @nospecialize sha shb
-    _is_array_shape(sha) && _throw_array(sha)
-    _is_array_shape(shb) && _throw_array(shb)
+    is_array_shape(sha) && _throw_array(sha)
+    is_array_shape(shb) && _throw_array(shb)
 
     return ShapeVecT()
 end

@@ -2190,11 +2190,11 @@ end
     """))
 end
 
-_is_array_shape(sh::ShapeT) = sh isa Unknown || _ndims_from_shape(sh) > 0
+is_array_shape(sh::ShapeT) = sh isa Unknown || _ndims_from_shape(sh) > 0
 function _multiplied_shape(shapes)
-    first_arr = findfirst(_is_array_shape, shapes)
+    first_arr = findfirst(is_array_shape, shapes)
     first_arr === nothing && return ShapeVecT(), first_arr
-    last_arr::Int = findlast(_is_array_shape, shapes)
+    last_arr::Int = findlast(is_array_shape, shapes)
     first_arr == last_arr && return shapes[first_arr], first_arr
 
     sh1::ShapeT = shapes[first_arr]
@@ -2218,7 +2218,7 @@ function _multiplied_shape(shapes)
     for i in (first_arr + 1):last_arr
         sh = shapes[i]
         ndims_sh = _ndims_from_shape(sh)
-        _is_array_shape(sh) || continue
+        is_array_shape(sh) || continue
         ndims_sh <= 2 || throw_expected_matvec(shend)
         is_matmatmul || throw_incompatible_shapes(cur_shape, sh)
         is_matmatmul = ndims_sh != 1
@@ -2266,9 +2266,9 @@ end
 
 function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
     sh = shape(ex)
-    _is_array_shape(sh) || return ex, one_of_vartype(T)
+    is_array_shape(sh) || return ex, one_of_vartype(T)
     @match ex begin
-        BSImpl.Term(; f, args, type) && if f === (*) && !_is_array_shape(shape(first(args))) end => begin
+        BSImpl.Term(; f, args, type) && if f === (*) && !is_array_shape(shape(first(args))) end => begin
             if length(args) == 2
                 return args[1], args[2]
             end
@@ -2399,7 +2399,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         end
         sh = shape(term)
         type = promote_symtype(*, type, symtype(term))
-        if _is_array_shape(sh)
+        if is_array_shape(sh)
             coeff, arrterm = _split_arrterm_scalar_coeff(T, term)
             _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, coeff)
             if iscall(arrterm) && operation(arrterm) === (*)
@@ -2730,7 +2730,7 @@ function _bslash_worker(::Type{T}, a, b) where {T}
     sha = shape(a)
     type = promote_symtype(\, symtype(a), symtype(b))
     newshape = promote_shape(\, shape(a), shape(b))
-    if _is_array_shape(newshape) || _is_array_shape(sha)
+    if is_array_shape(newshape) || is_array_shape(sha)
         # Scalar \ Anything == Anything / Scalar
         return Term{T}(\, ArgsT{T}((a, b)); type, shape = newshape)
     else
@@ -2828,7 +2828,7 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
     newshape = promote_shape(^, sha, shb)
     type = promote_symtype(^, symtype(a), symtype(b))
 
-    if _is_array_shape(sha)
+    if is_array_shape(sha)
         @match a begin
             BSImpl.Term(; f, args) && if f === (^) && isconst(args[1]) end => begin
                 base, exp = args
@@ -2843,7 +2843,7 @@ function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
             end
             _ => return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
         end
-    elseif _is_array_shape(shb)
+    elseif is_array_shape(shb)
         return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)::BasicSymbolic{T}
     end
     if b isa Number
@@ -2907,7 +2907,7 @@ function ^(a::Union{Number, Matrix{<:Number}}, b::BasicSymbolic{T}) where {T}
     isconst(b) && return Const{T}(a ^ unwrap_const(b))
     newshape = promote_shape(^, shape(a), shape(b))
     type = promote_symtype(^, symtype(a), symtype(b))
-    if _is_array_shape(newshape) && _isone(a)
+    if is_array_shape(newshape) && _isone(a)
         if newshape isa Unknown
             return Const{T}(LinearAlgebra.I)
         else
@@ -2973,7 +2973,7 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
     @nospecialize sharr
     # `promote_symtype` rules out the presence of multidimensional indices - each index
     # is either an integer, Colon or vector of integers.
-    _is_array_shape(sharr) || isempty(shidxs) || throw_not_array(sharr)
+    is_array_shape(sharr) || isempty(shidxs) || throw_not_array(sharr)
     result = ShapeVecT()
     for (i, idx) in enumerate(shidxs)
         isempty(idx) && continue
@@ -3027,7 +3027,7 @@ Base.@propagate_inbounds function _getindex(arr::BasicSymbolic{T}, idxs::Union{B
             idxs_i = 1
             for oldidx in Iterators.drop(args, 1)
                 oldidx_sh = shape(oldidx)
-                if !_is_array_shape(oldidx_sh)
+                if !is_array_shape(oldidx_sh)
                     push!(newargs, oldidx)
                     continue
                 end
@@ -3111,7 +3111,7 @@ Base.@propagate_inbounds function _getindex(arr::BasicSymbolic{T}, idxs::Union{B
             end
         end
         _ => begin
-            if _is_array_shape(newshape)
+            if is_array_shape(newshape)
                 new_output_idx = OutIdxT{T}()
                 expr_args = ArgsT{T}((arr,))
                 term_args = ArgsT{T}((arr,))

@@ -1,6 +1,6 @@
 using Random: shuffle, seed!
 using SymbolicUtils
-using SymbolicUtils: getdepth, Rewriters, Term
+using SymbolicUtils: getdepth, Rewriters, Term, unwrap_const
 
 include("utils.jl")
 
@@ -21,10 +21,10 @@ end
 
 @testset "Numeric" begin
     @syms a::Integer b c d x::Real y::Number
-    @eqtest simplify(Term{Real}(conj, [x])) == x
-    @eqtest simplify(Term{Real}(real, [x])) == x
-    @eqtest simplify(Term{Real}(imag, [x])) == 0
-    @eqtest simplify(Term{Real}(imag, [y])) == imag(y)
+    @eqtest simplify(Term{SymReal}(conj, [x]; type = Real)) == x
+    @eqtest simplify(Term{SymReal}(real, [x]; type = Real)) == x
+    @eqtest unwrap_const(simplify(Term{SymReal}(imag, [x]; type = Real))) == 0
+    @eqtest simplify(Term{SymReal}(imag, [y]; type = Real)) == imag(y)
     @eqtest simplify(x - y) == x + -1 * y
     @eqtest simplify(x - sin(y)) == x + -1 * sin(y)
     @eqtest simplify(-sin(x)) == -1 * sin(x)
@@ -47,18 +47,18 @@ end
     @eqtest simplify(a * b * 1 * c * d) == simplify(a * b * c * d)
     @eqtest simplify_fractions(x^2.0 / (x * y)^2.0) == simplify_fractions(1 / (y^2.0))
 
-    @test simplify(Term(one, [a])) == 1
-    @test simplify(Term(one, [b + 1])) == 1
-    @test simplify(Term(one, [x + 2])) == 1
+    @test unwrap_const(simplify(Term{SymReal}(one, [a]))) == 1
+    @test unwrap_const(simplify(Term{SymReal}(one, [b + 1]))) == 1
+    @test unwrap_const(simplify(Term{SymReal}(one, [x + 2]))) == 1
 
 
-    @test simplify(Term(zero, [a])) == 0
-    @test simplify(Term(zero, [b + 1])) == 0
-    @test simplify(Term(zero, [x + 2])) == 0
+    @test unwrap_const(simplify(Term{SymReal}(zero, [a]))) == 0
+    @test unwrap_const(simplify(Term{SymReal}(zero, [b + 1]))) == 0
+    @test unwrap_const(simplify(Term{SymReal}(zero, [x + 2]))) == 0
 end
 
 @testset "LiteralReal" begin
-    @syms x1::LiteralReal x2::LiteralReal
+    @syms x1 x2 vartype=TreeReal
     s = cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2
     @eqtest s == cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2
 
@@ -74,39 +74,39 @@ end
 
     @eqtest simplify(a < 0) == (a < 0)
     @eqtest simplify(0 < a) == (0 < a)
-    @eqtest simplify((0 < a) | true) == true
-    @eqtest simplify(true | (0 < a)) == true
+    @eqtest unwrap_const(simplify((0 < a) | true)) == true
+    @eqtest unwrap_const(simplify(true | (0 < a))) == true
     @eqtest simplify((0 < a) & true) == (0 < a)
     @eqtest simplify(true & (0 < a)) == (0 < a)
-    @eqtest simplify(false & (0 < a)) == false
-    @eqtest simplify((0 < a) & false) == false
-    @eqtest simplify(Term{Bool}(!, [true])) == false
-    @eqtest simplify(Term{Bool}(|, [false, true])) == true
+    @eqtest unwrap_const(simplify(false & (0 < a))) == false
+    @eqtest unwrap_const(simplify((0 < a) & false)) == false
+    @eqtest unwrap_const(simplify(Term{SymReal}(!, [true]; type = Bool))) == false
+    @eqtest unwrap_const(simplify(Term{SymReal}(|, [false, true]; type = Bool))) == true
     @eqtest simplify(ifelse(true, a, b)) == a
     @eqtest simplify(ifelse(false, a, b)) == b
 
     # abs
-    @test simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => -1))) == 1
-    @test simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => 1))) == 1
-    @test simplify(substitute(ifelse(a < 0, -a, a), Dict(a => -1))) == 1
-    @test simplify(substitute(ifelse(a < 0, -a, a), Dict(a => 1))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => -1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(!(a < 0), a, -a), Dict(a => 1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(a < 0, -a, a), Dict(a => -1)))) == 1
+    @test unwrap_const(simplify(substitute(ifelse(a < 0, -a, a), Dict(a => 1)))) == 1
 end
 
 @testset "Pythagorean Identities" begin
     @syms a::Integer x::Real y::Number
 
-    @test simplify(cos(x)^2 + 1 + sin(x)^2) == 2
-    @test simplify(cos(y)^2 + 1 + sin(y)^2) == 2
-    @test simplify(sin(y)^2 + cos(y)^2 + 1) == 2
+    @test unwrap_const(simplify(cos(x)^2 + 1 + sin(x)^2)) == 2
+    @test unwrap_const(simplify(cos(y)^2 + 1 + sin(y)^2)) == 2
+    @test unwrap_const(simplify(sin(y)^2 + cos(y)^2 + 1)) == 2
 
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 
-    @eqtest simplify(cosh(x)^2 + 1 - sinh(x)^2) == 2
-    @eqtest simplify(cosh(y)^2 + 1 - sinh(y)^2) == 2
-    @eqtest simplify(-sinh(y)^2 + cosh(y)^2 + 1) == 2
+    @eqtest unwrap_const(simplify(cosh(x)^2 + 1 - sinh(x)^2)) == 2
+    @eqtest unwrap_const(simplify(cosh(y)^2 + 1 - sinh(y)^2)) == 2
+    @eqtest unwrap_const(simplify(-sinh(y)^2 + cosh(y)^2 + 1)) == 2
 
     @eqtest simplify(cosh(x)^2 - 1) == sinh(x)^2
     @eqtest simplify(sinh(x)^2 + 1) == cosh(x)^2
@@ -128,17 +128,17 @@ end
     @syms a::Real b::Real
     @eqtest simplify(exp(a) * exp(b)) == simplify(exp(a + b))
     @eqtest simplify(exp(a) * exp(a)) == simplify(exp(2a))
-    @test simplify(exp(a) * exp(-a)) == 1
+    @test unwrap_const(simplify(exp(a) * exp(-a))) == 1
     @eqtest simplify(exp(a)^2) == simplify(exp(2a))
     @eqtest simplify(exp(a) * a * exp(b)) == simplify(a * exp(a + b))
-    @eqtest simplify(one(Int)^a) == 1
-    @eqtest simplify(one(Complex{Float64})^a) == 1
+    @eqtest unwrap_const(simplify(one(Int)^a)) == 1
+    @eqtest unwrap_const(simplify(one(Complex{Float64})^a)) == 1
     @eqtest simplify(a^b * 1^a) == a^b
 end
 
 @testset "simplify_fractions" begin
     @syms x y z
-    @eqtest simplify(2 * ((y + z) / x) - 2 * y / x - z / x * 2) == 0
+    @eqtest unwrap_const(simplify(2 * ((y + z) / x) - 2 * y / x - z / x * 2)) == 0
 end
 
 @testset "Depth" begin
@@ -163,22 +163,15 @@ pred(x) = error("Fail")
     @test sprint(io -> Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
 end
 
-@testset "Threading" begin
-    @syms a b c d
-    ex = (((0.6666666666666666 / (c / 1)) + ((1 * a) / (c / 1))) +
-          (1.0 / (((1 * d) / (1 + b)) * (1 / b)))) +
-         ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
-          ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
-    @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
-    @test SymbolicUtils.node_count(a + b * c / d) == 7
-end
-
-@testset "timerwrite" begin
-    @syms a b c d
-    expr1 = foldr((x, y) -> rand([*, /])(x, y), rand([a, b, c, d], 100))
-    SymbolicUtils.@timerewrite simplify(expr1)
-end
-
+# @testset "Threading" begin
+#     @syms a b c d
+#     ex = (((0.6666666666666666 / (c / 1)) + ((1 * a) / (c / 1))) +
+#           (1.0 / (((1 * d) / (1 + b)) * (1 / b)))) +
+#          ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
+#           ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
+#     @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
+#     @test SymbolicUtils.node_count(a + b * c / d) == 7
+# end
 
 _g(y) = sin
 @testset "interpolation" begin

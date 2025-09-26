@@ -1,37 +1,12 @@
-const TIMER_OUTPUTS = true
-const being_timed = Ref{Bool}(false)
-
-if TIMER_OUTPUTS
-    using TimerOutputs
-
-    macro timer(name, expr)
-        :(if being_timed[]
-              @timeit $(esc(name)) $(esc(expr))
-          else
-              $(esc(expr))
-          end)
-    end
-
-    macro iftimer(expr)
-        esc(expr)
-    end
-
-else
-    macro timer(name, expr)
-        esc(expr)
-    end
-
-    macro iftimer(expr)
-    end
-end
-
 using Base: ImmutableDict
 
+safe_isinteger(@nospecialize(x::Number)) = isinteger(x) && abs(x) < typemax(Int)
+safe_isinteger(x) = false
 
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
-pow(x::Symbolic,y) = y==0 ? 1 : Base.:^(x,y)
-pow(x, y::Symbolic) = Base.:^(x,y)
-pow(x::Symbolic,y::Symbolic) = Base.:^(x,y)
+pow(x::BasicSymbolic,y) = y==0 ? 1 : Base.:^(x,y)
+pow(x, y::BasicSymbolic) = Base.:^(x,y)
+pow(x::BasicSymbolic,y::BasicSymbolic) = Base.:^(x,y)
 
 # Simplification utilities
 function has_trig_exp(term)
@@ -42,21 +17,7 @@ function has_trig_exp(term)
     if Base.@nany 9 i->fns[i] === op
         return true
     else
-        return any(has_trig_exp, arguments(term))
-    end
-end
-
-function fold(t)
-    if iscall(t)
-        tt = map(fold, arguments(t))
-        if !any(x->x isa Symbolic, tt)
-            # evaluate it
-            return operation(t)(tt...)
-        else
-            return maketerm(typeof(t), operation(t), tt, metadata(t))
-        end
-    else
-        return t
+        return any(has_trig_exp, parent(arguments(term)))
     end
 end
 
@@ -65,13 +26,25 @@ end
 sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 
 isliteral(::Type{T}) where {T} = x -> x isa T
-is_literal_number(x) = isliteral(Number)(x)
+is_literal_number(x) = isliteral(Number)(unwrap_const(x))
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
-_iszero(x) = x isa Number && iszero(x)
-_isone(x) = x isa Number && isone(x)
-_isinteger(x) = (x isa Number && isinteger(x)) || (x isa Symbolic && symtype(x) <: Integer)
-_isreal(x) = (x isa Number && isreal(x)) || (x isa Symbolic && symtype(x) <: Real)
+@cache function _iszero(x)::Bool
+    @nospecialize x
+    x = unwrap_const(unwrap(x))
+    x isa Number && return iszero(x)::Bool
+    x isa Array && return iszero(x)::Bool
+    return false
+end
+@cache function _isone(x)::Bool
+    @nospecialize x
+    x = unwrap_const(unwrap(x))
+    x isa Number && return isone(x)::Bool
+    x isa Array && return isone(x)::Bool
+    return false
+end
+_isinteger(x) = (x isa Number && isinteger(x)) || (x isa BasicSymbolic && symtype(x) <: Integer)
+_isreal(x) = (x isa Number && isreal(x)) || (x isa BasicSymbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
 needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
@@ -163,7 +136,10 @@ function sort_args(f, t)
 end
 
 # Linked List interface
-@inline assoc(d::ImmutableDict, k, v) = ImmutableDict(d, k=>v)
+@inline function assoc(d::ImmutableDict{Symbol, Any}, k::Symbol, v::Any)
+    @nospecialize v
+    ImmutableDict(d, k, unwrap_const(v))
+end
 
 struct LL{V}
     v::V

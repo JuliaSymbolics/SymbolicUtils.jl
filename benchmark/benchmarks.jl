@@ -7,6 +7,17 @@ SUITE = BenchmarkGroup()
 
 @syms a b c d x y[1:3] z[1:2, 1:2]; Random.seed!(123);
 
+function random_term(len; atoms, funs, fallback_atom=1)
+    xs = rand(atoms, len)
+    while length(xs) > 1
+        xs = map(Iterators.partition(xs, 2)) do xy
+            x = xy[1]; y = get(xy, 2, fallback_atom)
+            rand(funs)(x, y)
+        end
+    end
+    xs[]
+end
+
 let r = @rule(~x => ~x), rs = RuleSet([r]),
     acr = @rule(~x::is_literal_number + ~y => ~y)
 
@@ -34,16 +45,6 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
     overhead["simplify"]["noop:Sym"]  = @benchmarkable simplify($a)
     overhead["simplify"]["noop:Term"] = @benchmarkable simplify($(a+2))
 
-    function random_term(len; atoms, funs, fallback_atom=1)
-        xs = rand(atoms, len)
-        while length(xs) > 1
-            xs = map(Iterators.partition(xs, 2)) do xy
-                x = xy[1]; y = get(xy, 2, fallback_atom)
-                rand(funs)(x, y)
-            end
-        end
-        xs[]
-    end
     ex1 = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[+, *])
     ex2 = random_term(1000, atoms=[a, b, c, d, a^(-1), b^(-1), 1, 2.0], funs=[/, *])
 
@@ -55,15 +56,17 @@ let r = @rule(~x => ~x), rs = RuleSet([r]),
     overhead["substitute"] = BenchmarkGroup()
 
 
-    overhead["substitute"]["a"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1))) setup=begin
+    # we use `fold = false` since otherwise it dynamic dispatches to `sin`/`cos` whenever
+    # both arguments in the contained addition are substituted.
+    overhead["substitute"]["a"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1)); fold = false) setup=begin
         subs_expr = (sin(a+b) + cos(b+c)) * (sin(b+c) + cos(c+a)) * (sin(c+a) + cos(a+b))
     end
 
-    overhead["substitute"]["a,b"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1, b=>2))) setup=begin
+    overhead["substitute"]["a,b"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1, b=>2)); fold = false) setup=begin
         subs_expr = (sin(a+b) + cos(b+c)) * (sin(b+c) + cos(c+a)) * (sin(c+a) + cos(a+b))
     end
 
-    overhead["substitute"]["a,b,c"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1, b=>2, c=>3))) setup=begin
+    overhead["substitute"]["a,b,c"] = @benchmarkable substitute(subs_expr, $(Dict(a=>1, b=>2, c=>3)); fold = false) setup=begin
         subs_expr = (sin(a+b) + cos(b+c)) * (sin(b+c) + cos(c+a)) * (sin(c+a) + cos(a+b))
     end
 
@@ -94,6 +97,38 @@ let
          (-f*(g + (-d*g) / d)) / (i + (-c*(h + (-e*g) / d)) / b + (-f*g) / d)) / d
     pform["simplify_fractions"] = @benchmarkable simplify_fractions($ex)
     pform["iszero"] = @benchmarkable SymbolicUtils.fraction_iszero($ex)
-    pform["isone"] = @benchmarkable SymbolicUtils.fraction_isone($o)
+    pform["isone"] = @benchmarkable SymbolicUtils.fraction_isone($ex)
+    pform["isone:noop"] = @benchmarkable SymbolicUtils.fraction_isone($o)
+    pform["iszero:noop"] = @benchmarkable SymbolicUtils.fraction_iszero($o)
     pform["easy_iszero"] = @benchmarkable SymbolicUtils.fraction_iszero($((b*(h + (-e*g) / d)) / b + (e*g) / d - h))
+end
+
+let
+    arith = SUITE["arithmetic"] = BenchmarkGroup()
+    atoms = [a, b, c, d, a^2, b^2, a^1.5, (b + c), b^c, 1, 2.0]
+    funs = [+, *]
+    exs = [random_term(5; atoms, funs) for _ in 1:50]
+    @static if isdefined(SymbolicUtils, :SymReal)
+        arith["addition"] = @benchmarkable SymbolicUtils.add_worker(SymReal, $exs)
+    elseif isdefined(SymbolicUtils, :add_worker)
+        arith["addition"] = @benchmarkable SymbolicUtils.add_worker($exs)
+    else
+        exs = Tuple(exs)
+        arith["addition"] = @benchmarkable +($(exs)...)
+    end
+
+    funs = [*, /]
+    exs = [random_term(5; atoms, funs) for _ in 1:50]
+    @static if isdefined(SymbolicUtils, :SymReal)
+        arith["multiplication"] = @benchmarkable SymbolicUtils.mul_worker(SymReal, $exs)
+    elseif isdefined(SymbolicUtils, :mul_worker)
+        arith["multiplication"] = @benchmarkable SymbolicUtils.mul_worker($exs)
+    else
+        exs = Tuple(exs)
+        arith["multiplication"] = @benchmarkable *($(exs)...)
+    end
+
+    ex1 = random_term(50; atoms, funs)
+    ex2 = random_term(50; atoms, funs)
+    arith["division"] = @benchmarkable $ex1 / $ex2
 end

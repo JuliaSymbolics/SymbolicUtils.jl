@@ -7,11 +7,12 @@
 #
 
 function matcher(val::Any, acSets)
+    val = unwrap_const(val)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
     if iscall(val)
         # if has two arguments and one of them is a DefSlot, create a term matcher with defslot
         # just two arguments bc defslot is only supported with operations with two args: *, ^, +
-        if any(x -> isa(x, DefSlot), arguments(val))
+        if any(x -> isa(unwrap_const(x), DefSlot), parent(arguments(val)))
             return defslot_term_matcher_constructor(val, acSets)
         end
         # else return a normal term matcher
@@ -20,7 +21,7 @@ function matcher(val::Any, acSets)
 
     function literal_matcher(next, data, bindings)
         # car data is the first element of data
-        islist(data) && isequal(car(data), val) ? next(bindings, 1) : nothing
+        islist(data) && isequal(unwrap_const(car(data)), val) ? next(bindings, 1) : nothing
     end
 end
 
@@ -31,12 +32,14 @@ function matcher(slot::Slot, acSets)
         val = get(bindings, slot.name, nothing)
         # if slot name already is in bindings, check if it matches
         if val !== nothing
-            if isequal(val, car(data))
+            if isequal(val, unwrap_const(car(data)))::Bool
                 return next(bindings, 1)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
-        elseif slot.predicate(car(data))
-            next(assoc(bindings, slot.name, car(data)), 1)
+        elseif slot.predicate(unwrap_const(car(data)))::Bool
+            rest = car(data)
+            binds = assoc(bindings, slot.name, rest)
+            next(binds, 1)
         end
     end
 end
@@ -71,7 +74,7 @@ function trymatchexpr(data, value, n)
         end
 
         return !islist(value) ? n : nothing
-    elseif isequal(value, data)
+    elseif isequal(unwrap_const(value), unwrap_const(data))
         return n + 1
     end
 end
@@ -91,7 +94,7 @@ function matcher(segment::Segment, acSets)
             for i=length(data):-1:0
                 subexpr = take_n(data, i)
 
-                !segment.predicate(subexpr) && continue
+                !segment.predicate(unwrap_const(subexpr)) && continue
                 res = success(assoc(bindings, segment.name, subexpr), i)
                 res !== nothing && break
             end
@@ -102,8 +105,8 @@ function matcher(segment::Segment, acSets)
 end
 
 function term_matcher_constructor(term, acSets)
-    matchers = (matcher(operation(term), acSets), map(x->matcher(x,acSets), arguments(term))...,)
-    
+    matchers = vcat([matcher(operation(term), acSets)], map(x -> matcher(unwrap_const(x), acSets), parent(arguments(term))))
+
     function loop(term, bindings′, matchers′) # Get it to compile faster
         if !islist(matchers′)
             if  !islist(term)
@@ -134,28 +137,28 @@ function term_matcher_constructor(term, acSets)
             result !== nothing && return success(result, 1)
             
             frankestein = nothing
-            if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && isequal(arguments(arguments(data)[1])[1], 1)
+            if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && _isone(arguments(arguments(data)[1])[1])
                 # if data is of the alternative form (1/...)^(...)
                 one_over_smth = arguments(data)[1]
-                T = symtype(one_over_smth)
+                T = vartype(one_over_smth)
                 frankestein = Term{T}(^, [arguments(one_over_smth)[2], -arguments(data)[2]])
-            elseif (operation(data) === /) && isequal(arguments(data)[1], 1) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
+            elseif (operation(data) === /) && _isone(arguments(data)[1]) && iscall(arguments(data)[2]) && (operation(arguments(data)[2]) === ^)
                 # if data is of the alternative form 1/(...)^(...)
                 denominator = arguments(data)[2]
-                T = symtype(denominator)
+                T = vartype(denominator)
                 frankestein = Term{T}(^, [arguments(denominator)[1], -arguments(denominator)[2]])
-            elseif (operation(data) === /) && isequal(arguments(data)[1], 1)
+            elseif (operation(data) === /) && _isone(arguments(data)[1])
                 # if data is of the alternative form 1/(...), it might match with exponent = -1
                 denominator = arguments(data)[2]
-                T = symtype(denominator)
+                T = vartype(denominator)
                 frankestein = Term{T}(^, [denominator, -1])
             elseif operation(data)===exp
                 # if data is a exp call, it might match with base e
-                T = symtype(arguments(data)[1])
+                T = vartype(arguments(data)[1])
                 frankestein = Term{T}(^,[ℯ, arguments(data)[1]])
             elseif operation(data)===sqrt
                 # if data is a sqrt call, it might match with exponent 1//2
-                T = symtype(arguments(data)[1])
+                T = vartype(arguments(data)[1])
                 frankestein = Term{T}(^,[arguments(data)[1], 1//2])
             end
 
@@ -168,8 +171,8 @@ function term_matcher_constructor(term, acSets)
         end
         return pow_term_matcher
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
-    elseif acSets!==nothing && operation(term) in [+, *]
-        has_segment = any([isa(a,Segment) for a in arguments(term)])
+    elseif acSets!==nothing && (operation(term) === (+) || operation(term) === (*))
+        has_segment = any([isa(unwrap_const(a),Segment) for a in arguments(term)])
         function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data)
@@ -180,8 +183,8 @@ function term_matcher_constructor(term, acSets)
             !has_segment && length(matchers)-1 !== length(data_args) && return nothing
 
             
-            T = symtype(data)
-            if T <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
+            T = vartype(data)
+            if symtype(data) <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
                 f = operation(data)
                 
                 for inds in acSets(eachindex(data_args), length(data_args))
@@ -210,8 +213,8 @@ function term_matcher_constructor(term, acSets)
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
 
-            if (operation(data) === ^) && (arguments(data)[2] === 1//2)
-                T = symtype(arguments(data)[1])
+            if (operation(data) === ^) && (unwrap_const(arguments(data)[2]) === 1//2)
+                T = vartype(arguments(data)[1])
                 frankestein = Term{T}(sqrt,[arguments(data)[1]])
                 result = loop(frankestein, bindings, matchers)
                 result !== nothing && return success(result, 1)
@@ -230,8 +233,8 @@ function term_matcher_constructor(term, acSets)
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
 
-            if (operation(data) === ^) && (arguments(data)[1] === ℯ)
-                T = symtype(arguments(data)[2])
+            if (operation(data) === ^) && (unwrap_const(arguments(data)[1]) === ℯ)
+                T = vartype(arguments(data)[2])
                 frankestein = Term{T}(exp,[arguments(data)[2]])
                 result = loop(frankestein, bindings, matchers)
                 result !== nothing && return success(result, 1)
@@ -259,18 +262,18 @@ end
 # Note: there is a bit of a waste here bc the matcher get created twice, both 
 # in the normal_matcher and in defslot_matcher and other_part_matcher
 function defslot_term_matcher_constructor(term, acSets)
-    a = arguments(term)
-    defslot_index = findfirst(x -> isa(x, DefSlot), a) # find the defslot in the term
-    defslot = a[defslot_index]
+    a = parent(arguments(term))
+    defslot_index = findfirst(x -> isa(unwrap_const(x), DefSlot), a) # find the defslot in the term
+    defslot = unwrap_const(a[defslot_index])
     defslot_matcher = matcher(defslot, acSets)
     if length(a) == 2
-        other_part_matcher = matcher(a[defslot_index == 1 ? 2 : 1], acSets)
+        other_part_matcher = matcher(unwrap_const(a[defslot_index == 1 ? 2 : 1]), acSets)
     else
         # if we hare here the operation is a multiplication or sum of n>2 terms
         # (because ^ cannot have more than 2 terms).
         # creates the term matcher of the multiplication or sum of n-1 terms
         others = [a[i] for i in eachindex(a) if i != defslot_index]
-        T = symtype(term)
+        T = vartype(term)
         f = operation(term)
         other_part_matcher = term_matcher_constructor(Term{T}(f, others), acSets)
     end

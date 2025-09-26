@@ -1,23 +1,21 @@
 import AbstractTrees
 
 const inspect_metadata = Ref{Bool}(false)
-function AbstractTrees.nodevalue(x::Symbolic)
-    iscall(x) ? operation(x) : isexpr(x) ? head(x) : x
-end
 
-function AbstractTrees.nodevalue(x::BasicSymbolic)
+function AbstractTrees.nodevalue(x::BSImpl.Type)
+    T = nameof(MData.variant_type(x))
     str = if !iscall(x)
-        string(exprtype(x), "(", x, ")")
+        string(T, "(", x, ")")
     elseif isadd(x)
-        string(exprtype(x), 
-            (scalar=x.coeff, coeffs=Tuple(k=>v for (k,v) in x.dict)))
+        string(T, 
+            (variant=string(x.variant),))
     elseif ismul(x)
-        string(exprtype(x),
-            (scalar=x.coeff, powers=Tuple(k=>v for (k,v) in x.dict)))
+        string(T,
+            (variant=string(x.variant),))
     elseif isdiv(x) || ispow(x)
-        string(exprtype(x))
+        string(T)
     else
-        string(exprtype(x),"{", operation(x), "}")
+        string(T,"{", operation(x), "}")
     end
 
     if inspect_metadata[] && !isnothing(metadata(x))
@@ -34,7 +32,7 @@ the expression.
 
 This function is used internally for printing via AbstractTrees.
 """
-function AbstractTrees.children(x::Symbolic)
+function AbstractTrees.children(x::BasicSymbolic)
     iscall(x) ? sorted_arguments(x) : isexpr(x) ? sorted_children(x) : ()
 end
 
@@ -49,7 +47,7 @@ Line numbers will be shown, use `pluck(expr, line_number)` to get the sub expres
 """
 function inspect end
 
-function inspect(io::IO, x::Symbolic;
+function inspect(io::IO, x::BasicSymbolic;
         hint=true,
         metadata=inspect_metadata[])
 

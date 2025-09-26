@@ -16,6 +16,7 @@ Slot(s) = Slot(s, alwaystrue)
 Base.isequal(s1::Slot, s2::Slot) = s1.name == s2.name
 
 Base.show(io::IO, s::Slot) = (print(io, "~"); print(io, s.name))
+Base.nameof(x::Slot) = x.name
 
 # for when the slot is a symbol, like `~x`
 makeslot(s::Symbol, keys) = (push!(keys, s); Slot(s))
@@ -71,6 +72,7 @@ end
 DefSlot(s) = DefSlot(s, alwaystrue, nothing, 0)
 Base.isequal(s1::DefSlot, s2::DefSlot) = s1.name == s2.name
 Base.show(io::IO, s::DefSlot) = (print(io, "~!"); print(io, s.name))
+Base.nameof(x::DefSlot) = x.name
 
 makeDefSlot(s::Symbol, keys, op) = (push!(keys, s); DefSlot(s, alwaystrue, op, defaultValOfCall(op)))
 
@@ -97,11 +99,12 @@ struct Segment{F}
     predicate::F
 end
 
-ismatch(s::Segment, t) = s.predicate(t)
+ismatch(s::Segment, t) = s.predicate(unwrap_const(t))
 
 Segment(s) = Segment(s, alwaystrue)
 
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
+Base.nameof(x::Segment) = x.name
 
 makesegment(s::Symbol, keys) = (push!(keys, s); Segment(s))
 
@@ -136,7 +139,7 @@ function makepattern(expr, keys, parentCall=nothing)
                 return esc(expr.args[2] // expr.args[3])
             else
                 # make a pattern for every argument of the expr.
-                :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any))
+                :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any, shape=$ShapeVecT()))
             end
         elseif expr.head === :ref
             :(term(getindex, $(map(x->makepattern(x, keys), expr.args)...); type=Any))
@@ -210,7 +213,7 @@ function (r::Rule)(term)
 
     try
         # n == 1 means that exactly one term of the input (term,) was matched
-        success(bindings, n) = n == 1 ? (@timer "RHS" rhs(assoc(bindings, :MATCH, term))) : nothing
+        success(bindings, n) = n == 1 ? (rhs(assoc(bindings, :MATCH, term))) : nothing
         return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
     catch err
         throw(RuleRewriteError(r, term))
@@ -580,18 +583,45 @@ function (acr::ACRule)(term)
         # different operations -> try deflsot
         r(term)
     else
-        f = operation(term)
-        T = symtype(term)
+        f =  operation(term)
+        # Assume that the matcher was formed by closing over a term
+        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
+            return nothing
+        end
+
+        T = vartype(term)
         args = arguments(term)
+        is_full_perm = acr.arity == length(args)
+        if is_full_perm
+            args_buf = copy(parent(args))
+        else
+            args_buf = ArgsT{T}(@view args[1:acr.arity])
+        end
 
         itr = acr.sets(eachindex(args), acr.arity)
 
         for inds in itr
-            result = r(Term{T}(f, @views args[inds]))
+            for (i, ind) in enumerate(inds)
+                args_buf[i] = args[ind]
+            end
+            # this is temporary and only constructed so the rule can
+            # try and match it - no need to hashcons it.
+            tempterm = BSImpl.Term{T}(f, args_buf; unsafe = true, type = symtype(term))
+            # this term will be hashconsed regardless
+            result = r(tempterm)
             if result !== nothing
                 # Assumption: inds are unique
-                length(args) == length(inds) && return result
-                return maketerm(typeof(term), f, [result, (args[i] for i in eachindex(args) if i ∉ inds)...], metadata(term))
+                is_full_perm && return result
+                inds_set = BitSet(inds)
+                full_args_buf = ArgsT{T}(@view args[1:(length(args)-acr.arity+1)])
+                idx = 1
+                for i in eachindex(args)
+                    i in inds_set && continue
+                    full_args_buf[idx] = args[i]
+                    idx += 1
+                end
+                full_args_buf[idx] = Const{T}(result)
+                return maketerm(typeof(term), f, full_args_buf, metadata(term); type = symtype(term))
             end
         end
     end
@@ -609,59 +639,6 @@ getdepth(::Any) = typemax(Int)
     msg = "Failed to apply rule $(err.rule) on expression "
     msg *= sprint(io->showraw(io, err.expr))
     print(io, msg)
-end
-
-function timerewrite(f)
-    if !TIMER_OUTPUTS
-        error("timerewrite must be called after enabling " *
-              "TIMER_OUTPUTS in the main file of this package")
-    end
-    reset_timer!()
-    being_timed[] = true
-    x = f()
-    being_timed[] = false
-    print_timer()
-    println()
-    x
-end
-
-
-"""
-    @timerewrite expr
-
-If `expr` calls `simplify` or a `RuleSet` object, track the amount of time
-it spent on applying each rule and pretty print the timing.
-
-This uses [TimerOutputs.jl](https://github.com/KristofferC/TimerOutputs.jl).
-
-## Example:
-
-```julia
-
-julia> expr = foldr(*, rand([a,b,c,d], 100))
-(a ^ 26) * (b ^ 30) * (c ^ 16) * (d ^ 28)
-
-julia> @timerewrite simplify(expr)
- ────────────────────────────────────────────────────────────────────────────────────────────────
-                                                         Time                   Allocations
-                                                 ──────────────────────   ───────────────────────
-                Tot / % measured:                     340ms / 15.3%           92.2MiB / 10.8%
-
- Section                                 ncalls     time   %tot     avg     alloc   %tot      avg
- ────────────────────────────────────────────────────────────────────────────────────────────────
- ACRule((~y) ^ ~n * ~y => (~y) ^ (~n ...    667   11.1ms  21.3%  16.7μs   2.66MiB  26.8%  4.08KiB
-   RHS                                       92    277μs  0.53%  3.01μs   14.4KiB  0.14%     160B
- ACRule((~x) ^ ~n * (~x) ^ ~m => (~x)...    575   7.63ms  14.6%  13.3μs   1.83MiB  18.4%  3.26KiB
- (*)(~(~(x::!issortedₑ))) => sort_arg...    831   6.31ms  12.1%  7.59μs    738KiB  7.26%     910B
-   RHS                                      164   3.03ms  5.81%  18.5μs    250KiB  2.46%  1.52KiB
-   ...
-   ...
- ────────────────────────────────────────────────────────────────────────────────────────────────
-(a ^ 26) * (b ^ 30) * (c ^ 16) * (d ^ 28)
-```
-"""
-macro timerewrite(expr)
-    :(timerewrite(()->$(esc(expr))))
 end
 
 Base.@deprecate RuleSet(x) Postwalk(Chain(x))

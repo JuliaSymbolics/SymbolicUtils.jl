@@ -10,7 +10,10 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm, Symbolic
+                      symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
+                      ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
+                      ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT,
+                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -125,6 +128,117 @@ function function_to_expr(op, O, st)
     return expr
 end
 
+const ARRAYOP_OUTSYM = Symbol("_out")
+
+function function_to_expr(::typeof(getindex), O::BasicSymbolic{T}, st) where {T}
+    out = get(st.rewrites, O, nothing)
+    out === nothing || return out
+
+    args = arguments(O)
+    if issym(args[1]) && nameof(args[1]) == IDXS_SYM
+        @assert length(args) == 2
+        return Symbol(:_, unwrap_const(args[2]))
+    end
+    args = map(Base.Fix2(toexpr, st), arguments(O))
+    expr = Expr(:call, getindex)
+    append!(expr.args, args)
+    return expr
+end
+
+function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
+    out = get(st.rewrites, O, nothing)
+    out === nothing || return out
+
+    # TODO: better infer default eltype from `O`
+    output_eltype = get(st.rewrites, :arrayop_eltype, Float64)
+    delete!(st.rewrites, :arrayop_eltype)
+    sh = shape(O)
+    default_output_buffer = if is_array_shape(sh)
+        term(zeros, output_eltype, size(O))
+    else
+        term(zero, output_eltype)
+    end
+    output_buffer = get(st.rewrites, :arrayop_output, default_output_buffer)
+    delete!(st.rewrites, :arrayop_output)
+    toexpr(Let(
+        [
+            Assignment(ARRAYOP_OUTSYM, output_buffer),
+            Assignment(Symbol("%$ARRAYOP_OUTSYM"), inplace_expr(O, ARRAYOP_OUTSYM))
+        ], ARRAYOP_OUTSYM, false), st)
+end
+
+function unidealize_indices(expr::BasicSymbolic{T}, ranges, new_ranges) where {T}
+    iscall(expr) || return expr
+    op = operation(expr)
+    args = arguments(expr)
+    if op !== getindex
+        for i in eachindex(args)
+            arg = unidealize_indices(args[i], ranges, new_ranges)
+            isequal(arg, args[i]) && continue
+            if args isa ROArgsT
+                args = copy(parent(args))
+            end
+            args[i] = arg
+        end
+        args isa ROArgsT && return expr
+        return maketerm(typeof(expr), op, args, nothing)
+    end
+
+    arr = first(args)
+    sh = shape(arr)
+    sh isa Unknown && return expr
+    sh = sh::ShapeVecT
+
+    for i in eachindex(sh)
+        ax = sh[i]
+        idx = args[i + 1]
+        vars = Set{BasicSymbolic{T}}()
+        search_variables!(vars, idx; is_atomic = _is_index_variable)
+        length(vars) == 1 || continue
+        idxvar = only(vars)
+        haskey(ranges, idxvar) && continue
+        new_ranges[idxvar] = 1:length(ax)
+        first(ax) == 1 && continue
+
+        if args isa ROArgsT
+            args = copy(parent(args))
+        end
+        args[i + 1] = idx - (first(ax) - 1)
+    end
+    args isa ROArgsT && return expr
+    return maketerm(typeof(expr), getindex, args, nothing)
+end
+
+function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
+    # TODO:
+    # if x.term !== nothing
+    #     ex = inplace_builtin(x.term, outsym)
+    #     if ex !== nothing
+    #         return ex
+    #     end
+    # end
+    if outsym isa Symbol
+        outsym = Sym{T}(outsym; type = Array{Any}, shape = Unknown(-1))
+    end
+    sh = shape(x)
+    ranges = x.ranges
+    new_ranges = RangesT{T}()
+    new_expr = unidealize_indices(x.expr, ranges, new_ranges)
+    loopvar_order = unique!(filter(x -> x isa BasicSymbolic{T}, vcat(reverse(x.output_idx), collect(keys(ranges)), collect(keys(new_ranges)))))
+
+    if is_array_shape(sh)
+        inner_expr = SetArray(false, outsym, [AtIndex(term(CartesianIndex, x.output_idx...), term(x.reduce, term(getindex, outsym, x.output_idx...), new_expr))])
+    else
+        inner_expr = Assignment(outsym, term(x.reduce, outsym, new_expr))
+    end
+    merge!(new_ranges, ranges)
+    loops = foldl(reverse(loopvar_order), init=inner_expr) do acc, k
+        ForLoop(k, new_ranges[k], acc)
+    end
+
+    return loops
+end
+
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
@@ -141,18 +255,21 @@ function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     end
 end
 
-function function_to_expr(op::typeof(^), O, st)
-    args = arguments(O)
-    if args[2] isa Real && args[2] < 0
-        args[1] = Term(inv, Any[args[1]])
-        args[2] = -args[2]
+function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
+    base, exp = arguments(O)
+    base = unwrap_const(base)
+    exp = unwrap_const(exp)
+    if exp isa Real && exp < 0
+        base = Term{T}(inv, ArgsT{T}((base,)); type = symtype(O))
+        if isone(-exp)
+            return toexpr(base, st)
+        else
+            exp = -exp
+        end
     end
-    if isequal(args[2], 1)
-        return toexpr(args[1], st)
-    end
-    if get(st.rewrites, :nanmath, false) === true && !(args[2] isa Integer)
+    if get(st.rewrites, :nanmath, false) === true && !(exp isa Integer)
         op = NaNMath.pow
-        return toexpr(Term(op, args), st)
+        return toexpr(Term{T}(op, ArgsT{T}((Const{T}(base), Const{T}(exp))); type = symtype(O)), st)
     end
     return nothing
 end
@@ -176,38 +293,15 @@ function substitute_name(O, st)
     end
 end
 
-function _is_tuple_or_array_of_symbolics(O)
-    return O isa CodegenPrimitive ||
-        (symbolic_type(O) != NotSymbolic() && !(O isa Union{Symbol, Expr})) ||
-        _is_array_of_symbolics(O) ||
-        _is_tuple_of_symbolics(O)
-end
-
-function _is_array_of_symbolics(O)
-    # O is an array, not a symbolic array, and either has a non-symbolic eltype or contains elements that are
-    # symbolic or arrays of symbolics
-    return O isa AbstractArray && symbolic_type(O) == NotSymbolic() &&
-        (symbolic_type(eltype(O)) != NotSymbolic() && !(eltype(O) <: Union{Symbol, Expr}) ||
-        any(_is_tuple_or_array_of_symbolics, O))
-end
-
-# workaround for https://github.com/JuliaSparse/SparseArrays.jl/issues/599
-function _is_array_of_symbolics(O::SparseMatrixCSC)
-    return symbolic_type(eltype(O)) != NotSymbolic() && !(eltype(O) <: Union{Symbol, Expr}) ||
-        any(_is_tuple_or_array_of_symbolics, findnz(O)[3])
-end
-
-function _is_tuple_of_symbolics(O::Tuple)
-    return any(_is_tuple_or_array_of_symbolics, O)
-end
-_is_tuple_of_symbolics(O) = false
-
 function toexpr(O, st)
-    if issym(O)
-        O = substitute_name(O, st)
-        return issym(O) ? nameof(O) : toexpr(O, st)
+    O = unwrap_const(O)
+    if O isa CodegenPrimitive
+        return toexpr(O, st)
     end
     O = substitute_name(O, st)
+    if issym(O)
+        return nameof(O)
+    end
 
     if _is_array_of_symbolics(O)
         return issparse(O) ? toexpr(MakeSparseArray(O)) : toexpr(MakeArray(O, typeof(O)), st)
@@ -764,10 +858,11 @@ end
 
 Generates new symbol of type `T` with unique name in `state`.
 """
-@inline function newsym!(state, ::Type{T}) where T 
+@inline function newsym!(state, ::Type{T}, symtype) where {T <: SymVariant}
+    @nospecialize symtype
     name = "##cse#$(state.varid[])"
     state.varid[] += 1
-    Sym{T}(Symbol(name))
+    Sym{T}(Symbol(name); type = symtype)
 end
 
 """
@@ -799,7 +894,7 @@ struct CSEState
     """
     A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
     """
-    visited::IdDict{Any, Any}
+    visited::IdDict{Union{SymbolicUtils.IDType, AbstractArray, Tuple}, BasicSymbolic}
     """
     Integer counter, used to generate unique names for intermediate variables.
     """
@@ -899,25 +994,27 @@ function cse! end
 
 indextype(::AbstractSparseArray{Tv, Ti}) where {Tv, Ti} = Ti
 
-function cse!(expr::Symbolic, state::CSEState)
-    get!(state.visited, expr) do
+
+function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
+    get!(state.visited, expr.id) do
         iscall(expr) || return expr
 
         op = operation(expr)
         args = arguments(expr)
         cse_inside_expr(expr, op, args...) || return expr
         args = map(args) do arg
+            arg = unwrap_const(arg)
             if arg isa Union{Tuple, AbstractArray} &&
                 (_is_array_of_symbolics(arg) || _is_tuple_of_symbolics(arg))
                 if arg isa Tuple
                     new_arg = cse!(MakeTuple(arg), state)
-                    sym = newsym!(state, Tuple{symtype.(arg)...})
+                    sym = newsym!(state, T, Tuple{symtype.(arg)...})
                 elseif issparse(arg)
                     new_arg = cse!(MakeSparseArray(arg), state)
-                    sym = newsym!(state, AbstractSparseArray{symtype(eltype(arg)), indextype(arg), ndims(arg)})
+                    sym = newsym!(state, T, AbstractSparseArray{symtype(eltype(arg)), indextype(arg), ndims(arg)})
                 else
                     new_arg = cse!(MakeArray(arg, typeof(arg)), state)
-                    sym = newsym!(state, AbstractArray{symtype(eltype(arg)), ndims(arg)})
+                    sym = newsym!(state, T, AbstractArray{symtype(eltype(arg)), ndims(arg)})
                 end
                 push!(state.sorted_exprs, sym ← new_arg)
                 state.visited[arg] = sym
@@ -927,8 +1024,8 @@ function cse!(expr::Symbolic, state::CSEState)
         end
         # use `term` instead of `maketerm` because we only care about the operation being performed
         # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-        new_expr = term(operation(expr), args...; type = symtype(expr))
-        sym = newsym!(state, symtype(new_expr))
+        new_expr = Term{T}(operation(expr), args; type = symtype(expr))
+        sym = newsym!(state, T, symtype(new_expr))
         push!(state.sorted_exprs, sym ← new_expr)
         return sym
     end

@@ -1,8 +1,9 @@
 using SymbolicUtils
-using SymbolicUtils: Term, showraw, Symbolic, issym
+using SymbolicUtils: BasicSymbolic, Term, showraw, issym, symtype
 using SpecialFunctions
 using Test
 using NaNMath
+import Random
 
 function rand_input(T)
     if T == Bool
@@ -29,7 +30,7 @@ function rand_input(T)
     end
 end
 
-rand_input(i::Symbolic{T}) where {T} = rand_input(T)
+rand_input(i::BasicSymbolic{T}) where {T} = rand_input(symtype(i))
 
 const num_spec = let
     @syms a b::Real c::Integer d::Float64 e::Rational f
@@ -40,9 +41,9 @@ const num_spec = let
                   ()->rand([a b c d e f])]
 
     binops = SymbolicUtils.diadic
-    nopow  = setdiff(binops, [(^), NaNMath.pow, besselj0, besselj1, bessely0, bessely1, besselj, bessely, besseli, besselk])
+    nopow  = setdiff(binops, [(^), NaNMath.pow, besselj0, besselj1, bessely0, bessely1, besselj, bessely, besseli, besselk, expint])
     twoargfns = vcat(nopow, (x,y)->x isa Union{Int, Rational, Complex{<:Rational}} ? x * y : x^y)
-    fns = vcat(1 .=> vcat(SymbolicUtils.monadic, [one, zero]),
+    fns = vcat(1 .=> setdiff(vcat(SymbolicUtils.monadic, [one, zero]), [factorial, expint]),
                2 .=> vcat(twoargfns, fill(+, 5), [-,-], fill(*, 5), fill(/, 40)),
                3 .=> [+, *])
 
@@ -116,6 +117,11 @@ end
 
 function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
     inputs = Set()
+    @static if isdefined(Random, :getstate)
+        rstate = Random.getstate(Random.GLOBAL_RNG)
+    else
+        rstate = nothing
+    end
     expr = gen_rand_expr(inputs; spec=spec, kwargs...)
     inputs = collect(inputs)
     code = try
@@ -190,6 +196,8 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
                     $(sprint(io->showraw(io, simplify(expr)))) = $simplified
                 Inputs:
                     $inputs = $args
+                State:
+                    $rstate
                 """)
     end
 end
@@ -204,7 +212,7 @@ function gen_expr(lvl=5)
         n = rand(1:5)
         args = [gen_expr(lvl-1) for i in 1:n]
 
-        Term{Number}(f, first.(args)), f(last.(args)...)
+        Term{SymReal}(f, first.(args); type = Number), f(last.(args)...)
     else
         f = rand((-,/))
         l = gen_expr(lvl-1)
@@ -214,12 +222,17 @@ function gen_expr(lvl=5)
         end
         args = [l, r]
 
-        Term{Number}(f, first.(args)), f(last.(args)...)
+        Term{SymReal}(f, first.(args); type = Number), f(last.(args)...)
     end
 end
 
 test_dict = Dict{Any, Rational{BigInt}}(a=>1,b=>-1,c=>2,d=>-2,e=>5//3,g=>-2//3)
 function fuzz_addmulpow(lvl, d=test_dict)
+    @static if isdefined(Random, :getstate)
+        rstate = Random.getstate(Random.GLOBAL_RNG)
+    else
+        rstate = nothing
+    end
     l, r = gen_expr(lvl)
     rl = try
         substitute(l, d)
@@ -236,10 +249,11 @@ function fuzz_addmulpow(lvl, d=test_dict)
         return
     end
     if rl isa Number || rr isa Number
-        if isequal(rl, rr)
+        if isequal(rl, rr) || iszero(denominator(rl)) && iszero(denominator(rr))
             @test true
         else
             println("Weird bug here:")
+            @show rstate
             @show d
             @show r l
             @show rl rr

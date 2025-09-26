@@ -1,7 +1,7 @@
 using Test
 using Combinatorics
 using SymbolicUtils
-using SymbolicUtils: <ₑ, arguments, Term
+using SymbolicUtils: <ₑ, arguments, Term, Const, get_degrees
 SymbolicUtils.show_simplified[] = false
 
 @syms a b c
@@ -21,6 +21,10 @@ end
 @test istotal(a,a)
 @test istotal(a,b)
 @test istotal(2,a)
+@test 2 <ₑ Const{SymReal}(2)
+@test Const{SymReal}(2) <ₑ Const{SymReal}(3)
+@test Const{SymReal}(2) <ₑ a
+@test !(Const{SymReal}(3) <ₑ Const{SymReal}(2))
 @test 2 <ₑ a
 @test a <ₑ b
 @test istotal(a, 2a)
@@ -28,8 +32,8 @@ end
 @test istotal(b*a, a)
 @test istotal(a, b*a)
 @test !(b*a <ₑ b+a)
-@test Term(^, [1,-1]) <ₑ a
-@test istotal(a, Term(^, [1,-1]))
+@test Term{SymReal}(^, [1,-1]) <ₑ a
+@test istotal(a, Term{SymReal}(^, [1,-1]))
 
 @testset "operator order" begin
     fs = (*, -, +)
@@ -59,13 +63,11 @@ end
 
     @test istotal(ρ(), -1z())
 
-    @syms a(t) b(t) t
-    @test a(t) <ₑ b(t)
-    @test !(b(t) <ₑ a(t))
+    @syms b(t) a(t) t
+    @test istotal(a(t), b(t))
 
     @syms y() x()
-    @test x() <ₑ y()
-    @test !(y() <ₑ x())
+    @test istotal(x(), y())
 end
 
 @testset "Sym vs Term" begin
@@ -78,7 +80,7 @@ end
 @testset "small terms" begin
     # this failing was a cause of a nasty stackoverflow #82
     @syms a
-    istotal(Term(^, [a, -1]), (a + 2))
+    istotal(Term{SymReal}(^, [a, -1]), (a + 2))
 end
 
 @testset "transitivity" begin

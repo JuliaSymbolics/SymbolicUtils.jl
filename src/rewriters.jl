@@ -30,15 +30,12 @@ rewriters.
 
 """
 module Rewriters
-using SymbolicUtils: @timer
 using TermInterface
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count, _promote_symtype
+import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count,
+                      _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT,
+                      Const, SmallV, BSImpl, unwrap_const, BasicSymbolic, isconst
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
-
-# Cache of printed rules to speed up @timer
-const repr_cache = IdDict()
-cached_repr(x) = Base.get!(()->repr(x), repr_cache, x)
 
 """
     Empty()
@@ -88,7 +85,7 @@ end
 instrument(x::IfElse, f) = IfElse(x.cond, instrument(x.yes, f), instrument(x.no, f))
 
 function (rw::IfElse)(x)
-    rw.cond(x) ?  rw.yes(x) : rw.no(x)
+    rw.cond(x)::Bool ?  rw.yes(x) : rw.no(x)
 end
 
 """
@@ -131,15 +128,15 @@ julia> chain = Chain([r1, r2])
 julia> chain(sin(x)^2 + cos(x)^2)  # Returns 1
 ```
 """
-struct Chain
-    rws
-    stop_on_match::Bool
+mutable struct Chain{Cs}
+    const rws::Cs
+    const stop_on_match::Bool
 end
 Chain(rws) = Chain(rws, false)
 
 function (rw::Chain)(x)
     for f in rw.rws
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
         if rw.stop_on_match && !isnothing(y) && !isequal(y, x)
             return y
         end
@@ -149,8 +146,24 @@ function (rw::Chain)(x)
         end
     end
     return x
-
 end
+
+@generated function (rw::Chain{<:NTuple{N, Any}})(x) where {N}
+    quote
+        Base.@nexprs $N i -> begin
+            f = rw.rws[i]
+            y = f(x)
+            if rw.stop_on_match && y !== nothing && !isequal(x, y)
+                return y
+            end
+            if y !== nothing
+                x = y
+            end
+        end
+        return x
+    end
+end
+
 instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
 
 """
@@ -172,15 +185,15 @@ julia> chain = RestartedChain([r1, r2])
 julia> chain(x + x)  # Applies r1, then restarts and applies r2
 ```
 """
-struct RestartedChain{Cs}
-    rws::Cs
+mutable struct RestartedChain{Cs}
+    const rws::Cs
 end
 
 instrument(c::RestartedChain, f) = RestartedChain(map(x->instrument(x,f), c.rws))
 
 function (rw::RestartedChain)(x)
     for f in rw.rws
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
         if y !== nothing
             return Chain(rw.rws)(y)
         end
@@ -192,7 +205,7 @@ end
     quote
         Base.@nexprs $N i->begin
             let f = rw.rws[i]
-                y = @timer cached_repr(repr(f)) f(x)
+                y = f(x)
                 if y !== nothing
                     return Chain(rw.rws)(y)
                 end
@@ -231,11 +244,11 @@ instrument(x::Fixpoint, f) = Fixpoint(instrument(x.rw, f))
 
 function (rw::Fixpoint)(x)
     f = rw.rw
-    y = @timer cached_repr(f) f(x)
-    while x !== y && !isequal(x, y)
+    y = f(x)
+    while (x !== y) && !isequal(x, y)
         y === nothing && return x
         x = y
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
     end
     return x
 end
@@ -259,7 +272,7 @@ instrument(x::FixpointNoCycle, f) = Fixpoint(instrument(x.rw, f))
 function (rw::FixpointNoCycle)(x)
     f = rw.rw
     push!(rw.hist, hash(x))
-    y = @timer cached_repr(f) f(x)
+    y = f(x)
     while x !== y && hash(x) ∉ rw.hist
         if y === nothing
             empty!(rw.hist)
@@ -267,21 +280,23 @@ function (rw::FixpointNoCycle)(x)
         end
         push!(rw.hist, y)
         x = y
-        y = @timer cached_repr(f) f(x)
+        y = f(x)
     end
     empty!(rw.hist)
     return x
 end
 
-struct Walk{ord, C, F, threaded}
+struct Walk{ord, C, F, M, threaded}
     rw::C
+    filter::F
     thread_cutoff::Int
-    maketerm::F
+    maketerm::M
 end
 
-function instrument(x::Walk{ord, C,F,threaded}, f) where {ord,C,F,threaded}
+function instrument(x::Walk{ord, C,F, M,threaded}, f) where {ord,C,F, M,threaded}
     irw = instrument(x.rw, f)
-    Walk{ord, typeof(irw), typeof(x.maketerm), threaded}(irw,
+    Walk{ord, typeof(irw), typeof(x.filter), typeof(x.maketerm), threaded}(irw,
+                                                            x.filter,
                                                             x.thread_cutoff,
                                                             x.maketerm)
 end
@@ -302,6 +317,7 @@ simplification of subexpressions before the containing expression.
 - `threaded`: If true, use multi-threading for large expressions
 - `thread_cutoff`: Minimum node count to trigger threading
 - `maketerm`: Function to construct terms (defaults to `maketerm`)
+- `filter`: Function which returns whether to search into a subtree
 
 # Examples
 ```julia
@@ -313,8 +329,8 @@ julia> pw((x + x) * (y + y))  # Simplifies both additions
 
 See also: [`Prewalk`](@ref)
 """
-function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm)
-    Walk{:post, typeof(rw), typeof(maketerm), threaded}(rw, thread_cutoff, maketerm)
+function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm, filter=Returns(true))
+    Walk{:post, typeof(rw), typeof(filter), typeof(maketerm), threaded}(rw, filter, thread_cutoff, maketerm)
 end
 
 """
@@ -330,6 +346,7 @@ transformation of the overall structure before processing subexpressions.
 - `threaded`: If true, use multi-threading for large expressions
 - `thread_cutoff`: Minimum node count to trigger threading
 - `maketerm`: Function to construct terms (defaults to `maketerm`)
+- `filter`: Function which returns whether to search into a subtree
 
 # Examples
 ```julia
@@ -341,8 +358,8 @@ cos(cos(x))
 
 See also: [`Postwalk`](@ref)
 """
-function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm)
-    Walk{:pre, typeof(rw), typeof(maketerm), threaded}(rw, thread_cutoff, maketerm)
+function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, maketerm=maketerm, filter=Returns(true))
+    Walk{:pre, typeof(rw), typeof(filter), typeof(maketerm), threaded}(rw, filter, thread_cutoff, maketerm)
 end
 
 """
@@ -371,44 +388,75 @@ instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 (p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
 
 passthrough(x, default) = x === nothing ? default : x
-function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
+function (p::Walk{ord, C, F, M, false})(x::BasicSymbolic{T}) where {ord, C, F, M, T}
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
-            x = p.rw(x)
+            x = Const{T}(@something(p.rw(x), x))
         end
 
-        if iscall(x)
-            x = p.maketerm(typeof(x), operation(x), map(PassThrough(p),
-                            arguments(x)), metadata(x))
+        if iscall(x) && p.filter(x)
+            args = arguments(x)::ROArgsT{T}
+            op = PassThrough(p)
+            for i in eachindex(args)
+                arg = args[i]
+                newarg = op(arg)
+                if args isa ROArgsT{T}
+                    if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool
+                        continue
+                    end
+                    args = copy(parent(args))::ArgsT{T}
+                end
+                args[i] = Const{T}(newarg)
+            end
+            if args isa ArgsT{T}
+                x = p.maketerm(typeof(x), operation(x), args, metadata(x))
+            end
         end
 
-        return ord === :post ? p.rw(x) : x
+        return ord === :post ? Const{T}(@something(p.rw(x), x)) : x
     else
-        return p.rw(x)
+        return Const{T}(@something(p.rw(x), x))
     end
 end
+(p::Walk)(x) = x
 
-function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
+function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M, T}
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
             x = p.rw(x)
         end
-        if iscall(x)
-            _args = map(arguments(x)) do arg
-                if node_count(arg) > p.thread_cutoff
-                    Threads.@spawn p(arg)
+        if iscall(x) && p.filter(x)
+            args = arguments(x)::ROArgsT{T}
+            op = PassThrough(p)
+            for i in eachindex(args)
+                arg = args[i]
+                newarg = if node_count(arg) > p.thread_cutoff
+                    Const{T}(Threads.@spawn op(arg); unsafe=true)
                 else
-                    p(arg)
+                    Const{T}(op(arg))
                 end
+                if args isa ROArgsT{T}
+                    if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool
+                        continue
+                    end
+                    args = copy(parent(args))::ArgsT{T}
+                end
+                args[i] = newarg
             end
-            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
-            t = p.maketerm(typeof(x), operation(x), args, metadata(x))
+            if args isa ArgsT{T}
+                for i in eachindex(args)
+                    if unwrap_const(args[i]) isa Task
+                        args[i] = Const{T}(fetch(unwrap_const(args[i])))
+                    end
+                end
+                x = p.maketerm(typeof(x), operation(x), args, metadata(x))
+            end
         end
-        return ord === :post ? p.rw(t) : t
+        return ord === :post ? Const{T}(p.rw(x)) : x
     else
-        return p.rw(x)
+        return Const{T}(p.rw(x))
     end
 end
 

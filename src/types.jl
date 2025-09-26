@@ -672,7 +672,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
 
     partial = @match (a, b) begin
         (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => begin
-            isequal(v1, v2)::Bool && (!full || (typeof(v1) === typeof(v2))::Bool)
+            isequal_somescalar(v1, v2)::Bool && (!full || (typeof(v1) === typeof(v2))::Bool)
         end
         (BSImpl.Sym(; name = n1, shape = s1, type = t1), BSImpl.Sym(; name = n2, shape = s2, type = t2)) => begin
             n1 === n2 && s1 == s2 && t1 === t2
@@ -681,7 +681,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
             isequal(f1, f2) && isequal(args1, args2) && s1 == s2 && t1 === t2
         end
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
-            isequal(c1, c2) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && s1 == s2 && t1 === t2
+            isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && s1 == s2 && t1 === t2
         end
         (BSImpl.Div(; num = n1, den = d1, type = t1), BSImpl.Div(; num = n2, den = d2, type = t2)) => begin
             isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && t1 === t2
@@ -782,7 +782,11 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
+            htmp = hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
+            if full
+                htmp = Base.hash(typeof(coeff), htmp)
+            end
+            htmp
         end
         BSImpl.Div(; num, den, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2

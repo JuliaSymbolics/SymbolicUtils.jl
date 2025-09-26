@@ -67,11 +67,13 @@ ReadOnlyArrays = "0.2.0"
 ReverseDiff = "1"
 RuntimeGeneratedFunctions = "0.5.13"
 Setfield = "0.7, 0.8, 1"
+SparseArrays = "1"
 SpecialFunctions = "0.10, 1.0, 2"
 StaticArrays = "0.12, 1.0"
 SymbolicIndexingInterface = "0.3"
 TaskLocalValues = "0.1.2"
 TermInterface = "2.0"
+WeakCacheSets = "0.1.0"
 julia = "1.10"
 
 [extras]

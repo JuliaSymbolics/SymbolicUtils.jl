@@ -874,6 +874,7 @@ function hashcons(s::BSImpl.Type{T}) where {T}
     if !ENABLE_HASHCONSING[]
         return s
     end
+    s.id === nothing || return s
     @manually_scope COMPARE_FULL => true begin
         k = (@lock WCS_LOCK getkey!(wcs_for_vartype(T), s))::typeof(s)
         if k.id === nothing

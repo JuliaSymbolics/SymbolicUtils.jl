@@ -7,6 +7,17 @@ function (s::Substituter)(ex)
     return get(s.dict, ex, ex)
 end
 
+function (s::Substituter)(ex::AbstractArray)
+    map(s, ex)
+end
+
+function (s::Substituter)(ex::SparseMatrixCSC)
+    I, J, V = findnz(ex)
+    V = s(V)
+    m, n = size(ex)
+    return sparse(I, J, V, m, n)
+end
+
 function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     result = get(s.dict, ex, nothing)
     result === nothing || return result
@@ -15,43 +26,43 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     op = operation(ex)
     _op = s(op)
 
-    args = arguments(ex)::ROArgsT{T}
+    args = arguments(ex)
+    dirty = _op !== op
+    can_fold = !(_op isa BasicSymbolic{T})
+    newargs = parent(args)
     for i in eachindex(args)
         arg = args[i]
-        newarg = s(arg)
-        if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool
+        # This is `unsafe` because comparing `Const` equality is cheap, and we don't want to
+        # pay the cost of hashconsing if it is identical.
+        newarg = Const{T}(s(arg); unsafe = true)
+        if arg === newarg || @manually_scope COMPARE_FULL => true isequal(arg, newarg)::Bool true
+            can_fold &= isconst(arg)
             continue
         end
-        if args isa ROArgsT{T}
-            args = copy(parent(args))::ArgsT{T}
+        newarg = hashcons(newarg)
+        if !dirty
+            newargs = copy(parent(args))::ArgsT{T}
         end
-        args[i] = Const{T}(newarg)
+        dirty = true
+        can_fold &= isconst(newarg)
+        newargs[i] = newarg
     end
-    if args isa ArgsT{T} || _op !== op || Fold && all(isconst, args)
+    if dirty || can_fold
         if Fold
-            return combine_fold(T, _op, args, metadata(ex))
+            return combine_fold(T, _op, newargs, metadata(ex), can_fold)
         else
-            return maketerm(BasicSymbolic{T}, _op, args, metadata(ex))
+            return maketerm(BasicSymbolic{T}, _op, newargs, metadata(ex))
         end
     end
     return ex
 end
 
-function _const_or_not_symbolic(x)
-    isconst(x) || !(x isa BasicSymbolic)
-end
-
-function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta) where {T}
+function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta::MetadataT, can_fold::Bool) where {T}
     @nospecialize op args meta
-    can_fold = !(op isa BasicSymbolic{T}) # && all(_const_or_not_symbolic, args)
-    for arg in args
-        can_fold &= _const_or_not_symbolic(arg)
-        can_fold || break
-    end
     if op === (+)
         add_worker(T, args)
     elseif op === (*)
-        can_fold ? mapfoldl(unwrap_const, *, args) : mul_worker(T, args)
+        can_fold ? Const{T}(mapfoldl(unwrap_const, *, args)) : mul_worker(T, args)
     elseif op === (/)
         can_fold ? Const{T}(unwrap_const(args[1]) / unwrap_const(args[2])) : (args[1] / args[2])
     elseif op === (^)
@@ -71,8 +82,11 @@ function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta) wh
     end
 end
 
-function default_substitute_filter(ex::BasicSymbolic{T}) where {T}
-    iscall(ex) && !(operation(ex) isa Operator)
+@inline function default_substitute_filter(ex::BasicSymbolic{T}) where {T}
+    @match ex begin
+        BSImpl.Term(; f) && if f isa Operator end => false
+        _ => true
+    end
 end
 
 """
@@ -92,21 +106,6 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
 @inline function substitute(expr, dict; fold=true, filterer=default_substitute_filter)
     isempty(dict) && !fold && return expr
     return Substituter{fold, typeof(dict), typeof(filterer)}(dict, filterer)(expr)
-end
-
-function substitute(expr::SparseMatrixCSC, subs; kw...)
-    I, J, V = findnz(expr)
-    V = substitute(V, subs; kw...)
-    m, n = size(expr)
-    return sparse(I, J, V, m, n)
-end
-
-@inline function substitute(expr::AbstractArray, dict; kw...)
-    if _is_array_of_symbolics(expr)
-        [substitute(x, dict; kw...) for x in expr]
-    else
-        expr
-    end
 end
 
 """

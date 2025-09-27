@@ -157,6 +157,7 @@ include("code.jl")
 PrecompileTools.@setup_workload begin
     PrecompileTools.@compile_workload begin
         @syms x y f(t) q[1:5]
+        Sym{SymReal}(:a; type = Real, shape = ShapeVecT())
         x + y
         x * y
         x / y
@@ -165,6 +166,8 @@ PrecompileTools.@setup_workload begin
         6 ^ x
         x - y
         -y
+        2y
+        symtype(y)
         f(x)
         (5x / 5)
         show(devnull, x ^ 2 + y * x + y / 3x)
@@ -173,6 +176,7 @@ PrecompileTools.@setup_workload begin
         substitute(x + 2y + sin(x), Dict(x => y); fold = false)
         substitute(x + 2y + sin(x), Dict(x => 1); fold = true)
         q[1]
+        q'q
     end
 end
 

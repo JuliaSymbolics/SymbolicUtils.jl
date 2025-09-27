@@ -281,77 +281,75 @@ end
 
     var = a + a
     @test isequal(arguments(var), ArgsT{SymReal}([Const{SymReal}(2), a]))
-    @test isarrayop(var)
-    @test var.expr.f === *
+    @test var.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * a
     @test isequal(arguments(var), ArgsT{SymReal}([c, a]))
-    @test var.expr.f === *
+    @test var.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * symvec
     @test isequal(arguments(var), ArgsT{SymReal}([c, csymvec]))
-    @test var.expr.f === *
+    @test var.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = symmat * a
     @test isequal(arguments(var), ArgsT{SymReal}([csymmat, a]))
-    @test var.expr.f === *
+    @test var.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = 2 * c * h * c * im
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, c ^ 2)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
     var = var * a
-    @test var.expr.f === *
-    arg2 = @arrayop (i, j) (c^2)[i, j] term=(c^2)
-    @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, arg2, a)))
+    @test var.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, c^2, a)))
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * e * c
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e, c)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
     var = c * e
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e)))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
     var = var * c
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e, c)))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
     var = var * a
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e, c, a)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = c * e
     var = var * d
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e, d)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = e * a
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((e, a)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = e * d
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((e, d)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}

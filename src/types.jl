@@ -2397,21 +2397,21 @@ end
 mutable struct MulWorkerBuffer{T}
     num_dict::ACDict{T}
     den_dict::ACDict{T}
-    const num_coeff::Vector{PolyCoeffT}
-    const den_coeff::Vector{PolyCoeffT}
+    const arrterms::Vector{BasicSymbolic{T}}
+    const num_coeff::RefValue{PolyCoeffT}
+    const den_coeff::RefValue{PolyCoeffT}
 end
 
 function MulWorkerBuffer{T}() where {T}
-    MulWorkerBuffer{T}(Dict{BasicSymbolic{T}, Any}(), Dict{BasicSymbolic{T}, Any}(), PolyCoeffT[1], PolyCoeffT[1])
+    MulWorkerBuffer{T}(Dict{BasicSymbolic{T}, Any}(), Dict{BasicSymbolic{T}, Any}(), BasicSymbolic{T}[], Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1))
 end
 
 function Base.empty!(mwb::MulWorkerBuffer)
     empty!(mwb.num_dict)
     empty!(mwb.den_dict)
-    empty!(mwb.num_coeff)
-    empty!(mwb.den_coeff)
-    push!(mwb.num_coeff, 1)
-    push!(mwb.den_coeff, 1)
+    empty!(mwb.arrterms)
+    mwb.num_coeff[] = 1
+    mwb.den_coeff[] = 1
     return mwb
 end
 
@@ -2430,6 +2430,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     num_coeff = mwb.num_coeff
     den_dict = mwb.den_dict
     den_coeff = mwb.den_coeff
+    arrterms = mwb.arrterms
 
     # We're multiplying numbers here. If we don't take the `eltype`
     # and the first element is an array, `promote_symtype` may fail
@@ -2437,7 +2438,6 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     # both give the correct result regardless of whether the first element
     # is a scalar or array.
     type::TypeT = eltype(symtype(Const{T}(first(terms))))
-    arrterms = ArgsT{T}()
 
     for term in terms
         term = unwrap(term)
@@ -2473,83 +2473,90 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     filter!(kvp -> !iszero(kvp[2]), num_dict)
     filter!(kvp -> !iszero(kvp[2]), den_dict)
 
-    num_coeff[], den_coeff[] = simplify_coefficients(num_coeff[], den_coeff[])
+    ntrivialcoeff = isone(num_coeff[])::Bool
+    dtrivialcoeff = isone(den_coeff[])::Bool
+    ntrivialdict = isempty(num_dict)
+    dtrivialdict = isempty(den_dict)
+    ntrivial = ntrivialcoeff && ntrivialdict
+    dtrivial = dtrivialcoeff && dtrivialdict
 
-    num = Mul{T}(num_coeff[], num_dict; type = eltype(type)::TypeT)
-    @match num begin
-        BSImpl.AddMul(; dict) && if dict === num_dict end => begin
-            mwb.num_dict = ACDict{T}()
+    if ntrivialcoeff && ntrivialdict
+        num = one_of_vartype(T)
+    elseif ntrivialdict
+        num = Const{T}(num_coeff[])
+    else
+        num = Mul{T}(num_coeff[], num_dict; type = eltype(type)::TypeT)
+        @match num begin
+            BSImpl.AddMul(; dict) && if dict === num_dict end => begin
+                mwb.num_dict = ACDict{T}()
+            end
+            _ => nothing
+        end
+    end
+    if dtrivialcoeff && dtrivialdict
+        den = one_of_vartype(T)
+    elseif dtrivialdict
+        den = Const{T}(den_coeff[])
+    else
+        den = Mul{T}(den_coeff[], den_dict; type = eltype(type)::TypeT)
+        @match den begin
+            BSImpl.AddMul(; dict) && if dict === den_dict end => begin
+                mwb.den_dict = ACDict{T}()
+            end
+            _ => nothing
+        end
+    end
+
+    if ntrivial && dtrivial
+        result = one_of_vartype(T)
+    elseif dtrivial
+        result = num
+    else
+        result = Div{T}(num, den, false; type = eltype(type)::TypeT)
+    end
+
+    isempty(arrterms) && return result
+
+    scalartrivial = ntrivial && dtrivial
+    new_arrterms = ArgsT{T}()
+    _nontrivial_coeff = !scalartrivial
+    if _nontrivial_coeff
+        push!(new_arrterms, result)
+    end
+    cur = 2
+    acc_arrterm = arrterms[1]
+    acc_pow = 1
+    @match acc_arrterm begin
+        BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) end => begin
+            acc_arrterm = args[1]
+            acc_pow = unwrap_const(args[2])
         end
         _ => nothing
     end
-    den = Mul{T}(den_coeff[], den_dict; type = eltype(type)::TypeT)
-    @match den begin
-        BSImpl.AddMul(; dict) && if dict === den_dict end => begin
-            mwb.den_dict = ACDict{T}()
-        end
-        _ => nothing
-    end
-
-    result = Div{T}(num, den, false; type = eltype(type)::TypeT)
-    if !isempty(arrterms)
-        new_arrterms = ArgsT{T}()
-        _nontrivial_coeff = !_isone(result)
-        if _nontrivial_coeff
-            push!(new_arrterms, result)
-        end
-        fterm, rest = Iterators.peel(arrterms)
-        push!(new_arrterms, fterm)
-        for arrterm in rest
-            prev = last(new_arrterms)
-            termbase, termexp = _as_base_exp(arrterm)
-            prevbase, prevexp = _as_base_exp(prev)
-            if isequal(termbase, prevbase)
-                new_arrterms[end] = Term{T}(^, ArgsT{T}((termbase, prevexp + termexp)); type, shape = newshape)
-            else
-                push!(new_arrterms, arrterm)
+    n_arrterms = length(arrterms)
+    while cur <= n_arrterms
+        cur_arrterm = arrterms[cur]
+        cur += 1
+        @match cur_arrterm begin
+            BSImpl.Term(; f, args) && if f === (^) && isequal(args[1], acc_arrterm) && isconst(args[2]) end => begin
+                acc_pow += unwrap_const(args[2])
             end
-        end
-        if length(new_arrterms) == 1
-            return new_arrterms[1]
-        end
-        term = Term{T}(*, new_arrterms; type, shape = newshape)
-        if newshape === Unknown(-1)
-            return term
-        end
-        @match term begin
-            BSImpl.Term(; args) => begin
-                if args === new_arrterms
-                    new_arrterms = ArgsT{T}()
-                else
-                    empty!(new_arrterms)
+            _ => begin
+                if isequal(acc_arrterm, cur_arrterm)
+                    acc_pow += 1
+                    continue
                 end
-                offset = 0
-                if _nontrivial_coeff
-                    offset = 1
-                    push!(new_arrterms, result)
-                end
-                idxs = idxs_for_arrayop(T)
-                for i in (offset + 1):(length(args) - 1)
-                    push!(new_arrterms, args[i][idxs[i - offset], idxs[i - offset + 1]])
-                end
-                N = length(args)
-                if _ndims_from_shape(newshape) == 2
-                    push!(new_arrterms, last(args)[idxs[N - offset], idxs[N - offset + 1]])
-                    output_idxs = OutIdxT{T}((idxs[1], idxs[N - offset + 1]))
-                else
-                    push!(new_arrterms, last(args)[idxs[N - offset]])
-                    output_idxs = OutIdxT{T}((idxs[1],))
-                end
-                expr = if length(new_arrterms) == 1
-                    new_arrterms[1]
-                else
-                    Term{T}(*, new_arrterms; type = eltype(type), shape = ShapeVecT())
-                end
-                return BSImpl.ArrayOp{T}(output_idxs, expr, +, term; type, shape = newshape)
+                push!(new_arrterms, isone(acc_pow) ? acc_arrterm : (acc_arrterm ^ acc_pow))
+                acc_arrterm = cur_arrterm
+                acc_pow = 1
             end
         end
     end
-    return result
+    push!(new_arrterms, isone(acc_pow) ? acc_arrterm : (acc_arrterm ^ acc_pow))
+    if length(new_arrterms) == 1
+        return new_arrterms[1]
+    end
+    return Term{T}(*, new_arrterms; type, shape = newshape)
 end
 
 mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)

@@ -67,6 +67,7 @@ ReadOnlyArrays = "0.2.0"
 ReverseDiff = "1"
 RuntimeGeneratedFunctions = "0.5.13"
 Setfield = "0.7, 0.8, 1"
+SnoopCompileCore = "3.0.0"
 SparseArrays = "1"
 SpecialFunctions = "0.10, 1.0, 2"
 StaticArrays = "1.0"
@@ -89,9 +90,11 @@ ReferenceTests = "324d217c-45ce-50fc-942e-d289b448e8cf"
 ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
+SnoopCompile = "aa65fe97-06da-5843-b5b1-d5d13cad87d2"
+SnoopCompileCore = "e2b509da-e806-4183-be48-004708413034"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "SafeTestsets", "Test", "Zygote", "OhMyThreads", "RuntimeGeneratedFunctions", "StaticArrays"]
+test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "SafeTestsets", "Test", "Zygote", "OhMyThreads", "RuntimeGeneratedFunctions", "StaticArrays", "SnoopCompile", "SnoopCompileCore"]

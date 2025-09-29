@@ -1,6 +1,6 @@
 module Code
 
-using StaticArrays, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
+using StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
       DocStringExtensions
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,

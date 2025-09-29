@@ -325,250 +325,6 @@ function toexpr(O, st)
     end
 end
 
-# Call elements of vector arguments by their name.
-@matchable struct DestructuredArgs <: CodegenPrimitive
-    elems
-    inds
-    name
-    inbounds::Bool
-    create_bindings::Bool
-end
-
-"""
-    $(TYPEDEF)
-
-A struct maintaining the state of CSE across multiple expressions. This allows
-leveraging common subexpressions across a hierarchy of codegen constructs.
-
-# Fields
-
-$(TYPEDFIELDS)
-"""
-struct CSEState
-    """
-    An ordered list of assignment statements computing intermediate expressions
-    for CSE. Also allows `DestructuredArgs` for `Let` CSE.
-    """
-    sorted_exprs::Vector{Union{Assignment, DestructuredArgs}}
-    """
-    A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
-    """
-    visited::IdDict{Union{SymbolicUtils.IDType, AbstractArray, Tuple}, BasicSymbolic}
-    """
-    Integer counter, used to generate unique names for intermediate variables.
-    """
-    varid::Ref{Int}
-end
-
-function find_mul(x::BasicSymbolic)
-    iscall(x) && operation(x) === *
-end
-
-# CSE-aware version that looks through assignments
-function find_mul_cse(expr::BasicSymbolic, state::CSEState)
-    # First check if expr itself is a multiplication
-    find_mul(expr) && return true
-
-    # If expr is a symbol that was assigned, check its RHS
-    if issym(expr) && haskey(state.visited, expr.id)
-        assigned_expr = state.visited[expr.id]
-        @show assigned_expr
-        @show expr
-        if assigned_expr.name != expr.name  # Avoid infinite recursion
-            return find_mul_cse(assigned_expr, state)
-        end
-    end
-
-    return false
-end
-
-function find_mul_cse(assignment::Assignment, state::CSEState)
-    find_mul_cse(assignment.rhs, state)
-end
-
-function find_mul(e::Expr)
-    if e.head == :call
-        if e.args[1] == *
-            return true
-        else
-            return false
-        end
-    end
-    false
-end
-
-function generate_mul(O::BasicSymbolic)
-    @assert iscall(O) && operation(O) === +
-    args = arguments(O)
-
-    # Find which argument is multiplication and get the remaining as addition terms
-    mul_expr = nothing
-    other_terms = BasicSymbolic[]
-
-    for (i, arg) in enumerate(args)
-        if find_mul(arg)
-            mul_expr = arg
-            # Collect all other arguments as addition terms
-            for (j, other_arg) in enumerate(args)
-                if j != i
-                    push!(other_terms, other_arg)
-                end
-            end
-            break
-        end
-    end
-
-    if mul_expr !== nothing
-        # Extract A and B from the multiplication expression
-        mul_args = arguments(mul_expr)
-        A = mul_args[1]
-        B = mul_args[2]
-
-        # Create C from remaining terms
-        C_expr = if length(other_terms) == 1
-            other_terms[1]
-        else
-            # Multiple terms, create sum
-            Term{vartype(O)}(+, other_terms; type=symtype(O))
-        end
-
-        @show C_expr
-
-        @show SymbolicUtils.shape(A), SymbolicUtils.symtype(B)
-        @show symtype(O)
-        @show vartype(O)
-        # Generate symbolic representation for mul! operation
-        # This creates a 5-argument mul! call: mul!(C, A, B, α, β) = α*A*B + β*C
-        temp_var = gensym("temp_C")
-        mul_call = Term{vartype(O)}(LinearAlgebra.mul!,
-            [Sym{vartype(O)}(temp_var; type = symtype(O)), A, B, Const{vartype(O)}(1), Const{vartype(O)}(1)];
-            type=symtype(O))
-
-        assignments = [Assignment(Sym{vartype(O)}(temp_var; type = symtype(O)), C_expr)]
-        # Return Let expression: temp_var = C; mul!(temp_var, A, B, 1, 1)
-        return Let(assignments, mul_call, false)
-    else
-        # No multiplication found, return original
-        return O
-    end
-end
-
-# CSE-aware version that works with assignments and state
-function generate_mul_cse(O::BasicSymbolic, state::CSEState)
-    @assert iscall(O) && operation(O) === +
-    args = arguments(O)
-
-    # Find multiplication and other terms, resolving through CSE assignments
-    mul_expr = nothing
-    other_terms = BasicSymbolic[]
-
-    for (i, arg) in enumerate(args)
-        if find_mul_cse(arg, state)
-            mul_expr = resolve_cse_assignment(arg, state)
-            # Collect remaining terms
-            for (j, other_arg) in enumerate(args)
-                if j != i
-                    push!(other_terms, resolve_cse_assignment(other_arg, state))
-                end
-            end
-            break
-        end
-    end
-
-    if mul_expr !== nothing
-        # Extract A and B from multiplication
-        mul_args = arguments(mul_expr)
-        A = resolve_cse_assignment(mul_args[1], state)
-        B = resolve_cse_assignment(mul_args[2], state)
-
-        # Create C from remaining terms
-        C_expr = if length(other_terms) == 1
-            other_terms[1]
-        else
-            # Multiple terms, create sum
-            Term{vartype(O)}(+, other_terms; type=symtype(O))
-        end
-
-        # Generate mul! call with CSE integration
-        temp_var_sym = gensym("temp_C")
-        temp_var = Sym{vartype(O)}(temp_var_sym; type=symtype(O))
-
-        # Add assignment to CSE state
-        push!(state.sorted_exprs, Assignment(temp_var, C_expr))
-
-        # Create mul! call
-        mul_call = Term{vartype(O)}(LinearAlgebra.mul!,
-            [temp_var, A, B, Const{vartype(O)}(1), Const{vartype(O)}(1)];
-            type=symtype(O))
-
-        # Update visited map
-        state.visited[O.id] = temp_var
-
-        return temp_var
-    else
-        # No multiplication found, return original
-        return O
-    end
-end
-
-include("matmuladd.jl")
-
-# Updated mul5_cse2 that uses the rule system
-function mul5_cse2(expr, state::CSEState)
-
-    # Try to apply optimization rules
-    optimized = apply_optimization_rules(expr, state)
-    if optimized !== nothing
-        return optimized
-    end
-
-    # If no optimization applied, return original expression
-    return expr
-end
-
-function find_mul2(expr, state)
-    # Simple multiplication detection for arrays
-    if iscall(expr) && operation(expr) === *
-        args = arguments(expr)
-        return length(args) == 2 && all(x -> symtype(x) <: AbstractArray, args)
-    end
-    return false
-end
-
-# CSE-aware version that works with CSE state
-function mul5_cse(O::BasicSymbolic, state::CSEState)
-    if iscall(O) && (operation(O) === +) && length(arguments(O)) >= 2
-        # Check if any addition argument contains multiplication
-        args = arguments(O)
-        mul_found = any(arg -> find_mul_cse(arg, state), args)
-
-        if mul_found
-            return generate_mul_cse(O, state)
-        end
-    end
-    return O
-end
-
-function mul5(ex)
-    if ex.head == :call
-        if (ex.args[1] == +) && (length(ex.args) >= 3)
-            # Check if any of the addition arguments contains multiplication
-            mul_found = false
-            for i in 2:length(ex.args)
-                if find_mul(ex.args[i])
-                    mul_found = true
-                    break
-                end
-            end
-
-            if mul_found
-                return generate_mul(ex.args)
-            end
-        end
-    end
-    ex
-end
-
 function toexpr(O, st)
     O = unwrap_const(O)
     O = substitute_name(O, st)
@@ -601,14 +357,14 @@ function toexpr(O, st)
     end
 end
 
-# # Call elements of vector arguments by their name.
-# @matchable struct DestructuredArgs <: CodegenPrimitive
-#     elems
-#     inds
-#     name
-#     inbounds::Bool
-#     create_bindings::Bool
-# end
+# Call elements of vector arguments by their name.
+@matchable struct DestructuredArgs <: CodegenPrimitive
+    elems
+    inds
+    name
+    inbounds::Bool
+    create_bindings::Bool
+end
 
 function DestructuredArgs(elems, name=nothing; inds=eachindex(elems), inbounds=false, create_bindings=true)
     if name === nothing
@@ -1160,31 +916,31 @@ function cse_inside_expr(sym, f, args...)
     return true
 end
 
-# """
-#     $(TYPEDEF)
+"""
+    $(TYPEDEF)
 
-# A struct maintaining the state of CSE across multiple expressions. This allows
-# leveraging common subexpressions across a hierarchy of codegen constructs.
+A struct maintaining the state of CSE across multiple expressions. This allows
+leveraging common subexpressions across a hierarchy of codegen constructs.
 
-# # Fields
+# Fields
 
-# $(TYPEDFIELDS)
-# """
-# struct CSEState
-#     """
-#     An ordered list of assignment statements computing intermediate expressions
-#     for CSE. Also allows `DestructuredArgs` for `Let` CSE.
-#     """
-#     sorted_exprs::Vector{Union{Assignment, DestructuredArgs}}
-#     """
-#     A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
-#     """
-#     visited::IdDict{Union{SymbolicUtils.IDType, AbstractArray, Tuple}, BasicSymbolic}
-#     """
-#     Integer counter, used to generate unique names for intermediate variables.
-#     """
-#     varid::Ref{Int}
-# end
+$(TYPEDFIELDS)
+"""
+struct CSEState
+    """
+    An ordered list of assignment statements computing intermediate expressions
+    for CSE. Also allows `DestructuredArgs` for `Let` CSE.
+    """
+    sorted_exprs::Vector{Union{Assignment, DestructuredArgs}}
+    """
+    A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
+    """
+    visited::IdDict{Union{SymbolicUtils.IDType, AbstractArray, Tuple}, BasicSymbolic}
+    """
+    Integer counter, used to generate unique names for intermediate variables.
+    """
+    varid::Ref{Int}
+end
 
 CSEState() = CSEState(Union{Assignment, DestructuredArgs}[], IdDict(), Ref(1))
 
@@ -1403,6 +1159,47 @@ function cse!(x::ForLoop, state::CSEState)
     # cse the range with current scope, CSE the body with a new scope
     new_state = new_scope(state)
     return ForLoop(x.itervar, cse!(x.range, state), apply_cse(cse!(x.body, new_state), new_state))
+end
+
+include("matmuladd.jl")
+
+# Updated mul5_cse2 that uses the rule system
+function mul5_cse2(expr, state::CSEState)
+
+    # Try to apply optimization rules
+    optimized = apply_optimization_rules(expr, state)
+    if optimized !== nothing
+        return optimized
+    end
+
+    # If no optimization applied, return original expression
+    return expr
+end
+
+function find_mul(x::BasicSymbolic)
+    iscall(x) && operation(x) === *
+end
+
+# CSE-aware version that looks through assignments
+function find_mul_cse(expr::BasicSymbolic, state::CSEState)
+    # First check if expr itself is a multiplication
+    find_mul(expr) && return true
+
+    # If expr is a symbol that was assigned, check its RHS
+    if issym(expr) && haskey(state.visited, expr.id)
+        assigned_expr = state.visited[expr.id]
+        @show assigned_expr
+        @show expr
+        if assigned_expr.name != expr.name  # Avoid infinite recursion
+            return find_mul_cse(assigned_expr, state)
+        end
+    end
+
+    return false
+end
+
+function find_mul_cse(assignment::Assignment, state::CSEState)
+    find_mul_cse(assignment.rhs, state)
 end
 
 end

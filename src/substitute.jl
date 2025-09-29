@@ -3,12 +3,22 @@ struct Substituter{Fold, D <: AbstractDict, F}
     filter::F
 end
 
+@inline function Substituter{Fold}(d::AbstractDict, filter::F) where {Fold, F}
+    Substituter{Fold, typeof(d), F}(d, filter)
+end
+@inline function Substituter{Fold}(d::Pair, filter::F) where {Fold, F}
+    Substituter{Fold}(Dict(d), filter)
+end
+@inline function Substituter{Fold}(d::AbstractArray{<:Pair}, filter::F) where {Fold, F}
+    Substituter{Fold}(Dict(d), filter)
+end
+
 function (s::Substituter)(ex)
     return get(s.dict, ex, ex)
 end
 
 function (s::Substituter)(ex::AbstractArray)
-    map(s, ex)
+    [s(x) for x in ex]
 end
 
 function (s::Substituter)(ex::SparseMatrixCSC)
@@ -90,22 +100,22 @@ end
 end
 
 """
-    substitute(expr, dict; fold=true)
+    substitute(expr, dict; fold=Val(true))
 
 substitute any subexpression that matches a key in `dict` with
-the corresponding value. If `fold=false`,
+the corresponding value. If `fold=Val(false)`,
 expressions which can be evaluated won't be evaluated.
 
 ```julia
-julia> substitute(1+sqrt(y), Dict(y => 2), fold=true)
+julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(true))
 2.414213562373095
-julia> substitute(1+sqrt(y), Dict(y => 2), fold=false)
+julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(false))
 1 + sqrt(2)
 ```
 """
-@inline function substitute(expr, dict; fold=true, filterer=default_substitute_filter)
-    isempty(dict) && !fold && return expr
-    return Substituter{fold, typeof(dict), typeof(filterer)}(dict, filterer)(expr)
+@inline function substitute(expr, dict; fold::Val{Fold}=Val{true}(), filterer=default_substitute_filter) where {Fold}
+    isempty(dict) && !Fold && return expr
+    return Substituter{Fold}(dict, filterer)(expr)
 end
 
 """
@@ -265,7 +275,7 @@ function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T},
         for (idx, ii) in zip(iidxs, collapsed)
             subrules[ii] = idx
         end
-        return substitute(new_expr, subrules; fold = false)
+        return substitute(new_expr, subrules; fold = Val{false}())
     end
 end
 @cache function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges::RangesT{SymReal}, reduce)::BasicSymbolic{SymReal}
@@ -335,9 +345,9 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
                     subrules[ii] = idxs[i]
                 end
                 if toplevel
-                    substitute(new_expr, subrules; fold = true)
+                    substitute(new_expr, subrules; fold = Val{true}())
                 else
-                    scalarize(substitute(new_expr, subrules; fold = true))
+                    scalarize(substitute(new_expr, subrules; fold = Val{true}()))
                 end
             end
         end

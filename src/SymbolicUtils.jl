@@ -155,6 +155,8 @@ include("substitute.jl")
 include("code.jl")
 
 PrecompileTools.@setup_workload begin
+    fold1 = Val{false}()
+    fold2 = Val{true}()
     PrecompileTools.@compile_workload begin
         @syms x y f(t) q[1:5]
         Sym{SymReal}(:a; type = Real, shape = ShapeVecT())
@@ -173,8 +175,15 @@ PrecompileTools.@setup_workload begin
         show(devnull, x ^ 2 + y * x + y / 3x)
         expand((x + y) ^ 2)
         simplify(x ^ (1//2) + (sin(x) ^ 2 + cos(x) ^ 2) + 2(x + y) - x - y)
-        substitute(x + 2y + sin(x), Dict(x => y); fold = false)
-        substitute(x + 2y + sin(x), Dict(x => 1); fold = true)
+        ex = x + 2y + sin(x)
+        rules1 = Dict(x => y)
+        rules2 = Dict(x => 1)
+        substitute(ex, rules1)
+        substitute(ex, rules1; fold = fold1)
+        substitute(ex, rules2; fold = fold1)
+        substitute(ex, rules2)
+        substitute(ex, rules1; fold = fold2)
+        substitute(ex, rules2; fold = fold2)
         q[1]
         q'q
     end

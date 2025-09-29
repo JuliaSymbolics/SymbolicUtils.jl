@@ -143,9 +143,9 @@ struct Ctx2 end
     @test getmetadata(newf, Ctx1) == "yes"
 
 
-    @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
+    @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=Val(false)),
                   1 + term(sqrt, 2, type=Real))
-    @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=true)) isa Float64
+    @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=Val(true))) isa Float64
 end
 
 @testset "metadata" begin

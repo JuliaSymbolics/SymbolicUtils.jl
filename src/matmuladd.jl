@@ -36,11 +36,52 @@ function find_cse_expr(x, state)
     isnothing(idx) ? nothing : (; expr = rhs(state.sorted_exprs[idx]), x)
 end
 
+function validate_mul_shapes(A, B, C)
+    @show shape(A)
+    [shape(A)[1], shape(B)[2]] == shape(C)
+    # true
+end
+
 function detect_matmul_add_pattern(expr::Let, state::CSEState)
+    global ge = expr
 
     @show arguments(expr)
+    @show arguments.(expr.pairs)
     # detect_matmul_add_pattern(expr, state)
-    error()
+    mul_candidates_idx = findall(expr.pairs) do x
+        # @show symtype.(arguments(rhs(x)))
+        all_arrays = all(y -> y <: AbstractArray, symtype.(arguments(rhs(x))))
+        is_mul = operation(rhs(x)) === *
+        all_arrays && is_mul
+    end
+    mul_candidates = expr.pairs[mul_candidates_idx]
+
+    plus_candidates_idx = findall(expr.pairs) do x
+        # @show symtype.(arguments(rhs(x)))
+        all_arrays = all(y -> y <: AbstractArray, symtype.(arguments(rhs(x))))
+        is_plus = operation(rhs(x)) === +
+        all_arrays && is_plus
+    end
+    plus_candidates = expr.pairs[plus_candidates_idx]
+
+    pattern = map(enumerate(plus_candidates)) do (plus_idx, c)
+        plus_args = arguments(rhs(c))
+        mul_pattern = map(enumerate(mul_candidates)) do (mul_idx, m)
+            mul_val = lhs(m)
+            @show mul_val
+
+            if nameof(mul_val) in nameof.(plus_args)
+                A, B = arguments(rhs(m))
+                C = only(filter(x -> nameof(x) != nameof(mul_val), plus_args))
+
+                validate_mul_shapes(A, B, C) || return nothing
+                return (; A, B, C, mul_candidate = m, plus_candidate = c, mul_idx, plus_idx, pattern="A*B + C")
+            end
+        end
+        only(filter(!isnothing, mul_pattern))
+    end
+    @show pattern[1]
+    # error()
 end
 
 function detect_matmul_add_pattern(expr, state::CSEState)
@@ -106,31 +147,37 @@ function detect_matmul_add_pattern(expr, state::CSEState)
 end
 
 function transform_to_mul5_assignment(match_data, state::CSEState)
+    @show match_data
     A, B, C = match_data.A, match_data.B, match_data.C
-    T = vartype(match_data.original_expr)
+    # T = vartype(match_data.original_expr)
+    T = vartype(match_data.C)
 
     # Create temporary variable for the result
     temp_var_sym = gensym("mul5_temp")
-    temp_var = Sym{T}(temp_var_sym; type=symtype(match_data.original_expr))
+    # temp_var = Sym{T}(temp_var_sym; type=symtype(match_data.original_expr))
+    temp_var = Sym{T}(temp_var_sym; type=symtype(match_data.C))
 
     # Create the mul! call: mul!(copy(C), A, B, 1, 1)
     # This computes: result = 1*A*B + 1*C
     copy_call = Term{T}(copy, [C]; type=symtype(C))
     mul_call = Term{T}(LinearAlgebra.mul!,
         [temp_var, A, B, Const{T}(1), Const{T}(1)];
-        type=symtype(match_data.original_expr))
+        type=symtype(match_data.C))
+        # type=symtype(match_data.original_expr))
 
     # Add assignments to CSE state
     copy_assignment = Assignment(temp_var, copy_call)
     mul_assignment = Assignment(temp_var, mul_call)  # This overwrites temp_var with mul! result
 
+    @show mul_call
     push!(state.sorted_exprs, copy_assignment)
     push!(state.sorted_exprs, mul_assignment)
 
     # Update visited map
-    state.visited[match_data.original_expr.id] = temp_var
+    # state.visited[match_data.original_expr.id] = temp_var
 
-    return temp_var
+    # return temp_var
+    Let([copy_assignment, mul_assignment], temp_var, false)
 end
 
 # Rule 1: A * B + C → optimized mul! version

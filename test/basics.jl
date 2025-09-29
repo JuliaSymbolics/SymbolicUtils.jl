@@ -1178,3 +1178,8 @@ end
     @test v2.coeff !== 0.5
     @test v2.coeff === 1//2
 end
+
+@testset "`imag(::Real)`" begin
+    @syms x::Real
+    @test SymbolicUtils._iszero(imag(x))
+end

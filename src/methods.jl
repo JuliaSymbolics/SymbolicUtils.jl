@@ -343,7 +343,7 @@ end
 promote_symtype(::typeof(Base.imag), ::Type{T}) where {eT, T <: Complex{eT}} = eT
 promote_symtype(::typeof(Base.imag), ::Type{T}) where {T <: Real} = T
 function Base.imag(s::BasicSymbolic{T}) where {T}
-    islike(s, Real) && return s
+    islike(s, Real) && return zero_of_vartype(T)
     @match s begin
         BSImpl.Const(; val) => Const{T}(imag(val))
         BSImpl.Term(; f, args) && if f === complex && length(args) == 2 end => args[2]

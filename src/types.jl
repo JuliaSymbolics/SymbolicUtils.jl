@@ -971,6 +971,8 @@ function unwrap_args(args)
         args
     end
 end
+unwrap_args(args::ArgsT) = args
+unwrap_args(args::ROArgsT) = args
 
 function parse_dict(::Type{T}, dict::AbstractDict) where {T}
     dict isa ACDict{T} && return dict
@@ -1599,35 +1601,31 @@ function term(f, args...; vartype = SymReal, type = promote_symtype(f, symtype.(
     Term{vartype}(f, args; type, shape)
 end
 
-function TermInterface.maketerm(::Type{BasicSymbolic{T}}, head, args, metadata; type = _promote_symtype(head, args)) where {T}
-    @nospecialize head
-    args = unwrap_args(args)
-    basicsymbolic(T, head, args, type, metadata)
+function TermInterface.maketerm(::Type{BasicSymbolic{TreeReal}}, f, args, metadata; @nospecialize(type = _promote_symtype(f, args)))
+    sh = promote_shape(f, shape.(args)...)
+    Term{TreeReal}(f, args; type, shape=sh, metadata=metadata)
 end
 
-function basicsymbolic(::Type{T}, f, args, type::TypeT, metadata) where {T}
-    @nospecialize f type
+function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @nospecialize(type = _promote_symtype(f, args))) where {T}
+    @nospecialize f
+    args = unwrap_args(args)
     if f isa Symbol
         error("$f must not be a Symbol")
-    end
-    args = unwrap_args(args)
-    if T === TreeReal
-        @goto FALLBACK
     elseif f === ArrayOp{T}
-        return ArrayOp{T}(args...)
+        return ArrayOp{T}(args...)::BasicSymbolic{T}
     elseif f === broadcast
         _f, _args = Iterators.peel(args)
         res = broadcast(unwrap_const(_f), _args...)
         if metadata !== nothing && iscall(res)
             @set! res.metadata = metadata
         end
-        return res
+        return res::BasicSymbolic{T}
     elseif f === getindex
         res = getindex(unwrap_const.(args)...)
         if metadata !== nothing && iscall(res)
             @set! res.metadata = metadata
         end
-        return res
+        return res::BasicSymbolic{T}
     elseif f === hvncat
         sh = ShapeVecT()
         for dim in unwrap_const(args[1])

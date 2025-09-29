@@ -253,7 +253,8 @@ shape(::Colon) = ShapeVecT((1:0,))
 function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
     symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
 end
-SymbolicIndexingInterface.symbolic_type(::Type{<:BasicSymbolic}) = ScalarSymbolic()
+SymbolicIndexingInterface.symbolic_type(::Type{BasicSymbolic}) = ScalarSymbolic()
+SymbolicIndexingInterface.symbolic_type(::Type{BasicSymbolic{T}}) where {T} = ScalarSymbolic()
 
 function SymbolicIndexingInterface.getname(x::BasicSymbolic{T}) where {T}
     @match x begin
@@ -277,7 +278,7 @@ end
 Return the inner `Symbolic` wrapped in a non-symbolic subtype. Defaults to
 returning the input as-is.
 """
-unwrap(x) = x
+unwrap(@nospecialize(x)) = x
 
 struct UnimplementedForVariantError <: Exception
     method
@@ -2168,8 +2169,10 @@ end
 
 const PolyadicNumericOpFirstArgT{T} = Union{Number, AbstractArray{<:Number}, AbstractArray{T}}
 
-function +(a::PolyadicNumericOpFirstArgT{T}, b::T, bs...) where {T <: NonTreeSym}
-    return add_worker(vartype(T), (a, b, bs...))
+for T in [:(PolyadicNumericOpFirstArgT{T}), Int, Float64, Bool]
+    @eval function +(a::$T, b::T, bs...) where {T <: NonTreeSym}
+        return add_worker(vartype(T), (a, b, bs...))
+    end
 end
 
 function -(a::BasicSymbolic{T}) where {T}
@@ -2569,8 +2572,10 @@ function *(x::T, args...) where {T <: NonTreeSym}
     mul_worker(vartype(T), (x, args...))
 end
 
-function *(a::PolyadicNumericOpFirstArgT{T}, b::T, bs...) where {T <: NonTreeSym}
-    return mul_worker(vartype(T), (a, b, bs...))
+for T in [:(PolyadicNumericOpFirstArgT{T}), Int, Float64, Bool]
+    @eval function *(a::$T, b::T, bs...) where {T <: NonTreeSym}
+        return mul_worker(vartype(T), (a, b, bs...))
+    end
 end
 
 ###
@@ -2874,7 +2879,7 @@ function promote_shape(::typeof(^), sh1::ShapeT, sh2::ShapeT)
     end
 end
 
-function ^(a::BasicSymbolic{T}, b) where {T <: Union{SymReal, SafeReal}}
+function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicSymbolic{T}}) where {T <: Union{SymReal, SafeReal}}
     if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(^, (a, b)))
     end

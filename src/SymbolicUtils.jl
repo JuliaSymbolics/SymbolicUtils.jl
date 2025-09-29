@@ -154,6 +154,10 @@ include("substitute.jl")
 
 include("code.jl")
 
+PrecompileTools.@recompile_invalidations begin
+    include("despecialize.jl")
+end
+
 PrecompileTools.@setup_workload begin
     fold1 = Val{false}()
     fold2 = Val{true}()

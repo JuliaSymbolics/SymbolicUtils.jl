@@ -400,5 +400,6 @@ function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}
         return [x[idx] for idx in eachindex(x)]
     end
     args = arguments(x)
-    return getindex(scalarize(args[1]), Iterators.drop(args, 1)...)
+    idxs = Iterators.map((-), Iterators.drop(args, 1), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
+    return getindex(scalarize(args[1]), idxs...)
 end

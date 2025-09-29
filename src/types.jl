@@ -20,6 +20,9 @@ struct Unknown
     end
 end
 
+const SCALARS = [Bool, Int, Int32, BigInt, Float64, Float32, BigFloat, Rational{Int}, Rational{Int32}, Rational{BigInt}, ComplexF32, ComplexF64, Complex{BigFloat}]
+
+
 const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
 const SmallV{T} = SmallVec{T, Vector{T}}
 const ShapeVecT = SmallV{UnitRange{Int}}
@@ -190,6 +193,8 @@ symtype(x) = typeof(x)
 
 vartype(x::BasicSymbolic{T}) where {T} = T
 vartype(::Type{BasicSymbolic{T}}) where {T} = T
+
+function shape end
 
 Base.@nospecializeinfer @generated function _shape_notsymbolic(x)
     @nospecialize x
@@ -597,8 +602,6 @@ Base.isequal(::BasicSymbolic, ::Missing) = false
 Base.isequal(::Missing, ::BasicSymbolic) = false
 
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
-
-const SCALARS = [Bool, Int, Int32, BigInt, Float64, Float32, BigFloat, Rational{Int}, Rational{Int32}, Rational{BigInt}, ComplexF32, ComplexF64, Complex{BigFloat}]
 
 @generated function isequal_somescalar(a, b)
     @nospecialize a b

@@ -178,12 +178,14 @@ PrecompileTools.@setup_workload begin
         ex = x + 2y + sin(x)
         rules1 = Dict(x => y)
         rules2 = Dict(x => 1)
+        # Running `fold = Val(true)` invalidates the precompiled statements
+        # for `fold = Val(false)` and itself doesn't precompile anyway.
         substitute(ex, rules1)
         substitute(ex, rules1; fold = fold1)
         substitute(ex, rules2; fold = fold1)
-        substitute(ex, rules2)
-        substitute(ex, rules1; fold = fold2)
-        substitute(ex, rules2; fold = fold2)
+        # substitute(ex, rules2)
+        # substitute(ex, rules1; fold = fold2)
+        # substitute(ex, rules2; fold = fold2)
         q[1]
         q'q
     end

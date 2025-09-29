@@ -16,6 +16,7 @@ expr = x + sin(y) * z
 rules = Dict(x => y)
 fold = Val{false}()
 subs_inf = @snoop_inference substitute(expr, rules; fold)
+args_inf = @snoop_inference arguments(expr)
 
 using SnoopCompile
 
@@ -30,14 +31,10 @@ using SnoopCompile
     ("const_div", const_div_inf),
     ("pow", pow_inf),
     ("const_pow", const_pow_inf),
-    ("substitute", subs_inf)
+    ("substitute", subs_inf),
+    ("arguments", args_inf)
 ]
     @test isempty(staleinstances(inf))
-    # `setindex!` on TaskLocalValue doesn't infer (COMPARE_FULL)
-    if inf === subs_inf
-        @test treesize(inf) == 21
-    else
-        @test isempty(children(inf))
-    end
+    @test isempty(children(inf))
 end
 

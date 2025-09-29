@@ -29,7 +29,7 @@ function (s::Substituter)(ex::SparseMatrixCSC)
 end
 
 function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
-    result = get(s.dict, ex, nothing)
+    result = unwrap(get(s.dict, ex, nothing))
     result === nothing || return result
     iscall(ex) || return ex
     s.filter(ex) || return ex

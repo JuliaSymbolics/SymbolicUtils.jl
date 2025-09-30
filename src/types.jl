@@ -1930,7 +1930,7 @@ See also: [`SymbolicUtils.is_function_symbolic`](@ref).
 """
 function is_called_function_symbolic(x::BasicSymbolic{T}) where {T}
     @match x begin
-        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => is_function_symtype(f)
+        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => is_function_symbolic(f)
         _ => false
     end
 end

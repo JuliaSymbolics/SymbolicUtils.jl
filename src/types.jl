@@ -1773,7 +1773,8 @@ julia> getmetadata(x, Float64, "no type")
 """
 function getmetadata(s::BasicSymbolic, ctx, default)
     md = metadata(s)
-    md isa AbstractDict ? get(md, ctx, default) : default
+    md === nothing && return default
+    return get(md, ctx, default)
 end
 
 # pirated for Setfield purposes:
@@ -1824,7 +1825,7 @@ julia> getmetadata(x_with_meta, Float64)
 "custom value"
 ```
 """
-function setmetadata(s::BasicSymbolic, ctx::DataType, val)
+function setmetadata(s::BasicSymbolic, @nospecialize(ctx::DataType), @nospecialize(val))
     if s.metadata isa AbstractDict
         @set s.metadata = assocmeta(s.metadata, ctx, val)
     else

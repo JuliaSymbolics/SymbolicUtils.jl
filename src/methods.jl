@@ -106,6 +106,36 @@ for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
                    ::Type{S}) where {T <: Number, S <: Number} = promote_type(T, S)
     @eval promote_symtype(::$(typeof(f)),
                    ::Type{T},
+                   ::Type{S}) where {T <: Number, S <: BigInt} = promote_type(T, Integer)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{S},
+                   ::Type{T}) where {T <: Number, S <: BigInt} = promote_type(T, Integer)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigInt},
+                   ::Type{BigInt}) = BigInt
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Number, S <: BigFloat} = promote_type(T, Real)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{S},
+                   ::Type{T}) where {T <: Number, S <: BigFloat} = promote_type(T, Real)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigFloat},
+                   ::Type{BigFloat}) = BigFloat
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigInt},
+                   ::Type{BigFloat}) = BigFloat
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigFloat},
+                   ::Type{BigInt}) = BigFloat
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Rational, S <: BigInt} = promote_type(T, Integer)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{S},
+                   ::Type{T}) where {T <: Rational, S <: BigInt} = promote_type(T, Integer)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
                    ::Type{S}) where {eT, T <: Rational{eT}, S <: Integer} = Real
     @eval promote_symtype(::$(typeof(f)),
                    ::Type{T},

@@ -307,10 +307,10 @@ scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeo
 function _default_scalarize_array(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = arguments(x)
-    if toplevel && f !== broadcast
+    if toplevel && f !== broadcast && f !== (*)
         f(map(unwrap_const, args)...)
     else
-        f(map(unwrap_const ∘ scalarize, args)...)
+        f(map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args)...)
     end
 end
 

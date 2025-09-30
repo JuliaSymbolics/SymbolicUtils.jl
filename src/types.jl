@@ -2080,7 +2080,7 @@ function promote_shape(::typeof(+), sh1::ShapeT, sh2::ShapeT, shs::ShapeT...)
 end
 promote_shape(::typeof(-), args::ShapeT...) = promote_shape(+, args...)
 
-function +(x::T, args...) where {T <: NonTreeSym}
+function +(x::T, args::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
     add_worker(vartype(T), (x, args...))
 end
 
@@ -2122,9 +2122,7 @@ function _added_shape(terms)
     return sh
 end
 
-(awb::AddWorkerBuffer{T})(terms) where {T} = awb(Const{T}.(terms))
-
-function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}}, AbstractArray{BasicSymbolic{T}}}) where {T}
+function (awb::AddWorkerBuffer{T})(terms) where {T}
     if !all(_numeric_or_arrnumeric_symtype, terms)
         throw(MethodError(+, Tuple(terms)))
     end
@@ -2134,30 +2132,44 @@ function (awb::AddWorkerBuffer{T})(terms::Union{Tuple{Vararg{BasicSymbolic{T}}},
     end
     empty!(awb)
     shape = _added_shape(terms)
-    type = promoted_symtype(+, terms)
+    type::TypeT = symtype(Const{T}(first(terms)))
+    # type = promoted_symtype(+, terms)
     newcoeff = 0
     result = awb.dict
     for term in terms
         term = unwrap(term)
-        @match term begin
-            BSImpl.Const(; val) => (newcoeff += val)
-            BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
-                @match variant begin
-                    AddMulVariant.ADD => begin
-                        newcoeff += coeff
-                        for (k, v) in dict
-                            result[k] = get(result, k, 0) + v
+        if _is_array_of_symbolics(term)
+            term = Const{T}(term)
+        end
+        type = promote_symtype(+, type, symtype(term))
+        if term isa BasicSymbolic{T}
+            @match term begin
+                BSImpl.Const(; val) => (newcoeff += val)
+                BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
+                    @match variant begin
+                        AddMulVariant.ADD => begin
+                            newcoeff += coeff
+                            for (k, v) in dict
+                                result[k] = get(result, k, 0) + v
+                            end
+                        end
+                        AddMulVariant.MUL => begin
+                            newterm = Mul{T}(1, dict; shape, type, metadata)
+                            result[newterm] = get(result, newterm, 0) + coeff
                         end
                     end
-                    AddMulVariant.MUL => begin
-                        newterm = Mul{T}(1, dict; shape, type, metadata)
-                        result[newterm] = get(result, newterm, 0) + coeff
-                    end
+                end
+                _ => begin
+                    result[term] = get(result, term, 0) + 1
                 end
             end
-            _ => begin
-                result[term] = get(result, term, 0) + 1
-            end
+        elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal} || term isa BasicSymbolic{TreeReal}
+            error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
+        elseif term isa AbstractIrrational
+            term = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
+            result[term] = get(result, term, 0) + 1
+        else
+            newcoeff += term
         end
     end
     filter!(!(iszero ∘ last), result)
@@ -2574,12 +2586,12 @@ end
 mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)
 mul_worker(::Type{SafeReal}, terms) = SAFEREAL_MULBUFFER[](terms)
 
-function *(x::T, args...) where {T <: NonTreeSym}
+function *(x::T, args::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
     mul_worker(vartype(T), (x, args...))
 end
 
 for T in [:(PolyadicNumericOpFirstArgT{T}), Int, Float64, Bool]
-    @eval function *(a::$T, b::T, bs...) where {T <: NonTreeSym}
+    @eval function *(a::$T, b::T, bs::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
         return mul_worker(vartype(T), (a, b, bs...))
     end
 end

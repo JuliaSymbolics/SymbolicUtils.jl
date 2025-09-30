@@ -1627,7 +1627,7 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
     elseif f === getindex
         # This can't call `getindex` because that goes through `@cache`, which is unstable
         # and doesn't precompile.
-        res = _getindex(unwrap_const.(args)...)
+        res = _getindex(T, unwrap_const.(args)...)
         if metadata !== nothing && iscall(res)
             @set! res.metadata = metadata
         end
@@ -3083,13 +3083,13 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
 end
 
 @cache function _getindex_1(arr::BasicSymbolic{SymReal}, idxs::Union{BasicSymbolic{SymReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SymReal}
-    _getindex(arr, idxs...)
+    _getindex(SymReal, arr, idxs...)
 end
 @cache function _getindex_2(arr::BasicSymbolic{SafeReal}, idxs::Union{BasicSymbolic{SafeReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SafeReal}
-    _getindex(arr, idxs...)
+    _getindex(SafeReal, arr, idxs...)
 end
 
-Base.@propagate_inbounds function _getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     @match arr begin
         BSImpl.Term(; f) && if f === hvncat && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
             return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
@@ -3226,6 +3226,9 @@ Base.@propagate_inbounds function _getindex(arr::BasicSymbolic{T}, idxs::Union{B
             end
         end
     end
+end
+function _getindex(::Type{T}, x::AbstractArray, idxs...) where {T}
+    Const{T}(getindex(x, idxs...))
 end
 Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]
 function Base.getindex(x::AbstractArray, idx::BasicSymbolic{T}, idxs...) where {T}

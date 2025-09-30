@@ -2397,6 +2397,9 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
         end
     elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal}
         error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
+    elseif term isa AbstractIrrational
+        base = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
+        num_dict[base] = get(num_dict, base, 0) + 1
     else
         num_coeff[] *= term
     end

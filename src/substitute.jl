@@ -100,7 +100,7 @@ end
 end
 
 """
-    substitute(expr, dict; fold=Val(true))
+    substitute(expr, dict; fold=Val(false))
 
 substitute any subexpression that matches a key in `dict` with
 the corresponding value. If `fold=Val(false)`,
@@ -113,9 +113,15 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(false))
 1 + sqrt(2)
 ```
 """
-@inline function substitute(expr, dict; fold::Val{Fold}=Val{true}(), filterer=default_substitute_filter) where {Fold}
+@inline function substitute(expr, dict; fold::Val{Fold}=Val{false}(), filterer=default_substitute_filter) where {Fold}
     isempty(dict) && !Fold && return expr
     return Substituter{Fold}(dict, filterer)(expr)
+end
+
+const EMPTY_DICT = Dict{Int, Int}()
+
+@inline function evaluate(expr; filterer = default_substitute_filter)
+    return substitute(expr, EMPTY_DICT; fold = Val{true}(), filterer)
 end
 
 """

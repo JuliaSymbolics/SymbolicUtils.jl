@@ -13,7 +13,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT,
-                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, _is_array_shape,
+                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       vartype, symtype
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -154,7 +154,7 @@ function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
     output_eltype = get(st.rewrites, :arrayop_eltype, Float64)
     delete!(st.rewrites, :arrayop_eltype)
     sh = shape(O)
-    default_output_buffer = if _is_array_shape(sh)
+    default_output_buffer = if is_array_shape(sh)
         term(zeros, output_eltype, size(O))
     else
         term(zero, output_eltype)
@@ -227,7 +227,7 @@ function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
     new_expr = unidealize_indices(x.expr, ranges, new_ranges)
     loopvar_order = unique!(filter(x -> x isa BasicSymbolic{T}, vcat(reverse(x.output_idx), collect(keys(ranges)), collect(keys(new_ranges)))))
 
-    if _is_array_shape(sh)
+    if is_array_shape(sh)
         inner_expr = SetArray(false, outsym, [AtIndex(term(CartesianIndex, x.output_idx...), term(x.reduce, term(getindex, outsym, x.output_idx...), new_expr))])
     else
         inner_expr = Assignment(outsym, term(x.reduce, outsym, new_expr))

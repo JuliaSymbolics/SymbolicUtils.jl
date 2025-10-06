@@ -192,8 +192,6 @@ function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, Polynomi
 end
 
 function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: SymVariant}
-    isconst(num) && return num, den
-    isconst(den) && return num, den
     poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
     bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
     partial_poly1 = to_poly!(poly_to_bs, bs_to_poly, num, false)
@@ -241,8 +239,11 @@ function quick_cancel(d::BasicSymbolic{T})::BasicSymbolic{T} where {T}
 end
 
 function quick_cancel(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
+    isequal(x, y) && return one_of_vartype(T), one_of_vartype(T)
     opx = iscall(x) ? operation(x) : nothing
     opy = iscall(y) ? operation(y) : nothing
+    icx = isconst(x)
+    icy = isconst(y)
     if opx === (^) && opy === (^)
         return quick_powpow(x, y)
     elseif opx === (*) && opy === (^)
@@ -251,16 +252,14 @@ function quick_cancel(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
         return reverse(quick_mulpow(y, x))
     elseif opx === (*) && opy === (*)
         return quick_mulmul(x, y)
-    elseif opx === (^) && !isconst(y)
+    elseif opx === (^) && !icy
         return quick_pow(x, y)
-    elseif opy === (^) && !isconst(x)
+    elseif opy === (^) && !icx
         return reverse(quick_pow(y, x))
-    elseif opx === (*) && !isconst(y)
+    elseif opx === (*) && !icy
         return quick_mul(x, y)
-    elseif opy === (*) && !isconst(x)
+    elseif opy === (*) && !icx
         return reverse(quick_mul(y, x))
-    elseif isequal(x, y)
-        return Const{T}(1), Const{T}(1)
     else
         return x, y
     end
@@ -271,7 +270,7 @@ function quick_pow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSy
     base, exp = arguments(x)
     exp = unwrap_const(exp)
     exp isa Number || return (x, y)
-    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), Const{T}(1)) : (x, y)
+    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), one_of_vartype(T)) : (x, y)
 end
 
 # Double Pow case
@@ -283,17 +282,17 @@ function quick_powpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     exp2 = unwrap_const(exp2)
     !(exp1 isa Number && exp2 isa Number) && return (x, y)
     if exp1 > exp2
-        return base1 ^ (exp1 - exp2), Const{T}(1)
+        return base1 ^ (exp1 - exp2), one_of_vartype(T)
     elseif exp1 == exp2
-        return Const{T}(1), Const{T}(1)
+        return one_of_vartype(T), one_of_vartype(T)
     else # exp1 < exp2
-        return Const{T}(1), base2 ^ (exp2 - exp1)
+        return one_of_vartype(T), base2 ^ (exp2 - exp1)
     end
 end
 
 # ismul(x)
 function quick_mul(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
-    yy = BSImpl.Term{T}(^, ArgsT{T}((y, Const{T}(1))); type = symtype(y))
+    yy = BSImpl.Term{T}(^, ArgsT{T}((y, one_of_vartype(T))); type = symtype(y))
     newx, newy = quick_mulpow(x, yy)
     return isequal(newy, yy) ? (x, y) : (newx, newy)
 end
@@ -328,12 +327,12 @@ function quick_mulpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     oldval = args[idx]
     if argexp > exp
         args[idx] = argbase ^ (argexp - exp)
-        result = mul_worker(T, args), Const{T}(1)
+        result = mul_worker(T, args), one_of_vartype(T)
     elseif argexp == exp
-        args[idx] = Const{T}(1)
-        result = mul_worker(T, args), Const{T}(1)
+        args[idx] = one_of_vartype(T)
+        result = mul_worker(T, args), one_of_vartype(T)
     else
-        args[idx] = Const{T}(1)
+        args[idx] = one_of_vartype(T)
         result = mul_worker(T, args), base ^ (exp - argexp)
     end
     args[idx] = oldval
@@ -342,20 +341,31 @@ end
 
 # Double mul case
 function quick_mulmul(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
-    yargs = arguments(y)
-    for (i, arg) in enumerate(yargs)
-        newx, newarg = quick_cancel(x, arg)
-        isequal(arg, newarg) && continue
-        if yargs isa ROArgsT
-            yargs = copy(parent(yargs))
+    @match (x, y) begin
+        (BSImpl.AddMul(; coeff = c1, dict = d1, type = t1, shape = s1, variant = vr1), BSImpl.AddMul(; coeff = c2, dict = d2, type = t2, shape = s2, variant = vr2)) => begin
+            newd1 = d1
+            newd2 = d2
+            for (k1, v1) in d1
+                haskey(d2, k1) || continue
+                v2 = d2[k1]
+                if newd1 === d1
+                    newd1 = copy(d1)
+                    newd2 = copy(d2)
+                end
+                delete!((v1 >= v2) ? newd2 : newd1, k1)
+                setindex!((v1 >= v2) ? newd1 : newd2, abs(v1 - v2), k1)
+            end
+            if newd1 === d1
+                return x, y
+            end
+            filter!(!iszero ∘ last, newd1)
+            filter!(!iszero ∘ last, newd2)
+            xx = Mul{T}(c1, newd1; type = t1, shape = s1)
+            yy = Mul{T}(c2, newd2; type = t2, shape = s2)
+
+            return xx, yy
         end
-        yargs[i] = Const{T}(newarg)
-        x = newx
-    end
-    if yargs isa ROArgsT
-        return x, y
-    else
-        return x, mul_worker(T, yargs)
+        _ => _unreachable()
     end
 end
 

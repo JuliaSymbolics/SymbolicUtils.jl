@@ -1,5 +1,6 @@
 using SymbolicUtils
 using SymbolicUtils.Code
+import SymbolicUtils as SU
 
 # Create symbolic arrays A, B, C
 @syms A[1:2, 1:2] B[1:2, 1:2] C[1:2, 1:2]

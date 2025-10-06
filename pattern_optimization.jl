@@ -18,6 +18,7 @@ end
 
 # Template 1: A * B + C → mul!(copy(C), A, B, 1, 1)
 function detect_matmul_add(expr)
+    @show "hi"
     # Check if expression is addition with exactly 2 terms
     if iscall(expr) && (operation(expr) === +) && length(arguments(expr)) == 2
         args = arguments(expr)
@@ -82,7 +83,7 @@ matmul_add_template = MatMulAddTemplate(
 
 # Template 2: A * B * C + D → use BLAS gemm chains
 function detect_matmul_chain_add(expr)
-    if iscall(expr) && operation(expr) === + && length(arguments(expr)) == 2
+    if iscall(expr) && (operation(expr) === +) && length(arguments(expr)) == 2
         args = arguments(expr)
 
         for (chain_candidate, add_candidate) in [(args[1], args[2]), (args[2], args[1])]
@@ -156,6 +157,7 @@ end
 function apply_optimization(expr)
     patterns = find_optimization_patterns(expr)
 
+    @show patterns
     if !isempty(patterns)
         # Apply the highest priority optimization
         best_match = patterns[1]
@@ -207,6 +209,11 @@ test_expressions = [
     A * B + C * D,       # No match (two separate multiplications)
     A + B,               # No match (just addition)
 ]
+
+
+expr = A * B + C
+# optimized = apply_optimization(expr)
+optimized = SU.Code.cse(expr)
 
 for (i, expr) in enumerate(test_expressions)
     println("\nTest $i: $expr")

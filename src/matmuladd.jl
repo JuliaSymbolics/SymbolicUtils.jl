@@ -80,7 +80,10 @@ function detect_matmul_add_pattern(expr::Let, state::CSEState)
         end
         only(filter(!isnothing, mul_pattern))
     end
-    @show pattern[1]
+    @show pattern
+    isempty(pattern) ? nothing : pattern
+    # @show pattern[1]
+    # nothing
     # error()
 end
 
@@ -92,7 +95,7 @@ function detect_matmul_add_pattern(expr, state::CSEState)
     @show state.sorted_exprs
     global gs = state
     global ge = expr
-    error()
+    # error()
     # Must be addition with exactly 2 arguments
     if !iscall(expr) || (operation(expr) !== +) || length(arguments(expr)) != 2
         return nothing
@@ -188,13 +191,18 @@ const MATMUL_ADD_RULE = OptimizationRule(
     10
 )
 
+Base.isempty(l::Let) = isempty(l.pairs)   
+
 # Apply optimization rules during CSE
 function apply_optimization_rules(expr, state::CSEState, rules=[MATMUL_ADD_RULE])
+    @warn expr
     for rule in sort(rules, by=r->r.priority, rev=true)
         match_data = rule.detector(expr, state)
-        if match_data !== nothing
+        @show match_data 
+        if match_data !== nothing # || !isempty(match_data)
             println("Applying rule: $(rule.name)")
-            return rule.transformer(match_data, state)
+            # return rule.transformer(match_data, state)
+            return map(m -> rule.transformer(m, state), match_data) |> first
         end
     end
     return nothing

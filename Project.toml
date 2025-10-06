@@ -18,8 +18,8 @@ LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 Moshi = "2e0e35c7-a2e4-4343-998d-7ef72827ed2d"
-MultivariatePolynomials = "102ac46a-7ee4-5c85-9060-abc95bfdeaa3"
 MutableArithmetics = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
+MultivariatePolynomials = "102ac46a-7ee4-5c85-9060-abc95bfdeaa3"
 NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 ReadOnlyArrays = "988b38a3-91fc-5605-94a2-ee2116b3bd83"
 Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"
@@ -40,7 +40,6 @@ ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 
 [sources]
 DynamicPolynomials = {rev = "as/new-poly-merge", url = "https://github.com/AayushSabharwal/DynamicPolynomials.jl"}
-MultivariatePolynomials = {rev = "as/poly-merge-nonconcrete", url = "https://github.com/AayushSabharwal/MultivariatePolynomials.jl"}
 MutableArithmetics = {rev = "as+bl/simplify_promote_type_fallback", url = "https://github.com/AayushSabharwal/MutableArithmetics.jl"}
 
 [extensions]
@@ -64,7 +63,6 @@ LabelledArrays = "1.5"
 LinearAlgebra = "1"
 MacroTools = "0.5.16"
 Moshi = "0.3.6"
-MultivariatePolynomials = "0.5.12"
 MutableArithmetics = "1.6.5"
 NaNMath = "0.3, 1.1.2"
 OhMyThreads = "0.7"

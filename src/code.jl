@@ -1168,38 +1168,14 @@ function mul5_cse2(expr, state::CSEState)
 
     # Try to apply optimization rules
     optimized = apply_optimization_rules(expr, state)
+    @warn optimized
     if optimized !== nothing
         return optimized
     end
+    @warn expr
 
     # If no optimization applied, return original expression
     return expr
-end
-
-function find_mul(x::BasicSymbolic)
-    iscall(x) && operation(x) === *
-end
-
-# CSE-aware version that looks through assignments
-function find_mul_cse(expr::BasicSymbolic, state::CSEState)
-    # First check if expr itself is a multiplication
-    find_mul(expr) && return true
-
-    # If expr is a symbol that was assigned, check its RHS
-    if issym(expr) && haskey(state.visited, expr.id)
-        assigned_expr = state.visited[expr.id]
-        @show assigned_expr
-        @show expr
-        if assigned_expr.name != expr.name  # Avoid infinite recursion
-            return find_mul_cse(assigned_expr, state)
-        end
-    end
-
-    return false
-end
-
-function find_mul_cse(assignment::Assignment, state::CSEState)
-    find_mul_cse(assignment.rhs, state)
 end
 
 end

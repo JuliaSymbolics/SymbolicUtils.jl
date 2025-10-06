@@ -242,10 +242,8 @@ end
 
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.rewrites, O, nothing)
-    @show out
     out === nothing || return out
     args = map(Base.Fix2(toexpr, st), sorted_arguments(O))
-    @show args
     if length(args) >= 3 && symtype(O) <: Number
         x, xs = Iterators.peel(args)
         foldl(xs, init=x) do a, b
@@ -296,10 +294,6 @@ function substitute_name(O, st)
     end
 end
 
-function find_mul(x::Symbol)
-    false
-end
-
 function toexpr(O, st)
     O = unwrap_const(O)
     if O isa CodegenPrimitive
@@ -316,38 +310,6 @@ function toexpr(O, st)
     !iscall(O) && return O
     op = operation(O)
     expr′ = function_to_expr(op, O, st)
-    if expr′ !== nothing
-        return expr′
-    else
-        !iscall(O) && return O
-        args = arguments(O)
-        return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
-    end
-end
-
-function toexpr(O, st)
-    O = unwrap_const(O)
-    O = substitute_name(O, st)
-    if issym(O)
-        return nameof(O)
-    end
-
-    if _is_array_of_symbolics(O)
-        return issparse(O) ? toexpr(MakeSparseArray(O)) : toexpr(MakeArray(O, typeof(O)), st)
-    end
-    !iscall(O) && return O
-
-    # Apply mul5 transformation on IR before converting to expression
-    # O = mul5_cse(O, st)
-
-    op = operation(O)
-    @show op
-    @show arguments(O)
-    # @show map(c -> toexpr(c, st), arguments(O))
-    @show st
-    @show iscall(O)
-    expr′ = function_to_expr(op, O, st)
-    # expr′ = mul5(expr′)
     if expr′ !== nothing
         return expr′
     else
@@ -1168,11 +1130,9 @@ function mul5_cse2(expr, state::CSEState)
 
     # Try to apply optimization rules
     optimized = apply_optimization_rules(expr, state)
-    @warn optimized
     if optimized !== nothing
         return optimized
     end
-    @warn expr
 
     # If no optimization applied, return original expression
     return expr

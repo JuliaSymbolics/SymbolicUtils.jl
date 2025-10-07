@@ -3090,8 +3090,124 @@ end
     _getindex(SafeReal, arr, idxs...)
 end
 
-Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+
+struct StableIndex
+    idxs::SmallV{Int}
+end
+
+function StableIndex(idxs::AbstractVector{Int})
+    _idxs = SmallV{Int}()
+    append!(_idxs, idxs)
+    return StableIndex(_idxs)
+end
+
+function as_linear_idx(sh::ShapeVecT, sidxs::StableIndex)
+    linear_idx = 0
+    acc = 1
+    for i in eachindex(sh)
+        linear_idx += sidxs.idxs[i] * acc
+        acc *= length(sh[i])
+    end
+    return linear_idx
+end
+
+# To act as a function barrier
+function scalar_index(@nospecialize(val), idx::Int)
+    vec(val)[idx]
+end
+
+function Base.getindex(arr::BasicSymbolic{SymReal}, idxs::StableIndex)
+    _stable_getindex_1(arr, idxs)
+end
+function Base.getindex(arr::BasicSymbolic{SafeReal}, idxs::StableIndex)
+    _stable_getindex_2(arr, idxs)
+end
+
+@cache function _stable_getindex_1(arr::BasicSymbolic{SymReal}, sidxs::StableIndex)::BasicSymbolic{SymReal}
+    __stable_getindex(arr, sidxs)
+end
+@cache function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)::BasicSymbolic{SafeReal}
+    __stable_getindex(arr, sidxs)
+end
+
+function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex) where {T}
+    idxs = sidxs.idxs
+    isempty(idxs) && return arr
+    sh::ShapeVecT = shape(arr)
     @match arr begin
+        BSImpl.Const(; val) => return Const{T}(scalar_index(val, as_linear_idx(sh, sidxs)))
+        BSImpl.Term(; f, args) && if f === hvncat end => begin
+            return args[2 + as_linear_idx(sh, sidxs)]
+        end
+        BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => begin
+            return args[as_linear_idx(sh, sidxs)]
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            inner = args[1][sidxs]
+            return BSImpl.Term{T}(f, ArgsT{T}((inner,)); type = symtype(inner), shape = ShapeVecT())
+        end
+        BSImpl.Term(; f, args) && if f === getindex && all(isconst, Iterators.drop(args, 1)) && !any(x -> x isa BasicSymbolic{T}, idxs) end => begin
+            newargs = ArgsT{T}()
+            push!(newargs, args[1])
+            sh = shape(arr)
+            type = eltype(symtype(arr))::TypeT
+            newshape = ShapeVecT()
+            idxs_i = 1
+            for oldidx in Iterators.drop(args, 1)
+                oldidx_sh = shape(oldidx)
+                if !is_array_shape(oldidx_sh)
+                    push!(newargs, oldidx)
+                    continue
+                end
+                idx = idxs[idxs_i]
+                idxs_i += 1
+                # special case when `oldidx` is `Colon()`
+                if length(oldidx_sh) == 1 && oldidx_sh[1] == 1:0
+                    push!(newargs, Const{T}(idx))
+                else
+                    push!(newargs, Const{T}(unwrap_const(oldidx)[idx]))
+                end
+            end
+            @assert idxs_i == length(idxs) + 1
+            return BSImpl.Term{T}(f, newargs; type, shape = newshape)
+        end
+        _ => nothing
+    end
+    type = eltype(symtype(arr))::TypeT
+    newshape = ShapeVecT()
+    @match arr begin
+        BSImpl.ArrayOp(; output_idx, expr, ranges, reduce, term) => begin
+            subrules = Dict{BasicSymbolic{T}, Union{BasicSymbolic{T}, Int}}()
+            empty!(subrules)
+            idxsym_idx = 1
+            idxsym = idxs_for_arrayop(T)
+            for (i, (newidx, outidx)) in enumerate(zip(idxs, output_idx))
+                if outidx isa BasicSymbolic{T}
+                    if haskey(ranges, outidx)
+                        subrules[outidx] = ranges[outidx][newidx]
+                    else
+                        subrules[outidx] = newidx
+                    end
+                end
+            end
+            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+            result = substitute(new_expr, subrules; fold = Val{false}(), filterer = !isarrayop)
+            return result
+        end
+        _ => begin
+            args = ArgsT{T}((arr,))
+            for i in idxs
+                push!(args, Const{T}(i))
+            end
+            return BSImpl.Term{T}(getindex, args; type, shape = newshape)
+        end
+    end
+end
+
+Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+    isempty(idxs) && return arr
+    @match arr begin
+        BSImpl.Const(; val) => return Const{T}(val[idxs...])
         BSImpl.Term(; f) && if f === hvncat && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
             return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
@@ -3250,3 +3366,4 @@ end
 function Base.getindex(x::AbstractArray, i1::BasicSymbolic{T}, i2::BasicSymbolic{T}, idx::BasicSymbolic{T}, idxs...) where {T}
     getindex(Const{T}(x), i1, i2, idx, idxs...)
 end
+Base.to_index(x::BasicSymbolic) = unwrap_const(x)::Int

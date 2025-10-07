@@ -1782,7 +1782,7 @@ using Base: ImmutableDict
 Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
 
 assocmeta(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
-function assocmeta(d::Base.ImmutableDict, ctx, val)::ImmutableDict{DataType,Any}
+function assocmeta(d::Base.ImmutableDict{DataType, Any}, @nospecialize(ctx::DataType), @nospecialize(val))::ImmutableDict{DataType,Any}
     val = unwrap(val)
     # optimizations
     # If using upto 3 contexts, things stay compact
@@ -1826,8 +1826,9 @@ julia> getmetadata(x_with_meta, Float64)
 ```
 """
 function setmetadata(s::BasicSymbolic, @nospecialize(ctx::DataType), @nospecialize(val))
-    if s.metadata isa AbstractDict
-        @set s.metadata = assocmeta(s.metadata, ctx, val)
+    meta = metadata(s)
+    if meta isa Base.ImmutableDict{DataType, Any}
+        @set s.metadata = assocmeta(meta, ctx, val)
     else
         # fresh Dict
         @set s.metadata = Base.ImmutableDict{DataType, Any}(ctx, unwrap(val))

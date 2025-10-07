@@ -2353,7 +2353,7 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type) => begin
             coeff, rest = @match expr begin
                 BSImpl.Term(; f, args, type, shape) && if f === (*) end => begin
-                    if query!(isequal(idxs_for_arrayop(T)), args[1])
+                    if query(isequal(idxs_for_arrayop(T)), args[1])
                         one_of_vartype(T), expr
                     elseif length(args) == 2
                         args[1], args[2]

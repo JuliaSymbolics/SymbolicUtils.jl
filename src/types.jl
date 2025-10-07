@@ -1071,6 +1071,16 @@ _is_tuple_of_symbolics(O) = false
         end
         shape = ShapeVecT(axes(val))
         return BSImpl.Term{T}(hvncat, args; type = Array{type, ndims(val)}, shape, unsafe)
+    elseif val isa Tuple && _is_tuple_of_symbolics(val)
+        args = ArgsT{T}()
+        sizehint!(args, length(val))
+        for v in val
+            push!(args, BSImpl.Const{T}(v))
+        end
+        types = symtype.(val)
+        type = Tuple{types...}
+        shape = ShapeVecT((1:length(val),))
+        return BSImpl.Term{T}(tuple, args; type, shape, unsafe)
     else
         props = ordered_override_properties(BSImpl.Const)
         var = BSImpl.Const{T}(val, props...)

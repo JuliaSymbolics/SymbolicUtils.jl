@@ -537,6 +537,52 @@ function Base.eachindex(x::BasicSymbolic)
     end
     CartesianIndices(Tuple(sh))
 end
+
+struct StableIndices
+    sh::ShapeVecT
+end
+
+Base.length(x::StableIndices) = prod(length, x.sh; init = 1)
+Base.eltype(::Type{StableIndices}) = StableIndex
+
+function Base.iterate(x::StableIndices)
+    idx = SmallV{Int}()
+    resize!(idx, length(x.sh))
+    for i in eachindex(x.sh)
+        idx[i] = first(x.sh[i])
+    end
+    idx = StableIndex(idx)
+    return idx, idx
+end
+function Base.iterate(x::StableIndices, st::StableIndex)
+    idxs = st.idxs
+    buffer = copy(idxs)
+    i = 1
+    N = length(x.sh)
+    while i <= N
+        buffer[i] += 1
+        buffer[i] > last(x.sh[i]) || break
+        buffer[i] = first(x.sh[i])
+        i += 1
+    end
+    i <= N || return nothing
+    idxs = StableIndex(buffer)
+    return idxs, idxs
+end
+function Base.getindex(x::StableIndices, idx::Integer)
+    buffer = SmallV{Int}()
+    N = length(x.sh)
+    idx -= 1
+    for i in 1:N
+        push!(buffer, idx % length(x.sh[i]) + first(x.sh[i]))
+        idx ÷= length(x.sh[i])
+    end
+    return StableIndex(buffer)
+end
+
+function stable_eachindex(x::BasicSymbolic)
+    StableIndices(shape(x)::ShapeVecT)
+end
 function Base.collect(x::BasicSymbolic)
     scalarize(x, Val{true}())
 end
@@ -548,6 +594,7 @@ function Base.iterate(x::BasicSymbolic)
     return x[idx], (idxs, state)
 end
 function Base.iterate(x::BasicSymbolic, _state)
+    _state === nothing && return nothing
     idxs, state = _state
     idx, state = iterate(idxs, state)
     return x[idx], (idxs, state)

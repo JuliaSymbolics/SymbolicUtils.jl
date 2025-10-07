@@ -1183,3 +1183,17 @@ end
     @syms x::Real
     @test SymbolicUtils._iszero(imag(x))
 end
+
+@testset "`StableIndices`" begin
+    @syms x[1:3] y[-2:5, 3:7] z[-10:-4, 0:5, 1:2]
+    for v in [x, y, z]
+        idxs = SymbolicUtils.stable_eachindex(v)
+        els = [v[i] for i in idxs]
+        truth = vec(collect(v))
+        @test isequal(els, truth)
+
+        for i in 1:length(v)
+            @test Tuple(idxs[i]) == Tuple(CartesianIndices(Tuple(shape(v)))[i])
+        end
+    end
+end

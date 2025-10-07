@@ -12,8 +12,9 @@ import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
                       symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
-                      ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT,
+                      ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape
+using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
 ##== state management ==##
@@ -997,37 +998,28 @@ indextype(::AbstractSparseArray{Tv, Ti}) where {Tv, Ti} = Ti
 
 function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
     get!(state.visited, expr.id) do
-        iscall(expr) || return expr
-
-        op = operation(expr)
-        args = arguments(expr)
-        cse_inside_expr(expr, op, args...) || return expr
-        args = map(args) do arg
-            arg = unwrap_const(arg)
-            if arg isa Union{Tuple, AbstractArray} &&
-                (_is_array_of_symbolics(arg) || _is_tuple_of_symbolics(arg))
-                if arg isa Tuple
-                    new_arg = cse!(MakeTuple(arg), state)
-                    sym = newsym!(state, T, Tuple{symtype.(arg)...})
-                elseif issparse(arg)
-                    new_arg = cse!(MakeSparseArray(arg), state)
-                    sym = newsym!(state, T, AbstractSparseArray{symtype(eltype(arg)), indextype(arg), ndims(arg)})
-                else
-                    new_arg = cse!(MakeArray(arg, typeof(arg)), state)
-                    sym = newsym!(state, T, AbstractArray{symtype(eltype(arg)), ndims(arg)})
-                end
-                push!(state.sorted_exprs, sym ← new_arg)
-                state.visited[arg] = sym
+        @match expr begin
+            BSImpl.Const(;) => begin
+                new_expr = expr
+                sym = newsym!(state, T, symtype(new_expr))
+                push!(state.sorted_exprs, sym ← new_expr)
                 return sym
             end
-            return cse!(arg, state)
+            BSImpl.Sym(;) => return expr
+            _ => begin
+                op = operation(expr)
+                args = arguments(expr)
+                cse_inside_expr(expr, op, args...) || return expr
+                args = map(Base.Fix2(cse!, state), args)
+                # use `term` instead of `maketerm` because we only care about the operation being performed
+                # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
+                new_expr = Term{T}(operation(expr), args; type = symtype(expr))
+                sym = newsym!(state, T, symtype(new_expr))
+                push!(state.sorted_exprs, sym ← new_expr)
+                return sym
+            end
         end
-        # use `term` instead of `maketerm` because we only care about the operation being performed
-        # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-        new_expr = Term{T}(operation(expr), args; type = symtype(expr))
-        sym = newsym!(state, T, symtype(new_expr))
-        push!(state.sorted_exprs, sym ← new_expr)
-        return sym
+
     end
 end
 

@@ -288,15 +288,13 @@ scalarization_function(@nospecialize(_)) = _default_scalarize
 
 scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(map), typeof(mapreduce), typeof(broadcast), typeof(adjoint)}) = _default_scalarize_array
 
-const ScalarizeRetT{T} = Union{Array{BasicSymbolic{T}}, BasicSymbolic{T}}
-
 function _default_scalarize_array(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = arguments(x)
     if toplevel && f !== broadcast && f !== (*)
-        f(map(unwrap_const, args)...)::ScalarizeRetT{T}
+        f(map(unwrap_const, args)...)
     else
-        f(map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args)...)::ScalarizeRetT{T}
+        f(map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args)...)
     end
 end
 
@@ -304,52 +302,43 @@ function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
     @nospecialize f
 
     sh = shape(x)
-    is_array_shape(sh) && return map(Base.Fix1(getindex, x), eachindex(x))::Array{BasicSymbolic{T}}
+    is_array_shape(sh) && return [x[idx] for idx in eachindex(x)]
 
     args = arguments(x)
     if toplevel
-        f(map(unwrap_const, args)...)::ScalarizeRetT{T}
+        f(map(unwrap_const, args)...)
     else
-        f(map(unwrap_const ∘ scalarize, args)...)::ScalarizeRetT{T}
+        f(map(unwrap_const ∘ scalarize, args)...)
     end
 end
 
-function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}())::ScalarizeRetT{T} where {T, toplevel}
+function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T, toplevel}
     sh = shape(x)
     sh isa Unknown && return x
-    sh = sh::ShapeVecT
     @match x begin
-        BSImpl.Const(; val) => begin
-            is_array_shape(sh) || return x
-            return map(Const{T}, collect(val))::Array{BasicSymbolic{T}}
-        end
-        BSImpl.Sym(;) => begin
-            is_array_shape(sh) || return x
-            return map(Base.Fix1(getindex, x), eachindex(x))::Array{BasicSymbolic{T}}
-        end
+        BSImpl.Const(;) => return x
+        BSImpl.Sym(;) => is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
-            term === nothing || return scalarize(term, Val{toplevel}())::ScalarizeRetT{T}
-            subrules = Dict{BasicSymbolic{T}, Int}()
+            term === nothing || return scalarize(term, Val{toplevel}())
+            subrules = Dict()
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+            empty!(subrules)
             map(Iterators.product(sh...)) do idxs
                 for (i, ii) in enumerate(output_idx)
                     ii isa Int && continue
                     subrules[ii] = idxs[i]
                 end
                 if toplevel
-                    substitute(new_expr, subrules; fold = Val{true}())::BasicSymbolic{T}
+                    substitute(new_expr, subrules; fold = Val{true}())
                 else
-                    scalarize(substitute(new_expr, subrules; fold = Val{true}()))::ScalarizeRetT{T}
+                    scalarize(substitute(new_expr, subrules; fold = Val{true}()))
                 end
             end
         end
         _ => begin
             f = operation(x)
-            if f isa BasicSymbolic{T}
-                length(sh) == 0 && return x
-                return map(Base.Fix1(getindex, x), eachindex(x))::Array{BasicSymbolic{T}}
-            end
-            return scalarization_function(f)(f, x, Val{toplevel}())::ScalarizeRetT{T}
+            f isa BasicSymbolic{T} && return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]
+            return scalarization_function(f)(f, x, Val{toplevel}())
         end
     end
 end
@@ -362,10 +351,7 @@ scalarization_function(::typeof(inv)) = _inv_scal
 
 function _inv_scal(::typeof(inv), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     sh = shape(x)
-    if sh isa ShapeVecT && !isempty(sh)
-        return map(Base.Fix1(getindex, x), eachindex(x))::Array{BasicSymbolic{T}}
-    end
-    return x
+    (sh isa ShapeVecT && !isempty(sh)) ? [x[idx] for idx in eachindex(x)] : x
 end
 
 scalarization_function(::typeof(LinearAlgebra.det)) = _det_scal
@@ -376,28 +362,28 @@ function _det_scal(::typeof(LinearAlgebra.det), x::BasicSymbolic{T}, ::Val{tople
     sh isa Unknown && return collect(x)
     sh = sh::ShapeVecT
     isempty(sh) && return x
-    sarg = toplevel ? collect(arg) : scalarize(arg)::Array{BasicSymbolic{T}}
-    _det_scal(LinearAlgebra.det, T, sarg)::BasicSymbolic{T}
+    sarg = toplevel ? collect(arg) : scalarize(arg)
+    _det_scal(LinearAlgebra.det, T, sarg)
 end
 
 function _det_scal(::typeof(LinearAlgebra.det), ::Type{T}, x::AbstractMatrix) where {T}
     length(x) == 1 && return x[]
     add_buffer = BasicSymbolic{T}[]
     for i in 1:size(x, 1)
-        ex = _det_scal(LinearAlgebra.det, T, view(x, setdiff(axes(x, 1), i), 2:size(x, 2)))::BasicSymbolic{T}
+        ex = _det_scal(LinearAlgebra.det, T, view(x, setdiff(axes(x, 1), i), 2:size(x, 2)))
         push!(add_buffer, (isodd(i) ? 1 : -1) * x[i, 1] * ex)
     end
-    return add_worker(T, add_buffer)::BasicSymbolic{T}
+    return add_worker(T, add_buffer)
 end
 
 scalarization_function(::typeof(getindex)) = _getindex_scal
 
 function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
-    sh = shape(x)::ShapeVecT
+    sh = shape(x)
     if length(sh) > 0
-        return map(Base.Fix1(getindex, x), eachindex(x))::Array{BasicSymbolic{T}}
+        return [x[idx] for idx in eachindex(x)]
     end
     args = arguments(x)
     idxs = Iterators.map((-), Iterators.drop(args, 1), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
-    return getindex(scalarize(args[1])::ScalarizeRetT{T}, idxs...)::BasicSymbolic{T}
+    return getindex(scalarize(args[1]), idxs...)
 end

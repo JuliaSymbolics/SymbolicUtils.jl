@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT, ArgsT, isarrayop
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT, ArgsT, isarrayop, query
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
@@ -884,13 +884,13 @@ end
     @test unwrap_const(substitute(exp(a), Dict(a=>2); fold = Val(true))) ≈ exp(2)
 end
 
-@testset "occursin" begin
+@testset "query" begin
     @syms a b c
-    @test occursin(a, a + b)
-    @test !occursin(sin(a), a + b + c)
-    @test occursin(sin(a),  a * b + c + sin(a^2 * sin(a)))
-    @test occursin(0.01, 0.01*a)
-    @test !occursin(0.01, a * b * c)
+    @test query(isequal(a), a + b)
+    @test !query(isequal(sin(a)), a + b + c)
+    @test query(isequal(sin(a)),  a * b + c + sin(a^2 * sin(a)))
+    @test query(isequal(Const{SymReal}(0.01)), 0.01^a)
+    @test !query(isequal(Const{SymReal}(0.01)), a * b * c)
 end
 
 @testset "printing" begin

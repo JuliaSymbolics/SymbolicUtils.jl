@@ -10,8 +10,8 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 
     @test t isa Let
     @test length(t.pairs) == 5
-    @test occursin(t.pairs[3].lhs, t.pairs[5].rhs)
-    @test occursin(t.pairs[4].lhs, t.pairs[5].rhs)
+    @test SymbolicUtils.query(isequal(t.pairs[3].lhs), t.pairs[5].rhs)
+    @test SymbolicUtils.query(isequal(t.pairs[4].lhs), t.pairs[5].rhs)
 end
 
 @testset "DAG CSE" begin
@@ -61,7 +61,9 @@ end
     end
     ex = term(foo, [a^2 + b^2, b^2 + c], (a^2 + b^2, b^2 + c), c; type = Real)
     sorted_nodes = topological_sort(ex)
-    @test length(sorted_nodes) == 7
+    @test length(sorted_nodes) == 10
+    @test operation(sorted_nodes[8].rhs) === hvncat
+    @test operation(sorted_nodes[9].rhs) === tuple
     expr = quote
         a = 1
         b = 2

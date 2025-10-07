@@ -124,36 +124,11 @@ const EMPTY_DICT = Dict{Int, Int}()
     return substitute(expr, EMPTY_DICT; fold = Val{true}(), filterer)
 end
 
-"""
-    occursin(needle::BasicSymbolic, haystack::BasicSymbolic)
-
-Determine whether the second argument contains the first argument. Note that
-this function doesn't handle associativity, commutativity, or distributivity.
-"""
-Base.occursin(needle::BasicSymbolic, haystack::BasicSymbolic) = _occursin(needle, haystack)
-Base.occursin(needle, haystack::BasicSymbolic) = _occursin(needle, haystack)
-Base.occursin(needle::BasicSymbolic, haystack) = _occursin(needle, haystack)
-function _occursin(needle, haystack)
-    isequal(unwrap_const(needle), unwrap_const(haystack)) && return true
-    if iscall(haystack)
-        args = arguments(haystack)
-        for arg in args
-            arg = unwrap_const(arg)
-            if needle isa Integer || needle isa AbstractFloat
-                isequal(needle, arg) && return true
-            else
-               occursin(needle, arg) && return true
-            end
-        end
-    end
-    return false
-end
-
 function query!(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
     predicate(expr) && return true
     recurse(expr) || return default
 
-    @match expr begin
+    return @match expr begin
         BSImpl.Term(; f, args) => any(args) do arg
             query!(predicate, arg; recurse, default)
         end

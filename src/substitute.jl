@@ -124,23 +124,24 @@ const EMPTY_DICT = Dict{Int, Int}()
     return substitute(expr, EMPTY_DICT; fold = Val{true}(), filterer)
 end
 
-function query!(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
+function query(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
     predicate(expr) && return true
     recurse(expr) || return default
 
     return @match expr begin
         BSImpl.Term(; f, args) => any(args) do arg
-            query!(predicate, arg; recurse, default)
+            query(predicate, arg; recurse, default)
         end
         BSImpl.AddMul(; dict) => any(keys(dict)) do arg
-            query!(predicate, arg; recurse, default)
+            query(predicate, arg; recurse, default)
         end
-        BSImpl.Div(; num, den) => query!(predicate, num; recurse, default) || query!(predicate, den; recurse, default)
+        BSImpl.Div(; num, den) => query(predicate, num; recurse, default) || query(predicate, den; recurse, default)
         BSImpl.ArrayOp(; expr = inner_expr, term) => begin
-            query!(predicate, @something(term, inner_expr); recurse, default)
+            query(predicate, @something(term, inner_expr); recurse, default)
         end
     end
 end
+query(predicate::F, expr; kw...) where {F} = predicate(expr)
 
 search_variables!(buffer, expr; kw...) = nothing
 

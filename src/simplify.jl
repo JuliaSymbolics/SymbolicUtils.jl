@@ -39,7 +39,7 @@ Pass `simplify_fractions=false` to prevent this.
     end
 
     x = PassThrough(f)(x)
-    simplify_fractions && query!(isdiv, x) ?
+    simplify_fractions && query(isdiv, x) ?
         SymbolicUtils.simplify_fractions(x) : x
 end
 

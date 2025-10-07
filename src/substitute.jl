@@ -239,7 +239,7 @@ const ARRAYOP_REDUCE_SAFEREAL = TaskLocalValue{ArrayOpReduceCache{SafeReal}}(Arr
 arrayop_reduce_cache(::Type{SymReal}) = empty!(ARRAYOP_REDUCE_SYMREAL[])
 arrayop_reduce_cache(::Type{SafeReal}) = empty!(ARRAYOP_REDUCE_SAFEREAL[])
 
-function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce) where {T}
+function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, @nospecialize(reduce)) where {T}
     cache = arrayop_reduce_cache(T)
     new_ranges = cache.new_ranges
     subrules = cache.subrules
@@ -256,20 +256,22 @@ function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T},
         for (idx, ii) in zip(iidxs, collapsed)
             subrules[ii] = idx
         end
-        return substitute(new_expr, subrules; fold = Val{false}())
-    end
+        return substitute(new_expr, subrules; fold = Val{false}())::BasicSymbolic{T}
+    end::BasicSymbolic{T}
 end
 @cache function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges::RangesT{SymReal}, reduce)::BasicSymbolic{SymReal}
-    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+    @nospecialize reduce
+    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)::BasicSymbolic{SymReal}
 end
 @cache function reduce_eliminated_idxs_2(expr::BasicSymbolic{SafeReal}, output_idx::OutIdxT{SafeReal}, ranges::RangesT{SafeReal}, reduce)::BasicSymbolic{SafeReal}
-    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+    @nospecialize reduce
+    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)::BasicSymbolic{SafeReal}
 end
-function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, reduce) where {T}
+function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, @nospecialize(reduce)) where {T}
     if T === SymReal
-        return reduce_eliminated_idxs_1(expr, output_idx, ranges, reduce)
+        return reduce_eliminated_idxs_1(expr, output_idx, ranges, reduce)::BasicSymbolic{T}
     elseif T === SafeReal
-        return reduce_eliminated_idxs_2(expr, output_idx, ranges, reduce)
+        return reduce_eliminated_idxs_2(expr, output_idx, ranges, reduce)::BasicSymbolic{T}
     end
     _unreachable()
 end

@@ -30,7 +30,7 @@ end
 
 function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     result = unwrap(get(s.dict, ex, nothing))
-    result === nothing || return result
+    result === nothing || return Const{T}(result)
     iscall(ex) || return ex
     s.filter(ex) || return ex
     op = operation(ex)
@@ -59,9 +59,9 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     end
     if dirty || can_fold
         if Fold
-            return combine_fold(T, _op, newargs, metadata(ex), can_fold)
+            return combine_fold(T, _op, newargs, metadata(ex), can_fold)::BasicSymbolic{T}
         else
-            return maketerm(BasicSymbolic{T}, _op, newargs, metadata(ex))
+            return maketerm(BasicSymbolic{T}, _op, newargs, metadata(ex))::BasicSymbolic{T}
         end
     end
     return ex

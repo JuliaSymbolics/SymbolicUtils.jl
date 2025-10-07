@@ -29,12 +29,14 @@ import TaskLocalValues: TaskLocalValue
 using WeakCacheSets: WeakCacheSet, getkey!
 using Base: RefValue
 import MacroTools
-import MultivariatePolynomials as MP
-import DynamicPolynomials as DP
-import MutableArithmetics as MA
+import PrecompileTools
+PrecompileTools.@recompile_invalidations begin
+    import MultivariatePolynomials as MP
+    import DynamicPolynomials as DP
+    import MutableArithmetics as MA
+end
 import LinearAlgebra
 import SparseArrays: SparseMatrixCSC, findnz, sparse
-import PrecompileTools
 
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)

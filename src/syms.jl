@@ -36,7 +36,11 @@ name = ident |
 # a variable in the current scope of type `Symbol` containing the name of this variable.
 # Note that in this case the created symbolic variable will be bound to a randomized
 # Julia identifier.
-       "\$" ident
+       "\$" ident |
+# Or it can be of the form `Foo.Bar.baz` referencing a value accessible as `Foo.Bar.baz`
+# in the current scope.
+       getproperty_literal
+getproperty_literal = ident "." getproperty_literal | ident "." ident
 # The `suffix` can be empty (no suffix) which defaults the type to `Number`
 suffix = "" |
 # or it can be a type annotation (setting the type of the prefix). The shape of the result
@@ -175,6 +179,7 @@ this function.
 """
 Base.@nospecializeinfer function parse_variable(x; default_type = Number)::ParseDictT
     @nospecialize x
+    x = unwrap(x)
     if x isa Symbol
         # just a symbol
         type = if x == :..
@@ -183,6 +188,14 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
             default_type
         end
         return ParseDictT(:name => x, :type => type, :shape => ShapeVecT(), :isruntime => false)
+    elseif Meta.isexpr(x, :.)
+        # just a symbol
+        type = if x == :..
+            Vararg{Any}
+        else
+            default_type
+        end
+        return ParseDictT(:name => x, :type => type, :shape => ShapeVecT(), :isruntime => true)
     elseif Meta.isexpr(x, :$)
         return ParseDictT(:name => x.args[1], :type => default_type, :shape => ShapeVecT(), :isruntime => true)
     elseif Meta.isexpr(x, :call)
@@ -248,6 +261,27 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
         result[:name] = x
         result[:type] = :($symtype.($(x.args[1]))...)
         result[:shape] = nothing
+        result[:isruntime] = false
+        return result
+    elseif x isa BasicSymbolic{SymReal}
+        result = ParseDictT()
+        result[:name] = SymbolicIndexingInterface.getname(x)
+        result[:type] = symtype(x)
+        result[:shape] = (@__MODULE__).shape(x)
+        result[:isruntime] = false
+        return result
+    elseif x isa BasicSymbolic{SafeReal}
+        result = ParseDictT()
+        result[:name] = SymbolicIndexingInterface.getname(x)
+        result[:type] = symtype(x)
+        result[:shape] = (@__MODULE__).shape(x)
+        result[:isruntime] = false
+        return result
+    elseif x isa BasicSymbolic{TreeReal}
+        result = ParseDictT()
+        result[:name] = SymbolicIndexingInterface.getname(x)
+        result[:type] = symtype(x)
+        result[:shape] = (@__MODULE__).shape(x)
         result[:isruntime] = false
         return result
     else

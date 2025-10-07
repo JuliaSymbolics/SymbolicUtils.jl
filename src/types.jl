@@ -3041,8 +3041,12 @@ end
 
 promote_symtype(::typeof(getindex), ::Type{Symbol}, Ts...) = Any
 
-function promote_symtype(::typeof(getindex), ::Type{T}, Ts...) where {N, eT, T <: AbstractArray{eT, N}}
+@noinline function _throw_cartesian_indexing()
     throw(ArgumentError("Symbolic `getindex` requires cartesian indexing."))
+end
+
+function promote_symtype(::typeof(getindex), ::Type{T}, Ts...) where {N, eT, T <: AbstractArray{eT, N}}
+    _throw_cartesian_indexing()
 end
 
 @noinline function throw_no_unknown_colon()
@@ -3215,9 +3219,8 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex) where {T}
 end
 
 Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
-    isempty(idxs) && return arr
     @match arr begin
-        BSImpl.Const(; val) => return Const{T}(val[idxs...])
+        BSImpl.Const(; val) && if all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => return Const{T}(val[unwrap_const.(idxs)...])
         BSImpl.Term(; f) && if f === hvncat && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
             return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
@@ -3348,8 +3351,10 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
                 new_expr = BSImpl.Term{T}(getindex, expr_args; type = eltype(type), shape = ShapeVecT())
                 new_term = BSImpl.Term{T}(getindex, term_args; type, shape = newshape)
                 return BSImpl.ArrayOp{T}(new_output_idx, new_expr, +, new_term, ranges; type, shape = newshape)
-            else
+            elseif is_array_shape(sh)
                 return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
+            else
+                return arr
             end
         end
     end

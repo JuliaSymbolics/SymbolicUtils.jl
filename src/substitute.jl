@@ -34,7 +34,10 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     iscall(ex) || return ex
     s.filter(ex) || return ex
     op = operation(ex)
-    _op = s(op)
+    # We need to `unwrap_const` because `op` could be a symbolic function with
+    # a substitution in `s.dict`, in which case this method will be called recursively
+    # and return a symbolic result.
+    _op = unwrap_const(s(op))
 
     args = arguments(ex)
     dirty = _op !== op

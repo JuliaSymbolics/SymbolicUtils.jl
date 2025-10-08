@@ -36,5 +36,6 @@ using SnoopCompile
 ]
     @test isempty(staleinstances(inf))
     @test isempty(children(inf))
+    print_tree(inf; maxdepth = 100)
 end
 

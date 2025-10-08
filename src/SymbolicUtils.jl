@@ -10,10 +10,8 @@ export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 using Moshi.Data: @data
 import Moshi.Data as MData
 using Moshi.Match: @match
-using ReadOnlyArrays
 using EnumX: @enumx
 using TermInterface
-using DataStructures
 using Setfield
 import Setfield: PropertyLens
 using SymbolicIndexingInterface
@@ -34,9 +32,11 @@ PrecompileTools.@recompile_invalidations begin
     import MultivariatePolynomials as MP
     import DynamicPolynomials as DP
     import MutableArithmetics as MA
+    import SparseArrays: SparseMatrixCSC, findnz, sparse
+    using DataStructures
+    using ReadOnlyArrays
 end
 import LinearAlgebra
-import SparseArrays: SparseMatrixCSC, findnz, sparse
 
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)
@@ -116,9 +116,10 @@ export @arrayop
 include("arrayop.jl")
 
 # Methods on symbolic objects
+PrecompileTools.@recompile_invalidations begin
 using SpecialFunctions, NaNMath
 include("methods.jl")
-
+end
 # LinkedList, simplification utilities
 include("utils.jl")
 
@@ -187,8 +188,8 @@ PrecompileTools.@setup_workload begin
         # Running `fold = Val(true)` invalidates the precompiled statements
         # for `fold = Val(false)` and itself doesn't precompile anyway.
         substitute(ex, rules1)
-        substitute(ex, rules1; fold = fold1)
-        substitute(ex, rules2; fold = fold1)
+        # substitute(ex, rules1; fold = fold1)
+        # substitute(ex, rules2; fold = fold1)
         # substitute(ex, rules2)
         # substitute(ex, rules1; fold = fold2)
         # substitute(ex, rules2; fold = fold2)

@@ -1170,7 +1170,7 @@ struct Mul{T} end
 struct Div{T} end
 struct ArrayOp{T} end
 
-@inline Const{T}(val; kw...) where {T} = BSImpl.Const{T}(val; kw...)
+@inline Const{T}(@nospecialize(val); unsafe = false) where {T} = BSImpl.Const{T}(val; unsafe)
 
 @inline Sym{T}(name; kw...) where {T} = BSImpl.Sym{T}(name; kw...)
 

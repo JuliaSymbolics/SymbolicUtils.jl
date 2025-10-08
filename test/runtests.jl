@@ -4,7 +4,11 @@ using Pkg, Test, SafeTestsets
     if haskey(ENV, "SU_BENCHMARK_ONLY")
         @safetestset "Benchmark" begin include("benchmark.jl") end
     else
-        @safetestset "Precompilation" begin include("precompilation.jl") end
+        if VERSION < v"1.12"
+            # as of this comment, `@snoop_inference` on 1.12 has a tendency to never
+            # end. I have kept a REPL going for 24 hours.
+            @safetestset "Precompilation" begin include("precompilation.jl") end
+        end
         @safetestset "Basics" begin include("basics.jl") end
         @safetestset "Basics" begin include("arrayop.jl") end
         @safetestset "Order" begin include("order.jl") end

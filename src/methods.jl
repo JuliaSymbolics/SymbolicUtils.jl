@@ -146,6 +146,12 @@ for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
     @eval promote_symtype(::$(typeof(f)),
                    ::Type{T},
                    ::Type{S}) where {T <: Integer, eS, S <: Complex{Rational{eS}}} = Complex{Real}
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{BigInt}) where {eT, T <: Complex{Rational{eT}}} = Complex{Real}
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigInt},
+                   ::Type{S}) where {eS, S <: Complex{Rational{eS}}} = Complex{Real}
 end
 
 for f in [/, \]

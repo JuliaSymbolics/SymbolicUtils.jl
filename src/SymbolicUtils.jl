@@ -179,6 +179,7 @@ PrecompileTools.@setup_workload begin
         symtype(y)
         f(x)
         (5x / 5)
+        Const{SymReal}(x; unsafe=true)
         show(devnull, x ^ 2 + y * x + y / 3x)
         expand((x + y) ^ 2)
         simplify(x ^ (1//2) + (sin(x) ^ 2 + cos(x) ^ 2) + 2(x + y) - x - y)

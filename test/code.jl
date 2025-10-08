@@ -241,12 +241,12 @@ nanmath_st.rewrites[:nanmath] = true
         @syms a b
 
         f = eval(toexpr(Func([a+b], [], a+b)))
-        @test f(1) == 1
-        @test f(2) == 2
+        @test @invokelatest(f(1)) == 1
+        @test @invokelatest(f(2)) == 2
 
         f = eval(toexpr(Func([a, b], [], sqrt(a - b)), nanmath_st))
-        @test isnan(f(0, 10))
-        @test f(10, 2) ≈ sqrt(8)
+        @test isnan(@invokelatest f(0, 10))
+        @test @invokelatest(f(10, 2)) ≈ sqrt(8)
     end
 
     let
@@ -266,7 +266,7 @@ nanmath_st.rewrites[:nanmath] = true
 
         t = term(sum, [a, b, a + b, 3a + 2b, sqrt(b)]; type = Number)
         f = eval(toexpr(Func([a, b], [], t)))
-        @test f(1.0, 2.0) ≈ 13.0 + sqrt(2)
+        @test @invokelatest(f(1.0, 2.0)) ≈ 13.0 + sqrt(2)
     end
 end
 

@@ -96,6 +96,19 @@ function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta::Me
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+The default filter function used by [`substitute`](@ref) to determine whether to substitute
+within an expression. Returns `false` for expressions that are `Term`s with an `Operator` as
+the operation (preventing substitution within operator calls), and `true` otherwise.
+
+# Arguments
+- `ex::BasicSymbolic{T}`: The expression to check.
+
+# Returns
+- `Bool`: `false` if the expression should not be substituted into, `true` otherwise.
+"""
 @inline function default_substitute_filter(ex::BasicSymbolic{T}) where {T}
     @match ex begin
         BSImpl.Term(; f) && if f isa Operator end => false
@@ -128,6 +141,25 @@ const EMPTY_DICT = Dict{Int, Int}()
     return substitute(expr, EMPTY_DICT; fold = Val{true}(), filterer)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Recursively search an expression tree to determine if any subexpression satisfies a given
+predicate. This function traverses the expression tree and returns `true` if the predicate
+returns `true` for any node in the tree.
+
+# Arguments
+- `predicate::F`: A function that takes an expression and returns a `Bool`.
+- `expr::BasicSymbolic`: The expression to search.
+
+# Keyword Arguments
+- `recurse::G=iscall`: A function determining whether to recurse into a subexpression.
+- `default::Bool=false`: The default value to return if the expression is not a call or
+  recursion is prevented.
+
+# Returns
+- `Bool`: `true` if any subexpression satisfies the predicate, `false` otherwise.
+"""
 function query(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
     predicate(expr) && return true
     iscall(expr) || return default
@@ -283,6 +315,25 @@ end
     @nospecialize reduce
     _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)::BasicSymbolic{SafeReal}
 end
+
+"""
+    $TYPEDSIGNATURES
+
+Reduce (collapse) all indices in an `ArrayOp` expression that are not present in the output
+index list. This function performs a reduction operation (like summation) over the eliminated
+indices by substituting concrete values for each eliminated index and combining the results
+using the provided reduction function.
+
+# Arguments
+- `expr::BasicSymbolic{T}`: The expression containing indices to be reduced.
+- `output_idx::OutIdxT{T}`: The indices that should remain in the output (not reduced).
+- `ranges::RangesT{T}`: A dictionary mapping indices to their ranges.
+- `reduce`: The reduction function to apply (e.g., `+` for summation).
+
+# Returns
+- `BasicSymbolic{T}`: The expression with eliminated indices reduced according to the
+  reduction function.
+"""
 function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, @nospecialize(reduce)) where {T}
     if T === SymReal
         return reduce_eliminated_idxs_1(expr, output_idx, ranges, reduce)::BasicSymbolic{T}
@@ -293,11 +344,22 @@ function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, 
 end
 
 """
-    $(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
 Given a function `f`, return a function that will scalarize an expression with `f` as the
 head. The returned function is passed `f`, the expression with `f` as the head, and
 `Val(true)` or `Val(false)` indicating whether to recursively scalarize or not.
+
+This function provides a dispatch mechanism for customizing scalarization behavior based on
+the operation type. Different operations may require different scalarization strategies
+(e.g., array operations, determinants, indexing operations).
+
+# Arguments
+- `f`: The function/operation to get a scalarization function for.
+
+# Returns
+- A function that takes `(f, x::BasicSymbolic{T}, ::Val{toplevel})` and returns the
+  scalarized form of `x`.
 """
 scalarization_function(@nospecialize(_)) = _default_scalarize
 
@@ -327,6 +389,27 @@ function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Convert a symbolic expression with array operations into a fully scalarized form. This function
+expands array operations into element-wise operations, converting symbolic array expressions
+into arrays of scalar symbolic expressions.
+
+For `ArrayOp` expressions, this function reduces eliminated indices and substitutes concrete
+values for output indices to generate scalar expressions for each array element.
+
+# Arguments
+- `x::BasicSymbolic{T}`: The symbolic expression to scalarize.
+- `::Val{toplevel}=Val{false}()`: Whether to evaluate constant expressions at the top level.
+  When `true`, constant subexpressions are evaluated; when `false`, they are recursively
+  scalarized.
+
+# Returns
+- The scalarized expression. For array-shaped expressions, returns an array of scalar
+  expressions. For scalar expressions, returns the expression unchanged or with recursively
+  scalarized subexpressions.
+"""
 function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T, toplevel}
     sh = shape(x)
     sh isa Unknown && return x

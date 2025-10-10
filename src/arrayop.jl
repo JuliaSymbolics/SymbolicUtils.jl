@@ -155,6 +155,23 @@ macro arrayop(output_idx, expr, options...)
     end) |> esc
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Recursively find all index symbols used in array indexing operations within an expression.
+
+# Arguments
+- `expr`: The expression to search for index variables
+- `idxs`: Accumulator array for found index symbols (defaults to empty array)
+
+# Returns
+- Array of symbols that are used as indices in array references or `getindex` calls
+
+# Details
+This function traverses an expression tree looking for array indexing patterns (`:ref` or
+`:getindex` calls) and collects all symbols used as indices. The function recursively
+processes nested expressions to find all index variables used throughout the expression.
+"""
 function find_indices(expr, idxs=[])
     !(expr isa Expr) && return idxs
     if expr.head == :ref
@@ -167,6 +184,23 @@ function find_indices(expr, idxs=[])
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Find a reference variable in an expression to determine the variant type for array operations.
+
+# Arguments
+- `expr`: The expression to search for a variable reference
+
+# Returns
+- The first array variable found in the expression, or `nothing` if none exists
+
+# Details
+This function searches for the first array variable used in indexing operations within an
+expression. It returns the array being indexed (not the indices themselves). The found
+variable is used to determine the symbolic type (e.g., `SymReal`, `SafeReal`, `TreeReal`)
+for the array operation being constructed.
+"""
 function find_vartype_reference(expr)
     !(expr isa Expr) && return nothing
     if expr.head == :ref

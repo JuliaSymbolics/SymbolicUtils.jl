@@ -538,7 +538,44 @@ function Base.eachindex(x::BasicSymbolic)
     CartesianIndices(Tuple(sh))
 end
 
+"""
+    $TYPEDEF
+
+An iterator that produces [`StableIndex`](@ref) values representing all possible
+multi-dimensional indices for a given shape in a type-stable, allocation-efficient manner.
+
+This type is used to iterate over multi-dimensional index spaces where each
+dimension can have its own range (stored in `sh`). The iterator produces all
+combinations of indices in column-major order, similar to `CartesianIndices`,
+but with better type stability and allocation characteristics.
+
+This is similar to `CartesianIndices` for symbolic arrays, but avoids type-instability due
+to the type parameters of `CartesianIndices` being uninferrable. Note that iterator
+iterates over multidimensional indices, but is not a multidimensional iterator. In other
+words, `collect`ing this iterator will return a vector regardless of the number of
+dimensions it iterates over.
+
+# Fields
+$TYPEDFIELDS
+
+# Examples
+```julia
+sh = ShapeVecT([1:2, 1:3])
+indices = StableIndices(sh)
+for idx in indices
+    # idx is a StableIndex with values like [1,1], [1,2], [1,3], [2,1], [2,2], [2,3]
+end
+```
+
+# See also
+- [`StableIndex`](@ref): The index type produced by this iterator.
+- [`stable_eachindex`](@ref): Convenience function that returns a `StableIndices` iterator for a symbolic array.
+"""
 struct StableIndices
+    """
+    A small vector of `UnitRange{Int}` values, one for each dimension, defining the range
+    of valid indices for that dimension.
+    """
     sh::ShapeVecT
 end
 
@@ -580,6 +617,54 @@ function Base.getindex(x::StableIndices, idx::Integer)
     return StableIndex(buffer)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Returns a type-stable iterator over all indices of a symbolic array `x`.
+
+This function provides an efficient, allocation-friendly way to iterate over
+multi-dimensional symbolic arrays. Unlike `Base.eachindex`, which returns
+`CartesianIndices` with type parameters that may be uninferrable for symbolic
+arrays, `stable_eachindex` returns a [`StableIndices`](@ref) iterator that
+produces [`StableIndex`](@ref) values in a fully type-stable manner.
+
+Note that the returned iterator does not match the shape of `x`. In other
+words, `collect(stable_eachindex(x))` will be a vector regardless of the shape
+of `x`.
+
+# Arguments
+- `x::BasicSymbolic`: A symbolic array expression with a known concrete shape.
+
+# Returns
+- `StableIndices`: An iterator that yields `StableIndex` values for each position in the array.
+
+# Throws
+- This function assumes `x` has a concrete shape (i.e., `shape(x)` is a `ShapeVecT`,
+  not `Unknown`). If the shape is unknown, it will error.
+
+# Examples
+```julia
+using SymbolicUtils
+
+# Create a symbolic 2×3 matrix
+@variables x[1:2, 1:3]
+
+# Iterate over all indices in a type-stable manner
+for idx in stable_eachindex(x)
+    println("Index: ", idx, " -> Value: ", x[idx])
+end
+
+# Compare with regular eachindex
+for idx in eachindex(x)  # Returns CartesianIndices
+    println("Index: ", idx, " -> Value: ", x[idx])
+end
+```
+
+# See also
+- [`StableIndices`](@ref): The iterator type returned by this function
+- [`StableIndex`](@ref): The index type produced by `StableIndices`
+- `Base.eachindex`: The standard Julia function for iterating over array indices
+"""
 function stable_eachindex(x::BasicSymbolic)
     StableIndices(shape(x)::ShapeVecT)
 end

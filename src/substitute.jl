@@ -29,10 +29,10 @@ function (s::Substituter)(ex::SparseMatrixCSC)
 end
 
 function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
+    s.filter(ex) || return ex
     result = unwrap(get(s.dict, ex, nothing))
     result === nothing || return Const{T}(result)
     iscall(ex) || return ex
-    s.filter(ex) || return ex
     op = operation(ex)
     # We need to `unwrap_const` because `op` could be a symbolic function with
     # a substitution in `s.dict`, in which case this method will be called recursively

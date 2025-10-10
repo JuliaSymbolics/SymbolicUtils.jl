@@ -129,6 +129,7 @@ end
 
 function query(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
     predicate(expr) && return true
+    iscall(expr) || return default
     recurse(expr) || return default
 
     return @match expr begin

@@ -3104,7 +3104,6 @@ end
     _getindex(SafeReal, arr, idxs...)
 end
 
-
 struct StableIndex
     idxs::SmallV{Int}
 end
@@ -3114,6 +3113,11 @@ function StableIndex(idxs::AbstractVector{Int})
     append!(_idxs, idxs)
     return StableIndex(_idxs)
 end
+
+Base.getindex(x::StableIndex, i::Int) = x.idxs[i]
+Base.length(x::StableIndex) = length(x.idxs)
+Base.iterate(x::StableIndex, args...) = iterate(x.idxs, args...)
+Base.eltype(::Type{StableIndex}) = Int
 
 function as_linear_idx(sh::ShapeVecT, sidxs::StableIndex)
     linear_idx = 0

@@ -543,7 +543,7 @@ struct StableIndices
 end
 
 Base.length(x::StableIndices) = prod(length, x.sh; init = 1)
-Base.eltype(x::StableIndices) = StableIndex
+Base.eltype(::Type{StableIndices}) = StableIndex
 
 function Base.iterate(x::StableIndices)
     idx = SmallV{Int}()
@@ -568,6 +568,16 @@ function Base.iterate(x::StableIndices, st::StableIndex)
     i <= N || return nothing
     idxs = StableIndex(buffer)
     return idxs, idxs
+end
+function Base.getindex(x::StableIndices, idx::Integer)
+    buffer = SmallV{Int}()
+    N = length(x.sh)
+    idx -= 1
+    for i in 1:N
+        push!(buffer, idx % length(x.sh[i]) + first(x.sh[i]))
+        idx ÷= length(x.sh[i])
+    end
+    return StableIndex(buffer)
 end
 
 function stable_eachindex(x::BasicSymbolic)

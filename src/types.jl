@@ -41,6 +41,14 @@ const TypeT = Union{DataType, UnionAll, Union}
 const MonomialT = DP.Monomial{PolyVarOrder, MonomialOrder}
 const MonomialVecT = DP.MonomialVector{PolyVarOrder, MonomialOrder}
 
+"""
+    $TYPEDSIGNATURES
+
+Create a zero polynomial with empty monomial vector.
+
+# Returns
+- A `PolynomialT` representing the zero polynomial
+"""
 function zeropoly()
     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}()
     PolynomialT(PolyCoeffT[], mv)
@@ -537,7 +545,17 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
     end
 end
 
+"""
+    $TYPEDSIGNATURES
 
+Check if a `BasicSymbolic` is an expression (not a `Sym` or `Const`).
+
+# Arguments
+- `s`: A `BasicSymbolic` value to check.
+
+# Returns
+`true` if `s` is a compound expression.
+"""
 function isexpr(s::BSImpl.Type)
     !MData.isa_variant(s, BSImpl.Sym) && !MData.isa_variant(s, BSImpl.Const)
 end
@@ -573,14 +591,127 @@ See also: [`operation`](@ref), [`arguments`](@ref)
 """
 iscall(s::BSImpl.Type) = isexpr(s)
 
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is a `Const` variant of `BasicSymbolic`.
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if `Const`, for others returns false)
+
+# Returns
+- `true` if `x` is a `BasicSymbolic` with `Const` variant, `false` otherwise
+"""
 isconst(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Const)
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is a `Sym` variant of `BasicSymbolic`.
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if `Sym`, for others returns false)
+
+# Returns
+- `true` if `x` is a `BasicSymbolic` with `Sym` variant, `false` otherwise
+"""
 issym(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Sym)
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is a `Term` variant of `BasicSymbolic`.
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if `Term`, for others returns false)
+
+# Returns
+- `true` if `x` is a `BasicSymbolic` with `Term` variant, `false` otherwise
+"""
 isterm(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Term)
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is an `AddMul` variant of `BasicSymbolic`.
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if `AddMul`, for others returns false)
+
+# Returns
+- `true` if `x` is a `BasicSymbolic` with `AddMul` variant, `false` otherwise
+"""
 isaddmul(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.AddMul)
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is an addition (`AddMul` with ADD variant).
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if addition, for others returns false)
+
+# Returns
+- `true` if `x` is an `AddMul` with `ADD` variant, `false` otherwise
+"""
 isadd(x::BSImpl.Type) = isaddmul(x) && MData.variant_getfield(x, BSImpl.AddMul, :variant) == AddMulVariant.ADD
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is a multiplication (`AddMul` with MUL variant).
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if multiplication, for others returns false)
+
+# Returns
+- `true` if `x` is an `AddMul` with `MUL` variant, `false` otherwise
+"""
 ismul(x::BSImpl.Type) = isaddmul(x) && MData.variant_getfield(x, BSImpl.AddMul, :variant) == AddMulVariant.MUL
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is a `Div` variant of `BasicSymbolic`.
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if `Div`, for others returns false)
+
+# Returns
+- `true` if `x` is a `BasicSymbolic` with `Div` variant, `false` otherwise
+"""
 isdiv(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Div)
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is a power expression (`Term` with `^` operation).
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if power, for others returns false)
+
+# Returns
+- `true` if `x` is a `Term` with exponentiation operation, `false` otherwise
+
+# Details
+Power expressions are `Term` variants where the operation is `^` (6 uses).
+"""
 ispow(x::BSImpl.Type) = isterm(x) && operation(x) === (^)
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is an `ArrayOp` variant of `BasicSymbolic`.
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if `ArrayOp`, for others returns false).
+
+# Returns
+- `true` if `x` is a `BasicSymbolic` with `ArrayOp` variant, `false` otherwise.
+
+# Details
+Array operations represent vectorized computations created by the `@arrayop` macro.
+"""
 isarrayop(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.ArrayOp)
 
 for fname in [:isconst, :issym, :isterm, :isaddmul, :isadd, :ismul, :isdiv, :ispow, :isarrayop]
@@ -890,6 +1021,17 @@ const CONST_ONE_SYMREAL = hashcons(BSImpl.Const{SymReal}(1, 0, nothing))
 const CONST_ONE_SAFEREAL = hashcons(BSImpl.Const{SafeReal}(1, 0, nothing))
 const CONST_ONE_TREEREAL = hashcons(BSImpl.Const{TreeReal}(1, 0, nothing))
 
+"""
+    $TYPEDSIGNATURES
+
+Get the default zero constant for a given `BasicSymbolic` variant type.
+
+# Arguments
+- Type parameter: `BasicSymbolic{SymReal}`, `BasicSymbolic{SafeReal}`, or `BasicSymbolic{TreeReal}`
+
+# Returns
+- A `Const` variant representing zero with the appropriate variant type
+"""
 @inline defaultval(::Type{BasicSymbolic{SymReal}}) =  CONST_ZERO_SYMREAL
 @inline defaultval(::Type{BasicSymbolic{SafeReal}}) = CONST_ZERO_SAFEREAL
 @inline defaultval(::Type{BasicSymbolic{TreeReal}}) = CONST_ZERO_TREEREAL
@@ -911,6 +1053,23 @@ Return a `Const` representing `1` with the provided `vartype`.
 @inline one_of_vartype(::Type{SafeReal}) = CONST_ONE_SAFEREAL
 @inline one_of_vartype(::Type{TreeReal}) = CONST_ONE_TREEREAL
 
+"""
+    $TYPEDSIGNATURES
+
+Extract the numeric coefficient from a multiplication expression.
+
+# Arguments
+- `x`: A symbolic expression that must be a multiplication
+
+# Returns
+- The numeric coefficient of the multiplication
+
+# Details
+This function extracts the leading numeric coefficient from a multiplication expression.
+For `Term` variants, it recursively searches for nested multiplications. For `AddMul`
+variants with `MUL` operation, it returns the stored coefficient. Throws an error if
+the input is not a multiplication expression.
+"""
 function get_mul_coefficient(x)
     iscall(x) && operation(x) === (*) || throw(ArgumentError("$x is not a multiplication"))
     @match x begin
@@ -925,6 +1084,19 @@ function get_mul_coefficient(x)
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Convert various metadata inputs into standardized `ImmutableDict` format.
+
+# Arguments
+- `x`: Metadata input (can be `MetadataT`, `Nothing`, or an iterable of key-value pairs)
+
+# Returns
+- `Nothing` if input is `Nothing`
+- The input unchanged if already in `MetadataT` format
+- A new `ImmutableDict{DataType, Any}` constructed from the key-value pairs otherwise
+"""
 parse_metadata(x::MetadataT) = x
 parse_metadata(::Nothing) = nothing
 function parse_metadata(x)
@@ -952,6 +1124,24 @@ function maybe_integer(x)
     return (x isa Rational && isone(x.den)) ? x.num : x
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Convert argument tuples or vectors into standardized `ArgsT` format for a variant type.
+
+# Arguments
+- `T`: The `SymVariant` type (`SymReal`, `SafeReal`, or `TreeReal`)
+- `args`: Tuple or vector of arguments to convert
+
+# Returns
+- An `ArgsT{T}` containing the arguments, with non-`BasicSymbolic` values wrapped in `Const{T}`
+
+# Details
+This function normalizes arguments for symbolic operations. If arguments are already in
+`ArgsT{T}` format, returns them unchanged. For `ROArgsT{T}`, extracts the parent. Otherwise,
+creates a new `ArgsT{T}` and wraps each non-symbolic argument in a `Const{T}` variant. This
+ensures all arguments to symbolic operations are properly typed `BasicSymbolic` objects.
+"""
 function parse_args(::Type{T}, args::Union{Tuple, AbstractVector}) where {T <: SymVariant}
     args isa ROArgsT{T} && return parent(args)::ArgsT{T}
     args isa ArgsT{T} && return args
@@ -963,6 +1153,25 @@ function parse_args(::Type{T}, args::Union{Tuple, AbstractVector}) where {T <: S
     return _args::ArgsT{T}
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Unwrap arguments if any need unwrapping, otherwise return them unchanged.
+
+# Arguments
+- `args`: Arguments to potentially unwrap (can be `ArgsT`, `ROArgsT`, or other collections)
+
+# Returns
+- The original `args` if already in `ArgsT` or `ROArgsT` format
+- The original `args` if no element needs unwrapping
+- A new collection with all elements unwrapped otherwise
+
+# Details
+This function optimizes argument unwrapping by checking first if any element needs unwrapping.
+If none do, it returns the original collection to avoid unnecessary allocations. For `ArgsT`
+and `ROArgsT` types, which are already in normalized form, always returns the input unchanged.
+Used in constructor functions to ensure arguments are in their simplest form.
+"""
 function unwrap_args(args)
     if any(x -> unwrap(x) !== x, args)
         map(unwrap, args)
@@ -982,6 +1191,25 @@ function parse_dict(::Type{T}, dict::AbstractDict) where {T}
     return _dict::ACDict{T}
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Unwrap dictionary keys if any need unwrapping, preserving values unchanged.
+
+# Arguments
+- `dict`: A dictionary whose keys might need unwrapping
+
+# Returns
+- The original dictionary if no key needs unwrapping
+- A new dictionary of the same type with unwrapped keys otherwise
+
+# Details
+This function optimizes dictionary key unwrapping by checking first if any key needs
+unwrapping. If none do, returns the original dictionary to avoid allocations. Otherwise,
+creates a new dictionary of the same type with all keys unwrapped but values preserved.
+Used to normalize dictionaries used in symbolic expressions where keys might be wrapped
+symbolic values.
+"""
 function unwrap_dict(dict)
     if any(x -> unwrap(x) !== x, keys(dict))
         typeof(dict)(unwrap(k) => v for (k, v) in dict)
@@ -1000,6 +1228,18 @@ function parse_output_idxs(::Type{T}, outidxs::Union{Tuple, AbstractVector}) whe
     return _outidxs::OutIdxT{T}
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Normalize shape inputs into either `Unknown` or `ShapeVecT` format.
+
+# Arguments
+- `sh`: Shape input (can be `Unknown`, `ShapeVecT`, or an iterable of ranges)
+
+# Returns
+- The input if already `Unknown` or `ShapeVecT`
+- A new `ShapeVecT` constructed from the iterable otherwise
+"""
 function parse_shape(sh)
     sh isa Unknown && return sh
     sh isa ShapeVecT && return sh
@@ -1558,6 +1798,23 @@ Return the denominator of expression `x` as an array of multiplied terms.
 """
 @inline denominators(x) = isdiv(x) ? numerators(x.den) : SmallV{Any}((1,))
 
+"""
+    $TYPEDSIGNATURES
+
+Extract the constant value from a `Const` variant, or return the input unchanged.
+
+# Arguments
+- `x`: Any value, potentially a `BasicSymbolic` with a `Const` variant
+
+# Returns
+- The wrapped constant value if `x` is a `Const` variant of `BasicSymbolic`
+- The input `x` unchanged otherwise
+
+# Details
+This function unwraps constant symbolic expressions to their underlying values. It handles
+all three symbolic variants (`SymReal`, `SafeReal`, `TreeReal`). For non-`Const` symbolic
+expressions or non-symbolic values, returns the input unchanged.
+"""
 @inline function unwrap_const(x::Any)
     @nospecialize x
     if x isa BasicSymbolic{SymReal}

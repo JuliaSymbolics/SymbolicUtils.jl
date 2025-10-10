@@ -3356,7 +3356,30 @@ end
     _getindex(SafeReal, arr, idxs...)
 end
 
+"""
+    $TYPEDEF
+
+A wrapper around a small vector of integer indices that provides a stable,
+allocation-efficient representation of multi-dimensional array indices.
+
+This type is used in conjunction with [`StableIndices`](@ref) to iterate over
+multi-dimensional index spaces in a type-stable manner. It implements the
+standard iteration and indexing interfaces.
+
+This is effectively equivalent to `CartesianIndex` for symbolic arrays, but
+avoids type-instability due to `N` in `CartesianIndex{N}` being uninferrable.
+
+# Fields
+$TYPEDFIELDS
+
+# See also
+- [`StableIndices`](@ref): An iterator that produces `StableIndex` values.
+- [`stable_eachindex`](@ref): Returns a `StableIndices` iterator for a symbolic array.
+"""
 struct StableIndex
+    """
+    A small vector storing the indices for each dimension.
+    """
     idxs::SmallV{Int}
 end
 

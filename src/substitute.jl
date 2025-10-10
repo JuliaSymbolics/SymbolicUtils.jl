@@ -210,6 +210,16 @@ function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = default_i
     return nothing
 end
 
+function search_variables!(buffer, expr::AbstractArray; kw...)
+    for el in expr
+        search_variables!(buffer, el; kw...)
+    end
+end
+function search_variables!(buffer, expr::SparseMatrixCSC; kw...)
+    _, _, V = findnz(expr)
+    search_variables!(buffer, V; kw...)
+end
+
 _default_buffer(::BasicSymbolic{T}) where {T} = Set{BasicSymbolic{T}}()
 _default_buffer(x::Any) = unwrap(x) === x ? Set() : _default_buffer(unwrap(x))
 

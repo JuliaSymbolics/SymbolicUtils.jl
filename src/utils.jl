@@ -1,14 +1,66 @@
 using Base: ImmutableDict
 
+"""
+    $TYPEDSIGNATURES
+
+Check if a number is an integer and within safe bounds for `Int`.
+
+# Arguments
+- `x`: The value to check (either a `Number` or other type)
+
+# Returns
+- `true` if `x` is an integer with absolute value less than `typemax(Int)`, `false` otherwise
+
+# Details
+This function ensures that integer values are safe to convert to `Int` without overflow.
+For non-numeric types, always returns `false`. The bounds check prevents issues with
+very large integers that cannot be accurately represented as `Int`.
+"""
 safe_isinteger(@nospecialize(x::Number)) = isinteger(x) && abs(x) < typemax(Int)
 safe_isinteger(x) = false
 
+"""
+    $TYPEDSIGNATURES
+
+Safe power operation that handles special cases for symbolic and numeric values.
+
+# Arguments
+- `x`: The base (can be numeric or symbolic)
+- `y`: The exponent (can be numeric or symbolic)
+
+# Returns
+- The result of `x^y` with special handling for edge cases
+
+# Details
+This function provides a safe implementation of exponentiation with special case handling:
+- For numeric exponents: `y==0` returns `1`, `y<0` uses `inv(x)^(-y)` for numerical stability
+- For symbolic values: delegates to `Base.:^` to maintain proper symbolic behavior
+Multiple dispatch ensures correct behavior for all combinations of numeric and symbolic arguments.
+"""
 pow(x,y) = y==0 ? 1 : y<0 ? inv(x)^(-y) : x^y
 pow(x::BasicSymbolic,y) = y==0 ? 1 : Base.:^(x,y)
 pow(x, y::BasicSymbolic) = Base.:^(x,y)
 pow(x::BasicSymbolic,y::BasicSymbolic) = Base.:^(x,y)
 
 # Simplification utilities
+"""
+    $TYPEDSIGNATURES
+
+Check if a term contains trigonometric or exponential functions.
+
+# Arguments
+- `term`: The symbolic term to check
+
+# Returns
+- `true` if the term contains any of: `sin`, `cos`, `tan`, `cot`, `sec`, `csc`, `exp`, `cosh`, `sinh`
+- `false` otherwise
+
+# Details
+This function recursively searches a symbolic expression tree to determine if it contains
+any trigonometric or exponential functions. It checks both the operation at the current
+level and recursively checks all arguments. Used by simplification routines to identify
+expressions requiring special handling.
+"""
 function has_trig_exp(term)
     !iscall(term) && return false
     fns = (sin, cos, tan, cot, sec, csc, exp, cosh, sinh)
@@ -29,6 +81,23 @@ isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(unwrap_const(x))
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is zero, with caching for performance.
+
+# Arguments
+- `x`: The value to check (can be a number, array, or symbolic expression)
+
+# Returns
+- `true` if the unwrapped value is zero, `false` otherwise
+
+# Details
+This cached function efficiently checks if a value is zero by first unwrapping any
+constant wrappers. Handles both numeric values and arrays. Returns `false` for symbolic
+expressions that are not constant zero. The `@cache` macro improves performance by
+memoizing results for previously seen values.
+"""
 @cache function _iszero(x)::Bool
     @nospecialize x
     x = unwrap_const(unwrap(x))
@@ -36,6 +105,23 @@ is_literal_number(x) = isliteral(Number)(unwrap_const(x))
     x isa Array && return iszero(x)::Bool
     return false
 end
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is one, with caching for performance.
+
+# Arguments
+- `x`: The value to check (can be a number, array, or symbolic expression)
+
+# Returns
+- `true` if the unwrapped value is one, `false` otherwise
+
+# Details
+This cached function efficiently checks if a value is one by first unwrapping any
+constant wrappers. Handles both numeric values and arrays. Returns `false` for symbolic
+expressions that are not constant one. The `@cache` macro improves performance by
+memoizing results for previously seen values.
+"""
 @cache function _isone(x)::Bool
     @nospecialize x
     x = unwrap_const(unwrap(x))
@@ -43,13 +129,83 @@ end
     x isa Array && return isone(x)::Bool
     return false
 end
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is an integer (numeric or symbolic with integer type).
+
+# Arguments
+- `x`: The value to check
+
+# Returns
+- `true` if `x` is a numeric integer or a symbolic with `Integer` symtype, `false` otherwise
+
+# Details
+This predicate returns `true` for both concrete integer values and symbolic expressions
+with integer type annotations. Used in simplification and code generation to determine
+when integer-specific optimizations can be applied.
+"""
 _isinteger(x) = (x isa Number && isinteger(x)) || (x isa BasicSymbolic && symtype(x) <: Integer)
+
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is real (numeric or symbolic with real type).
+
+# Arguments
+- `x`: The value to check
+
+# Returns
+- `true` if `x` is a numeric real or a symbolic with `Real` symtype, `false` otherwise
+
+# Details
+This predicate returns `true` for both concrete real values and symbolic expressions
+with real type annotations. Used in simplification and rewriting to enable real-specific
+mathematical transformations.
+"""
 _isreal(x) = (x isa Number && isreal(x)) || (x isa BasicSymbolic && symtype(x) <: Real)
 
 issortedₑ(args) = issorted(args, lt=<ₑ)
+
+"""
+    $TYPEDSIGNATURES
+
+Create a predicate that checks if an expression with operation `f` needs argument sorting.
+
+# Arguments
+- `f`: The operation to check for
+
+# Returns
+- A function that returns `true` if an expression has operation `f` and unsorted arguments
+
+# Details
+Returns a predicate function that checks whether a given expression:
+1. Has operation `f`
+2. Has arguments that are not sorted according to the `<ₑ` ordering
+
+This is used in simplification to identify expressions that need canonicalization through
+argument sorting.
+"""
 needs_sorting(f) = x -> is_operation(f)(x) && !issortedₑ(arguments(x))
 
 # are there nested ⋆ terms?
+"""
+    $TYPEDSIGNATURES
+
+Create a predicate that checks if an expression has nested operations of type `⋆`.
+
+# Arguments
+- `⋆`: The operation to check for nesting
+
+# Returns
+- A function that returns `true` if any argument has operation `⋆` (indicating nesting)
+
+# Details
+Returns a predicate function that checks whether an expression contains nested instances
+of the same operation. For example, if `⋆` is `*`, this would detect `*(x, *(y, z))`
+which should be flattened to `*(x, y, z)`. Used in normalization to identify expressions
+that need flattening.
+"""
 function isnotflat(⋆)
     function (x)
         args = arguments(x)
@@ -62,6 +218,23 @@ function isnotflat(⋆)
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Check if a sequence has consecutive repeated elements.
+
+# Arguments
+- `x`: A sequence (array or tuple) to check
+
+# Returns
+- `true` if any element is equal to the next element, `false` otherwise
+
+# Details
+This function scans through a sequence to detect consecutive duplicates. Returns `false`
+for sequences of length 0 or 1. Uses `isequal` for comparison, which handles symbolic
+expressions correctly. Used in simplification to identify terms that can be merged
+(e.g., `x + x` → `2x`).
+"""
 function hasrepeats(x)
     length(x) <= 1 && return false
     for i=1:length(x)-1
@@ -72,6 +245,24 @@ function hasrepeats(x)
     return false
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Merge consecutive repeated elements in a sequence using a combining function.
+
+# Arguments
+- `merge`: A function `(element, count) -> merged_value` to combine repeated elements
+- `xs`: The sequence to process
+
+# Returns
+- A new sequence with consecutive repeats merged, or `false` if `xs` has length ≤ 1
+
+# Details
+This function scans through a sequence and merges consecutive equal elements by calling
+`merge(element, count)` where `count` is the number of repetitions. For example, with
+`merge = (x, n) -> n*x`, this transforms `[x, x, x, y]` to `[3x, y]`. Elements that
+don't repeat are kept as-is. Uses `isequal` for comparison.
+"""
 function merge_repeats(merge, xs)
     length(xs) <= 1 && return false
     merged = Any[]
@@ -123,6 +314,24 @@ function flatten_term(⋆, x)
     maketerm(typeof(x), ⋆, flattened_args, metadata(x))
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Sort the arguments of a term according to the canonical ordering `<ₑ`.
+
+# Arguments
+- `f`: The operation of the term
+- `t`: The term whose arguments should be sorted
+
+# Returns
+- A new term with the same operation and metadata, but with arguments sorted by `<ₑ`
+
+# Details
+This function creates a canonical form for commutative operations by sorting arguments.
+For 0-1 arguments, returns unchanged. For 2 arguments, performs a direct comparison.
+For more arguments, sorts using the full `<ₑ` ordering. This ensures expressions like
+`x + y` and `y + x` have the same representation.
+"""
 function sort_args(f, t)
     args = arguments(t)
     if length(args) < 2

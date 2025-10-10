@@ -537,11 +537,6 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
     end
 end
 
-function addmul_variant(x::BasicSymbolic)
-    @match x begin
-        BSImpl.AddMul(; variant) => variant
-    end
-end
 
 function isexpr(s::BSImpl.Type)
     !MData.isa_variant(s, BSImpl.Sym) && !MData.isa_variant(s, BSImpl.Const)
@@ -582,8 +577,8 @@ isconst(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Const)
 issym(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Sym)
 isterm(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Term)
 isaddmul(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.AddMul)
-isadd(x::BSImpl.Type) = isaddmul(x) && addmul_variant(x) == AddMulVariant.ADD
-ismul(x::BSImpl.Type) = isaddmul(x) && addmul_variant(x) == AddMulVariant.MUL
+isadd(x::BSImpl.Type) = isaddmul(x) && MData.variant_getfield(x, BSImpl.AddMul, :variant) == AddMulVariant.ADD
+ismul(x::BSImpl.Type) = isaddmul(x) && MData.variant_getfield(x, BSImpl.AddMul, :variant) == AddMulVariant.MUL
 isdiv(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.Div)
 ispow(x::BSImpl.Type) = isterm(x) && operation(x) === (^)
 isarrayop(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.ArrayOp)

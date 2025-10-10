@@ -134,7 +134,7 @@ macro arrayop(output_idx, expr, options...)
     iidxs = find_indices(expr)
     vartype_ref = find_vartype_reference(expr)
     idxs  = union(oidxs, iidxs)
-    fbody = call2term(deepcopy(expr))
+    fbody = :($unwrap($expr))
     oftype(x,T) = :($x::$T)
 
     let_assigns = Expr(:block)
@@ -150,7 +150,7 @@ macro arrayop(output_idx, expr, options...)
         $ArrayOp{__vartype}(__output_idx,
                  __expr,
                  $reduce,
-                 $(call2term(call)),
+                 $unwrap($call),
                  __ranges)
     end) |> esc
 end
@@ -179,8 +179,4 @@ function find_vartype_reference(expr)
         res === nothing || return res
     end
     return nothing
-end
-
-function call2term(expr)
-    return :($unwrap($expr))
 end

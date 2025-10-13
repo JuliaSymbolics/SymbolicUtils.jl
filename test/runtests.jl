@@ -26,5 +26,6 @@ using Pkg, Test, SafeTestsets
         @safetestset "Cache macro" begin include("cache_macro.jl") end
         @safetestset "Recursive utilities" begin include("recursive_utils.jl") end
         @safetestset "Misc" begin include("misc.jl") end
+        @safetestset "Method library" begin include("methods.jl") end
     end
 end

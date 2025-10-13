@@ -389,6 +389,33 @@ function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
     end
 end
 
+scalarization_function(::Type{ArrayOp{T}}) where {T} = _scalarize_arrayop
+
+function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @match x begin
+        BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce, shape = sh) => begin
+            subrules = Dict()
+            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+            empty!(subrules)
+            res = map(Iterators.product(sh...)) do idxs
+                for (i, ii) in enumerate(output_idx)
+                    ii isa Int && continue
+                    subrules[ii] = idxs[i]
+                end
+                if toplevel
+                    substitute(new_expr, subrules; fold = Val{true}())
+                else
+                    scalarize(substitute(new_expr, subrules; fold = Val{true}()))
+                end
+            end
+            return isempty(sh) ? res[] : res
+        end
+    end
+end
+
+scalarization_function(::Mapper) = _scalarize_arrayop
+scalarization_function(::Mapreducer) = _scalarize_arrayop
+
 """
     $TYPEDSIGNATURES
 
@@ -425,23 +452,6 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
             end
         end
         BSImpl.Sym(;) => is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
-        BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce) => begin
-            term === nothing || return scalarize(term, Val{toplevel}())
-            subrules = Dict()
-            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
-            empty!(subrules)
-            map(Iterators.product(sh...)) do idxs
-                for (i, ii) in enumerate(output_idx)
-                    ii isa Int && continue
-                    subrules[ii] = idxs[i]
-                end
-                if toplevel
-                    substitute(new_expr, subrules; fold = Val{true}())
-                else
-                    scalarize(substitute(new_expr, subrules; fold = Val{true}()))
-                end
-            end
-        end
         _ => begin
             f = operation(x)
             f isa BasicSymbolic{T} && return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]

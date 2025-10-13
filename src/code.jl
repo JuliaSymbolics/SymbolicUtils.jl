@@ -993,9 +993,6 @@ and should have the same type as `x`.
 """
 function cse! end
 
-indextype(::AbstractSparseArray{Tv, Ti}) where {Tv, Ti} = Ti
-
-
 function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
     get!(state.visited, expr.id) do
         @match expr begin

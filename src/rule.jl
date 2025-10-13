@@ -99,8 +99,6 @@ struct Segment{F}
     predicate::F
 end
 
-ismatch(s::Segment, t) = s.predicate(unwrap_const(t))
-
 Segment(s) = Segment(s, alwaystrue)
 
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))

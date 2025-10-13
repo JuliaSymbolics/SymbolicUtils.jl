@@ -135,7 +135,6 @@ macro arrayop(output_idx, expr, options...)
     vartype_ref = find_vartype_reference(expr)
     idxs  = union(oidxs, iidxs)
     fbody = :($unwrap($expr))
-    oftype(x,T) = :($x::$T)
 
     let_assigns = Expr(:block)
     push!(let_assigns.args, Expr(:(=), :__vartype, :($vartype($unwrap($vartype_ref)))))

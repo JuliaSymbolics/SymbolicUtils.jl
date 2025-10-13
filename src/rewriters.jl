@@ -387,7 +387,6 @@ instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 
 (p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
 
-passthrough(x, default) = x === nothing ? default : x
 function (p::Walk{ord, C, F, M, false})(x::BasicSymbolic{T}) where {ord, C, F, M, T}
     @assert ord === :pre || ord === :post
     if iscall(x)
@@ -458,20 +457,6 @@ function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M,
     else
         return Const{T}(p.rw(x))
     end
-end
-
-function instrument_io(x)
-    function io_instrumenter(r)
-        function (args...)
-            println("Rule: ", r)
-            println("Input: ", args)
-            res = r(args...)
-            println("Output: ", res)
-            res
-        end
-    end
-
-    instrument(x, io_instrumenter)
 end
 
 end # end module

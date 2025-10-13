@@ -1115,16 +1115,6 @@ Base.convert(::Type{B}, x) where {R, B <: BasicSymbolic{R}} = BSImpl.Const{R}(un
 Base.convert(::Type{B}, x::B) where {R, B <: BasicSymbolic{R}} = x
 
 """
-    $(METHODLIST)
-
-If `x` is a rational with denominator 1, turn it into an integer.
-"""
-function maybe_integer(x)
-    x = unwrap(x)
-    return (x isa Rational && isone(x.den)) ? x.num : x
-end
-
-"""
     $TYPEDSIGNATURES
 
 Convert argument tuples or vectors into standardized `ArgsT` format for a variant type.
@@ -1484,15 +1474,6 @@ function ratcoeff(x)
     else
         (false, NaN)
     end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Simplify the coefficients of `n` and `d` (numerator and denominator).
-"""
-function simplify_coefficients(n, d)
-    return n, d
 end
 
 function safe_div(a::Number, b::Number)::Number
@@ -2640,13 +2621,6 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
     end
 end
 _split_arrterm_scalar_coeff(::Type{T}, ex) where {T} = one_of_vartype(T), Const{T}(ex)
-
-function _as_base_exp(term::BasicSymbolic{T}) where {T}
-    @match term begin
-        BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) end => (args[1], args[2])
-        _ => (term, one_of_vartype(T))
-    end
-end
 
 function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term) where {T}
     @nospecialize term

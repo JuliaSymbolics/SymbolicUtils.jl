@@ -295,19 +295,31 @@ function shape_from_type(type::Union{Expr, Symbol}, default)
     elseif type == :Matrix
         return Unknown(2)
     elseif type == :Array
-        return Unknown(0)
+        return Unknown(-1)
     elseif Meta.isexpr(type, :curly)
         if type.args[1] == :Vector
             return Unknown(1)
         elseif type.args[1] == :Matrix
             return Unknown(2)
         elseif type.args[1] == :Array
-            return Expr(:call, Unknown, length(type.args) == 3 ? type.args[3] : 0)
+            return Expr(:call, Unknown, length(type.args) == 3 ? type.args[3] : -1)
         else
             return default
         end
     else
         return default
+    end
+end
+
+function shape_from_type(t::Type, default)
+    if t <: AbstractArray
+        if hasmethod(ndims, Tuple{t})
+            Unknown(ndims(t))
+        else
+            Unknown(-1)
+        end
+    else
+        default
     end
 end
 

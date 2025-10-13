@@ -596,7 +596,9 @@ end
 function Base.iterate(x::BasicSymbolic, _state)
     _state === nothing && return nothing
     idxs, state = _state
-    idx, state = iterate(idxs, state)
+    innerstate = iterate(idxs, state)
+    innerstate === nothing && return nothing
+    idx, state = innerstate
     return x[idx], (idxs, state)
 end
 function Base.isempty(x::BasicSymbolic)

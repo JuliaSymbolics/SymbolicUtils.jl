@@ -1066,7 +1066,11 @@ function cse!(x::MakeSparseArray, state::CSEState)
 end
 
 function cse!(x::Assignment, state::CSEState)
-    return Assignment(x.lhs, cse!(x.rhs, state))
+    result = Assignment(x.lhs, cse!(x.rhs, state))
+    if x.lhs isa BasicSymbolic
+        state.visited[x.lhs.id] = x.lhs
+    end
+    return result
 end
 
 function cse!(x::DestructuredArgs, state::CSEState)

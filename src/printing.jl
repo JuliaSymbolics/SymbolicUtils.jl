@@ -11,7 +11,10 @@ end
 
 # Term{}
 print_arg(io, x::Union{Complex, Rational}; paren=true) = print(io, "(", x, ")")
-isbinop(f) = iscall(f) && !iscall(operation(f)) && Base.isbinaryoperator(nameof(operation(f)))
+function isbinop(f)
+    iscall(f) && !iscall(operation(f)) && applicable(nameof, operation(f)) &&
+        Base.isbinaryoperator(nameof(operation(f)))
+end
 function print_arg(io, x; paren=false)
     if paren && isbinop(x)
         print(io, "(", x, ")")

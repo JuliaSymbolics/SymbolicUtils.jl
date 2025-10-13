@@ -2927,7 +2927,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                 return Term{T}(^, ArgsT{T}((base, exp * b)); type, shape = newshape)
             end
             BSImpl.Term(; f) && if f === (*) end => begin
-                coeff, rest = _split_arrterm_scalar_coeff(a)
+                coeff, rest = _split_arrterm_scalar_coeff(T, a)
                 if _isone(coeff)
                     return Term{T}(^, ArgsT{T}((rest, Const{T}(b))); type, shape = newshape)
                 end

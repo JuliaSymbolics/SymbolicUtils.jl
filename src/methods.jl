@@ -990,24 +990,26 @@ function promote_shape(f::Mapreducer, shs::ShapeT...)
     return ShapeVecT()
 end
 
+function __index_args(::Type{T}, ::Val{N}, xs...) where {T, N}
+    idxsym = idxs_for_arrayop(T)
+    inner_idxs = ntuple(Base.Fix1(getindex, idxsym), Val{N}())
+    indexer = let xs = xs, inner_idxs = inner_idxs
+        function __indexer(i)
+            xs[i][inner_idxs...]
+        end
+    end
+    ntuple(indexer, Val(length(xs)))
+end
+
 function _mapreduce(::Type{T}, f, red, xs...) where {T}
     f = Mapreducer(f, red)
     xs = Const{T}.(xs)
     type = promote_symtype(f, symtype.(xs)...)
     sh = promote_shape(f, shape.(xs)...)
-    nd = ndims(sh)
     term = BSImpl.Term{T}(f, ArgsT{T}(xs); type, shape = sh)
-    idxsym = idxs_for_arrayop(T)
     idxs = OutIdxT{T}()
-    sizehint!(idxs, nd)
-    for i in 1:nd
-        push!(idxs, idxsym[i])
-    end
-    idxs = ntuple(Base.Fix1(getindex, idxsym), nd)
 
-    indexed = ntuple(Val(length(xs))) do i
-        xs[i][idxs...]
-    end
+    indexed = __index_args(T, Val(ndims(xs[1])), xs...)::NTuple{length(xs), BasicSymbolic{T}}
     exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
     return BSImpl.ArrayOp{T}(idxs, exp, red, term; type = type, shape = sh)
 end

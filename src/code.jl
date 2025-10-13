@@ -1009,6 +1009,9 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
             _ => begin
                 op = operation(expr)
                 args = arguments(expr)
+                if op isa BasicSymbolic{T}
+                    SymbolicUtils.is_function_symbolic(op) || return expr
+                end
                 cse_inside_expr(expr, op, args...) || return expr
                 args = map(Base.Fix2(cse!, state), args)
                 # use `term` instead of `maketerm` because we only care about the operation being performed

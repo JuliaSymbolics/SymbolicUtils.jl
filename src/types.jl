@@ -874,11 +874,11 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 original behavior of those functions.
 """
 
-function hashcons(s::BSImpl.Type{T}) where {T}
+function hashcons(s::BSImpl.Type{T}, reregister = false) where {T}
     if !ENABLE_HASHCONSING[]
         return s
     end
-    s.id === nothing || return s
+    s.id === nothing || reregister || return s
     @manually_scope COMPARE_FULL => true begin
         k = (@lock WCS_LOCK getkey!(wcs_for_vartype(T), s))::typeof(s)
         if k.id === nothing

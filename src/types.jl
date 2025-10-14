@@ -1484,6 +1484,30 @@ function _is_tuple_of_symbolics(O::Tuple)
 end
 _is_tuple_of_symbolics(O) = false
 
+"""
+    BSImpl.Const{T}(val) where {T}
+
+Constructor for a symbolic expression that wraps a constant value `val`. Also converts
+arrays/tuples of symbolics to symbolic expressions.
+
+# Arguments
+- `val`: The value to wrap (can be any type including arrays and tuples)
+
+# Returns
+- `BasicSymbolic{T}`: A `Const` variant or specialized representation
+
+# Details
+This is the low-level constructor for constant expressions. It handles several special cases:
+1. If `val` is already a `BasicSymbolic{T}`, returns it unchanged
+2. If `val` is a `BasicSymbolic` of a different variant type, throws an error
+3. If `val` is an array containing symbolic elements, creates a `Term` with `hvncat` operation
+4. If `val` is a tuple containing symbolic elements, creates a `Term` with `tuple` operation
+5. Otherwise, creates a `Const` variant wrapping the value
+
+# Extended help
+
+The `unsafe` flag skips hash consing for performance in internal operations.
+"""
 @inline function BSImpl.Const{T}(val; unsafe = false) where {T}
     @nospecialize val
     val = unwrap(val)
@@ -1525,6 +1549,31 @@ _is_tuple_of_symbolics(O) = false
     end
 end
 
+"""
+    BSImpl.Sym{T}(name::Symbol; metadata = nothing, type, shape = default_shape(type)) where {T}
+
+Internal constructor for symbolic variables.
+
+# Arguments
+- `name::Symbol`: The name of the symbolic variable
+- `metadata`: Optional metadata dictionary (default: `nothing`)
+- `type`: The symbolic type of the variable (required keyword argument)
+- `shape`: The shape of the variable (default: inferred from `type`)
+
+# Returns
+- `BasicSymbolic{T}`: A `Sym` variant representing the symbolic variable
+
+# Details
+This is the low-level constructor for symbolic variables. It normalizes the metadata
+and shape inputs, populates default properties using `ordered_override_properties`,
+and performs hash consing. The `type` parameter determines the Julia type
+that this symbolic variable represents.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
 @inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
@@ -1536,6 +1585,32 @@ end
     return var
 end
 
+"""
+    BSImpl.Term{T}(f, args; metadata = nothing, type, shape = default_shape(type)) where {T}
+
+Internal constructor for function application terms.
+
+# Arguments
+- `f`: The function or operation to apply
+- `args`: The arguments to the function (normalized to `ArgsT{T}`)
+- `metadata`: Optional metadata dictionary (default: `nothing`)
+- `type`: The result type of the function application (required keyword argument)
+- `shape`: The shape of the result (default: inferred from `type`)
+
+# Returns
+- `BasicSymbolic{T}`: A `Term` variant representing the function application
+
+# Details
+This is the low-level constructor for function application expressions. It represents
+`f(args...)` symbolically. The constructor normalizes metadata, shape, and arguments,
+populates default properties, and performs hash consing. The `type` parameter
+should be the expected return type of calling `f` with `args`.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
 @inline function BSImpl.Term{T}(f, args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
@@ -1548,6 +1623,33 @@ end
     return var
 end
 
+"""
+    BSImpl.AddMul{T}(coeff, dict, variant::AddMulVariant.T; metadata = nothing, type, shape = default_shape(type)) where {T}
+
+Internal constructor for addition and multiplication expressions.
+
+# Arguments
+- `coeff`: The leading coefficient (for addition) or coefficient (for multiplication)
+- `dict`: Dictionary mapping terms to their coefficients/exponents (normalized to `ACDict{T}`)
+- `variant::AddMulVariant.T`: Either `AddMulVariant.ADD` or `AddMulVariant.MUL`
+- `metadata`: Optional metadata dictionary (default: `nothing`)
+- `type`: The result type of the operation (required keyword argument)
+- `shape`: The shape of the result (default: inferred from `type`)
+
+# Returns
+- `BasicSymbolic{T}`: An `AddMul` variant representing the sum or product
+
+# Details
+This is the low-level constructor for optimized addition and multiplication expressions.
+For addition, represents `coeff + sum(k * v for (k, v) in dict)`. For multiplication,
+represents `coeff * prod(k ^ v for (k, v) in dict)`. The constructor normalizes all
+inputs and performs hash consing.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
 @inline function BSImpl.AddMul{T}(coeff, dict, variant::AddMulVariant.T; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     @nospecialize coeff
     metadata = parse_metadata(metadata)
@@ -1561,6 +1663,33 @@ end
     return var
 end
 
+"""
+    BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, type, shape = default_shape(type)) where {T}
+
+Internal constructor for division expressions.
+
+# Arguments
+- `num`: The numerator (converted to `Const{T}`)
+- `den`: The denominator (converted to `Const{T}`)
+- `simplified::Bool`: Whether the division has been simplified
+- `metadata`: Optional metadata dictionary (default: `nothing`)
+- `type`: The result type of the division (required keyword argument)
+- `shape`: The shape of the result (default: inferred from `type`)
+
+# Returns
+- `BasicSymbolic{T}`: A `Div` variant representing the division
+
+# Details
+This is the low-level constructor for division expressions. It represents `num / den`
+symbolically. Both numerator and denominator are automatically wrapped in `Const{T}`
+if not already symbolic. The `simplified` flag tracks whether simplification has been
+attempted. The constructor normalizes all inputs and performs hash consing.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
 @inline function BSImpl.Div{T}(num, den, simplified::Bool; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
@@ -1582,6 +1711,37 @@ default_ranges(::Type{SymReal}) = DEFAULT_RANGES_SYMREAL
 default_ranges(::Type{SafeReal}) = DEFAULT_RANGES_SAFEREAL
 default_ranges(::Type{TreeReal}) = DEFAULT_RANGES_TREEREAL
 
+"""
+    BSImpl.ArrayOp{T}(output_idx, expr::BasicSymbolic{T}, reduce, term, ranges = default_ranges(T); metadata = nothing, type, shape = default_shape(type)) where {T}
+
+Internal constructor for array operation expressions.
+
+# Arguments
+- `output_idx`: Output indices defining the result array dimensions (normalized to `OutIdxT{T}`)
+- `expr::BasicSymbolic{T}`: The expression to evaluate for each index combination
+- `reduce`: Reduction operation to apply (or `nothing` for direct assignment)
+- `term`: Optional term for accumulation (or `nothing`)
+- `ranges`: Dictionary mapping index variables to their ranges (default: empty)
+- `metadata`: Optional metadata dictionary (default: `nothing`)
+- `type`: The result type (required keyword argument, typically an array type)
+- `shape`: The shape of the result (default: inferred from `type`)
+
+# Returns
+- `BasicSymbolic{T}`: An `ArrayOp` variant representing the array operation
+
+# Details
+This is the low-level constructor for array comprehension-like operations. It represents
+operations like `[expr for i in range1, j in range2]` with optional reduction. The
+constructor normalizes all inputs, unwraps constants where appropriate, and optionally
+performs hash consing.
+
+The [`ArrayOp`](@ref) constructor should be strongly preferred.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
 @inline function BSImpl.ArrayOp{T}(output_idx, expr::BasicSymbolic{T}, reduce, term, ranges = default_ranges(T); metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
@@ -1604,15 +1764,48 @@ struct Mul{T} end
 struct Div{T} end
 struct ArrayOp{T} end
 
+"""
+    Const{T}(val) where {T}
+
+Alias for [`BSImpl.Const{T}`](@ref).
+"""
 @inline Const{T}(@nospecialize(val); unsafe = false) where {T} = BSImpl.Const{T}(val; unsafe)
 
+"""
+    Sym{T}(name; kw...) where {T}
+
+Alias for [`BSImpl.Sym{T}`](@ref).
+"""
 @inline Sym{T}(name; kw...) where {T} = BSImpl.Sym{T}(name; kw...)
 
+"""
+    Term{T}(f, args; type = _promote_symtype(f, args), kw...) where {T}
+
+Alias for [`BSImpl.Term{T}`](@ref) except it also unwraps `args`.
+"""
 @inline function Term{T}(f, args; type = _promote_symtype(f, args), kw...) where {T}
     args = unwrap_args(args)
     BSImpl.Term{T}(f, args; type, kw...)
 end
 
+"""
+    Add{T}(coeff, dict; kw...) where {T}
+
+High-level constructor for addition expressions.
+
+# Arguments
+- `coeff`: The constant term (additive offset)
+- `dict`: Dictionary mapping terms to their coefficients
+- `kw...`: Additional keyword arguments (e.g., `type`, `shape`, `metadata`, `unsafe`)
+
+# Returns
+- `BasicSymbolic{T}`: An optimized representation of `coeff + sum(k * v for (k, v) in dict)`
+
+# Details
+
+This constructor maintains invariants required by the `AddMul` variant. This should be
+preferred over the `BSImpl.AddMul{T}` constructor.
+"""
 @inline function Add{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
     coeff = unwrap(coeff)
@@ -1631,6 +1824,24 @@ end
     BSImpl.AddMul{T}(coeff, dict, AddMulVariant.ADD; kw...)
 end
 
+"""
+    Mul{T}(coeff, dict; kw...) where {T}
+
+High-level constructor for multiplication expressions.
+
+# Arguments
+- `coeff`: The multiplicative coefficient
+- `dict`: Dictionary mapping base terms to their exponents
+- `kw...`: Additional keyword arguments (e.g., `type`, `shape`, `metadata`, `unsafe`)
+
+# Returns
+- `BasicSymbolic{T}`: An optimized representation of `coeff * prod(k ^ v for (k, v) in dict)`
+
+# Details
+
+This constructor maintains invariants required by the `AddMul` variant. This should be
+preferred over the `BSImpl.AddMul{T}` constructor.
+"""
 @inline function Mul{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
     coeff = unwrap(coeff)
@@ -1712,7 +1923,33 @@ function safe_div(a::Number, b::Number)::Number
 end
 
 """
-    $(TYPEDSIGNATURES)
+    Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(d)), kw...) where {T}
+
+High-level constructor for division expressions with simplification.
+
+# Arguments
+- `n`: The numerator
+- `d`: The denominator
+- `simplified::Bool`: Whether simplification has been attempted
+- `type`: The result type (default: inferred using `promote_symtype`)
+- `kw...`: Additional keyword arguments (e.g., `shape`, `metadata`, `unsafe`)
+
+# Returns
+- `BasicSymbolic{T}`: An optimized representation of `n / d`
+
+# Details
+This constructor creates symbolic division expressions with extensive simplification:
+- Zero numerator returns zero
+- Unit denominator returns the numerator
+- Zero denominator returns `Const{T}(1 // 0)` (infinity). Any infinity may be returned.
+- Nested divisions are flattened
+- Constant divisions are evaluated
+- Rational coefficients are simplified
+- Multiplications in numerator/denominator are handled specially
+
+For non-`SafeReal` variants, automatic cancellation is attempted using `quick_cancel`.
+The `simplified` flag prevents infinite simplification loops.
+
 """
 function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(d)), kw...) where {T}
     n = Const{T}(unwrap(n))
@@ -2070,6 +2307,32 @@ function promote_symtype(::Type{ArrayOp{T}}, _outidx, expr, _reduce, _term, _ran
     Array{expr}
 end
 
+"""
+    ArrayOp{T}(output_idx, expr, reduce, term, ranges; metadata = nothing) where {T}
+
+High-level constructor for array operation expressions.
+
+# Arguments
+- `output_idx`: Output indices defining result dimensions
+- `expr`: Expression to evaluate for each index combination
+- `reduce`: Reduction operation (or `nothing`)
+- `term`: Optional accumulation term (or `nothing`)
+- `ranges`: Dictionary mapping index variables to ranges
+- `metadata`: Optional metadata (default: `nothing`)
+
+# Returns
+- `BasicSymbolic{T}`: An `ArrayOp` representing the array comprehension
+
+# Details
+
+This constructor validates and parses fields of the `ArrayOp` variant. It is usually never
+called directly. Prefer using the [`@arrayop`](@ref) macro.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
 function ArrayOp{T}(output_idx, expr, reduce, term, ranges; metadata = nothing, unsafe = false) where {T}
     type = Array{symtype(expr), length(output_idx)}
     output_idx = unwrap_args(collect(unwrap(output_idx)))

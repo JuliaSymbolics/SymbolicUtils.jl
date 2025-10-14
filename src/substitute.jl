@@ -40,7 +40,7 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     _op = unwrap_const(s(op))
 
     args = arguments(ex)
-    dirty = _op !== op
+    dirty = false
     can_fold = !(_op isa BasicSymbolic{T})
     newargs = parent(args)
     for i in eachindex(args)
@@ -60,6 +60,7 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
         can_fold &= isconst(newarg)
         newargs[i] = newarg
     end
+    dirty |= op !== _op
     if dirty || can_fold
         if Fold
             return combine_fold(T, _op, newargs, metadata(ex), can_fold)::BasicSymbolic{T}

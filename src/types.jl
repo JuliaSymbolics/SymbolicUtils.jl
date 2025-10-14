@@ -11,7 +11,20 @@ abstract type TreeReal <: SymVariant end
 
 # Unknown(-1) is an array of unknown ndims
 # Empty ShapeVecT is a scalar
+"""
+    $TYPEDEF
+
+A struct used as the `shape` of symbolic expressions with unknown size.
+
+# Fields
+
+$TYPEDFIELDS
+"""
 struct Unknown
+    """
+    An integer >= -1 indicating the number of dimensions of the symbolic expression of
+    unknown size. A value of `-1` indicates the number of dimensions is also unknown.
+    """
     ndims::Int
 
     function Unknown(x::Int)
@@ -54,6 +67,14 @@ function zeropoly()
     PolynomialT(PolyCoeffT[], mv)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Create a polynomial representing the constant 1.
+
+# Returns
+- A `PolynomialT` representing the constant polynomial 1 with an empty monomial vector
+"""
 function onepoly()
     V = DP.Commutative{DP.CreationOrder}
     mv = DP.MonomialVector{V, MonomialOrder}(DP.Variable{V, MonomialOrder}[], [Int[]])
@@ -158,6 +179,18 @@ const ACDict{T} = Dict{BasicSymbolic{T}, Number}
 const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
 const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
 
+"""
+    $TYPEDSIGNATURES
+
+Convert a `BasicSymbolic` expression to a polynomial variable, caching the result.
+
+# Arguments
+- `bs_to_poly::AbstractDict`: Dictionary cache mapping `BasicSymbolic` to `PolyVarT`
+- `x::BasicSymbolic`: The symbolic expression to convert
+
+# Returns
+- A `PolyVarT` polynomial variable representing `x`, created or retrieved from cache
+"""
 function basicsymbolic_to_polyvar(bs_to_poly::AbstractDict, x::BasicSymbolic)::PolyVarT
     get!(bs_to_poly, x) do
         inner_name = _name_as_operator(x)
@@ -166,6 +199,19 @@ function basicsymbolic_to_polyvar(bs_to_poly::AbstractDict, x::BasicSymbolic)::P
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Convert polynomial terms back into `BasicSymbolic` expressions by substitution.
+
+# Arguments
+- `poly`: A polynomial expression, either `PolyVarT` or `PolynomialT`
+- `vars`: Vector of `BasicSymbolic` variables corresponding to each entry of
+  `MultivariatePolynomials.variables(poly)`.
+
+# Returns
+- A `BasicSymbolic{T}` expression representing the polynomial with substituted variables
+"""
 function subs_poly(poly, vars::AbstractVector{BasicSymbolic{T}}) where {T}
     add_buffer = ArgsT{T}()
     mul_buffer = ArgsT{T}()
@@ -186,6 +232,13 @@ function subs_poly(poly::PolyVarT, vars::AbstractVector{BasicSymbolic{T}}) where
     return only(vars)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Return the Julia type that the given symbolic expression `x` represents.
+Can also be called on non-symbolic values, in which case it is equivalent to
+`typeof`.
+"""
 function symtype(x::BasicSymbolic)
     # use `@match` instead of `x.type` since it is faster
     @match x begin
@@ -199,9 +252,20 @@ function symtype(x::BasicSymbolic)
 end
 symtype(x) = typeof(x)
 
+"""
+    $METHODLIST
+
+Extract the variant type of a `BasicSymbolic`.
+"""
 vartype(x::BasicSymbolic{T}) where {T} = T
 vartype(::Type{BasicSymbolic{T}}) where {T} = T
 
+"""
+    shape(x)
+
+Get the shape of a value or symbolic expression. Generally equivalent to `axes` for
+non-symbolic `x`, but also works on non-array values.
+"""
 function shape end
 
 Base.@nospecializeinfer @generated function _shape_notsymbolic(x)
@@ -727,8 +791,18 @@ Base.isequal(x::Union{Number, AbstractArray}, ::BasicSymbolic) = false
 Base.isequal(::BasicSymbolic, ::Missing) = false
 Base.isequal(::Missing, ::BasicSymbolic) = false
 
+"""
+Task-local flag to control whether equality comparisons include metadata and full type
+information.
+"""
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
+"""
+    $TYPEDSIGNATURES
+
+Generated function which manually dispatches on `isequal` for common scalar types,
+avoiding dynamic dispatch in common cases.
+"""
 @generated function isequal_somescalar(a, b)
     @nospecialize a b
     
@@ -752,7 +826,15 @@ const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
     end
 end
 
-function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full) where {T}
+"""
+    $TYPEDSIGNATURES
+
+Compare two dictionaries of the form inside `AddMul`. Handles the edge case where
+the keys are hashed with `full=false` but the current comparison is with `full=true`.
+`full` is a boolean which should be the current value of `COMPARE_FULL[]`. Passing it
+allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
+"""
+function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full::Bool) where {T}
     full || return isequal(d1, d2)
     length(d1) == length(d2) || return false
     for (k, v) in d1
@@ -768,6 +850,14 @@ function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full) where {T}
     return true
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Compare two dictionaries of the form of `ArrayOp.ranges`. Handles the edge case where
+the keys are hashed with `full=false` but the current comparison is with `full=true`.
+`full` is a boolean which should be the current value of `COMPARE_FULL[]`. Passing it
+allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
+"""
 function isequal_rangesdict(d1::RangesT{T}, d2::RangesT{T}, full) where {T}
     full || return isequal(d1, d2)
     length(d1) == length(d2) || return false
@@ -786,6 +876,12 @@ end
 
 isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false
 
+"""
+    $TYPEDSIGNATURES
+
+Core equality comparison for `BasicSymbolic`. `full` is the current value of
+`COMPARE_FULL[]`, but passed explicitly to reduce accessing a `TaskLocalValue`.
+"""
 function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where {T}
     a === b && return true
     ida = a.id
@@ -836,6 +932,12 @@ Base.isequal(a::WeakRef, b::BSImpl.Type) = isequal(a.value, b)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 
+"""
+    $TYPEDSIGNATURES
+
+Manual dispatch on `hash` for common scalar types, avoiding dynamic dispatch when
+`a` is uninferred.
+"""
 @inline @generated function hash_somescalar(a, h::UInt)
     @nospecialize a
     expr = Expr(:if)
@@ -858,6 +960,13 @@ const DIV_SALT = 0x334b218e73bbba53 % UInt
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Hash `AddMul.dict`, accounting for the fact that the keys are inserted with `full=false`
+when currently `full` may be `true`. `full` should be equal to the current value of
+`COMPARE_FULL`. Passing `full` prevents repeatedly accessing a `TaskLocalValue`.
+"""
 function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
     hv = Base.hasha_seed
     for (k, v) in d
@@ -868,6 +977,15 @@ function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
     return hash(hv, h)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+
+Hash `ArrayOp.ranges`, accounting for the fact that the keys are inserted with `full=false`
+when currently `full` may be `true`. `full` should be equal to the current value of
+`COMPARE_FULL`. Passing `full` prevents repeatedly accessing a `TaskLocalValue`.
+Compute a hash value for a ranges dictionary used in `ArrayOp` variants.
+"""
 function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
     hv = Base.hasha_seed
     for (k, v) in d
@@ -878,6 +996,12 @@ function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
     return hash(hv, h)
 end
 
+"""
+    hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
+
+Core hash function for `BasicSymbolic`. `full` must be equal to the current value of
+`COMPARE_FULL[]`. Passing it reduces repeated access of a `TaskLocalValue`.
+"""
 function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     if !iszero(h)
         return hash(hash_bsimpl(s, zero(h), full), h)::UInt
@@ -942,10 +1066,30 @@ function Base.hash(s::BSImpl.Type, h::UInt)
     hash_bsimpl(s, h, COMPARE_FULL[])
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Return `one(symtype(s))`
+"""
 Base.one( s::BSImpl.Type) = one( symtype(s))
+"""
+    $TYPEDSIGNATURES
+
+Return a `Const` symbolic wrapping `1`.
+"""
+Base.one(::Type{BSImpl.Type{T}}) where {T} = one_of_vartype(T)
+"""
+    $TYPEDSIGNATURES
+
+Return `zero(symtype(s))`
+"""
 Base.zero(s::BSImpl.Type) = zero(symtype(s))
-Base.one( ::Type{<:BSImpl.Type}) = 1
-Base.zero(::Type{<:BSImpl.Type}) = 0
+"""
+    $TYPEDSIGNATURES
+
+Return a `Const` symbolic wrapping `0`.
+"""
+Base.zero(::Type{BSImpl.Type{T}}) where {T} = zero_of_vartype(T)
 
 function _name_as_operator(x::BasicSymbolic)
     @match x begin
@@ -956,6 +1100,11 @@ function _name_as_operator(x::BasicSymbolic)
 end
 _name_as_operator(x) = nameof(x)
 
+"""
+    Base.nameof(s::BasicSymbolic)
+
+Return the name of a symbolic variable. Valid only if `issym(s)`.
+"""
 Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic doesn't have a name")
 
 ###
@@ -1172,6 +1321,19 @@ end
 unwrap_args(args::ArgsT) = args
 unwrap_args(args::ROArgsT) = args
 
+"""
+    $TYPEDSIGNATURES
+
+Convert a dictionary into standardized `ACDict{T}` format for `AddMul`.
+
+# Arguments
+- `::Type{T}`: The `SymVariant` type (`SymReal`, `SafeReal`, or `TreeReal`)
+- `dict::AbstractDict`: Dictionary to convert
+
+# Returns
+- The input if already in `ACDict{T}` format
+- A new `ACDict{T}` populated with all key-value pairs otherwise
+"""
 function parse_dict(::Type{T}, dict::AbstractDict) where {T}
     dict isa ACDict{T} && return dict
     _dict = ACDict{T}()
@@ -1208,6 +1370,19 @@ function unwrap_dict(dict)
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Convert output indices into standardized `OutIdxT{T}` format for `ArrayOp` variants.
+
+# Arguments
+- `::Type{T}`: The `SymVariant` type (`SymReal`, `SafeReal`, or `TreeReal`)
+- `outidxs`: Tuple or vector of output indices
+
+# Returns
+- The input if already in `OutIdxT{T}` format
+- A new `OutIdxT{T}` with all indices unwrapped to their constant values otherwise
+"""
 function parse_output_idxs(::Type{T}, outidxs::Union{Tuple, AbstractVector}) where {T}
     outidxs isa OutIdxT{T} && return outidxs
     _outidxs = OutIdxT{T}()
@@ -1240,6 +1415,19 @@ function parse_shape(sh)
     return _sh
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Convert a dictionary of ranges into standardized `RangesT{T}` format for `ArrayOp`.
+
+# Arguments
+- `::Type{T}`: The `SymVariant` type (`SymReal`, `SafeReal`, or `TreeReal`)
+- `dict::AbstractDict`: Dictionary mapping index variables to ranges
+
+# Returns
+- The input if already in `RangesT{T}` format
+- A new `RangesT{T}` with all keys and values unwrapped otherwise
+"""
 function parse_rangedict(::Type{T}, dict::AbstractDict) where {T}
     dict isa RangesT{T} && return dict
     _dict = RangesT{T}()
@@ -1249,6 +1437,17 @@ function parse_rangedict(::Type{T}, dict::AbstractDict) where {T}
     return _dict::RangesT{T}
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Check if an object is or contains symbolic expressions.
+
+# Arguments
+- `O`: Any object to check
+
+# Returns
+- `Bool`: `true` if `O` is a symbolic, code primitive, array of symbolics, or tuple of symbolics
+"""
 function _is_tuple_or_array_of_symbolics(O)
     return O isa Code.CodegenPrimitive ||
         (symbolic_type(O) != NotSymbolic() && !(O isa Union{Symbol, Expr})) ||
@@ -1256,6 +1455,11 @@ function _is_tuple_or_array_of_symbolics(O)
         _is_tuple_of_symbolics(O)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Check if an object is a non-symbolic array containing symbolic elements.
+"""
 function _is_array_of_symbolics(O)
     # O is an array, not a symbolic array, and either has a non-symbolic eltype or contains elements that are
     # symbolic or arrays of symbolics
@@ -1270,6 +1474,11 @@ function _is_array_of_symbolics(O::SparseMatrixCSC)
         any(_is_tuple_or_array_of_symbolics, findnz(O)[3])
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Check if a tuple contains symbolic elements.
+"""
 function _is_tuple_of_symbolics(O::Tuple)
     return any(_is_tuple_or_array_of_symbolics, O)
 end
@@ -1476,6 +1685,18 @@ function ratcoeff(x)
     end
 end
 
+"""
+    safe_div(a::Number, b::Number)::Number
+
+Perform division with automatic rational conversion for integer inputs.
+
+# Arguments
+- `a::Number`: The numerator
+- `b::Number`: The denominator
+
+# Returns
+- `Number`: The result of `a / b`, using rational arithmetic for integers
+"""
 function safe_div(a::Number, b::Number)::Number
     # @nospecialize a b
     if (!(a isa Integer) && safe_isinteger(a))
@@ -1562,6 +1783,19 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
     BSImpl.Div{T}(n, d, simplified; type, kw...)
 end
 
+"""
+    IndexedAxis{T}
+
+Helper struct tracking how an array is indexed along one dimension.
+
+# Fields
+- `sym::BasicSymbolic{T}`: The array being indexed
+- `dim::Int`: Which dimension of the array
+- `pad::Union{Int, Nothing}`: Offset added to the index variable, or `nothing` for complex indexing
+
+# Details
+Used internally by `arrayop_shape` to track and validate index variable usage patterns.
+"""
 struct IndexedAxis{T}
     sym::BasicSymbolic{T}
     dim::Int
@@ -1570,6 +1804,20 @@ end
 
 const IdxToAxesT{T} = Dict{BasicSymbolic{T}, Vector{IndexedAxis{T}}}
 
+"""
+    IndexedAxes{T}
+
+Helper struct for tracking index variable usage in array operations.
+
+# Fields
+- `idx_to_axes::IdxToAxesT{T}`: Maps index variables to the axes they index
+- `search_buffer::Set{BasicSymbolic{T}}`: Reusable buffer for variable searches
+- `buffers::Vector{Vector{IndexedAxis{T}}}`: Pool of reusable buffers
+
+# Details
+Used internally for shape inference in `ArrayOp` expressions. Tracks which arrays
+are indexed by which index variables and validates consistency.
+"""
 struct IndexedAxes{T}
     idx_to_axes::IdxToAxesT{T}
     search_buffer::Set{BasicSymbolic{T}}
@@ -1595,6 +1843,16 @@ function getbuffer(ix::IndexedAxes{T}) where {T}
     end
 end
 
+"""
+    Base.setindex!(ix::IndexedAxes{T}, val::IndexedAxis{T}, ax::BasicSymbolic{T}) where {T}
+
+Record that an index variable `ax` is used to index an array.
+
+# Arguments
+- `ix::IndexedAxes{T}`: The tracking structure
+- `val::IndexedAxis{T}`: Information about how the array is indexed
+- `ax::BasicSymbolic{T}`: The index variable
+"""
 function Base.setindex!(ix::IndexedAxes{T}, val::IndexedAxis{T}, ax::BasicSymbolic{T}) where {T}
     buffer = get!(() -> getbuffer(ix), ix.idx_to_axes, ax)
     push!(buffer, val)
@@ -1604,12 +1862,48 @@ end
 const INDEXED_AXES_BUFFER_SYMREAL = TaskLocalValue{IndexedAxes{SymReal}}(IndexedAxes{SymReal})
 const INDEXED_AXES_BUFFER_SAFEREAL = TaskLocalValue{IndexedAxes{SafeReal}}(IndexedAxes{SafeReal})
 
+"""
+    _is_index_variable(expr::BasicSymbolic{T}) where T
+
+Check if an expression is an index variable for array operations.
+
+# Arguments
+- `expr::BasicSymbolic{T}`: Expression to check
+"""
+function _is_index_variable end
+
 for T in [SymReal, SafeReal, TreeReal]
     @eval function _is_index_variable(expr::BasicSymbolic{$T})
         iscall(expr) && operation(expr) === getindex && first(arguments(expr)) === idxs_for_arrayop($T)
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Extract and record index variable usage patterns from an expression.
+
+# Arguments
+- `ix::IndexedAxes{T}`: The tracking structure to populate
+- `expr::BasicSymbolic{T}`: The expression to analyze
+
+# Returns
+- `IndexedAxes{T}`: The updated tracking structure
+
+# Details
+Recursively searches for `getindex` operations in the expression and records how
+index variables are used. For each indexed array access, it identifies:
+- Which array is being indexed
+- Which dimension is accessed
+- The offset applied to the index variable (if constant)
+
+Special cases are optimized for performance:
+- Direct index variables (`arr[i]`)
+- Simple offsets (`arr[i + c]`)
+
+For complex indexing patterns, searches for all index variables in the expression
+and validates that only one is used per dimension.
+"""
 function get_indexed_axes!(ix::IndexedAxes{T}, expr::BasicSymbolic{T}) where {T}
     iscall(expr) || return ix
     args = arguments(expr)
@@ -1655,6 +1949,11 @@ function get_indexed_axes!(ix::IndexedAxes{T}, expr::BasicSymbolic{T}) where {T}
     return ix
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Wraps [`get_indexed_axes!`](@ref).
+"""
 function get_indexed_axes(expr::BasicSymbolic{SymReal})
     buffer = INDEXED_AXES_BUFFER_SYMREAL[]
     empty!(buffer)
@@ -1667,6 +1966,33 @@ function get_indexed_axes(expr::BasicSymbolic{SafeReal})
     get_indexed_axes!(buffer, expr)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Infer the shape of an `ArrayOp` result from index variables and ranges.
+
+# Arguments
+- `output_idx::AbstractVector`: Output index variables defining result dimensions
+- `expr::BasicSymbolic{T}`: The expression being computed over indices
+- `ranges::AbstractDict`: Dictionary mapping bound index variables to their ranges
+
+# Returns
+- `ShapeVecT`: The inferred shape of the result array
+- `Unknown(length(output_idx))`: If shape cannot be fully inferred
+
+# Throws
+- `ArgumentError`: If index variable usage is inconsistent or out of bounds
+
+# Details
+This function performs comprehensive shape inference and validation:
+1. Extracts all index variable usages from `expr`
+2. For each bound index variable (in `ranges`), validates that its range fits within
+   all arrays it indexes
+3. For each unbound index variable, validates that all usages have consistent ranges
+4. Constructs the output shape from the ranges of output index variables
+
+The function ensures that array operations are well-formed before code generation.
+"""
 function arrayop_shape(output_idx::AbstractVector, expr::BasicSymbolic{T}, ranges::AbstractDict) where {T}
     ix = get_indexed_axes(expr)
     idx_to_axes = ix.idx_to_axes

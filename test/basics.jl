@@ -69,11 +69,11 @@ include("utils.jl")
         @test f.type == Matrix
         @test shape(g) == SymbolicUtils.Unknown(2)
         @test g.type == Matrix{Int}
-        @test shape(h) == SymbolicUtils.Unknown(0)
+        @test shape(h) == SymbolicUtils.Unknown(-1)
         @test h.type == Array
         @test shape(i) == SymbolicUtils.Unknown(3)
         @test i.type == Array{Int, 3}
-        @test shape(j) == SymbolicUtils.Unknown(0)
+        @test shape(j) == SymbolicUtils.Unknown(-1)
         @test j.type == Array{Int}
         @test shape(k) == ShapeVecT([1:2])
         @test k.type == FnType{Tuple, Vector{Int}, Nothing}

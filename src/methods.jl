@@ -484,6 +484,12 @@ promote_symtype(::typeof(ifelse), ::Type{Bool}, ::Type{T}, ::Type{S}) where {T,S
 function promote_symtype(::typeof(ifelse), ::Type{B}, ::Type{T}, ::Type{S}) where {B, T,S}
     throw(ArgumentError("Condition of `ifelse` must be a `Bool`"))
 end
+function promote_shape(::typeof(ifelse), shc::ShapeT, sht::ShapeT, shf::ShapeT)
+    @nospecialize shc sht shf
+    is_array_shape(shc) && error("Condition of `ifelse` cannot be an array.")
+    sht == shf || error("Both branches of `ifelse` must have the same shape.")
+    return sht
+end
 
 # Array-like operations
 Base.IndexStyle(::Type{<:BasicSymbolic}) = Base.IndexCartesian()

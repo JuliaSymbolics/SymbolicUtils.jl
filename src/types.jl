@@ -89,7 +89,7 @@ end
 """
     $(TYPEDEF)
 
-Core ADT for `BasicSymbolic`. `hash` and `isequal` compare metadata.
+Core ADT for `BasicSymbolic`
 """
 @data mutable BasicSymbolicImpl{T <: SymVariant} begin 
     struct Const

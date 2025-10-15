@@ -245,7 +245,7 @@ end
 
 function search_variables!(buffer, expr::AbstractArray; kw...)
     for el in expr
-        search_variables!(buffer, el; kw...)
+        search_variables!(buffer, unwrap(el); kw...)
     end
 end
 function search_variables!(buffer, expr::SparseMatrixCSC; kw...)

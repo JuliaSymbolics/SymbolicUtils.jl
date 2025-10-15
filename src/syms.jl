@@ -323,6 +323,15 @@ function shape_from_type(t::Type, default)
     end
 end
 
+"""
+    BS[...]
+    BS{T}[...]
+
+`BS` is a utility defined in SymbolicUtils for constructing arrays of symbolics. Similar to
+how `T[...]` creates an `Array` of eltype `T`, `BS[...]` creates an array of eltype
+`BasicSymbolic{T}`. To infer the [`vartype`](@ref) of the result, at least one of the values
+in `...` must be a symbolic. `BS{T}[...]` can be used to explicitly specify the `vartype`.
+"""
 struct BS{T} end
 
 @inline vartype_from_literal(::BasicSymbolic{T}, xs...) where {T} = T

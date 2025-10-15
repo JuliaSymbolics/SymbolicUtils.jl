@@ -2408,14 +2408,16 @@ expressions or non-symbolic values, returns the input unchanged.
 end
 
 """
-    term(f, args...; type = nothing)
+    term(f, args...; vartype = SymReal, type = promote_symtype(f, symtype.(args)...), shape = promote_shape(f, SymbolicUtils.shape.(args)...))
 
 Create a symbolic term with operation `f` and arguments `args`.
 
 # Arguments
 - `f`: The operation or function head of the term
 - `args...`: The arguments to the operation
-- `type`: Optional type specification for the term. If not provided, the type is inferred using `promote_symtype`.
+- `vartype`: The variant type for the term (default: `SymReal`)
+- `type`: The symbolic type of the term. If not provided, it is inferred using `promote_symtype` on the function and argument types.
+- `shape`: The shape of the term. If not provided, it is inferred using `promote_shape` on the function and argument shapes.
 
 # Examples
 ```julia

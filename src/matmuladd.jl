@@ -15,6 +15,10 @@ function validate_mul_shapes(A, B, C)
     [shape(A)[1], shape(B)[2]] == shape(C)
 end
 
+function validate_mul_shapes(A, B, C...)
+    [shape(A)[1], shape(B)[2]] == shape(first(C)) && all(x -> shape(first(C)) == shape(x), C)
+end
+
 function detect_matmul_add_pattern(expr::Let, state::CSEState)
     mul_candidates_idx = findall(expr.pairs) do x
         all_arrays = all(y -> y <: AbstractArray, symtype.(arguments(rhs(x))))
@@ -30,17 +34,27 @@ function detect_matmul_add_pattern(expr::Let, state::CSEState)
     end
     plus_candidates = expr.pairs[plus_candidates_idx]
 
-    pattern = map(enumerate(plus_candidates)) do (plus_idx, c)
+    mul_vals = lhs.(mul_candidates)
+    candidates = map(plus_candidates_idx, plus_candidates) do p_idx, p
+        map(mul_candidates_idx, mul_vals) do m_idx, m_v
+            if nameof(m_v) in nameof.(arguments(rhs(p)))
+                (m_idx, m_v) => (p_idx, expr.pairs[p_idx])
+            end
+        end
+    end
+    candidates = filter(!isnothing, reduce(vcat, candidates))
+
+    pattern = map(plus_candidates_idx, plus_candidates) do plus_idx, c
         plus_args = arguments(rhs(c))
-        mul_pattern = map(enumerate(mul_candidates)) do (mul_idx, m)
+        mul_pattern = map(mul_candidates_idx, mul_candidates) do mul_idx, m
             mul_val = lhs(m)
 
             if nameof(mul_val) in nameof.(plus_args)
                 A, B = arguments(rhs(m))
-                C = only(filter(x -> nameof(x) != nameof(mul_val), plus_args))
+                Cs = filter(x -> nameof(x) != nameof(mul_val), plus_args)
 
-                validate_mul_shapes(A, B, C) || return nothing
-                return (; A, B, C, mul_candidate = m, plus_candidate = c, mul_idx, plus_idx, pattern="A*B + C")
+                validate_mul_shapes(A, B, Cs...) || return nothing
+                return (; A, B, Cs, mul_candidate = m, plus_candidate = c, mul_idx, plus_idx, pattern="A*B + C")
             end
         end
         only(filter(!isnothing, mul_pattern))
@@ -72,27 +86,36 @@ function detect_matmul_add_pattern(expr, state::CSEState)
     return nothing
 end
 
-function transform_to_mul5_assignment(match_data, state::CSEState)
-    A, B, C = match_data.A, match_data.B, match_data.C
-    T = vartype(match_data.C)
+function transform_to_mul5_assignment(expr, match_data, state::CSEState)
+    A, B = match_data.A, match_data.B
+    Cs = match_data.Cs
+    C, other_Cs... = Cs
+    T = vartype(C)
 
     # Create temporary variable for the result
     temp_var_sym = gensym("mul5_temp")
-    temp_var = Sym{T}(temp_var_sym; type=symtype(match_data.C))
+    temp_var = Sym{T}(temp_var_sym; type=symtype(C))
 
     copy_call = Term{T}(copy, [C]; type=symtype(C))
     mul_call = Term{T}(LinearAlgebra.mul!,
         [temp_var, A, B, Const{T}(1), Const{T}(1)];
-        type=symtype(match_data.C))
+        type=symtype(C))
 
     # Add assignments to CSE state
     copy_assignment = Assignment(temp_var, copy_call)
     mul_assignment = Assignment(temp_var, mul_call)  # This overwrites temp_var with mul! result
+    if !isempty(other_Cs)
+        plus_call = Term{T}(+, [temp_var, other_Cs...]; type=symtype(C))
+        final_assignment = Assignment(temp_var, plus_call)
+    else
+        final_assignment = Assignment(temp_var, temp_var)
+    end
 
     push!(state.sorted_exprs, copy_assignment)
     push!(state.sorted_exprs, mul_assignment)
+    push!(state.sorted_exprs, final_assignment)
 
-    Let([copy_assignment, mul_assignment], temp_var, false)
+    Let([copy_assignment, mul_assignment, final_assignment], temp_var, false)
 end
 
 const MATMUL_ADD_RULE = OptimizationRule(
@@ -109,7 +132,7 @@ function apply_optimization_rules(expr, state::CSEState, rules=[MATMUL_ADD_RULE]
     for rule in sort(rules, by=r->r.priority, rev=true)
         match_data = rule.detector(expr, state)
         if match_data !== nothing # || !isempty(match_data)
-            return map(m -> rule.transformer(m, state), match_data) |> first
+            return map(m -> rule.transformer(expr, m, state), match_data) |> first
         end
     end
     return nothing

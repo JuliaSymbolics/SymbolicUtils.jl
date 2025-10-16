@@ -106,6 +106,36 @@ for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
                    ::Type{S}) where {T <: Number, S <: Number} = promote_type(T, S)
     @eval promote_symtype(::$(typeof(f)),
                    ::Type{T},
+                   ::Type{S}) where {T <: Number, S <: BigInt} = promote_type(T, Integer)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{S},
+                   ::Type{T}) where {T <: Number, S <: BigInt} = promote_type(T, Integer)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigInt},
+                   ::Type{BigInt}) = BigInt
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Number, S <: BigFloat} = promote_type(T, Real)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{S},
+                   ::Type{T}) where {T <: Number, S <: BigFloat} = promote_type(T, Real)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigFloat},
+                   ::Type{BigFloat}) = BigFloat
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigInt},
+                   ::Type{BigFloat}) = BigFloat
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigFloat},
+                   ::Type{BigInt}) = BigFloat
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{S}) where {T <: Rational, S <: BigInt} = promote_type(T, Integer)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{S},
+                   ::Type{T}) where {T <: Rational, S <: BigInt} = promote_type(T, Integer)
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
                    ::Type{S}) where {eT, T <: Rational{eT}, S <: Integer} = Real
     @eval promote_symtype(::$(typeof(f)),
                    ::Type{T},
@@ -116,6 +146,12 @@ for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
     @eval promote_symtype(::$(typeof(f)),
                    ::Type{T},
                    ::Type{S}) where {T <: Integer, eS, S <: Complex{Rational{eS}}} = Complex{Real}
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{T},
+                   ::Type{BigInt}) where {eT, T <: Complex{Rational{eT}}} = Complex{Real}
+    @eval promote_symtype(::$(typeof(f)),
+                   ::Type{BigInt},
+                   ::Type{S}) where {eS, S <: Complex{Rational{eS}}} = Complex{Real}
 end
 
 for f in [/, \]
@@ -343,7 +379,7 @@ end
 promote_symtype(::typeof(Base.imag), ::Type{T}) where {eT, T <: Complex{eT}} = eT
 promote_symtype(::typeof(Base.imag), ::Type{T}) where {T <: Real} = T
 function Base.imag(s::BasicSymbolic{T}) where {T}
-    islike(s, Real) && return s
+    islike(s, Real) && return zero_of_vartype(T)
     @match s begin
         BSImpl.Const(; val) => Const{T}(imag(val))
         BSImpl.Term(; f, args) && if f === complex && length(args) == 2 end => args[2]
@@ -448,6 +484,12 @@ promote_symtype(::typeof(ifelse), ::Type{Bool}, ::Type{T}, ::Type{S}) where {T,S
 function promote_symtype(::typeof(ifelse), ::Type{B}, ::Type{T}, ::Type{S}) where {B, T,S}
     throw(ArgumentError("Condition of `ifelse` must be a `Bool`"))
 end
+function promote_shape(::typeof(ifelse), shc::ShapeT, sht::ShapeT, shf::ShapeT)
+    @nospecialize shc sht shf
+    is_array_shape(shc) && error("Condition of `ifelse` cannot be an array.")
+    sht == shf || error("Both branches of `ifelse` must have the same shape.")
+    return sht
+end
 
 # Array-like operations
 Base.IndexStyle(::Type{<:BasicSymbolic}) = Base.IndexCartesian()
@@ -501,6 +543,137 @@ function Base.eachindex(x::BasicSymbolic)
     end
     CartesianIndices(Tuple(sh))
 end
+
+"""
+    $TYPEDEF
+
+An iterator that produces [`StableIndex`](@ref) values representing all possible
+multi-dimensional indices for a given shape in a type-stable, allocation-efficient manner.
+
+This type is used to iterate over multi-dimensional index spaces where each
+dimension can have its own range (stored in `sh`). The iterator produces all
+combinations of indices in column-major order, similar to `CartesianIndices`,
+but with better type stability and allocation characteristics.
+
+This is similar to `CartesianIndices` for symbolic arrays, but avoids type-instability due
+to the type parameters of `CartesianIndices` being uninferrable. Note that iterator
+iterates over multidimensional indices, but is not a multidimensional iterator. In other
+words, `collect`ing this iterator will return a vector regardless of the number of
+dimensions it iterates over.
+
+# Fields
+$TYPEDFIELDS
+
+# Examples
+```julia
+sh = ShapeVecT([1:2, 1:3])
+indices = StableIndices(sh)
+for idx in indices
+    # idx is a StableIndex with values like [1,1], [1,2], [1,3], [2,1], [2,2], [2,3]
+end
+```
+
+# See also
+- [`StableIndex`](@ref): The index type produced by this iterator.
+- [`stable_eachindex`](@ref): Convenience function that returns a `StableIndices` iterator for a symbolic array.
+"""
+struct StableIndices
+    """
+    A small vector of `UnitRange{Int}` values, one for each dimension, defining the range
+    of valid indices for that dimension.
+    """
+    sh::ShapeVecT
+end
+
+Base.length(x::StableIndices) = prod(length, x.sh; init = 1)
+Base.eltype(::Type{StableIndices}) = StableIndex
+
+function Base.iterate(x::StableIndices)
+    idx = SmallV{Int}()
+    resize!(idx, length(x.sh))
+    for i in eachindex(x.sh)
+        idx[i] = first(x.sh[i])
+    end
+    idx = StableIndex(idx)
+    return idx, idx
+end
+function Base.iterate(x::StableIndices, st::StableIndex)
+    idxs = st.idxs
+    buffer = copy(idxs)
+    i = 1
+    N = length(x.sh)
+    while i <= N
+        buffer[i] += 1
+        buffer[i] > last(x.sh[i]) || break
+        buffer[i] = first(x.sh[i])
+        i += 1
+    end
+    i <= N || return nothing
+    idxs = StableIndex(buffer)
+    return idxs, idxs
+end
+function Base.getindex(x::StableIndices, idx::Integer)
+    buffer = SmallV{Int}()
+    N = length(x.sh)
+    idx -= 1
+    for i in 1:N
+        push!(buffer, idx % length(x.sh[i]) + first(x.sh[i]))
+        idx ÷= length(x.sh[i])
+    end
+    return StableIndex(buffer)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Returns a type-stable iterator over all indices of a symbolic array `x`.
+
+This function provides an efficient, allocation-friendly way to iterate over
+multi-dimensional symbolic arrays. Unlike `Base.eachindex`, which returns
+`CartesianIndices` with type parameters that may be uninferrable for symbolic
+arrays, `stable_eachindex` returns a [`StableIndices`](@ref) iterator that
+produces [`StableIndex`](@ref) values in a fully type-stable manner.
+
+Note that the returned iterator does not match the shape of `x`. In other
+words, `collect(stable_eachindex(x))` will be a vector regardless of the shape
+of `x`.
+
+# Arguments
+- `x::BasicSymbolic`: A symbolic array expression with a known concrete shape.
+
+# Returns
+- `StableIndices`: An iterator that yields `StableIndex` values for each position in the array.
+
+# Throws
+- This function assumes `x` has a concrete shape (i.e., `shape(x)` is a `ShapeVecT`,
+  not `Unknown`). If the shape is unknown, it will error.
+
+# Examples
+```julia
+using SymbolicUtils
+
+# Create a symbolic 2×3 matrix
+@variables x[1:2, 1:3]
+
+# Iterate over all indices in a type-stable manner
+for idx in stable_eachindex(x)
+    println("Index: ", idx, " -> Value: ", x[idx])
+end
+
+# Compare with regular eachindex
+for idx in eachindex(x)  # Returns CartesianIndices
+    println("Index: ", idx, " -> Value: ", x[idx])
+end
+```
+
+# See also
+- [`StableIndices`](@ref): The iterator type returned by this function
+- [`StableIndex`](@ref): The index type produced by `StableIndices`
+- `Base.eachindex`: The standard Julia function for iterating over array indices
+"""
+function stable_eachindex(x::BasicSymbolic)
+    StableIndices(shape(x)::ShapeVecT)
+end
 function Base.collect(x::BasicSymbolic)
     scalarize(x, Val{true}())
 end
@@ -512,8 +685,11 @@ function Base.iterate(x::BasicSymbolic)
     return x[idx], (idxs, state)
 end
 function Base.iterate(x::BasicSymbolic, _state)
+    _state === nothing && return nothing
     idxs, state = _state
-    idx, state = iterate(idxs, state)
+    innerstate = iterate(idxs, state)
+    innerstate === nothing && return nothing
+    idx, state = innerstate
     return x[idx], (idxs, state)
 end
 function Base.isempty(x::BasicSymbolic)
@@ -905,24 +1081,26 @@ function promote_shape(f::Mapreducer, shs::ShapeT...)
     return ShapeVecT()
 end
 
+function __index_args(::Type{T}, ::Val{N}, xs...) where {T, N}
+    idxsym = idxs_for_arrayop(T)
+    inner_idxs = ntuple(Base.Fix1(getindex, idxsym), Val{N}())
+    indexer = let xs = xs, inner_idxs = inner_idxs
+        function __indexer(i)
+            xs[i][inner_idxs...]
+        end
+    end
+    ntuple(indexer, Val(length(xs)))
+end
+
 function _mapreduce(::Type{T}, f, red, xs...) where {T}
     f = Mapreducer(f, red)
     xs = Const{T}.(xs)
     type = promote_symtype(f, symtype.(xs)...)
     sh = promote_shape(f, shape.(xs)...)
-    nd = ndims(sh)
     term = BSImpl.Term{T}(f, ArgsT{T}(xs); type, shape = sh)
-    idxsym = idxs_for_arrayop(T)
     idxs = OutIdxT{T}()
-    sizehint!(idxs, nd)
-    for i in 1:nd
-        push!(idxs, idxsym[i])
-    end
-    idxs = ntuple(Base.Fix1(getindex, idxsym), nd)
 
-    indexed = ntuple(Val(length(xs))) do i
-        xs[i][idxs...]
-    end
+    indexed = __index_args(T, Val(ndims(xs[1])), xs...)::NTuple{length(xs), BasicSymbolic{T}}
     exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
     return BSImpl.ArrayOp{T}(idxs, exp, red, term; type = type, shape = sh)
 end

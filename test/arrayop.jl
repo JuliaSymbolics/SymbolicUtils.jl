@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, Term, Const, ArgsT, ShapeVecT, scalarize
+using SymbolicUtils: BasicSymbolic, Term, Const, ArgsT, ShapeVecT, scalarize, symtype, isarrayop
 using SymbolicUtils.Code
 using LinearAlgebra
 using Test
@@ -127,4 +127,19 @@ end
     end
 
     @test isequal(scalarize(inv(A)), [inv(A)[i] for i in eachindex(A)])
+end
+
+@testset "map/mapreduce" begin
+    @syms a[1:2] b[1:2, 1:2] c[1:2, 1:2, 1:2]
+    @testset "$f($v)" for v in [a, b, c], f in [sum, prod]
+        var = f(v)
+        @test isarrayop(var)
+        @test SymbolicUtils.shape(var) == ShapeVecT()
+        @test symtype(var) == Number
+        @test isequal(scalarize(var), f(collect(v)))
+    end
+
+    @syms a[1:8] b[1:2, 1:4]
+    @test_throws AssertionError map(+, a, b)
+    @test_throws AssertionError mapreduce(+, +, a, b)
 end

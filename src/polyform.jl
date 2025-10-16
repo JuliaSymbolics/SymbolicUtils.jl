@@ -2,7 +2,6 @@ export simplify_fractions, quick_cancel, flatten_fractions
 
 to_poly!(::AbstractDict, ::AbstractDict, expr, ::Bool) = MA.operate!(+, zeropoly(), expr)
 function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::BasicSymbolic{T}, recurse::Bool = true)::Union{PolyVarT, PolynomialT} where {T}
-    type = symtype(expr)
     @match expr begin
         BSImpl.Const(; val) => to_poly!(poly_to_bs, bs_to_poly, val, recurse)
         BSImpl.Sym(;) => begin
@@ -41,7 +40,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 end
             end
         end
-        BSImpl.Term(; f, args) => begin
+        BSImpl.Term(; f, args, type, shape) => begin
             if f === (^) && isconst(args[2]) && (exp = unwrap_const(args[2]); exp isa Real) && safe_isinteger(exp)
                 base = args[1]
                 poly = to_poly!(poly_to_bs, bs_to_poly, base)
@@ -57,7 +56,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 end
                 return poly
             elseif f === (*) || f === (+)
-                arg1, restargs = Iterators.peel(args)
+               arg1, restargs = Iterators.peel(args)
                 poly = to_poly!(poly_to_bs, bs_to_poly, arg1)
                 if !(poly isa PolynomialT)
                     _poly = zeropoly()
@@ -70,14 +69,14 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 return poly
             else
                 if recurse
-                    expr = BSImpl.Term{T}(f, map(expand, args); type)
+                    expr = BSImpl.Term{T}(f, map(expand, args); type, shape)
                 end
                 pvar = basicsymbolic_to_polyvar(bs_to_poly, expr)
                 get!(poly_to_bs, pvar, expr)
                 return pvar
             end
         end
-        BSImpl.Div(; num, den) => begin
+        BSImpl.Div(; num, den, type, shape) => begin
             if isconst(den)
                 npoly = to_poly!(poly_to_bs, bs_to_poly, num, recurse)
                 den = unwrap_const(den)
@@ -98,7 +97,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 end
             end
             if recurse
-                expr = BSImpl.Div{T}(expand(num), expand(den), false; type)
+                expr = BSImpl.Div{T}(expand(num), expand(den), false; type, shape)
             end
             pvar = basicsymbolic_to_polyvar(bs_to_poly, expr)
             get!(poly_to_bs, pvar, expr)

@@ -78,7 +78,7 @@ end
 end
 
 @testset "promote_symtype for rem2pi" begin
-    @test promote_symtype(rem2pi, Float64, RoundNearest) == Float64
+    @test promote_symtype(rem2pi, Float64, typeof(RoundNearest)) == Float64
 end
 
 @testset "promote_shape for diadic functions with arrays" begin

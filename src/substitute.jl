@@ -243,7 +243,7 @@ function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = default_i
     return nothing
 end
 
-function search_variables!(buffer, expr::AbstractArray; kw...)
+function search_variables!(buffer, expr::Union{AbstractArray, AbstractSet}; kw...)
     for el in expr
         search_variables!(buffer, unwrap(el); kw...)
     end

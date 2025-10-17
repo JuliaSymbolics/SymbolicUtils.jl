@@ -30,8 +30,8 @@ end
 
 @testset "promote_symtype with Rational and BigInt" begin
     # Rational and BigInt combinations
-    @test promote_symtype(+, Rational{Int}, BigInt) == promote_type(Rational{Int}, Integer)
-    @test promote_symtype(+, BigInt, Rational{Int}) == promote_type(Rational{Int}, Integer)
+    @test promote_symtype(+, Rational{Int}, BigInt) == Real
+    @test promote_symtype(+, BigInt, Rational{Int}) == Real
 end
 
 @testset "promote_symtype with Rational and Integer" begin

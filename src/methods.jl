@@ -101,139 +101,104 @@ end
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a), Const{TreeReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))))
 
 for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Number, S <: Number} = promote_type(T, S)
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Number, S <: BigInt} = promote_type(T, Integer)
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{S},
-                   ::Type{T}) where {T <: Number, S <: BigInt} = promote_type(T, Integer)
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{BigInt},
-                   ::Type{BigInt}) = BigInt
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Number, S <: BigFloat} = promote_type(T, Real)
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{S},
-                   ::Type{T}) where {T <: Number, S <: BigFloat} = promote_type(T, Real)
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{BigFloat},
-                   ::Type{BigFloat}) = BigFloat
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{BigInt},
-                   ::Type{BigFloat}) = BigFloat
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{BigFloat},
-                   ::Type{BigInt}) = BigFloat
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Rational, S <: BigInt} = promote_type(T, Integer)
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{S},
-                   ::Type{T}) where {T <: Rational, S <: BigInt} = promote_type(T, Integer)
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {eT, T <: Rational{eT}, S <: Integer} = Real
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Integer, eS, S <: Rational{eS}} = Real
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {eT, T <: Complex{Rational{eT}}, S <: Integer} = Complex{Real}
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Integer, eS, S <: Complex{Rational{eS}}} = Complex{Real}
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{BigInt}) where {eT, T <: Complex{Rational{eT}}} = Complex{Real}
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{BigInt},
-                   ::Type{S}) where {eS, S <: Complex{Rational{eS}}} = Complex{Real}
+    @eval function promote_symtype(::$(typeof(f)), @nospecialize(T::TypeT), @nospecialize(S::TypeT))
+        if T === S
+            return T
+        elseif T <: S
+            return S
+        elseif S <: T
+            return T
+        elseif $(f === (*) || f === Base.mul_prod) && T <: AbstractMatrix && S <: AbstractVecOrMat
+            return Array{promote_symtype(*, T.parameters[1]::TypeT, S.parameters[1]::TypeT), S.parameters[2]}
+        elseif $(f === (*) || f === Base.mul_prod) && T <: AbstractArray && S <: Number
+            return Array{promote_symtype(*, T.parameters[1]::TypeT, S), T.parameters[2]}
+        elseif $(f === (*) || f === Base.mul_prod) && T <: Number && S <: AbstractArray
+            return Array{promote_symtype(*, T, S.parameters[1]::TypeT), S.parameters[2]}
+        elseif $(f === (+) || f === Base.add_sum || f === (-)) && T <: AbstractArray && S <: AbstractArray
+            nd = T.parameters[2]::Int
+            @assert nd == S.parameters[2]::Int
+            return Array{promote_symtype(+, T.parameters[1]::TypeT, S.parameters[1]::TypeT), nd}
+        elseif $(f === (^)) && T <: Number && S <: AbstractArray
+            nd = S.parameters[2]::Int
+            @assert nd == 2
+            return Matrix{promote_symtype(^, T, S.parameters[1]::TypeT)}
+        elseif $(f === (^)) && T <: AbstractArray && S <: Number
+            nd = T.parameters[2]::Int
+            @assert nd == 2
+            if S <: Integer
+                return Matrix{T.parameters[1]::TypeT}
+            else
+                eT = promote_symtype(^, T.parameters[1]::TypeT, S)
+                if eT <: Complex
+                    return Matrix{eT}
+                elseif eT === Number
+                    return Matrix{Number}
+                else
+                    return Matrix{Complex{eT}}
+                end
+            end
+        elseif T === BigInt && S === BigFloat
+            return BigFloat
+        elseif T === BigFloat && S === BigInt
+            return BigFloat
+        elseif T === BigInt
+            return promote_symtype($f, Integer, S)
+        elseif S === BigInt
+            return promote_symtype($f, T, Integer)
+        elseif T === BigFloat
+            return promote_symtype($f, Real, S)
+        elseif S === BigFloat
+            return promote_symtype($f, T, Real)
+        elseif T <: Rational && S <: Integer
+            return Real
+        elseif T <: Integer && S <: Rational
+            return Real
+        elseif T <: Complex{<:Rational} && S <: Integer
+            return Complex{Real}
+        elseif T <: Integer && S <: Complex{<:Rational}
+            return Complex{Real}
+        else
+            return promote_type(T, S)::TypeT
+        end
+    end
 end
 
 for f in [/, \]
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Number, S <: Number} = promote_type(T, S)
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Integer, S <: Integer} = Real
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Rational, S <: Integer} = Real
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Integer, S <: Rational} = Real
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {eT, T <: Complex{eT}, S <: Union{Integer, Rational}} = Complex{promote_type(eT, Real)}
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {T <: Union{Integer, Rational}, eS, S <: Complex{eS}} = Complex{promote_type(Real, eS)}
-    @eval promote_symtype(::$(typeof(f)),
-                   ::Type{T},
-                   ::Type{S}) where {eT, T <: Complex{eT}, eS, S <: Complex{eS}} = Complex{promote_type(promote_type(eT, eS), Real)}
-end
-
-function promote_symtype(::typeof(+), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, eS <: Number, S <: AbstractArray{eS, N}}
-    return Array{promote_symtype(+, eT, eS), N}
-end
-
-function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractMatrix{eT}, eS <: Number, S <: AbstractVecOrMat{eS}}
-    return Array{promote_symtype(*, eT, eS), ndims(S)}
-end
-
-function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, S <: Number}
-    return Array{promote_symtype(*, eT, S), N}
-end
-
-function promote_symtype(::typeof(*), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, N, S <: AbstractArray{eS, N}}
-    return Array{promote_symtype(*, T, eS), N}
-end
-
-function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {T <: Number, E <: Number, S <: AbstractMatrix{E}}
-    Matrix{promote_type(T, E)}
-end
-function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {E <: Number, T <: AbstractMatrix{E}, S <: Integer}
-    T
-end
-_complex(::Type{Number}) = Number
-_complex(::Type{T}) where {T} = complex(T)
-function promote_symtype(::typeof(^), ::Type{T}, ::Type{S}) where {E <: Number, T <: AbstractMatrix{E}, S <: Number}
-    Matrix{_complex(promote_type(E, S))}
-end
-
-function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, N, S <: AbstractArray{eS, N}}
-    Array{promote_symtype(/, eS, T), N}
-end
-
-function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVector{eT}, eS <: Number, S <: AbstractVector{eS}}
-    promote_symtype(/, eS, eT)
-end
-
-function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVecOrMat{eT}, eS <: Number, S <: AbstractMatrix{eS}}
-    Matrix{promote_symtype(/, eS, eT)}
-end
-
-function promote_symtype(::typeof(\), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractMatrix{eT}, eS <: Number, S <: AbstractVector{eS}}
-    Vector{promote_symtype(/, eS, eT)}
-end
-
-# we don't actually care about specifically making the Mat/Vec case error because
-# `promote_shape` handles it with a much nicer error message than we can give here.
-function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {eT <: Number, T <: AbstractVecOrMat{eT}, eS <: Number, S <: AbstractVecOrMat{eS}}
-    Matrix{promote_symtype(/, eT, eS)}
-end
-
-function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {T <: Number, eS <: Number, S <: AbstractVector{eS}}
-    Matrix{promote_symtype(/, T, eS)}
-end
-
-function promote_symtype(::typeof(/), ::Type{T}, ::Type{S}) where {eT <: Number, N, T <: AbstractArray{eT, N}, S <: Number}
-    Array{promote_symtype(/, eT, S), N}
+    @eval function promote_symtype(::$(typeof(f)), T::TypeT, S::TypeT)
+        if T <: Integer && S <: Integer
+            return Real
+        elseif T <: Integer && S <: Rational
+            return Real
+        elseif T <: Rational && S <: Integer
+            return Real
+        elseif $(f === (\)) && T <: Number && S <: AbstractArray
+            return Array{promote_symtype(/, T, S.parameters[1]::TypeT), S.parameters[2]::Int}
+        elseif $(f === (\)) && T <: AbstractVector && S <: AbstractVector
+            return promote_symtype(/, T.parameters[1]::TypeT, S.parameters[1]::TypeT)
+        elseif $(f === (\)) && T <: AbstractVecOrMat && S <: AbstractMatrix
+            return Matrix{promote_symtype(/, T.parameters[1]::TypeT, S.parameters[1]::TypeT)}
+        elseif $(f === (\)) && T <: AbstractMatrix && S <: AbstractVector
+            return Vector{promote_symtype(/, T.parameters[1]::TypeT, S.parameters[1]::TypeT)}
+        elseif $(f === (/)) && T <: AbstractVecOrMat && S <: AbstractVecOrMat
+            # we don't actually care about specifically making the Mat/Vec case error because
+            # `promote_shape` handles it with a much nicer error message than we can give here.
+            return Matrix{promote_symtype(/, T.parameters[1]::TypeT, S.parameters[1]::TypeT)}
+        elseif $(f === (/)) && T <: Number && S <: AbstractVector
+            return Matrix{promote_symtype(/, T, S.parameters[1]::TypeT)}
+        elseif $(f === (/)) && T <: AbstractArray && S <: Number
+            return Array{promote_symtype(/, T.parameters[1]::TypeT, S), T.parameters[2]::Int}
+        elseif T <: Complex && S <: Complex
+            return Complex{promote_symtype(/, T.parameters[1]::TypeT, S.parameters[1]::TypeT)}
+        elseif T <: Complex
+            eT = promote_symtype(/, T.parameters[1]::TypeT, S)
+            return eT === Number ? eT : Complex{eT}
+        elseif S <: Complex
+            eT = promote_symtype(/, T, S.parameters[1]::TypeT)
+            return eT === Number ? eT : Complex{eT}
+        else
+            return promote_type(promote_type(T, S)::TypeT, Real)::TypeT
+        end
+    end
 end
 
 promote_symtype(::typeof(identity), ::Type{T}) where {T} = T

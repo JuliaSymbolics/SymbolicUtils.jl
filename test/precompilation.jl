@@ -11,7 +11,8 @@ div_inf = @snoop_inference x / y
 const_div_inf = @snoop_inference x / 5
 pow_inf = @snoop_inference x ^ y
 print(devnull, Val{5}())
-const_pow_inf = @snoop_inference x ^ 5
+z = rand(Int)
+const_pow_inf = @snoop_inference x ^ z
 expr = x + sin(y) * z
 rules = Dict(x => y)
 fold = Val{false}()

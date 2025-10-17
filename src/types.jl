@@ -2334,7 +2334,11 @@ The `unsafe` keyword argument (default: `false`) can be used to skip hash consin
 performance in internal operations.
 """
 function ArrayOp{T}(output_idx, expr, reduce, term, ranges; metadata = nothing, unsafe = false) where {T}
-    type = Array{symtype(expr), length(output_idx)}
+    if isempty(output_idx)
+        type = symtype(expr)
+    else
+        type = Array{symtype(expr), length(output_idx)}
+    end
     output_idx = unwrap_args(collect(unwrap(output_idx)))
     expr = unwrap(expr)
     ranges = unwrap_dict(unwrap_const(ranges))

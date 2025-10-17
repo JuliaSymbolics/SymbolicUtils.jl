@@ -179,6 +179,8 @@ PrecompileTools.@setup_workload begin
         symtype(y)
         f(x)
         (5x / 5)
+        z = 2
+        x ^ z
         Const{SymReal}(x; unsafe=true)
         show(devnull, x ^ 2 + y * x + y / 3x)
         expand((x + y) ^ 2)

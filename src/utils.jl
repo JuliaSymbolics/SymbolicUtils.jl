@@ -408,7 +408,6 @@ macro matchable(expr)
     quote
         # TODO: fix this to be not a call. Make pattern matcher work for these
         $expr
-        SymbolicUtils.head(::$name) = $name
         SymbolicUtils.operation(::$name) = $name
         SymbolicUtils.arguments(x::$name) = getfield.((x,), ($(QuoteNode.(fields)...),))
         SymbolicUtils.children(x::$name) = [SymbolicUtils.operation(x); SymbolicUtils.children(x)]

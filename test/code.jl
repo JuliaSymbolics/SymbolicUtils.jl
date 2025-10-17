@@ -295,7 +295,7 @@ SymbolicUtils.Code.cse_inside_expr(sym, ::typeof(foo), args...) = false
 end
 
 @testset "`AtIndex` with symbolic index" begin
-    @syms a b c::Array
+    @syms a b c::Matrix{Int}
     ex = SetArray(false, c, [AtIndex(MakeArray([a, b], Array), [a + b, a - b])])
     expr = quote
         let a = 1, b = 2, c = zeros(Int, 3, 3)
@@ -312,7 +312,7 @@ end
 end
 
 @testset "`ForLoop`" begin
-    @syms a b c::Array
+    @syms a b c::Vector{Int}
     ex = ForLoop(a, term(range, b^2, b^2 + 3), SetArray(false, c, [AtIndex(a, a + 1)]))
     expr = quote
         let b = 2, c = zeros(Int, 10)
@@ -330,7 +330,7 @@ end
 end
 
 @testset "`SetArray` with `return_arr`" begin
-    @syms a b c::Array
+    @syms a b c::Vector{Int}
     ex = SetArray(false, c, [3, 2, 1], false)
     expr = quote
         let b = 2, c = zeros(Int, 3)

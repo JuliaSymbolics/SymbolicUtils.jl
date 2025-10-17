@@ -50,7 +50,7 @@ const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
 # we can't actually print a zero polynomial of this type, since it attempts to call
 # `zero(Any)` but that doesn't matter because we shouldn't ever store a zero polynomial
 const PolynomialT = _PolynomialT{PolyCoeffT}
-const TypeT = Union{DataType, UnionAll, Union}
+const TypeT = DataType
 const MonomialT = DP.Monomial{PolyVarOrder, MonomialOrder}
 const MonomialVecT = DP.MonomialVector{PolyVarOrder, MonomialOrder}
 

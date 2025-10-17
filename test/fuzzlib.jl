@@ -14,11 +14,11 @@ function rand_input(T)
             x = rand(-100:100)
         end
         return x
-    elseif T == Rational
+    elseif T <: Rational
         return Rational(rand_input(Int), rand(1:50)) # no 0 denominator tests yet!
     elseif T == Real
         return rand_input(rand([Int, Float64, Rational]))
-    elseif T == Complex
+    elseif T <: Complex
         return rand_input(Real) + rand_input(Real) * im
     elseif T == Number
         # more real than complex
@@ -33,7 +33,7 @@ end
 rand_input(i::BasicSymbolic{T}) where {T} = rand_input(symtype(i))
 
 const num_spec = let
-    @syms a b::Real c::Integer d::Float64 e::Rational f
+    @syms a b::Real c::Integer d::Float64 e::Rational{Int} f
 
     leaf_funcs = [()->rand_input(Real),
                   ()->rand_input(Complex),
@@ -52,7 +52,7 @@ const num_spec = let
 end
 
 const bool_spec = let
-    @syms b::Bool x::Real y::Real z::Complex
+    @syms b::Bool x::Real y::Real z::Complex{Real}
 
     bool_leaf_funcs = [()->rand(Bool),
                        ()->rand([b, (x, b) => ((x > 0) | b), (x,)=>(x < 0), (y,z) => y==z, (y, z) => y!=z])]

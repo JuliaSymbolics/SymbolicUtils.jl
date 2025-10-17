@@ -219,7 +219,7 @@ function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
     #     end
     # end
     if outsym isa Symbol
-        outsym = Sym{T}(outsym; type = Array{Any}, shape = Unknown(-1))
+        outsym = Sym{T}(outsym; type = Any, shape = Unknown(-1))
     end
     sh = shape(x)
     ranges = x.ranges

@@ -45,7 +45,7 @@ getproperty_literal = ident "." getproperty_literal | ident "." ident
 suffix = "" |
 # or it can be a type annotation (setting the type of the prefix). The shape of the result
 # is inferred from the type as best it can be. In particular, `Array{T, N}` is inferred
-# to have shape `Unknown(N)` and `Array{T}` is inferred to have shape `Unknown(-1)`.
+# to have shape `Unknown(N)`.
          "::" type |
 # or it can be a shape annotation, which sets the shape to the one specified by `ranges`.
 # The type defaults to `Array{Number, length(ranges)}`

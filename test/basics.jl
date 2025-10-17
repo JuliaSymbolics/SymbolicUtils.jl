@@ -54,27 +54,19 @@ include("utils.jl")
         @syms (f::typeof(identity))(::Real)::Number
         @test symtype(g(a, f)) == Number
 
-        @syms a[1:2] b[1:2]::String c[1:2, 3:4] d::Vector e::Vector{Int} f::Matrix g::Matrix{Int} h::Array i::Array{Int, 3} j::Array{Int} k(..)[1:2]::Int
+        @syms a[1:2] b[1:2]::String c[1:2, 3:4] e::Vector{Int} g::Matrix{Int} i::Array{Int, 3} k(..)[1:2]::Int
         @test shape(a) == ShapeVecT([1:2])
         @test a.type == Vector{Number}
         @test shape(b) == ShapeVecT([1:2])
         @test b.type == Vector{String}
         @test shape(c) == ShapeVecT([1:2, 3:4])
         @test c.type == Matrix{Number}
-        @test shape(d) == SymbolicUtils.Unknown(1)
-        @test d.type == Vector
         @test shape(e) == SymbolicUtils.Unknown(1)
         @test e.type == Vector{Int}
-        @test shape(f) == SymbolicUtils.Unknown(2)
-        @test f.type == Matrix
         @test shape(g) == SymbolicUtils.Unknown(2)
         @test g.type == Matrix{Int}
-        @test shape(h) == SymbolicUtils.Unknown(-1)
-        @test h.type == Array
         @test shape(i) == SymbolicUtils.Unknown(3)
         @test i.type == Array{Int, 3}
-        @test shape(j) == SymbolicUtils.Unknown(-1)
-        @test j.type == Array{Int}
         @test shape(k) == ShapeVecT([1:2])
         @test k.type == FnType{Tuple, Vector{Int}, Nothing}
     end
@@ -153,19 +145,19 @@ end
 end
 
 @testset "Base methods" begin
-    @syms w::Complex z::Complex a::Real b::Real x
-    @test isequal(w + z, Add{SymReal}(0, ACDict{SymReal}(w => 1, z => 1); type = Complex))
-    @test isequal(z + a, Add{SymReal}(0, ACDict{SymReal}(z => 1, a => 1); type = Number))
+    @syms w::Complex{Real} z::Complex{Real} a::Real b::Real x
+    @test isequal(w + z, Add{SymReal}(0, ACDict{SymReal}(w => 1, z => 1); type = Complex{Real}))
+    @test isequal(z + a, Add{SymReal}(0, ACDict{SymReal}(z => 1, a => 1); type = Complex{Real}))
     @test isequal(a + b, Add{SymReal}(0, ACDict{SymReal}(a => 1, b => 1); type = Real))
     @test isequal(a + x, Add{SymReal}(0, ACDict{SymReal}(a => 1, x => 1); type = Number))
-    @test isequal(a + z, Add{SymReal}(0, ACDict{SymReal}(a => 1, z => 1); type = Number))
+    @test isequal(a + z, Add{SymReal}(0, ACDict{SymReal}(a => 1, z => 1); type = Complex{Real}))
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
     @test SymbolicUtils._promote_symtype(foo, (w, z, a, b,)) === Real
 
     # promote_symtype of identity
-    @test isequal(Term{SymReal}(identity, [w]), Term{SymReal}(identity, [w]; type = Complex))
+    @test isequal(Term{SymReal}(identity, [w]), Term{SymReal}(identity, [w]; type = Complex{Real}))
     @test isequal(+(w), w)
     @test isequal(+(a), a)
 
@@ -179,8 +171,8 @@ end
     end
 
     @test symtype(ifelse(true, 4, 5)) == Int
-    @test symtype(ifelse(a < 0, b, w)) == Union{Real, Complex}
-    @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
+    @test symtype(ifelse(a < 0, b, w)) == Complex{Real}
+    @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Int
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{SymReal}(==, [w, 0]; type = Bool))
 
@@ -194,16 +186,6 @@ end
     @set! x.name = :oof
     @test nameof(x) === :oof
 end
-
-# @testset "array-like operations" begin
-#     abstract type SquareDummy end
-#     Base.:*(a::BasicSymbolic{SquareDummy}, b) = b^2
-#     @syms s t a::SquareDummy A[1:2, 1:2]
-
-#     @test isequal(ndims(A), 2)
-#     @test_broken isequal(a.*[1 (s+t); t pi], [1 (s+t)^2; t^2 pi^2])
-#     @test isequal(s.*[1 (s+t); t pi], [s s*(s+t); s*t s*pi])
-# end
 
 @testset "array arithmetic" begin
     @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number} f[1:2, 1:2, 1:2] g[1:3, 1:3] h q[1:2, 1:3] x y z

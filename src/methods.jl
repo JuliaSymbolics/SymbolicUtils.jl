@@ -488,10 +488,10 @@ end
 
 # An ifelse node
 function Base.ifelse(_if::BasicSymbolic{T}, _then, _else) where {T}
-    type = Union{symtype(_then), symtype(_else)}
+    type = promote_symtype(ifelse, symtype(_if), symtype(_then), symtype(_else))
     Term{T}(ifelse, ArgsT{T}((_if, _then, _else)); type)
 end
-promote_symtype(::typeof(ifelse), ::Type{Bool}, ::Type{T}, ::Type{S}) where {T,S} = Union{T, S}
+promote_symtype(::typeof(ifelse), ::Type{Bool}, ::Type{T}, ::Type{S}) where {T,S} = promote_type(T, S)
 function promote_symtype(::typeof(ifelse), ::Type{B}, ::Type{T}, ::Type{S}) where {B, T,S}
     throw(ArgumentError("Condition of `ifelse` must be a `Bool`"))
 end

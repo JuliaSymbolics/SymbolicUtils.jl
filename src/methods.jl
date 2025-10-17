@@ -439,7 +439,13 @@ for (f, Domain) in [(==) => Number, (!=) => Number,
                     (& ) => Bool,   (| ) => Bool,
                     xor => Bool]
     @eval begin
-        promote_symtype(::$(typeof(f)), ::Type{<:$Domain}, ::Type{<:$Domain}) = Bool
+        promote_symtype(::$(typeof(f)), ::Type{T}, ::Type{S}) where {T <: $Domain, S <: $Domain}= Bool
+        function promote_shape(::$(typeof(f)), sha::ShapeT, shb::ShapeT)
+            @nospecialize sha shb
+            is_array_shape(sha) && _throw_array($f, sha, shb)
+            is_array_shape(shb) && _throw_array($f, sha, shb)
+            return ShapeVecT()
+        end
         function (::$(typeof(f)))(a::BasicSymbolic{T}, b::$Domain) where {T}
             if !(symtype(a) <: $Domain)
                 throw(MethodError($f, (a, b)))
@@ -463,7 +469,12 @@ end
 
 for f in [!, ~]
     @eval begin
-        promote_symtype(::$(typeof(f)), ::Type{<:Bool}) = Bool
+        promote_symtype(::$(typeof(f)), ::Type{Bool}) = Bool
+        function promote_shape(::$(typeof(f)), sha::ShapeT)
+            @nospecialize sha
+            is_array_shape(sha) && _throw_array($f, sha)
+            return ShapeVecT()
+        end
         function (::$(typeof(f)))(s::BasicSymbolic{T}) where {T}
             type = symtype(s)
             if type !== Bool

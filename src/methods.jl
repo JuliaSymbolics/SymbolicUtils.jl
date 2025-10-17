@@ -1112,7 +1112,11 @@ function _mapreduce(::Type{T}, f, red, xs...) where {T}
     idxs = OutIdxT{T}()
 
     indexed = __index_args(T, Val(ndims(xs[1])), xs...)::NTuple{length(xs), BasicSymbolic{T}}
-    exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
+    if f.f === identity
+        exp = indexed[1]
+    else
+        exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
+    end
     return BSImpl.ArrayOp{T}(idxs, exp, red, term; type = type, shape = sh)
 end
 

@@ -209,3 +209,23 @@ end
     @test !default_is_atomic(SymbolicUtils.IDXS_SYMREAL)
     @test !default_is_atomic(SymbolicUtils.IDXS_SYMREAL[1])
 end
+
+@testset "Scalarization of matmul with scalar coeff" begin
+    @syms x y[1:2, 1:2] z[1:2]
+    expr = x * y * z
+    scal = SymbolicUtils.scalarize(expr)
+    @test scal isa Vector
+    @test length(scal) == 2
+    truth = x .* (collect(y) * collect(z))
+    @test isequal(truth, scal)
+end
+
+@testset "Scalarization of array addition" begin
+    @syms x[1:3] y[1:3] z[1:3]
+    expr = x + y + z
+    scal = SymbolicUtils.scalarize(expr)
+    @test scal isa Vector
+    @test length(scal) == 3
+    truth = collect(x) + collect(y) + collect(z)
+    @test isequal(truth, scal)
+end

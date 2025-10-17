@@ -363,13 +363,21 @@ the operation type. Different operations may require different scalarization str
 """
 scalarization_function(@nospecialize(_)) = _default_scalarize
 
-scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(map), typeof(mapreduce), typeof(broadcast), typeof(adjoint)}) = _default_scalarize_array
+scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(broadcast), typeof(adjoint)}) = _default_scalarize_array
 
 function _default_scalarize_array(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = arguments(x)
-    if toplevel && f !== broadcast && f !== (*)
+    if toplevel && f !== broadcast && f !== (*) && f !== (+)
         f(map(unwrap_const, args)...)
+    elseif f === (+)
+        reduce(+, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))
+    elseif f === (*)
+        if is_array_shape(shape(args[1]))
+            reduce(*, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))
+        else
+            scalarize(args[1], Val{toplevel}()) .* reduce(*, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), @view(args[2:end])))
+        end
     else
         f(map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args)...)
     end
@@ -454,7 +462,9 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
         BSImpl.Sym(;) => is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
         _ => begin
             f = operation(x)
-            f isa BasicSymbolic{T} && return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]
+            if f isa BasicSymbolic{T} || f isa Operator
+                return length(sh) == 0 ? x : [x[idx] for idx in eachindex(x)]
+            end
             return scalarization_function(f)(f, x, Val{toplevel}())
         end
     end

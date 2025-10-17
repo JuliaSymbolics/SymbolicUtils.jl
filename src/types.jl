@@ -3294,7 +3294,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     # so we take the eltype, since `scalar * scalar` and `scalar * array`
     # both give the correct result regardless of whether the first element
     # is a scalar or array.
-    type::TypeT = eltype(symtype(Const{T}(first(terms))))
+    type::TypeT = safe_eltype(symtype(Const{T}(first(terms))))
 
     for term in terms
         term = unwrap(term)
@@ -3330,8 +3330,8 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     filter!(kvp -> !iszero(kvp[2]), num_dict)
     filter!(kvp -> !iszero(kvp[2]), den_dict)
 
-    ntrivialcoeff = isone(num_coeff[])::Bool
-    dtrivialcoeff = isone(den_coeff[])::Bool
+    ntrivialcoeff = _isone(num_coeff[])::Bool
+    dtrivialcoeff = _isone(den_coeff[])::Bool
     ntrivialdict = isempty(num_dict)
     dtrivialdict = isempty(den_dict)
     ntrivial = ntrivialcoeff && ntrivialdict
@@ -3342,7 +3342,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif ntrivialdict
         num = Const{T}(num_coeff[])
     else
-        num = Mul{T}(num_coeff[], num_dict; type = eltype(type)::TypeT)
+        num = Mul{T}(num_coeff[], num_dict; type = safe_eltype(type)::TypeT)
         @match num begin
             BSImpl.AddMul(; dict) && if dict === num_dict end => begin
                 mwb.num_dict = ACDict{T}()
@@ -3355,7 +3355,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif dtrivialdict
         den = Const{T}(den_coeff[])
     else
-        den = Mul{T}(den_coeff[], den_dict; type = eltype(type)::TypeT)
+        den = Mul{T}(den_coeff[], den_dict; type = safe_eltype(type)::TypeT)
         @match den begin
             BSImpl.AddMul(; dict) && if dict === den_dict end => begin
                 mwb.den_dict = ACDict{T}()
@@ -3369,7 +3369,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif dtrivial
         result = num
     else
-        result = Div{T}(num, den, false; type = eltype(type)::TypeT)
+        result = Div{T}(num, den, false; type = safe_eltype(type)::TypeT)
     end
 
     isempty(arrterms) && return result
@@ -3386,7 +3386,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     @match acc_arrterm begin
         BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) end => begin
             acc_arrterm = args[1]
-            acc_pow = unwrap_const(args[2])
+            acc_pow = unwrap_const(args[2])::Number
         end
         _ => nothing
     end
@@ -3403,13 +3403,13 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
                     acc_pow += 1
                     continue
                 end
-                push!(new_arrterms, isone(acc_pow) ? acc_arrterm : (acc_arrterm ^ acc_pow))
+                push!(new_arrterms, _isone(acc_pow) ? acc_arrterm : (acc_arrterm ^ acc_pow))
                 acc_arrterm = cur_arrterm
                 acc_pow = 1
             end
         end
     end
-    push!(new_arrterms, isone(acc_pow) ? acc_arrterm : (acc_arrterm ^ acc_pow))
+    push!(new_arrterms, _isone(acc_pow) ? acc_arrterm : (acc_arrterm ^ acc_pow))
     if length(new_arrterms) == 1
         return new_arrterms[1]
     end

@@ -29,6 +29,14 @@ const basic_monadic = [-, +]
 const basic_diadic = [+, -, *, /, //, \, ^]
 #######################################################
 
+@inline function safe_eltype(T::TypeT)
+    if T <: AbstractArray
+        T.parameters[1]::TypeT
+    else
+        T
+    end
+end
+
 @inline function promote_type_fast_path(T::TypeT, S::TypeT)
     if T === S
         return T

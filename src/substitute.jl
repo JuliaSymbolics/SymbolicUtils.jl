@@ -424,6 +424,33 @@ end
 scalarization_function(::Mapper) = _scalarize_arrayop
 scalarization_function(::Mapreducer) = _scalarize_arrayop
 
+function _scalarize_norm(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @match x begin
+        BSImpl.Term(; args) => begin
+            if length(args) == 1
+                return sqrt(scalarize(sum(abs2, args[1]), Val{toplevel}())::BasicSymbolic{T})
+            end
+            @match args[2] begin
+                BSImpl.Const(;val) => begin
+                    if val === Inf
+                        return scalarize(mapreduce(abs, max, args[1]), Val{toplevel}())::BasicSymbolic{T}
+                    elseif val === -Inf
+                        return scalarize(mapreduce(abs, min, args[1]), Val{toplevel}())::BasicSymbolic{T}
+                    elseif safe_isinteger(val::Number) && iseven(Int(val::Number))
+                        exp = Int(val::Number)
+                        return (sum(scalarize(args[1], Val{toplevel}()) .^ args[2])) ^ (1 / args[2])
+                    else
+                        return (sum(abs.(scalarize(args[1], Val{toplevel}())) .^ args[2])) ^ (1 / args[2])
+                    end
+                end
+                _ => return (sum(scalarize(args[1], Val{toplevel}()) .^ args[2])) ^ (1 / args[2])
+            end
+        end
+    end
+end
+
+scalarization_function(::typeof(LinearAlgebra.norm)) = _scalarize_norm
+
 """
     $TYPEDSIGNATURES
 

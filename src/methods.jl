@@ -1020,6 +1020,50 @@ function LinearAlgebra.det(A::BasicSymbolic{T}) where {T}
     BSImpl.Term{T}(LinearAlgebra.det, ArgsT{T}((A,)); type, shape = sh)
 end
 
+function promote_symtype(::typeof(LinearAlgebra.norm), T::TypeT)
+    if T <: Real
+        return T
+    elseif T <: Complex
+        return T.parameters[1]::TypeT
+    elseif T === Number
+        return T
+    elseif T <: AbstractArray
+        return promote_symtype(LinearAlgebra.norm, T.parameters[1]::TypeT)
+    else
+        error("Invalid type for `LinearAlgebra.norm`: $T")
+    end
+end
+function promote_symtype(::typeof(LinearAlgebra.norm), T::TypeT, S::TypeT)
+    @assert S <: Real
+    return promote_symtype(LinearAlgebra.norm, T)
+end
+function promote_shape(::typeof(LinearAlgebra.norm), sh::ShapeT)
+    @nospecialize sh
+    return ShapeVecT()
+end
+function promote_shape(::typeof(LinearAlgebra.norm), sh::ShapeT, sh2::ShapeT)
+    @nospecialize sh sh2
+    is_array_shape(sh2) && _throw_array(LinearAlgebra.norm, sh, sh2)
+    return ShapeVecT()
+end
+
+function LinearAlgebra.norm(x::BasicSymbolic{T}) where {T}
+    type = promote_symtype(LinearAlgebra.norm, symtype(x))
+    sh = promote_shape(LinearAlgebra.norm, shape(x))
+    return BSImpl.Term{T}(LinearAlgebra.norm, ArgsT{T}((x,)); type, shape = sh)
+end
+function LinearAlgebra.norm(x::BasicSymbolic{T}, y::Real) where {T}
+    type = promote_symtype(LinearAlgebra.norm, symtype(x))
+    sh = promote_shape(LinearAlgebra.norm, shape(x))
+    return BSImpl.Term{T}(LinearAlgebra.norm, ArgsT{T}((x, Const{T}(y))); type, shape = sh)
+end
+function LinearAlgebra.norm(x::Union{BasicSymbolic{T}, AbstractArray}, y::BasicSymbolic{T}) where {T}
+    x = Const{T}(x)
+    type = promote_symtype(LinearAlgebra.norm, symtype(x), symtype(y))
+    sh = promote_shape(LinearAlgebra.norm, shape(x), shape(y))
+    return BSImpl.Term{T}(LinearAlgebra.norm, ArgsT{T}((x, y)); type, shape = sh)
+end
+
 struct Mapper{F}
     f::F
 end

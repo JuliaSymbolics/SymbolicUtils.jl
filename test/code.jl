@@ -241,12 +241,12 @@ nanmath_st.rewrites[:nanmath] = true
         @syms a b
 
         f = eval(toexpr(Func([a+b], [], a+b)))
-        @test f(1) == 1
-        @test f(2) == 2
+        @test @invokelatest(f(1)) == 1
+        @test @invokelatest(f(2)) == 2
 
         f = eval(toexpr(Func([a, b], [], sqrt(a - b)), nanmath_st))
-        @test isnan(f(0, 10))
-        @test f(10, 2) ≈ sqrt(8)
+        @test isnan(@invokelatest f(0, 10))
+        @test @invokelatest(f(10, 2)) ≈ sqrt(8)
     end
 
     let
@@ -266,7 +266,7 @@ nanmath_st.rewrites[:nanmath] = true
 
         t = term(sum, [a, b, a + b, 3a + 2b, sqrt(b)]; type = Number)
         f = eval(toexpr(Func([a, b], [], t)))
-        @test f(1.0, 2.0) ≈ 13.0 + sqrt(2)
+        @test @invokelatest(f(1.0, 2.0)) ≈ 13.0 + sqrt(2)
     end
 end
 
@@ -295,7 +295,7 @@ SymbolicUtils.Code.cse_inside_expr(sym, ::typeof(foo), args...) = false
 end
 
 @testset "`AtIndex` with symbolic index" begin
-    @syms a b c::Array
+    @syms a b c::Matrix{Int}
     ex = SetArray(false, c, [AtIndex(MakeArray([a, b], Array), [a + b, a - b])])
     expr = quote
         let a = 1, b = 2, c = zeros(Int, 3, 3)
@@ -312,7 +312,7 @@ end
 end
 
 @testset "`ForLoop`" begin
-    @syms a b c::Array
+    @syms a b c::Vector{Int}
     ex = ForLoop(a, term(range, b^2, b^2 + 3), SetArray(false, c, [AtIndex(a, a + 1)]))
     expr = quote
         let b = 2, c = zeros(Int, 10)
@@ -330,7 +330,7 @@ end
 end
 
 @testset "`SetArray` with `return_arr`" begin
-    @syms a b c::Array
+    @syms a b c::Vector{Int}
     ex = SetArray(false, c, [3, 2, 1], false)
     expr = quote
         let b = 2, c = zeros(Int, 3)

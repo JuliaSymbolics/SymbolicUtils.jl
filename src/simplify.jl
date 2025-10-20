@@ -39,12 +39,8 @@ Pass `simplify_fractions=false` to prevent this.
     end
 
     x = PassThrough(f)(x)
-    simplify_fractions && has_operation(x, /) ?
+    simplify_fractions && query(isdiv, x) ?
         SymbolicUtils.simplify_fractions(x) : x
 end
-
-has_operation(x, op) = (iscall(x) && (operation(x) == op ||
-                                      any(a->has_operation(a, op),
-                                        arguments(x))))
 
 Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)

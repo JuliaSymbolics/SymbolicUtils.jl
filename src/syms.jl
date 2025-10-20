@@ -36,12 +36,16 @@ name = ident |
 # a variable in the current scope of type `Symbol` containing the name of this variable.
 # Note that in this case the created symbolic variable will be bound to a randomized
 # Julia identifier.
-       "\$" ident
+       "\$" ident |
+# Or it can be of the form `Foo.Bar.baz` referencing a value accessible as `Foo.Bar.baz`
+# in the current scope.
+       getproperty_literal
+getproperty_literal = ident "." getproperty_literal | ident "." ident
 # The `suffix` can be empty (no suffix) which defaults the type to `Number`
 suffix = "" |
 # or it can be a type annotation (setting the type of the prefix). The shape of the result
 # is inferred from the type as best it can be. In particular, `Array{T, N}` is inferred
-# to have shape `Unknown(N)` and `Array{T}` is inferred to have shape `Unknown(-1)`.
+# to have shape `Unknown(N)`.
          "::" type |
 # or it can be a shape annotation, which sets the shape to the one specified by `ranges`.
 # The type defaults to `Array{Number, length(ranges)}`
@@ -175,6 +179,7 @@ this function.
 """
 Base.@nospecializeinfer function parse_variable(x; default_type = Number)::ParseDictT
     @nospecialize x
+    x = unwrap(x)
     if x isa Symbol
         # just a symbol
         type = if x == :..
@@ -183,6 +188,14 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
             default_type
         end
         return ParseDictT(:name => x, :type => type, :shape => ShapeVecT(), :isruntime => false)
+    elseif Meta.isexpr(x, :.)
+        # just a symbol
+        type = if x == :..
+            Vararg{Any}
+        else
+            default_type
+        end
+        return ParseDictT(:name => x, :type => type, :shape => ShapeVecT(), :isruntime => true)
     elseif Meta.isexpr(x, :$)
         return ParseDictT(:name => x.args[1], :type => default_type, :shape => ShapeVecT(), :isruntime => true)
     elseif Meta.isexpr(x, :call)
@@ -250,6 +263,27 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
         result[:shape] = nothing
         result[:isruntime] = false
         return result
+    elseif x isa BasicSymbolic{SymReal}
+        result = ParseDictT()
+        result[:name] = SymbolicIndexingInterface.getname(x)
+        result[:type] = symtype(x)
+        result[:shape] = (@__MODULE__).shape(x)
+        result[:isruntime] = false
+        return result
+    elseif x isa BasicSymbolic{SafeReal}
+        result = ParseDictT()
+        result[:name] = SymbolicIndexingInterface.getname(x)
+        result[:type] = symtype(x)
+        result[:shape] = (@__MODULE__).shape(x)
+        result[:isruntime] = false
+        return result
+    elseif x isa BasicSymbolic{TreeReal}
+        result = ParseDictT()
+        result[:name] = SymbolicIndexingInterface.getname(x)
+        result[:type] = symtype(x)
+        result[:shape] = (@__MODULE__).shape(x)
+        result[:isruntime] = false
+        return result
     else
         syms_syntax_error(x)
     end
@@ -261,14 +295,14 @@ function shape_from_type(type::Union{Expr, Symbol}, default)
     elseif type == :Matrix
         return Unknown(2)
     elseif type == :Array
-        return Unknown(0)
+        return Unknown(-1)
     elseif Meta.isexpr(type, :curly)
         if type.args[1] == :Vector
             return Unknown(1)
         elseif type.args[1] == :Matrix
             return Unknown(2)
         elseif type.args[1] == :Array
-            return Expr(:call, Unknown, length(type.args) == 3 ? type.args[3] : 0)
+            return Expr(:call, Unknown, length(type.args) == 3 ? type.args[3] : -1)
         else
             return default
         end
@@ -277,6 +311,27 @@ function shape_from_type(type::Union{Expr, Symbol}, default)
     end
 end
 
+function shape_from_type(t::Type, default)
+    if t <: AbstractArray
+        if hasmethod(ndims, Tuple{t})
+            Unknown(ndims(t))
+        else
+            Unknown(-1)
+        end
+    else
+        default
+    end
+end
+
+"""
+    BS[...]
+    BS{T}[...]
+
+`BS` is a utility defined in SymbolicUtils for constructing arrays of symbolics. Similar to
+how `T[...]` creates an `Array` of eltype `T`, `BS[...]` creates an array of eltype
+`BasicSymbolic{T}`. To infer the [`vartype`](@ref) of the result, at least one of the values
+in `...` must be a symbolic. `BS{T}[...]` can be used to explicitly specify the `vartype`.
+"""
 struct BS{T} end
 
 @inline vartype_from_literal(::BasicSymbolic{T}, xs...) where {T} = T

@@ -69,7 +69,7 @@ Base.@propagate_inbounds function Base.setindex!(x::Backing, v, i::Int)
     end
 end
 
-Base.@propagate_inbounds function Base.push!(x::Backing, v)
+Base.@propagate_inbounds function Base.push!(x::Backing{T}, v::T) where {T}
     @boundscheck x.len < 3
     x.len += 1
     x[x.len] = v
@@ -85,47 +85,50 @@ end
 
 function Base.any(f::Function, x::Backing)
     if x.len == 0
-        false
+        return false
     elseif x.len == 1
-        f(x.x1)
+        return f(x.x1)
     elseif x.len == 2
-        f(x.x1) || f(x.x2)
+        return f(x.x1) || f(x.x2)
     elseif x.len == 3
-        f(x.x1) || f(x.x2) || f(x.x3)
+        return f(x.x1) || f(x.x2) || f(x.x3)
     end
+    _unreachable()
 end
 
 function Base.all(f::Function, x::Backing)
     if x.len == 0
-        true
+        return true
     elseif x.len == 1
-        f(x.x1)
+        return f(x.x1)
     elseif x.len == 2
-        f(x.x1) && f(x.x2)
+        return f(x.x1) && f(x.x2)
     elseif x.len == 3
-        f(x.x1) && f(x.x2) && f(x.x3)
+        return f(x.x1) && f(x.x2) && f(x.x3)
     end
+    _unreachable()
 end
 
 function Base.map(f, x::Backing{T}) where {T}
     if x.len == 0
         # StaticArrays does this, so we are only as bad as they are
-        Backing{Core.Compiler.return_type(f, Tuple{T})}()
+        return Backing{Core.Compiler.return_type(f, Tuple{T})}()
     elseif x.len == 1
         x1 = f(x.x1)
-        Backing{typeof(x1)}(x1)
+        return Backing{typeof(x1)}(x1)
     elseif x.len == 2
         x1 = f(x.x1)
         x2 = f(x.x2)
-        Backing{Base.promote_typejoin(typeof(x1), typeof(x2))}(x1, x2)
+        return Backing{Base.promote_typejoin(typeof(x1), typeof(x2))}(x1, x2)
     elseif x.len == 3
         x1 = f(x.x1)
         x2 = f(x.x2)
         x3 = f(x.x3)
         _T = Base.promote_typejoin(typeof(x1), typeof(x2))
         _T = Base.promote_typejoin(_T, typeof(x3))
-        Backing{_T}(x1, x2, x3)
+        return Backing{_T}(x1, x2, x3)
     end
+    _unreachable()
 end
 
 function Base.empty!(x::Backing{T}) where {T}
@@ -157,6 +160,7 @@ function Base.copy(x::Backing{T}) where {T}
     elseif x.len == 3
         return Backing{T}(x.x1, x.x2, x.x3)
     end
+    _unreachable()
 end
 
 function Base.resize!(x::Backing, sz::Integer)
@@ -274,7 +278,7 @@ Base.@propagate_inbounds function Base.getindex(x::SmallVec{T, V}, i::Vector{Int
     SmallVec{T, V}(x.data[i])
 end
 
-Base.@propagate_inbounds function Base.push!(x::SmallVec{T, V}, v) where {T, V}
+Base.@propagate_inbounds function Base.push!(x::SmallVec{T, V}, v::T) where {T, V}
     buf = x.data
     buf isa Backing{T} || return push!(buf::V, v)
     isfull(buf) || return push!(buf::Backing{T}, v)
@@ -284,12 +288,14 @@ end
 
 Base.@propagate_inbounds Base.pop!(x::SmallVec) = pop!(x.data)
 
-function Base.sizehint!(x::SmallVec{T, V}, n; kwargs...) where {T, V}
+function Base.sizehint!(x::SmallVec{T, V}, n::Int; kwargs...) where {T, V}
     x.data isa Backing && return x
     sizehint!(x.data, n; kwargs...)
     x
 end
 
+Base.iterate(x::SmallVec) = iterate(x.data)
+Base.iterate(x::SmallVec, st::Int) = iterate(x.data, st)
 Base.any(f::Function, x::SmallVec) = any(f, x.data)
 Base.all(f::Function, x::SmallVec) = all(f, x.data)
 function Base.map(f, x::SmallVec{T, Vector{T}}) where {T}

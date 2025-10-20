@@ -99,8 +99,6 @@ struct Segment{F}
     predicate::F
 end
 
-ismatch(s::Segment, t) = s.predicate(unwrap_const(t))
-
 Segment(s) = Segment(s, alwaystrue)
 
 Base.show(io::IO, s::Segment) = (print(io, "~~"); print(io, s.name))
@@ -120,6 +118,31 @@ function makesegment(s::Expr, keys)
 end
 
 # parent call is needed to know which default value to give if any default slots are present
+"""
+    $TYPEDSIGNATURES
+
+Convert a rule pattern expression into a pattern matcher structure.
+
+# Arguments
+- `expr`: The pattern expression to convert (can contain slots like `~x`, segments like `~~x`, etc.)
+- `keys`: A collection to accumulate pattern variable names
+- `parentCall`: The parent operation (used to determine default values for default slots)
+
+# Returns
+- A pattern matcher structure that can be used to match against symbolic expressions
+
+# Details
+This function recursively transforms a pattern expression into an internal representation used
+by the rule system. It handles several special syntaxes:
+- `~x`: Matches a single term (creates a `Slot`)
+- `~~x`: Matches zero or more terms (creates a `Segment`)
+- `~!x`: Matches a term with a default value (creates a `DefSlot`)
+- `~x::predicate`: Adds a predicate constraint to the slot
+- `\$expr`: Interpolates a value directly
+
+The function tracks pattern variable names in `keys` and uses `parentCall` to determine
+appropriate default values for default slots in operations like `+`, `*`, and `^`.
+"""
 function makepattern(expr, keys, parentCall=nothing)
     if expr isa Expr
         if expr.head === :call
@@ -154,6 +177,29 @@ function makepattern(expr, keys, parentCall=nothing)
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Convert a rule consequent expression into code that constructs the result.
+
+# Arguments
+- `expr`: The consequent expression to convert (the right-hand side of a rewrite rule)
+
+# Returns
+- An expression that, when evaluated with matched bindings, produces the replacement term
+
+# Details
+This function recursively transforms the right-hand side of a rewrite rule into code that
+constructs the result using matched values. It handles special syntax for referencing
+matched pattern variables:
+- `~x`: References the value matched by pattern variable `x`
+- `~~x`: References the sequence matched by segment variable `x`
+- `~` alone: References the entire match dictionary
+
+The function generates code that looks up pattern variables in the `__MATCHES__` dictionary,
+which is populated during pattern matching. All other parts of the expression are treated
+as literal values to be included in the result.
+"""
 function makeconsequent(expr)
     if expr isa Expr
         if expr.head === :call

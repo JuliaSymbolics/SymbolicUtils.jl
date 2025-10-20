@@ -3,20 +3,9 @@
 ## Symbols and Terms
 
 ### Creating Symbols and Terms
-```@docs
+```@docs; canonical=false
 SymbolicUtils.@syms
 SymbolicUtils.term
-```
-
-### Inspecting Terms
-```@docs
-SymbolicUtils.issym
-SymbolicUtils.symtype
-SymbolicUtils.iscall
-SymbolicUtils.operation
-SymbolicUtils.arguments
-SymbolicUtils.sorted_arguments
-SymbolicUtils.showraw
 ```
 
 ### Metadata
@@ -27,7 +16,7 @@ SymbolicUtils.setmetadata
 ```
 
 ### Type Promotion
-```@docs
+```@docs; canonical=false
 SymbolicUtils.promote_symtype
 ```
 

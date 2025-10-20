@@ -1,4 +1,4 @@
-using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT, ArgsT, isarrayop
+using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT, ArgsT, isarrayop, query
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
@@ -54,27 +54,19 @@ include("utils.jl")
         @syms (f::typeof(identity))(::Real)::Number
         @test symtype(g(a, f)) == Number
 
-        @syms a[1:2] b[1:2]::String c[1:2, 3:4] d::Vector e::Vector{Int} f::Matrix g::Matrix{Int} h::Array i::Array{Int, 3} j::Array{Int} k(..)[1:2]::Int
+        @syms a[1:2] b[1:2]::String c[1:2, 3:4] e::Vector{Int} g::Matrix{Int} i::Array{Int, 3} k(..)[1:2]::Int
         @test shape(a) == ShapeVecT([1:2])
         @test a.type == Vector{Number}
         @test shape(b) == ShapeVecT([1:2])
         @test b.type == Vector{String}
         @test shape(c) == ShapeVecT([1:2, 3:4])
         @test c.type == Matrix{Number}
-        @test shape(d) == SymbolicUtils.Unknown(1)
-        @test d.type == Vector
         @test shape(e) == SymbolicUtils.Unknown(1)
         @test e.type == Vector{Int}
-        @test shape(f) == SymbolicUtils.Unknown(2)
-        @test f.type == Matrix
         @test shape(g) == SymbolicUtils.Unknown(2)
         @test g.type == Matrix{Int}
-        @test shape(h) == SymbolicUtils.Unknown(0)
-        @test h.type == Array
         @test shape(i) == SymbolicUtils.Unknown(3)
         @test i.type == Array{Int, 3}
-        @test shape(j) == SymbolicUtils.Unknown(0)
-        @test j.type == Array{Int}
         @test shape(k) == ShapeVecT([1:2])
         @test k.type == FnType{Tuple, Vector{Int}, Nothing}
     end
@@ -143,9 +135,9 @@ struct Ctx2 end
     @test getmetadata(newf, Ctx1) == "yes"
 
 
-    @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=false),
+    @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=Val(false)),
                   1 + term(sqrt, 2, type=Real))
-    @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=true)) isa Float64
+    @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=Val(true))) isa Float64
 end
 
 @testset "metadata" begin
@@ -153,19 +145,19 @@ end
 end
 
 @testset "Base methods" begin
-    @syms w::Complex z::Complex a::Real b::Real x
-    @test isequal(w + z, Add{SymReal}(0, ACDict{SymReal}(w => 1, z => 1); type = Complex))
-    @test isequal(z + a, Add{SymReal}(0, ACDict{SymReal}(z => 1, a => 1); type = Number))
+    @syms w::Complex{Real} z::Complex{Real} a::Real b::Real x
+    @test isequal(w + z, Add{SymReal}(0, ACDict{SymReal}(w => 1, z => 1); type = Complex{Real}))
+    @test isequal(z + a, Add{SymReal}(0, ACDict{SymReal}(z => 1, a => 1); type = Complex{Real}))
     @test isequal(a + b, Add{SymReal}(0, ACDict{SymReal}(a => 1, b => 1); type = Real))
     @test isequal(a + x, Add{SymReal}(0, ACDict{SymReal}(a => 1, x => 1); type = Number))
-    @test isequal(a + z, Add{SymReal}(0, ACDict{SymReal}(a => 1, z => 1); type = Number))
+    @test isequal(a + z, Add{SymReal}(0, ACDict{SymReal}(a => 1, z => 1); type = Complex{Real}))
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
     @test SymbolicUtils._promote_symtype(foo, (w, z, a, b,)) === Real
 
     # promote_symtype of identity
-    @test isequal(Term{SymReal}(identity, [w]), Term{SymReal}(identity, [w]; type = Complex))
+    @test isequal(Term{SymReal}(identity, [w]), Term{SymReal}(identity, [w]; type = Complex{Real}))
     @test isequal(+(w), w)
     @test isequal(+(a), a)
 
@@ -179,8 +171,8 @@ end
     end
 
     @test symtype(ifelse(true, 4, 5)) == Int
-    @test symtype(ifelse(a < 0, b, w)) == Union{Real, Complex}
-    @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Union{Int, Bool}
+    @test symtype(ifelse(a < 0, b, w)) == Complex{Real}
+    @test SymbolicUtils.promote_symtype(ifelse, Bool, Int, Bool) == Int
     @test_throws MethodError w < 0
     @test isequal(w == 0, Term{SymReal}(==, [w, 0]; type = Bool))
 
@@ -194,16 +186,6 @@ end
     @set! x.name = :oof
     @test nameof(x) === :oof
 end
-
-# @testset "array-like operations" begin
-#     abstract type SquareDummy end
-#     Base.:*(a::BasicSymbolic{SquareDummy}, b) = b^2
-#     @syms s t a::SquareDummy A[1:2, 1:2]
-
-#     @test isequal(ndims(A), 2)
-#     @test_broken isequal(a.*[1 (s+t); t pi], [1 (s+t)^2; t^2 pi^2])
-#     @test isequal(s.*[1 (s+t); t pi], [s s*(s+t); s*t s*pi])
-# end
 
 @testset "array arithmetic" begin
     @syms a[1:2] a2[1:2] a3[2:3] b[1:3] c[1:2, 1:2] d::Vector{Number} d2::Vector{Number} e::Matrix{Number} f[1:2, 1:2, 1:2] g[1:3, 1:3] h q[1:2, 1:3] x y z
@@ -281,77 +263,75 @@ end
 
     var = a + a
     @test isequal(arguments(var), ArgsT{SymReal}([Const{SymReal}(2), a]))
-    @test isarrayop(var)
-    @test var.expr.f === *
+    @test var.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * a
     @test isequal(arguments(var), ArgsT{SymReal}([c, a]))
-    @test var.expr.f === *
+    @test var.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * symvec
     @test isequal(arguments(var), ArgsT{SymReal}([c, csymvec]))
-    @test var.expr.f === *
+    @test var.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = symmat * a
     @test isequal(arguments(var), ArgsT{SymReal}([csymmat, a]))
-    @test var.expr.f === *
+    @test var.f === *
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = 2 * c * h * c * im
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, c ^ 2)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
     var = var * a
-    @test var.expr.f === *
-    arg2 = @arrayop (i, j) (c^2)[i, j] term=(c^2)
-    @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, arg2, a)))
+    @test var.f === *
+    @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, c^2, a)))
     @test shape(var) == ShapeVecT([1:2])
     @test symtype(var) == Vector{Number}
 
     var = c * e * c
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e, c)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
     var = c * e
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e)))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
     var = var * c
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e, c)))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
     var = var * a
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e, c, a)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = c * e
     var = var * d
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((c, e, d)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = e * a
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((e, a)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
 
     var = e * d
-    @test var.expr.f === *
+    @test var.f === *
     @test isequal(arguments(var), ArgsT{SymReal}((e, d)))
     @test shape(var) == SymbolicUtils.Unknown(1)
     @test symtype(var) == Vector{Number}
@@ -883,16 +863,16 @@ end
     @test unwrap_const(substitute(a, Dict(a=>1))) == 1
     @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(b+1))
     @test unwrap_const(substitute(a+b, Dict(a=>1, b=>3))) == 4
-    @test unwrap_const(substitute(exp(a), Dict(a=>2))) ≈ exp(2)
+    @test unwrap_const(substitute(exp(a), Dict(a=>2); fold = Val(true))) ≈ exp(2)
 end
 
-@testset "occursin" begin
+@testset "query" begin
     @syms a b c
-    @test occursin(a, a + b)
-    @test !occursin(sin(a), a + b + c)
-    @test occursin(sin(a),  a * b + c + sin(a^2 * sin(a)))
-    @test occursin(0.01, 0.01*a)
-    @test !occursin(0.01, a * b * c)
+    @test query(isequal(a), a + b)
+    @test !query(isequal(sin(a)), a + b + c)
+    @test query(isequal(sin(a)),  a * b + c + sin(a^2 * sin(a)))
+    @test query(isequal(Const{SymReal}(0.01)), 0.01^a)
+    @test !query(isequal(Const{SymReal}(0.01)), a * b * c)
 end
 
 @testset "printing" begin
@@ -1169,5 +1149,33 @@ end
     @test isequal(a, a2)
     @test SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true begin
         isequal(a, a2)
+    end
+end
+
+@testset "AddMul coefficients are hashconsed properly" begin
+    @syms x
+    v1 = 0.5x
+    @test isequal(v1.coeff, 0.5)
+    v2 = (1//2)x
+    @test v2.coeff !== 0.5
+    @test v2.coeff === 1//2
+end
+
+@testset "`imag(::Real)`" begin
+    @syms x::Real
+    @test SymbolicUtils._iszero(imag(x))
+end
+
+@testset "`StableIndices`" begin
+    @syms x[1:3] y[-2:5, 3:7] z[-10:-4, 0:5, 1:2]
+    for v in [x, y, z]
+        idxs = SymbolicUtils.stable_eachindex(v)
+        els = [v[i] for i in idxs]
+        truth = vec(collect(v))
+        @test isequal(els, truth)
+
+        for i in 1:length(v)
+            @test Tuple(idxs[i]) == Tuple(CartesianIndices(Tuple(shape(v)))[i])
+        end
     end
 end

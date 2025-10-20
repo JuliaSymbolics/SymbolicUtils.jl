@@ -10,17 +10,15 @@ export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
 using Moshi.Data: @data
 import Moshi.Data as MData
 using Moshi.Match: @match
-using ReadOnlyArrays
 using EnumX: @enumx
 using TermInterface
-using DataStructures
 using Setfield
 import Setfield: PropertyLens
 using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 using TermInterface
-import TermInterface: iscall, isexpr, head, children,
+import TermInterface: iscall, isexpr, children,
                       operation, arguments, metadata, maketerm, sorted_arguments
 # For ReverseDiffExt
 import ArrayInterface
@@ -29,12 +27,16 @@ import TaskLocalValues: TaskLocalValue
 using WeakCacheSets: WeakCacheSet, getkey!
 using Base: RefValue
 import MacroTools
-import MultivariatePolynomials as MP
-import DynamicPolynomials as DP
-import MutableArithmetics as MA
-import LinearAlgebra
-import SparseArrays: SparseMatrixCSC, findnz, sparse
 import PrecompileTools
+PrecompileTools.@recompile_invalidations begin
+    import MultivariatePolynomials as MP
+    import DynamicPolynomials as DP
+    import MutableArithmetics as MA
+    import SparseArrays: SparseMatrixCSC, findnz, sparse
+    using DataStructures
+    using ReadOnlyArrays
+end
+import LinearAlgebra
 
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)
@@ -114,9 +116,10 @@ export @arrayop
 include("arrayop.jl")
 
 # Methods on symbolic objects
+PrecompileTools.@recompile_invalidations begin
 using SpecialFunctions, NaNMath
 include("methods.jl")
-
+end
 # LinkedList, simplification utilities
 include("utils.jl")
 
@@ -154,9 +157,16 @@ include("substitute.jl")
 
 include("code.jl")
 
+PrecompileTools.@recompile_invalidations begin
+    include("despecialize.jl")
+end
+
 PrecompileTools.@setup_workload begin
+    fold1 = Val{false}()
+    fold2 = Val{true}()
     PrecompileTools.@compile_workload begin
         @syms x y f(t) q[1:5]
+        Sym{SymReal}(:a; type = Real, shape = ShapeVecT())
         x + y
         x * y
         x / y
@@ -165,14 +175,29 @@ PrecompileTools.@setup_workload begin
         6 ^ x
         x - y
         -y
+        2y
+        symtype(y)
         f(x)
         (5x / 5)
+        z = 2
+        x ^ z
+        Const{SymReal}(x; unsafe=true)
         show(devnull, x ^ 2 + y * x + y / 3x)
         expand((x + y) ^ 2)
         simplify(x ^ (1//2) + (sin(x) ^ 2 + cos(x) ^ 2) + 2(x + y) - x - y)
-        substitute(x + 2y + sin(x), Dict(x => y); fold = false)
-        substitute(x + 2y + sin(x), Dict(x => 1); fold = true)
+        ex = x + 2y + sin(x)
+        rules1 = Dict(x => y)
+        rules2 = Dict(x => 1)
+        # Running `fold = Val(true)` invalidates the precompiled statements
+        # for `fold = Val(false)` and itself doesn't precompile anyway.
+        substitute(ex, rules1)
+        # substitute(ex, rules1; fold = fold1)
+        # substitute(ex, rules2; fold = fold1)
+        # substitute(ex, rules2)
+        # substitute(ex, rules1; fold = fold2)
+        # substitute(ex, rules2; fold = fold2)
         q[1]
+        q'q
     end
 end
 

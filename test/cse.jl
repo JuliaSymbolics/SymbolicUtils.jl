@@ -10,8 +10,8 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 
     @test t isa Let
     @test length(t.pairs) == 5
-    @test occursin(t.pairs[3].lhs, t.pairs[5].rhs)
-    @test occursin(t.pairs[4].lhs, t.pairs[5].rhs)
+    @test SymbolicUtils.query(isequal(t.pairs[3].lhs), t.pairs[5].rhs)
+    @test SymbolicUtils.query(isequal(t.pairs[4].lhs), t.pairs[5].rhs)
 end
 
 @testset "DAG CSE" begin
@@ -61,7 +61,9 @@ end
     end
     ex = term(foo, [a^2 + b^2, b^2 + c], (a^2 + b^2, b^2 + c), c; type = Real)
     sorted_nodes = topological_sort(ex)
-    @test length(sorted_nodes) == 7
+    @test length(sorted_nodes) == 10
+    @test operation(sorted_nodes[8].rhs) === hvncat
+    @test operation(sorted_nodes[9].rhs) === tuple
     expr = quote
         a = 1
         b = 2
@@ -144,7 +146,7 @@ end
 end
 
 @testset "Let, Func, Assignment, DestructuredArgs" begin
-    @syms a b c d::Array e f
+    @syms a b c d::Vector{Real} e f
     fn = Func([a, DestructuredArgs([b, c])], [], Let([Assignment(d, [a^2 + b^2, b^2 + c^2]), DestructuredArgs([e, f], term(broadcast, *, 2, d))], a^2 + b^2 + e + f))
     csex = cse(fn)
     sexprs = csex.body.pairs
@@ -206,7 +208,7 @@ end
 end
 
 @testset "ForLoop" begin
-    @syms a b c::Array
+    @syms a b c::Vector{Real}
     ex = ForLoop(a, term(range, b^2, b^2 + 3), SetArray(false, c, [AtIndex(a, a^2 + sin(a^2))]))
     csex = cse(ex)
     @test findfirst(isequal(csex.body.range), Code.lhs.(csex.pairs)) !== nothing
@@ -227,7 +229,7 @@ end
 end
 
 @testset "CSE doesn't affect ranges" begin
-    @syms x::Array
+    @syms x::Vector{Real}
     t = term(view, x, 1:3)
     fnexpr = Func([x], [], t)
     fn1 = @RuntimeGeneratedFunction(toexpr(fnexpr))

@@ -1130,4 +1130,6 @@ function mul5_cse2(expr, state::CSEState)
     return expr
 end
 
+include("irpass2.jl")
+
 end

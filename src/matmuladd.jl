@@ -132,7 +132,7 @@ function apply_optimization_rules(expr, state::CSEState, rules=[MATMUL_ADD_RULE]
     for rule in sort(rules, by=r->r.priority, rev=true)
         match_data = rule.detector(expr, state)
         if match_data !== nothing # || !isempty(match_data)
-            return map(m -> rule.transformer(expr, m, state), match_data) |> first
+            return map(m -> walk_ir(rule.transformer(expr, m, state), Mul5Visitor()), match_data) |> first
         end
     end
     return nothing

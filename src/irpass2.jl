@@ -92,12 +92,6 @@ visit(visitor::IRVisitor, node::Union{Int, Symbol, Nothing}, ctx) = node
 Visit an Assignment node. Default implementation recursively visits rhs.
 """
 function visit(visitor::IRVisitor, asgn::Assignment, ctx)
-    @show "in visit assignment"
-    @show asgn.lhs
-    @show typeof(asgn.lhs)
-    @show Main.@which walk_ir(asgn.lhs, visitor, PostOrder(), ctx)
-    # @show Main.@which walk_ir_postorder(asgn.lhs, visitor, ctx)
-    @show visitor
     new_lhs = walk_ir(asgn.lhs, visitor, PostOrder(), ctx)
     new_rhs = walk_ir(asgn.rhs, visitor, PostOrder(), ctx)
     return Assignment(new_lhs, new_rhs)
@@ -109,7 +103,6 @@ end
 Visit a Let node. Default implementation recursively visits pairs and body.
 """
 function visit(visitor::IRVisitor, let_node::Let, ctx)
-    @show "in visit_let"
     push_scope!(ctx)
     new_pairs = [walk_ir(pair, visitor, PostOrder(), ctx) for pair in let_node.pairs]
     new_body = walk_ir(let_node.body, visitor, PostOrder(), ctx)

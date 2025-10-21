@@ -5,6 +5,7 @@ import MultivariatePolynomials as MP
 using Setfield
 using Test, ReferenceTests
 import LinearAlgebra
+using SparseArrays
 
 include("utils.jl")
 
@@ -1178,4 +1179,13 @@ end
             @test Tuple(idxs[i]) == Tuple(CartesianIndices(Tuple(shape(v)))[i])
         end
     end
+end
+
+@testset "promote_symtype with sparse operations" begin
+    S = sprand(5, 5, 0.1)
+    @syms z[1:5, 1:5]::Real
+    @test SymbolicUtils.promote_symtype(*, typeof(S), symtype(z)) == Matrix{Real}
+    @test SymbolicUtils.promote_symtype(+, typeof(S), symtype(z)) == Matrix{Real}
+    @test SymbolicUtils.promote_symtype(\, typeof(S), symtype(z)) == Matrix{Real}
+    @test SymbolicUtils.promote_symtype(/, typeof(S), symtype(z)) == Matrix{Real}
 end

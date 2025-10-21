@@ -128,12 +128,16 @@ for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
             return S
         elseif S <: T
             return T
+        elseif T <: AbstractArray && !(T <: Array)
+            return promote_symtype($f, Array{eltype(T), ndims(T)::Int}, S)
+        elseif S <: AbstractArray && !(S <: Array)
+            return promote_symtype($f, T, Array{eltype(S), ndims(S)::Int})
         elseif $(f === (*) || f === Base.mul_prod) && T <: AbstractMatrix && S <: AbstractVecOrMat
-            return Array{promote_symtype(*, T.parameters[1]::TypeT, S.parameters[1]::TypeT), S.parameters[2]}
+            return Array{promote_symtype(*, T.parameters[1]::TypeT, S.parameters[1]::TypeT), S.parameters[2]::Int}
         elseif $(f === (*) || f === Base.mul_prod) && T <: AbstractArray && S <: Number
-            return Array{promote_symtype(*, T.parameters[1]::TypeT, S), T.parameters[2]}
+            return Array{promote_symtype(*, T.parameters[1]::TypeT, S), T.parameters[2]::Int}
         elseif $(f === (*) || f === Base.mul_prod) && T <: Number && S <: AbstractArray
-            return Array{promote_symtype(*, T, S.parameters[1]::TypeT), S.parameters[2]}
+            return Array{promote_symtype(*, T, S.parameters[1]::TypeT), S.parameters[2]::Int}
         elseif $(f === (+) || f === Base.add_sum || f === (-)) && T <: AbstractArray && S <: AbstractArray
             nd = T.parameters[2]::Int
             @assert nd == S.parameters[2]::Int
@@ -191,6 +195,10 @@ for f in [/, \]
             return Real
         elseif T <: Rational && S <: Integer
             return Real
+        elseif T <: AbstractArray && !(T <: Array)
+            return promote_symtype($f, Array{eltype(T), ndims(T)::Int}, S)
+        elseif S <: AbstractArray && !(S <: Array)
+            return promote_symtype($f, T, Array{eltype(S), ndims(S)::Int})
         elseif $(f === (\)) && T <: Number && S <: AbstractArray
             return Array{promote_symtype(/, T, S.parameters[1]::TypeT), S.parameters[2]::Int}
         elseif $(f === (\)) && T <: AbstractVector && S <: AbstractVector

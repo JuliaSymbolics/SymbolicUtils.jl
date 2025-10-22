@@ -242,7 +242,7 @@ function transform_ir(transform_fn, ir;
 end
 
 struct Mul5Visitor <: IRVisitor end
-function Code.visit(visitor::Mul5Visitor, assgn::Assignment, ctx)
+function visit(visitor::Mul5Visitor, assgn::Assignment, ctx)
     # if operation(asgn.rhs) == +
     #     Assignment(asgn.lhs, -(arguments(asgn.rhs)...))
     # else

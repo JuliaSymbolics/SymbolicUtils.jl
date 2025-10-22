@@ -156,6 +156,11 @@ export substitute
 include("substitute.jl")
 
 include("code.jl")
+import .Code
+import .Code: CSEState, Let, Assignment, Func, MakeArray,
+    MakeSparseArray, AtIndex, DestructuredArgs, SpawnFetch,
+    LiteralExpr, BasicSymbolic, ForLoop, SetArray, MakeTuple,
+    lhs, rhs
 include("matmuladd.jl")
 
 # Updated mul5_cse2 that uses the rule system

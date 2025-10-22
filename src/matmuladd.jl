@@ -20,7 +20,7 @@ function validate_mul_shapes(A, B, C...)
     [shape(A)[1], shape(B)[2]] == shape(first(C))
 end
 
-function detect_matmul_add_pattern(expr::Let, state::CSEState)
+function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     mul_candidates_idx = findall(expr.pairs) do x
         # @show typeof(rhs(x))
         # @show arguments(rhs(x))
@@ -71,7 +71,7 @@ function detect_matmul_add_pattern(expr::Let, state::CSEState)
     isempty(pattern) ? nothing : pattern
 end
 
-function detect_matmul_add_pattern(expr, state::CSEState)
+function detect_matmul_add_pattern(expr, state::Code.CSEState)
     # Must be addition with exactly 2 arguments
     if !iscall(expr) || (operation(expr) !== +) || length(arguments(expr)) != 2
         return nothing
@@ -95,7 +95,7 @@ function detect_matmul_add_pattern(expr, state::CSEState)
     return nothing
 end
 
-function transform_to_mul5_assignment(expr, match_data_, state::CSEState)
+function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     # @show expr
 
     # Create temporary variable for the result
@@ -133,7 +133,7 @@ function transform_to_mul5_assignment(expr, match_data_, state::CSEState)
 
     push!(state.sorted_exprs, m...)
     temp_var = last(m).lhs
-    Let(m, temp_var, false)
+    Code.Let(m, temp_var, false)
 end
 
 const MATMUL_ADD_RULE = OptimizationRule(
@@ -143,10 +143,10 @@ const MATMUL_ADD_RULE = OptimizationRule(
     10
 )
 
-Base.isempty(l::Let) = isempty(l.pairs)   
+Base.isempty(l::Code.Let) = isempty(l.pairs)   
 
 # Apply optimization rules during CSE
-function apply_optimization_rules(expr, state::CSEState, rules=[MATMUL_ADD_RULE])
+function apply_optimization_rules(expr, state::Code.CSEState, rules=[MATMUL_ADD_RULE])
     for rule in sort(rules, by=r->r.priority, rev=true)
         match_data = reduce(vcat, rule.detector(expr, state))
         if match_data !== nothing # || !isempty(match_data)

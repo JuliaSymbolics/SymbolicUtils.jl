@@ -1484,6 +1484,8 @@ function _is_tuple_of_symbolics(O::Tuple)
 end
 _is_tuple_of_symbolics(O) = false
 
+array_literal(sz::NTuple{N, Int}, args...) where {N} = reshape(Base.vect(args...), sz)
+
 """
     BSImpl.Const{T}(val) where {T}
 
@@ -1500,7 +1502,7 @@ arrays/tuples of symbolics to symbolic expressions.
 This is the low-level constructor for constant expressions. It handles several special cases:
 1. If `val` is already a `BasicSymbolic{T}`, returns it unchanged
 2. If `val` is a `BasicSymbolic` of a different variant type, throws an error
-3. If `val` is an array containing symbolic elements, creates a `Term` with `hvncat` operation
+3. If `val` is an array containing symbolic elements, creates a `Term` with [`array_literal`](@ref) operation
 4. If `val` is a tuple containing symbolic elements, creates a `Term` with `tuple` operation
 5. Otherwise, creates a `Const` variant wrapping the value
 
@@ -1520,15 +1522,15 @@ The `unsafe` flag skips hash consing for performance in internal operations.
     elseif val isa BasicSymbolic{TreeReal}
         error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
     elseif val isa AbstractArray && _is_array_of_symbolics(val)
-        args = ArgsT{T}((BSImpl.Const{T}(size(val); unsafe), BSImpl.Const{T}(false; unsafe)))
-        sizehint!(args, length(val) + 2)
+        args = ArgsT{T}((BSImpl.Const{T}(size(val); unsafe),))
+        sizehint!(args, length(val) + 1)
         type = Union{}
         for v in val
             push!(args, BSImpl.Const{T}(v))
             type = promote_type(type, symtype(v))
         end
         shape = ShapeVecT(axes(val))
-        return BSImpl.Term{T}(hvncat, args; type = Array{type, ndims(val)}, shape, unsafe)
+        return BSImpl.Term{T}(array_literal, args; type = Array{type, ndims(val)}, shape, unsafe)
     elseif val isa Tuple && _is_tuple_of_symbolics(val)
         args = ArgsT{T}()
         sizehint!(args, length(val))
@@ -2470,7 +2472,7 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
             @set! res.metadata = metadata
         end
         return res::BasicSymbolic{T}
-    elseif f === hvncat
+    elseif f === array_literal
         sh = ShapeVecT()
         for dim in unwrap_const(args[1])
             push!(sh, 1:dim)
@@ -3998,8 +4000,8 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex) where {T}
     sh::ShapeVecT = shape(arr)
     @match arr begin
         BSImpl.Const(; val) => return Const{T}(scalar_index(val, as_linear_idx(sh, sidxs)))
-        BSImpl.Term(; f, args) && if f === hvncat end => begin
-            return args[2 + as_linear_idx(sh, sidxs)]
+        BSImpl.Term(; f, args) && if f === array_literal  end => begin
+            return args[1 + as_linear_idx(sh, sidxs)]
         end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => begin
             return args[as_linear_idx(sh, sidxs)]
@@ -4069,8 +4071,8 @@ end
 Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     @match arr begin
         BSImpl.Const(; val) && if all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => return Const{T}(val[unwrap_const.(idxs)...])
-        BSImpl.Term(; f) && if f === hvncat && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
-            return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
+        BSImpl.Term(; f) && if f === array_literal && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
+            return Const{T}(reshape(@view(arguments(arr)[2:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin

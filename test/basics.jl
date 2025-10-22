@@ -217,13 +217,13 @@ end
     var = Const{SymReal}(symvec)
     @test var isa BasicSymbolic{SymReal}
     @test isterm(var)
-    @test isequal(arguments(var), Const{SymReal}.([(2,), false, h, x]))
+    @test isequal(arguments(var), Const{SymReal}.([(2,), h, x]))
     @test symtype(var) == Vector{Number}
     @test shape(var) == ShapeVecT((1:2,))
     var = Const{SymReal}(symmat)
     @test var isa BasicSymbolic{SymReal}
     @test isterm(var)
-    @test isequal(arguments(var), Const{SymReal}.([(2, 2), false, h, y, x, z]))
+    @test isequal(arguments(var), Const{SymReal}.([(2, 2), h, y, x, z]))
     @test symtype(var) == Matrix{Number}
     @test shape(var) == ShapeVecT((1:2, 1:2))
     csymvec = Const{SymReal}(symvec)

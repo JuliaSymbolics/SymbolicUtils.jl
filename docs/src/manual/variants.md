@@ -108,8 +108,8 @@ variant. This variant can be constructed using `Const{T}(val)` or `BSImpl.Const{
 where `T` is the appropriate `vartype`.
 
 The `Const` constructors have an additional special behavior. If given an array of symbolics
-(or array of array of ... symbolics), it will return a `Term` (see below) with `hvncat` as
-the operation. This allows standard symbolic operations (such as [`substitute`](@ref)) to
+(or array of array of ... symbolics), it will return a `Term` (see below) with [`array_literal`](@ref)
+as the operation. This allows standard symbolic operations (such as [`substitute`](@ref)) to
 work on arrays of symbolics without excessive special-case handling and improved
 type-stability.
 
@@ -409,6 +409,7 @@ unwrap_const
 ### Inner constructors
 
 ```@docs
+SymbolicUtils.array_literal
 SymbolicUtils.BSImpl.Const
 SymbolicUtils.BSImpl.Sym
 SymbolicUtils.BSImpl.Term

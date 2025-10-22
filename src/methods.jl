@@ -238,7 +238,7 @@ end
 _sequential_promote(T::TypeT) = T
 
 
-function promote_symtype(::typeof(hvncat), Tp::TypeT, Ts::TypeT...)
+function promote_symtype(::typeof(array_literal), Tp::TypeT, Ts::TypeT...)
     @assert Tp <: Tuple
     return Array{_sequential_promote(Ts...), length(Tp.parameters)}
 end

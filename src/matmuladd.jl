@@ -11,6 +11,10 @@ function find_cse_expr(x, state)
     isnothing(idx) ? nothing : (; expr = rhs(state.sorted_exprs[idx]), x)
 end
 
+function is_cse_var(x)
+    startswith(string(nameof(x)), "##cse")
+end
+
 function validate_mul_shapes(A, B, C)
     [shape(A)[1], shape(B)[2]] == shape(C)
 end
@@ -22,9 +26,7 @@ end
 
 function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     mul_candidates_idx = findall(expr.pairs) do x
-        # @show typeof(rhs(x))
-        # @show arguments(rhs(x))
-        # @show x
+        @show typeof(rhs(x))
         args = rhs(x) isa Const ? [] : arguments(rhs(x))
         all_arrays = all(y -> y <: AbstractArray, symtype.(args))
         is_mul = operation(rhs(x)) === *
@@ -49,8 +51,6 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     end
     candidates = filter(!isnothing, reduce(vcat, candidates))
 
-    # @show plus_candidates
-
     pattern = map(plus_candidates_idx, plus_candidates) do plus_idx, c
         plus_args = arguments(rhs(c))
         mul_pattern = map(mul_candidates_idx, mul_candidates) do mul_idx, m
@@ -59,55 +59,25 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
             if nameof(mul_val) in nameof.(plus_args)
                 A, B = arguments(rhs(m))
                 Cs = filter(x -> nameof(x) != nameof(mul_val), plus_args)
-                # @show validate_mul_shapes(A, B, Cs...)
                 validate_mul_shapes(A, B, Cs...) || return nothing
                 return (; A, B, Cs, mul_candidate = m, plus_candidate = c, mul_idx, plus_idx, pattern="A*B + C")
             end
         end
-        # @show mul_pattern
-        # only(filter(!isnothing, mul_pattern))
         filter(!isnothing, mul_pattern)
     end
     isempty(pattern) ? nothing : pattern
 end
 
-function detect_matmul_add_pattern(expr, state::Code.CSEState)
-    # Must be addition with exactly 2 arguments
-    if !iscall(expr) || (operation(expr) !== +) || length(arguments(expr)) != 2
-        return nothing
-    end
-
-    args = arguments(expr)
-
-    if all(x -> x <: AbstractArray, symtype.(args))
-        if (operation(expr) === +) && length(args) == 2
-            cse_exprs = map(x -> find_cse_expr(x, state), args)
-            C_idx = only(findfirst(isnothing, cse_exprs))
-            var_idx = only(findfirst(!isnothing, cse_exprs))
-            C = args[C_idx]
-            var_ex = cse_exprs[var_idx].expr
-            var_args = arguments(var_ex)
-            @assert operation(var_ex) === *
-
-            return (; A = var_args[1], B = var_args[2], C = C, original_expr = expr)
-        end
-    end
-    return nothing
-end
-
 function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
-    # @show expr
 
     # Create temporary variable for the result
-    # temp_var_sym = gensym("mul5_temp")
-    # temp_var = Sym{T}(temp_var_sym; type=symtype(C))
-    # T = vartype(C)
+    Cset = Set(filter(!is_cse_var, reduce(vcat,getproperty.(match_data_, :Cs))))
+    final_temps = []
 
     m = map(match_data_) do match_data
 
         A, B = match_data.A, match_data.B
-        Cs = match_data.Cs
-        C, other_Cs... = Cs
+        C = pop!(Cset)
         T = vartype(C)
 
         # Create temporary variable for the result
@@ -122,18 +92,15 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
         # Add assignments to CSE state
         copy_assignment = Assignment(temp_var, copy_call)
         mul_assignment = Assignment(temp_var, mul_call)  # This overwrites temp_var with mul! result
-        if !isempty(other_Cs)
-            plus_call = Term{T}(+, [temp_var, other_Cs...]; type=symtype(C))
-            final_assignment = Assignment(temp_var, plus_call)
-        else
-            final_assignment = Assignment(temp_var, temp_var)
-        end
+        final_assignment = Assignment(temp_var, temp_var)
+        push!(final_temps, temp_var)
+
         [copy_assignment, mul_assignment, final_assignment]
     end |> Base.Fix1(reduce, vcat)
 
     push!(state.sorted_exprs, m...)
     temp_var = last(m).lhs
-    Code.Let(m, temp_var, false)
+    Code.Let(m, +(final_temps..., Cset...), false)
 end
 
 const MATMUL_ADD_RULE = OptimizationRule(

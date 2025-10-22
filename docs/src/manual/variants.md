@@ -336,7 +336,7 @@ to Base-like behavior:
   doing so requires the function(s) passed to `map` and `mapreduce` instead of their types
   or shapes.
 - Since `ndims` information is not present in the type, `eachindex`, `iterate`, `size`,
-  `axes`, `ndims`, `collect` are type-unstable. [`safe_eachindex`](@ref) is useful as
+  `axes`, `ndims`, `collect` are type-unstable. [`stable_eachindex`](@ref) is useful as
   a type-stable iteration alternative.
 - `ifelse` requires that both the true and false cases have identical shape.
 - Symbolic arrays _only_ support cartesian indexing. For example, given `@syms x[1:3, 1:3]`
@@ -458,9 +458,9 @@ SymbolicUtils.promote_shape
 ### Symbolic array utilities
 
 ```@docs
-SymbolicUtils.safe_eachindex
-SymbolicUtils.SafeIndices
-SymbolicUtils.SafeIndex
+SymbolicUtils.stable_eachindex
+SymbolicUtils.StableIndices
+SymbolicUtils.StableIndex
 BS
 ```
 

@@ -58,35 +58,3 @@ SymbolicUtils.simplify_fractions
 SymbolicUtils.quick_cancel
 SymbolicUtils.flatten_fractions
 ```
-
-## Code Generation
-
-### Core Functions
-```@docs
-SymbolicUtils.Code.toexpr
-SymbolicUtils.Code.cse
-```
-
-### Code Generation Types
-```@docs
-SymbolicUtils.Code.Assignment
-SymbolicUtils.Code.Let
-SymbolicUtils.Code.Func
-SymbolicUtils.Code.DestructuredArgs
-SymbolicUtils.Code.LiteralExpr
-SymbolicUtils.Code.ForLoop
-```
-
-### Array Operations
-```@docs
-SymbolicUtils.Code.SetArray
-SymbolicUtils.Code.MakeArray
-SymbolicUtils.Code.MakeSparseArray
-SymbolicUtils.Code.MakeTuple
-```
-
-### Parallelism
-```@docs
-SymbolicUtils.Code.SpawnFetch
-SymbolicUtils.Code.Multithreaded
-```

@@ -13,7 +13,8 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
-                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape
+                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
+                      vartype, symtype
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -219,7 +220,7 @@ function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
     #     end
     # end
     if outsym isa Symbol
-        outsym = Sym{T}(outsym; type = Any, shape = Unknown(-1))
+        outsym = Sym{T}(outsym; type = Array{Any}, shape = Unknown(-1))
     end
     sh = shape(x)
     ranges = x.ranges
@@ -492,6 +493,8 @@ Func
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 function toexpr(f::Func, st)
+    # @show st
+    # @show f.args
     funkyargs = get_rewrites(vcat(f.args, map(lhs, f.kwargs)))
     union_rewrites!(st.rewrites, funkyargs)
     dargs = filter(x->x isa DestructuredArgs, f.args)
@@ -1019,7 +1022,6 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
                 return sym
             end
         end
-
     end
 end
 

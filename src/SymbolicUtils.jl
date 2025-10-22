@@ -156,6 +156,22 @@ export substitute
 include("substitute.jl")
 
 include("code.jl")
+include("matmuladd.jl")
+
+# Updated mul5_cse2 that uses the rule system
+function mul5_cse2(expr, state::CSEState)
+
+    # Try to apply optimization rules
+    optimized = apply_optimization_rules(expr, state)
+    if optimized !== nothing
+        return optimized
+    end
+
+    # If no optimization applied, return original expression
+    return expr
+end
+
+include("irpass2.jl")
 
 PrecompileTools.@recompile_invalidations begin
     include("despecialize.jl")

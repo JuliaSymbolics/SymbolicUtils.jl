@@ -32,6 +32,6 @@ using Pkg, Test, SafeTestsets
         @safetestset "Method library" begin include("methods.jl") end
 
         # Optimization
-        @safetestset "MatmulAdd Optimization" begin include("test_mul5_optimization.jl") end
+        @safetestset "MatmulAdd Optimization" begin include("mul5_opt.jl") end
     end
 end

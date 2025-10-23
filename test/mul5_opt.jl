@@ -1,7 +1,6 @@
 using SymbolicUtils
 using SymbolicUtils.Code
 import SymbolicUtils as SU
-using Symbolics
 using LinearAlgebra
 using Test
 
@@ -30,11 +29,11 @@ function test_optimization(expr, args...)
     has_optimization = has_mul5_optimization(optimized_ir)
     @test has_optimization
 
-    f_cse_expr = build_function(cse_ir, args...; array = false, cse = true)
-    f_cse = eval(f_cse_expr)
+    f_cse_expr = Func(collect(args), [], cse_ir)
+    f_cse = eval(toexpr(f_cse_expr))
 
-    f_opt_expr = build_function(cse_ir, args...; array = true, cse = true)
-    f_opt = eval(f_opt_expr)
+    f_opt_expr = Func(collect(args), [], optimized_ir)
+    f_opt = eval(toexpr(f_opt_expr))
 
     test_A = randn(3, 3)
     test_B = randn(3, 3)

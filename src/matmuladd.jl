@@ -20,14 +20,14 @@ function validate_mul_shapes(A, B, C)
 end
 
 function validate_mul_shapes(A, B, C...)
-    # [shape(A)[1], shape(B)[2]] == shape(first(C)) && all(x -> shape(first(C)) == shape(x), Base.tail(C))
+    return true
     [shape(A)[1], shape(B)[2]] == shape(first(C))
 end
 
 function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     mul_candidates_idx = findall(expr.pairs) do x
-        @show typeof(rhs(x))
-        args = rhs(x) isa Const ? [] : arguments(rhs(x))
+        iscall(rhs(x)) || return false
+        args = arguments(rhs(x))
         all_arrays = all(y -> y <: AbstractArray, symtype.(args))
         is_mul = operation(rhs(x)) === *
         all_arrays && is_mul
@@ -35,7 +35,9 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     mul_candidates = expr.pairs[mul_candidates_idx]
 
     plus_candidates_idx = findall(expr.pairs) do x
-        all_arrays = all(y -> y <: AbstractArray, symtype.(arguments(rhs(x))))
+        iscall(rhs(x)) || return false
+        args = arguments(rhs(x))
+        all_arrays = all(y -> y <: AbstractArray, symtype.(args))
         is_plus = operation(rhs(x)) === +
         all_arrays && is_plus
     end
@@ -69,8 +71,6 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
 end
 
 function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
-
-    # Create temporary variable for the result
     Cset = Set(filter(!is_cse_var, reduce(vcat,getproperty.(match_data_, :Cs))))
     final_temps = []
 
@@ -117,11 +117,7 @@ function apply_optimization_rules(expr, state::Code.CSEState, rules=[MATMUL_ADD_
     for rule in sort(rules, by=r->r.priority, rev=true)
         match_data = reduce(vcat, rule.detector(expr, state))
         if match_data !== nothing # || !isempty(match_data)
-            # @show typeof(match_data)
-            # @show rule.transformer(expr, first(match_data), state)
             return rule.transformer(expr, match_data, state)
-            # return map(m -> walk_ir(rule.transformer(expr, m, state), Mul5Visitor()), match_data) |> first
-            # return map(m -> walk_ir(rule.transformer(expr, m, state), Mul5Visitor()), match_data)
         end
     end
     return nothing

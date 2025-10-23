@@ -30,5 +30,8 @@ using Pkg, Test, SafeTestsets
         @safetestset "Recursive utilities" begin include("recursive_utils.jl") end
         @safetestset "Misc" begin include("misc.jl") end
         @safetestset "Method library" begin include("methods.jl") end
+
+        # Optimization
+        @safetestset "MatmulAdd Optimization" begin include("mul5_opt.jl") end
     end
 end

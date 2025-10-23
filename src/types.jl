@@ -1484,6 +1484,15 @@ function _is_tuple_of_symbolics(O::Tuple)
 end
 _is_tuple_of_symbolics(O) = false
 
+"""
+    $TYPEDSIGNATURES
+
+Utility function used as the operation of expressions representing an array of symbolic values.
+See [`SymbolicUtils.BSImpl.Const`](@ref) for more details.
+
+The first argument `sz` is the `size` of the represented array. `args...` is `prod(sz)`
+elements representing the elements of the array in column-major order.
+"""
 array_literal(sz::NTuple{N, Int}, args...) where {N} = reshape(Base.vect(args...), sz)
 
 """
@@ -1502,7 +1511,8 @@ arrays/tuples of symbolics to symbolic expressions.
 This is the low-level constructor for constant expressions. It handles several special cases:
 1. If `val` is already a `BasicSymbolic{T}`, returns it unchanged
 2. If `val` is a `BasicSymbolic` of a different variant type, throws an error
-3. If `val` is an array containing symbolic elements, creates a `Term` with [`array_literal`](@ref) operation
+3. If `val` is an array containing symbolic elements, creates a `Term` with
+   [`SymbolicUtils.array_literal`](@ref) operation
 4. If `val` is a tuple containing symbolic elements, creates a `Term` with `tuple` operation
 5. Otherwise, creates a `Const` variant wrapping the value
 

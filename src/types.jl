@@ -3425,7 +3425,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif ntrivialdict
         num = Const{T}(num_coeff[])
     else
-        num = Mul{T}(num_coeff[], num_dict; type = safe_eltype(type)::TypeT)
+        num = Mul{T}(num_coeff[], num_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match num begin
             BSImpl.AddMul(; dict) && if dict === num_dict end => begin
                 mwb.num_dict = ACDict{T}()
@@ -3438,7 +3438,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif dtrivialdict
         den = Const{T}(den_coeff[])
     else
-        den = Mul{T}(den_coeff[], den_dict; type = safe_eltype(type)::TypeT)
+        den = Mul{T}(den_coeff[], den_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match den begin
             BSImpl.AddMul(; dict) && if dict === den_dict end => begin
                 mwb.den_dict = ACDict{T}()
@@ -3452,7 +3452,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif dtrivial
         result = num
     else
-        result = Div{T}(num, den, false; type = safe_eltype(type)::TypeT)
+        result = Div{T}(num, den, false; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
     end
 
     isempty(arrterms) && return result
@@ -3841,7 +3841,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                 if _isone(coeff)
                     return Term{T}(^, ArgsT{T}((rest, Const{T}(b))); type, shape = newshape)
                 end
-                return (coeff ^ b * rest ^ b)
+                return ((coeff ^ b)::BasicSymbolic{T} * (rest ^ b)::BasicSymbolic{T})
             end
             _ => return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
         end

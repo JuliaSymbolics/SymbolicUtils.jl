@@ -18,8 +18,7 @@ using SymbolicIndexingInterface
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 using ConstructionBase
 using TermInterface
-import TermInterface: iscall, isexpr, children,
-                      operation, arguments, metadata, maketerm, sorted_arguments
+import TermInterface: iscall, operation, arguments, metadata, maketerm, sorted_arguments
 # For ReverseDiffExt
 import ArrayInterface
 import ExproniconLite as EL

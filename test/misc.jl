@@ -227,11 +227,10 @@ end
     # Test array of symbolics
     arr = [x, y, x+y]
     const_arr = SymbolicUtils.Const{SymbolicUtils.SymReal}(arr)
-    @test operation(const_arr) === hvncat
+    @test operation(const_arr) === SymbolicUtils.array_literal
     args = arguments(const_arr)
     @test unwrap_const(args[1]) == (3,)
-    @test unwrap_const(args[2]) == false
-    @test length(args) == 5
+    @test length(args) == 4
 
     # Test tuple of symbolics
     tup = (x, y)

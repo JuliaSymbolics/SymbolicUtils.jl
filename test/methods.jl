@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown
+using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal
 using Test
 import NaNMath
 import LinearAlgebra
@@ -72,9 +72,9 @@ end
     @test promote_shape(identity, ShapeVecT()) == ShapeVecT()
     @test promote_shape(identity, ShapeVecT((1:2, 1:3))) == ShapeVecT((1:2, 1:3))
 end
-@testset "promote_symtype for hvncat" begin
-    @test promote_symtype(hvncat, NTuple{2, Int}, Int, Float64, Int32) == Array{Float64, 2}
-    @test promote_symtype(hvncat, NTuple{3, Int}, Int, Int, Int) == Array{Int, 3}
+@testset "promote_symtype for `array_literal`" begin
+    @test promote_symtype(array_literal, NTuple{2, Int}, Int, Float64, Int32) == Array{Float64, 2}
+    @test promote_symtype(array_literal, NTuple{3, Int}, Int, Int, Int) == Array{Int, 3}
 end
 
 @testset "promote_symtype for rem2pi" begin

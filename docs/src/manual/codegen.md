@@ -35,4 +35,18 @@ SymbolicUtils.Code.MakeArray
 SymbolicUtils.Code.MakeSparseArray
 SymbolicUtils.Code.MakeTuple
 SymbolicUtils.Code.LiteralExpr
+SymbolicUtils.Code.ForLoop
+```
+
+## Optimizations
+
+### Common Subexpression Elimination (CSE)
+
+SymbolicUtils can perform CSE on symbolic expressions, and codegen primitives composed of the above "Code Combinators".
+This ensures that common subexpressions in the expression are only computed once. Note that this assumes that all functions
+called within the expression are pure. SymbolicUtils can and will change the number and order of function calls.
+
+```@docs
+SymbolicUtils.Code.cse
+SymbolicUtils.Code.cse_inside_expr
 ```

@@ -61,9 +61,9 @@ end
     end
     ex = term(foo, [a^2 + b^2, b^2 + c], (a^2 + b^2, b^2 + c), c; type = Real)
     sorted_nodes = topological_sort(ex)
-    @test length(sorted_nodes) == 10
-    @test operation(sorted_nodes[8].rhs) === hvncat
-    @test operation(sorted_nodes[9].rhs) === tuple
+    @test length(sorted_nodes) == 9
+    @test operation(sorted_nodes[7].rhs) === SymbolicUtils.array_literal
+    @test operation(sorted_nodes[8].rhs) === tuple
     expr = quote
         a = 1
         b = 2

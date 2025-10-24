@@ -33,7 +33,7 @@ the expression.
 This function is used internally for printing via AbstractTrees.
 """
 function AbstractTrees.children(x::BasicSymbolic)
-    iscall(x) ? sorted_arguments(x) : isexpr(x) ? sorted_children(x) : ()
+    iscall(x) ? sorted_arguments(x) : ()
 end
 
 """

@@ -1,8 +1,27 @@
 export SymReal, SafeReal, TreeReal, vartype
 
 abstract type SymVariant end
+"""
+    $TYPEDEF
+
+One of three possible values of the [`vartype`](@ref). This variant is the default and
+behaves as a typical ideal scalar algebra would be expected to.
+"""
 abstract type SymReal <: SymVariant end
+"""
+    $TYPEDEF
+
+One of three possible values of the [`vartype`](@ref). This variant is identical to
+[`SymReal`](@ref) except common terms in the numerator and denominator of a division are
+not cancelled out.
+"""
 abstract type SafeReal <: SymVariant end
+"""
+    $TYPEDEF
+
+One of three possible values of the [`vartype`](@ref). This variant does not assume anything
+about the algebra and always uses the default tree form for expressions.
+"""
 abstract type TreeReal <: SymVariant end
 
 ###
@@ -35,10 +54,25 @@ end
 
 const SCALARS = [Bool, Int, Int32, BigInt, Float64, Float32, BigFloat, Rational{Int}, Rational{Int32}, Rational{BigInt}, ComplexF32, ComplexF64, Complex{BigFloat}]
 
+"""
+    $TYPEDEF
 
+Type of metadata field for symbolics.
+"""
 const MetadataT = Union{Base.ImmutableDict{DataType, Any}, Nothing}
+"""
+    $TYPEDEF
+
+A custom vector type which does not allocate for small numbers of elements. If the number of elements is
+known at compile time, it should be passed as a `Tuple` to the constructor.
+"""
 const SmallV{T} = SmallVec{T, Vector{T}}
 const ShapeVecT = SmallV{UnitRange{Int}}
+"""
+    $TYPEDEF
+
+Type that represents the [`SymbolicUtils.shape`](@ref) of symbolics.
+"""
 const ShapeT = Union{Unknown, ShapeVecT}
 const IdentT = Union{IDType, Nothing}
 const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
@@ -50,6 +84,11 @@ const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
 # we can't actually print a zero polynomial of this type, since it attempts to call
 # `zero(Any)` but that doesn't matter because we shouldn't ever store a zero polynomial
 const PolynomialT = _PolynomialT{PolyCoeffT}
+"""
+    $TYPEDEF
+
+Allowed types for the [`SymbolicUtils.symtype`](@ref) of symbolics.
+"""
 const TypeT = DataType
 const MonomialT = DP.Monomial{PolyVarOrder, MonomialOrder}
 const MonomialVecT = DP.MonomialVector{PolyVarOrder, MonomialOrder}
@@ -81,6 +120,12 @@ function onepoly()
     PolynomialT(PolyCoeffT[1], mv)
 end
 
+"""
+    $(TYPEDEF)
+
+An EnumX.jl enum used to distinguish between addition and multiplication in
+[`SymbolicUtils.BSImpl.AddMul`](@ref).
+"""
 @enumx AddMulVariant::Bool begin
     ADD
     MUL
@@ -89,7 +134,7 @@ end
 """
     $(TYPEDEF)
 
-Core ADT for `BasicSymbolic`
+Core ADT for symbolic expressions.
 """
 @data mutable BasicSymbolicImpl{T <: SymVariant} begin 
     struct Const
@@ -171,12 +216,38 @@ Core ADT for `BasicSymbolic`
     end
 end
 
+"""
+    Alias for `SymbolicUtils.BasicSymbolicImpl`.
+"""
 const BSImpl = BasicSymbolicImpl
+"""
+    Alias for `SymbolicUtils.BasicSymbolicImpl.Type`.
+"""
 const BasicSymbolic = BSImpl.Type
+"""
+    The type of a mutable buffer containing symbolic arguments. Passing this to the
+    [`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array.
+"""
 const ArgsT{T} = SmallV{BasicSymbolic{T}}
+"""
+    The type of a read-only buffer containing symbolic arguments. Passing this to the
+    [`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array. This is
+    the type returned from [`TermInterface.arguments`](@ref).
+"""
 const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
+"""
+    The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to the
+    [`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will avoid
+    allocating a new dictionary.
+"""
 const ACDict{T} = Dict{BasicSymbolic{T}, Number}
+"""
+    The type of the `output_idxs` field in [`BSImpl.ArrayOp`](@ref).
+"""
 const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
+"""
+    The type of the `ranges` field in [`BSImpl.ArrayOp`](@ref).
+"""
 const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
 
 """
@@ -423,7 +494,7 @@ end
 ###
 
 """
-    operation(expr)
+    $TYPEDSIGNATURES
 
 Extract the operation (function) from a symbolic function call expression.
 Only valid for expressions where `iscall(expr)` returns `true`.
@@ -454,7 +525,7 @@ operation(expr4)    # returns sin
 operation(arguments(expr4)[1])  # returns +
 ```
 
-See also: [`iscall`](@ref), [`arguments`](@ref)
+See also: [`TermInterface.iscall`](@ref), [`arguments`](@ref)
 """
 @inline function TermInterface.operation(x::BSImpl.Type{T}) where {T}
     @nospecialize x
@@ -612,21 +683,6 @@ end
 """
     $TYPEDSIGNATURES
 
-Check if a `BasicSymbolic` is an expression (not a `Sym` or `Const`).
-
-# Arguments
-- `s`: A `BasicSymbolic` value to check.
-
-# Returns
-`true` if `s` is a compound expression.
-"""
-function isexpr(s::BSImpl.Type)
-    !MData.isa_variant(s, BSImpl.Sym) && !MData.isa_variant(s, BSImpl.Const)
-end
-
-"""
-    iscall(expr)
-
 Check if a symbolic expression `expr` represents a function call. Returns `true` if the 
 expression is a composite expression with an operation and arguments, `false` otherwise.
 
@@ -653,7 +709,9 @@ iscall(x * y)       # true
 
 See also: [`operation`](@ref), [`arguments`](@ref)
 """
-iscall(s::BSImpl.Type) = isexpr(s)
+function TermInterface.iscall(s::BSImpl.Type)
+    !MData.isa_variant(s, BSImpl.Sym) && !MData.isa_variant(s, BSImpl.Const)
+end
 
 """
     $TYPEDSIGNATURES
@@ -1485,6 +1543,17 @@ end
 _is_tuple_of_symbolics(O) = false
 
 """
+    $TYPEDSIGNATURES
+
+Utility function used as the operation of expressions representing an array of symbolic values.
+See [`SymbolicUtils.BSImpl.Const`](@ref) for more details.
+
+The first argument `sz` is the `size` of the represented array. `args...` is `prod(sz)`
+elements representing the elements of the array in column-major order.
+"""
+array_literal(sz::NTuple{N, Int}, args...) where {N} = reshape(Base.vect(args...), sz)
+
+"""
     BSImpl.Const{T}(val) where {T}
 
 Constructor for a symbolic expression that wraps a constant value `val`. Also converts
@@ -1500,7 +1569,8 @@ arrays/tuples of symbolics to symbolic expressions.
 This is the low-level constructor for constant expressions. It handles several special cases:
 1. If `val` is already a `BasicSymbolic{T}`, returns it unchanged
 2. If `val` is a `BasicSymbolic` of a different variant type, throws an error
-3. If `val` is an array containing symbolic elements, creates a `Term` with `hvncat` operation
+3. If `val` is an array containing symbolic elements, creates a `Term` with
+   [`SymbolicUtils.array_literal`](@ref) operation
 4. If `val` is a tuple containing symbolic elements, creates a `Term` with `tuple` operation
 5. Otherwise, creates a `Const` variant wrapping the value
 
@@ -1520,15 +1590,15 @@ The `unsafe` flag skips hash consing for performance in internal operations.
     elseif val isa BasicSymbolic{TreeReal}
         error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
     elseif val isa AbstractArray && _is_array_of_symbolics(val)
-        args = ArgsT{T}((BSImpl.Const{T}(size(val); unsafe), BSImpl.Const{T}(false; unsafe)))
-        sizehint!(args, length(val) + 2)
+        args = ArgsT{T}((BSImpl.Const{T}(size(val); unsafe),))
+        sizehint!(args, length(val) + 1)
         type = Union{}
         for v in val
             push!(args, BSImpl.Const{T}(v))
             type = promote_type(type, symtype(v))
         end
         shape = ShapeVecT(axes(val))
-        return BSImpl.Term{T}(hvncat, args; type = Array{type, ndims(val)}, shape, unsafe)
+        return BSImpl.Term{T}(array_literal, args; type = Array{type, ndims(val)}, shape, unsafe)
     elseif val isa Tuple && _is_tuple_of_symbolics(val)
         args = ArgsT{T}()
         sizehint!(args, length(val))
@@ -2470,7 +2540,7 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
             @set! res.metadata = metadata
         end
         return res::BasicSymbolic{T}
-    elseif f === hvncat
+    elseif f === array_literal
         sh = ShapeVecT()
         for dim in unwrap_const(args[1])
             push!(sh, 1:dim)
@@ -2678,9 +2748,9 @@ end
 ###
 
 """
-    promote_symtype(f, Ts...)
+    $TYPEDSIGNATURES
 
-The result of applying `f` to arguments of [`symtype`](#symtype) `Ts...`
+The result of applying `f` to arguments of [`SymbolicUtils.symtype`](@ref) `Ts...`
 
 ```julia
 julia> promote_symtype(+, Real, Real)
@@ -2696,8 +2766,14 @@ julia> promote_symtype(f, Number)
 Complex
 ```
 
-When constructing [`Term`](#Term)s without an explicit symtype,
+When constructing expressions without an explicit symtype,
 `promote_symtype` is used to figure out the symtype of the Term.
+
+It is recommended that all type arguments be annotated with [`SymbolicUtils.TypeT`](@ref)
+and one method be implemented for any combination of `f` and the number of arguments. For
+example, one method is implemented for unary `-` and one method for binary `-`. Each method
+has an `if..elseif` chain to handle possible types. Any call to `promote_type` should be
+typeasserted with `::TypeT`.
 """
 promote_symtype(f, Ts...) = Any
 
@@ -2705,6 +2781,7 @@ promote_symtype(f, Ts...) = Any
     promote_shape(f, shs::ShapeT...)
 
 The shape of the result of applying `f` to arguments of [`shape`](@ref) `shs...`.
+It is recommended that implemented methods `@nospecialize` all the shape arguments.
 """
 promote_shape(f, szs::ShapeT...) = Unknown(-1)
 
@@ -2944,6 +3021,12 @@ Base.empty!(awb::AddWorkerBuffer) = empty!(awb.dict)
 const SYMREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SymReal}}(AddWorkerBuffer{SymReal})
 const SAFEREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SafeReal}}(AddWorkerBuffer{SafeReal})
 
+"""
+    $METHODLIST
+
+Add an indexable list or tuple of terms `terms` with the given vartype. Applicable only for
+symbolic expressions with numeric or array of numeric symtype.
+"""
 add_worker(::Type{SymReal}, terms) = SYMREAL_ADDBUFFER[](terms)
 add_worker(::Type{SafeReal}, terms) = SAFEREAL_ADDBUFFER[](terms)
 
@@ -3342,7 +3425,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif ntrivialdict
         num = Const{T}(num_coeff[])
     else
-        num = Mul{T}(num_coeff[], num_dict; type = safe_eltype(type)::TypeT)
+        num = Mul{T}(num_coeff[], num_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match num begin
             BSImpl.AddMul(; dict) && if dict === num_dict end => begin
                 mwb.num_dict = ACDict{T}()
@@ -3355,7 +3438,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif dtrivialdict
         den = Const{T}(den_coeff[])
     else
-        den = Mul{T}(den_coeff[], den_dict; type = safe_eltype(type)::TypeT)
+        den = Mul{T}(den_coeff[], den_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match den begin
             BSImpl.AddMul(; dict) && if dict === den_dict end => begin
                 mwb.den_dict = ACDict{T}()
@@ -3369,7 +3452,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     elseif dtrivial
         result = num
     else
-        result = Div{T}(num, den, false; type = safe_eltype(type)::TypeT)
+        result = Div{T}(num, den, false; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
     end
 
     isempty(arrterms) && return result
@@ -3416,6 +3499,12 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     return Term{T}(*, new_arrterms; type, shape = newshape)
 end
 
+"""
+    $METHODLIST
+
+Multiply an indexable list or tuple of terms `terms` with the given vartype. Applicable
+only for symbolic expressions with numeric or array of numeric symtype.
+"""
 mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)
 mul_worker(::Type{SafeReal}, terms) = SAFEREAL_MULBUFFER[](terms)
 
@@ -3752,7 +3841,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                 if _isone(coeff)
                     return Term{T}(^, ArgsT{T}((rest, Const{T}(b))); type, shape = newshape)
                 end
-                return (coeff ^ b * rest ^ b)
+                return ((coeff ^ b)::BasicSymbolic{T} * (rest ^ b)::BasicSymbolic{T})
             end
             _ => return Term{T}(^, ArgsT{T}((a, Const{T}(b))); type, shape = newshape)
         end
@@ -3998,8 +4087,8 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex) where {T}
     sh::ShapeVecT = shape(arr)
     @match arr begin
         BSImpl.Const(; val) => return Const{T}(scalar_index(val, as_linear_idx(sh, sidxs)))
-        BSImpl.Term(; f, args) && if f === hvncat end => begin
-            return args[2 + as_linear_idx(sh, sidxs)]
+        BSImpl.Term(; f, args) && if f === array_literal  end => begin
+            return args[1 + as_linear_idx(sh, sidxs)]
         end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => begin
             return args[as_linear_idx(sh, sidxs)]
@@ -4069,8 +4158,8 @@ end
 Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     @match arr begin
         BSImpl.Const(; val) && if all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => return Const{T}(val[unwrap_const.(idxs)...])
-        BSImpl.Term(; f) && if f === hvncat && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
-            return Const{T}(reshape(@view(arguments(arr)[3:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
+        BSImpl.Term(; f) && if f === array_literal && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
+            return Const{T}(reshape(@view(arguments(arr)[2:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin

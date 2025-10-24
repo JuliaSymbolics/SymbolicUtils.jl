@@ -869,10 +869,9 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return `true` if CSE should descend inside `sym`, which has operation `f` and
-arguments `args...`.
+Return `true` if CSE should descend inside `sym`, which has operation `f`.
 """
-function cse_inside_expr(sym, f, args...)
+function cse_inside_expr(sym, f)
     return true
 end
 
@@ -1009,7 +1008,7 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
                 if op isa BasicSymbolic{T}
                     SymbolicUtils.is_function_symbolic(op) || return expr
                 end
-                cse_inside_expr(expr, op, args...) || return expr
+                cse_inside_expr(expr, op) || return expr
                 args = map(Base.Fix2(cse!, state), args)
                 # use `term` instead of `maketerm` because we only care about the operation being performed
                 # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.

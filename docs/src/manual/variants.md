@@ -9,7 +9,7 @@ as `BasicSymbolic`. A `BasicSymbolic` is considered immutable. Mutating its fiel
 behavior.
 
 In SymbolicUtils v3, the type `T` in `BasicSymbolic{T}` was the type represented by the symbolic
-variable. In other words, `T` was the [`symtype`](@ref) of the variable.
+variable. In other words, `T` was the [`SymbolicUtils.symtype`](@ref) of the variable.
 
 In SymbolicUtils v4, the `symtype` is not stored in the type, and is instead a field of the
 struct. This allows for greatly increased type-stability. The type `T` in `BasicSymbolic{T}`
@@ -26,6 +26,7 @@ A given expression must be pure in its `vartype`. In other words, no operation s
 of different `vartype`s.
 
 !!! warning "A short note on (im-)mutability"
+  
   While `ismutabletype(BasicSymbolic)` returns `true`, symbolic types are IMMUTABLE.
   Any mutation is undefined behavior and can lead to very confusing and hard-to-debug issues.
   This includes internal mutation, such as mutating `AddMul.dict`. The arrays returned from
@@ -108,10 +109,10 @@ variant. This variant can be constructed using `Const{T}(val)` or `BSImpl.Const{
 where `T` is the appropriate `vartype`.
 
 The `Const` constructors have an additional special behavior. If given an array of symbolics
-(or array of array of ... symbolics), it will return a `Term` (see below) with `hvncat` as
-the operation. This allows standard symbolic operations (such as [`substitute`](@ref)) to
-work on arrays of symbolics without excessive special-case handling and improved
-type-stability.
+(or array of array of ... symbolics), it will return a `Term` (see below) with
+[`SymbolicUtils.array_literal`](@ref) as the operation. This allows standard symbolic
+operations (such as [`substitute`](@ref)) to work on arrays of symbolics without excessive
+special-case handling and improved type-stability.
 
 ```julia
 struct Sym
@@ -294,6 +295,7 @@ range of indices over which they should iterate, in case such a range is explici
 provided.
 
 !!! note
+  
   The common global index variable is printed as `_1`, `_2`, ... in arrayops. It is not
   a valid symbolic variable outside of an `ArrayOp`'s `expr`.
 
@@ -336,8 +338,8 @@ to Base-like behavior:
   doing so requires the function(s) passed to `map` and `mapreduce` instead of their types
   or shapes.
 - Since `ndims` information is not present in the type, `eachindex`, `iterate`, `size`,
-  `axes`, `ndims`, `collect` are type-unstable. [`safe_eachindex`](@ref) is useful as
-  a type-stable iteration alternative.
+  `axes`, `ndims`, `collect` are type-unstable. [`SymbolicUtils.stable_eachindex`](@ref) is
+  useful as a type-stable iteration alternative.
 - `ifelse` requires that both the true and false cases have identical shape.
 - Symbolic arrays _only_ support cartesian indexing. For example, given `@syms x[1:3, 1:3]`
   accessing `x[4]` is invalid and `x[1, 2]` should be used. Valid indices are
@@ -385,7 +387,7 @@ words,
 Here, `f1(x)` is considered a symbolic function `f1` called with the argument `x` and
 `f2(x)` is considered a dependent variable that depends on `x`. The utilities
 [`SymbolicUtils.is_function_symbolic`](@ref), [`SymbolicUtils.is_function_symtype`](@ref),
-[`symbolicUtils.is_called_function_symbolic`](@ref) can be used to differentiate between
+[`SymbolicUtils.is_called_function_symbolic`](@ref) can be used to differentiate between
 these cases.
 
 ## API
@@ -409,6 +411,7 @@ unwrap_const
 ### Inner constructors
 
 ```@docs
+SymbolicUtils.array_literal
 SymbolicUtils.BSImpl.Const
 SymbolicUtils.BSImpl.Sym
 SymbolicUtils.BSImpl.Term
@@ -457,9 +460,9 @@ SymbolicUtils.promote_shape
 ### Symbolic array utilities
 
 ```@docs
-SymbolicUtils.safe_eachindex
-SymbolicUtils.SafeIndices
-SymbolicUtils.SafeIndex
+SymbolicUtils.stable_eachindex
+SymbolicUtils.StableIndices
+SymbolicUtils.StableIndex
 BS
 ```
 

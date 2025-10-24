@@ -108,42 +108,38 @@ struct Ctx1 end
 struct Ctx2 end
 
 # needs to be written like this to avoid a segfault on Julia 1.10
-@noinline function metadata_test()
-    @syms a b c
-    for a = [a, sin(a), a+b, a*b, a^3]
+@info "Metadata test"
+@syms a b c
+for a = [a, sin(a), a+b, a*b, a^3]
 
-        a′ = setmetadata(a, Ctx1, "meta_1")
+    a′ = setmetadata(a, Ctx1, "meta_1")
 
-        @test hasmetadata(a′, Ctx1)
-        @test !hasmetadata(a′, Ctx2)
+    @test hasmetadata(a′, Ctx1)
+    @test !hasmetadata(a′, Ctx2)
 
-        a′ = setmetadata(a′, Ctx2, "meta_2")
+    a′ = setmetadata(a′, Ctx2, "meta_2")
 
-        @test hasmetadata(a′, Ctx1)
-        @test hasmetadata(a′, Ctx2)
+    @test hasmetadata(a′, Ctx1)
+    @test hasmetadata(a′, Ctx2)
 
-        @test getmetadata(a′, Ctx1) == "meta_1"
-        @test getmetadata(a′, Ctx2) == "meta_2"
-    end
-
-    # In substitute #283
-    #
-    @syms f(t) t
-    f = setmetadata(f(t), Ctx1, "yes")
-    hasmetadata(f, Ctx1) # true
-    newf = substitute(f, Dict(a=>b)) # unrelated substitution
-    @test hasmetadata(newf, Ctx1)
-    @test getmetadata(newf, Ctx1) == "yes"
-
-
-    @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=Val(false)),
-                  1 + term(sqrt, 2, type=Real))
-    @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=Val(true))) isa Float64
+    @test getmetadata(a′, Ctx1) == "meta_1"
+    @test getmetadata(a′, Ctx2) == "meta_2"
 end
 
-@testset "metadata" begin
-    metadata_test()
-end
+# In substitute #283
+#
+@syms f(t) t
+f = setmetadata(f(t), Ctx1, "yes")
+hasmetadata(f, Ctx1) # true
+newf = substitute(f, Dict(a=>b)) # unrelated substitution
+@test hasmetadata(newf, Ctx1)
+@test getmetadata(newf, Ctx1) == "yes"
+
+
+@test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=Val(false)),
+              1 + term(sqrt, 2, type=Real))
+@test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=Val(true))) isa Float64
+@info "Metadata test ends"
 
 @testset "Base methods" begin
     @syms w::Complex{Real} z::Complex{Real} a::Real b::Real x

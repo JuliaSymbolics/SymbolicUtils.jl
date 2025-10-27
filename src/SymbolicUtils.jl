@@ -176,8 +176,6 @@ function mul5_cse2(expr, state::CSEState)
     return expr
 end
 
-include("irpass2.jl")
-
 PrecompileTools.@recompile_invalidations begin
     include("despecialize.jl")
 end

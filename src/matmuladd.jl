@@ -61,6 +61,8 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
             if nameof(mul_val) in nameof.(plus_args)
                 A, B = arguments(rhs(m))
                 Cs = filter(x -> nameof(x) != nameof(mul_val), plus_args)
+
+                @show validate_mul_shapes(A, B, Cs...)
                 validate_mul_shapes(A, B, Cs...) || return nothing
                 return (; A, B, Cs, mul_candidate = m, plus_candidate = c, mul_idx, plus_idx, pattern="A*B + C")
             end
@@ -74,7 +76,7 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     Cset = Set(filter(!is_cse_var, reduce(vcat,getproperty.(match_data_, :Cs))))
     final_temps = []
 
-    m = map(match_data_) do match_data
+    m_ = map(match_data_) do match_data
 
         A, B = match_data.A, match_data.B
         C = pop!(Cset)
@@ -96,11 +98,96 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
         push!(final_temps, temp_var)
 
         [copy_assignment, mul_assignment, final_assignment]
-    end |> Base.Fix1(reduce, vcat)
+    end
+    m = m_ |> Base.Fix1(reduce, vcat)
+
+    transformed_idxs = getproperty.(match_data_, :plus_idx)
+    substitution_map = get_substitution_map(match_data_, m_)
+    rm_idxs = getproperty.(match_data_, :mul_idx)
+    transformations = Dict()
+    map(transformed_idxs, m_) do i, mm
+        bank(transformations, i, mm)
+    end
+
+    new_pairs = []
+    for (i, e) in enumerate(expr.pairs)
+        if i in transformed_idxs
+            push!(new_pairs, transformations[i]...)
+            @show e
+        elseif i in rm_idxs
+            push!(new_pairs, nothing)
+        else
+            push!(new_pairs, e)
+        end
+    end
+    new_pairs = filter(!isnothing, new_pairs)
 
     push!(state.sorted_exprs, m...)
     temp_var = last(m).lhs
-    Code.Let(m, +(final_temps..., Cset...), false)
+    new_let = Code.Let(new_pairs, expr.body, expr.let_block)
+    apply_substitution_map(new_let, substitution_map)
+end
+
+function get_substitution_map(match_data, transformations)
+    dic = Dict()
+    @assert length(match_data) == length(transformations)
+
+    plus_idxs = getproperty.(match_data, :plus_idx)
+
+    map(match_data, transformations) do m, t
+        bank(dic, m.plus_candidate.lhs, t[end].lhs)
+    end
+    dic
+end
+
+function bank(dic, key, value)
+    if haskey(dic, key)
+        dic[key] = vcat(dic[key], value)
+    else
+        dic[key] = value
+    end
+end
+
+function apply_substitution_map(expr::Code.Let, substitution_map::Dict)
+    substitute_in_ir(expr, substitution_map)
+end
+
+function substitute_in_ir(s::Symbol, substitution_map::Dict)
+    get(substitution_map, s, s)
+end
+
+function substitute_in_ir_base(s, substitution_map::Dict)
+    @warn s, substitution_map
+    get(substitution_map, s, s)
+end
+
+function substitute_in_ir(expr, substitution_map::Dict)
+    if iscall(expr)
+        new_args = map(arguments(expr)) do arg
+            substitute_in_ir(arg, substitution_map)
+        end
+        return Code.Term{Code.vartype(expr)}(operation(expr), new_args; type=Code.symtype(expr))
+    elseif issym(expr)
+        substitute_in_ir_base(expr, substitution_map)
+    else
+        expr
+    end
+end
+
+function substitute_in_ir(x::Code.Assignment, substitution_map::Dict)
+    new_lhs = substitute_in_ir(Code.lhs(x), substitution_map)
+    new_rhs = substitute_in_ir(Code.rhs(x), substitution_map)
+    return Code.Assignment(new_lhs, new_rhs)
+end
+
+function substitute_in_ir(expr::Code.Let, substitution_map::Dict)
+    isempty(substitution_map) && return expr
+
+    new_pairs = map(expr.pairs) do p
+        substitute_in_ir(p, substitution_map)
+    end
+    new_body = substitute_in_ir(expr.body, substitution_map)
+    return Code.Let(new_pairs, new_body, expr.let_block)
 end
 
 const MATMUL_ADD_RULE = OptimizationRule(

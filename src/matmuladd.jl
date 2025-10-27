@@ -61,8 +61,6 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
             if nameof(mul_val) in nameof.(plus_args)
                 A, B = arguments(rhs(m))
                 Cs = filter(x -> nameof(x) != nameof(mul_val), plus_args)
-
-                @show validate_mul_shapes(A, B, Cs...)
                 validate_mul_shapes(A, B, Cs...) || return nothing
                 return (; A, B, Cs, mul_candidate = m, plus_candidate = c, mul_idx, plus_idx, pattern="A*B + C")
             end
@@ -73,7 +71,10 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
 end
 
 function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
+    # Create temporary variable for the result
     Cset = Set(filter(!is_cse_var, reduce(vcat,getproperty.(match_data_, :Cs))))
+    plus_candidates_idx = getproperty.(match_data_, :plus_idx)
+
     final_temps = []
 
     m_ = map(match_data_) do match_data
@@ -157,8 +158,12 @@ function substitute_in_ir(s::Symbol, substitution_map::Dict)
 end
 
 function substitute_in_ir_base(s, substitution_map::Dict)
-    @warn s, substitution_map
-    get(substitution_map, s, s)
+    if haskey(substitution_map, s)
+        v = substitution_map[s]
+        +(v...)
+    else
+        s
+    end
 end
 
 function substitute_in_ir(expr, substitution_map::Dict)

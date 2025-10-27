@@ -71,7 +71,6 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
 end
 
 function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
-    # Create temporary variable for the result
     Cset = Set(filter(!is_cse_var, reduce(vcat,getproperty.(match_data_, :Cs))))
     plus_candidates_idx = getproperty.(match_data_, :plus_idx)
 
@@ -160,7 +159,11 @@ end
 function substitute_in_ir_base(s, substitution_map::Dict)
     if haskey(substitution_map, s)
         v = substitution_map[s]
-        +(v...)
+        if issym(v)
+            v
+        else
+            +(v...)
+        end
     else
         s
     end

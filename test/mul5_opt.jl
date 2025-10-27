@@ -64,9 +64,9 @@ end
     expr2 = A * B + C + D
     test_optimization(expr2, A, B, C, D)
 
-    expr4 = A * B + C + D + C * D
+    expr4 = A * B + C + D + C * D # multiple correct patterns
     test_optimization(expr4, A, B, C, D)
 
     expr5 = sin.(A * B + C + D + C * D)
-    # test_optimization(expr5, A, B, C, D)
+    test_optimization(expr5, A, B, C, D)
 end

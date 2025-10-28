@@ -1068,32 +1068,32 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
     partial::UInt = @match s begin
         BSImpl.Const(; val, hash) => begin
-            if iszero(hash)
-                h = s.hash = hash_somescalar(val, h)::UInt
-            else
-                h = hash
-            end
+            # if iszero(hash)
+                h = hash_somescalar(val, h)::UInt
+            # else
+            #     h = hash
+            # end
             if full
                 h = Base.hash(typeof(val), h)::UInt
             end
             return h
         end
         BSImpl.Sym(; name, shape, type, hash, hash2) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
             h = Base.hash(shape, h)
             h = Base.hash(type, h)
             h ⊻ SYM_SALT
         end
         BSImpl.Term(; f, args, shape, hash, hash2, type) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
             Base.hash(f, Base.hash(args, Base.hash(shape, Base.hash(type, h))))::UInt
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
             htmp = hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
             if full
                 htmp = Base.hash(typeof(coeff), htmp)
@@ -1101,21 +1101,21 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             htmp
         end
         BSImpl.Div(; num, den, type, hash, hash2) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
             hash_bsimpl(num, hash_bsimpl(den, Base.hash(shape, Base.hash(type, h)), full), full) ⊻ DIV_SALT
         end
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, hash, hash2) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
             Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, Base.hash(shape, Base.hash(type, h)), full)))::UInt, full))
         end
     end
 
     if full
-        partial = s.hash2 = Base.hash(metadata(s), partial)::UInt
+        partial = Base.hash(metadata(s), partial)::UInt
     else
-        s.hash = partial
+        partial
     end
     return partial
 end

@@ -7,7 +7,6 @@ using LabelledArrays
 using SparseArrays
 using ReverseDiff
 using LinearAlgebra
-using SymbolicUtils: Const
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 nanmath_st = Code.NameState()
@@ -21,26 +20,11 @@ nanmath_st.rewrites[:nanmath] = true
     @test toexpr(a*b*c*d*e) == :($(*)($(*)($(*)($(*)(a, b), c), d), e))
     @test toexpr(a+b+c+d+e) == :($(+)($(+)($(+)($(+)(a, b), c), d), e))
     @test toexpr(a+b) == :($(+)(a, b))
-    newsym = eval(quote
-        let x = $x, y = $y, t = $t
-            $(toexpr(x(t)+y(t)))
-        end
-    end)
-    @test operation(newsym) === (+) && issetequal(arguments(newsym), [x(t), y(t)])
-    newsym = eval(quote
-        let x = $x, y = $y, t = $t
-            $(toexpr(x(t)+y(t)+x(t+1)))
-        end
-    end)
-    @test operation(newsym) === (+) && issetequal(arguments(newsym), [x(t), y(t), x(1+t)])
+    @test toexpr(x(t)+y(t)) == :($(+)(y(t), x(t)))
+    @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)($(+)(y(t), x(t)), x($(+)(1, t))))
     s = LazyState()
     Code.union_rewrites!(s.rewrites, [x(t), y(t)])
-    newsym = eval(quote
-        let var"x(t)" = $(x(t)), x = $x, var"y(t)" = $(y(t)), t = $t
-            $(toexpr(x(t)+y(t)+x(t+1), s))
-        end
-    end)
-    @test operation(newsym) === (+) && issetequal(arguments(newsym), [x(t), x(1+t), y(t)])
+    @test toexpr(x(t)+y(t)+x(t+1), s) == :($(+)($(+)(var"y(t)", var"x(t)"), x($(+)(1, t))))
 
     ex = :(let a = 3, b = $(+)(1,a)
                $(+)(a, b)
@@ -52,27 +36,38 @@ nanmath_st.rewrites[:nanmath] = true
             $(+)(a, b)
         end))
 
-    newf = eval(toexpr(Func([x(t), x, a, t],[b ← a+2, y(t) ← b], x(t)+x(t+1)+b+y(t))))
-    newsym = newf(x(t), x, a, t; var"y(t)" = y(t))
-    @test operation(newsym) === (+) && issetequal(arguments(newsym), [x(t), x(1+t), a, y(t), Const{SymReal}(2)])
-
-    fexpr1 = toexpr(Func([DestructuredArgs([x, x(t), t], :state),
+    test_repr(toexpr(Func([x(t), x],[b ← a+2, y(t) ← b], x(t)+x(t+1)+b+y(t))),
+              :(function (var"x(t)", x; b = $(+)(2, a), var"y(t)" = b)
+                    $(+)($(+)($(+)(b, var"y(t)"), var"x(t)"), x($(+)(1, t)))
+                end))
+    test_repr(toexpr(Func([DestructuredArgs([x, x(t)], :state),
                            DestructuredArgs((a, b), :params)], [],
-                          x(t+1) + x(t) + a  + b))
-    newf = eval(fexpr1)
-    newsym = newf([x, x(t), t], [a, b])
-    @test operation(newsym) === (+) && issetequal(arguments(newsym), [x(t+1), x(t), a, b])
+                          x(t+1) + x(t) + a  + b)),
+              :(function (state, params)
+                    begin
+                        x = state[1]
+                        var"x(t)" = state[2]
+                        a = params[1]
+                        b = params[2]
+                        $(+)($(+)($(+)(a, b), var"x(t)"), x($(+)(1, t)))
+                    end
+                end))
 
-    fexpr2 = toexpr(Func([DestructuredArgs([x, x(t), t], :state, create_bindings=false),
+    test_repr(toexpr(Func([DestructuredArgs([x, x(t)], :state, create_bindings=false),
                            DestructuredArgs((a, b), :params, create_bindings=false)], [],
-                          x(t+1) + x(t) + a  + b))
-    newf = eval(fexpr2)
-    newsym = newf([x, x(t), t], [a, b])
-    @test operation(newsym) === (+) && issetequal(arguments(newsym), [x(t+1), x(t), a, b])
-    @test fexpr1 != fexpr2
+                          x(t+1) + x(t) + a  + b)),
+              :(function (state, params)
+                    begin
+                        $(+)($(+)($(+)(params[1], params[2]), state[2]), state[1]($(+)(1, t)))
+                    end
+                end))
 
-    fexpr = toexpr(Func([],[],:(rand()), [Expr(:meta, :inline)]))
-    @test any(isequal(Expr(:meta, :inline)), fexpr.args[2].args)
+
+    test_repr(toexpr(Func([],[],:(rand()), [Expr(:meta, :inline)])),
+              :(function ()
+                    $(Expr(:meta, :inline))
+                    rand()
+                end))
 
     ex = toexpr(Func([DestructuredArgs([x, x(t)], :state, inbounds=true)], [], x(t+1) + x(t)))
     ex = Base.remove_linenums!(ex)

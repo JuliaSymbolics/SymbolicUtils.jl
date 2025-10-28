@@ -42,7 +42,7 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     args = arguments(ex)
     dirty = false
     can_fold = !(_op isa BasicSymbolic{T})
-    newargs = parent(args)
+    newargs = ArgsT{T}()
     for i in eachindex(args)
         arg = args[i]
         # This is `unsafe` because comparing `Const` equality is cheap, and we don't want to
@@ -59,6 +59,9 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
         dirty = true
         can_fold &= isconst(newarg)
         newargs[i] = newarg
+    end
+    if !dirty
+        newargs = parent(args)
     end
     dirty |= op !== _op
     if dirty || can_fold

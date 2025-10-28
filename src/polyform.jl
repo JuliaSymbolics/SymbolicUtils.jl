@@ -324,17 +324,21 @@ function quick_mulpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     # cheat by mutating `args` to avoid allocating
     args = parent(args)
     oldval = args[idx]
-    if argexp > exp
-        args[idx] = argbase ^ (argexp - exp)
-        result = mul_worker(T, args), one_of_vartype(T)
-    elseif argexp == exp
-        args[idx] = one_of_vartype(T)
-        result = mul_worker(T, args), one_of_vartype(T)
-    else
-        args[idx] = one_of_vartype(T)
-        result = mul_worker(T, args), base ^ (exp - argexp)
+    result = oldval
+    try
+        if argexp > exp
+            args[idx] = argbase ^ (argexp - exp)
+            result = mul_worker(T, args), one_of_vartype(T)
+        elseif argexp == exp
+            args[idx] = one_of_vartype(T)
+            result = mul_worker(T, args), one_of_vartype(T)
+        else
+            args[idx] = one_of_vartype(T)
+            result = mul_worker(T, args), base ^ (exp - argexp)
+        end
+    finally
+        args[idx] = oldval
     end
-    args[idx] = oldval
     return result
 end
 
@@ -370,7 +374,7 @@ end
 
 function add_with_div(x::BasicSymbolic{T})::BasicSymbolic{T} where {T}
     (!iscall(x) || operation(x) !== (+)) && return x
-    aa = parent(arguments(x))
+    aa = arguments(x)
     !any(isdiv, aa) && return x # no rewrite necessary
 
     # find and multiply all denominators

@@ -580,7 +580,7 @@ julia> sorted_arguments(expr)
  z
 ```
 """
-@cache function TermInterface.sorted_arguments(x::BSImpl.Type)::ROArgsT
+function TermInterface.sorted_arguments(x::BSImpl.Type)::ROArgsT
     T = vartype(x)
     @match x begin
         BSImpl.AddMul(; variant) => begin

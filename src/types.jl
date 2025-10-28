@@ -4007,10 +4007,10 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
     _unreachable()
 end
 
-@cache function _getindex_1(arr::BasicSymbolic{SymReal}, idxs::Union{BasicSymbolic{SymReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SymReal}
+function _getindex_1(arr::BasicSymbolic{SymReal}, idxs::Union{BasicSymbolic{SymReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SymReal}
     _getindex(SymReal, arr, idxs...)
 end
-@cache function _getindex_2(arr::BasicSymbolic{SafeReal}, idxs::Union{BasicSymbolic{SafeReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SafeReal}
+function _getindex_2(arr::BasicSymbolic{SafeReal}, idxs::Union{BasicSymbolic{SafeReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SafeReal}
     _getindex(SafeReal, arr, idxs...)
 end
 
@@ -4074,10 +4074,10 @@ function Base.getindex(arr::BasicSymbolic{SafeReal}, idxs::StableIndex)
     _stable_getindex_2(arr, idxs)
 end
 
-@cache function _stable_getindex_1(arr::BasicSymbolic{SymReal}, sidxs::StableIndex)::BasicSymbolic{SymReal}
+function _stable_getindex_1(arr::BasicSymbolic{SymReal}, sidxs::StableIndex)::BasicSymbolic{SymReal}
     __stable_getindex(arr, sidxs)
 end
-@cache function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)::BasicSymbolic{SafeReal}
+function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)::BasicSymbolic{SafeReal}
     __stable_getindex(arr, sidxs)
 end
 

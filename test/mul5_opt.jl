@@ -28,6 +28,7 @@ function test_optimization(expr, args...)
     # Check if optimization was applied
     has_optimization = has_mul5_optimization(optimized_ir)
     @test has_optimization
+    @test !has_mul5_optimization(cse_ir)
 
     f_cse_expr = Func(collect(args), [], cse_ir)
     f_cse = eval(toexpr(f_cse_expr))
@@ -35,16 +36,20 @@ function test_optimization(expr, args...)
     f_opt_expr = Func(collect(args), [], optimized_ir)
     f_opt = eval(toexpr(f_opt_expr))
 
-    test_A = randn(3, 3)
-    test_B = randn(3, 3)
-    test_C = randn(3, 3)
-    test_D = randn(3, 3)
+    N = 3
+    test_A = randn(N, N)
+    test_B = randn(N, N)
+    test_C = randn(N, N)
+    test_D = randn(N, N)
+    test_E = randn(N, N)
 
     # Get concrete test args
     test_args = if length(args) == 3
         (test_A, test_B, test_C)
-    else
+    elseif length(args) == 4
         (test_A, test_B, test_C, test_D)
+    else
+        (test_A, test_B, test_C, test_D, test_E)
     end
 
     # Evaluate both versions
@@ -56,7 +61,7 @@ function test_optimization(expr, args...)
 end
 
 @testset "Mul5 Optimization Tests" begin
-    @syms A[1:3, 1:3] B[1:3, 1:3] C[1:3, 1:3] D[1:3, 1:3]
+    @syms A[1:3, 1:3] B[1:3, 1:3] C[1:3, 1:3] D[1:3, 1:3] E[1:3, 1:3]
 
     expr1 = A * B + C
     test_optimization(expr1, A, B, C)
@@ -69,4 +74,19 @@ end
 
     expr5 = sin.(A * B + C + D + C * D)
     test_optimization(expr5, A, B, C, D)
+
+    expr6 = (A * B + C + D + C * D) * E
+    test_optimization(expr6, A, B, C, D, E)
+
+    expr7 = sin.(A * B) + C + D + C * D
+    test_optimization(expr7, A, B, C, D)
+
+    P = A + B
+    Q = B + C
+    R = C / D
+    expr8 = P * Q + R + D
+    test_optimization(expr8, A, B, C, D)
+
+    expr9 = A * B + C + C * D # partial patterns and correct patterns mixed
+    # test_optimization(expr9, A, B, C, D)
 end

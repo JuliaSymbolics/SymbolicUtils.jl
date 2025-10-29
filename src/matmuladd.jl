@@ -77,7 +77,7 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     matches = MatMulAddMatch[]
 
     for ((mul_idx, mul_val), (plus_idx, plus_val)) in candidates
-        A, B = arguments(rhs(expr.pairs[mul_idx]))
+        A, B... = arguments(rhs(expr.pairs[mul_idx]))
         Cs = isempty(net_additive_terms) ? continue : [pop!(net_additive_terms)]
         validate_mul_shapes(A, B, Cs...) || continue
         push!(matches, MatMulAddMatch(A, B, Cs, expr.pairs[mul_idx], plus_val, mul_idx, plus_idx, "A*B + C"))
@@ -102,6 +102,10 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
         # Create temporary variable for the result
         temp_var_sym = gensym("mul5_temp")
         temp_var = Sym{T}(temp_var_sym; type=symtype(C))
+
+        if B isa AbstractVector
+            B = Term{T}(*, B, type=symtype(C))
+        end
 
         copy_call = Term{T}(copy, [C]; type=symtype(C))
         mul_call = Term{T}(LinearAlgebra.mul!,

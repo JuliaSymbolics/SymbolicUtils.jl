@@ -1,9 +1,22 @@
 # Pattern-based optimization templates for CSE
-struct OptimizationRule
-    name::String
-    detector::Function
-    transformer::Function
-    priority::Int
+struct OptimizationRule{N, D, T, P}
+    name::N
+    detector::D
+    transformer::T
+    priority::P
+end
+
+abstract type Matched end
+
+struct MatMulAddMatch{At, Bt, Ct} <: Matched
+    A::At
+    B::Bt
+    Cs::Ct
+    mul_candidate::Code.Assignment
+    plus_candidate::Code.Assignment
+    mul_idx::Int
+    plus_idx::Int
+    pattern::String
 end
 
 function find_cse_expr(x, state)
@@ -16,6 +29,7 @@ function is_cse_var(x)
 end
 
 function validate_mul_shapes(A, B, C)
+    return true
     [shape(A)[1], shape(B)[2]] == shape(C)
 end
 
@@ -45,35 +59,38 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
 
     mul_vals = lhs.(mul_candidates)
     candidates = map(plus_candidates_idx, plus_candidates) do p_idx, p
-        map(mul_candidates_idx, mul_vals) do m_idx, m_v
-            if nameof(m_v) in nameof.(arguments(rhs(p)))
+
+        map(mul_candidates_idx, mul_candidates) do m_idx, m_v
+            if nameof(lhs(m_v)) in nameof.(arguments(rhs(p)))
                 (m_idx, m_v) => (p_idx, expr.pairs[p_idx])
             end
         end
     end
     candidates = filter(!isnothing, reduce(vcat, candidates))
 
-    pattern = map(plus_candidates_idx, plus_candidates) do plus_idx, c
-        plus_args = arguments(rhs(c))
-        mul_pattern = map(mul_candidates_idx, mul_candidates) do mul_idx, m
-            mul_val = lhs(m)
+    all_additive_terms = map(candidates) do c
+        arguments(rhs(c[2][2]))
+    end |> Iterators.flatten |> Set
+    all_multiplicative_terms = Set(lhs.(mul_candidates))
+    net_additive_terms = setdiff(all_additive_terms, all_multiplicative_terms)
 
-            if nameof(mul_val) in nameof.(plus_args)
-                A, B = arguments(rhs(m))
-                Cs = filter(x -> nameof(x) != nameof(mul_val), plus_args)
-                validate_mul_shapes(A, B, Cs...) || return nothing
-                return (; A, B, Cs, mul_candidate = m, plus_candidate = c, mul_idx, plus_idx, pattern="A*B + C")
-            end
-        end
-        filter(!isnothing, mul_pattern)
+    matches = MatMulAddMatch[]
+
+    for ((mul_idx, mul_val), (plus_idx, plus_val)) in candidates
+        A, B = arguments(rhs(expr.pairs[mul_idx]))
+        Cs = isempty(net_additive_terms) ? continue : [pop!(net_additive_terms)]
+        validate_mul_shapes(A, B, Cs...) || continue
+        push!(matches, MatMulAddMatch(A, B, Cs, expr.pairs[mul_idx], plus_val, mul_idx, plus_idx, "A*B + C"))
     end
-    isempty(pattern) ? nothing : pattern
+
+    isempty(matches) ? nothing : matches, net_additive_terms
 end
 
+transform_to_mul5_assignment(expr, ::Union{Nothing, AbstractVector{Nothing}, Tuple{Nothing, Nothing}}, state::Code.CSEState) = expr
 function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
-    Cset = Set(filter(!is_cse_var, reduce(vcat,getproperty.(match_data_, :Cs))))
+    match_data_, net_additive_terms = match_data_
+    Cset = Set(Iterators.flatten(getproperty.(match_data_, :Cs)))
     plus_candidates_idx = getproperty.(match_data_, :plus_idx)
-
     final_temps = []
 
     m_ = map(match_data_) do match_data
@@ -105,7 +122,7 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     substitution_map = get_substitution_map(match_data_, m_)
     rm_idxs = getproperty.(match_data_, :mul_idx)
     transformations = Dict()
-    map(transformed_idxs, m_) do i, mm
+    for (i, mm) in zip(transformed_idxs, m_)
         bank(transformations, i, mm)
     end
 
@@ -113,7 +130,6 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     for (i, e) in enumerate(expr.pairs)
         if i in transformed_idxs
             push!(new_pairs, transformations[i]...)
-            @show e
         elseif i in rm_idxs
             push!(new_pairs, nothing)
         else
@@ -122,17 +138,21 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     end
     new_pairs = filter(!isnothing, new_pairs)
 
+    bank(substitution_map, last(match_data_).plus_candidate.lhs, collect(Cset))
+    bank(substitution_map, last(match_data_).plus_candidate.lhs, collect(net_additive_terms))
+
+
     push!(state.sorted_exprs, m...)
     temp_var = last(m).lhs
     new_let = Code.Let(new_pairs, expr.body, expr.let_block)
-    apply_substitution_map(new_let, substitution_map)
+    transformed_ir = apply_substitution_map(new_let, substitution_map)
+
+    transformed_ir
 end
 
 function get_substitution_map(match_data, transformations)
     dic = Dict()
     @assert length(match_data) == length(transformations)
-
-    plus_idxs = getproperty.(match_data, :plus_idx)
 
     map(match_data, transformations) do m, t
         bank(dic, m.plus_candidate.lhs, t[end].lhs)
@@ -210,7 +230,7 @@ Base.isempty(l::Code.Let) = isempty(l.pairs)
 # Apply optimization rules during CSE
 function apply_optimization_rules(expr, state::Code.CSEState, rules=[MATMUL_ADD_RULE])
     for rule in sort(rules, by=r->r.priority, rev=true)
-        match_data = reduce(vcat, rule.detector(expr, state))
+        match_data = rule.detector(expr, state)
         if match_data !== nothing # || !isempty(match_data)
             return rule.transformer(expr, match_data, state)
         end

@@ -19,10 +19,6 @@ struct MatMulAddMatch{At, Bt, Ct} <: Matched
     pattern::String
 end
 
-function is_cse_var(x)
-    startswith(string(nameof(x)), "##cse")
-end
-
 function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     mul_candidates_idx = findall(expr.pairs) do x
         iscall(rhs(x)) || return false
@@ -106,7 +102,6 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
 
         [copy_assignment, mul_assignment, final_assignment]
     end
-    m = m_ |> Base.Fix1(reduce, vcat)
 
     transformed_idxs = getproperty.(match_data_, :plus_idx)
     substitution_map = get_substitution_map(match_data_, m_)
@@ -119,7 +114,7 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     new_pairs = []
     for (i, e) in enumerate(expr.pairs)
         if i in transformed_idxs
-            push!(new_pairs, transformations[i]...)
+            append!(new_pairs, transformations[i])
         elseif i in rm_idxs
             push!(new_pairs, nothing)
         else
@@ -131,7 +126,6 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     bank(substitution_map, last(match_data_).plus_candidate.lhs, collect(Cset))
     bank(substitution_map, last(match_data_).plus_candidate.lhs, collect(net_additive_terms))
 
-
     new_let = Code.Let(new_pairs, expr.body, expr.let_block)
     transformed_ir = apply_substitution_map(new_let, substitution_map)
 
@@ -142,8 +136,8 @@ function get_substitution_map(match_data, transformations)
     dic = Dict()
     @assert length(match_data) == length(transformations)
 
-    map(match_data, transformations) do m, t
-        bank(dic, m.plus_candidate.lhs, t[end].lhs)
+    for (m, t) in zip(match_data, transformations)
+        bank(dic, m.plus_candidate.lhs, t[2].lhs)
     end
     dic
 end

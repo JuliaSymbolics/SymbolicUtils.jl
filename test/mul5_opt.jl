@@ -36,21 +36,9 @@ function test_optimization(expr, args...)
     f_opt_expr = Func(collect(args), [], optimized_ir)
     f_opt = eval(toexpr(f_opt_expr))
 
-    N = 3
-    test_A = randn(N, N)
-    test_B = randn(N, N)
-    test_C = randn(N, N)
-    test_D = randn(N, N)
-    test_E = randn(N, N)
-
     # Get concrete test args
-    test_args = if length(args) == 3
-        (test_A, test_B, test_C)
-    elseif length(args) == 4
-        (test_A, test_B, test_C, test_D)
-    else
-        (test_A, test_B, test_C, test_D, test_E)
-    end
+    N = 3
+    test_args = (randn(N, N) for _ in 1:length(args))
 
     # Evaluate both versions
     result_cse = invokelatest(f_cse, test_args...)
@@ -89,4 +77,7 @@ end
 
     expr9 = A * B + C + C * D # partial patterns and correct patterns mixed
     # test_optimization(expr9, A, B, C, D)
+
+    expr10 = A * B * C * D * E + C # chains of muls
+    test_optimization(expr10, A, B, C, D, E)
 end

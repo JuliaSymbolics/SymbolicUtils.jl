@@ -19,23 +19,8 @@ struct MatMulAddMatch{At, Bt, Ct} <: Matched
     pattern::String
 end
 
-function find_cse_expr(x, state)
-    idx = findfirst(y -> nameof(lhs(y)) == nameof(x), state.sorted_exprs)
-    isnothing(idx) ? nothing : (; expr = rhs(state.sorted_exprs[idx]), x)
-end
-
 function is_cse_var(x)
     startswith(string(nameof(x)), "##cse")
-end
-
-function validate_mul_shapes(A, B, C)
-    return true
-    [shape(A)[1], shape(B)[2]] == shape(C)
-end
-
-function validate_mul_shapes(A, B, C...)
-    return true
-    [shape(A)[1], shape(B)[2]] == shape(first(C))
 end
 
 function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
@@ -79,7 +64,6 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     for ((mul_idx, mul_val), (plus_idx, plus_val)) in candidates
         A, B... = arguments(rhs(expr.pairs[mul_idx]))
         Cs = isempty(net_additive_terms) ? continue : [pop!(net_additive_terms)]
-        validate_mul_shapes(A, B, Cs...) || continue
         push!(matches, MatMulAddMatch(A, B, Cs, expr.pairs[mul_idx], plus_val, mul_idx, plus_idx, "A*B + C"))
     end
 
@@ -91,7 +75,6 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     match_data_, net_additive_terms = match_data_
     Cset = Set(Iterators.flatten(getproperty.(match_data_, :Cs)))
     plus_candidates_idx = getproperty.(match_data_, :plus_idx)
-    final_temps = []
 
     m_ = map(match_data_) do match_data
 
@@ -103,8 +86,12 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
         temp_var_sym = gensym("mul5_temp")
         temp_var = Sym{T}(temp_var_sym; type=symtype(C))
 
-        if B isa AbstractVector
-            B = Term{T}(*, B, type=symtype(C))
+        if B isa AbstractVector{<:BasicSymbolic}
+            if length(B) == 1
+                B = B[1]
+            else
+                B = Term{T}(*, B, type=symtype(C))
+            end
         end
 
         copy_call = Term{T}(copy, [C]; type=symtype(C))
@@ -116,7 +103,6 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
         copy_assignment = Assignment(temp_var, copy_call)
         mul_assignment = Assignment(temp_var, mul_call)  # This overwrites temp_var with mul! result
         final_assignment = Assignment(temp_var, temp_var)
-        push!(final_temps, temp_var)
 
         [copy_assignment, mul_assignment, final_assignment]
     end
@@ -146,8 +132,6 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     bank(substitution_map, last(match_data_).plus_candidate.lhs, collect(net_additive_terms))
 
 
-    push!(state.sorted_exprs, m...)
-    temp_var = last(m).lhs
     new_let = Code.Let(new_pairs, expr.body, expr.let_block)
     transformed_ir = apply_substitution_map(new_let, substitution_map)
 

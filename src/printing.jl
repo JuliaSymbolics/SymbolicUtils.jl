@@ -160,7 +160,7 @@ function show_term(io::IO, t)
     end
 
     f = operation(t)
-    args = sorted_arguments(t)
+    args = copy(sorted_arguments(t))
     if vartype(t) === TreeReal
         show_call(io, f, args)
     elseif f === (+)

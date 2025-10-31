@@ -1092,7 +1092,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             # end
             if full
                 h = Base.hash(typeof(val), h)::UInt
-                debug && @info "FULLH" h
+                debug && @info "FULLH" typeof(val) hash(typeof(val)) h
             end
             return h
         end
@@ -1105,7 +1105,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
             h = Base.hash(type, h)
-            debug && @info "TYPE" h
+            debug && @info "TYPE" type hash(type) h
             h ⊻ SYM_SALT
             debug && @info "SALT" h
             h
@@ -1115,7 +1115,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             # !full && !iszero(hash) && return hash
             debug && @info "TERM"
             h = Base.hash(type, h)
-            debug && @info "TYPE" h
+            debug && @info "TYPE" type hash(type) h
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
              h = Base.hash(args, h)
@@ -1130,7 +1130,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             #
             debug && @info "ADDMUL" variant
             h = Base.hash(type, h)
-            debug && @info "TYPE" h
+            debug && @info "TYPE" type hash(type) h
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
             h = hash_amvariant(variant, h)
@@ -1141,7 +1141,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             debug && @info "COEFF" htmp
             if full
                 htmp = Base.hash(typeof(coeff), htmp)
-                debug && @info "COEFFT" htmp
+                debug && @info "COEFFT" typeof(coeff) htmp
             end
             htmp
         end
@@ -1150,7 +1150,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             # !full && !iszero(hash) && return hash
             debug && @info "DIV"
             h = Base.hash(type, h)
-            debug && @info "TYPE" h
+            debug && @info "TYPE" type hash(type) h
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
             h = hash_bsimpl(den, h, full)

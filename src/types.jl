@@ -1054,6 +1054,8 @@ function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
     return hash(hv, h)
 end
 
+debug::Bool = false
+
 """
     hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
@@ -1061,51 +1063,98 @@ Core hash function for `BasicSymbolic`. `full` must be equal to the current valu
 `COMPARE_FULL[]`. Passing it reduces repeated access of a `TaskLocalValue`.
 """
 function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
+    debug && @info "HBSI" h full
     if !iszero(h)
-        return hash(hash_bsimpl(s, zero(h), full), h)::UInt
+        debug && @info "NZ"
+        part = hash_bsimpl(s, zero(h), full)
+        debug && @info "PART" part
+        return hash(part, h)::UInt
     end
     h = hash(T, h)
+    debug && @info "VTHASH" h
 
     partial::UInt = @match s begin
         BSImpl.Const(; val, hash) => begin
+            debug && @info "CONST"
             # if iszero(hash)
                 h = hash_somescalar(val, h)::UInt
+            debug && @info "V" h
             # else
             #     h = hash
             # end
             if full
                 h = Base.hash(typeof(val), h)::UInt
+                debug && @info "FULLH" h
             end
             return h
         end
         BSImpl.Sym(; name, shape, type, hash, hash2) => begin
+            debug && @info "SYM"
             # full && !iszero(hash2) && return hash2
             # !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
+            debug && @info "NAME" h
             h = Base.hash(shape, h)
+            debug && @info "SHAPE" h
             h = Base.hash(type, h)
+            debug && @info "TYPE" h
             h ⊻ SYM_SALT
+            debug && @info "SALT" h
+            h
         end
         BSImpl.Term(; f, args, shape, hash, hash2, type) => begin
             # full && !iszero(hash2) && return hash2
             # !full && !iszero(hash) && return hash
-            Base.hash(f, Base.hash(args, Base.hash(shape, Base.hash(type, h))))::UInt
+            debug && @info "TERM"
+            h = Base.hash(type, h)
+            debug && @info "TYPE" h
+            h = Base.hash(shape, h)
+            debug && @info "SHAPE" h
+             h = Base.hash(args, h)
+             debug && @info "ARGS" h
+             h = Base.hash(f, h)
+             debug && @info "F" h
+             h
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             # full && !iszero(hash2) && return hash2
             # !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
+            #
+            debug && @info "ADDMUL" variant
+            h = Base.hash(type, h)
+            debug && @info "TYPE" h
+            h = Base.hash(shape, h)
+            debug && @info "SHAPE" h
+            h = Base.hash(variant, h)
+            debug && @info "VARIANT" h
+            h = hash_addmuldict(dict, h, full)
+            debug && @info "DICT" h
+            htmp = hash_somescalar(coeff, h)
+            debug && @info "COEFF" htmp
             if full
                 htmp = Base.hash(typeof(coeff), htmp)
+                debug && @info "COEFFT" htmp
             end
             htmp
         end
         BSImpl.Div(; num, den, type, hash, hash2) => begin
             # full && !iszero(hash2) && return hash2
             # !full && !iszero(hash) && return hash
-            hash_bsimpl(num, hash_bsimpl(den, Base.hash(shape, Base.hash(type, h)), full), full) ⊻ DIV_SALT
+            debug && @info "DIV"
+            h = Base.hash(type, h)
+            debug && @info "TYPE" h
+            h = Base.hash(shape, h)
+            debug && @info "SHAPE" h
+            h = hash_bsimpl(den, h, full)
+            debug && @info "DEN" h
+            h = hash_bsimpl(num, h, full)
+            debug && @info "NUM" h
+            h = h ⊻ DIV_SALT
+            debug && @info "SALT" h
+            h
         end
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, hash, hash2) => begin
+            debug && @info "ARRAYOP"
             # full && !iszero(hash2) && return hash2
             # !full && !iszero(hash) && return hash
             Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, Base.hash(shape, Base.hash(type, h)), full)))::UInt, full))
@@ -1114,6 +1163,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
     if full
         partial = Base.hash(metadata(s), partial)::UInt
+        debug && @info "MHASH" partial
+        partial
     else
         partial
     end

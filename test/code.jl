@@ -20,6 +20,15 @@ nanmath_st.rewrites[:nanmath] = true
     @test toexpr(a*b*c*d*e) == :($(*)($(*)($(*)($(*)(a, b), c), d), e))
     @test toexpr(a+b+c+d+e) == :($(+)($(+)($(+)($(+)(a, b), c), d), e))
     @test toexpr(a+b) == :($(+)(a, b))
+    ex = x(t) + y(t)
+    println(arguments(ex))
+    SymbolicUtils.debug = true
+    hash(ex)
+    SymbolicUtils.debug = false
+    @info "BETWEEN"
+    SymbolicUtils.debug = true
+    hash(arguments(ex))
+    SymbolicUtils.debug = false
     @test toexpr(x(t)+y(t)) == :($(+)(y(t), x(t)))
     @test toexpr(x(t)+y(t)+x(t+1)) == :($(+)($(+)(y(t), x(t)), x($(+)(1, t))))
     s = LazyState()

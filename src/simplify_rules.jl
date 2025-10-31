@@ -145,19 +145,10 @@ const NUMBER_SIMPLIFIER = RestartedChain((
     If(is_operation(^), Chain(POW_RULES)),
 ))
 
-is_array(x) = symtype(x) <: AbstractArray
-const ARRAY_RULES = (
-    @rule( ~a::is_array * ~b::is_array + ~c::is_array => begin
-        tmp = copy(~c)
-        LinearAlgebra.mul!(tmp, ~a, ~b, 1, 1)
-    end),
-)
-
 const TRIG_EXP_SIMPLIFIER = Chain(TRIG_EXP_RULES)
 
 const BOOLEAN_SIMPLIFIER = Chain(BOOLEAN_RULES)
 
-const ARRAY_SIMPLIFIER = Chain(ARRAY_RULES)
 
 function get_default_simplifier(; kw...)
     IfElse(has_trig_exp,
@@ -168,9 +159,7 @@ function get_default_simplifier(; kw...)
            Postwalk(Chain((If(x->symtype(x) <: Number,
                               NUMBER_SIMPLIFIER),
                            If(x->symtype(x) <: Bool,
-                              BOOLEAN_SIMPLIFIER),
-                           If(x -> symtype(x) <: AbstractArray,
-                              ARRAY_SIMPLIFIER)))
+                              BOOLEAN_SIMPLIFIER)))
                     ; kw...))
 end
 

@@ -1136,6 +1136,7 @@ Base.one( s::BSImpl.Type) = one( symtype(s))
 Return a `Const` symbolic wrapping `1`.
 """
 Base.one(::Type{BSImpl.Type{T}}) where {T} = one_of_vartype(T)
+Base.oneunit(::Type{BSImpl.Type{T}}) where {T} = one_of_vartype(T)
 """
     $TYPEDSIGNATURES
 

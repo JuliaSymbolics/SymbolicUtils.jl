@@ -1064,7 +1064,7 @@ hash_amvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6
 
 const FNTYPE_SEED = 0x8b414291138f6c45
 
-function hash_symtype(T::TypeT, h::UInt)
+function hash_maybe_fntype(T::TypeT, h::UInt)
     if T <: FnType
         hash(T.parameters[1], hash(T.parameters[2], hash(T.parameters[3], h)::UInt)::UInt)::UInt ⊻ FNTYPE_SEED
     else
@@ -1114,8 +1114,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             debug && @info "NAME" h
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
-            h = hash_symtype(type, h)
-            debug && @info "TYPE" type hash_symtype(type, 0%UInt) h
+            h = hash_maybe_fntype(type, h)
+            debug && @info "TYPE" type hash_maybe_fntype(type, 0%UInt) h
             h ⊻ SYM_SALT
             debug && @info "SALT" h
             h
@@ -1124,8 +1124,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             # full && !iszero(hash2) && return hash2
             # !full && !iszero(hash) && return hash
             debug && @info "TERM"
-            h = hash_symtype(type, h)
-            debug && @info "TYPE" type hash_symtype(type, 0%UInt) h
+            h = Base.hash(type, h)
+            debug && @info "TYPE" type Base.hash(type, 0%UInt) h
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
              h = Base.hash(args, h)

@@ -13,7 +13,8 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
-                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape
+                      search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
+                      vartype, symtype
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -1110,6 +1111,20 @@ function cse!(x::ForLoop, state::CSEState)
     # cse the range with current scope, CSE the body with a new scope
     new_state = new_scope(state)
     return ForLoop(x.itervar, cse!(x.range, state), apply_cse(cse!(x.body, new_state), new_state))
+end
+
+include("matmuladd.jl")
+
+function mul5_opt(expr, state::CSEState)
+
+    # Try to apply optimization rules
+    optimized = apply_optimization_rules(expr, state, MATMUL_ADD_RULE)
+    if optimized !== nothing
+        return optimized
+    end
+
+    # If no optimization applied, return original expression
+    return expr
 end
 
 end

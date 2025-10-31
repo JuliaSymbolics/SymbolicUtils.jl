@@ -42,7 +42,7 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     args = arguments(ex)
     dirty = false
     can_fold = !(_op isa BasicSymbolic{T})
-    newargs = parent(args)
+    newargs = ArgsT{T}()
     for i in eachindex(args)
         arg = args[i]
         # This is `unsafe` because comparing `Const` equality is cheap, and we don't want to
@@ -59,6 +59,9 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
         dirty = true
         can_fold &= isconst(newarg)
         newargs[i] = newarg
+    end
+    if !dirty
+        newargs = parent(args)
     end
     dirty |= op !== _op
     if dirty || can_fold
@@ -307,11 +310,11 @@ function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T},
         return substitute(new_expr, subrules; fold = Val{false}())::BasicSymbolic{T}
     end::BasicSymbolic{T}
 end
-@cache function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges::RangesT{SymReal}, reduce)::BasicSymbolic{SymReal}
+function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges::RangesT{SymReal}, reduce)::BasicSymbolic{SymReal}
     @nospecialize reduce
     _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)::BasicSymbolic{SymReal}
 end
-@cache function reduce_eliminated_idxs_2(expr::BasicSymbolic{SafeReal}, output_idx::OutIdxT{SafeReal}, ranges::RangesT{SafeReal}, reduce)::BasicSymbolic{SafeReal}
+function reduce_eliminated_idxs_2(expr::BasicSymbolic{SafeReal}, output_idx::OutIdxT{SafeReal}, ranges::RangesT{SafeReal}, reduce)::BasicSymbolic{SafeReal}
     @nospecialize reduce
     _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)::BasicSymbolic{SafeReal}
 end

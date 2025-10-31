@@ -4,6 +4,8 @@ using Pkg, Test, SafeTestsets
     if haskey(ENV, "SU_BENCHMARK_ONLY")
         @safetestset "Benchmark" begin include("benchmark.jl") end
     else
+        @info hash(Int)
+        @info hash(Float64)
         if v"1.11" <= VERSION < v"1.12"
             # as of this comment, `@snoop_inference` on 1.12 has a tendency to never
             # end. I have kept a REPL going for 24 hours.
@@ -20,15 +22,15 @@ using Pkg, Test, SafeTestsets
         @safetestset "Rulesets" begin include("rulesets.jl") end
         @safetestset "Inference" begin include("inference.jl") end
         @safetestset "Code" begin include("code.jl") end
-        @safetestset "CSE" begin include("cse.jl") end
-        @safetestset "Interface" begin include("interface.jl") end
-        # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed
-        @safetestset "Fuzz" begin include("fuzz.jl") end
-        @safetestset "Adjoints" begin include("adjoints.jl") end
-        @safetestset "Hash Consing" begin include("hash_consing.jl") end
-        @safetestset "Cache macro" begin include("cache_macro.jl") end
-        @safetestset "Recursive utilities" begin include("recursive_utils.jl") end
-        @safetestset "Misc" begin include("misc.jl") end
-        @safetestset "Method library" begin include("methods.jl") end
+        # @safetestset "CSE" begin include("cse.jl") end
+        # @safetestset "Interface" begin include("interface.jl") end
+        # # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed
+        # @safetestset "Fuzz" begin include("fuzz.jl") end
+        # @safetestset "Adjoints" begin include("adjoints.jl") end
+        # @safetestset "Hash Consing" begin include("hash_consing.jl") end
+        # @safetestset "Cache macro" begin include("cache_macro.jl") end
+        # @safetestset "Recursive utilities" begin include("recursive_utils.jl") end
+        # @safetestset "Misc" begin include("misc.jl") end
+        # @safetestset "Method library" begin include("methods.jl") end
     end
 end

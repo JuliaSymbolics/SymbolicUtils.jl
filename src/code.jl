@@ -243,6 +243,7 @@ end
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
+    @show "BEGIN" O sorted_arguments(O) SymbolicUtils.get_degrees.(sorted_arguments(O)) "END"
     args = map(Base.Fix2(toexpr, st), sorted_arguments(O))
     if length(args) >= 3 && symtype(O) <: Number
         x, xs = Iterators.peel(args)

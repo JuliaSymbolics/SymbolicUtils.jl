@@ -580,7 +580,7 @@ julia> sorted_arguments(expr)
  z
 ```
 """
-@cache function TermInterface.sorted_arguments(x::BSImpl.Type)::ROArgsT
+function TermInterface.sorted_arguments(x::BSImpl.Type)::ROArgsT
     T = vartype(x)
     @match x begin
         BSImpl.AddMul(; variant) => begin
@@ -967,11 +967,11 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
             isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && s1 == s2 && t1 === t2
         end
-        (BSImpl.Div(; num = n1, den = d1, type = t1), BSImpl.Div(; num = n2, den = d2, type = t2)) => begin
-            isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && t1 === t2
+        (BSImpl.Div(; num = n1, den = d1, type = t1, shape = s1), BSImpl.Div(; num = n2, den = d2, type = t2, shape = s2)) => begin
+            isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && s1 == s2 && t1 === t2
         end
         (BSImpl.ArrayOp(; output_idx = o1, expr = e1, reduce = f1, term = t1, ranges = r1, shape = s1, type = type1), BSImpl.ArrayOp(; output_idx = o2, expr = e2, reduce = f2, term = t2, ranges = r2, shape = s2, type = type2)) => begin
-            isequal(o1, o2) && isequal(e1, e2) && isequal(f1, f2)::Bool && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && s1 == s2 && t1 === t2
+            isequal(o1, o2) && isequal(e1, e2) && isequal(f1, f2)::Bool && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && s1 == s2 && type1 === type2
         end
     end
     if full && partial && !(Ta <: BSImpl.Const)
@@ -1054,6 +1054,24 @@ function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
     return hash(hv, h)
 end
 
+debug::Bool = false
+
+vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a, h)
+vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d, h)
+vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
+
+hash_amvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
+
+const FNTYPE_SEED = 0x8b414291138f6c45
+
+function hash_maybe_fntype(T::TypeT, h::UInt)
+    if T <: FnType
+        hash(T.parameters[1], hash(T.parameters[2], hash(T.parameters[3], h)::UInt)::UInt)::UInt ⊻ FNTYPE_SEED
+    else
+        hash(T, h)::UInt
+    end
+end
+
 """
     hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
@@ -1061,61 +1079,112 @@ Core hash function for `BasicSymbolic`. `full` must be equal to the current valu
 `COMPARE_FULL[]`. Passing it reduces repeated access of a `TaskLocalValue`.
 """
 function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
+    debug && @info "HBSI" h full
     if !iszero(h)
-        return hash(hash_bsimpl(s, zero(h), full), h)::UInt
+        debug && @info "NZ"
+        part = hash_bsimpl(s, zero(h), full)
+        debug && @info "PART" part
+        part = hash(part, h)::UInt
+        debug && @info "FHASH" part
+        return part
     end
-    h = hash(T, h)
+    h = vartype_hash(T, h)
+    debug && @info "VTHASH" h
 
     partial::UInt = @match s begin
         BSImpl.Const(; val, hash) => begin
-            if iszero(hash)
-                h = s.hash = hash_somescalar(val, h)::UInt
-            else
-                h = hash
-            end
+            debug && @info "CONST"
+            # if iszero(hash)
+                h = hash_somescalar(val, h)::UInt
+            debug && @info "V" h
+            # else
+            #     h = hash
+            # end
             if full
                 h = Base.hash(typeof(val), h)::UInt
+                debug && @info "FULLH" typeof(val) Base.hash(typeof(val)) h
             end
             return h
         end
         BSImpl.Sym(; name, shape, type, hash, hash2) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
+            debug && @info "SYM"
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
+            debug && @info "NAME" h
             h = Base.hash(shape, h)
-            h = Base.hash(type, h)
+            debug && @info "SHAPE" h
+            h = hash_maybe_fntype(type, h)
+            debug && @info "TYPE" type hash_maybe_fntype(type, 0%UInt) h
             h ⊻ SYM_SALT
+            debug && @info "SALT" h
+            h
         end
         BSImpl.Term(; f, args, shape, hash, hash2, type) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
-            Base.hash(f, Base.hash(args, Base.hash(shape, Base.hash(type, h))))::UInt
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
+            debug && @info "TERM"
+            h = Base.hash(type, h)
+            debug && @info "TYPE" type Base.hash(type, 0%UInt) h
+            h = Base.hash(shape, h)
+            debug && @info "SHAPE" h
+             h = Base.hash(args, h)
+             debug && @info "ARGS" h
+             h = Base.hash(f, h)
+             debug && @info "F" h
+             h
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
+            #
+            debug && @info "ADDMUL" variant
+            h = Base.hash(type, h)
+            debug && @info "TYPE" type Base.hash(type) h
+            h = Base.hash(shape, h)
+            debug && @info "SHAPE" h
+            h = hash_amvariant(variant, h)
+            debug && @info "VARIANT" h
+            h = hash_addmuldict(dict, h, full)
+            debug && @info "DICT" h
+            htmp = hash_somescalar(coeff, h)
+            debug && @info "COEFF" htmp
             if full
                 htmp = Base.hash(typeof(coeff), htmp)
+                debug && @info "COEFFT" typeof(coeff) Base.hash(typeof(coeff)) htmp
             end
             htmp
         end
         BSImpl.Div(; num, den, type, hash, hash2) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
-            hash_bsimpl(num, hash_bsimpl(den, Base.hash(shape, Base.hash(type, h)), full), full) ⊻ DIV_SALT
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
+            debug && @info "DIV"
+            h = Base.hash(type, h)
+            debug && @info "TYPE" type hash(type) h
+            h = Base.hash(shape, h)
+            debug && @info "SHAPE" h
+            h = hash_bsimpl(den, h, full)
+            debug && @info "DEN" h
+            h = hash_bsimpl(num, h, full)
+            debug && @info "NUM" h
+            h = h ⊻ DIV_SALT
+            debug && @info "SALT" h
+            h
         end
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, hash, hash2) => begin
-            full && !iszero(hash2) && return hash2
-            !full && !iszero(hash) && return hash
+            debug && @info "ARRAYOP"
+            # full && !iszero(hash2) && return hash2
+            # !full && !iszero(hash) && return hash
             Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, Base.hash(shape, Base.hash(type, h)), full)))::UInt, full))
         end
     end
 
     if full
-        partial = s.hash2 = Base.hash(metadata(s), partial)::UInt
+        partial = Base.hash(metadata(s), partial)::UInt
+        debug && @info "MHASH" partial
+        partial
     else
-        s.hash = partial
+        partial
     end
     return partial
 end
@@ -1211,6 +1280,7 @@ function hashcons(s::BSImpl.Type{T}, reregister = false) where {T}
     if !ENABLE_HASHCONSING[]
         return s
     end
+    return s
     s.id === nothing || reregister || return s
     @manually_scope COMPARE_FULL => true begin
         k = (@lock WCS_LOCK getkey!(wcs_for_vartype(T), s))::typeof(s)
@@ -4007,10 +4077,10 @@ Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Uni
     _unreachable()
 end
 
-@cache function _getindex_1(arr::BasicSymbolic{SymReal}, idxs::Union{BasicSymbolic{SymReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SymReal}
+function _getindex_1(arr::BasicSymbolic{SymReal}, idxs::Union{BasicSymbolic{SymReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SymReal}
     _getindex(SymReal, arr, idxs...)
 end
-@cache function _getindex_2(arr::BasicSymbolic{SafeReal}, idxs::Union{BasicSymbolic{SafeReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SafeReal}
+function _getindex_2(arr::BasicSymbolic{SafeReal}, idxs::Union{BasicSymbolic{SafeReal}, Int, AbstractRange{Int}, Colon}...)::BasicSymbolic{SafeReal}
     _getindex(SafeReal, arr, idxs...)
 end
 
@@ -4074,10 +4144,10 @@ function Base.getindex(arr::BasicSymbolic{SafeReal}, idxs::StableIndex)
     _stable_getindex_2(arr, idxs)
 end
 
-@cache function _stable_getindex_1(arr::BasicSymbolic{SymReal}, sidxs::StableIndex)::BasicSymbolic{SymReal}
+function _stable_getindex_1(arr::BasicSymbolic{SymReal}, sidxs::StableIndex)::BasicSymbolic{SymReal}
     __stable_getindex(arr, sidxs)
 end
-@cache function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)::BasicSymbolic{SafeReal}
+function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)::BasicSymbolic{SafeReal}
     __stable_getindex(arr, sidxs)
 end
 

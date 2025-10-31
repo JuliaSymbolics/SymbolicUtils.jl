@@ -98,7 +98,7 @@ constant wrappers. Handles both numeric values and arrays. Returns `false` for s
 expressions that are not constant zero. The `@cache` macro improves performance by
 memoizing results for previously seen values.
 """
-@cache function _iszero(x)::Bool
+function _iszero(x)::Bool
     @nospecialize x
     x = unwrap_const(unwrap(x))
     x isa Number && return iszero(x)::Bool
@@ -122,7 +122,7 @@ constant wrappers. Handles both numeric values and arrays. Returns `false` for s
 expressions that are not constant one. The `@cache` macro improves performance by
 memoizing results for previously seen values.
 """
-@cache function _isone(x)::Bool
+function _isone(x)::Bool
     @nospecialize x
     x = unwrap_const(unwrap(x))
     x isa Number && return isone(x)::Bool

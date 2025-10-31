@@ -4,7 +4,6 @@ using Pkg, Test, SafeTestsets
     if haskey(ENV, "SU_BENCHMARK_ONLY")
         @safetestset "Benchmark" begin include("benchmark.jl") end
     else
-        versioninfo()
         @info hash(Int)
         @info hash(Float64)
         if v"1.11" <= VERSION < v"1.12"

@@ -1068,10 +1068,12 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         debug && @info "NZ"
         part = hash_bsimpl(s, zero(h), full)
         debug && @info "PART" part
-        return hash(part, h)::UInt
+        part = hash(part, h)::UInt
+        debug && @info "FHASH" part
+        return part
     end
-    h = hash(T, h)
-    debug && @info "VTHASH" h
+    # h = hash(T, h)
+    # debug && @info "VTHASH" h
 
     partial::UInt = @match s begin
         BSImpl.Const(; val, hash) => begin

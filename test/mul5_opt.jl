@@ -38,7 +38,7 @@ function test_optimization(expr, args...)
 
     # Get concrete test args
     N = 3
-    test_args = (randn(N, N) for _ in 1:length(args))
+    test_args = collect(randn(N, N) for _ in 1:length(args))
 
     # Evaluate both versions
     result_cse = invokelatest(f_cse, test_args...)

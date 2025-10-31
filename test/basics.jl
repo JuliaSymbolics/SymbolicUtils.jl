@@ -7,6 +7,7 @@ using Test, ReferenceTests
 import LinearAlgebra
 using SparseArrays
 
+@info hash(SymReal)
 include("utils.jl")
 
 @testset "@syms" begin

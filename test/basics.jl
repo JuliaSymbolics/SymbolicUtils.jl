@@ -8,6 +8,8 @@ import LinearAlgebra
 using SparseArrays
 
 @info hash(SymReal)
+@info hash(SymbolicUtils.AddMulVariant.ADD)
+@info hash(SymbolicUtils.AddMulVariant.MUL)
 include("utils.jl")
 
 @testset "@syms" begin

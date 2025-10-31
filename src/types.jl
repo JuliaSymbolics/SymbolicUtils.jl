@@ -1055,6 +1055,41 @@ function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
 end
 
 """
+    $METHODLIST
+
+Custom hash functions for `vartype(x)`, since hashes of types defined in a module are not
+stable across machines or processes.
+"""
+vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a, h)
+vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d, h)
+vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
+
+"""
+    $TYPEDSIGNATURES
+
+Custom hash functions for `AddMul.variant`, since it falls back to the `Base.Enum`
+implementation, which uses `objectid`, which changes across runs.
+"""
+hash_addmulvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
+
+const FNTYPE_SEED = 0x8b414291138f6c45
+
+"""
+    $TYPEDSIGNATURES
+
+Custom hash function for a type that may be an `FnType`, since hashes of types defined in a module are not
+stable across machines or processes.
+"""
+function hash_maybe_fntype(T::TypeT, h::UInt)
+    @nospecialize T
+    if T <: FnType
+        hash(T.parameters[1], hash(T.parameters[2], hash(T.parameters[3], h)::UInt)::UInt)::UInt ⊻ FNTYPE_SEED
+    else
+        hash(T, h)::UInt
+    end
+end
+
+"""
     hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
 Core hash function for `BasicSymbolic`. `full` must be equal to the current value of
@@ -1064,7 +1099,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     if !iszero(h)
         return hash(hash_bsimpl(s, zero(h), full), h)::UInt
     end
-    h = hash(T, h)
+    h = vartype_hash(T, h)
 
     partial::UInt = @match s begin
         BSImpl.Const(; val, hash) => begin
@@ -1083,7 +1118,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
             h = Base.hash(shape, h)
-            h = Base.hash(type, h)
+            h = hash_maybe_fntype(type, h)
             h ⊻ SYM_SALT
         end
         BSImpl.Term(; f, args, shape, hash, hash2, type) => begin
@@ -1094,7 +1129,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
+            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, Base.hash(shape, Base.hash(type, h))), full))
             if full
                 htmp = Base.hash(typeof(coeff), htmp)
             end

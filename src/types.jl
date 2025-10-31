@@ -1056,6 +1056,12 @@ end
 
 debug::Bool = false
 
+vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a, h)
+vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d, h)
+vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
+
+hash_amvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
+
 """
     hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
@@ -1072,8 +1078,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         debug && @info "FHASH" part
         return part
     end
-    # h = hash(T, h)
-    # debug && @info "VTHASH" h
+    h = vartype_hash(T, h)
+    debug && @info "VTHASH" h
 
     partial::UInt = @match s begin
         BSImpl.Const(; val, hash) => begin
@@ -1127,7 +1133,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             debug && @info "TYPE" h
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
-            h = Base.hash(variant, h)
+            h = hash_amvariant(variant, h)
             debug && @info "VARIANT" h
             h = hash_addmuldict(dict, h, full)
             debug && @info "DICT" h

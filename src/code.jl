@@ -493,8 +493,6 @@ Func
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 function toexpr(f::Func, st)
-    # @show st
-    # @show f.args
     funkyargs = get_rewrites(vcat(f.args, map(lhs, f.kwargs)))
     union_rewrites!(st.rewrites, funkyargs)
     dargs = filter(x->x isa DestructuredArgs, f.args)
@@ -1022,6 +1020,7 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
                 return sym
             end
         end
+
     end
 end
 

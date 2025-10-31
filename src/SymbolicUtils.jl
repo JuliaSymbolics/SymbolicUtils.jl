@@ -156,25 +156,6 @@ export substitute
 include("substitute.jl")
 
 include("code.jl")
-import .Code
-import .Code: CSEState, Let, Assignment, Func, MakeArray,
-    MakeSparseArray, AtIndex, DestructuredArgs, SpawnFetch,
-    LiteralExpr, BasicSymbolic, ForLoop, SetArray, MakeTuple,
-    lhs, rhs
-include("matmuladd.jl")
-
-# Updated mul5_cse2 that uses the rule system
-function mul5_cse2(expr, state::CSEState)
-
-    # Try to apply optimization rules
-    optimized = apply_optimization_rules(expr, state)
-    if optimized !== nothing
-        return optimized
-    end
-
-    # If no optimization applied, return original expression
-    return expr
-end
 
 PrecompileTools.@recompile_invalidations begin
     include("despecialize.jl")

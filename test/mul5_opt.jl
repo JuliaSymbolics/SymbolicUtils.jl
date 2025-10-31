@@ -23,7 +23,7 @@ end
 function test_optimization(expr, args...)
     cse_ir = SU.Code.cse(expr)
     state = SU.Code.CSEState()
-    optimized_ir = SU.mul5_cse2(cse_ir, state)
+    optimized_ir = SU.Code.mul5_opt(cse_ir, state)
 
     # Check if optimization was applied
     has_optimization = has_mul5_optimization(optimized_ir)

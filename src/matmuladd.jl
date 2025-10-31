@@ -210,12 +210,11 @@ const MATMUL_ADD_RULE = OptimizationRule(
 Base.isempty(l::Code.Let) = isempty(l.pairs)   
 
 # Apply optimization rules during CSE
-function apply_optimization_rules(expr, state::Code.CSEState, rules=[MATMUL_ADD_RULE])
-    for rule in sort(rules, by=r->r.priority, rev=true)
-        match_data = rule.detector(expr, state)
-        if match_data !== nothing # || !isempty(match_data)
-            return rule.transformer(expr, match_data, state)
-        end
+function apply_optimization_rules(expr, state::Code.CSEState, rules)
+    match_data = rules.detector(expr, state)
+    if match_data !== nothing
+        return rules.transformer(expr, match_data, state)
     end
+
     return nothing
 end

@@ -1114,4 +1114,18 @@ function cse!(x::ForLoop, state::CSEState)
     return ForLoop(x.itervar, cse!(x.range, state), apply_cse(cse!(x.body, new_state), new_state))
 end
 
+include("matmuladd.jl")
+
+function mul5_opt(expr, state::CSEState)
+
+    # Try to apply optimization rules
+    optimized = apply_optimization_rules(expr, state, MATMUL_ADD_RULE)
+    if optimized !== nothing
+        return optimized
+    end
+
+    # If no optimization applied, return original expression
+    return expr
+end
+
 end

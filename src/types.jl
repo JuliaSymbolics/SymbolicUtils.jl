@@ -1062,6 +1062,16 @@ vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
 
 hash_amvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
 
+const FNTYPE_SEED = 0x8b414291138f6c45
+
+function hash_symtype(T::TypeT, h::UInt)
+    if T <: FnType
+        hash(T.parameters[1], hash(T.parameters[2], hash(T.parameters[3], h)::UInt)::UInt)::UInt ⊻ FNTYPE_SEED
+    else
+        hash(T, h)::UInt
+    end
+end
+
 """
     hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
@@ -1104,8 +1114,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             debug && @info "NAME" h
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
-            h = Base.hash(type, h)
-            debug && @info "TYPE" type Base.hash(type) h
+            h = hash_symtype(type, h)
+            debug && @info "TYPE" type hash_symtype(type, 0%UInt) h
             h ⊻ SYM_SALT
             debug && @info "SALT" h
             h
@@ -1114,8 +1124,8 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             # full && !iszero(hash2) && return hash2
             # !full && !iszero(hash) && return hash
             debug && @info "TERM"
-            h = Base.hash(type, h)
-            debug && @info "TYPE" type Base.hash(type) h
+            h = hash_symtype(type, h)
+            debug && @info "TYPE" type hash_symtype(type, 0%UInt) h
             h = Base.hash(shape, h)
             debug && @info "SHAPE" h
              h = Base.hash(args, h)

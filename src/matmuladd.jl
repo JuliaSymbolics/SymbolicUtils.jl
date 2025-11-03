@@ -1,4 +1,26 @@
 # Pattern-based optimization templates for CSE
+
+"""
+    OptimizationRule(name, detector, transformer, priority)
+
+Defines an optimization rule with:
+- `name`: A string identifier for the optimization.
+- `detector`: A function that detects patterns in the IR. 
+- `transformer`: A function that transforms the IR based on detected patterns, and returns updated IR
+- `priority`: Integer priority (higher = applied first)
+
+The detector function should implement the signature
+
+```julia
+detector(expr::Code.Let, state::Code.CSEState) -> Union{Nothing, Vector{<:AbstractMatched}}
+```
+
+Likewise, the transformer function should implement the signature
+
+```julia
+transformer(expr::Code.Let, match_data::Union{Nothing, Vector{<:AbstractMatched}}, state::Code.CSEState) -> Code.Let
+```
+"""
 struct OptimizationRule{N, D, T, P}
     name::N
     detector::D
@@ -6,9 +28,9 @@ struct OptimizationRule{N, D, T, P}
     priority::P
 end
 
-abstract type Matched end
+abstract type AbstractMatched end
 
-struct MatMulAddMatch{At, Bt, Ct} <: Matched
+struct MatMulAddMatch{At, Bt, Ct} <: AbstractMatched
     A::At
     B::Bt
     Cs::Ct
@@ -19,6 +41,25 @@ struct MatMulAddMatch{At, Bt, Ct} <: Matched
     pattern::String
 end
 
+"""
+    detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState) -> Union{Nothing, Vector{MatMulAddMatch}}
+
+Attempts to detect patterns of the form:
+
+```julia
+result = A * B + C
+```
+
+And replaces them with in-place multiplication and addition:
+
+```julia
+copy!(temp, C)
+mul!(temp, A, B, 1, 1)
+result = temp
+```
+
+`A` and `B` must not be aliased.
+"""
 function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     mul_candidates_idx = findall(expr.pairs) do x
         r = rhs(x)
@@ -188,6 +229,11 @@ function substitute_in_ir(x::Code.Assignment, substitution_map::Dict)
     return Code.Assignment(new_lhs, new_rhs)
 end
 
+"""
+    substitute_in_ir(expr::Code.Let, substitution_map::Dict) -> Code.Let
+
+Recursively substitutes variables in the IR `expr` according to `substitution_map`.
+"""
 function substitute_in_ir(expr::Code.Let, substitution_map::Dict)
     isempty(substitution_map) && return expr
 

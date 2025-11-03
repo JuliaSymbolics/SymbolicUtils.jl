@@ -74,7 +74,7 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
         r = rhs(x)
         iscall(r) || return false
         all_arrays = symtype(r) <: AbstractArray
-        is_plus = operation(r) === +
+        is_plus = isadd(r)
         all_arrays && is_plus
     end
     plus_candidates = expr.pairs[plus_candidates_idx]
@@ -203,7 +203,7 @@ function substitute_in_ir_base(s, substitution_map::Dict)
         if issym(v)
             v
         else
-            +(v...)
+            add_worker(vartype(first(v)), v)
         end
     else
         s

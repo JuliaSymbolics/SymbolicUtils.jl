@@ -217,7 +217,7 @@ function substitute_in_ir(expr, substitution_map::Dict)
         new_args = map(arguments(expr)) do arg
             substitute_in_ir(arg, substitution_map)
         end
-        return Code.Term{Code.vartype(expr)}(operation(expr), new_args; type=Code.symtype(expr))
+        return Term{vartype(expr)}(operation(expr), new_args; type = symtype(expr))
     elseif issym(expr)
         substitute_in_ir_base(expr, substitution_map)
     else

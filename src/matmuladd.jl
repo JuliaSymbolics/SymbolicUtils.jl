@@ -110,6 +110,7 @@ transform_to_mul5_assignment(expr, ::Union{Nothing, AbstractVector{Nothing}, Tup
 function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     match_data_, net_additive_terms = match_data_
     Cset = Set(Iterators.flatten(getproperty.(match_data_, :Cs)))
+    counter = 1
 
     m_ = map(match_data_) do match_data
 
@@ -118,7 +119,8 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
         T = vartype(C)
 
         # Create temporary variable for the result
-        temp_var_sym = gensym("mul5_temp")
+        temp_var_sym = Symbol("##mul5_temp#", counter)
+        counter += 1
         temp_var = Sym{T}(temp_var_sym; type=symtype(C))
 
         if B isa AbstractVector{<:BasicSymbolic}

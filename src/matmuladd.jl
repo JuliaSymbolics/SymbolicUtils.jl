@@ -74,7 +74,7 @@ function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
         r = rhs(x)
         iscall(r) || return false
         all_arrays = symtype(r) <: AbstractArray
-        is_plus = isadd(r)
+        is_plus = operation(r) === +
         all_arrays && is_plus
     end
     plus_candidates = expr.pairs[plus_candidates_idx]

@@ -21,24 +21,23 @@ end
 
 function detect_matmul_add_pattern(expr::Code.Let, state::Code.CSEState)
     mul_candidates_idx = findall(expr.pairs) do x
-        iscall(rhs(x)) || return false
-        args = arguments(rhs(x))
-        all_arrays = all(y -> y <: AbstractArray, symtype.(args))
-        is_mul = operation(rhs(x)) === *
+        r = rhs(x)
+        iscall(r) || return false
+        all_arrays = symtype(r) <: AbstractArray
+        is_mul = operation(r) === *
         all_arrays && is_mul
     end
     mul_candidates = expr.pairs[mul_candidates_idx]
 
     plus_candidates_idx = findall(expr.pairs) do x
-        iscall(rhs(x)) || return false
-        args = arguments(rhs(x))
-        all_arrays = all(y -> y <: AbstractArray, symtype.(args))
-        is_plus = operation(rhs(x)) === +
+        r = rhs(x)
+        iscall(r) || return false
+        all_arrays = symtype(r) <: AbstractArray
+        is_plus = operation(r) === +
         all_arrays && is_plus
     end
     plus_candidates = expr.pairs[plus_candidates_idx]
 
-    mul_vals = lhs.(mul_candidates)
     candidates = map(plus_candidates_idx, plus_candidates) do p_idx, p
 
         map(mul_candidates_idx, mul_candidates) do m_idx, m_v
@@ -70,7 +69,6 @@ transform_to_mul5_assignment(expr, ::Union{Nothing, AbstractVector{Nothing}, Tup
 function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
     match_data_, net_additive_terms = match_data_
     Cset = Set(Iterators.flatten(getproperty.(match_data_, :Cs)))
-    plus_candidates_idx = getproperty.(match_data_, :plus_idx)
 
     m_ = map(match_data_) do match_data
 
@@ -116,12 +114,12 @@ function transform_to_mul5_assignment(expr, match_data_, state::Code.CSEState)
         if i in transformed_idxs
             append!(new_pairs, transformations[i])
         elseif i in rm_idxs
-            push!(new_pairs, nothing)
+            # do nothing/ skip over
+            # TODO: handle expr9 when a hanging mul is filtered out
         else
             push!(new_pairs, e)
         end
     end
-    new_pairs = filter(!isnothing, new_pairs)
 
     bank(substitution_map, last(match_data_).plus_candidate.lhs, collect(Cset))
     bank(substitution_map, last(match_data_).plus_candidate.lhs, collect(net_additive_terms))

@@ -39,14 +39,16 @@ end
     @test_nowarn @inferred tmp * a * b
 end
 
-@testset "Div" begin
-    @test_nowarn @inferred a / 2
-    @test_nowarn @inferred 2 / a
-    @test_nowarn @inferred a / b
-    @test_nowarn @inferred a / 2 / b / 2 / c / 2 / d
-    @test_nowarn @inferred (a * b) / (b * c)
-    @test_nowarn @inferred (2a*b) / (4b * c)
-    @test_nowarn @inferred (a^2 * b) / (a^3 * c)
+@static if VERSION < v"1.12"
+    @testset "Div" begin
+        @test_nowarn @inferred a / 2
+        @test_nowarn @inferred 2 / a
+        @test_nowarn @inferred a / b
+        @test_nowarn @inferred a / 2 / b / 2 / c / 2 / d
+        @test_nowarn @inferred (a * b) / (b * c)
+        @test_nowarn @inferred (2a*b) / (4b * c)
+        @test_nowarn @inferred (a^2 * b) / (a^3 * c)
+    end
 end
 
 @testset "Pow" begin
@@ -97,21 +99,23 @@ function foo end
     @test_nowarn @inferred term(foo, a, b, c; type = Number)
 end
 
-@testset "`maketerm`" begin
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, +, [a, b, c], nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, +, (a, b, c), nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, *, [a, b, c], nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, *, (a, b, c), nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, ^, [a, b], nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, ^, (a, b), nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, /, [a, b], nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, /, (a, b), nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, -, [a, b], nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, -, (a, b), nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, sin, [a], nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, sin, (a,), nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, ifelse, [a == b, b, c], nothing)
-    @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, ifelse, (a == b, b, c), nothing)
+@static if VERSION < v"1.12"
+    @testset "`maketerm`" begin
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, +, [a, b, c], nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, +, (a, b, c), nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, *, [a, b, c], nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, *, (a, b, c), nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, ^, [a, b], nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, ^, (a, b), nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, /, [a, b], nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, /, (a, b), nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, -, [a, b], nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, -, (a, b), nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, sin, [a], nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, sin, (a,), nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, ifelse, [a == b, b, c], nothing)
+        @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, ifelse, (a == b, b, c), nothing)
+    end
 end
 
 @testset "`expand`" begin

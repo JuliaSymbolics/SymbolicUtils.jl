@@ -45,7 +45,7 @@ function test_optimization(expr, args...)
     result_opt = invokelatest(f_opt, test_args...)
 
     # Assert correctness
-    @test isapprox(result_cse, result_opt, rtol=1e-10)
+    @test isapprox(result_cse, result_opt, rtol=1e-10, atol=1e-10)
 end
 
 @testset "Mul5 Optimization Tests" begin

@@ -1185,3 +1185,15 @@ end
     @test SymbolicUtils.promote_symtype(\, typeof(S), symtype(z)) == Matrix{Real}
     @test SymbolicUtils.promote_symtype(/, typeof(S), symtype(z)) == Matrix{Real}
 end
+
+@testset "Symbolic `StableIndex`" begin
+    @syms x[1:3] y[-2:5, 3:7] z[-10:-4, 0:5, 1:2]
+    @syms i::Int j::Int
+    idxs = [i, i + j, i * j]
+    for v in [x, y, z]
+        idx = SymbolicUtils.StableIndex(idxs[1:ndims(v)])
+        el = v[idx]
+        truth = v[idxs[1:ndims(v)]...]
+        @test isequal(el, truth)
+    end
+end

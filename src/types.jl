@@ -967,11 +967,11 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
             isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && s1 == s2 && t1 === t2
         end
-        (BSImpl.Div(; num = n1, den = d1, type = t1), BSImpl.Div(; num = n2, den = d2, type = t2)) => begin
-            isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && t1 === t2
+        (BSImpl.Div(; num = n1, den = d1, type = t1, shape = s1), BSImpl.Div(; num = n2, den = d2, type = t2, shape = s2)) => begin
+            isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && s1 == s2 && t1 === t2
         end
         (BSImpl.ArrayOp(; output_idx = o1, expr = e1, reduce = f1, term = t1, ranges = r1, shape = s1, type = type1), BSImpl.ArrayOp(; output_idx = o2, expr = e2, reduce = f2, term = t2, ranges = r2, shape = s2, type = type2)) => begin
-            isequal(o1, o2) && isequal(e1, e2) && isequal(f1, f2)::Bool && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && s1 == s2 && t1 === t2
+            isequal(o1, o2) && isequal(e1, e2) && isequal(f1, f2)::Bool && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && s1 == s2 && type1 === type2
         end
     end
     if full && partial && !(Ta <: BSImpl.Const)
@@ -1055,6 +1055,41 @@ function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
 end
 
 """
+    $METHODLIST
+
+Custom hash functions for `vartype(x)`, since hashes of types defined in a module are not
+stable across machines or processes.
+"""
+vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a, h)
+vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d, h)
+vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
+
+"""
+    $TYPEDSIGNATURES
+
+Custom hash functions for `AddMul.variant`, since it falls back to the `Base.Enum`
+implementation, which uses `objectid`, which changes across runs.
+"""
+hash_addmulvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
+
+const FNTYPE_SEED = 0x8b414291138f6c45
+
+"""
+    $TYPEDSIGNATURES
+
+Custom hash function for a type that may be an `FnType`, since hashes of types defined in a module are not
+stable across machines or processes.
+"""
+function hash_maybe_fntype(T::TypeT, h::UInt)
+    @nospecialize T
+    if T <: FnType
+        hash(T.parameters[1], hash(T.parameters[2], hash(T.parameters[3], h)::UInt)::UInt)::UInt ⊻ FNTYPE_SEED
+    else
+        hash(T, h)::UInt
+    end
+end
+
+"""
     hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
 Core hash function for `BasicSymbolic`. `full` must be equal to the current value of
@@ -1064,7 +1099,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     if !iszero(h)
         return hash(hash_bsimpl(s, zero(h), full), h)::UInt
     end
-    h = hash(T, h)
+    h = vartype_hash(T, h)
 
     partial::UInt = @match s begin
         BSImpl.Const(; val, hash) => begin
@@ -1083,7 +1118,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
             h = Base.hash(shape, h)
-            h = Base.hash(type, h)
+            h = hash_maybe_fntype(type, h)
             h ⊻ SYM_SALT
         end
         BSImpl.Term(; f, args, shape, hash, hash2, type) => begin
@@ -1094,7 +1129,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, Base.hash(variant, Base.hash(shape, Base.hash(type, h))), full))
+            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, Base.hash(shape, Base.hash(type, h))), full))
             if full
                 htmp = Base.hash(typeof(coeff), htmp)
             end
@@ -1136,6 +1171,7 @@ Base.one( s::BSImpl.Type) = one( symtype(s))
 Return a `Const` symbolic wrapping `1`.
 """
 Base.one(::Type{BSImpl.Type{T}}) where {T} = one_of_vartype(T)
+Base.oneunit(::Type{BSImpl.Type{T}}) where {T} = one_of_vartype(T)
 """
     $TYPEDSIGNATURES
 

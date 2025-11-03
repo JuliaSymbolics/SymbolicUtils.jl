@@ -4070,17 +4070,30 @@ $TYPEDFIELDS
 - [`StableIndices`](@ref): An iterator that produces `StableIndex` values.
 - [`stable_eachindex`](@ref): Returns a `StableIndices` iterator for a symbolic array.
 """
-struct StableIndex
+struct StableIndex{I}
     """
-    A small vector storing the indices for each dimension.
+    A small vector storing the indices for each dimension. Indices can either be integers
+    or `BasicSymbolic`s where all values have integer symtypes.
     """
-    idxs::SmallV{Int}
-end
+    idxs::SmallV{I}
 
-function StableIndex(idxs::AbstractVector{Int})
-    _idxs = SmallV{Int}()
-    append!(_idxs, idxs)
-    return StableIndex(_idxs)
+    StableIndex(idxs::SmallV{Int}) = new{Int}(idxs)
+    function StableIndex(idxs::AbstractVector{Int})
+        _idxs = SmallV{Int}()
+        sizehint!(_idxs, length(idxs))
+        append!(_idxs, idxs)
+        return new{Int}(_idxs)
+    end
+    StableIndex(idxs::SmallV{BasicSymbolic{T}}) where {T} = new{BasicSymbolic{T}}(idxs)
+    function StableIndex(idxs::AbstractVector{BasicSymbolic{T}}) where {T}
+        _idxs = SmallV{BasicSymbolic{T}}()
+        sizehint!(_idxs, length(idxs))
+        for x in idxs
+            @assert symtype(x) <: Integer
+        end
+        append!(_idxs, idxs)
+        return new{BasicSymbolic{T}}(_idxs)
+    end
 end
 
 Base.getindex(x::StableIndex, i::Int) = x.idxs[i]
@@ -4110,25 +4123,36 @@ function Base.getindex(arr::BasicSymbolic{SafeReal}, idxs::StableIndex)
     _stable_getindex_2(arr, idxs)
 end
 
-@cache function _stable_getindex_1(arr::BasicSymbolic{SymReal}, sidxs::StableIndex)::BasicSymbolic{SymReal}
+@cache function _stable_getindex_1(arr::BasicSymbolic{SymReal}, sidxs::StableIndex{Int})::BasicSymbolic{SymReal}
     __stable_getindex(arr, sidxs)
 end
-@cache function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)::BasicSymbolic{SafeReal}
+@cache function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex{Int})::BasicSymbolic{SafeReal}
+    __stable_getindex(arr, sidxs)
+end
+function _stable_getindex_1(arr::BasicSymbolic{SymReal}, sidxs::StableIndex)
+    __stable_getindex(arr, sidxs)
+end
+function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)
     __stable_getindex(arr, sidxs)
 end
 
-function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex) where {T}
+function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {T, I}
     idxs = sidxs.idxs
     isempty(idxs) && return arr
     sh::ShapeVecT = shape(arr)
+    if I === Int
+        @match arr begin
+            BSImpl.Const(; val) => return Const{T}(scalar_index(val, as_linear_idx(sh, sidxs)))
+            BSImpl.Term(; f, args) && if f === array_literal end => begin
+                return args[1 + as_linear_idx(sh, sidxs)]
+            end
+            BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => begin
+                return args[as_linear_idx(sh, sidxs)]
+            end
+            _ => nothing
+        end
+    end
     @match arr begin
-        BSImpl.Const(; val) => return Const{T}(scalar_index(val, as_linear_idx(sh, sidxs)))
-        BSImpl.Term(; f, args) && if f === array_literal  end => begin
-            return args[1 + as_linear_idx(sh, sidxs)]
-        end
-        BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => begin
-            return args[as_linear_idx(sh, sidxs)]
-        end
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
             inner = args[1][sidxs]
             return BSImpl.Term{T}(f, ArgsT{T}((inner,)); type = symtype(inner), shape = ShapeVecT())

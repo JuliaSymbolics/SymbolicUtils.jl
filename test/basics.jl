@@ -1197,3 +1197,12 @@ end
         @test isequal(el, truth)
     end
 end
+
+@testset "`StableIndex{Int}(::BasicSymbolic)`" begin
+    @syms x[1:3, 1:3] y j::Int k::Int
+
+    i = SymbolicUtils.StableIndex{Int}(x[1, 3])
+    @test i.idxs == [1, 3]
+    @test_throws ArgumentError SymbolicUtils.StableIndex{Int}(y)
+    @test_throws TypeError SymbolicUtils.StableIndex{Int}(x[j, k])
+end

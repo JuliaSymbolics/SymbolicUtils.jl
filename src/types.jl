@@ -4096,6 +4096,26 @@ struct StableIndex{I}
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Build a `StableIndex` from an indexed symbolic `sym`. Requires that all indices are
+integers.
+"""
+function StableIndex{Int}(sym::BasicSymbolic{T}) where {T}
+    idxs = SmallV{Int}()
+    @match sym begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            sizehint!(idxs, length(args) - 1)
+            for i in 2:length(args)
+                push!(idxs, unwrap_const(args[i])::Int)
+            end
+            return StableIndex(idxs)
+        end
+        _ => throw(ArgumentError("Can only build `StableIndex{Int}` from indexed symbolic."))
+    end
+end
+
 Base.getindex(x::StableIndex, i::Int) = x.idxs[i]
 Base.length(x::StableIndex) = length(x.idxs)
 Base.iterate(x::StableIndex, args...) = iterate(x.idxs, args...)

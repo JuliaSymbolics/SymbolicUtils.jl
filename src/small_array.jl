@@ -304,7 +304,20 @@ function Base.map(f, x::SmallVec{T, Vector{T}}) where {T}
 end
 Base.empty!(x::SmallVec) = empty!(x.data)
 Base.copy(x::SmallVec{T, V}) where {T, V} = SmallVec{T, V}(copy(x.data))
-Base.resize!(x::SmallVec, sz::Integer) = resize!(x.data, sz)
+function Base.resize!(x::SmallVec{T, V}, sz::Integer) where {T, V}
+    tmp = x.data
+    if tmp isa Backing{T}
+        if sz > 3
+            tmp = x.data = V(tmp)
+            resize!(tmp, sz)
+        else
+            resize!(tmp, sz)
+        end
+    else
+        resize!(tmp, sz)
+    end
+    resize!(x.data, sz)
+end
 function Base.insert!(x::SmallVec{T, V}, i::Integer, val) where {T, V}
     if x.data isa Backing{T} && isfull(x.data)
         x.data = V(x.data)

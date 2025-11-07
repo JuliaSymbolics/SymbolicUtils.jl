@@ -4102,11 +4102,12 @@ Base.iterate(x::StableIndex, args...) = iterate(x.idxs, args...)
 Base.eltype(::Type{StableIndex}) = Int
 
 function as_linear_idx(sh::ShapeVecT, sidxs::StableIndex)
-    linear_idx = 0
+    linear_idx = 1
     acc = 1
     for i in eachindex(sh)
-        linear_idx += sidxs.idxs[i] * acc
-        acc *= length(sh[i])
+        ax = sh[i]
+        linear_idx += (sidxs.idxs[i] - first(ax)) * acc
+        acc *= length(ax)
     end
     return linear_idx
 end

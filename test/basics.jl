@@ -1206,3 +1206,11 @@ end
     @test_throws ArgumentError SymbolicUtils.StableIndex{Int}(y)
     @test_throws TypeError SymbolicUtils.StableIndex{Int}(x[j, k])
 end
+
+@testset "`StableIndex{Int}` indexing of `Array`" begin
+    i = SymbolicUtils.StableIndex([1, 2])
+    arr = rand(3, 3)
+    @test arr[i] == arr[1, 2]
+    arr[i] = 4.5
+    @test arr[1, 2] == 4.5
+end

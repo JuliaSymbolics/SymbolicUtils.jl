@@ -4121,6 +4121,23 @@ Base.length(x::StableIndex) = length(x.idxs)
 Base.iterate(x::StableIndex, args...) = iterate(x.idxs, args...)
 Base.eltype(::Type{StableIndex}) = Int
 
+function Base.to_indices(A, inds, I::Tuple{StableIndex{Int}})
+    return (as_linear_idx(axes(A), I[1]),)
+end
+
+@generated function as_linear_idx(sh::NTuple{N}, I::StableIndex{Int}) where {N}
+    return quote
+        linear_idx = 1
+        acc = 1
+        Base.@nexprs $N i -> begin
+            ax = sh[i]
+            linear_idx += (I.idxs[i] - first(ax)) * acc
+            acc *= length(ax)
+        end
+        return linear_idx
+    end
+end
+
 function as_linear_idx(sh::ShapeVecT, sidxs::StableIndex)
     linear_idx = 1
     acc = 1

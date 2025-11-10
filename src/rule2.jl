@@ -15,10 +15,11 @@ return value is a ImmutableDict
 2) if no mismatch is found but no new matches either (for example in mathcing ^2), the original matches is returned
 3) otherwise the dictionary of old + new ones is returned that could look like:
 Base.ImmutableDict{Symbol, SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymReal}}(:x => a, :y => b)
+
+TODO matches does assigment or mutation? which is faster?
 """
-# TODO matches does assigment or mutation? which is faster?
 function check_expr_r(data::SymsType, rule::Expr, matches::MatchDict)::MatchDict
-    # print("Checking "); show(data); print(" rule "); show(rule); println()
+    # print("Checking "); show(data); print(" against "); show(rule); println(" and with ", matches)
     rule.head != :call && error("It happened") #it should never happen
     # rule is a slot or defslot
     if rule.head == :call && rule.args[1] == :(~)
@@ -46,15 +47,34 @@ function check_expr_r(data::SymsType, rule::Expr, matches::MatchDict)::MatchDict
     # - check arguments
     arg_data = arguments(data); arg_rule = rule.args[2:end];
     (length(arg_data) != length(arg_rule)) && return FAIL_DICT
-    for (a, b) in zip(arg_data, arg_rule)
-        new_matches = check_expr_r(a, b, matches)
-        if new_matches===FAIL_DICT
-            return FAIL_DICT
+    # commutative checks
+    if (rule.args[1]===:+) || (rule.args[1]===:*)
+        for perm_arg_data in permutations(arg_data) # is the same if done on arg_rule right?
+	    matches_this_perm = matches
+	    goto_next_perm::Bool = false
+	    for (a, b) in zip(perm_arg_data, arg_rule)
+		matches_this_perm  = check_expr_r(a, b, matches_this_perm)
+		if matches_this_perm===FAIL_DICT
+		    goto_next_perm = true
+		    break
+		end
+		# else the match has been added (or confirmed)
+	    end
+	    !goto_next_perm && return matches_this_perm 
+	    # else try with next perm
         end
-        # else the match has been added (or confirmed)
-        matches = new_matches
+	# if all perm failed
+	return FAIL_DICT
+    else
+        for (a, b) in zip(arg_data, arg_rule)
+            matches = check_expr_r(a, b, matches)
+            if matches===FAIL_DICT
+                return FAIL_DICT
+            end
+            # else the match has been added (or confirmed)
+        end
+	return matches
     end
-    return matches
 end
 
 # for when the rule contains a constant, a literal number
@@ -62,9 +82,7 @@ function check_expr_r(data::SymsType, rule::Real, matches::MatchDict)::MatchDict
     # print("Checking "); show(data); print(" against the real "); show(rule); println()
     unw = unwrap_const(data)
     if isa(unw, Real)
-        if unw!==rule
-            return FAIL_DICT
-        end
+        unw!==rule && return FAIL_DICT
         return matches
     end
     # else always fail
@@ -72,7 +90,10 @@ function check_expr_r(data::SymsType, rule::Real, matches::MatchDict)::MatchDict
 end
 
 """
+matches is the dictionary
+rhs is the expression to be rewritten into
 
+TODO investigate foo in rhs not working
 """
 function rewrite(matches::MatchDict, rhs::Expr)::SymsType
     if rhs.head != :call

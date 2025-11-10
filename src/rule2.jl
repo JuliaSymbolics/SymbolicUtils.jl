@@ -1,95 +1,74 @@
 
-# function create_n_expressions(n::Int)::Nothing
-#     @syms x
-#     exps = SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymReal}[]
-#     for i in 1:n
-#         e = :(∫(((~f) + (~!g)*(~x))^(~!q)*((~!a) + (~!b)*log((~!c)*((~d) + (~!e)*(~x))^(~!n)))^(~!p),(~x)) =>
-#         1⨸(~e)*int_and_subst(((~f)*(~x)⨸(~d))^(~q)*((~a) + (~b)*log((~c)*(~x)^(~n)))^(~p),  (~x), (~x), (~d) + (~e)*(~x), "3_3_2"))
-#         push!(exps, e)
-#     end
-# end
-# 
-# function create_n_rules(n::Int)::Nothing
-#     @syms x ∫(var1, var2)
-#     rules = Rule[]
-#     for i in 1:n
-#         r = @rule ∫(((~f) + (~!g)*(~x))^(~!q)*((~!a) + (~!b)*log((~!c)*((~d) + (~!e)*(~x))^(~!n)))^(~!p),(~x)) =>
-#         1⨸(~e)*int_and_subst(((~f)*(~x)⨸(~d))^(~q)*((~a) + (~b)*log((~c)*(~x)^(~n)))^(~p),  (~x), (~x), (~d) + (~e)*(~x), "3_3_2")
-#         push!(rules, r)
-#     end
-# end
-
-# empty base imuttable dict of the correct type
-
+# empty Base.ImmutableDict of the correct type
 const SymsType = SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymReal}
 const MatchDict = ImmutableDict{Symbol, SymsType}
 const NO_MATCHES = MatchDict() # or {Symbol, Union{Symbol, Real}} ?
 const FAIL_DICT = MatchDict(:_fail,0)
 
-function merge_immutable_dicts(d1::MatchDict, d2::MatchDict)::MatchDict
-    result = d1
-    for (k, v) in d2
-        result = Base.ImmutableDict(result, k, v)
-    end
-    return result
-end
-
-@syms ∫(var1, var2) 
 """
-against is a quoted expression
-to_check is a symbolic expression
+data is a symbolic expression, we need to check if respects the rule
+rule is a quoted expression, representing part of the rule
+matches is the dictionary of the matches found so far
 
-return value is the dictionary containing the bindings matches found.
+return value is a ImmutableDict
 1) if a mismatch is found, FAIL_DICT is returned.
-2) if no mismatch is found but no matches either (for example in mathcing ^2), a NO_MATCHES is returned.
-3) otherwise the dictionary of matches is returned that could look like:
+2) if no mismatch is found but no new matches either (for example in mathcing ^2), the original matches is returned
+3) otherwise the dictionary of old + new ones is returned that could look like:
 Base.ImmutableDict{Symbol, SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymReal}}(:x => a, :y => b)
-
 """
-function check_expr_r(to_check::SymsType, against::Expr)::MatchDict
-    # print("Checking "); show(to_check); print(" against "); show(against); println()
-    if against.head != :call
-        error("It happened") #it should never happen
-    end
-    # against is a slot or defslot
-    if against.head == :call && against.args[1] == :(~)
-        # TODO add predicates
-        return MatchDict(against.args[2], to_check)
-    end
-    # against is a call, check operation and arguments
-    !iscall(to_check) && return FAIL_DICT
-    # check operation
-    (operation(to_check) !== eval(against.args[1])) && return FAIL_DICT
-    # check arguments
-    arg_to_check = arguments(to_check)
-    arg_against = against.args[2:end]
-    (length(arg_to_check) != length(arg_against)) && return FAIL_DICT
-
-    bind_args = NO_MATCHES
-    for (a, b) in zip(arg_to_check, arg_against)
-        bind_arg = check_expr_r(a, b)
-        if bind_arg===FAIL_DICT
-            return FAIL_DICT
-        elseif bind_arg!==NO_MATCHES
-            bind_args = merge_immutable_dicts(bind_args, bind_arg)
+# TODO matches does assigment or mutation? which is faster?
+function check_expr_r(data::SymsType, rule::Expr, matches::MatchDict)::MatchDict
+    # print("Checking "); show(data); print(" rule "); show(rule); println()
+    rule.head != :call && error("It happened") #it should never happen
+    # rule is a slot or defslot
+    if rule.head == :call && rule.args[1] == :(~)
+        if rule.args[2] in keys(matches) # if the slot has already been matched
+            # check if it mached the same symbolic expression
+            !isequal(matches[rule.args[2]],data) && return FAIL_DICT
+            return matches
+        else # if never been matched
+            # if there is a predicate
+            if isa(rule.args[2], Expr)
+                rule.args[2].head != :(::) && error("it happened") # it should never happen
+                # check it
+                pred = rule.args[2].args[2]
+                !eval(pred)(SymbolicUtils.unwrap_const(data)) && return FAIL_DICT
+                return Base.ImmutableDict(matches, rule.args[2].args[1], data)
+            end
+            # if no predicate add match
+            return Base.ImmutableDict(matches, rule.args[2], data)
         end
-        # if bind_arg===NO_MATCHES continue to next
     end
-    return bind_args
+    # rule is a call, check operation and arguments
+    # - check operation
+    !iscall(data) && return FAIL_DICT
+    (Symbol(operation(data)) !== rule.args[1]) && return FAIL_DICT
+    # - check arguments
+    arg_data = arguments(data); arg_rule = rule.args[2:end];
+    (length(arg_data) != length(arg_rule)) && return FAIL_DICT
+    for (a, b) in zip(arg_data, arg_rule)
+        new_matches = check_expr_r(a, b, matches)
+        if new_matches===FAIL_DICT
+            return FAIL_DICT
+        end
+        # else the match has been added (or confirmed)
+        matches = new_matches
+    end
+    return matches
 end
 
-function check_expr_r(to_check::SymsType, against::Real)::MatchDict
-    # print("Checking "); show(to_check); print(" against the real "); show(against); println()
-    unw = unwrap_const(to_check)
-    # if we have literal numbers in the rule
+# for when the rule contains a constant, a literal number
+function check_expr_r(data::SymsType, rule::Real, matches::MatchDict)::MatchDict
+    # print("Checking "); show(data); print(" against the real "); show(rule); println()
+    unw = unwrap_const(data)
     if isa(unw, Real)
-        if unw!==against
+        if unw!==rule
             return FAIL_DICT
         end
-        return NO_MATCHES
+        return matches
     end
-    # else always match
-    return MatchDict(to_check, against)
+    # else always fail
+    return FAIL_DICT
 end
 
 """
@@ -122,7 +101,7 @@ function rewrite(matches::MatchDict, rhs::Real)::SymsType
 end
 
 function rule2(rule::Pair{Expr, Expr}, exp::SymsType)::Union{SymsType, Nothing}
-    m = check_expr_r(exp, rule.first)
+    m = check_expr_r(exp, rule.first, NO_MATCHES)
     m===FAIL_DICT && return nothing
     return rewrite(m, rule.second)
 end

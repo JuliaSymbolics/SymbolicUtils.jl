@@ -151,3 +151,9 @@ BenchmarkTools.Trial: 11 samples with 1 evaluation per sample.
 
  Memory estimate: 110.40 MiB, allocs estimate: 3393493.
 """
+
+function testpredicates()
+    @syms ∫ a
+    SymbolicUtils.rule2(:(∫(1 / (~x)^(~m::iseven), ~x)) => :(log(~x)*~m), ∫(1/a^3,a))===nothing
+    SymbolicUtils.rule2(:(∫(1 / (~x)^(~m::iseven), ~x)) => :(log(~x)*~m), ∫(1/a^2,a))!==nothing
+end

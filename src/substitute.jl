@@ -112,6 +112,7 @@ the operation (preventing substitution within operator calls), and `true` otherw
 @inline function default_substitute_filter(ex::BasicSymbolic{T}) where {T}
     @match ex begin
         BSImpl.Term(; f) && if f isa Operator end => false
+        BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => is_function_symbolic(f)
         _ => true
     end
 end

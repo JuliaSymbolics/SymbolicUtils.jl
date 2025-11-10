@@ -44,3 +44,43 @@ seed!(8258)
             fuzz_addmulpow(4)
         end
     end
+
+    @testset "fuzz StableIndex" begin
+        for _ in 1:10
+            axes = UnitRange{Int}[]
+            nd = rand(2:5)
+            for i in 1:nd
+                left = rand(-5:5)
+                right = rand(left:10)
+                push!(axes, left:right)
+            end
+            axes_tup = Tuple(axes)
+
+            for _ in 1:100
+                idx = Int[]
+                for i in 1:nd
+                    push!(idx, rand(axes[i]))
+                end
+                si = SymbolicUtils.StableIndex(idx)
+
+                cartidx = CartesianIndex(Tuple(idx))
+                cart_idx_truth = findfirst(isequal(cartidx), CartesianIndices(axes_tup))
+                lin_idx_truth = LinearIndices(axes_tup)[cart_idx_truth]
+                lin_idx_generated = SymbolicUtils.as_linear_idx(axes_tup, si)
+                lin_idx_shapevect = SymbolicUtils.as_linear_idx(SymbolicUtils.ShapeVecT(axes), si)
+                if lin_idx_generated == lin_idx_truth == lin_idx_shapevect
+                    @test true
+                else
+                    @test_broken false
+                    println("""
+                    Broken StableIndex test:
+                    - axes: $axes
+                    - idx: $idx
+                    - lin_idx_truth: $lin_idx_truth
+                    - lin_idx_generated: $lin_idx_generated
+                    - lin_idx_shapevect: $lin_idx_shapevect
+                    """)
+                end
+            end
+        end
+    end

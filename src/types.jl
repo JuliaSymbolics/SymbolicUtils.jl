@@ -4096,17 +4096,55 @@ struct StableIndex{I}
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Build a `StableIndex` from an indexed symbolic `sym`. Requires that all indices are
+integers.
+"""
+function StableIndex{Int}(sym::BasicSymbolic{T}) where {T}
+    idxs = SmallV{Int}()
+    @match sym begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            sizehint!(idxs, length(args) - 1)
+            for i in 2:length(args)
+                push!(idxs, unwrap_const(args[i])::Int)
+            end
+            return StableIndex(idxs)
+        end
+        _ => throw(ArgumentError("Can only build `StableIndex{Int}` from indexed symbolic."))
+    end
+end
+
 Base.getindex(x::StableIndex, i::Int) = x.idxs[i]
 Base.length(x::StableIndex) = length(x.idxs)
 Base.iterate(x::StableIndex, args...) = iterate(x.idxs, args...)
 Base.eltype(::Type{StableIndex}) = Int
 
+function Base.to_indices(A, inds, I::Tuple{StableIndex{Int}})
+    return (as_linear_idx(axes(A), I[1]),)
+end
+
+@generated function as_linear_idx(sh::NTuple{N}, I::StableIndex{Int}) where {N}
+    return quote
+        linear_idx = 1
+        acc = 1
+        Base.@nexprs $N i -> begin
+            ax = sh[i]
+            linear_idx += (I.idxs[i] - first(ax)) * acc
+            acc *= length(ax)
+        end
+        return linear_idx
+    end
+end
+
 function as_linear_idx(sh::ShapeVecT, sidxs::StableIndex)
-    linear_idx = 0
+    linear_idx = 1
     acc = 1
     for i in eachindex(sh)
-        linear_idx += sidxs.idxs[i] * acc
-        acc *= length(sh[i])
+        ax = sh[i]
+        linear_idx += (sidxs.idxs[i] - first(ax)) * acc
+        acc *= length(ax)
     end
     return linear_idx
 end

@@ -1,4 +1,3 @@
-
 # empty Base.ImmutableDict of the correct type
 const SymsType = SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymReal}
 const MatchDict = ImmutableDict{Symbol, SymsType}
@@ -18,15 +17,15 @@ Base.ImmutableDict{Symbol, SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbo
 
 TODO matches does assigment or mutation? which is faster?
 """
-function check_expr_r(data::SymsType, rule::Expr, matches::MatchDict)::MatchDict
-    # print("Checking "); show(data); print(" against "); show(rule); println(" and with ", matches)
-    rule.head != :call && error("It happened") #it should never happen
+function check_expr_r(data::SymsType, rule::Expr, matches::MatchDict)
+    print("Checking "); show(data); print(" against "); show(rule); println(" and with ", matches)
+    rule.head != :call && error("It happened, rule head is not a call") #it should never happen
     # rule is a slot or defslot
     if rule.head == :call && rule.args[1] == :(~)
         if rule.args[2] in keys(matches) # if the slot has already been matched
             # check if it mached the same symbolic expression
-            !isequal(matches[rule.args[2]],data) && return FAIL_DICT
-            return matches
+            !isequal(matches[rule.args[2]],data) && return FAIL_DICT::MatchDict
+            return matches::MatchDict
         else # if never been matched
             # if there is a predicate
             if isa(rule.args[2], Expr)
@@ -34,47 +33,43 @@ function check_expr_r(data::SymsType, rule::Expr, matches::MatchDict)::MatchDict
                 # check it
                 pred = rule.args[2].args[2]
                 !eval(pred)(SymbolicUtils.unwrap_const(data)) && return FAIL_DICT
-                return Base.ImmutableDict(matches, rule.args[2].args[1], data)
+                return Base.ImmutableDict(matches, rule.args[2].args[1], data)::MatchDict
             end
             # if no predicate add match
-            return Base.ImmutableDict(matches, rule.args[2], data)
+            return Base.ImmutableDict(matches, rule.args[2], data)::MatchDict
         end
     end
     # rule is a call, check operation and arguments
     # - check operation
-    !iscall(data) && return FAIL_DICT
-    (Symbol(operation(data)) !== rule.args[1]) && return FAIL_DICT
+    !iscall(data) && return FAIL_DICT::MatchDict
+    (Symbol(operation(data)) !== rule.args[1]) && return FAIL_DICT::MatchDict
     # - check arguments
     arg_data = arguments(data); arg_rule = rule.args[2:end];
-    (length(arg_data) != length(arg_rule)) && return FAIL_DICT
+    (length(arg_data) != length(arg_rule)) && return FAIL_DICT::MatchDict
     # commutative checks
     if (rule.args[1]===:+) || (rule.args[1]===:*)
         for perm_arg_data in permutations(arg_data) # is the same if done on arg_rule right?
-	    matches_this_perm = matches
-	    goto_next_perm::Bool = false
-	    for (a, b) in zip(perm_arg_data, arg_rule)
-		matches_this_perm  = check_expr_r(a, b, matches_this_perm)
-		if matches_this_perm===FAIL_DICT
-		    goto_next_perm = true
-		    break
-		end
-		# else the match has been added (or confirmed)
-	    end
-	    !goto_next_perm && return matches_this_perm 
+	    matches_this_perm = foo(perm_arg_data, arg_rule, matches)
+	    matches_this_perm!==FAIL_DICT && return matches_this_perm::MatchDict
 	    # else try with next perm
         end
 	# if all perm failed
-	return FAIL_DICT
+	return FAIL_DICT::MatchDict
     else
-        for (a, b) in zip(arg_data, arg_rule)
-            matches = check_expr_r(a, b, matches)
-            if matches===FAIL_DICT
-                return FAIL_DICT
-            end
-            # else the match has been added (or confirmed)
-        end
-	return matches
+	return foo(arg_data, arg_rule, matches)::MatchDict
     end
+end
+
+# TODO add types
+function foo(arg_data, arg_rule, matches)
+    for (a, b) in zip(arg_data, arg_rule)
+	matches = check_expr_r(a, b, matches)
+	if matches===FAIL_DICT
+	    return FAIL_DICT
+	end
+	# else the match has been added (or confirmed)
+    end
+    return matches
 end
 
 # for when the rule contains a constant, a literal number

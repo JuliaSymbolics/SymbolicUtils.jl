@@ -1374,3 +1374,55 @@ for T1 in [Number, :(BasicSymbolic{T})], T2 in [Integer, :(BasicSymbolic{T})]
         return BSImpl.Term{T}(binomial, ArgsT{T}((Const{T}(a), Const{T}(b))); type = symtype(a), shape = sh)
     end
 end
+
+function promote_symtype(::typeof(LinearAlgebra.cross), x::TypeT, y::TypeT)
+    x <: AbstractVector || error("`LinearAlgebra.cross` expects vectors. Got value of symtype $x.")
+    y <: AbstractVector || error("`LinearAlgebra.cross` expects vectors. Got value of symtype $y.")
+    Vector{promote_symtype(*, x.parameters[1]::TypeT, y.parameters[1]::TypeT)}
+end
+
+function promote_shape(::typeof(LinearAlgebra.cross), shx::ShapeT, shy::ShapeT)
+    @nospecialize shx shy
+
+    if shx isa Unknown
+        shx.ndims == 1 || shx.ndims == -1 || error("""
+        `LinearAlgebra.cross` expects vectors. Got argument of shape $shx.
+        """)
+    else
+        length(shx) == 1 && length(shx[1]) == 3 || error("""
+        `LinearAlgebra.cross` expects a 3-vector. Got argument of shape $shx.
+        """)
+    end
+    if shy isa Unknown
+        shy.ndims == 1 || shy.ndims == -1 || error("""
+        `LinearAlgebra.cross` expects vectors. Got argument of shape $shy.
+        """)
+    else
+        length(shy) == 1 && length(shy[1]) == 3 || error("""
+        `LinearAlgebra.cross` expects a 3-vector. Got argument of shape $shy.
+        """)
+    end
+
+    return ShapeVecT((1:3,))
+end
+
+function LinearAlgebra.cross(x::BasicSymbolic{T}, y::Union{BasicSymbolic{T}, AbstractVector{<:Number}, AbstractVector{BasicSymbolic{T}}}) where {T}
+    if y isa Vector{BasicSymbolic{T}}
+        st_y = symtype(BSImpl.Const{T}(y))
+    else
+        st_y = symtype(y)
+    end
+    promote_symtype(LinearAlgebra.cross, symtype(x), st_y)
+    promote_shape(LinearAlgebra.cross, shape(x), shape(y))
+    BSImpl.Const{T}(ArgsT{T}((x[2] * y[3] - x[3] * y[2], -x[1] * y[3] + x[3] * y[1], x[1] * y[2] - x[2] * y[1])))
+end
+function LinearAlgebra.cross(x::Union{AbstractVector{<:Number}, AbstractVector{BasicSymbolic{T}}}, y::BasicSymbolic{T}) where {T}
+    if x isa Vector{BasicSymbolic{T}}
+        st_y = symtype(BSImpl.Const{T}(x))
+    else
+        st_y = symtype(x)
+    end
+    promote_symtype(LinearAlgebra.cross, symtype(x), symtype(y))
+    promote_shape(LinearAlgebra.cross, shape(x), shape(y))
+    BSImpl.Const{T}(ArgsT{T}((x[2] * y[3] - x[3] * y[2], -x[1] * y[3] + x[3] * y[1], x[1] * y[2] - x[2] * y[1])))
+end

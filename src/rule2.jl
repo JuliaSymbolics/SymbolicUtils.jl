@@ -1,5 +1,5 @@
 # empty Base.ImmutableDict of the correct type
-const SymsType = SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymReal}
+const SymsType = BasicSymbolic{SymReal}
 const MatchDict = ImmutableDict{Symbol, SymsType}
 const NO_MATCHES = MatchDict() # or {Symbol, Union{Symbol, Real}} ?
 const FAIL_DICT = MatchDict(:_fail,0)

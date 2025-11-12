@@ -1231,3 +1231,35 @@ end
     @test_throws "expects vectors" LinearAlgebra.cross(x, w)
     @test_throws "expects vectors" LinearAlgebra.cross(y, w)
 end
+
+@testset "`transpose`" begin
+    @syms x[1:3] y[1:3, 1:3]
+
+    var = transpose(x)
+    @test operation(var) === transpose
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == [1:1, 1:3]
+
+    var = transpose(y)
+    @test operation(var) === transpose
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == [1:3, 1:3]
+end
+
+@testset "`Const`-ification of `adjoint`/`transpose`" begin
+    @syms a b c
+
+    v1 = [a, b, c]
+    var = Const{SymReal}(v1')
+    @test operation(var) === adjoint
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == [1:1, 1:3]
+    @test isequal(collect(var), v1')
+
+    v1 = [a b c; b c a; c a b]
+    var = Const{SymReal}(v1')
+    @test operation(var) === adjoint
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == [1:3, 1:3]
+    @test isequal(collect(var), v1')
+end

@@ -415,7 +415,7 @@ end
     """))
 end
 
-function promote_shape(::typeof(adjoint), sh::ShapeT)
+function promote_shape(::typeof(adjoint), @nospecialize(sh::ShapeT))
     ndims = _ndims_from_shape(sh)
     ndims > 2 && _throw_adjont_vec_or_mat(sh)
     if sh isa Unknown

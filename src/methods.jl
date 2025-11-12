@@ -6,7 +6,7 @@ import SpecialFunctions: gamma, loggamma, erf, erfc, erfcinv, erfi, erfcx,
                          besselk, hankelh1, hankelh2, polygamma, beta, logbeta, expint,
                          expinti, sinint, cosint
 
-const monadic = [deg2rad, rad2deg, transpose, asind, log1p, acsch,
+const monadic = [deg2rad, rad2deg, asind, log1p, acsch,
                  acos, asec, acosh, acsc, cscd, log, tand, log10, csch, asinh,
                  abs2, cosh, sin, cos, atan, cospi, cbrt, acosd, acoth, acotd,
                  asecd, exp, acot, sqrt, sind, sinpi, asech, log2, tan, exp10,
@@ -445,6 +445,24 @@ function Base.adjoint(s::BasicSymbolic{T}) where {T}
     end
 end
 
+promote_symtype(::typeof(transpose), T::TypeT) = promote_symtype(adjoint, T)
+promote_shape(::typeof(transpose), @nospecialize(sh::ShapeT)) = promote_shape(adjoint, sh)
+
+function Base.transpose(s::BasicSymbolic{T}) where {T}
+    @match s begin
+        BSImpl.Const(; val) => return Const{T}(transpose(val))
+        _ => nothing
+    end
+    sh = shape(s)
+    stype = symtype(s)
+    if is_array_shape(sh)
+        type = promote_symtype(transpose, stype)
+        newsh = promote_shape(transpose, sh)
+        return Term{T}(transpose, ArgsT{T}((s,)); type, shape = newsh)
+    else
+        return s
+    end
+end
 
 ## Booleans
 

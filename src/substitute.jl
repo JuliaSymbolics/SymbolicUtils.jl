@@ -364,12 +364,12 @@ the operation type. Different operations may require different scalarization str
 """
 scalarization_function(@nospecialize(_)) = _default_scalarize
 
-scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(broadcast), typeof(adjoint)}) = _default_scalarize_array
+scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(broadcast), typeof(adjoint), typeof(transpose)}) = _default_scalarize_array
 
 function _default_scalarize_array(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = arguments(x)
-    if toplevel && f !== broadcast && f !== (*) && f !== (+)
+    if toplevel && f !== broadcast && f !== (*) && f !== (+) && f !== adjoint && f !== transpose
         f(map(unwrap_const, args)...)
     elseif f === (+)
         reduce(+, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))

@@ -538,7 +538,16 @@ function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}
     if length(sh) > 0
         return [x[idx] for idx in eachindex(x)]
     end
-    args = arguments(x)
-    idxs = Iterators.map((-), Iterators.drop(args, 1), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
+    args = MData.variant_getfield(x, BSImpl.Term, :args)
+    idx = try
+        StableIndex{Int}(x)
+    catch
+        nothing
+    end
+    if idx !== nothing
+        return getindex(scalarize(args[1]), idx)
+    end
+    
+    idxs = Iterators.map((-), Iterators.map(unwrap_const, Iterators.drop(args, 1)), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
     return getindex(scalarize(args[1]), idxs...)
 end

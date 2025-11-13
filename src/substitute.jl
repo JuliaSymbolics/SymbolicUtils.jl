@@ -364,12 +364,12 @@ the operation type. Different operations may require different scalarization str
 """
 scalarization_function(@nospecialize(_)) = _default_scalarize
 
-scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(broadcast), typeof(adjoint)}) = _default_scalarize_array
+scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(broadcast), typeof(adjoint), typeof(transpose)}) = _default_scalarize_array
 
 function _default_scalarize_array(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = arguments(x)
-    if toplevel && f !== broadcast && f !== (*) && f !== (+)
+    if toplevel && f !== broadcast && f !== (*) && f !== (+) && f !== adjoint && f !== transpose
         f(map(unwrap_const, args)...)
     elseif f === (+)
         reduce(+, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))
@@ -538,7 +538,16 @@ function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}
     if length(sh) > 0
         return [x[idx] for idx in eachindex(x)]
     end
-    args = arguments(x)
-    idxs = Iterators.map((-), Iterators.drop(args, 1), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
+    args = MData.variant_getfield(x, BSImpl.Term, :args)
+    idx = try
+        StableIndex{Int}(x)
+    catch
+        nothing
+    end
+    if idx !== nothing
+        return getindex(scalarize(args[1]), idx)
+    end
+    
+    idxs = Iterators.map((-), Iterators.map(unwrap_const, Iterators.drop(args, 1)), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
     return getindex(scalarize(args[1]), idxs...)
 end

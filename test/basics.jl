@@ -1214,3 +1214,52 @@ end
     arr[i] = 4.5
     @test arr[1, 2] == 4.5
 end
+
+@testset "`LinearAlgebra.cross`" begin
+    @syms x[1:3] xx[1:3] y::Vector{Real} z[1:4] w::Matrix{Real}
+
+    @test isequal(LinearAlgebra.cross(x, xx), Const{SymReal}(LinearAlgebra.cross(collect(x), collect(xx))))
+    @test isequal(LinearAlgebra.cross(x, y), Const{SymReal}(LinearAlgebra.cross(collect(x), [y[1], y[2], y[3]])))
+    @test isequal(LinearAlgebra.cross(x, collect(xx)), Const{SymReal}(LinearAlgebra.cross(collect(x), collect(xx))))
+    @test isequal(LinearAlgebra.cross(x, [1,2,3]), Const{SymReal}(LinearAlgebra.cross(collect(x), [1,2,3])))
+    @test isequal(LinearAlgebra.cross(xx, x), Const{SymReal}(LinearAlgebra.cross(collect(xx), collect(x))))
+    @test isequal(LinearAlgebra.cross(y, x), Const{SymReal}(LinearAlgebra.cross([y[1], y[2], y[3]], collect(x))))
+    @test isequal(LinearAlgebra.cross(collect(xx), x), Const{SymReal}(LinearAlgebra.cross(collect(xx), collect(x))))
+    @test isequal(LinearAlgebra.cross([1,2,3], x), Const{SymReal}(LinearAlgebra.cross([1,2,3], collect(x))))
+    @test_throws "3-vector" LinearAlgebra.cross(x, z)
+    @test_throws "3-vector" LinearAlgebra.cross(y, z)
+    @test_throws "expects vectors" LinearAlgebra.cross(x, w)
+    @test_throws "expects vectors" LinearAlgebra.cross(y, w)
+end
+
+@testset "`transpose`" begin
+    @syms x[1:3] y[1:3, 1:3]
+
+    var = transpose(x)
+    @test operation(var) === transpose
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == [1:1, 1:3]
+
+    var = transpose(y)
+    @test operation(var) === transpose
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == [1:3, 1:3]
+end
+
+@testset "`Const`-ification of `adjoint`/`transpose`" begin
+    @syms a b c
+
+    v1 = [a, b, c]
+    var = Const{SymReal}(v1')
+    @test operation(var) === adjoint
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == [1:1, 1:3]
+    @test isequal(collect(var), v1')
+
+    v1 = [a b c; b c a; c a b]
+    var = Const{SymReal}(v1')
+    @test operation(var) === adjoint
+    @test symtype(var) == Matrix{Number}
+    @test shape(var) == [1:3, 1:3]
+    @test isequal(collect(var), v1')
+end

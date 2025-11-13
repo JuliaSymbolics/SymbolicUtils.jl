@@ -1626,6 +1626,11 @@ The `unsafe` flag skips hash consing for performance in internal operations.
     elseif val isa BasicSymbolic{TreeReal}
         error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
     elseif val isa AbstractArray && _is_array_of_symbolics(val)
+        isadjoint = val isa LinearAlgebra.Adjoint
+        istranspose = val isa LinearAlgebra.Transpose
+        if isadjoint || istranspose
+            val = parent(val)
+        end
         args = ArgsT{T}((BSImpl.Const{T}(size(val); unsafe),))
         sizehint!(args, length(val) + 1)
         type = Union{}
@@ -1634,7 +1639,18 @@ The `unsafe` flag skips hash consing for performance in internal operations.
             type = promote_type(type, symtype(v))
         end
         shape = ShapeVecT(axes(val))
-        return BSImpl.Term{T}(array_literal, args; type = Array{type, ndims(val)}, shape, unsafe)
+        type = Array{type, ndims(val)}
+        term = BSImpl.Term{T}(array_literal, args; type, shape, unsafe)
+        if isadjoint
+            type = promote_symtype(adjoint, type)
+            shape = promote_shape(adjoint, shape)
+            term = BSImpl.Term{T}(adjoint, ArgsT{T}((term,)); type, shape, unsafe)
+        elseif istranspose
+            type = promote_symtype(transpose, type)
+            shape = promote_shape(transpose, shape)
+            term = BSImpl.Term{T}(transpose, ArgsT{T}((term,)); type, shape, unsafe)
+        end
+        return term
     elseif val isa Tuple && _is_tuple_of_symbolics(val)
         args = ArgsT{T}()
         sizehint!(args, length(val))

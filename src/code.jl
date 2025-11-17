@@ -7,6 +7,8 @@ export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
        SpawnFetch, Multithreaded, ForLoop, cse
 
+export OptimizationRule, substitute_in_ir, apply_optimization_rules
+
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
@@ -1110,6 +1112,111 @@ function cse!(x::ForLoop, state::CSEState)
     # cse the range with current scope, CSE the body with a new scope
     new_state = new_scope(state)
     return ForLoop(x.itervar, cse!(x.range, state), apply_cse(cse!(x.body, new_state), new_state))
+end
+
+"""
+    OptimizationRule(name, detector, transformer, priority)
+
+Defines an optimization rule with:
+- `name`: A string identifier for the optimization.
+- `detector`: A function that detects patterns in the IR. 
+- `transformer`: A function that transforms the IR based on detected patterns, and returns updated IR
+- `priority`: Integer priority (higher = applied first)
+
+The detector function should implement the signature
+
+```julia
+detector(expr::Code.Let, state::Code.CSEState) -> Union{Nothing, Vector{<:AbstractMatched}}
+```
+
+Likewise, the transformer function should implement the signature
+
+```julia
+transformer(expr::Code.Let, match_data::Union{Nothing, Vector{<:AbstractMatched}}, state::Code.CSEState) -> Code.Let
+```
+"""
+struct OptimizationRule{N, D, T, P}
+    name::N
+    detector::D
+    transformer::T
+    priority::P
+end
+
+abstract type AbstractMatched end
+
+function bank(dic, key, value)
+    if haskey(dic, key)
+        dic[key] = vcat(dic[key], value)
+    else
+        dic[key] = value
+    end
+end
+
+function apply_substitution_map(expr::Code.Let, substitution_map::Dict)
+    substitute_in_ir(expr, substitution_map)
+end
+
+function substitute_in_ir(s::Symbol, substitution_map::Dict)
+    get(substitution_map, s, s)
+end
+
+function substitute_in_ir_base(s, substitution_map::Dict)
+    if haskey(substitution_map, s)
+        v = substitution_map[s]
+        if issym(v)
+            v
+        else
+            add_worker(vartype(first(v)), v)
+        end
+    else
+        s
+    end
+end
+
+function substitute_in_ir(expr, substitution_map::Dict)
+    if iscall(expr)
+        new_args = map(arguments(expr)) do arg
+            substitute_in_ir(arg, substitution_map)
+        end
+        return Term{vartype(expr)}(operation(expr), new_args; type = symtype(expr))
+    elseif issym(expr)
+        substitute_in_ir_base(expr, substitution_map)
+    else
+        expr
+    end
+end
+
+function substitute_in_ir(x::Code.Assignment, substitution_map::Dict)
+    new_lhs = substitute_in_ir(Code.lhs(x), substitution_map)
+    new_rhs = substitute_in_ir(Code.rhs(x), substitution_map)
+    return Code.Assignment(new_lhs, new_rhs)
+end
+
+"""
+    substitute_in_ir(expr::Code.Let, substitution_map::Dict) -> Code.Let
+
+Recursively substitutes variables in the IR `expr` according to `substitution_map`.
+"""
+function substitute_in_ir(expr::Code.Let, substitution_map::Dict)
+    isempty(substitution_map) && return expr
+
+    new_pairs = map(expr.pairs) do p
+        substitute_in_ir(p, substitution_map)
+    end
+    new_body = substitute_in_ir(expr.body, substitution_map)
+    return Code.Let(new_pairs, new_body, expr.let_block)
+end
+
+Base.isempty(l::Code.Let) = isempty(l.pairs)   
+
+# Apply optimization rules during CSE
+function apply_optimization_rules(expr, state::Code.CSEState, rules)
+    match_data = rules.detector(expr, state)
+    if match_data !== nothing
+        return rules.transformer(expr, match_data, state)
+    end
+
+    return nothing
 end
 
 end

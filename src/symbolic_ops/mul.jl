@@ -195,8 +195,20 @@ const SYMREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SymReal}}(MulWorkerBuff
 const SAFEREAL_MULBUFFER = TaskLocalValue{MulWorkerBuffer{SafeReal}}(MulWorkerBuffer{SafeReal})
 
 function (mwb::MulWorkerBuffer{T})(terms) where {T}
-    if !all(x -> _is_array_of_symbolics(x) || _numeric_or_arrnumeric_symtype(x), terms)
-        throw(MethodError(*, Tuple(terms)))
+    if terms isa ArgsT{T}
+        @union_split_smallvec terms begin
+            for x in terms
+                _is_array_of_symbolics(x) && continue
+                _numeric_or_arrnumeric_symtype(x) && continue
+                throw(MethodError(*, Tuple(symtype.(terms))))
+            end
+        end
+    else
+        for x in terms
+            _is_array_of_symbolics(x) && continue
+            _numeric_or_arrnumeric_symtype(x) && continue
+            throw(MethodError(*, Tuple(symtype.(terms))))
+        end
     end
     isempty(terms) && return one_of_vartype(T)
     length(terms) == 1 && return Const{T}(terms[1])

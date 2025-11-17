@@ -7,7 +7,44 @@ import Base: (+), (-), (*), (//), (/), (\), (^)
     
     expr = Expr(:if)
     cur_expr = expr
+    push!(cur_expr.args, :(S === Number))
+    push!(cur_expr.args, true)
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
+    push!(cur_expr.args, :(S === Real))
+    push!(cur_expr.args, true)
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
+    push!(cur_expr.args, :(S === Vector{Number}))
+    push!(cur_expr.args, true)
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
+    push!(cur_expr.args, :(S === Vector{Real}))
+    push!(cur_expr.args, true)
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
+    push!(cur_expr.args, :(S === Matrix{Number}))
+    push!(cur_expr.args, true)
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
+    push!(cur_expr.args, :(S === Matrix{Real}))
+    push!(cur_expr.args, true)
+    new_expr = Expr(:elseif)
+    push!(cur_expr.args, new_expr)
+    cur_expr = new_expr
+
     i = 0
+    
     N = length(SCALARS)
     for t1 in SCALARS
         for T in [t1, Vector{t1}, Matrix{t1}, LinearAlgebra.UniformScaling{t1}]

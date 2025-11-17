@@ -354,28 +354,29 @@ function quick_mulpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     base, exp = arguments(y)
     exp = unwrap_const(exp)
     exp isa Number || return (x, y)
-    args = arguments(x)
+    args = parent(arguments(x))
     idx = 0
     argbase = argexp = nothing
-    for (i, arg) in enumerate(args)
-        if isequal(arg, base)
-            idx = i
-            argbase = arg
-            argexp = 1
-            break
-        end
+    @union_split_smallvec args begin
+        for (i, arg) in enumerate(args)
+            if isequal(arg, base)
+                idx = i
+                argbase = arg
+                argexp = 1
+                break
+            end
         
-        if iscall(arg) && operation(arg) === (^) && isequal(arguments(arg)[1], base)
-            idx = i
-            argbase, argexp = arguments(arg)
-            break
+            if iscall(arg) && operation(arg) === (^) && isequal(arguments(arg)[1], base)
+                idx = i
+                argbase, argexp = arguments(arg)
+                break
+            end
         end
     end
     iszero(idx) && return x, y
     argexp = unwrap_const(argexp)
     argexp isa Number || return x, y
     # cheat by mutating `args` to avoid allocating
-    args = parent(args)
     oldval = args[idx]
     if argexp > exp
         args[idx] = argbase ^ (argexp - exp)

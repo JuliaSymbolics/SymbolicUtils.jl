@@ -88,6 +88,18 @@ end
 
 isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false
 
+function isequal_argsvec(v1::ArgsT{T}, v2::ArgsT{T}, full::Bool) where {T}
+    @union_split_smallvec v1 begin
+        @union_split_smallvec v2 begin
+            length(v1) == length(v2) || return false
+            for (a, b) in zip(v1, v2)
+                isequal_bsimpl(a, b, full) || return false
+            end
+        end
+    end
+    return true
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -116,7 +128,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
             n1 === n2 && s1 == s2 && t1 === t2
         end
         (BSImpl.Term(; f = f1, args = args1, shape = s1, type = t1), BSImpl.Term(; f = f2, args = args2, shape = s2, type = t2)) => begin
-            isequal(f1, f2) && isequal(args1, args2) && s1 == s2 && t1 === t2
+            isequal(f1, f2)::Bool && isequal_argsvec(args1, args2, full) && s1 == s2 && t1 === t2
         end
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
             isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && s1 == s2 && t1 === t2
@@ -236,7 +248,35 @@ stable across machines or processes.
 """
 function hash_maybe_fntype(T::TypeT, h::UInt)
     @nospecialize T
-    if T <: FnType
+    if T === Number
+        hash(Number, h)
+    elseif T === Real
+        hash(Real, h)
+    elseif T === Bool
+        hash(Bool, h)
+    elseif T === Int
+        hash(Int, h)
+    elseif T === BigInt
+        hash(BigInt, h)
+    elseif T === Float64
+        hash(Float64, h)
+    elseif T === Rational{Int}
+        hash(Rational{Int}, h)
+    elseif T === Integer
+        hash(Integer, h)
+    elseif T === Vector{Real}
+        hash(Vector{Real}, h)
+    elseif T === Vector{Number}
+        hash(Vector{Number}, h)
+    elseif T === Vector{Bool}
+        hash(Vector{Bool}, h)
+    elseif T === Matrix{Real}
+        hash(Matrix{Real}, h)
+    elseif T === Matrix{Number}
+        hash(Matrix{Number}, h)
+    elseif T === Matrix{Bool}
+        hash(Matrix{Bool}, h)
+    elseif T <: FnType
         hash(T.parameters[1], hash(T.parameters[2], hash(T.parameters[3], h)::UInt)::UInt)::UInt ⊻ FNTYPE_SEED
     else
         hash(T, h)::UInt
@@ -263,7 +303,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
                 h = hash
             end
             if full
-                h = Base.hash(typeof(val), h)::UInt
+                h = hash_maybe_fntype(typeof(val)::TypeT, h)::UInt
             end
             return h
         end
@@ -278,26 +318,35 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.Term(; f, args, shape, hash, hash2, type) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(f, Base.hash(args, Base.hash(shape, Base.hash(type, h))))::UInt
+            h = hash_maybe_fntype(type, h)
+            if shape isa Unknown
+                h = Base.hash(shape, h)
+            elseif shape isa ShapeVecT
+                h = Base.hash(shape, h)
+            else
+                _unreachable()
+            end
+            
+            Base.hash(f, Base.hash(args, h))::UInt
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, Base.hash(shape, Base.hash(type, h))), full))
+            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, Base.hash(shape, hash_maybe_fntype(type, h))), full))
             if full
-                htmp = Base.hash(typeof(coeff), htmp)
+                htmp = hash_maybe_fntype(typeof(coeff)::TypeT, htmp)
             end
             htmp
         end
         BSImpl.Div(; num, den, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            hash_bsimpl(num, hash_bsimpl(den, Base.hash(shape, Base.hash(type, h)), full), full) ⊻ DIV_SALT
+            hash_bsimpl(num, hash_bsimpl(den, Base.hash(shape, hash_maybe_fntype(type, h)), full), full) ⊻ DIV_SALT
         end
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, Base.hash(shape, Base.hash(type, h)), full)))::UInt, full))
+            Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, Base.hash(shape, hash_maybe_fntype(type, h)), full)))::UInt, full))
         end
     end
 

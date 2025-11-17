@@ -328,3 +328,26 @@ end
 function Base.hash(x::SmallVec{T, V}, h::UInt) where {T, V}
     return hash(x.data, h)
 end
+
+backingtype(::Type{SmallVec{T, V}}) where {T, V} = Backing{T}
+backingtype(x::SmallVec) = backingtype(typeof(x))
+buffertype(::Type{SmallVec{T, V}}) where {T, V} = V
+buffertype(x::SmallVec) = buffertype(typeof(x))
+
+macro union_split_smallvec(svec::Symbol, body)
+    svec = esc(svec)
+    quote
+        inner = $(svec).data
+        if inner isa $backingtype($svec)
+            let $svec = inner
+                $(esc(body))
+            end
+        elseif inner isa $buffertype($svec)
+            let $svec = inner
+                $(esc(body))
+            end
+        else
+            $_unreachable()
+        end
+    end
+end

@@ -105,6 +105,16 @@ export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Add, Mul and Pow
 PrecompileTools.@recompile_invalidations begin
     include("types.jl")
+    include("terminterface.jl")
+    include("hashconsing.jl")
+    include("inner_ctors.jl")
+    include("safe_ctors.jl")
+    include("symbolic_ops/common.jl")
+    include("symbolic_ops/addsub.jl")
+    include("symbolic_ops/mul.jl")
+    include("symbolic_ops/div.jl")
+    include("symbolic_ops/pow.jl")
+    include("symbolic_ops/getindex.jl")
 end
 
 include("printing.jl")

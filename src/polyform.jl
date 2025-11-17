@@ -1,5 +1,58 @@
 export simplify_fractions, quick_cancel, flatten_fractions
 
+"""
+    $TYPEDSIGNATURES
+
+Convert a `BasicSymbolic` expression to a polynomial variable, caching the result.
+
+# Arguments
+- `bs_to_poly::AbstractDict`: Dictionary cache mapping `BasicSymbolic` to `PolyVarT`
+- `x::BasicSymbolic`: The symbolic expression to convert
+
+# Returns
+- A `PolyVarT` polynomial variable representing `x`, created or retrieved from cache
+"""
+function basicsymbolic_to_polyvar(bs_to_poly::AbstractDict, x::BasicSymbolic)::PolyVarT
+    get!(bs_to_poly, x) do
+        inner_name = _name_as_operator(x)
+        name = Symbol(inner_name, :_, hash(x))
+        MP.similar_variable(ExamplePolyVar, name)
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Convert polynomial terms back into `BasicSymbolic` expressions by substitution.
+
+# Arguments
+- `poly`: A polynomial expression, either `PolyVarT` or `PolynomialT`
+- `vars`: Vector of `BasicSymbolic` variables corresponding to each entry of
+  `MultivariatePolynomials.variables(poly)`.
+
+# Returns
+- A `BasicSymbolic{T}` expression representing the polynomial with substituted variables
+"""
+function subs_poly(poly, vars::AbstractVector{BasicSymbolic{T}}) where {T}
+    add_buffer = ArgsT{T}()
+    mul_buffer = ArgsT{T}()
+    for term in MP.terms(poly)
+        empty!(mul_buffer)
+        coeff = MP.coefficient(term)
+        push!(mul_buffer, Const{T}(coeff))
+        mono = MP.monomial(term)
+        for (i, exp) in enumerate(MP.exponents(mono))
+            iszero(exp) && continue
+            push!(mul_buffer, (vars[i] ^ exp))
+        end
+        push!(add_buffer, mul_worker(T, mul_buffer))
+    end
+    return add_worker(T, add_buffer)
+end
+function subs_poly(poly::PolyVarT, vars::AbstractVector{BasicSymbolic{T}}) where {T}
+    return only(vars)
+end
+
 to_poly!(::AbstractDict, ::AbstractDict, expr, ::Bool) = MA.operate!(+, zeropoly(), expr)
 function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::BasicSymbolic{T}, recurse::Bool = true)::Union{PolyVarT, PolynomialT} where {T}
     @match expr begin

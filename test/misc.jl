@@ -1,6 +1,6 @@
 using Test
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, vartype, shape, onepoly, UnimplementedForVariantError
+using SymbolicUtils: BasicSymbolic, vartype, shape, onepoly
 using SymbolicIndexingInterface
 using LinearAlgebra
 

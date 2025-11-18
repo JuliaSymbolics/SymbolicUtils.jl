@@ -364,21 +364,102 @@ the operation type. Different operations may require different scalarization str
 """
 scalarization_function(@nospecialize(_)) = _default_scalarize
 
-scalarization_function(::Union{typeof(+), typeof(-), typeof(*), typeof(/), typeof(\), typeof(^), typeof(LinearAlgebra.norm), typeof(broadcast), typeof(adjoint), typeof(transpose)}) = _default_scalarize_array
+scalarization_function(::typeof(+)) = _scalarize_add
 
+function _scalarize_add(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = arguments(x)
+    reduce(+, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))
+end
+
+scalarization_function(::typeof(*)) = _scalarize_mul
+
+function _scalarize_mul(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = arguments(x)
+    scal_args = map(Base.Fix2(scalarize, Val{toplevel}()), args)
+    is_array_shape(shape(x)) || return mul_worker(T, scal_args)
+    is_array_shape(shape(args[1])) && return mapreduce(unwrap_const, *, scal_args)
+    coeff = scal_args[1]
+    res = mapreduce(unwrap_const, *, @view(scal_args[2:end]))
+    return map(Base.Fix2(*, coeff), res)
+end
+
+scalarization_function(::typeof(broadcast)) = _scalarize_broadcast
+
+function _scalarize_broadcast(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = arguments(x)
+    scal_args = Vector{Any}(undef, length(args))
+    map!(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), scal_args, args)
+    for i in eachindex(scal_args)
+        val = scal_args[i]
+        if val isa BasicSymbolic{T}
+            @assert !is_array_shape(shape(val))
+            scal_args[i] = Ref(val)
+        end
+    end
+    return broadcast(scal_args...)
+end
+
+scalarization_function(::Union{typeof(adjoint), typeof(transpose)}) = _scalarize_adjoint_transpose
+
+function _scalarize_adjoint_transpose(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = arguments(x)
+    val = scalarize(args[1], Val{toplevel}())::Array{BasicSymbolic{T}}
+    if f === adjoint
+        return adjoint(val)
+    elseif f === transpose
+        return transpose(val)
+    end
+    _unreachable()
+end
+
+scalarization_function(::typeof(/)) = _scalarize_rdiv
+
+function _scalarize_rdiv(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = arguments(x)
+    num = scalarize(args[1], Val{toplevel}())
+    den = scalarize(args[2], Val{toplevel}())
+    shnum = shape(num)
+    shden = shape(den)
+    if !is_array_shape(shnum) && !is_array_shape(shden)
+        return num / den
+    elseif !is_array_shape(shden)
+        return map(Base.Fix2(/, den), num)
+    else
+        res = num / den
+        return BasicSymbolic{T}[res[i] for i in eachindex(res)]
+    end
+end
+
+scalarization_function(::typeof(\)) = _scalarize_ldiv
+
+function _scalarize_ldiv(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = arguments(x)
+    fst = scalarize(args[1], Val{toplevel}())
+    lst = scalarize(args[2], Val{toplevel}())
+    shfst = shape(fst)
+    shlst = shape(lst)
+    if !is_array_shape(shfst) && !is_array_shape(shlst)
+        return fst / lst
+    elseif !is_array_shape(shfst)
+        return map(Base.Fix2(/, fst), lst)
+    else
+        res = fst / lst
+        return BasicSymbolic{T}[res[i] for i in eachindex(res)]
+    end
+end
+
+scalarization_function(::Union{typeof(-), typeof(^)}) = _default_scalarize_array
 function _default_scalarize_array(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = arguments(x)
-    if toplevel && f !== broadcast && f !== (*) && f !== (+) && f !== adjoint && f !== transpose
+    if toplevel
         f(map(unwrap_const, args)...)
-    elseif f === (+)
-        reduce(+, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))
-    elseif f === (*)
-        if is_array_shape(shape(args[1]))
-            reduce(*, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))
-        else
-            scalarize(args[1], Val{toplevel}()) .* reduce(*, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), @view(args[2:end])))
-        end
     else
         f(map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args)...)
     end

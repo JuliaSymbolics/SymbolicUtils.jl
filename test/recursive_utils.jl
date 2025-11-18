@@ -229,3 +229,19 @@ end
     truth = collect(x) + collect(y) + collect(z)
     @test isequal(truth, scal)
 end
+
+@testset "Scalarization of array division" begin
+    @syms x y[1:2, 1:2] z[1:2]
+    expr = (y * z) / x
+    scal = SymbolicUtils.scalarize(expr)
+    @test scal isa Vector
+    @test length(scal) == 2
+    truth = [(y[1, 1] * z[1] + y[1, 2] * z[2]) / x, (y[2, 1] * z[1] + y[2, 2] * z[2]) / x]
+    @test isequal(scal, truth)
+
+    expr = x \ (y * z)
+    scal = SymbolicUtils.scalarize(expr)
+    @test scal isa Vector
+    @test length(scal) == 2
+    @test isequal(scal, truth)
+end

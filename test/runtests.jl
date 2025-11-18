@@ -13,7 +13,7 @@ using Pkg, Test, SafeTestsets
             # @safetestset "Precompilation" begin include("precompilation.jl") end
         end
         @safetestset "Basics" begin include("basics.jl") end
-        @safetestset "Basics" begin include("arrayop.jl") end
+        @safetestset "ArrayOp" begin include("arrayop.jl") end
         @safetestset "Order" begin include("order.jl") end
         @safetestset "PolyForm" begin include("polyform.jl") end
         @safetestset "Rewrite" begin include("rewrite.jl") end

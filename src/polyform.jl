@@ -1,5 +1,58 @@
 export simplify_fractions, quick_cancel, flatten_fractions
 
+"""
+    $TYPEDSIGNATURES
+
+Convert a `BasicSymbolic` expression to a polynomial variable, caching the result.
+
+# Arguments
+- `bs_to_poly::AbstractDict`: Dictionary cache mapping `BasicSymbolic` to `PolyVarT`
+- `x::BasicSymbolic`: The symbolic expression to convert
+
+# Returns
+- A `PolyVarT` polynomial variable representing `x`, created or retrieved from cache
+"""
+function basicsymbolic_to_polyvar(bs_to_poly::AbstractDict, x::BasicSymbolic)::PolyVarT
+    get!(bs_to_poly, x) do
+        inner_name = _name_as_operator(x)
+        name = Symbol(inner_name, :_, hash(x))
+        MP.similar_variable(ExamplePolyVar, name)
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Convert polynomial terms back into `BasicSymbolic` expressions by substitution.
+
+# Arguments
+- `poly`: A polynomial expression, either `PolyVarT` or `PolynomialT`
+- `vars`: Vector of `BasicSymbolic` variables corresponding to each entry of
+  `MultivariatePolynomials.variables(poly)`.
+
+# Returns
+- A `BasicSymbolic{T}` expression representing the polynomial with substituted variables
+"""
+function subs_poly(poly, vars::AbstractVector{BasicSymbolic{T}}) where {T}
+    add_buffer = ArgsT{T}()
+    mul_buffer = ArgsT{T}()
+    for term in MP.terms(poly)
+        empty!(mul_buffer)
+        coeff = MP.coefficient(term)
+        push!(mul_buffer, Const{T}(coeff))
+        mono = MP.monomial(term)
+        for (i, exp) in enumerate(MP.exponents(mono))
+            iszero(exp) && continue
+            push!(mul_buffer, (vars[i] ^ exp))
+        end
+        push!(add_buffer, mul_worker(T, mul_buffer))
+    end
+    return add_worker(T, add_buffer)
+end
+function subs_poly(poly::PolyVarT, vars::AbstractVector{BasicSymbolic{T}}) where {T}
+    return only(vars)
+end
+
 to_poly!(::AbstractDict, ::AbstractDict, expr, ::Bool) = MA.operate!(+, zeropoly(), expr)
 function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::BasicSymbolic{T}, recurse::Bool = true)::Union{PolyVarT, PolynomialT} where {T}
     @match expr begin
@@ -301,28 +354,29 @@ function quick_mulpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
     base, exp = arguments(y)
     exp = unwrap_const(exp)
     exp isa Number || return (x, y)
-    args = arguments(x)
+    args = parent(arguments(x))
     idx = 0
     argbase = argexp = nothing
-    for (i, arg) in enumerate(args)
-        if isequal(arg, base)
-            idx = i
-            argbase = arg
-            argexp = 1
-            break
-        end
+    @union_split_smallvec args begin
+        for (i, arg) in enumerate(args)
+            if isequal(arg, base)
+                idx = i
+                argbase = arg
+                argexp = 1
+                break
+            end
         
-        if iscall(arg) && operation(arg) === (^) && isequal(arguments(arg)[1], base)
-            idx = i
-            argbase, argexp = arguments(arg)
-            break
+            if iscall(arg) && operation(arg) === (^) && isequal(arguments(arg)[1], base)
+                idx = i
+                argbase, argexp = arguments(arg)
+                break
+            end
         end
     end
     iszero(idx) && return x, y
     argexp = unwrap_const(argexp)
     argexp isa Number || return x, y
     # cheat by mutating `args` to avoid allocating
-    args = parent(args)
     oldval = args[idx]
     if argexp > exp
         args[idx] = argbase ^ (argexp - exp)

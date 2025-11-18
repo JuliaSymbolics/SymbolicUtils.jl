@@ -121,11 +121,14 @@ let
     funs = [*, /]
     exs = [random_term(5; atoms, funs) for _ in 1:50]
     @static if isdefined(SymbolicUtils, :SymReal)
+        arith["2-arg mul"] = @benchmarkable SymbolicUtils.mul_worker(SymReal, $((exs[1], exs[2])))
         arith["multiplication"] = @benchmarkable SymbolicUtils.mul_worker(SymReal, $exs)
     elseif isdefined(SymbolicUtils, :mul_worker)
+        arith["2-arg mul"] = @benchmarkable SymbolicUtils.mul_worker($((exs[1], exs[2])))
         arith["multiplication"] = @benchmarkable SymbolicUtils.mul_worker($exs)
     else
         exs = Tuple(exs)
+        arith["2-arg mul"] = @benchmarkable *($(exs[1]), $(exs[2]))
         arith["multiplication"] = @benchmarkable *($(exs)...)
     end
 

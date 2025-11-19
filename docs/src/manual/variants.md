@@ -27,11 +27,11 @@ of different `vartype`s.
 
 !!! warning "A short note on (im-)mutability"
   
-  While `ismutabletype(BasicSymbolic)` returns `true`, symbolic types are IMMUTABLE.
-  Any mutation is undefined behavior and can lead to very confusing and hard-to-debug issues.
-  This includes internal mutation, such as mutating `AddMul.dict`. The arrays returned from
-  `TermInterface.arguments` and `TermInterface.sorted_arguments` are read-only arrays for this
-  reason.
+    While `ismutabletype(BasicSymbolic)` returns `true`, symbolic types are IMMUTABLE.
+    Any mutation is undefined behavior and can lead to very confusing and hard-to-debug issues.
+    This includes internal mutation, such as mutating `AddMul.dict`. The arrays returned from
+    `TermInterface.arguments` and `TermInterface.sorted_arguments` are read-only arrays for this
+    reason.
 
 ## Expression symtypes
 

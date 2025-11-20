@@ -1136,11 +1136,11 @@ Likewise, the transformer function should implement the signature
 transformer(expr::Code.Let, match_data::Union{Nothing, Vector{<:AbstractMatched}}, state::Code.CSEState) -> Code.Let
 ```
 """
-struct OptimizationRule{N, D, T, P}
-    name::N
+struct OptimizationRule{D, T}
+    name::String
     detector::D
     transformer::T
-    priority::P
+    priority::Int
 end
 
 abstract type AbstractMatched end

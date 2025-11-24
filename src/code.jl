@@ -1145,14 +1145,6 @@ end
 
 abstract type AbstractMatched end
 
-function bank(dic, key, value)
-    if haskey(dic, key)
-        dic[key] = vcat(dic[key], value)
-    else
-        dic[key] = value
-    end
-end
-
 function apply_substitution_map(expr::Code.Let, substitution_map::Dict)
     substitute_in_ir(expr, substitution_map)
 end

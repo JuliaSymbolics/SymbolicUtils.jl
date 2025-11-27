@@ -73,15 +73,7 @@ end
 
 function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta::MetadataT, can_fold::Bool) where {T}
     @nospecialize op args meta
-    if op === (+)
-        add_worker(T, args)
-    elseif op === (*)
-        can_fold ? Const{T}(mapfoldl(unwrap_const, *, args)) : mul_worker(T, args)
-    elseif op === (/)
-        can_fold ? Const{T}(unwrap_const(args[1]) / unwrap_const(args[2])) : (args[1] / args[2])
-    elseif op === (^)
-        args[1] ^ args[2]
-    elseif can_fold
+    if can_fold
         if length(args) == 1
             Const{T}(op(unwrap_const(args[1])))
         elseif length(args) == 2

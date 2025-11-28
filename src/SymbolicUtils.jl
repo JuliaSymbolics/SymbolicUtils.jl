@@ -117,8 +117,6 @@ PrecompileTools.@recompile_invalidations begin
     include("symbolic_ops/getindex.jl")
 end
 
-include("printing.jl")
-
 export BS
 include("syms.jl")
 export @arrayop
@@ -128,6 +126,7 @@ include("arrayop.jl")
 PrecompileTools.@recompile_invalidations begin
 using SpecialFunctions, NaNMath
 include("methods.jl")
+include("printing.jl")
 end
 # LinkedList, simplification utilities
 include("utils.jl")

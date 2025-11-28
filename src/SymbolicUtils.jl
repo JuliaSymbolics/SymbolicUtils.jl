@@ -5,7 +5,7 @@ module SymbolicUtils
 
 using DocStringExtensions
 
-export @syms, term, showraw, hasmetadata, getmetadata, setmetadata
+export @syms, term, hasmetadata, getmetadata, setmetadata
 
 using Moshi.Data: @data
 import Moshi.Data as MData

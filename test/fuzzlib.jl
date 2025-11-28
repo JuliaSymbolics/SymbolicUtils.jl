@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, Term, showraw, issym, symtype
+using SymbolicUtils: BasicSymbolic, Term, issym, symtype
 using SpecialFunctions
 using Test
 using NaNMath
@@ -137,7 +137,7 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
 
     simplifiedstr = """
     function $(tuple(inputs...))
-        $(sprint(io->showraw(io, simplify(expr))))
+        $(sprint(io->show(io, simplify(expr))))
     end
     """
     f = include_string(Main, unsimplifiedstr)
@@ -191,9 +191,9 @@ function fuzz_test(ntrials, spec, simplify=simplify;kwargs...)
 
         @label print_err
         println("""Test failed for expression
-                    $(sprint(io->showraw(io, expr))) = $unsimplified
+                    $(sprint(io->show(io, expr))) = $unsimplified
                 Simplified:
-                    $(sprint(io->showraw(io, simplify(expr)))) = $simplified
+                    $(sprint(io->show(io, simplify(expr)))) = $simplified
                 Inputs:
                     $inputs = $args
                 State:

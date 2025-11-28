@@ -2,7 +2,6 @@ using Test
 using Combinatorics
 using SymbolicUtils
 using SymbolicUtils: <ₑ, arguments, Term, Const, get_degrees
-SymbolicUtils.show_simplified[] = false
 
 @syms a b c
 

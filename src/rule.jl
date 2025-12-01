@@ -683,7 +683,7 @@ getdepth(::Any) = typemax(Int)
 
 @noinline function Base.showerror(io::IO, err::RuleRewriteError)
     msg = "Failed to apply rule $(err.rule) on expression "
-    msg *= sprint(io->showraw(io, err.expr))
+    msg *= sprint(io->show(io, err.expr))
     print(io, msg)
 end
 

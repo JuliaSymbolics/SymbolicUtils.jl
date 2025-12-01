@@ -89,11 +89,12 @@ julia> sorted_arguments(expr)
     @match x begin
         BSImpl.AddMul(; variant) => begin
             args = copy(parent(arguments(x)))
-            @match variant begin
-                AddMulVariant.ADD => sort!(args; by = get_degrees, lt = monomial_lt)
-                AddMulVariant.MUL => sort!(args; by = get_degrees)
+            degrees = map(get_degrees, args)
+            idxs = @match variant begin
+                AddMulVariant.ADD => sortperm(degrees; lt = monomial_lt)
+                AddMulVariant.MUL => sortperm(degrees)
             end
-            return ROArgsT{T}(ArgsT{T}(args))
+            return ROArgsT{T}(ArgsT{T}(args[idxs]))
         end
         _ => return arguments(x)
     end

@@ -402,7 +402,7 @@ function get_indexed_axes!(ix::IndexedAxes{T}, expr::BasicSymbolic{T}) where {T}
                 ix[idx] = IndexedAxis(sym, dim, 0)
                 continue
             end
-            BSImpl.AddMul(; variant, coeff, dict) && if variant == AddMulVariant.ADD && length(dict) == 1 && !iscall(first(keys(dict))) && isone(first(values(dict))) end => begin
+            BSImpl.AddMul(; variant, coeff, dict) && if variant == AddMulVariant.ADD && length(dict) == 1 && !iscall(first(keys(dict))) && _isone(first(values(dict))) end => begin
                 idxsym = first(keys(dict))
                 ix[idxsym] = IndexedAxis(sym, dim, Int(coeff))
                 continue

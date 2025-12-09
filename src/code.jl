@@ -265,7 +265,7 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     exp = unwrap_const(exp)
     if exp isa Real && exp < 0
         base = Term{T}(inv, ArgsT{T}((base,)); type = symtype(O))
-        if isone(-exp)
+        if SymbolicUtils._isone(-exp)
             return toexpr(base, st)
         else
             exp = -exp

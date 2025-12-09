@@ -184,7 +184,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                     end
                 end
                 AddMulVariant.MUL => begin
-                    if !isone(coeff)
+                    if !_isone(coeff)
                         push!(args, Const{T}(coeff))
                     end
                     for (k, v) in dict

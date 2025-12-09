@@ -293,7 +293,7 @@ macro cache(args...)
             push!(keyexprs, :($get_cache_key($arg)))
             push!(argexprs, arg)
             push!(keytypes, Any)
-            valid_key_condition = :($valid_key_condition && !(key[$(length(keyexprs))] isa $CacheSentinel))
+            valid_key_condition = :($valid_key_condition && !($(Symbol(:key_, length(keyexprs))) isa $CacheSentinel))
             continue
         end
         argname, Texpr = arg.args
@@ -303,7 +303,7 @@ macro cache(args...)
             # if the type is `Any`, branch on it being a `BasicSymbolic`
             push!(keyexprs, :($get_cache_key($argname)))
             push!(keytypes, Any)
-            valid_key_condition = :($valid_key_condition && !(key[$(length(keyexprs))] isa $CacheSentinel))
+            valid_key_condition = :($valid_key_condition && !($(Symbol(:key_, length(keyexprs))) isa $CacheSentinel))
             continue
         end
 
@@ -316,7 +316,7 @@ macro cache(args...)
             push!(keytypes, Union{keyTs...})
             if maybe_basicsymbolic
                 push!(keyexprs, :($get_cache_key($argname)))
-                valid_key_condition = :($valid_key_condition && !(key[$(length(keyexprs))] isa $CacheSentinel))
+                valid_key_condition = :($valid_key_condition && !($(Symbol(:key_, length(keyexprs))) isa $CacheSentinel))
             else
                 push!(keyexprs, argname)
             end
@@ -328,7 +328,7 @@ macro cache(args...)
         if T <: BasicSymbolic
             push!(keytypes, SymbolicKey) 
             push!(keyexprs, :($get_cache_key($argname)))
-            valid_key_condition = :($valid_key_condition && !(key[$(length(keyexprs))] isa $CacheSentinel))
+            valid_key_condition = :($valid_key_condition && !($(Symbol(:key_, length(keyexprs))) isa $CacheSentinel))
         else
             push!(keytypes, T)
             push!(keyexprs, argname)
@@ -336,7 +336,26 @@ macro cache(args...)
     end
 
     # the expression for getting the keys
-    keyexpr = EL.xtuple(keyexprs...)
+    keyvarsexpr = Expr(:block)
+    for (i, kex) in enumerate(keyexprs)
+        kname = Symbol(:key_, i)
+        if Meta.isexpr(kex, :...)
+            push!(keyvarsexpr.args, :($kname = ($kex,)))
+            keyexprs[i] = :($kname...)
+        else
+            push!(keyvarsexpr.args, :($kname = $kex))
+            keyexprs[i] = kname
+        end
+    end
+
+    is_singleton_key = false
+    if length(keyexprs) == 1 && !Meta.isexpr(keyexprs[1], :...)
+        keyexpr = only(keyexprs)
+        keytypes = only(keytypes)
+        is_singleton_key = true
+    else
+        keyexpr = EL.xtuple(keyexprs...)
+    end
 
     rettype = fn.rettype
     if rettype === nothing
@@ -347,8 +366,12 @@ macro cache(args...)
     end
 
     # construct an expression for the type of the cache keys
-    keyT = Expr(:curly, Tuple)
-    append!(keyT.args, keytypes)
+    if is_singleton_key
+        keyT = keytypes
+    else
+        keyT = Expr(:curly, Tuple)
+        append!(keyT.args, keytypes)
+    end
     valT = rettype
     # the type of the cache
     cacheT = :(Dict{$keyT, $valT})
@@ -386,6 +409,7 @@ macro cache(args...)
     wrapperfn.body = :(begin
         # if we can cache
         if $conditions
+            $keyvarsexpr
             # construct the `Tuple` key
             key = $keyexpr
             if !($valid_key_condition)

@@ -73,6 +73,7 @@ Base.@propagate_inbounds function Base.push!(x::Backing{T}, v::T) where {T}
     @boundscheck x.len < 3
     x.len += 1
     x[x.len] = v
+    x
 end
 
 Base.@propagate_inbounds function Base.pop!(x::Backing{T}) where {T}
@@ -280,10 +281,19 @@ end
 
 Base.@propagate_inbounds function Base.push!(x::SmallVec{T, V}, v::T) where {T, V}
     buf = x.data
-    buf isa Backing{T} || return push!(buf::V, v)
-    isfull(buf) || return push!(buf::Backing{T}, v)
-    x.data = V(buf)
-    return push!(x.data::V, v)
+    if buf isa V
+        push!(buf, v)
+        return x
+    elseif buf isa Backing{T}
+        if !isfull(buf)
+            push!(buf, v)
+            return x
+        end
+        buf = x.data = V(buf)::V
+        push!(buf, v)
+        return x
+    end
+    _unreachable()
 end
 
 Base.@propagate_inbounds Base.pop!(x::SmallVec) = pop!(x.data)

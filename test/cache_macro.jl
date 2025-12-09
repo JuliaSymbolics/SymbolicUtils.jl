@@ -15,9 +15,9 @@ end
     @test isequal(val, 2x + 1)
     cachestruct = associated_cache(f1)
     cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{SymbolicKey}, BasicSymbolic}
+    @test cache isa Dict{SymbolicKey, BasicSymbolic}
     @test length(cache) == 1
-    @test cache[(get_cache_key(x),)] === val
+    @test cache[get_cache_key(x)] === val
     @test stats.hits == 0
     @test stats.misses == 1
     f1(x)
@@ -112,9 +112,9 @@ end
     @test isequal(val, 2x + 1)
     cachestruct = associated_cache(fn)
     cache, stats = cachestruct.tlv[]
-    @test cache isa Dict{Tuple{Any}, Union{BasicSymbolic, Int}}
+    @test cache isa Dict{Any, Union{BasicSymbolic, Int}}
     @test length(cache) == 1
-    @test cache[(get_cache_key(x),)] === val
+    @test cache[get_cache_key(x)] === val
     @test stats.hits == 0
     @test stats.misses == 1
     fn(x)

@@ -206,7 +206,11 @@ PrecompileTools.@setup_workload begin
         # substitute(ex, rules2; fold = fold2)
         q[1]
         q'q
+        sorted_arguments(x ^ 2 + 2x + x / y + q[1] + f(x) ^ x)
     end
 end
+
+precompile(Tuple{typeof(Base.show), Base.TTY, SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:color,), Tuple{Symbol}}, typeof(Base.printstyled), Base.TTY, Int64})
 
 end # module

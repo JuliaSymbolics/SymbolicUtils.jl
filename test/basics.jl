@@ -1263,3 +1263,21 @@ end
     @test shape(var) == [1:3, 1:3]
     @test isequal(collect(var), v1')
 end
+
+@testset "`^` doesn't distribute into `/`" begin
+    @syms a b c
+    ex = (a / b) ^ c
+    @test operation(ex) === (^)
+    @test isequal(arguments(ex), [a/b, c])
+end
+
+@testset "Vector * transpose(Vector) works" begin
+    @syms b[1:3] c[2:6] d[3:3, -1:4]
+    ex = b * c'
+    @test symtype(ex) === Matrix{Number}
+    @test shape(ex) == [1:3, 2:6]
+
+    ex = b * d
+    @test symtype(ex) === Matrix{Number}
+    @test shape(ex) == [1:3, -1:4]
+end

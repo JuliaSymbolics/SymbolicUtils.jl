@@ -101,9 +101,45 @@ memoizing results for previously seen values.
 @cache function _iszero(x)::Bool
     @nospecialize x
     x = unwrap_const(unwrap(x))
-    x isa Number && return iszero(x)::Bool
-    x isa Array && return iszero(x)::Bool
-    return false
+    if x isa Int
+        return iszero(x)
+    elseif x isa BigInt
+        return iszero(x)
+    elseif x isa Float64
+        return iszero(x)
+    elseif x isa Float32
+        return iszero(x)
+    elseif x isa BigFloat
+        return iszero(x)
+    elseif x isa Rational{Int}
+        return iszero(x)
+    elseif x isa Rational{BigInt}
+        return iszero(x)
+    elseif x isa Bool
+        return iszero(x)
+    elseif x isa ComplexF64
+        return iszero(x)
+    elseif x isa ComplexF32
+        return iszero(x)
+    elseif x isa Complex{Int}
+        return iszero(x)
+    elseif x isa Complex{Rational{Int}}
+        return iszero(x)
+    elseif x isa Vector{Int}
+        return iszero(x)
+    elseif x isa Vector{Float64}
+        return iszero(x)
+    elseif x isa Matrix{Int}
+        return iszero(x)
+    elseif x isa Matrix{Float64}
+        return iszero(x)
+    elseif x isa Number
+        return iszero(x)::Bool
+    elseif x isa Array
+        return iszero(x)::Bool
+    else
+        return false
+    end
 end
 """
     $TYPEDSIGNATURES
@@ -125,9 +161,45 @@ memoizing results for previously seen values.
 @cache function _isone(x)::Bool
     @nospecialize x
     x = unwrap_const(unwrap(x))
-    x isa Number && return isone(x)::Bool
-    x isa Array && return isone(x)::Bool
-    return false
+    if x isa Int
+        return isone(x)
+    elseif x isa BigInt
+        return isone(x)
+    elseif x isa Float64
+        return isone(x)
+    elseif x isa Float32
+        return isone(x)
+    elseif x isa BigFloat
+        return isone(x)
+    elseif x isa Rational{Int}
+        return isone(x)
+    elseif x isa Rational{BigInt}
+        return isone(x)
+    elseif x isa Bool
+        return isone(x)
+    elseif x isa ComplexF64
+        return isone(x)
+    elseif x isa ComplexF32
+        return isone(x)
+    elseif x isa Complex{Int}
+        return isone(x)
+    elseif x isa Complex{Rational{Int}}
+        return isone(x)
+    elseif x isa Vector{Int}
+        return isone(x)
+    elseif x isa Vector{Float64}
+        return isone(x)
+    elseif x isa Matrix{Int}
+        return isone(x)
+    elseif x isa Matrix{Float64}
+        return isone(x)
+    elseif x isa Number
+        return isone(x)::Bool
+    elseif x isa Array
+        return isone(x)::Bool
+    else
+        return false
+    end
 end
 """
     $TYPEDSIGNATURES

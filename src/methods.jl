@@ -132,7 +132,7 @@ for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
             return promote_symtype($f, Array{eltype(T), ndims(T)::Int}, S)
         elseif S <: AbstractArray && !(S <: Array)
             return promote_symtype($f, T, Array{eltype(S), ndims(S)::Int})
-        elseif $(f === (*) || f === Base.mul_prod) && T <: AbstractMatrix && S <: AbstractVecOrMat
+        elseif $(f === (*) || f === Base.mul_prod) && T <: AbstractVecOrMat && S <: AbstractVecOrMat
             return Array{promote_symtype(*, T.parameters[1]::TypeT, S.parameters[1]::TypeT), S.parameters[2]::Int}
         elseif $(f === (*) || f === Base.mul_prod) && T <: AbstractArray && S <: Number
             return Array{promote_symtype(*, T.parameters[1]::TypeT, S), T.parameters[2]::Int}

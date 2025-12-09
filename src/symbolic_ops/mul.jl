@@ -25,7 +25,8 @@ function _multiplied_shape(shapes)
     shend::ShapeT = shapes[last_arr]
     ndims_1 = _ndims_from_shape(sh1)
     ndims_end = _ndims_from_shape(shend)
-    ndims_1 == -1 || ndims_1 == 2 || throw_expected_matrix(sh1)
+    # Vector * transpose(Vector) works
+    ndims_1 == -1 || ndims_1 == 2 || ndims_1 == 1 || throw_expected_matrix(sh1)
     ndims_end <= 2 || throw_expected_matvec(shend)
     if ndims_end == 1
         # NOTE: This lies because the shape of a matvec mul isn't solely determined by the
@@ -38,19 +39,25 @@ function _multiplied_shape(shapes)
         result = ShapeVecT((first(sh1), last(shend)))
     end
     cur_shape = sh1
-    is_matmatmul = true
+    is_matmatmul = ndims_1 != 1
     for i in (first_arr + 1):last_arr
         sh = shapes[i]
         ndims_sh = _ndims_from_shape(sh)
         is_array_shape(sh) || continue
         ndims_sh <= 2 || throw_expected_matvec(shend)
-        is_matmatmul || throw_incompatible_shapes(cur_shape, sh)
-        is_matmatmul = ndims_sh != 1
-        if cur_shape isa ShapeVecT && sh isa ShapeVecT
-            if length(last(cur_shape)) != length(first(sh))
-                throw_incompatible_shapes(cur_shape, sh)
+        if is_matmatmul
+            if cur_shape isa ShapeVecT && sh isa ShapeVecT
+                if length(last(cur_shape)) != length(first(sh))
+                    throw_incompatible_shapes(cur_shape, sh)
+                end
+            end
+        else
+            ndims_sh == 2 || throw_incompatible_shapes(cur_shape, sh)
+            if cur_shape isa ShapeVecT && sh isa ShapeVecT
+                length(first(sh)) == 1 || throw_incompatible_shapes(cur_shape, sh)
             end
         end
+        is_matmatmul = ndims_sh != 1
         cur_shape = sh
     end
 

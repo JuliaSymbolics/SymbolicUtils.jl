@@ -84,15 +84,42 @@ julia> sorted_arguments(expr)
  z
 ```
 """
-@cache function TermInterface.sorted_arguments(x::BSImpl.Type)::ROArgsT
-    T = vartype(x)
+function TermInterface.sorted_arguments(x::BasicSymbolic{T})::ROArgsT{T} where {T}
+    if T === SymReal
+        return _sorted_args1(x)
+    elseif T === SafeReal
+        return _sorted_args2(x)
+    elseif T === TreeReal
+        return _sorted_args2(x)
+    end
+    _unreachable()
+end
+
+@cache function _sorted_args1(x::BasicSymbolic{SymReal})::ROArgsT{SymReal}
+    __sorted_args(x)
+end
+@cache function _sorted_args2(x::BasicSymbolic{SafeReal})::ROArgsT{SafeReal}
+    __sorted_args(x)
+end
+@cache function _sorted_args3(x::BasicSymbolic{TreeReal})::ROArgsT{TreeReal}
+    __sorted_args(x)
+end
+function __sorted_args(x::BasicSymbolic{T})::ROArgsT{T} where {T}
     @match x begin
         BSImpl.AddMul(; variant) => begin
             args = copy(parent(arguments(x)))
-            degrees = map(get_degrees, args)
-            idxs = @match variant begin
-                AddMulVariant.ADD => sortperm(degrees; lt = monomial_lt)
-                AddMulVariant.MUL => sortperm(degrees)
+            degrees = SmallV{RODegreesT}()
+            sizehint!(degrees, length(args))
+            @union_split_smallvec args begin
+                for arg in args
+                    push!(degrees, get_degrees(arg))
+                end
+            end
+            idxs = @union_split_smallvec degrees begin
+                @match variant begin
+                    AddMulVariant.ADD => sortperm(degrees; lt = monomial_lt)
+                    AddMulVariant.MUL => sortperm(degrees)
+                end
             end
             return ROArgsT{T}(ArgsT{T}(args[idxs]))
         end

@@ -1263,3 +1263,10 @@ end
     @test shape(var) == [1:3, 1:3]
     @test isequal(collect(var), v1')
 end
+
+@testset "`^` doesn't distribute into `/`" begin
+    @syms a b c
+    ex = (a / b) ^ c
+    @test operation(ex) === (^)
+    @test isequal(arguments(ex), [a/b, c])
+end

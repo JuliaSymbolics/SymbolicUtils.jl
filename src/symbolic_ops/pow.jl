@@ -113,10 +113,6 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
             _ => nothing
         end
     end
-    @match a begin
-        BSImpl.Div(; num, den) => return BSImpl.Div{T}(num ^ b, den ^ b, false; type)
-        _ => nothing
-    end
     if b isa Number
         @match a begin
             BSImpl.AddMul(; coeff, dict, variant, shape, type) && if variant == AddMulVariant.MUL end => begin

@@ -98,7 +98,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 base = args[1]
                 poly = to_poly!(poly_to_bs, bs_to_poly, base)
                 if poly isa PolyVarT
-                    isone(exp) && return poly
+                    _isone(exp) && return poly
                     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}([poly], [Int[exp]])
                     return PolynomialT(PolyCoeffT[1], mv)
                 end

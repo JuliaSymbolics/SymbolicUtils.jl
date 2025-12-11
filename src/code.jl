@@ -16,7 +16,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
-                      symtype, vartype, add_worker
+                      symtype, vartype, add_worker, search_variables!
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -1243,6 +1243,14 @@ function apply_optimization_rules(expr, state::Code.CSEState, rules)
     end
 
     return nothing
+end
+
+function search_variables!(buf, expr::Code.Let)
+    rhs_buf = Set()
+    lhs_buf = Set()
+    search_variables!.(Ref(rhs_buf), rhs.(expr.pairs))
+    search_variables!.(Ref(lhs_buf), lhs.(expr.pairs))
+    union!(buf, setdiff(rhs_buf, lhs_buf))
 end
 
 end

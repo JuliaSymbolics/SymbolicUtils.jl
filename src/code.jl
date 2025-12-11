@@ -132,6 +132,39 @@ function function_to_expr(op, O, st)
     return expr
 end
 
+function function_to_expr(op::SymbolicUtils.Mapper, O, st)
+    out = get(st.rewrites, O, nothing)
+    out === nothing || return out
+    expr = Expr(:call, map)
+    push!(expr.args, toexpr(op.f, st))
+    for arg in arguments(O)
+        push!(expr.args, toexpr(arg, st))
+    end
+    return expr
+end
+
+function function_to_expr(op::SymbolicUtils.Mapreducer, O, st)
+    out = get(st.rewrites, O, nothing)
+    out === nothing || return out
+    expr = Expr(:call, mapreduce)
+    kws = Expr(:parameters)
+    if op.dims isa Int
+        push!(kws.args, Expr(:kw, :dims, op.dims))
+    end
+    if op.init !== nothing
+        push!(kws.args, Expr(:kw, :init, toexpr(op.init, st)))
+    end
+    if !isempty(kws.args)
+        push!(expr.args, kws)
+    end
+    push!(expr.args, op.f)
+    push!(expr.args, op.reduce)
+    for arg in arguments(O)
+        push!(expr.args, toexpr(arg, st))
+    end
+    return expr
+end
+
 const ARRAYOP_OUTSYM = Symbol("_out")
 
 function function_to_expr(::typeof(getindex), O::BasicSymbolic{T}, st) where {T}

@@ -1245,4 +1245,12 @@ function apply_optimization_rules(expr, state::Code.CSEState, rules)
     return nothing
 end
 
+function search_variables!(buf, expr::Code.Let)
+    rhs_buf = Set()
+    lhs_buf = Set()
+    search_variables!.(Ref(rhs_buf), rhs.(expr.pairs))
+    search_variables!.(Ref(lhs_buf), lhs.(expr.pairs))
+    union!(buf, setdiff(rhs_buf, lhs_buf))
+end
+
 end

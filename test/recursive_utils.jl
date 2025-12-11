@@ -1,6 +1,6 @@
 using SymbolicUtils
 using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, substitute, query, Operator, scalarize
-import SymbolicUtils: search_variables!, default_substitute_filter, evaluate, default_is_atomic, search_variables
+import SymbolicUtils: search_variables!, default_substitute_filter, evaluate, default_is_atomic, search_variables, Code
 using Test
 using SparseArrays
 using LinearAlgebra
@@ -91,6 +91,9 @@ end
     search_variables!(vars, expr)
     @test x in vars
     @test y in vars
+    let_block = Code.cse(expr)
+    let_vars = search_variables(let_block)
+    @test issetequal(vars, let_vars)
 end
 
 @testset "search_variables! with ArrayOp" begin
@@ -99,6 +102,9 @@ end
     vars = Set{Any}()
     search_variables!(vars, expr)
     @test any(v -> v isa BasicSymbolic, vars)
+    let_block = Code.cse(expr)
+    let_vars = search_variables(let_block)
+    @test issetequal(vars, let_vars)
 end
 
 @testset "search_variables! with AbstractArray" begin
@@ -109,6 +115,9 @@ end
     @test x in vars
     @test y in vars
     @test z in vars
+    let_block = Code.cse(arr)
+    let_vars = search_variables(let_block)
+    @test issetequal(vars, let_vars)
 end
 
 @testset "search_variables! with SparseMatrixCSC" begin

@@ -1245,7 +1245,7 @@ function apply_optimization_rules(expr, state::Code.CSEState, rules)
     return nothing
 end
 
-function search_variables!(buf, expr::Code.Let)
+function search_variables!(buf, expr::Let)
     rhs_buf = Set()
     lhs_buf = Set()
     search_variables!.(Ref(rhs_buf), rhs.(expr.pairs))

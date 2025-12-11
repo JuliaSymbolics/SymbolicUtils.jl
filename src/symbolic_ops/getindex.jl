@@ -158,6 +158,11 @@ function Base.to_indices(A, inds, I::Tuple{StableIndex{Int}})
     return (as_linear_idx(axes(A), I[1]),)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Turn the index `I` into a linear index into an array for which `Base.axes` returns `sh`.
+"""
 @generated function as_linear_idx(sh::NTuple{N}, I::StableIndex{Int}) where {N}
     return quote
         linear_idx = 1
@@ -171,6 +176,11 @@ end
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Turn the index `I` into a linear index into an array of shape `sh`.
+"""
 function as_linear_idx(sh::ShapeVecT, sidxs::StableIndex)
     linear_idx = 1
     acc = 1

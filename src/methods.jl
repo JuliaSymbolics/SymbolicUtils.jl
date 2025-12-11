@@ -1098,6 +1098,38 @@ function LinearAlgebra.norm(x::Union{BasicSymbolic{T}, AbstractArray}, y::BasicS
     return BSImpl.Term{T}(LinearAlgebra.norm, ArgsT{T}((x, y)); type, shape = sh)
 end
 
+@noinline function _vec_throw_non_array(T::TypeT)
+    throw(ArgumentError("`Base.vec` only accepts arrays. Got argument of type $T."))
+end
+@noinline function _vec_throw_non_array(@nospecialize(sh::ShapeT))
+    throw(ArgumentError("`Base.vec` only accepts arrays. Got argument of shape $sh."))
+end
+
+function promote_symtype(::typeof(vec), T::TypeT)
+    if T <: AbstractArray
+        return Vector{safe_eltype(T)::TypeT}
+    end
+    _vec_throw_non_array(T)
+end
+
+function promote_shape(::typeof(vec), sh::ShapeT)
+    @nospecialize sh
+    is_array_shape(sh) || _vec_throw_non_array(sh)
+    if sh isa Unknown
+        return Unknown(1)
+    else
+        return ShapeVecT((1:(_length_from_shape(sh)::Int),))
+    end
+end
+
+function Base.vec(x::BasicSymbolic{T}) where {T}
+    sh = shape(x)
+    _ndims_from_shape(sh) == 1 && return x
+    type = promote_symtype(vec, symtype(x))
+    sh = promote_shape(vec, sh)
+    return BSImpl.Term{T}(vec, ArgsT{T}((x,)); type, shape = sh)
+end
+
 struct Mapper{F}
     f::F
 end

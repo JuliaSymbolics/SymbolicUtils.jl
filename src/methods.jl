@@ -1138,44 +1138,122 @@ function (f::Mapper)(xs...)
     map(f.f, xs...)
 end
 
-@inline __getfirstparam(T::TypeT) = T.parameters[1]::TypeT
-function promote_symtype(f::Mapper, T::TypeT, Ts::TypeT...)
-    @assert T <: AbstractArray
-    Ts = ntuple(__getfirstparam ∘ Base.Fix1(getindex, Ts), Val{length(Ts)}())
-    Array{promote_symtype(f.f, T.parameters[1]::TypeT, Ts...), T.parameters[2]::Int}
+function __safe_ndims(@nospecialize(T::TypeT))
+    if T <: Array
+        return T.parameters[2]::Int
+    elseif T <: AbstractArray
+        return ndims(T)::Int
+    elseif T <: Tuple
+        return 1
+    else
+        return 0
+    end
 end
 
-function promote_shape(::Mapper, shs::ShapeT...)
-    @nospecialize shs
-    @assert allequal(Iterators.map(_size_from_shape, shs))
-    sz = _size_from_shape(shs[1])
-    if sz isa Unknown
-        sz.ndims == -1 && error("Cannot `map` when first argument has unknown `ndims`.")
-        return sz
+@inline __getfirstparam(T::TypeT) = T.parameters[1]::TypeT
+# TODO: This method doesn't handle the case when all are tuples. Instead of
+# a tuple type, this will return a `Vector{..}`.
+function promote_symtype(f::Mapper, T::TypeT, Ts::TypeT...)
+    # If all `ndims` are the same, the result has the same `ndims` (assuming sizes are
+    # equal). If they're unequal, the result is a `Vector`.
+    ndims_1 = __safe_ndims(T)
+    all_same_ndims = true
+    for Ti in Ts
+        ndims_i = __safe_ndims(Ti)
+        # They're all same if they're all equal to the first element
+        all_same_ndims &= ndims_i == ndims_1
+        all_same_ndims || break
     end
-    return ShapeVecT((:).(1, sz))
+    Ts = ntuple(safe_eltype ∘ Base.Fix1(getindex, Ts), Val{length(Ts)}())::NTuple{length(Ts), TypeT}
+    mappedT = promote_symtype(f.f, safe_eltype(T)::TypeT, Ts...)::TypeT
+    # all scalars
+    if all_same_ndims
+        return ndims_1 == 0 ? mappedT : Array{mappedT, ndims_1}
+    else
+        return Vector{mappedT}
+    end
 end
+
+@noinline function _throw_map_unequal_shapes_same_ndims(shs::ShapeT...)
+    throw(ArgumentError("""
+    If all arguments to `map` have the same `ndims`, they must have the same shape. Found \
+    arguments of shapes $shs.
+    """))
+end
+
+function promote_shape(::Mapper, sh::ShapeT, shs::ShapeT...)
+    @nospecialize sh shs
+    all_known_shapes_equal = true
+    all_same_ndims = true
+    ndims_1 = _ndims_from_shape(sh)
+    first_known_shape::Union{Nothing, ShapeVecT} = sh isa ShapeVecT ? sh : nothing
+    min_length = sh isa ShapeVecT ? _length_from_shape(sh)::Int : typemax(Int)
+    any_unknown = sh isa Unknown
+
+    for shi in shs
+        ndims_i = _ndims_from_shape(shi)
+        all_same_ndims &= ndims_i == ndims_1
+        if shi isa ShapeVecT
+            first_known_shape = @something(first_known_shape, shi)
+            all_known_shapes_equal &= first_known_shape == shi
+            min_length = min(min_length, _length_from_shape(shi)::Int)
+        else
+            any_unknown = true
+        end
+    end
+
+    if all_known_shapes_equal && all_same_ndims
+        return @something(first_known_shape, Unknown(ndims_1))
+    elseif all_same_ndims && ndims_1 != 1
+        _throw_map_unequal_shapes_same_ndims(sh, shs...)
+    elseif min_length == typemax(Int)
+        return Unknown(1)
+    else
+        return ShapeVecT((1:min_length,))
+    end
+end
+
+__safe_vec(x) = is_array_shape(shape(x)) ? vec(x) : x
+
+function __index_args(::Type{T}, nd::Int, xs...) where {T}
+    idxsym = idxs_for_arrayop(T)
+    if nd == 1
+        stable_idx = StableIndex(ArgsT{T}((idxsym[1],)))
+        fn = Base.Fix2(getindex, stable_idx) ∘ __safe_vec ∘ Base.Fix1(getindex, xs)
+        indexed = ntuple(fn, Val(length(xs)))
+    else
+        _idxs = ArgsT{T}()
+        sizehint!(_idxs, nd)
+        for i in 1:nd
+            push!(_idxs, idxsym[i])
+        end
+        stable_idx = StableIndex(_idxs)
+        indexed = ntuple(Base.Fix2(getindex, stable_idx) ∘ Base.Fix1(getindex, xs), Val(length(xs)))
+    end
+    return indexed
+end
+
 
 function _map(::Type{T}, f, xs...) where {T}
     f = Mapper(f)
     xs = Const{T}.(xs)
     type = promote_symtype(f, symtype.(xs)...)
     sh = promote_shape(f, shape.(xs)...)
-    nd = ndims(sh)
+    nd = _ndims_from_shape(sh)
     term = BSImpl.Term{T}(f, ArgsT{T}(xs); type, shape = sh)
+    indexed = __index_args(T, nd, xs...)
     idxsym = idxs_for_arrayop(T)
     idxs = OutIdxT{T}()
     sizehint!(idxs, nd)
     for i in 1:nd
         push!(idxs, idxsym[i])
     end
-    idxs = ntuple(Base.Fix1(getindex, idxsym), nd)
-
-    indexed = ntuple(Val(length(xs))) do i
-        xs[i][idxs...]
+    ranges = RangesT{T}()
+    if nd == 1 && sh isa ShapeVecT
+        ranges[idxsym[1]] = 1:1:(_length_from_shape(sh)::Int)
     end
-    exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
-    return BSImpl.ArrayOp{T}(idxs, exp, +, term; type = type, shape = sh)
+    exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type)::TypeT, shape = ShapeVecT())
+    return BSImpl.ArrayOp{T}(idxs, exp, +, term, ranges; type = type, shape = sh)
 end
 
 function Base.map(f::BasicSymbolic{T}, xs...) where {T}

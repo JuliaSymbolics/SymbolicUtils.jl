@@ -463,6 +463,7 @@ SymbolicUtils.promote_shape
 SymbolicUtils.stable_eachindex
 SymbolicUtils.StableIndices
 SymbolicUtils.StableIndex
+SymbolicUtils.as_linear_idx
 BS
 ```
 

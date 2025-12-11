@@ -158,6 +158,11 @@ function Base.to_indices(A, inds, I::Tuple{StableIndex{Int}})
     return (as_linear_idx(axes(A), I[1]),)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Turn the index `I` into a linear index into an array for which `Base.axes` returns `sh`.
+"""
 @generated function as_linear_idx(sh::NTuple{N}, I::StableIndex{Int}) where {N}
     return quote
         linear_idx = 1
@@ -171,6 +176,11 @@ end
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Turn the index `I` into a linear index into an array of shape `sh`.
+"""
 function as_linear_idx(sh::ShapeVecT, sidxs::StableIndex)
     linear_idx = 1
     acc = 1
@@ -210,8 +220,9 @@ end
 function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {T, I}
     idxs = sidxs.idxs
     isempty(idxs) && return arr
-    sh::ShapeVecT = shape(arr)
+    sh = shape(arr)
     if I === Int
+        sh = sh::ShapeVecT
         @match arr begin
             BSImpl.Const(; val) => return Const{T}(scalar_index(val, as_linear_idx(sh, sidxs)))
             BSImpl.Term(; f, args) && if f === array_literal end => begin
@@ -231,7 +242,6 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
         BSImpl.Term(; f, args) && if f === getindex && all(isconst, Iterators.drop(args, 1)) && !any(x -> x isa BasicSymbolic{T}, idxs) end => begin
             newargs = ArgsT{T}()
             push!(newargs, args[1])
-            sh = shape(arr)
             type = eltype(symtype(arr))::TypeT
             newshape = ShapeVecT()
             idxs_i = 1

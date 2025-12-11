@@ -1,4 +1,5 @@
 using SymbolicUtils: Sym, FnType, Term, Add, Mul, symtype, operation, arguments, issym, isterm, BasicSymbolic, term, basicsymbolic_to_polyvar, get_mul_coefficient, ACDict, Const, shape, ShapeVecT, ArgsT, isarrayop, query
+using SymbolicUtils.Code: toexpr
 using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP

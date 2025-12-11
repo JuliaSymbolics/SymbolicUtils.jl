@@ -57,7 +57,7 @@ function show_term(io::IO, x::BasicSymbolic)
     end
 end
 
-function show_call(io::IO, @nospecialize(f), x::BasicSymbolic)
+function show_call(io::IO, @nospecialize(f), x::BasicSymbolic; @nospecialize(kw...))
     args = parent(arguments(x))
     len_args = length(args)
     fname = applicable(nameof, f)::Bool ? nameof(f)::Symbol : :_
@@ -83,6 +83,15 @@ function show_call(io::IO, @nospecialize(f), x::BasicSymbolic)
             i == len_args || print(io, ", ")
         end
     end
+    if !isempty(kw)
+        print(io, "; ")
+        len_kwargs = length(kw)
+        for (i, (k, v)) in enumerate(kw)
+            print(io, k, " = ")
+            print_arg(io, v)
+            i == len_kwargs || print(io, ", ")
+        end
+    end
     print(io, ")")
 end
 
@@ -106,7 +115,15 @@ function show_call(io::IO, @nospecialize(f::Mapreducer), x::BasicSymbolic{T}) wh
     append!(args, _args)
 
     newx = BSImpl.Term{T}(mapreduce, args; type = Any, shape = ShapeVecT(), unsafe = false)
-    show_call(io, mapreduce, newx)
+    if f.dims isa Colon && f.init === nothing
+        show_call(io, mapreduce, newx)
+    elseif f.dims isa Colon
+        show_call(io, mapreduce, newx; init = f.init)
+    elseif f.init === nothing
+        show_call(io, mapreduce, newx; dims = f.dims)
+    else
+        show_call(io, mapreduce, newx; dims = f.dims, init = f.init)
+    end
 end
 
 function show_pow(io::IO, x::BasicSymbolic)
@@ -182,6 +199,7 @@ function isnegative(x::BasicSymbolic)
     end
 end
 
+print_arg(io::IO, x) = print(io, x)
 function print_arg(io::IO, x::BasicSymbolic; paren = true)
     paren && iscall(x) && return print_arg(io, operation(x), x; paren)
     print(io, x)

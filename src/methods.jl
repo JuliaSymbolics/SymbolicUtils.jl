@@ -1098,6 +1098,38 @@ function LinearAlgebra.norm(x::Union{BasicSymbolic{T}, AbstractArray}, y::BasicS
     return BSImpl.Term{T}(LinearAlgebra.norm, ArgsT{T}((x, y)); type, shape = sh)
 end
 
+@noinline function _vec_throw_non_array(T::TypeT)
+    throw(ArgumentError("`Base.vec` only accepts arrays. Got argument of type $T."))
+end
+@noinline function _vec_throw_non_array(@nospecialize(sh::ShapeT))
+    throw(ArgumentError("`Base.vec` only accepts arrays. Got argument of shape $sh."))
+end
+
+function promote_symtype(::typeof(vec), T::TypeT)
+    if T <: AbstractArray
+        return Vector{safe_eltype(T)::TypeT}
+    end
+    _vec_throw_non_array(T)
+end
+
+function promote_shape(::typeof(vec), sh::ShapeT)
+    @nospecialize sh
+    is_array_shape(sh) || _vec_throw_non_array(sh)
+    if sh isa Unknown
+        return Unknown(1)
+    else
+        return ShapeVecT((1:(_length_from_shape(sh)::Int),))
+    end
+end
+
+function Base.vec(x::BasicSymbolic{T}) where {T}
+    sh = shape(x)
+    _ndims_from_shape(sh) == 1 && return x
+    type = promote_symtype(vec, symtype(x))
+    sh = promote_shape(vec, sh)
+    return BSImpl.Term{T}(vec, ArgsT{T}((x,)); type, shape = sh)
+end
+
 struct Mapper{F}
     f::F
 end
@@ -1106,44 +1138,122 @@ function (f::Mapper)(xs...)
     map(f.f, xs...)
 end
 
-@inline __getfirstparam(T::TypeT) = T.parameters[1]::TypeT
-function promote_symtype(f::Mapper, T::TypeT, Ts::TypeT...)
-    @assert T <: AbstractArray
-    Ts = ntuple(__getfirstparam ∘ Base.Fix1(getindex, Ts), Val{length(Ts)}())
-    Array{promote_symtype(f.f, T.parameters[1]::TypeT, Ts...), T.parameters[2]::Int}
+function __safe_ndims(@nospecialize(T::TypeT))
+    if T <: Array
+        return T.parameters[2]::Int
+    elseif T <: AbstractArray
+        return ndims(T)::Int
+    elseif T <: Tuple
+        return 1
+    else
+        return 0
+    end
 end
 
-function promote_shape(::Mapper, shs::ShapeT...)
-    @nospecialize shs
-    @assert allequal(Iterators.map(_size_from_shape, shs))
-    sz = _size_from_shape(shs[1])
-    if sz isa Unknown
-        sz.ndims == -1 && error("Cannot `map` when first argument has unknown `ndims`.")
-        return sz
+@inline __getfirstparam(T::TypeT) = T.parameters[1]::TypeT
+# TODO: This method doesn't handle the case when all are tuples. Instead of
+# a tuple type, this will return a `Vector{..}`.
+function promote_symtype(f::Mapper, T::TypeT, Ts::TypeT...)
+    # If all `ndims` are the same, the result has the same `ndims` (assuming sizes are
+    # equal). If they're unequal, the result is a `Vector`.
+    ndims_1 = __safe_ndims(T)
+    all_same_ndims = true
+    for Ti in Ts
+        ndims_i = __safe_ndims(Ti)
+        # They're all same if they're all equal to the first element
+        all_same_ndims &= ndims_i == ndims_1
+        all_same_ndims || break
     end
-    return ShapeVecT((:).(1, sz))
+    Ts = ntuple(safe_eltype ∘ Base.Fix1(getindex, Ts), Val{length(Ts)}())::NTuple{length(Ts), TypeT}
+    mappedT = promote_symtype(f.f, safe_eltype(T)::TypeT, Ts...)::TypeT
+    # all scalars
+    if all_same_ndims
+        return ndims_1 == 0 ? mappedT : Array{mappedT, ndims_1}
+    else
+        return Vector{mappedT}
+    end
 end
+
+@noinline function _throw_map_unequal_shapes_same_ndims(shs::ShapeT...)
+    throw(ArgumentError("""
+    If all arguments to `map` have the same `ndims`, they must have the same shape. Found \
+    arguments of shapes $shs.
+    """))
+end
+
+function promote_shape(::Mapper, sh::ShapeT, shs::ShapeT...)
+    @nospecialize sh shs
+    all_known_shapes_equal = true
+    all_same_ndims = true
+    ndims_1 = _ndims_from_shape(sh)
+    first_known_shape::Union{Nothing, ShapeVecT} = sh isa ShapeVecT ? sh : nothing
+    min_length = sh isa ShapeVecT ? _length_from_shape(sh)::Int : typemax(Int)
+    any_unknown = sh isa Unknown
+
+    for shi in shs
+        ndims_i = _ndims_from_shape(shi)
+        all_same_ndims &= ndims_i == ndims_1
+        if shi isa ShapeVecT
+            first_known_shape = @something(first_known_shape, shi)
+            all_known_shapes_equal &= first_known_shape == shi
+            min_length = min(min_length, _length_from_shape(shi)::Int)
+        else
+            any_unknown = true
+        end
+    end
+
+    if all_known_shapes_equal && all_same_ndims
+        return @something(first_known_shape, Unknown(ndims_1))
+    elseif all_same_ndims && ndims_1 != 1
+        _throw_map_unequal_shapes_same_ndims(sh, shs...)
+    elseif min_length == typemax(Int)
+        return Unknown(1)
+    else
+        return ShapeVecT((1:min_length,))
+    end
+end
+
+__safe_vec(x) = is_array_shape(shape(x)) ? vec(x) : x
+
+function __index_args(::Type{T}, nd::Int, xs...) where {T}
+    idxsym = idxs_for_arrayop(T)
+    if nd == 1
+        stable_idx = StableIndex(ArgsT{T}((idxsym[1],)))
+        fn = Base.Fix2(getindex, stable_idx) ∘ __safe_vec ∘ Base.Fix1(getindex, xs)
+        indexed = ntuple(fn, Val(length(xs)))
+    else
+        _idxs = ArgsT{T}()
+        sizehint!(_idxs, nd)
+        for i in 1:nd
+            push!(_idxs, idxsym[i])
+        end
+        stable_idx = StableIndex(_idxs)
+        indexed = ntuple(Base.Fix2(getindex, stable_idx) ∘ Base.Fix1(getindex, xs), Val(length(xs)))
+    end
+    return indexed
+end
+
 
 function _map(::Type{T}, f, xs...) where {T}
     f = Mapper(f)
     xs = Const{T}.(xs)
     type = promote_symtype(f, symtype.(xs)...)
     sh = promote_shape(f, shape.(xs)...)
-    nd = ndims(sh)
+    nd = _ndims_from_shape(sh)
     term = BSImpl.Term{T}(f, ArgsT{T}(xs); type, shape = sh)
+    indexed = __index_args(T, nd, xs...)
     idxsym = idxs_for_arrayop(T)
     idxs = OutIdxT{T}()
     sizehint!(idxs, nd)
     for i in 1:nd
         push!(idxs, idxsym[i])
     end
-    idxs = ntuple(Base.Fix1(getindex, idxsym), nd)
-
-    indexed = ntuple(Val(length(xs))) do i
-        xs[i][idxs...]
+    ranges = RangesT{T}()
+    if nd == 1 && sh isa ShapeVecT
+        ranges[idxsym[1]] = 1:1:(_length_from_shape(sh)::Int)
     end
-    exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
-    return BSImpl.ArrayOp{T}(idxs, exp, +, term; type = type, shape = sh)
+    exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type)::TypeT, shape = ShapeVecT())
+    return BSImpl.ArrayOp{T}(idxs, exp, +, term, ranges; type = type, shape = sh)
 end
 
 function Base.map(f::BasicSymbolic{T}, xs...) where {T}
@@ -1181,71 +1291,90 @@ macro map_methods(T, arg_f, result_f)
     end |> esc
 end
 
-struct Mapreducer{F, R}
+struct Mapreducer{F, R, D <: Union{Int, Colon}, I}
     f::F
     reduce::R
+    dims::D
+    init::I
 end
 
-function (f::Mapreducer)(xs...)
-    mapreduce(f.f, f.reduce, xs...)
+function (f::Mapreducer{F, R, D, I})(xs...) where {F, R, D, I}
+    if I === Nothing
+        mapreduce(f.f, f.reduce, xs...; dims = f.dims)
+    else
+        mapreduce(f.f, f.reduce, xs...; dims = f.dims, init = f.init)
+    end
 end
 
 function promote_symtype(f::Mapreducer, T::TypeT, Ts::TypeT...)
-    @assert T <: AbstractArray
-    Ts = ntuple(__getfirstparam ∘ Base.Fix1(getindex, Ts), Val{length(Ts)}())
-    mappedT = promote_symtype(f.f, T.parameters[1]::TypeT, Ts...)::TypeT
-    return promote_symtype(f.reduce, mappedT, mappedT)
+    mappedArrT = promote_symtype(Mapper(f.f), T, Ts...)
+    mappedT = safe_eltype(mappedArrT)::TypeT
+    mapped_ndims = __safe_ndims(mappedArrT)
+    reducedT = if f.init === nothing
+        promote_symtype(f.reduce, mappedT, mappedT)
+    else
+        promote_symtype(f.reduce, typeof(f.init)::TypeT, mappedT)
+    end
+    if f.dims isa Colon
+        return reducedT
+    else
+        return Array{reducedT, mapped_ndims}
+    end
 end
 
 function promote_shape(f::Mapreducer, shs::ShapeT...)
     @nospecialize shs
-    promote_shape(Mapper(f.f), shs...)
-    return ShapeVecT()
-end
-
-function __index_args(::Type{T}, ::Val{N}, xs...) where {T, N}
-    idxsym = idxs_for_arrayop(T)
-    inner_idxs = ntuple(Base.Fix1(getindex, idxsym), Val{N}())
-    indexer = let xs = xs, inner_idxs = inner_idxs
-        function __indexer(i)
-            xs[i][inner_idxs...]
-        end
+    mapped_shape = promote_shape(Mapper(f.f), shs...)
+    if f.dims isa Colon
+        return ShapeVecT()
+    elseif mapped_shape isa Unknown
+        return mapped_shape
+    else
+        ax = mapped_shape[f.dims]
+        mapped_shape[f.dims] = first(ax):first(ax)
+        return mapped_shape
     end
-    ntuple(indexer, Val(length(xs)))
 end
 
-function _mapreduce(::Type{T}, f, red, xs...) where {T}
-    f = Mapreducer(f, red)
+function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T}
+    f = Mapreducer(f, red, dims, init)
     xs = Const{T}.(xs)
+    shs = shape.(xs)
     type = promote_symtype(f, symtype.(xs)...)
-    sh = promote_shape(f, shape.(xs)...)
+    sh = promote_shape(f, shs...)
     term = BSImpl.Term{T}(f, ArgsT{T}(xs); type, shape = sh)
     idxs = OutIdxT{T}()
+    _map_sh = promote_shape(Mapper(f), shs...)
+    nd = _ndims_from_shape(_map_sh)
 
-    indexed = __index_args(T, Val(ndims(xs[1])), xs...)::NTuple{length(xs), BasicSymbolic{T}}
+    indexed = __index_args(T, nd, xs...)::NTuple{length(xs), BasicSymbolic{T}}
     if f.f === identity
         exp = indexed[1]
     else
-        exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type), shape = ShapeVecT())
+        exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type)::TypeT, shape = ShapeVecT())
+    end
+    ranges = RangesT{T}()
+    if nd == 1 && _map_sh isa ShapeVecT
+        ranges[idxs_for_arrayop(T)[1]] = 1:1:(_length_from_shape(_map_sh)::Int)
     end
     return BSImpl.ArrayOp{T}(idxs, exp, red, term; type = type, shape = sh)
 end
 
 for (Tf, Tr) in Iterators.product([:(BasicSymbolic{T}), Any], [:(BasicSymbolic{T}), Any])
     if Tf != Any || Tr != Any
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, xs...) where {T}
-            return _mapreduce(T, f, red, xs...)
+        @eval function Base.mapreduce(f::$Tf, red::$Tr, xs...; kw...) where {T}
+            return _mapreduce(T, f, red, xs...; kw...)
         end
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, x::AbstractArray, xs...) where {T}
-            return _mapreduce(T, f, red, x, xs...)
+        @eval function Base.mapreduce(f::$Tf, red::$Tr, x::AbstractArray, xs...; kw...) where {T}
+            return _mapreduce(T, f, red, x, xs...; kw...)
         end
     end
-    @eval function Base.mapreduce(f::$Tf, red::$Tr, x::BasicSymbolic{T}, xs...) where {T}
-        _mapreduce(T, f, red, x, xs...)
+    @eval function Base.mapreduce(f::$Tf, red::$Tr, x::BasicSymbolic{T}, xs...; kw...) where {T}
+        _mapreduce(T, f, red, x, xs...; kw...)
     end
     for x1T in [Any, :(BasicSymbolic{T})]
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, x1::$x1T, x::BasicSymbolic{T}, xs...) where {T}
-            _mapreduce(T, f, red, x1, x, xs...)
+        @eval function Base.mapreduce(f::$Tf, red::$Tr, x1::$x1T, x::BasicSymbolic{T}, xs...; kw...) where {T}
+            _mapreduce(T, f, red, x1, x, xs...; kw...)
         end
     end
 end

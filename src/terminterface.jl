@@ -245,7 +245,7 @@ function TermInterface.iscall(s::BSImpl.Type)
 end
 
 function TermInterface.maketerm(::Type{BasicSymbolic{TreeReal}}, f, args, metadata; @nospecialize(type = _promote_symtype(f, args)))
-    sh = promote_shape(f, shape.(args)...)
+    sh = promote_shape(f, shape.(args)...)::ShapeT
     Term{TreeReal}(f, args; type, shape=sh, metadata=metadata)
 end
 

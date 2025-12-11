@@ -134,18 +134,58 @@ end
 
 const ARRAYOP_OUTSYM = Symbol("_out")
 
+const OFFSET_NONSTANDARD_AXES_KEY = :offset_nonstandard_axes
+
 function function_to_expr(::typeof(getindex), O::BasicSymbolic{T}, st) where {T}
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
 
     args = arguments(O)
-    if issym(args[1]) && nameof(args[1]) == IDXS_SYM
-        @assert length(args) == 2
-        return Symbol(:_, unwrap_const(args[2]))
+    arr = args[1]
+    @match arr begin
+        BSImpl.Sym(; name) && if name == IDXS_SYM end => begin
+            @assert length(args) == 2
+            return Symbol(:_, unwrap_const(args[2]))
+        end
+        _ => nothing
     end
-    args = map(Base.Fix2(toexpr, st), arguments(O))
-    expr = Expr(:call, getindex)
-    append!(expr.args, args)
+    exprs = []
+    push!(exprs, toexpr(arr, st))
+    sh = shape(arr)
+    args = parent(args)
+    if sh isa ShapeVecT && get(st.rewrites, OFFSET_NONSTANDARD_AXES_KEY, false) === true
+        SymbolicUtils.@union_split_smallvec sh begin
+            SymbolicUtils.@union_split_smallvec args begin
+                for (axi, idxi) in zip(sh, Iterators.drop(args, 1))
+                    start = first(axi)
+                    if start == 1
+                        push!(exprs, toexpr(idxi, st))
+                        continue
+                    end
+
+                    push!(exprs, @match idxi begin
+                        BSImpl.Const(; val) => SymbolicUtils.as_canonical_concrete_index(axi, val)
+                        _ => begin
+                            type = symtype(idxi)
+                            if type <: Integer
+                                toexpr(idxi - (start - 1), st)
+                            elseif type <: AbstractArray{<:Integer}
+                                toexpr(idxi .- (start - 1), st)
+                            else
+                                error("Unandled symbolic index $idxi of symtype $type in codegen")
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    else
+        SymbolicUtils.@union_split_smallvec args for arg in Iterators.drop(args, 1)
+            push!(exprs, toexpr(arg, st))
+        end
+    end
+    expr = Expr(:ref)
+    append!(expr.args, exprs)
     return expr
 end
 
@@ -207,7 +247,7 @@ function unidealize_indices(expr::BasicSymbolic{T}, ranges, new_ranges) where {T
         if args isa ROArgsT
             args = copy(parent(args))
         end
-        args[i + 1] = idx - (first(ax) - 1)
+        args[i + 1] = idx + (first(ax) - 1)
     end
     args isa ROArgsT && return expr
     return maketerm(typeof(expr), getindex, args, nothing)

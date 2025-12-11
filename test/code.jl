@@ -351,3 +351,27 @@ end
     val = Code.create_array(SArray, nothing, Val(1), Val((1,)), Code.create_array(SArray, nothing, Val(1), Val((1,)), 1.0))
     @test val == SA[SA[1.0]]
 end
+
+@testset "`getindex` codegen can be made to handle arrays with non-standard axes" begin
+    @syms x[-1:4, 3:7] i::Int js[1:3]::Int
+    st = Code.NameState(Dict(Code.OFFSET_NONSTANDARD_AXES_KEY => true))
+
+    @test toexpr(x[0, 4], st) == :(x[2, 2])
+    @test toexpr(x[1:3, :], st) == :(x[$(3:5), $:])
+    @test toexpr(x[-1:2:4, :], st) == :(x[$(1:2:6), $:])
+    @test toexpr(x[i, js], st) == :(x[$+($2, i), $broadcast($-, js, $2)])
+
+    test_repr(toexpr(@arrayop((i,), x[i, j]), st),
+        quote
+        _out = $zeros(Float64, (6,))
+        var"%_out" = for _1 = 1:1:6
+            for _2 = 1:1:5
+                begin
+                    _out[$CartesianIndex(_1)] = $+(_out[_1], x[_1, _2])
+                    $nothing
+                end
+            end
+        end
+        _out
+    end)
+end

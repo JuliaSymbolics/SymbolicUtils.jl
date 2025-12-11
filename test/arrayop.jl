@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, Term, Const, ArgsT, ShapeVecT, scalarize, symtype, isarrayop
+using SymbolicUtils: BasicSymbolic, Term, Const, ArgsT, ShapeVecT, scalarize, symtype, isarrayop, shape
 using SymbolicUtils.Code
 using LinearAlgebra
 using Test
@@ -138,8 +138,140 @@ end
         @test symtype(var) == Number
         @test isequal(scalarize(var), f(collect(v)))
     end
+end
 
-    @syms a[1:8] b[1:2, 1:4]
-    @test_throws AssertionError map(+, a, b)
-    @test_throws AssertionError mapreduce(+, +, a, b)
+@testset "`map` and `mapreduce` on oddly sized arrays" begin
+    @syms a[1:4] b[1:3] c[1:2, 1:2] d[1:1, 1:4] e::Vector{Number} f::Matrix{Number} g
+
+    ex = map(+, a, b)
+    @test shape(ex) == [1:3]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, a, b)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, a, c)
+    @test shape(ex) == [1:4]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, a, c)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    # Assumes unknowns match shape so `ArrayOp` can be constructed
+    ex = map(+, a, e)
+    @test shape(ex) == [1:4]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, a, e)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, a, f)
+    @test shape(ex) == [1:4]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, a, f)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, a, g)
+    @test shape(ex) == [1:1]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, a, g)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, b, c)
+    @test shape(ex) == [1:3]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, b, c)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, c, c)
+    @test shape(ex) == [1:2, 1:2]
+    @test symtype(ex) == Matrix{Number}
+    ex = mapreduce(+, +, c, c)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    @test_throws ArgumentError map(+, c, d)
+
+    ex = map(+, c, e)
+    @test shape(ex) == [1:4]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, c, e)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, c, f)
+    @test shape(ex) == [1:2, 1:2]
+    @test symtype(ex) == Matrix{Number}
+    ex = mapreduce(+, +, c, f)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, c, g)
+    @test shape(ex) == [1:1]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, c, g)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, e, f)
+    @test shape(ex) == SymbolicUtils.Unknown(1)
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, e, f)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, e, g)
+    @test shape(ex) == [1:1]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, e, g)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, f, g)
+    @test shape(ex) == [1:1]
+    @test symtype(ex) == Vector{Number}
+    ex = mapreduce(+, +, f, g)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+
+    ex = map(+, g, g)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+    ex = mapreduce(+, +, g, g)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+end
+
+@testset "`mapreduce` kwargs" begin
+    @syms a[1:4, 1:5, 1:6]
+
+    ex = mapreduce(+, +, a; dims = 2)
+    @test shape(ex) == [1:4, 1:1, 1:6]
+    @test symtype(ex) == Array{Number, 3}
+    io = IOBuffer()
+    print(io, ex)
+    str = String(take!(io))
+    @test str == "mapreduce(+, +, a; dims = 2)"
+    @test toexpr(ex) == :($mapreduce($+, $+, a; dims = 2))
+
+    ex = mapreduce(+, +, a; init = 2)
+    @test shape(ex) == UnitRange{Int}[]
+    @test symtype(ex) == Number
+    io = IOBuffer()
+    print(io, ex)
+    str = String(take!(io))
+    @test str == "mapreduce(+, +, a; init = 2)"
+    @test toexpr(ex) == :($mapreduce($+, $+, a; init = 2))
+
+    ex = mapreduce(+, +, a; dims = 2, init = 3)
+    @test shape(ex) == [1:4, 1:1, 1:6]
+    @test symtype(ex) == Array{Number, 3}
+    io = IOBuffer()
+    print(io, ex)
+    str = String(take!(io))
+    @test str == "mapreduce(+, +, a; dims = 2, init = 3)"
+    @test toexpr(ex) == :($mapreduce($+, $+, a; dims = 2, init = 3))
 end

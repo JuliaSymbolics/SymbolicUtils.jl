@@ -62,13 +62,55 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     end
     dirty |= op !== _op
     if dirty || can_fold
-        if Fold
+        if _op === getindex && has_nonstandard_axes(args[1]) && @union_split_smallvec newargs all(isconst, newargs)
+            return fold_getindex(args[1], newargs, metadata(ex))::BasicSymbolic{T}
+        elseif Fold
             return combine_fold(T, _op, newargs, metadata(ex), can_fold)::BasicSymbolic{T}
         else
             return maketerm(BasicSymbolic{T}, _op, newargs, metadata(ex))::BasicSymbolic{T}
         end
     end
     return ex
+end
+
+function has_nonstandard_axes(x::BasicSymbolic)
+    sh = shape(x)
+    sh isa ShapeVecT && @union_split_smallvec sh any(!isone ∘ first, sh)
+end
+
+function as_canonical_concrete_index(axis::UnitRange{Int}, @nospecialize(idx))
+    offset = first(axis) - 1
+    iszero(offset) && return idx
+    if idx isa Int
+        return idx - offset
+    elseif idx isa Colon
+        return idx
+    elseif idx isa UnitRange{Int}
+        return idx .- offset
+    elseif idx isa StepRange{Int, Int}
+        return idx .- offset
+    elseif idx isa AbstractVector{Int}
+        return idx .- offset
+    end
+    _unreachable()
+end
+
+function fold_getindex(arr::BasicSymbolic{T}, args::ArgsT{T}, meta::MetadataT) where {T}
+    sh = shape(arr)::ShapeVecT
+    @union_split_smallvec args begin
+        @union_split_smallvec sh begin
+            for (i, (ax, idx)) in enumerate(zip(sh, Iterators.drop(args, 1)))
+                args[i + 1] = BSImpl.Const{T}(as_canonical_concrete_index(ax, unwrap_const(idx)); unsafe = true)
+            end
+        end
+        if length(args) == 2
+            return BSImpl.Const{T}(getindex(unwrap_const(args[1]), unwrap_const(args[2])))
+        elseif length(args) == 3
+            return BSImpl.Const{T}(getindex(unwrap_const(args[1]), unwrap_const(args[2]), unwrap_const(args[3])))
+        else
+            return BSImpl.Const{T}(getindex(unwrap_const.(args)...))
+        end
+    end
 end
 
 function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta::MetadataT, can_fold::Bool) where {T}

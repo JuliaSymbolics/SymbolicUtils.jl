@@ -245,3 +245,10 @@ end
     @test length(scal) == 2
     @test isequal(scal, truth)
 end
+
+@testset "`substitute` handles folding arrays with non-standard axes" begin
+    @syms x[-4:5]
+    xval = rand(10)
+    res = substitute(x[-4], Dict(x => xval))
+    @test unwrap_const(res) == xval[1]
+end

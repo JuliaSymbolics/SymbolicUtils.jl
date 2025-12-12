@@ -1386,7 +1386,7 @@ function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
         push!(args, :($name::$xT))
     end
     splat && push!(args, :(xs::Vararg))
-    EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kw...))
+    EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kwargs = [:(kw...)], kw...))
 end
 
 macro mapreduce_methods(T, arg_f, result_f)
@@ -1400,11 +1400,11 @@ macro mapreduce_methods(T, arg_f, result_f)
             nothing
         end
 
-        body = :($result_f($mapreduce(f, red, $arg_f(x1))))
+        body = :($result_f($mapreduce(f, red, $arg_f(x1); kw...)))
         push!(result.args, _mapreduce_method(Tf, Tred, T; splat = false, body, whereparams))
-        body = :($result_f($mapreduce(f, red, $arg_f(x1), xs...)))
+        body = :($result_f($mapreduce(f, red, $arg_f(x1), xs...; kw...)))
         push!(result.args, _mapreduce_method(Tf, Tred, T; body, whereparams))
-        body = :($result_f($mapreduce(f, red, x1, $arg_f(x2), xs...)))
+        body = :($result_f($mapreduce(f, red, x1, $arg_f(x2), xs...; kw...)))
         push!(result.args, _mapreduce_method(Tf, Tred, Any, T; body, whereparams))
         push!(result.args, _mapreduce_method(Tf, Tred, BasicSymbolic, T; body, whereparams))
     end

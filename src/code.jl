@@ -1248,8 +1248,10 @@ end
 function search_variables!(buf, expr::Let)
     rhs_buf = empty(buf)
     lhs_buf = empty(buf)
-    search_variables!.(Ref(rhs_buf), rhs.(expr.pairs))
-    search_variables!.(Ref(lhs_buf), lhs.(expr.pairs))
+    for p in expr.pairs
+        search_variables!(rhs_buf, rhs(p))
+        search_variables!(lhs_buf, lhs(p))
+    end
     union!(buf, setdiff!(rhs_buf, lhs_buf))
 end
 

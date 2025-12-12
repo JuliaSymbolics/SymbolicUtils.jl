@@ -145,6 +145,8 @@ include("rule.jl")
 include("matchers.jl")
 include("rewriters.jl")
 
+include("rule2.jl")
+
 # Convert to an efficient multi-variate polynomial representation
 import DynamicPolynomials
 export expand

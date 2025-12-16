@@ -1066,6 +1066,10 @@ cse!(x::CodegenPrimitive, state::CSEState) = throw(MethodError(cse!, (x, state))
 
 cse!(x::AbstractRange, ::CSEState) = x
 function cse!(x::AbstractArray, state::CSEState)
+    ux = SymbolicUtils.unwrap(x)
+    if ux !== x
+        return cse!(ux, state)
+    end
     res = map(Base.Fix2(cse!, state), x)
     return res
 end

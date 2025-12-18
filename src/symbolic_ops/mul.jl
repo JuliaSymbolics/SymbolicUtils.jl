@@ -84,7 +84,7 @@ function _check_adjoint_or_transpose(terms, result::ShapeT, first_arr::Union{Int
 end
 
 function _multiplied_terms_shape(terms::Tuple)
-    result, first_arr, last_arr = _multiplied_shape(ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms))))
+    result, first_arr, last_arr = _multiplied_shape(ntuple(shape ∘ unwrap ∘ Base.Fix1(getindex, terms), Val(length(terms))))
     return _check_adjoint_or_transpose(terms, result, first_arr, last_arr)
 end
 

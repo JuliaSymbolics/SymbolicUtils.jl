@@ -254,3 +254,9 @@ end
     @test length(scal) == 2
     @test isequal(scal, truth)
 end
+
+@testset "Scalarization of ldiv" begin
+    @syms x y A[1:3, 1:3] b[1:3]
+    @test isequal(SymbolicUtils.scalarize(x \ y), x \ y)
+    @test isequal(SymbolicUtils.scalarize(A \ b), [(A \ b)[1], (A \ b)[2], (A \ b)[3]])
+end

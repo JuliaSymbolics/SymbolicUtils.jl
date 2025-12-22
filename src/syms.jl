@@ -144,11 +144,23 @@ end
 
 const ParseDictT = Dict{Symbol, Any}
 
-function sym_from_parse_result(result::ParseDictT, vartype)::Expr
+"""
+    $TYPEDSIGNATURES
+
+Return an `Expr` which constructs a `Sym` for the given parsed variable `result`. `vartype`
+is the vartype of the variable to be constructed. `do_esc` controls whether this function
+is responsible for `esc`ing necessary values, or the caller will manually sanitize and `esc`
+the expression.
+"""
+function sym_from_parse_result(result::ParseDictT, vartype; do_esc = true)::Expr
     n, t, s = result[:name], result[:type], result[:shape]
-    T = esc(t)
-    s = esc(s)
-    varname = result[:isruntime] ? esc(n) : Expr(:quote, n)
+    T = do_esc ? esc(t) : t
+    s = do_esc ? esc(s) : s
+    if result[:isruntime]::Bool
+        varname = do_esc ? esc(n) : n
+    else
+        varname = Expr(:quote, n)
+    end
     return :($Sym{$vartype}($(varname); type = $T, shape = $s))
 end
 

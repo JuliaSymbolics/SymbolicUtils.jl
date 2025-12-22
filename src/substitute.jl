@@ -3,6 +3,7 @@ struct Substituter{Fold, D <: AbstractDict, F}
     filter::F
 end
 
+@inline Substituter{Fold}(d) where {Fold} = Substituter{Fold}(d, default_substitute_filter)
 @inline function Substituter{Fold}(d::AbstractDict, filter::F) where {Fold, F}
     Substituter{Fold, typeof(d), F}(d, filter)
 end

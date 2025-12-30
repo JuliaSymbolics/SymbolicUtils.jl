@@ -24,9 +24,10 @@ import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 using WeakCacheSets: WeakCacheSet, getkey!
-using Base: RefValue
+using Base: RefValue, Constructor
 import MacroTools
 import PrecompileTools
+using SciMLPublic: @public
 PrecompileTools.@recompile_invalidations begin
     import MultivariatePolynomials as MP
     import DynamicPolynomials as DP
@@ -95,12 +96,20 @@ macro readlock(l, expr)
     end
 end
 
+@public clear_cache!, @cache, toggle_caching!
 include("cache.jl")
 Base.@deprecate istree iscall
 
 include("small_array.jl")
 
 export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
+@public Const, Sym, Term, Add, Mul, Div, ArrayOp, ArgsT, BSImpl, BasicSymbolic, FnType
+@public Operator, ROArgsT, isconst, issym, isterm, isadd, ismul, isaddmul, isdiv, ispow
+@public isarrayop, promote_symtype, shape, symtype, unwrap, ACDict, AddMulVariant, TypeT
+@public BasicSymbolicImpl, MetadataT, MonomialOrder, MonomialT, PolyCoeffT, PolyVarOrder
+@public PolyVarT, PolynomialT, ShapeT, ShapeVecT, Unknown, StableIndex, hashcons
+@public is_array_shape, is_called_function_symbolic, mul_worker, add_worker, one_of_vartype
+@public operator_to_term, promote_shape, zero_of_vartype, zeropoly
 # Sym, Term,
 # Add, Mul and Pow
 PrecompileTools.@recompile_invalidations begin
@@ -117,7 +126,7 @@ PrecompileTools.@recompile_invalidations begin
     include("symbolic_ops/getindex.jl")
 end
 
-export BS
+export BS, parse_variable, sym_from_parse_result
 include("syms.jl")
 export @arrayop
 include("arrayop.jl")
@@ -125,10 +134,12 @@ include("arrayop.jl")
 # Methods on symbolic objects
 PrecompileTools.@recompile_invalidations begin
 using SpecialFunctions, NaNMath
+@public @map_methods, @mapreduce_methods, @number_methods, SymBroadcast
 include("methods.jl")
 include("printing.jl")
 end
 # LinkedList, simplification utilities
+@public _isone, _iszero
 include("utils.jl")
 
 # Tree inspection
@@ -141,16 +152,18 @@ using Combinatorics: permutations, combinations
 export @rule, @acrule, RuleSet
 
 # Rule type and @rule macro
+@public Rule
 include("rule.jl")
 include("matchers.jl")
 include("rewriters.jl")
 
 # Convert to an efficient multi-variate polynomial representation
 import DynamicPolynomials
-export expand
+export expand, basicsymbolic_to_polyvar, fraction_iszero, fraction_isone, from_poly, to_poly!
 include("polyform.jl")
 
 # Term ordering
+@public <ₑ
 include("ordering.jl")
 
 # Default rules for expression simplification
@@ -161,8 +174,11 @@ export simplify
 include("simplify.jl")
 
 export substitute
+@public scalarize, search_variables, search_variables!, Substituter, default_is_atomic
+@public default_substitute_filter, evaluate, query 
 include("substitute.jl")
 
+@public Code
 include("code.jl")
 
 PrecompileTools.@recompile_invalidations begin

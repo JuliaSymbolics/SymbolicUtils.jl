@@ -233,7 +233,13 @@ promote_symtype(::typeof(identity), T::TypeT) = T
 promote_shape(::typeof(identity), @nospecialize(sh::ShapeT)) = sh
 
 function _sequential_promote(T::TypeT, S::TypeT, Ts::TypeT...)
-    _sequential_promote(promote_type(T, S)::TypeT, Ts...)
+    if T === Nothing
+        return _sequential_promote(S, Ts...)
+    elseif S === Nothing
+        return _sequential_promote(T, Ts...)
+    else
+        _sequential_promote(promote_type(T, S)::TypeT, Ts...)
+    end
 end
 _sequential_promote(T::TypeT) = T
 

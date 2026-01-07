@@ -342,7 +342,14 @@ function shape(x::BasicSymbolic)
     end
 end
 
-shape(x) = _shape_notsymbolic(x)::ShapeT
+function shape(x)
+    ux = unwrap(x)
+    if ux === x
+        return _shape_notsymbolic(x)::ShapeT
+    else
+        return shape(ux)::ShapeT
+    end
+end
 shape(::Colon) = ShapeVecT((1:0,))
 
 function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)

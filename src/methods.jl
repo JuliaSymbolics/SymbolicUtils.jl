@@ -233,7 +233,13 @@ promote_symtype(::typeof(identity), T::TypeT) = T
 promote_shape(::typeof(identity), @nospecialize(sh::ShapeT)) = sh
 
 function _sequential_promote(T::TypeT, S::TypeT, Ts::TypeT...)
-    _sequential_promote(promote_type(T, S)::TypeT, Ts...)
+    if T === Nothing
+        return _sequential_promote(S, Ts...)
+    elseif S === Nothing
+        return _sequential_promote(T, Ts...)
+    else
+        _sequential_promote(promote_type(T, S)::TypeT, Ts...)
+    end
 end
 _sequential_promote(T::TypeT) = T
 
@@ -1386,7 +1392,7 @@ function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
         push!(args, :($name::$xT))
     end
     splat && push!(args, :(xs::Vararg))
-    EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kw...))
+    EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kwargs = [:(kw...)], kw...))
 end
 
 macro mapreduce_methods(T, arg_f, result_f)
@@ -1400,11 +1406,11 @@ macro mapreduce_methods(T, arg_f, result_f)
             nothing
         end
 
-        body = :($result_f($mapreduce(f, red, $arg_f(x1))))
+        body = :($result_f($mapreduce(f, red, $arg_f(x1); kw...)))
         push!(result.args, _mapreduce_method(Tf, Tred, T; splat = false, body, whereparams))
-        body = :($result_f($mapreduce(f, red, $arg_f(x1), xs...)))
+        body = :($result_f($mapreduce(f, red, $arg_f(x1), xs...; kw...)))
         push!(result.args, _mapreduce_method(Tf, Tred, T; body, whereparams))
-        body = :($result_f($mapreduce(f, red, x1, $arg_f(x2), xs...)))
+        body = :($result_f($mapreduce(f, red, x1, $arg_f(x2), xs...; kw...)))
         push!(result.args, _mapreduce_method(Tf, Tred, Any, T; body, whereparams))
         push!(result.args, _mapreduce_method(Tf, Tred, BasicSymbolic, T; body, whereparams))
     end

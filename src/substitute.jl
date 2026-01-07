@@ -3,6 +3,7 @@ struct Substituter{Fold, D <: AbstractDict, F}
     filter::F
 end
 
+@inline Substituter{Fold}(d) where {Fold} = Substituter{Fold}(d, default_substitute_filter)
 @inline function Substituter{Fold}(d::AbstractDict, filter::F) where {Fold, F}
     Substituter{Fold, typeof(d), F}(d, filter)
 end
@@ -437,12 +438,11 @@ function _scalarize_ldiv(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, topl
     shfst = shape(fst)
     shlst = shape(lst)
     if !is_array_shape(shfst) && !is_array_shape(shlst)
-        return fst / lst
+        return fst \ lst
     elseif !is_array_shape(shfst)
         return map(Base.Fix2(/, fst), lst)
     else
-        res = fst / lst
-        return BasicSymbolic{T}[res[i] for i in eachindex(res)]
+        return BasicSymbolic{T}[x[i] for i in eachindex(x)]
     end
 end
 

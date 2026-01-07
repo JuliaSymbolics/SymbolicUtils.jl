@@ -1246,7 +1246,7 @@ function apply_optimization_rules(expr, state::Code.CSEState, rules)
         return rules.transformer(expr, match_data, state)
     end
 
-    return nothing
+    return expr
 end
 
 function search_variables!(buf, expr::Let)

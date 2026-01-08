@@ -1240,7 +1240,7 @@ end
 Base.isempty(l::Code.Let) = isempty(l.pairs)   
 
 # Apply optimization rules during CSE
-function apply_optimization_rules(expr, state::Code.CSEState, rules::OptimizationRule)
+function apply_optimization_rules(expr::Code.Let, state::Code.CSEState, rules::OptimizationRule)
     match_data = rules.detector(expr, state)
     if match_data !== nothing
         return rules.transformer(expr, match_data, state)
@@ -1248,14 +1248,16 @@ function apply_optimization_rules(expr, state::Code.CSEState, rules::Optimizatio
 
     return expr
 end
+apply_optimization_rules(expr::Code.Let, state::Code.CSEState, rules::Nothing) = expr
 
-function apply_optimization_rules(ir, state, rules)
+function apply_optimization_rules(expr, state, rules)
+    isempty(rules) && return expr
     for rule in sort(rules, by = x -> x.priority)
-        ir_new = apply_optimization_rules(ir, state, rule)
-        ir = ir_new
+        expr_new = apply_optimization_rules(expr, state, rule)
+        expr = expr_new
     end
 
-    ir
+    expr
 end
 
 function search_variables!(buf, expr::Let)

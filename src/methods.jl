@@ -128,6 +128,20 @@ for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
             return S
         elseif S <: T
             return T
+        elseif $(f === (*) || f === Base.mul_prod) && T <: AdjointOrTranspose &&
+                T.parameters[2]::TypeT <: AbstractVector && S <: AbstractVector
+            # `Adjoint` and `Transpose` need special handling since `x'x` is a scalar
+            return promote_symtype($f, T.parameters[1]::TypeT, S.parameters[1]::TypeT)
+        elseif $(f === (*) || f === Base.mul_prod) && T <: AdjointOrTranspose
+            # `AdjointOrTranspose * anything` should stay an `Adjoint`
+            # This mimics the behavior of e.g. `rand(3)' * rand(3, 4)` being an `Adjoint`
+            pT = promote_symtype($f, T.parameters[2]::TypeT, S)
+            return LinearAlgebra.Adjoint{pT.parameters[1]::TypeT, pT}
+        elseif $(f === (*) || f === Base.mul_prod) && T <: Number && S <: AdjointOrTranspose
+            # scalar * `AdjointOrTranspose` should retain the `Adjoint`
+            # This handles a multiplication chain with interspersed scalars
+            pT = promote_symtype($f, T, S.parameters[2]::TypeT)
+            return LinearAlgebra.Adjoint{pT.parameters[1]::TypeT, pT}
         elseif T <: AbstractArray && !(T <: Array)
             return promote_symtype($f, Array{eltype(T), ndims(T)::Int}, S)
         elseif S <: AbstractArray && !(S <: Array)
@@ -409,7 +423,7 @@ function promote_symtype(::typeof(adjoint), T::TypeT)
     if T <: Number
         return T
     elseif T <: AbstractVecOrMat
-        return Matrix{T.parameters[1]::TypeT}
+        return LinearAlgebra.Adjoint{T.parameters[1]::TypeT, T}
     else
         error("Invalid type $T for `adjoint`")
     end

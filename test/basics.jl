@@ -1238,12 +1238,12 @@ end
 
     var = transpose(x)
     @test operation(var) === transpose
-    @test symtype(var) == Matrix{Number}
+    @test symtype(var) == LinearAlgebra.Adjoint{Number, Vector{Number}}
     @test shape(var) == [1:1, 1:3]
 
     var = transpose(y)
     @test operation(var) === transpose
-    @test symtype(var) == Matrix{Number}
+    @test symtype(var) == LinearAlgebra.Adjoint{Number, Matrix{Number}}
     @test shape(var) == [1:3, 1:3]
 end
 
@@ -1253,14 +1253,15 @@ end
     v1 = [a, b, c]
     var = Const{SymReal}(v1')
     @test operation(var) === adjoint
-    @test symtype(var) == Matrix{Number}
+    @test symtype(var) == LinearAlgebra.Adjoint{Number, Vector{Number}}
+
     @test shape(var) == [1:1, 1:3]
     @test isequal(collect(var), v1')
 
     v1 = [a b c; b c a; c a b]
     var = Const{SymReal}(v1')
     @test operation(var) === adjoint
-    @test symtype(var) == Matrix{Number}
+    @test symtype(var) == LinearAlgebra.Adjoint{Number, Matrix{Number}}
     @test shape(var) == [1:3, 1:3]
     @test isequal(collect(var), v1')
 end
@@ -1281,4 +1282,11 @@ end
     ex = b * d
     @test symtype(ex) === Matrix{Number}
     @test shape(ex) == [1:3, -1:4]
+end
+
+@testset "Issue#838: Handle `x'x` dot product" begin
+    @syms x[1:3] y[1:3, 1:4]
+    @test symtype(x') === LinearAlgebra.Adjoint{Number, Vector{Number}}
+    @test symtype(x'x) === Number
+    @test symtype(x'y) === LinearAlgebra.Adjoint{Number, Matrix{Number}}
 end

@@ -159,7 +159,7 @@ end
 
 @testset "promote_symtype for adjoint" begin
     @test promote_symtype(adjoint, Float64) == Float64
-    @test promote_symtype(adjoint, Matrix{Float64}) == Matrix{Float64}
+    @test promote_symtype(adjoint, Matrix{Float64}) == LinearAlgebra.Adjoint{Float64, Matrix{Float64}}
 end
 
 @testset "promote_shape for adjoint" begin

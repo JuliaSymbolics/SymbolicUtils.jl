@@ -135,6 +135,7 @@ macro arrayop(output_idx, expr, options...)
     vartype_ref = find_vartype_reference(expr)
     idxs  = union(oidxs, iidxs)
     fbody = :($unwrap($expr))
+    wrap_indexed_arrays!(fbody)
 
     let_assigns = Expr(:block)
     push!(let_assigns.args, Expr(:(=), :__vartype, :($vartype($unwrap($vartype_ref)))))
@@ -152,6 +153,20 @@ macro arrayop(output_idx, expr, options...)
                  $unwrap($call),
                  __ranges)
     end) |> esc
+end
+
+function wrap_indexed_arrays!(e::Expr)
+    if Meta.isexpr(e, :ref)
+        e.args[1] = :($(BSImpl.Const){__vartype}($(e.args[1])))
+        return e
+    end
+    for i in eachindex(e.args)
+        arg = e.args[i]
+        if arg isa Expr
+            e.args[i] = wrap_indexed_arrays!(arg)
+        end
+    end
+    return e
 end
 
 """

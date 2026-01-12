@@ -16,7 +16,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
-                      symtype, vartype, add_worker
+                      symtype, vartype, add_worker, search_variables!
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -1240,13 +1240,24 @@ end
 Base.isempty(l::Code.Let) = isempty(l.pairs)   
 
 # Apply optimization rules during CSE
-function apply_optimization_rules(expr, state::Code.CSEState, rules)
+function apply_optimization_rules(expr::Code.Let, state::Code.CSEState, rules::OptimizationRule)
     match_data = rules.detector(expr, state)
     if match_data !== nothing
         return rules.transformer(expr, match_data, state)
     end
 
-    return nothing
+    return expr
+end
+apply_optimization_rules(expr::Code.Let, state::Code.CSEState, rules::Nothing) = expr
+
+function apply_optimization_rules(expr, state, rules)
+    isempty(rules) && return expr
+    for rule in sort(rules, by = x -> x.priority)
+        expr_new = apply_optimization_rules(expr, state, rule)
+        expr = expr_new
+    end
+
+    expr
 end
 
 function search_variables!(buf, expr::Let)

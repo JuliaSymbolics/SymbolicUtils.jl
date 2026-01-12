@@ -380,7 +380,12 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
                         end
                     else
                         if haskey(ranges, outidx)
-                            subrules[outidx] = ranges[outidx][unwrap_const(newidx)::Union{BasicSymbolic{T}, Int}]
+                            _newidx = unwrap_const(newidx)::Union{BasicSymbolic{T}, Int}
+                            subrules[outidx] = if _newidx isa Int
+                                ranges[outidx][_newidx]
+                            else
+                                BSImpl.Const{T}(ranges[outidx])[_newidx]
+                            end
                         else
                             subrules[outidx] = unwrap_const(newidx)::Union{BasicSymbolic{T}, Int}
                         end
@@ -441,22 +446,3 @@ function _getindex(::Type{T}, x::AbstractArray, idxs...) where {T}
     Const{T}(getindex(x, idxs...))
 end
 Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]
-function Base.getindex(x::AbstractArray, idx::BasicSymbolic{T}, idxs...) where {T}
-    getindex(Const{T}(x), idx, idxs...)
-end
-function Base.getindex(x::AbstractArray, i1, idx::BasicSymbolic{T}, idxs...) where {T}
-    getindex(Const{T}(x), i1, idx, idxs...)
-end
-function Base.getindex(x::AbstractArray, i1::BasicSymbolic{T}, idx::BasicSymbolic{T}, idxs...) where {T}
-    getindex(Const{T}(x), i1, idx, idxs...)
-end
-function Base.getindex(x::AbstractArray, i1, i2, idx::BasicSymbolic{T}, idxs...) where {T}
-    getindex(Const{T}(x), i1, i2, idx, idxs...)
-end
-function Base.getindex(x::AbstractArray, i1, i2::BasicSymbolic{T}, idx::BasicSymbolic{T}, idxs...) where {T}
-    getindex(Const{T}(x), i1, i2, idx, idxs...)
-end
-function Base.getindex(x::AbstractArray, i1::BasicSymbolic{T}, i2::BasicSymbolic{T}, idx::BasicSymbolic{T}, idxs...) where {T}
-    getindex(Const{T}(x), i1, i2, idx, idxs...)
-end
-Base.to_index(x::BasicSymbolic) = unwrap_const(x)::Int

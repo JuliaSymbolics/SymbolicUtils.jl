@@ -50,6 +50,7 @@ See also: [`TermInterface.iscall`](@ref), [`arguments`](@ref)
                 operation(term)
             end
         end
+        BSImpl.ArrayMaker(;) => ArrayMaker{T}
     end
 end
 
@@ -208,6 +209,12 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                 return arguments(term)
             end
         end
+        BSImpl.ArrayMaker(; regions, values, args) => begin
+            isempty(args) || return ROArgsT{T}(args)
+            push!(args, BSImpl.Const{T}(regions))
+            push!(args, BSImpl.Const{T}(values))
+            return ROArgsT{T}(args)
+        end
     end
 end
 
@@ -256,6 +263,8 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
         error("$f must not be a Symbol")
     elseif f === ArrayOp{T}
         return ArrayOp{T}(args...)::BasicSymbolic{T}
+    elseif f === ArrayMaker{T}
+        return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, @view(arguments(args[2])[2:end]))
     elseif f === broadcast
         _f, _args = Iterators.peel(args)
         res = broadcast(unwrap_const(_f), _args...)

@@ -29,6 +29,7 @@ function Base.show(io::IO, x::BasicSymbolic)
             end
         end
         BSImpl.ArrayOp(;) => show_arrayop(io, x)
+        BSImpl.ArrayMaker(;) => show_arraymaker(io, x)
         BSImpl.AddMul(; variant) => if variant === AddMulVariant.ADD
                 show_add(io, x)
             else
@@ -369,5 +370,33 @@ function show_arrayop(io::IO, aop::BasicSymbolic)
             end
         end
     end
+end
+
+function show_arraymaker(io::IO, x::BasicSymbolic)
+    regions, values, shape = @match x begin
+        BSImpl.ArrayMaker(; regions, values, shape) => (regions, values, shape)
+    end
+    shape = shape::ShapeVecT
+    compact = get(io, :compact, false)::Bool
+    print(io, "@makearray")
+    print(io, compact ? "(" : " ")
+    print(io, "_[")
+    @union_split_smallvec shape join(io, shape, ", ")
+    print(io, "]")
+    print(io, compact ? ", " : " ")
+    print(io, "begin")
+    print(io, compact ? "; " : "\n")
+    @union_split_smallvec regions @union_split_smallvec values begin
+        for (reg, val) in zip(regions, values)
+            compact || print(io, "    ")
+            print(io, "_[")
+            @union_split_smallvec reg join(io, reg, ", ")
+            print(io, "] => ")
+            print_arg(IOContext(io, :compact => true), val)
+            print(io, compact ? "; " : "\n")
+        end
+    end
+    print(io, "end")
+    compact && print(io, ")")
 end
 

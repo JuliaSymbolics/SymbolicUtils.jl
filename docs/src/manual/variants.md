@@ -130,8 +130,8 @@ tag for the type of quantity represented here. `shape` stores the shape if the v
 an array symbolic.
 
 - `metadata` is either `nothing` or a map from `DataType` keys to arbitrary values. Any
-interaction with metadata should be done by providing such a mapping during construction
-or using [`getmetadata`](@ref), [`setmetadata`](@ref), [`hasmetadata`](@ref).
+  interaction with metadata should be done by providing such a mapping during construction
+  or using [`getmetadata`](@ref), [`setmetadata`](@ref), [`hasmetadata`](@ref).
 - `type` is a Julia type.
 - `shape` is as described above.
 

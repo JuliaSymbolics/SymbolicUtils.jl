@@ -117,7 +117,7 @@ substitute any subexpression that matches a key in `dict` with
 the corresponding value. If `fold=Val(false)`,
 expressions which can be evaluated won't be evaluated.
 
-```julia
+```julia-repl
 julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(true))
 2.414213562373095
 julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(false))

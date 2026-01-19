@@ -55,7 +55,7 @@ Convert a symbolic expression into an `Expr`, suitable to be passed into `eval`.
 
 For example,
 
-```julia
+```julia-repl
 julia> @syms a b
 (a, b)
 
@@ -491,8 +491,7 @@ A function.
 
 For example,
 
-```julia
-
+```julia-repl
 julia> @syms a b c t f(d) x(t) y(t) z(t)
 (a, b, c, t, f(::Number)::Number, x(::Number)::Number, y(::Number)::Number, z(::Number)::Number)
 
@@ -515,7 +514,7 @@ julia> toexpr(func)
 
 An example invocation of this function is:
 
-```julia
+```julia-repl
 julia> executable = eval(toexpr(func))
 #10 (generic function with 1 method)
 
@@ -615,7 +614,7 @@ An expression which constructs an array.
    by default, the output type is inferred automatically.
 
 You can define:
-```
+```julia
 @inline function create_array(A::Type{<:MyArray},a
                               ::Nothing, d::Val{dims}, elems...) where dims
 
@@ -992,7 +991,7 @@ variables to avoid redundant computation.
 An optimized expression with common subexpressions eliminated
 
 # Examples
-```julia
+```julia-repl
 julia> expr = :(sin(x) + sin(x) * cos(y))
 julia> cse(expr)  # sin(x) is computed only once
 ```

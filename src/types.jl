@@ -712,7 +712,7 @@ Create a symbolic term with operation `f` and arguments `args`.
 - `shape`: The shape of the term. If not provided, it is inferred using `promote_shape` on the function and argument shapes.
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x y
 (x, y)
 
@@ -750,7 +750,7 @@ Check if a symbolic expression has metadata for a given context.
 - `true` if the expression has metadata for the given context, `false` otherwise
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x
 x
 
@@ -778,7 +778,7 @@ The metadata value associated with the given context
 - `ArgumentError` if the expression does not have metadata for the given context
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x::Float64
 x
 
@@ -810,7 +810,7 @@ returning a default value if not found.
 The metadata value associated with the given context, or `default` if not found
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x
 x
 
@@ -861,7 +861,7 @@ Set metadata for a symbolic expression in a given context.
 A new symbolic expression with the updated metadata
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x
 x
 
@@ -891,7 +891,7 @@ end
 
 The result of applying `f` to arguments of [`SymbolicUtils.symtype`](@ref) `Ts...`
 
-```julia
+```julia-repl
 julia> promote_symtype(+, Real, Real)
 Real
 

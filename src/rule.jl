@@ -369,11 +369,11 @@ julia> r_sum(x)
 
 Currently DefSlot is implemented in:
 
-Operation | Default value<br>
-----------|--------------
-\\* | 1
-\\+ | 0
-2nd argument of ^ | 1
+| Operation         | Default value |
+|-------------------|---------------|
+| \\*               | 1             |
+| \\+               | 0             |
+| 2nd argument of ^ | 1             |
 
 **Segment**:
 

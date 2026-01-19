@@ -137,3 +137,31 @@ let
     ex2 = random_term(50; atoms, funs)
     arith["division"] = @benchmarkable $ex1 / $ex2
 end
+
+function reset_query_cache()
+    @static if isdefined(SymbolicUtils, :PREV_QUERIER)
+        SymbolicUtils.PREV_QUERIER[] = nothing
+    end
+end
+
+let
+    qry = SUITE["query"] = BenchmarkGroup()
+    atoms = [a, b, c, d, a^2, b^2, a^1.5, (b + c), b^c, 1, 2.0]
+    funs = [+, *, /]
+    ex = random_term(1000; atoms, funs)
+
+    iseq = qry["isequal"] = BenchmarkGroup()
+    # Reset `PREV_QUERIER` otherwise multiple evals in a benchmark will all hit the cache
+    iseq["present"] = @benchmarkable begin
+        reset_query_cache()
+        SymbolicUtils.query($(isequal(a)), $ex)
+    end
+    iseq["present - expr"] = @benchmarkable begin
+        reset_query_cache()
+        SymbolicUtils.query($(isequal(atoms[5])), $ex)
+    end
+    iseq["absent"] = @benchmarkable begin
+        reset_query_cache()
+        SymbolicUtils.query($(isequal(c^b)), $ex)
+    end
+end

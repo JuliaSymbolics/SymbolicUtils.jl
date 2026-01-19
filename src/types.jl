@@ -217,36 +217,36 @@ Core ADT for symbolic expressions.
 end
 
 """
-    Alias for `SymbolicUtils.BasicSymbolicImpl`.
+Alias for `SymbolicUtils.BasicSymbolicImpl`.
 """
 const BSImpl = BasicSymbolicImpl
 """
-    Alias for `SymbolicUtils.BasicSymbolicImpl.Type`.
+Alias for `SymbolicUtils.BasicSymbolicImpl.Type`.
 """
 const BasicSymbolic = BSImpl.Type
 """
-    The type of a mutable buffer containing symbolic arguments. Passing this to the
-    [`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array.
+The type of a mutable buffer containing symbolic arguments. Passing this to the
+[`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array.
 """
 const ArgsT{T} = SmallV{BasicSymbolic{T}}
 """
-    The type of a read-only buffer containing symbolic arguments. Passing this to the
-    [`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array. This is
-    the type returned from [`TermInterface.arguments`](@ref).
+The type of a read-only buffer containing symbolic arguments. Passing this to the
+[`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array. This is
+the type returned from [`TermInterface.arguments`](@ref).
 """
 const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
 """
-    The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to the
-    [`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will avoid
-    allocating a new dictionary.
+The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to the
+[`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will avoid
+allocating a new dictionary.
 """
 const ACDict{T} = Dict{BasicSymbolic{T}, Number}
 """
-    The type of the `output_idxs` field in [`BSImpl.ArrayOp`](@ref).
+The type of the `output_idxs` field in [`BSImpl.ArrayOp`](@ref).
 """
 const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
 """
-    The type of the `ranges` field in [`BSImpl.ArrayOp`](@ref).
+The type of the `ranges` field in [`BSImpl.ArrayOp`](@ref).
 """
 const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
 

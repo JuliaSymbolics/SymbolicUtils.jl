@@ -135,6 +135,55 @@ const EMPTY_DICT = Dict{Int, Int}()
     return substitute(expr, EMPTY_DICT; fold = Val{true}(), filterer)
 end
 
+struct Querier{F, G}
+    predicate::F
+    recurse::G
+    default::Bool
+end
+
+function Querier(predicate; recurse = iscall, default = false)
+    Querier(predicate, recurse, default)
+end
+
+function (q::Querier)(expr::BasicSymbolic)
+    (; predicate, recurse, default) = q
+    predicate(expr) && return true
+    iscall(expr) || return default
+    recurse(expr) || return default
+
+    return @match expr begin
+        BSImpl.Term(; f, args) => @union_split_smallvec args any(Base.Fix1(query, q), args)
+        BSImpl.AddMul(; dict) => any(Base.Fix1(query, q), keys(dict))
+        BSImpl.Div(; num, den) => query(q, num) || query(q, den)
+        BSImpl.ArrayOp(; expr = inner_expr, term) => begin
+            query(q, @something(term, inner_expr))
+        end
+    end
+end
+
+@cache function __query_1(q::Querier, expr::BasicSymbolic{SymReal})::Bool
+    q(expr)
+end
+@cache function __query_2(q::Querier, expr::BasicSymbolic{SafeReal})::Bool
+    q(expr)
+end
+@cache function __query_3(q::Querier, expr::BasicSymbolic{TreeReal})::Bool
+    q(expr)
+end
+
+function query(q::Querier, expr::BasicSymbolic{T}) where {T}
+    return if T === SymReal
+        __query_1(q, expr)
+    elseif T === SafeReal
+        __query_2(q, expr)
+    elseif T === TreeReal
+        __query_3(q, expr)
+    end
+    _unreachable()
+end
+
+const PREV_QUERIER = TaskLocalValue{Any}(() -> nothing)
+
 """
     $TYPEDSIGNATURES
 
@@ -155,22 +204,14 @@ returns `true` for any node in the tree.
 - `Bool`: `true` if any subexpression satisfies the predicate, `false` otherwise.
 """
 function query(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
-    predicate(expr) && return true
-    iscall(expr) || return default
-    recurse(expr) || return default
-
-    return @match expr begin
-        BSImpl.Term(; f, args) => any(args) do arg
-            query(predicate, arg; recurse, default)
-        end
-        BSImpl.AddMul(; dict) => any(keys(dict)) do arg
-            query(predicate, arg; recurse, default)
-        end
-        BSImpl.Div(; num, den) => query(predicate, num; recurse, default) || query(predicate, den; recurse, default)
-        BSImpl.ArrayOp(; expr = inner_expr, term) => begin
-            query(predicate, @something(term, inner_expr); recurse, default)
-        end
+    q = Querier(predicate; recurse, default)
+    prevq = PREV_QUERIER[]
+    if !(prevq isa typeof(q) && isequal(prevq, q))
+        clear_cache!(__query_1)
+        clear_cache!(__query_2)
+        clear_cache!(__query_3)
     end
+    return query(q, expr)
 end
 query(predicate::F, expr; kw...) where {F} = predicate(expr)
 

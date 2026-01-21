@@ -115,7 +115,8 @@ end
 @number_methods(BasicSymbolic{SymReal},
                 Term{SymReal}(f, ArgsT{SymReal}((Const{SymReal}(a),)); type = promote_symtype(f, symtype(a))),
                 Term{SymReal}(f, ArgsT{SymReal}((Const{SymReal}(a), Const{SymReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))),
-                skipbasics)
+                # Avoid declaring for `exp` since matrix exponential method exists
+                [+, -, *, /, //, \, ^, exp])
 @number_methods(BasicSymbolic{TreeReal},
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a),)); type = promote_symtype(f, symtype(a))),
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a), Const{TreeReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))))
@@ -293,13 +294,72 @@ for f in monadic
             end
             _throw_array($f, sh)
         end
-    else
+    elseif f !== exp
         @eval function promote_shape(::$(typeof(f)), sh::ShapeT)
             @nospecialize sh
             is_array_shape(sh) && _throw_array($f, sh)
             return ShapeVecT()
         end
     end
+end
+
+function promote_symtype(::typeof(exp), T::TypeT)
+    if T === Real
+        return Real
+    elseif T === Number
+        return Number
+    elseif T <: Integer
+        return Real
+    elseif T <: Rational
+        return Real
+    elseif T <: Complex
+        return Complex{promote_symtype(exp, T.parameters[1]::TypeT)}
+    elseif T <: Number
+        return T
+    elseif T <: Array
+        eT = T.parameters[1]::TypeT
+        eT <: Number || error_f_symbolic(exp, T)
+        nd = T.parameters[2]::Int
+        nd == 2 || error_f_symbolic(exp, T)
+        return Array{promote_symtype(exp, eT), nd}
+    elseif T <: AdjointOrTranspose
+        eT = T.parameters[1]::TypeT
+        eT <: Number || error_f_symbolic(exp, T)
+        eT = promote_symtype(exp, eT)
+        # We can always assume the second type parameter is a matrix, since vectors aren't
+        # square and then `promote_shape` will error. The exception is 1-vectors, in which
+        # case this doesn't really matter since the `exp` is a `Matrix` so `exp(v')v` won't
+        # be a scalar anyway.
+        return LinearAlgebra.Adjoint{eT, Matrix{eT}}
+    elseif T <: AbstractMatrix
+        return Matrix{promote_symtype(exp, T.parameters[1]::TypeT)}
+    else
+        error_f_symbolic(exp, T)
+    end
+end
+
+@noinline function _throw_not_square(sh)
+    throw(ArgumentError("Expected square matrix, got argument of shape $sh"))
+end
+
+function promote_shape(::typeof(exp), sh::ShapeT)
+    @nospecialize sh
+    if sh isa Unknown
+        sh.ndims == -1 || sh.ndims == 2 || _throw_not_matrix(sh)
+        return sh
+    elseif sh isa ShapeVecT
+        length(sh) == 0 && return sh
+        length(sh) == 2 || _throw_not_matrix(sh)
+        length(sh[1]) == length(sh[2]) || _throw_not_square(sh)
+        return sh
+    end
+    _unreachable()
+end
+
+function Base.exp(x::BasicSymbolic{T}) where {T}
+    type = promote_symtype(exp, symtype(x))
+    sh = promote_shape(exp, shape(x))
+    return BSImpl.Term{T}(exp, ArgsT{T}((x,)); type, shape = sh)
 end
 
 error_f_symbolic(f, T) = error("$f is not defined for $T.")
@@ -355,7 +415,7 @@ end
 
 promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
-    if f in [sign, signbit, ceil, floor, factorial]
+    if f in [sign, signbit, ceil, floor, factorial, exp]
         continue
     end
     @eval function promote_symtype(::$(typeof(f)), T::TypeT)

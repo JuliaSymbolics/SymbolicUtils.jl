@@ -1293,3 +1293,31 @@ end
     @test symtype(x'x) === Number
     @test symtype(x'y) === LinearAlgebra.Adjoint{Number, Matrix{Number}}
 end
+
+@testset "`exp(::Matrix)`" begin
+    @syms x y[1:3] z[1:3, 1:4] w[1:3, 1:3]
+
+    ex = exp(x)
+    @test symtype(ex) === Number
+    @test shape(ex) == UnitRange{Int}[]
+
+    @test_throws ErrorException exp(y)
+    @test_throws ArgumentError exp(z)
+
+    ex = exp(w)
+    @test symtype(ex) === Matrix{Number}
+    @test shape(ex) == shape(w)
+
+    ex = exp(w')
+    @test symtype(ex) === LinearAlgebra.Adjoint{Number, Matrix{Number}}
+    @test shape(ex) == shape(w)
+
+    @test SymbolicUtils.promote_symtype(exp, Real) === Real
+    @test SymbolicUtils.promote_symtype(exp, Number) === Number
+    @test SymbolicUtils.promote_symtype(exp, Int) === Real
+    @test SymbolicUtils.promote_symtype(exp, Rational{Int}) === Real
+    @test SymbolicUtils.promote_symtype(exp, ComplexF64) === ComplexF64
+    @test SymbolicUtils.promote_symtype(exp, Complex{Int}) === Complex{Real}
+    @test SymbolicUtils.promote_symtype(exp, Matrix{Int}) === Matrix{Real}
+    @test SymbolicUtils.promote_symtype(exp, LinearAlgebra.Adjoint{Int, Matrix{Int}}) === LinearAlgebra.Adjoint{Real, Matrix{Real}}
+end

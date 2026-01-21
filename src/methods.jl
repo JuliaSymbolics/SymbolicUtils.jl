@@ -659,7 +659,7 @@ struct StableIndices
 end
 
 Base.length(x::StableIndices) = prod(length, x.sh; init = 1)
-Base.eltype(::Type{StableIndices}) = StableIndex
+Base.eltype(::Type{StableIndices}) = StableIndex{Int}
 
 function Base.iterate(x::StableIndices)
     idx = SmallV{Int}()

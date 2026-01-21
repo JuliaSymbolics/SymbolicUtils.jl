@@ -1171,6 +1171,9 @@ end
         els = [v[i] for i in idxs]
         truth = vec(collect(v))
         @test isequal(els, truth)
+        # Test that `eachindex(::StableIndices)` works as intended
+        # Also tests `isequal(::StableIndex)`
+        @test isequal(collect(idxs), [idxs[i] for i in eachindex(idxs)])
 
         for i in 1:length(v)
             @test Tuple(idxs[i]) == Tuple(CartesianIndices(Tuple(shape(v)))[i])

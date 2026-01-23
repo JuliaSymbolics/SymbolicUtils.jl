@@ -275,3 +275,16 @@ end
     @test str == "mapreduce(+, +, a; dims = 2, init = 3)"
     @test toexpr(ex) == :($mapreduce($+, $+, a; dims = 2, init = 3))
 end
+
+@testset "CSE works" begin
+    @syms x[1:4, 1:4] y[1:4, 1:4]
+    ex = @arrayop (i, j) x[i, k] * y[k, j]
+    xval = rand(4, 4)
+    yval = rand(4, 4)
+    expr = quote
+        let x = $xval, y = $yval
+            $(Code.toexpr(Code.cse(ex)))
+        end
+    end
+    @test eval(expr) ≈ xval * yval
+end

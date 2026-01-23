@@ -1038,6 +1038,13 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
                 return sym
             end
             BSImpl.Sym(;) => return expr
+            BSImpl.ArrayOp(; term) => if term === nothing
+                sym = newsym!(state, T, symtype(expr))
+                push!(state.sorted_exprs, sym ← expr)
+                return sym
+            else
+                return cse!(term, state)
+            end
             _ => begin
                 op = operation(expr)
                 args = arguments(expr)

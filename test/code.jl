@@ -179,6 +179,9 @@ nanmath_st.rewrites[:nanmath] = true
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray([a b;a+b a/b], arr)))) == [1 2; 3 1/2]
 
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(reshape(view([a,b,a+b,a/b], :), 1, 4), arr)))) == [1 2 3 1/2]
+
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SVector([1,2])],
                           MakeArray([a,b,a+b,a/b], arr)))) === @SVector [1, 2, 3, 1/2]
 
@@ -187,6 +190,9 @@ nanmath_st.rewrites[:nanmath] = true
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← @SLVector((:a, :b))(@SVector[1,2])],
                           MakeArray([a+b,a/b], arr)))) === @SLVector((:a, :b))(@SVector [3, 1/2])
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← reshape(view([1,2], :), 1, 2)],
+                          MakeArray([a,b,a+b,a/b], arr)))) == [1, 2, 3, 1/2]
 
     trackedarr = eval(toexpr(Let([a ← ReverseDiff.track(1.0), b ← 2, arr ← ReverseDiff.track(ones(2))],
                           MakeArray([a+b,a/b], arr))))

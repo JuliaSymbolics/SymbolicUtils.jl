@@ -718,6 +718,10 @@ end
     create_array(P, S, nd, d, elems...)
 end
 
+@inline function create_array(A::Type{<:Base.ReshapedArray{T,N,P,MI}}, S, nd::Val, d::Val, elems...) where {T,N,P,MI}
+    create_array(P, S, nd, d, elems...)
+end
+
 @inline function create_array(A::Type{<:PermutedDimsArray{T,N,perm,iperm,P}}, S, nd::Val, d::Val, elems...) where {T,N,perm,iperm,P}
     create_array(P, S, nd, d, elems...)
 end

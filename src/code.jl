@@ -298,7 +298,10 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
     @union_split_smallvec regions @union_split_smallvec values begin
         for (region, val) in zip(regions, values)
             args = ArgsT{T}((ARRAY_OUTSYM,))
-            append!(args, region)
+            # `append!`  doesn't convert on 1.10
+            @union_split_smallvec region for reg in region
+                push!(args, BSImpl.Const{T}(reg))
+            end
             vw = BSImpl.Term{T}(view, args; type = Any)
             @match val begin
                 BSImpl.ArrayOp(;) => begin

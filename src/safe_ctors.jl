@@ -598,6 +598,29 @@ function ArrayOp{T}(output_idx, expr, reduce, term, ranges; metadata = nothing, 
     return BSImpl.ArrayOp{T}(output_idx, expr, reduce, term, ranges; type, shape = sh, metadata, unsafe)
 end
 
+"""
+    ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false)
+
+High-level constructor for arrays composed of blocks of other arrays.
+
+# Arguments
+- `regions`: A list of `AbstractVector{UnitRange{Int}}` denoting subarrays of the resultant
+  array to assign.
+- `values`: A corresponding list of (symbolic) values assigned to each entry in `regions`.
+
+# Returns
+- `BasicSymbolic{T}`: An `ArrayMaker` representing the resultant array.
+
+# Details
+This constructor validates and parses the data necessary to construct an `ArrayMaker`. The
+[`SymbolicUtils.symtype`](@ref) of the resultant array is automatically inferred. Refer to
+the [`@makearray`](@ref) documentation for the constraints on `regions` and `values`.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
 function ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false) where {T}
     regions = parse_regions(unwrap_args(regions))
     values = parse_args(T, unwrap_args(values))

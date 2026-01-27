@@ -266,6 +266,7 @@ struct ArrayOp
     const metadata::MetadataT
     const shape::ShapeT
     const type::TypeT
+    # ...
 end
 ```
 
@@ -316,6 +317,29 @@ not possible (such as in recursive functions like `substitute`) the `ArrayOp` co
 should be preferred. This does not allow specifying the `type` and `shape`, since these
 values are tied to the fields of the variant and are thus determined. The `BSImpl.ArrayOp`
 constructor should be used with extreme caution, since it does not validate input.
+
+```julia
+struct ArrayMaker
+    const regions::SmallV{ShapeVecT}
+    const values::SmallV{BasicSymbolicImpl.Type{T}}
+    const metadata::MetadataT
+    const shape::ShapeT
+    const type::TypeT
+    # ...
+end
+```
+
+`ArrayMaker` is used to represent symbolic arrays composed of (potentially overlapping)
+blocks of other arrays. It is represented as a sequence `regions` of subarrays of the result,
+and a corresponding sequence `values` of values assigned to them. Each entry in `regions`
+must have the same number of dimensions as the represented array; singleton dimensions
+cannot be removed. The corresponding entry in `values` must have a size identical to
+the assigned subarray. Again, singleton dimensions cannot be dropped. In case of overlaps,
+later entries overwrite earlier ones. If a region of the array is left unassigned by all
+blocks, accessing it is invalid. When used in code generation, these unassigned regions
+can take arbitrary and possibly unassigned values.
+
+In most cases, `ArrayMaker` should not be created directly. Prefer using [`@makearray`](@ref).
 
 ## Array arithmetic
 
@@ -418,6 +442,7 @@ SymbolicUtils.BSImpl.Term
 SymbolicUtils.BSImpl.AddMul
 SymbolicUtils.BSImpl.Div
 SymbolicUtils.BSImpl.ArrayOp
+SymbolicUtils.BSImpl.ArrayMaker
 ```
 
 ### High-level constructors
@@ -431,6 +456,8 @@ SymbolicUtils.Mul
 SymbolicUtils.Div
 SymbolicUtils.ArrayOp
 @arrayop
+SymbolicUtils.ArrayMaker
+@makearray
 ```
 
 ### Variant checking
@@ -448,6 +475,7 @@ SymbolicUtils.ismul
 SymbolicUtils.isdiv
 SymbolicUtils.ispow
 SymbolicUtils.isarrayop
+SymbolicUtils.isarraymaker
 ```
 
 ### Using custom functions in expressions

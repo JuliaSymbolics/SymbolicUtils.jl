@@ -546,3 +546,47 @@ performance in internal operations.
     return var
 end
 
+function parse_regions(args::Union{Tuple, AbstractVector})
+    args isa RegionsT && return args
+    _args = RegionsT()
+    sizehint!(_args, length(args))
+    for arg in args
+        push!(_args, parse_shape(arg))
+    end
+    return _args
+end
+
+"""
+    BSImpl.ArrayMaker{T}(regions, values; metadata = nothing, type, shape = default_shape(type)) where {T}
+
+Internal constructor for array maker expressions.
+
+# Arguments
+- `regions`: List of subarray regions the `ArrayMaker` is composed of
+- `values`: Values for each region in `regions`
+- `metadata`: Optional metadata dictionary (default: `nothing`)
+- `type`: The result type (required keyword argument, typically an array type)
+- `shape`: The shape of the result (default: inferred from `type`)
+
+# Returns
+- `BasicSymbolic{T}`: An `ArrayMaker` variant representing the array operation
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
+@inline function BSImpl.ArrayMaker{T}(regions, values; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
+    metadata = parse_metadata(metadata)
+    shape = parse_shape(shape)
+    values = parse_args(T, values)
+    regions = parse_regions(regions)
+    props = ordered_override_properties(BSImpl.ArrayMaker{T})
+    @assert type <: AbstractArray
+    @assert is_array_shape(shape)
+    var = BSImpl.ArrayMaker{T}(regions, values, metadata, shape, type, props...)
+    if !unsafe
+        var = hashcons(var)
+    end
+    return var
+end

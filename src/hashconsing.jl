@@ -139,6 +139,9 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
         (BSImpl.ArrayOp(; output_idx = o1, expr = e1, reduce = f1, term = t1, ranges = r1, shape = s1, type = type1), BSImpl.ArrayOp(; output_idx = o2, expr = e2, reduce = f2, term = t2, ranges = r2, shape = s2, type = type2)) => begin
             isequal(o1, o2) && isequal(e1, e2) && isequal(f1, f2)::Bool && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && s1 == s2 && type1 === type2
         end
+        (BSImpl.ArrayMaker(; regions = r1, values = v1, shape = s1, type = t1), BSImpl.ArrayMaker(; regions = r2, values = v2, shape = s2, type = t2)) => begin
+            r1 == r2 && isequal_argsvec(v1, v2, full) && s1 == s2 && t1 === t2
+        end
     end
     if full && partial && !(Ta <: BSImpl.Const)
         partial = isequal(metadata(a), metadata(b))
@@ -347,6 +350,11 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
             Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, Base.hash(shape, hash_maybe_fntype(type, h)), full)))::UInt, full))
+        end
+        BSImpl.ArrayMaker(; regions, values, shape, type, hash, hash2) => begin
+            full && !iszero(hash2) && return hash2
+            !full && !iszero(hash) && return hash
+            Base.hash(regions, Base.hash(values, Base.hash(shape, hash_maybe_fntype(type, h))))
         end
     end
 

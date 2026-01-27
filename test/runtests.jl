@@ -14,6 +14,7 @@ using Pkg, Test, SafeTestsets
         end
         @safetestset "Basics" begin include("basics.jl") end
         @safetestset "ArrayOp" begin include("arrayop.jl") end
+        @safetestset "ArrayMaker" begin include("arraymaker.jl") end
         @safetestset "Order" begin include("order.jl") end
         @safetestset "PolyForm" begin include("polyform.jl") end
         @safetestset "Rewrite" begin include("rewrite.jl") end

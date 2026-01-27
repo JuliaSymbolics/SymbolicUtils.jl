@@ -16,7 +16,8 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
-                      symtype, vartype, add_worker, search_variables!
+                      symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
+                      ArrayMaker
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -165,7 +166,7 @@ function function_to_expr(op::SymbolicUtils.Mapreducer, O, st)
     return expr
 end
 
-const ARRAYOP_OUTSYM = Symbol("_out")
+const ARRAY_OUTSYM = Symbol("_out")
 
 function function_to_expr(::typeof(getindex), O::BasicSymbolic{T}, st) where {T}
     out = get(st.rewrites, O, nothing)
@@ -197,11 +198,14 @@ function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
     end
     output_buffer = get(st.rewrites, :arrayop_output, default_output_buffer)
     delete!(st.rewrites, :arrayop_output)
-    toexpr(Let(
-        [
-            Assignment(ARRAYOP_OUTSYM, output_buffer),
-            Assignment(Symbol("%$ARRAYOP_OUTSYM"), inplace_expr(O, ARRAYOP_OUTSYM))
-        ], ARRAYOP_OUTSYM, false), st)
+    return toexpr(
+        Let(
+            [
+                Assignment(ARRAY_OUTSYM, output_buffer),
+            ], Let([Assignment(Symbol("%$ARRAY_OUTSYM"), inplace_expr(O, ARRAY_OUTSYM))], ARRAY_OUTSYM, false),
+            true
+        ), st
+    )
 end
 
 function unidealize_indices(expr::BasicSymbolic{T}, ranges, new_ranges) where {T}
@@ -274,6 +278,47 @@ function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
     end
 
     return loops
+end
+
+function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where {T}
+    out = get(st.rewrites, O, nothing)
+    out === nothing || return out
+
+    # TODO: better infer default eltype from `O`
+    output_eltype = get(st.rewrites, :arraymaker_eltype, Float64)
+    delete!(st.rewrites, :arraymaker_eltype)
+    sh = shape(O)
+    default_output_buffer = term(zeros, output_eltype, size(O))
+    output_buffer = get(st.rewrites, :arraymaker_output, default_output_buffer)
+    delete!(st.rewrites, :arraymaker_output)
+    ir = Assignment[]
+    regions, values = @match O begin
+        BSImpl.ArrayMaker(; regions, values) => (regions, values)
+    end
+    @union_split_smallvec regions @union_split_smallvec values begin
+        for (region, val) in zip(regions, values)
+            args = ArgsT{T}((ARRAY_OUTSYM,))
+            # `append!`  doesn't convert on 1.10
+            @union_split_smallvec region for reg in region
+                push!(args, BSImpl.Const{T}(reg))
+            end
+            vw = BSImpl.Term{T}(view, args; type = Any)
+            @match val begin
+                BSImpl.ArrayOp(;) => begin
+                    st.rewrites[:arrayop_output] = vw
+                    push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
+                end
+                BSImpl.ArrayMaker(;) => begin
+                    st.rewrites[:arraymaker_output] = vw
+                    push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
+                end
+                _ => begin
+                    push!(ir, Assignment(Symbol("__tmp_ₐ"), :($copyto!($view($ARRAY_OUTSYM, $(region...)), $(toexpr(val, st))))))
+                end
+            end
+        end
+    end
+    return toexpr(Let([Assignment(ARRAY_OUTSYM, output_buffer)], Let(ir, ARRAY_OUTSYM, false), true), st)
 end
 
 function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
@@ -1044,6 +1089,9 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
                 return sym
             else
                 return cse!(term, state)
+            end
+            BSImpl.ArrayMaker(; regions, values, type, shape) => begin
+                return BSImpl.ArrayMaker{T}(regions, map(Base.Fix2(cse!, state), values); type, shape)
             end
             _ => begin
                 op = operation(expr)

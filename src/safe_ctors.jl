@@ -5,6 +5,7 @@ struct Add{T} end
 struct Mul{T} end
 struct Div{T} end
 struct ArrayOp{T} end
+struct ArrayMaker{T} end
 
 """
     Const{T}(val) where {T}
@@ -597,3 +598,119 @@ function ArrayOp{T}(output_idx, expr, reduce, term, ranges; metadata = nothing, 
     return BSImpl.ArrayOp{T}(output_idx, expr, reduce, term, ranges; type, shape = sh, metadata, unsafe)
 end
 
+"""
+    ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false)
+
+High-level constructor for arrays composed of blocks of other arrays.
+
+# Arguments
+- `regions`: A list of `AbstractVector{UnitRange{Int}}` denoting subarrays of the resultant
+  array to assign.
+- `values`: A corresponding list of (symbolic) values assigned to each entry in `regions`.
+
+# Returns
+- `BasicSymbolic{T}`: An `ArrayMaker` representing the resultant array.
+
+# Details
+This constructor validates and parses the data necessary to construct an `ArrayMaker`. The
+[`SymbolicUtils.symtype`](@ref) of the resultant array is automatically inferred. Refer to
+the [`@makearray`](@ref) documentation for the constraints on `regions` and `values`.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
+function ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false) where {T}
+    regions = parse_regions(unwrap_args(regions))
+    values = parse_args(T, unwrap_args(values))
+    if shape === nothing
+        shape = shape_from_regions(regions)
+    end
+    shape = shape::ShapeVecT
+    type = symtype_from_values(values, length(shape))
+    validate_values_shapes(regions, values)
+    return BSImpl.ArrayMaker{T}(regions, values; metadata, shape, type, unsafe)
+end
+
+function shape_from_regions(regions::RegionsT)::ShapeVecT
+    all_same_ndims = @union_split_smallvec regions allequal(Iterators.map(length, regions))
+    @assert all_same_ndims """
+    All regions provided to `ArrayMaker` must have the same number of dimensions.
+    """
+    ndim = length(first(regions))
+    starts = SmallV{Int}()
+    stops = SmallV{Int}()
+    sizehint!(starts, ndim)
+    sizehint!(stops, ndim)
+    for _ in 1:ndim
+        push!(starts, typemax(Int))
+        push!(stops, typemin(Int))
+    end
+
+    for region in regions
+        for (i, axis) in enumerate(region)
+            starts[i] = min(starts[i], first(axis))
+            stops[i] = max(stops[i], last(axis))
+        end
+    end
+
+    shape = ShapeVecT()
+    sizehint!(shape, ndim)
+    @union_split_smallvec starts begin
+        @union_split_smallvec stops begin
+            for (i, (start, stop)) in enumerate(zip(starts, stops))
+                if start == typemax(Int) || stop == typemin(Int)
+                    throw(ArgumentError("Unable to infer bounds for $i-th dimension of `ArrayMaker`."))
+                end
+                push!(shape, start:stop)
+            end
+        end
+    end
+
+    return shape
+end
+
+function symtype_from_values(values::ArgsT, ndims::Int)
+    sT = symtype(first(values))::TypeT
+    @assert sT <: AbstractArray
+    T::TypeT = safe_eltype(sT)::TypeT
+    for v in values
+        sT = symtype(v)
+        @assert sT <: AbstractArray
+        eT = safe_eltype(sT)::TypeT
+        T = promote_type_fast_path(T, eT)
+    end
+
+    return Array{T, ndims}
+end
+
+function _throw_arraymaker_incompatible_shapes(region, val)
+    throw(ArgumentError("""
+    Incompatible shapes found in `@arraymaker`: Value `$val` of shape $(shape(val)) \
+    assigned to region $region.
+    """))
+end
+
+function validate_values_shapes(regions::RegionsT, values::ArgsT{T}) where {T}
+    szbuf1 = SmallV{Int}()
+    szbuf2 = SmallV{Int}()
+    @union_split_smallvec regions @union_split_smallvec values begin
+        for (reg, val) in zip(regions, values)
+            empty!(szbuf1)
+            empty!(szbuf2)
+            sh = shape(val)
+            if sh isa ShapeVecT
+                @union_split_smallvec sh for ax in sh
+                    push!(szbuf2, length(ax))
+                end
+            else
+                sh.ndims == length(reg) || _throw_arraymaker_incompatible_shapes(reg, val)
+            end
+            @union_split_smallvec reg for ax in reg
+                push!(szbuf1, length(ax))
+            end
+            isequal(szbuf1, szbuf2) || _throw_arraymaker_incompatible_shapes(reg, val)
+        end
+    end
+end

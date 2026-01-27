@@ -220,6 +220,10 @@ function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)
     __stable_getindex(arr, sidxs)
 end
 
+function _throw_arraymaker_out_of_range(x::BasicSymbolic, idx)
+    throw(ArgumentError("Index $idx is out of range for `$x`."))
+end
+
 function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {T, I}
     idxs = sidxs.idxs
     isempty(idxs) && return arr
@@ -233,6 +237,23 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
             end
             BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => begin
                 return args[as_linear_idx(sh, sidxs)]
+            end
+            BSImpl.ArrayMaker(; regions, values) => begin
+                length(sh) == length(idxs) || _throw_cartesian_indexing()
+                @union_split_smallvec regions @union_split_smallvec values @union_split_smallvec idxs begin
+                    for (reg, val) in Iterators.reverse(zip(regions, values))
+                        @union_split_smallvec reg begin
+                            all(splat(in), zip(idxs, reg)) || continue
+                            new_idxs = SmallV{Int}()
+                            sizehint!(new_idxs, length(idxs))
+                            for (idx, ax) in zip(idxs, reg)
+                                push!(new_idxs, idx - first(ax) + 1)
+                            end
+                            return __stable_getindex(val, StableIndex(new_idxs))
+                        end
+                    end
+                    _throw_arraymaker_out_of_range(arr, sidxs)
+                end
             end
             _ => nothing
         end
@@ -406,6 +427,9 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
                 end
                 return BSImpl.ArrayOp{T}(new_output_idx, new_expr, reduce, term, new_ranges; type, shape = newshape)
             end
+        end
+        BSImpl.ArrayMaker(;) && if all(Base.Fix2(isa, Int), idxs) end => begin
+            return getindex(arr, StableIndex(SmallV{Int}(idxs)))
         end
         _ => begin
             if is_array_shape(newshape)

@@ -74,6 +74,12 @@ const ShapeVecT = SmallV{UnitRange{Int}}
 Type that represents the [`SymbolicUtils.shape`](@ref) of symbolics.
 """
 const ShapeT = Union{Unknown, ShapeVecT}
+"""
+    $TYPEDEF
+
+Type for the `regions` field of `ArrayMaker`.
+"""
+const RegionsT = SmallV{ShapeVecT}
 const IdentT = Union{IDType, Nothing}
 const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
 const PolyVarOrder = DP.Commutative{DP.CreationOrder}
@@ -214,6 +220,22 @@ Core ADT for symbolic expressions.
         hash2::UInt
         id::IdentT
     end
+    struct ArrayMaker
+        # List of subarray regions that the `ArrayMaker` is composed of. In case of
+        # overlapping regions, later ones take priority.
+        const regions::RegionsT
+        # Values at each region above. Must be of same length as `regions`. Values must
+        # have the same shape as the corresponding region, excluding singleton dimensions.
+        const values::SmallV{BasicSymbolicImpl.Type{T}}
+        const metadata::MetadataT
+        # _has_ to be an array shape.
+        const shape::ShapeT
+        const type::TypeT
+        const args::SmallV{BasicSymbolicImpl.Type{T}}
+        hash::UInt
+        hash2::UInt
+        id::IdentT
+    end
 end
 
 """
@@ -249,6 +271,10 @@ const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
     The type of the `ranges` field in [`BSImpl.ArrayOp`](@ref).
 """
 const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
+"""
+    The type of the `sequence` field in [`BSImpl.ArrayMaker`](@ref).
+"""
+const SequenceT{T} = SmallV{Tuple{SmallV{Union{Int, UnitRange{Int}}}, BasicSymbolic{T}}}
 
 """
     $TYPEDSIGNATURES
@@ -266,6 +292,7 @@ function symtype(x::BasicSymbolic)
         BSImpl.AddMul(; type) => type
         BSImpl.Div(; type) => type
         BSImpl.ArrayOp(; type) => type
+        BSImpl.ArrayMaker(; type) => type
     end
 end
 symtype(x) = typeof(x)
@@ -339,6 +366,7 @@ function shape(x::BasicSymbolic)
         BSImpl.AddMul(; shape) => shape
         BSImpl.Div(; shape) => shape
         BSImpl.ArrayOp(; shape) => shape
+        BSImpl.ArrayMaker(; shape) => shape
     end
 end
 
@@ -398,6 +426,7 @@ function override_properties(obj::Type{<:BSImpl.Variant})
         ::Type{<:BSImpl.Term} => (; id = nothing, hash = 0, hash2 = 0)
         ::Type{<:BSImpl.Div} => (; id = nothing, hash = 0, hash2 = 0)
         ::Type{<:BSImpl.ArrayOp} => (; id = nothing, hash = 0, hash2 = 0)
+        ::Type{<:BSImpl.ArrayMaker} => (; id = nothing, hash = 0, hash2 = 0)
     end
 end
 
@@ -407,6 +436,7 @@ ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, nothing)
 ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
 ordered_override_properties(::Type{<:BSImpl.Div}) = (0, 0, nothing)
 ordered_override_properties(::Type{<:BSImpl.ArrayOp{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.ArrayMaker{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
 
 function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
@@ -416,6 +446,7 @@ function ConstructionBase.getproperties(obj::BSImpl.Type)
         BSImpl.AddMul(; coeff, dict, variant, metadata, shape, type, args, hash, hash2, id) => (; coeff, dict, variant, metadata, shape, type, args, hash, hash2, id)
         BSImpl.Div(; num, den, simplified, metadata, hash, hash2, shape, type, id) => (; num, den, simplified, metadata, hash, hash2, shape, type, id)
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, metadata, shape, type, args, hash, hash2, id) => (; output_idx, expr, reduce, term, ranges, metadata, shape, type, args, hash, hash2, id)
+        BSImpl.ArrayMaker(; regions, values, metadata, shape, type, args, hash, hash2, id) => (; regions, values, metadata, shape, type, args, hash, hash2, id)
     end
 end
 
@@ -423,7 +454,7 @@ function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple) 
     props = getproperties(obj)
     overrides = override_properties(obj)
     # We only want to invalidate `args` if we're updating `coeff` or `dict`.
-    if isaddmul(obj) || isarrayop(obj)
+    if isaddmul(obj) || isarrayop(obj) || isarraymaker(obj)
         extras = (; args = ArgsT{T}())
     else
         extras = (;)
@@ -554,7 +585,20 @@ Array operations represent vectorized computations created by the `@arrayop` mac
 """
 isarrayop(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.ArrayOp)
 
-for fname in [:isconst, :issym, :isterm, :isaddmul, :isadd, :ismul, :isdiv, :ispow, :isarrayop]
+"""
+    $TYPEDSIGNATURES
+
+Check if a value is an `ArrayMaker` variant of `BasicSymbolic`.
+
+# Arguments
+- `x`: Value to check (for `BasicSymbolic` input returns true if `ArrayMaker`, for others returns false).
+
+# Returns
+- `true` if `x` is a `BasicSymbolic` with `ArrayMaker` variant, `false` otherwise.
+"""
+isarraymaker(x::BSImpl.Type) = MData.isa_variant(x, BSImpl.ArrayMaker)
+
+for fname in [:isconst, :issym, :isterm, :isaddmul, :isadd, :ismul, :isdiv, :ispow, :isarrayop, :isarraymaker]
     @eval $fname(x) = false
 end
 

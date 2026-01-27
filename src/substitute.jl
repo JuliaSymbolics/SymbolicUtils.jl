@@ -170,6 +170,9 @@ function query(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::
         BSImpl.ArrayOp(; expr = inner_expr, term) => begin
             query(predicate, @something(term, inner_expr); recurse, default)
         end
+        BSImpl.ArrayMaker(; values) => any(values) do arg
+            query(predicate, arg; recurse, default)
+        end
     end
 end
 query(predicate::F, expr; kw...) where {F} = predicate(expr)
@@ -232,6 +235,9 @@ function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = default_i
         end
         BSImpl.ArrayOp(; expr = inner_expr, term) => begin
             search_variables!(buffer, @something(term, inner_expr); is_atomic, recurse)
+        end
+        BSImpl.ArrayMaker(; values) => @union_split_smallvec values for val in values
+            search_variables!(buffer, val; is_atomic, recurse)
         end
     end
     return nothing
@@ -493,6 +499,30 @@ function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
             return isempty(sh) ? res[] : res
         end
     end
+end
+
+scalarization_function(::Type{ArrayMaker{T}}) where {T} = _scalarize_arraymaker
+
+function _scalarize_arraymaker(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    sh = shape(x)::ShapeVecT
+    buffer = Array{BasicSymbolic{T}}(undef, size(x))
+    regbuf = ShapeVecT()
+    sizehint!(regbuf, length(sh))
+    @match x begin
+        BSImpl.ArrayMaker(; regions, values) => begin
+            @union_split_smallvec regions @union_split_smallvec values @union_split_smallvec sh begin
+                for (reg, val) in zip(regions, values)
+                    empty!(regbuf)
+                    @union_split_smallvec reg for (ax, canonical_ax) in zip(reg, sh)
+                        offset = first(canonical_ax)
+                        push!(regbuf, (first(ax) - offset + 1):(last(ax) - offset + 1))
+                    end
+                    setindex!(buffer, scalarize(val, Val{toplevel}())::AbstractArray{BasicSymbolic{T}}, regbuf...)
+                end
+            end
+        end
+    end
+    return buffer
 end
 
 scalarization_function(::Mapper) = _scalarize_arrayop

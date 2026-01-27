@@ -121,6 +121,8 @@ export BS
 include("syms.jl")
 export @arrayop
 include("arrayop.jl")
+export @makearray
+include("arraymaker.jl")
 
 # Methods on symbolic objects
 PrecompileTools.@recompile_invalidations begin

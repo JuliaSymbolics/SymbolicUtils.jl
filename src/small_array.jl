@@ -30,6 +30,7 @@ Value to use when removing an element from a `Backing`. Used so stored entries c
 GC'ed when removed.
 """
 defaultval(::Type{T}) where {T <: Number} = zero(T)
+defaultval(::Type{UnitRange{Int}}) = 1:0
 defaultval(::Type{Any}) = nothing
 
 _unreachable() = error("Unreachable reached.")

@@ -7,6 +7,67 @@ The LHS of each sequence entry in `@makearray` must be of the form \
 `ident[start1:stop1, start2:stop2, ...]`.
 """
 
+"""
+    @makearray arr[shape...] begin
+        arr[subarray...] => value
+        # ...
+    end
+
+Construct an `ArrayMaker`. `ArrayMaker` symbolically represents an array
+composed of blocks of other arrays. To demonstrate, consider the following example:
+
+```julia
+@syms x[1:3]::Real y[1:3]::Real z[1:3]::Real
+w = @makearray foo[1:3, 1:3] begin
+    foo[1:1, 1:3] => x'
+    foo[2:2, 1:3] => @arrayop (1, i) y[i] + z[i]
+    foo[3:3, 1:1] => [1;;]
+    foo[3:3, 2:2] => [z[1];;]
+    foo[3:3, 3:3] => [z'z;;]
+end
+```
+
+The first argument to `@makearray` is an indexing expression denoting the shape of the
+constructed array. The identifier used here (`foo`) is arbitrary. It has no bearing
+on the result, and is only used as part of the macro syntax inside the `begin..end` block.
+
+Each entry in the `begin..end` block is a pair denoting a subarray to assign, and the
+value to assign it. Note that each subarray thus assigned must have the same number
+of dimensions as the created array. In other words, inside the block `foo` can only be
+indexed using ranges with a unit step (`UnitRange{Int}`). `foo[3, 1] => 1` is invalid
+syntax and will error. The RHS of each pair (the value assigned to the subarray) must have
+the same size as the subarray. Extra unit dimensions must be added as necessary, for
+example via the `1` in `@arrayop (1, i) y[i] + z[i]`. The identifier `foo` has no
+meaning if used in the RHS. It will simply refer to a variable named `foo` in the current
+scope, if such a variable exists.
+
+For convenience, `ArrayMaker` and `@makearray` allow assigning overlapping ranges. In such
+cases, later assignments in `@makearray` override earlier ones. For example:
+
+```julia
+q = @makearray q[1:3] begin
+    q[1:3] => x
+    q[2:3] => y[1:2]
+end
+```
+
+Here, `q` represents the array `[x[1], y[1], y[2]]`.
+
+Nesting `@makearray` is permitted. The following is valid syntax:
+
+```julia
+w = @makearray w[1:3, 1:3] begin
+    w[1:1, 1:3] => x'
+    w[2:2, 1:3] => @makearray _[1:1, 1:3] begin
+        _[1:1, 1:1] => [y[1];;]
+        _[1:1, 2:3] => z'[:, 1:2]
+    end
+    w[3:3, 1:1] => [1;;]
+    w[3:3, 2:2] => [z[1];;]
+    w[3:3, 3:3] => [z'z;;]
+end
+```
+"""
 macro makearray(definition::Expr, sequence::Expr)
     shape = get_shape_from_ref_expr(definition, INVALID_MAKEARRAY_DEFINITION_MSG)
     regions = Expr[]

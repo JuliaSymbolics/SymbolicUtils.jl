@@ -6,6 +6,7 @@ require recursing over the expression tree.
 ```@docs
 SymbolicUtils.substitute
 SymbolicUtils.Substituter
+SymbolicUtils.clear_cache!
 SymbolicUtils.default_substitute_filter
 SymbolicUtils.evaluate
 SymbolicUtils.query

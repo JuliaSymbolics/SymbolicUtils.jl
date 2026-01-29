@@ -130,8 +130,8 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Clear the cache for cached function `fn`. This is task specific. Also
-resets the stats.
+Clear the cache for [`SymbolicUtils.@cache`](@ref)d function `fn`. This is task specific.
+Also resets the stats.
 """
 function clear_cache!(fn)
     dict, stats = associated_cache(fn).tlv[]

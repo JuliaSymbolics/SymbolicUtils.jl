@@ -1,11 +1,114 @@
-struct Substituter{Fold, D <: AbstractDict, F}
-    dict::D
-    filter::F
+"""
+    Substituter{Fold, #= ... =# }
+
+A functor which acts as the workhorse for [`substitute`](@ref). Passing `fold = Val(true)`
+corresponds to `Substituter{true, #= ... =# }` (and similarly for `Val(false)`). To define
+substitution rules for custom types that wrap/contain [`BasicSymbolic`](@ref), define
+methods for this functor. For example,
+
+```julia
+struct Equation
+    lhs::BasicSymbolic{SymReal}
+    rhs::BasicSymbolic{SymReal}
 end
 
+function (subst::Substituter)(eq::Equation)
+    return Equation(subst(eq.lhs), subst(eq.rhs))
+end
+```
+
+Instead of repeatedly calling `substitute` with the same rules, it is usually more
+efficient to build a `Substituter` and reuse it.
+
+`Substituter` is also allowed to cache intermediate results as necessary. When
+constructing `Substituter` with an `AbstractDict`, it will alias the provided
+mapping. Mutating the map such that the identity of the substitution rules
+changes invalidates the substituter. It can be reused by clearing the
+cache using [`SymbolicUtils.clear_cache!`](@ref).
+
+The caching is only available when the [`SymbolicUtils.vartype`](@ref) of the
+expressions is inferrable from the substitution rules, or explicitly specified.
+As long as either the keys or values of the substitution rules are all
+`BasicSymbolic{T}` (for some `T`) the automatic inference will work. To allow
+the inference to work for your custom wrapper type, implement
+[`SymbolicUtils.infer_vartype`](@ref). For example:
+
+```julia
+struct Num <: Real
+  inner::BasicSymbolic{SymReal}
+end
+
+SymbolicUtils.infer_vartype(::Type{Num}) = SymReal
+```
+
+Alternatively, the vartype can be provided as the third positional argument
+to the `Substituter` constructor.
+
+# Extended help
+
+The following is internal details of `Substituter` and should not be relied on
+as public API.
+
+## Fields
+
+$TYPEDFIELDS
+"""
+struct Substituter{Fold, D <: AbstractDict, F, C}
+    """
+    The `AbstractDict` of substitution rules.
+    """
+    dict::D
+    """
+    The filter function to eliminate trees that do not need substitution.
+    """
+    filter::F
+    """
+    Cache of intermediate results.
+    """
+    cache::C
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Clear the cached values associated with `subst`. See the documentation of
+[`SymbolicUtils.Substituter`](@ref) for more details.
+"""
+function clear_cache!(subst::Substituter)
+    empty!(subst.cache)
+end
+
+infer_vartype(x) = infer_vartype(typeof(x))
+infer_vartype(::Type{T}) where {T} = Nothing
+function infer_vartype(::Type{D}) where {K, V, D <: AbstractDict{K, V}}
+    T = infer_vartype(K)
+    if T !== Nothing
+        return T
+    end
+    T = infer_vartype(V)
+    if T !== Nothing
+        return T
+    end
+    return Nothing
+end
+infer_vartype(::Type{BasicSymbolic{T}}) where {T} = T
+
+"""
+    $METHODLIST
+"""
 @inline Substituter{Fold}(d) where {Fold} = Substituter{Fold}(d, default_substitute_filter)
-@inline function Substituter{Fold}(d::AbstractDict, filter::F) where {Fold, F}
-    Substituter{Fold, typeof(d), F}(d, filter)
+@inline function Substituter{Fold}(d::AbstractDict, filter::F, ::Type{Nothing}) where {Fold, F}
+    return Substituter{Fold, typeof(d), F, Nothing}(d, filter, nothing)
+end
+@inline function Substituter{Fold}(d::AbstractDict, filter::F, ::Type{T}) where {Fold, F, T}
+    # Since `substitute` retains metadata, this needs to be an `IdDict`. Otherwise, keys
+    # with different metadata get cached to the same result.
+    return Substituter{Fold, typeof(d), F, IdDict{BasicSymbolic{T}, BasicSymbolic{T}}}(
+        d, filter, IdDict{BasicSymbolic{T}, BasicSymbolic{T}}()
+    )
+end
+@inline function Substituter{Fold}(d::AbstractDict, filter) where {Fold}
+    return Substituter{Fold}(d, filter, infer_vartype(d))
 end
 @inline function Substituter{Fold}(d::Pair, filter::F) where {Fold, F}
     Substituter{Fold}(Dict(d), filter)
@@ -34,6 +137,10 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     result === nothing || return Const{T}(result)
     iscall(ex) || return ex
     s.filter(ex) || return ex
+    if s.cache !== nothing
+        result = get(s.cache, ex, nothing)
+        result === nothing || return result
+    end
     op = operation(ex)
     # We need to `unwrap_const` because `op` could be a symbolic function with
     # a substitution in `s.dict`, in which case this method will be called recursively
@@ -62,14 +169,19 @@ function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
         newargs[i] = newarg
     end
     dirty |= op !== _op
-    if dirty || can_fold
+    result = if dirty || can_fold
         if Fold
-            return combine_fold(T, _op, newargs, metadata(ex), can_fold)::BasicSymbolic{T}
+            combine_fold(T, _op, newargs, metadata(ex), can_fold)::BasicSymbolic{T}
         else
-            return maketerm(BasicSymbolic{T}, _op, newargs, metadata(ex))::BasicSymbolic{T}
+            maketerm(BasicSymbolic{T}, _op, newargs, metadata(ex))::BasicSymbolic{T}
         end
+    else
+        ex
     end
-    return ex
+    if s.cache !== nothing
+        s.cache[ex] = result
+    end
+    return result
 end
 
 function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta::MetadataT, can_fold::Bool) where {T}

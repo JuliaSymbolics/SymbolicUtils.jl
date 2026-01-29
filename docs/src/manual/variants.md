@@ -13,11 +13,11 @@ variable. In other words, `T` was the [`SymbolicUtils.symtype`](@ref) of the var
 
 In SymbolicUtils v4, the `symtype` is not stored in the type, and is instead a field of the
 struct. This allows for greatly increased type-stability. The type `T` in `BasicSymbolic{T}`
-now represents a tag known as thw [`vartype`](@ref). This flag determines the assumptions
+now represents a tag known as the [`vartype`](@ref). This flag determines the assumptions
 made about the symbolic algebra. It can take one of three values:
 
 - [`SymReal`](@ref): The default behavior.
-- [`SafeReal`](@ref): Idential to `SymReal`, but common factors in the numerator and denominator
+- [`SafeReal`](@ref): Identical to `SymReal`, but common factors in the numerator and denominator
   of a division are not cancelled.
 - [`TreeReal`](@ref): Assumes nothing about the algebra, and always uses the `Term` variant to
   represent an expression.
@@ -130,8 +130,8 @@ tag for the type of quantity represented here. `shape` stores the shape if the v
 an array symbolic.
 
 - `metadata` is either `nothing` or a map from `DataType` keys to arbitrary values. Any
-interaction with metadata should be done by providing such a mapping during construction
-or using [`getmetadata`](@ref), [`setmetadata`](@ref), [`hasmetadata`](@ref).
+  interaction with metadata should be done by providing such a mapping during construction
+  or using [`getmetadata`](@ref), [`setmetadata`](@ref), [`hasmetadata`](@ref).
 - `type` is a Julia type.
 - `shape` is as described above.
 
@@ -171,10 +171,10 @@ end
 ```
 
 `AddMul` is a specialized representation for associative-commutative addition and
-multiplication. The two operations are distinguised using the [`AddMulVariant`](@ref)
+multiplication. The two operations are distinguished using the [`AddMulVariant`](@ref)
 EnumX.jl enum. It has two variants: `AddMulVariant.ADD` and `AddMulVariant.MUL`.
 
-For multiplication terms, `coeff` is a constant non-symbolic coefficient multipled
+For multiplication terms, `coeff` is a constant non-symbolic coefficient multiplied
 with the expression. `dict` is a map from terms being multiplied to their exponents. For
 example, `2x^2 * (y + z)^3` is represented with `coeff = 2` and
 `dict = ACDict{T}(x => 2, (y + z) => 3)`. A valid multiplication term is subject to the
@@ -346,7 +346,7 @@ In most cases, `ArrayMaker` should not be created directly. Prefer using [`@make
 SymbolicUtils implements a simple array algebra in addition to the default scalar algebra.
 Similar to how [`SymbolicUtils.promote_symtype`](@ref) given a function and symtypes of
 its arguments returns the symtype of the result, [`SymbolicUtils.promote_shape`](@ref)
-does the same for the shapes of the arguments. Implementing _both_ methods is cruicial
+does the same for the shapes of the arguments. Implementing _both_ methods is crucial
 for correctly using custom functions in symbolic expressions. Without `promote_shape`,
 SymbolicUtils will use `Unknown(-1)` as the shape.
 
@@ -365,7 +365,7 @@ to Base-like behavior:
   `axes`, `ndims`, `collect` are type-unstable. [`SymbolicUtils.stable_eachindex`](@ref) is
   useful as a type-stable iteration alternative.
 - `ifelse` requires that both the true and false cases have identical shape.
-- Symbolic arrays _only_ support cartesian indexing. For example, given `@syms x[1:3, 1:3]`
+- Symbolic arrays _only_ support Cartesian indexing. For example, given `@syms x[1:3, 1:3]`
   accessing `x[4]` is invalid and `x[1, 2]` should be used. Valid indices are
   `Int`, `Colon`, `AbstractRange{Int}` and symbolic expressions with integer `symtype`.
   A single `CartesianIndex` of appropriate dimension can also be used to symbolically

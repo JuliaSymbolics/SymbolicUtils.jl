@@ -4,6 +4,7 @@ using SymbolicUtils
 using ConstructionBase: setproperties
 import MultivariatePolynomials as MP
 using Setfield
+import SymbolicIndexingInterface as SII
 using Test, ReferenceTests
 import LinearAlgebra
 using SparseArrays
@@ -1320,4 +1321,9 @@ end
     @test SymbolicUtils.promote_symtype(exp, Complex{Int}) === Complex{Real}
     @test SymbolicUtils.promote_symtype(exp, Matrix{Int}) === Matrix{Real}
     @test SymbolicUtils.promote_symtype(exp, LinearAlgebra.Adjoint{Int, Matrix{Int}}) === LinearAlgebra.Adjoint{Real, Matrix{Real}}
+end
+
+@testset "`hasname` properly handles indexed variables" begin
+    @syms x[1:3]
+    @test !SII.hasname((2x)[1])
 end

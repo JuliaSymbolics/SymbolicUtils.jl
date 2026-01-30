@@ -397,7 +397,13 @@ end
 function SymbolicIndexingInterface.hasname(x::BasicSymbolic{T}) where {T}
     @match x begin
         BSImpl.Sym(;) => true
-        BSImpl.Term(; f) && if f === getindex || f isa BasicSymbolic{T} end => true
+        BSImpl.Term(; f, args) => if f === getindex
+            hasname(args[1])
+        elseif f isa BasicSymbolic{T}
+            hasname(f)
+        else
+            false
+        end
         _ => false
     end
 end

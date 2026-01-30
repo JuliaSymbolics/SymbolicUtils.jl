@@ -1327,3 +1327,10 @@ end
     @syms x[1:3]
     @test !SII.hasname((2x)[1])
 end
+
+@testset "Div * Array" begin
+    @syms x y z
+    ex = (x / y) * BS[z, 1]
+    @test operation(ex) === (*)
+    @test issetequal(arguments(ex), [x / y, SymbolicUtils.Const{SymReal}(BS[z, 1])])
+end

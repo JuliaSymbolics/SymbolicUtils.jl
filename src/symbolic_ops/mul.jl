@@ -180,19 +180,17 @@ end
 mutable struct MulWorkerBuffer{T}
     num_dict::ACDict{T}
     den_dict::ACDict{T}
-    const arrterms::Vector{BasicSymbolic{T}}
     const num_coeff::RefValue{PolyCoeffT}
     const den_coeff::RefValue{PolyCoeffT}
 end
 
 function MulWorkerBuffer{T}() where {T}
-    MulWorkerBuffer{T}(Dict{BasicSymbolic{T}, Any}(), Dict{BasicSymbolic{T}, Any}(), BasicSymbolic{T}[], Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1))
+    MulWorkerBuffer{T}(Dict{BasicSymbolic{T}, Any}(), Dict{BasicSymbolic{T}, Any}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1))
 end
 
 function Base.empty!(mwb::MulWorkerBuffer)
     empty!(mwb.num_dict)
     empty!(mwb.den_dict)
-    empty!(mwb.arrterms)
     mwb.num_coeff[] = 1
     mwb.den_coeff[] = 1
     return mwb
@@ -225,7 +223,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     num_coeff = mwb.num_coeff
     den_dict = mwb.den_dict
     den_coeff = mwb.den_coeff
-    arrterms = mwb.arrterms
+    arrterms = BasicSymbolic{T}[]
 
     # We're multiplying numbers here. If we don't take the `eltype`
     # and the first element is an array, `promote_symtype` may fail

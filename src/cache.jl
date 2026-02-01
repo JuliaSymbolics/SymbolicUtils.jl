@@ -217,7 +217,7 @@ See also: [`SymbolicUtils.get_limit`](@ref), [`SymbolicUtils.set_limit!`](@ref),
 [`SymbolicUtils.get_retain_fraction`](@ref), [`SymbolicUtils.set_retain_fraction!`](@ref),
 [`SymbolicUtils.toggle_caching!`](@ref), [`SymbolicUtils.is_caching_enabled`](@ref),
 [`SymbolicUtils.get_stats`](@ref), [`SymbolicUtils.clear_cache!`](@ref),
-[`SymbolicUtils.reset_stats!`].
+[`SymbolicUtils.reset_stats!`](@ref).
 """
 macro cache(args...)
     # the last argument is the function expression, all prior arguments are

@@ -56,7 +56,7 @@ Convert a symbolic expression into an `Expr`, suitable to be passed into `eval`.
 
 For example,
 
-```julia
+```julia-repl
 julia> @syms a b
 (a, b)
 
@@ -536,8 +536,7 @@ A function.
 
 For example,
 
-```julia
-
+```julia-repl
 julia> @syms a b c t f(d) x(t) y(t) z(t)
 (a, b, c, t, f(::Number)::Number, x(::Number)::Number, y(::Number)::Number, z(::Number)::Number)
 
@@ -555,12 +554,12 @@ julia> toexpr(func)
 
 - the second argument is a `DestructuredArgs`, in the `Expr` form, it is given a random name, and is expected to receive a vector or tuple of size 2 containing the values of `b` and `y(t)`. The let block that is automatically generated "destructures" these arguments.
 - `x(t)` and `y(t)` have been replaced with `var"x(t)"` and `var"y(t)"` symbols throughout
-the generated Expr. This makes sure that we are not actually calling the expressions `x(t)` or `y(t)` but instead passing the right values in place of the whole expression.
+  the generated Expr. This makes sure that we are not actually calling the expressions `x(t)` or `y(t)` but instead passing the right values in place of the whole expression.
 - `f` is also a function-like symbol, same as `x` and `y`, but since the `args` array contains `f` as itself rather than as say, `f(t)`, it does not become a `var"f(t)"`. The generated function expects a function of one argument to be passed in the position of `f`.
 
 An example invocation of this function is:
 
-```julia
+```julia-repl
 julia> executable = eval(toexpr(func))
 #10 (generic function with 1 method)
 
@@ -660,7 +659,7 @@ An expression which constructs an array.
    by default, the output type is inferred automatically.
 
 You can define:
-```
+```julia
 @inline function create_array(A::Type{<:MyArray},a
                               ::Nothing, d::Val{dims}, elems...) where dims
 
@@ -1037,7 +1036,7 @@ variables to avoid redundant computation.
 An optimized expression with common subexpressions eliminated
 
 # Examples
-```julia
+```julia-repl
 julia> expr = :(sin(x) + sin(x) * cos(y))
 julia> cse(expr)  # sin(x) is computed only once
 ```

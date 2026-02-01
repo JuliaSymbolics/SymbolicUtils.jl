@@ -239,36 +239,36 @@ Core ADT for symbolic expressions.
 end
 
 """
-    Alias for `SymbolicUtils.BasicSymbolicImpl`.
+Alias for `SymbolicUtils.BasicSymbolicImpl`.
 """
 const BSImpl = BasicSymbolicImpl
 """
-    Alias for `SymbolicUtils.BasicSymbolicImpl.Type`.
+Alias for `SymbolicUtils.BasicSymbolicImpl.Type`.
 """
 const BasicSymbolic = BSImpl.Type
 """
-    The type of a mutable buffer containing symbolic arguments. Passing this to the
-    [`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array.
+The type of a mutable buffer containing symbolic arguments. Passing this to the
+[`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array.
 """
 const ArgsT{T} = SmallV{BasicSymbolic{T}}
 """
-    The type of a read-only buffer containing symbolic arguments. Passing this to the
-    [`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array. This is
-    the type returned from [`TermInterface.arguments`](@ref).
+The type of a read-only buffer containing symbolic arguments. Passing this to the
+[`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array. This is
+the type returned from [`TermInterface.arguments`](@ref).
 """
 const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
 """
-    The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to the
-    [`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will avoid
-    allocating a new dictionary.
+The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to the
+[`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will avoid
+allocating a new dictionary.
 """
 const ACDict{T} = Dict{BasicSymbolic{T}, Number}
 """
-    The type of the `output_idxs` field in [`BSImpl.ArrayOp`](@ref).
+The type of the `output_idxs` field in [`BSImpl.ArrayOp`](@ref).
 """
 const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
 """
-    The type of the `ranges` field in [`BSImpl.ArrayOp`](@ref).
+The type of the `ranges` field in [`BSImpl.ArrayOp`](@ref).
 """
 const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
 """
@@ -762,7 +762,7 @@ Create a symbolic term with operation `f` and arguments `args`.
 - `shape`: The shape of the term. If not provided, it is inferred using `promote_shape` on the function and argument shapes.
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x y
 (x, y)
 
@@ -800,7 +800,7 @@ Check if a symbolic expression has metadata for a given context.
 - `true` if the expression has metadata for the given context, `false` otherwise
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x
 x
 
@@ -828,7 +828,7 @@ The metadata value associated with the given context
 - `ArgumentError` if the expression does not have metadata for the given context
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x::Float64
 x
 
@@ -860,7 +860,7 @@ returning a default value if not found.
 The metadata value associated with the given context, or `default` if not found
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x
 x
 
@@ -911,7 +911,7 @@ Set metadata for a symbolic expression in a given context.
 A new symbolic expression with the updated metadata
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x
 x
 
@@ -941,7 +941,7 @@ end
 
 The result of applying `f` to arguments of [`SymbolicUtils.symtype`](@ref) `Ts...`
 
-```julia
+```julia-repl
 julia> promote_symtype(+, Real, Real)
 Real
 

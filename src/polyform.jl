@@ -487,7 +487,7 @@ const FRACTION_FLATTENER = Rewriters.Fixpoint(Rewriters.Postwalk(add_with_div))
 
 Flatten nested fractions that are added together.
 
-```julia
+```julia-repl
 julia> flatten_fractions((1+(1+1/a)/a)/a)
 (1 + a + a^2) / (a^3)
 ```

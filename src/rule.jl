@@ -305,7 +305,7 @@ _Example:_
 
 Simple rule to turn any `sin` into `cos`:
 
-```julia
+```julia-repl
 julia> @syms a b c
 (a, b, c)
 
@@ -318,7 +318,7 @@ cos((1 + a))
 
 A rule with 2 segment variables
 
-```julia
+```julia-repl
 julia> r = @rule sin(~x + ~y) => sin(~x)*cos(~y) + cos(~x)*sin(~y)
 sin(~x + ~y) => sin(~x) * cos(~y) + cos(~x) * sin(~y)
 
@@ -328,7 +328,7 @@ cos(a)*sin(b) + sin(a)*cos(b)
 
 A rule that matches two of the same expressions:
 
-```julia
+```julia-repl
 julia> r = @rule sin(~x)^2 + cos(~x)^2 => 1
 sin(~x) ^ 2 + cos(~x) ^ 2 => 1
 
@@ -344,7 +344,7 @@ julia> r(sin(2a)^2 + cos(a)^2)
 A DefSlot variable is written as `~!x`. Works like a normal slot, but can also take default values if not present in the expression.
 
 _Example in power:_
-```julia
+```julia-repl
 julia> r_pow = @rule (~x)^(~!m) => ~m
 (~x) ^ ~(!m) => ~m
 
@@ -356,7 +356,7 @@ julia> r_pow(x)
 ```
 
 _Example in sum:_
-```julia
+```julia-repl
 julia> r_sum = @rule ~x + ~!y => ~y
 ~x + ~(!y) => ~y
 
@@ -369,11 +369,11 @@ julia> r_sum(x)
 
 Currently DefSlot is implemented in:
 
-Operation | Default value<br>
-----------|--------------
-\\* | 1
-\\+ | 0
-2nd argument of ^ | 1
+| Operation         | Default value |
+|-------------------|---------------|
+| \\*               | 1             |
+| \\+               | 0             |
+| 2nd argument of ^ | 1             |
 
 **Segment**:
 
@@ -385,7 +385,7 @@ _Example:_
 This implements the distributive property of multiplication: `+(~~ys)` matches expressions
 like `a + b`, `a+b+c` and so on. On the RHS `~~ys` presents as any old julia array.
 
-```julia
+```julia-repl
 julia> r = @rule ~x * +((~~ys)) => sum(map(y-> ~x * y, ~~ys));
 
 julia> r(2 * (a+b+c))
@@ -402,7 +402,7 @@ matched subexpression, in the case of segment, it gets an array of matched expre
 The predicate should return `true` if the current match is acceptable, and `false`
 otherwise.
 
-```julia
+```julia-repl
 julia> two_πs(x::Number) = abs(round(x/(2π)) - x/(2π)) < 10^-9
 two_πs (generic function with 1 method)
 
@@ -425,7 +425,7 @@ Predicate function gets an array of values if attached to a segment variable (`~
 
 For the predicate over the whole rule, use `@rule <LHS> => <RHS> where <predicate>`:
 
-```
+```julia-repl
 julia> @syms a b;
 
 julia> predicate(x) = x === a;
@@ -447,7 +447,7 @@ Note that if the RHS is a single tilde `~`, then the rule returns a a dictionary
 
 _Example:_
 
-```julia
+```julia-repl
 julia> r = @rule (~x + (~y)^(~m)) => ~
 ~x + (~y) ^ ~m => (~)
 
@@ -501,7 +501,7 @@ slot variable match results into the calling scope when the `pattern` matches, o
 rule language for specifying the `pattern` is the same in @capture as it is in `@rule`. Contextual matching
 is not yet supported
 
-```julia
+```julia-repl
 julia> @syms a; ex = a^a;
 
 julia> if @capture ex (~x)^(~x)
@@ -561,7 +561,7 @@ in associative and commutative operations like addition and multiplication.
 - `rhs`: The replacement expression (right-hand side)
 
 # Examples
-```julia
+```julia-repl
 julia> @syms x y z
 (x, y, z)
 

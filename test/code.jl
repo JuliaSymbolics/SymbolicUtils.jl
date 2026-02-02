@@ -351,3 +351,10 @@ end
     val = Code.create_array(SArray, nothing, Val(1), Val((1,)), Code.create_array(SArray, nothing, Val(1), Val((1,)), 1.0))
     @test val == SA[SA[1.0]]
 end
+
+@testset "`cse` retains shape information" begin
+    @syms x[1:3, 1:3] y[1:3, 1:3]
+    ex = (x*y)^2 + (x*y)^3
+    block = cse(ex)
+    @test SymbolicUtils.shape(block.pairs[1].lhs) == [1:3, 1:3]
+end

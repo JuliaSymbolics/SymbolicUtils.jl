@@ -1334,3 +1334,9 @@ end
     @test operation(ex) === (*)
     @test issetequal(arguments(ex), [x / y, SymbolicUtils.Const{SymReal}(BS[z, 1])])
 end
+
+@testset "Addition of `Const` arrays" begin
+    arr1 = Const{SymReal}(ones(3, 3))
+    arr2 = Const{SymReal}(ones(3, 3))
+    @test isequal(arr1 + arr2, Const{SymReal}(2ones(3, 3)))
+end

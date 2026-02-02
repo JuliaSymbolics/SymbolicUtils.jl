@@ -97,7 +97,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
         type = promote_symtype(+, type, symtype(term))
         if term isa BasicSymbolic{T}
             @match term begin
-                BSImpl.Const(; val) => (newcoeff += val)
+                BSImpl.Const(; val) => (newcoeff = newcoeff .+ val)
                 BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin

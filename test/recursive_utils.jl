@@ -260,3 +260,11 @@ end
     @test isequal(SymbolicUtils.scalarize(x \ y), x \ y)
     @test isequal(SymbolicUtils.scalarize(A \ b), [(A \ b)[1], (A \ b)[2], (A \ b)[3]])
 end
+
+@testset "Substitution inside large symbolic arrays" begin
+    @syms a b
+    arr = zeros(BasicSymbolic{SymReal}, 100, 100)
+    arr[5, 5] = a
+    arr = Const{SymReal}(arr)
+    @test_nowarn substitute(arr, [a => b])
+end

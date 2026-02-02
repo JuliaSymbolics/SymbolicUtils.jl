@@ -17,7 +17,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
-                      ArrayMaker
+                      ArrayMaker, TypeT, ShapeT
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -939,11 +939,11 @@ end
 
 Generates new symbol of type `T` with unique name in `state`.
 """
-@inline function newsym!(state, ::Type{T}, symtype) where {T <: SymVariant}
-    @nospecialize symtype
+@inline function newsym!(state, ::Type{T}, symtype::TypeT, sh::ShapeT) where {T <: SymVariant}
+    @nospecialize symtype sh
     name = "##cse#$(state.varid[])"
     state.varid[] += 1
-    Sym{T}(Symbol(name); type = symtype)
+    Sym{T}(Symbol(name); type = symtype, shape = sh)
 end
 
 """
@@ -1077,13 +1077,13 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
         @match expr begin
             BSImpl.Const(;) => begin
                 new_expr = expr
-                sym = newsym!(state, T, symtype(new_expr))
+                sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
                 push!(state.sorted_exprs, sym ← new_expr)
                 return sym
             end
             BSImpl.Sym(;) => return expr
             BSImpl.ArrayOp(; term) => if term === nothing
-                sym = newsym!(state, T, symtype(expr))
+                sym = newsym!(state, T, symtype(expr), shape(expr))
                 push!(state.sorted_exprs, sym ← expr)
                 return sym
             else
@@ -1103,7 +1103,7 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
                 # use `term` instead of `maketerm` because we only care about the operation being performed
                 # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
                 new_expr = Term{T}(operation(expr), args; type = symtype(expr))
-                sym = newsym!(state, T, symtype(new_expr))
+                sym = newsym!(state, T, symtype(new_expr), shape(expr))
                 push!(state.sorted_exprs, sym ← new_expr)
                 return sym
             end

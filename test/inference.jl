@@ -39,7 +39,7 @@ end
     @test_nowarn @inferred tmp * a * b
 end
 
-@static if VERSION < v"1.12"
+@static if VERSION > v"1.11"
     @testset "Div" begin
         @test_nowarn @inferred a / 2
         @test_nowarn @inferred 2 / a
@@ -99,7 +99,7 @@ function foo end
     @test_nowarn @inferred term(foo, a, b, c; type = Number)
 end
 
-@static if VERSION < v"1.12"
+@static if VERSION > v"1.11"
     @testset "`maketerm`" begin
         @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, +, [a, b, c], nothing)
         @test_nowarn @inferred maketerm(BasicSymbolic{SymReal}, +, (a, b, c), nothing)

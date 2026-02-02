@@ -1,10 +1,12 @@
 """
-    Substituter{Fold, #= ... =# }
+    Substituter{Fold}
 
-A functor which acts as the workhorse for [`substitute`](@ref). Passing `fold = Val(true)`
-corresponds to `Substituter{true, #= ... =# }` (and similarly for `Val(false)`). To define
-substitution rules for custom types that wrap/contain [`BasicSymbolic`](@ref), define
-methods for this functor. For example,
+An abstract supertype for functors that perform substitution operations on symbolic
+expressions. This can also be used as a constructor for the functor used by
+[`substitute`](@ref). `Fold` corresponds to the `fold` keyword of `substitute`. Passing
+`fold = Val(true)` corresponds to `Substituter{true}` (and similarly for `Val(false)`). To
+define substitution rules for custom types that wrap/contain [`BasicSymbolic`](@ref),
+define methods for this abstract type. For example,
 
 ```julia
 struct Equation
@@ -16,6 +18,11 @@ function (subst::Substituter)(eq::Equation)
     return Equation(subst(eq.lhs), subst(eq.rhs))
 end
 ```
+
+Custom substitution algorithms should define functors that subtype `Substituter`. For
+example, a functor may be defined for substituting until the expression reaches a fixpoint.
+These functors should then implement `(s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T}`
+to behave appropriately.
 
 Instead of repeatedly calling `substitute` with the same rules, it is usually more
 efficient to build a `Substituter` and reuse it.
@@ -53,7 +60,9 @@ as public API.
 
 $TYPEDFIELDS
 """
-struct Substituter{Fold, D <: AbstractDict, F, C}
+abstract type Substituter{Fold} end
+
+struct DefaultSubstituter{Fold, D <: AbstractDict, F, C} <: Substituter{Fold}
     """
     The `AbstractDict` of substitution rules.
     """
@@ -74,7 +83,7 @@ end
 Clear the cached values associated with `subst`. See the documentation of
 [`SymbolicUtils.Substituter`](@ref) for more details.
 """
-function clear_cache!(subst::Substituter)
+function clear_cache!(subst::DefaultSubstituter)
     empty!(subst.cache)
 end
 
@@ -93,28 +102,31 @@ function infer_vartype(::Type{D}) where {K, V, D <: AbstractDict{K, V}}
 end
 infer_vartype(::Type{BasicSymbolic{T}}) where {T} = T
 
+# This exists more for backward compat than anything
+Substituter{Fold}(args...) where {Fold} = DefaultSubstituter{Fold}(args...)
+
 """
     $METHODLIST
 """
-@inline Substituter{Fold}(d) where {Fold} = Substituter{Fold}(d, default_substitute_filter)
-@inline function Substituter{Fold}(d::AbstractDict, filter::F, ::Type{Nothing}) where {Fold, F}
-    return Substituter{Fold, typeof(d), F, Nothing}(d, filter, nothing)
+@inline DefaultSubstituter{Fold}(d) where {Fold} = DefaultSubstituter{Fold}(d, default_substitute_filter)
+@inline function DefaultSubstituter{Fold}(d::AbstractDict, filter::F, ::Type{Nothing}) where {Fold, F}
+    return DefaultSubstituter{Fold, typeof(d), F, Nothing}(d, filter, nothing)
 end
-@inline function Substituter{Fold}(d::AbstractDict, filter::F, ::Type{T}) where {Fold, F, T}
+@inline function DefaultSubstituter{Fold}(d::AbstractDict, filter::F, ::Type{T}) where {Fold, F, T}
     # Since `substitute` retains metadata, this needs to be an `IdDict`. Otherwise, keys
     # with different metadata get cached to the same result.
-    return Substituter{Fold, typeof(d), F, IdDict{BasicSymbolic{T}, BasicSymbolic{T}}}(
+    return DefaultSubstituter{Fold, typeof(d), F, IdDict{BasicSymbolic{T}, BasicSymbolic{T}}}(
         d, filter, IdDict{BasicSymbolic{T}, BasicSymbolic{T}}()
     )
 end
-@inline function Substituter{Fold}(d::AbstractDict, filter) where {Fold}
-    return Substituter{Fold}(d, filter, infer_vartype(d))
+@inline function DefaultSubstituter{Fold}(d::AbstractDict, filter) where {Fold}
+    return DefaultSubstituter{Fold}(d, filter, infer_vartype(d))
 end
-@inline function Substituter{Fold}(d::Pair, filter::F) where {Fold, F}
-    Substituter{Fold}(Dict(d), filter)
+@inline function DefaultSubstituter{Fold}(d::Pair, filter::F) where {Fold, F}
+    DefaultSubstituter{Fold}(Dict(d), filter)
 end
-@inline function Substituter{Fold}(d::AbstractArray{<:Pair}, filter::F) where {Fold, F}
-    Substituter{Fold}(Dict(d), filter)
+@inline function DefaultSubstituter{Fold}(d::AbstractArray{<:Pair}, filter::F) where {Fold, F}
+    DefaultSubstituter{Fold}(Dict(d), filter)
 end
 
 function (s::Substituter)(ex)
@@ -132,7 +144,7 @@ function (s::Substituter)(ex::SparseMatrixCSC)
     return sparse(I, J, V, m, n)
 end
 
-function (s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
+function (s::DefaultSubstituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
     result = unwrap(get(s.dict, ex, nothing))
     result === nothing || return Const{T}(result)
     iscall(ex) || return ex
@@ -238,7 +250,7 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(false))
 """
 @inline function substitute(expr, dict; fold::Val{Fold}=Val{false}(), filterer=default_substitute_filter) where {Fold}
     isempty(dict) && !Fold && return expr
-    return Substituter{Fold}(dict, filterer)(expr)
+    return DefaultSubstituter{Fold}(dict, filterer)(expr)
 end
 
 const EMPTY_DICT = Dict{Int, Int}()

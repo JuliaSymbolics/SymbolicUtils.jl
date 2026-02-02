@@ -21,8 +21,10 @@ end
 
 Custom substitution algorithms should define functors that subtype `Substituter`. For
 example, a functor may be defined for substituting until the expression reaches a fixpoint.
-These functors should then implement `(s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T}`
-to behave appropriately.
+These functors should then implement:
+- `(s::Substituter{Fold})(ex::BasicSymbolic{T}) where {T}` to perform the appropriate
+  substitution on the given symbolic expression.
+- `get_substitution_dict(::Substituter)` returning an `AbstractDict` of the substitution rules.
 
 Instead of repeatedly calling `substitute` with the same rules, it is usually more
 efficient to build a `Substituter` and reuse it.
@@ -87,6 +89,14 @@ function clear_cache!(subst::DefaultSubstituter)
     empty!(subst.cache)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Get an `AbstractDict` of the substitution rules for the given
+[`SymbolicUtils.Substituter`](@ref).
+"""
+get_substitution_dict(s::DefaultSubstituter) = s.dict
+
 infer_vartype(x) = infer_vartype(typeof(x))
 infer_vartype(::Type{T}) where {T} = Nothing
 function infer_vartype(::Type{D}) where {K, V, D <: AbstractDict{K, V}}
@@ -130,7 +140,7 @@ end
 end
 
 function (s::Substituter)(ex)
-    return get(s.dict, ex, ex)
+    return get(get_substitution_dict(s), ex, ex)
 end
 
 function (s::Substituter)(ex::AbstractArray)

@@ -17,7 +17,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
-                      ArrayMaker, TypeT, ShapeT
+                      ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -98,6 +98,43 @@ end
 An assignment expression. Shorthand `lhs ← rhs` (`\\leftarrow`)
 """
 Assignment
+
+function search_variables!(buffer, asg::Assignment; kw...)
+    lhs = asg.lhs
+    rhs = asg.rhs
+    if lhs isa BasicSymbolic{SymReal}
+        search_variables!(buffer, lhs; kw...)
+    elseif lhs isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, lhs; kw...)
+    elseif lhs isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, lhs; kw...)
+    elseif lhs isa Symbol
+    else
+        search_variables!(buffer, lhs; kw...)
+    end
+    if rhs isa BasicSymbolic{SymReal}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa Vector{BasicSymbolic{SymReal}}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa Vector{BasicSymbolic{SafeReal}}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa Vector{BasicSymbolic{TreeReal}}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa Matrix{BasicSymbolic{SymReal}}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa Matrix{BasicSymbolic{SafeReal}}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa Matrix{BasicSymbolic{TreeReal}}
+        search_variables!(buffer, rhs; kw...)
+    elseif rhs isa Symbol
+    else
+        search_variables!(buffer, rhs; kw...)
+    end
+end
 
 lhs(a::Assignment) = a.lhs
 rhs(a::Assignment) = a.rhs
@@ -428,6 +465,19 @@ components. See example in `Func` for more information.
 """
 DestructuredArgs
 
+function search_variables!(buffer, dargs::DestructuredArgs; kw...)
+    elems = dargs.elems
+    if elems isa Vector{BasicSymbolic{SymReal}}
+        search_variables!(buffer, elems; kw...)
+    elseif elems isa Vector{BasicSymbolic{SafeReal}}
+        search_variables!(buffer, elems; kw...)
+    elseif elems isa Vector{BasicSymbolic{TreeReal}}
+        search_variables!(buffer, elems; kw...)
+    else
+        search_variables!(buffer, elems; kw...)
+    end
+end
+
 toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
 get_rewrites(args::DestructuredArgs) = ()
 function get_rewrites(args::Union{AbstractArray, Tuple})
@@ -464,6 +514,53 @@ A Let block.
 - `let_block` boolean (default=true) -- do not create a let block if false.
 """
 Let(assignments, body) = Let(assignments, body, true)
+
+function search_variables!(buffer, l::Let; kw...)
+    lhsbuf = empty(buffer)
+    rhsbuf = empty(buffer)
+    for elem in l.pairs
+        if elem isa Assignment
+            lhs = elem.lhs
+            rhs = elem.rhs
+            if lhs isa BasicSymbolic{SymReal}
+                search_variables!(lhsbuf, lhs; kw...)
+            elseif lhs isa BasicSymbolic{SafeReal}
+                search_variables!(lhsbuf, lhs; kw...)
+            elseif lhs isa BasicSymbolic{TreeReal}
+                search_variables!(lhsbuf, lhs; kw...)
+            elseif lhs isa Symbol
+            else
+                search_variables!(lhsbuf, lhs; kw...)
+            end
+            if rhs isa BasicSymbolic{SymReal}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa BasicSymbolic{SafeReal}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa BasicSymbolic{TreeReal}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa Vector{BasicSymbolic{SymReal}}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa Vector{BasicSymbolic{SafeReal}}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa Vector{BasicSymbolic{TreeReal}}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa Matrix{BasicSymbolic{SymReal}}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa Matrix{BasicSymbolic{SafeReal}}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa Matrix{BasicSymbolic{TreeReal}}
+                search_variables!(rhsbuf, rhs; kw...)
+            elseif rhs isa Symbol
+            else
+                search_variables!(rhsbuf, rhs; kw...)
+            end
+        else
+            search_variables!(rhsbuf, elem; kw...)
+        end
+    end
+    setdiff!(rhsbuf, lhsbuf)
+    union!(buffer, rhsbuf)
+end
 
 function toexpr(l::Let, st)
     if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
@@ -510,12 +607,42 @@ end
 
 @matchable struct Func <: CodegenPrimitive
     args::Vector
-    kwargs
+    kwargs::Vector{Assignment}
     body
     pre::Vector
 end
 
-Func(args, kwargs, body) = Func(args, kwargs, body, [])
+function search_variables!(buffer, f::Func; kw...)
+    search_variables!(buffer, f.args; kw...)
+    search_variables!(buffer, f.kwargs; kw...)
+    body = f.body
+    if body isa BasicSymbolic{SymReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Vector{BasicSymbolic{SymReal}}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Vector{BasicSymbolic{SafeReal}}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Vector{BasicSymbolic{TreeReal}}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Matrix{BasicSymbolic{SymReal}}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Matrix{BasicSymbolic{SafeReal}}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Matrix{BasicSymbolic{TreeReal}}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Let
+        search_variables!(buffer, body; kw...)
+    elseif body isa Symbol
+    else
+        search_variables!(buffer, body; kw...)
+    end
+end
+
+Func(args, kwargs, body) = Func(args, kwargs, body, Assignment[])
 
 """
     Func(args, kwargs, body[, pre])
@@ -621,9 +748,56 @@ SetArray
 
 SetArray(inbounds, arr, elems) = SetArray(inbounds, arr, elems, false)
 
+function search_variables!(buffer, sa::SetArray; kw...)
+    body = sa.arr
+    if body isa BasicSymbolic{SymReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Symbol
+    else
+        search_variables!(buffer, body; kw...)
+    end
+    elems = sa.elems
+    if elems isa Vector{AtIndex}
+        search_variables!(buffer, elems; kw...)
+    else
+        search_variables!(buffer, elems; kw...)
+    end
+end
+
 @matchable struct AtIndex <: CodegenPrimitive
     i
     elem
+end
+
+function search_variables!(buffer, ai::AtIndex; kw...)
+    i = ai.i
+    elem = ai.elem
+    if i isa BasicSymbolic{SymReal}
+        search_variables!(buffer, i; kw...)
+    elseif i isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, i; kw...)
+    elseif i isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, i; kw...)
+    elseif i isa CartesianIndex
+    elseif i isa Integer
+    elseif i isa Symbol
+    else
+        search_variables!(buffer, i; kw...)
+    end
+    if elem isa BasicSymbolic{SymReal}
+        search_variables!(buffer, elem; kw...)
+    elseif elem isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, elem; kw...)
+    elseif elem isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, elem; kw...)
+    elseif elem isa Symbol
+    else
+        search_variables!(buffer, elem; kw...)
+    end
 end
 
 function toexpr(a::AtIndex, st)
@@ -643,6 +817,25 @@ end
     elems
     similarto # Must be either a reference to an array or a concrete type
     output_eltype
+end
+
+function search_variables!(buffer, ma::MakeArray; kw...)
+    elems = ma.elems
+    if elems isa Vector{BasicSymbolic{SymReal}}
+        search_variables!(buffer, elems; kw...)
+    elseif elems isa Vector{BasicSymbolic{SafeReal}}
+        search_variables!(buffer, elems; kw...)
+    elseif elems isa Vector{BasicSymbolic{TreeReal}}
+        search_variables!(buffer, elems; kw...)
+    elseif elems isa Matrix{BasicSymbolic{SymReal}}
+        search_variables!(buffer, elems; kw...)
+    elseif elems isa Matrix{BasicSymbolic{SafeReal}}
+        search_variables!(buffer, elems; kw...)
+    elseif elems isa Matrix{BasicSymbolic{TreeReal}}
+        search_variables!(buffer, elems; kw...)
+    else
+        search_variables!(buffer, elems; kw...)
+    end
 end
 
 """
@@ -799,6 +992,10 @@ end
     array::S
 end
 
+function search_variables!(buffer, msa::MakeSparseArray; kw...)
+    search_variables!(buffer, msa.array; kw...)
+end
+
 """
     MakeSpaseArray(array)
 
@@ -879,6 +1076,11 @@ struct SpawnFetch{Typ} <: CodegenPrimitive
     combine
 end
 
+function search_variables!(buffer, sf::SpawnFetch; kw...)
+    search_variables!(buffer, sf.exprs)
+    search_variables!(buffer, sf.args)
+end
+
 (::Type{SpawnFetch{T}})(exprs, combine) where {T} = SpawnFetch{T}(exprs, nothing, combine)
 
 function toexpr(p::SpawnFetch{Multithreaded}, st)
@@ -922,6 +1124,45 @@ struct ForLoop <: CodegenPrimitive
     itervar
     range
     body
+end
+
+function search_variables!(buffer, fl::ForLoop; kw...)
+    itervar = fl.itervar
+    range = fl.range
+    body = fl.body
+
+    if itervar isa BasicSymbolic{SymReal}
+        search_variables!(buffer, itervar; kw...)
+    elseif itervar isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, itervar; kw...)
+    elseif itervar isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, itervar; kw...)
+    elseif itervar isa Symbol
+    else
+        search_variables!(buffer, itervar; kw...)
+    end
+
+    if range isa BasicSymbolic{SymReal}
+        search_variables!(buffer, range; kw...)
+    elseif range isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, range; kw...)
+    elseif range isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, range; kw...)
+    elseif range isa Symbol
+    else
+        search_variables!(buffer, range; kw...)
+    end
+
+    if body isa BasicSymbolic{SymReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa BasicSymbolic{SafeReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa BasicSymbolic{TreeReal}
+        search_variables!(buffer, body; kw...)
+    elseif body isa Symbol
+    else
+        search_variables!(buffer, body; kw...)
+    end
 end
 
 function toexpr(f::ForLoop, st)
@@ -1318,16 +1559,6 @@ function apply_optimization_rules(expr, state, rules)
     end
 
     expr
-end
-
-function search_variables!(buf, expr::Let)
-    rhs_buf = empty(buf)
-    lhs_buf = empty(buf)
-    for p in expr.pairs
-        search_variables!(rhs_buf, rhs(p))
-        search_variables!(lhs_buf, lhs(p))
-    end
-    union!(buf, setdiff!(rhs_buf, lhs_buf))
 end
 
 end

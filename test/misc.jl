@@ -311,3 +311,10 @@ end
     # Test getmetadata with default
     @test SymbolicUtils.getmetadata(x, Float64, "default") == "default"
 end
+
+@testset "`quick_cancel` handles `adjoint(vec) * vec`" begin
+    @syms x[1:3]
+    num = x[1] * x[2]
+    den = x'x
+    @test isequal(quick_cancel(num, den), (num, den))
+end

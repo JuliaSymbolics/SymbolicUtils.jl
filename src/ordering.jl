@@ -155,6 +155,8 @@ function __get_degrees(expr::BasicSymbolic{T})::RODegreesT where {T}
             end
         end
         BSImpl.ArrayOp(;) => return RODegreesT(__default_degrees!(degrees, expr))
+        BSImpl.ArrayMaker(;) => return RODegreesT(__default_degrees!(degrees, expr))
+        _ => return RODegreesT(__default_degrees!(degrees, expr))
     end
 end
 

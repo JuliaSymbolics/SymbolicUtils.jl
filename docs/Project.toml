@@ -1,3 +1,7 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
+
+[compat]
+Documenter = "1.16.1"
+SymbolicUtils = "4.18.1"

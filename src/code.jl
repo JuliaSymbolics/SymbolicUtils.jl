@@ -1333,6 +1333,8 @@ end
 
 ### Common subexprssion evaluation
 
+const CSE_PREFIX = Vector{UInt8}("##cse#")
+
 """
     newsym!(state::CSEState, ::Type{T})
 
@@ -1340,9 +1342,18 @@ Generates new symbol of type `T` with unique name in `state`.
 """
 @inline function newsym!(state, ::Type{T}, symtype::TypeT, sh::ShapeT) where {T <: SymVariant}
     @nospecialize symtype sh
-    name = "##cse#$(state.varid[])"
+
+    idx = state.varid[]
     state.varid[] += 1
-    Sym{T}(Symbol(name); type = symtype, shape = sh)
+    buffer = UInt8[]
+    sizehint!(buffer, length(CSE_PREFIX) + ndigits(idx))
+    append!(buffer, CSE_PREFIX)
+    while idx > 0
+        push!(buffer, '0' + (idx % 10))
+        idx = div(idx, 10)
+    end
+    reverse!(@view(buffer[(length(CSE_PREFIX) + 1):end]))
+    Sym{T}(Symbol(buffer); type = symtype, shape = sh)
 end
 
 """

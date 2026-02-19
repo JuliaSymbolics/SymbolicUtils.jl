@@ -29,7 +29,7 @@ end
 NameState() = NameState(Dict{Any, Any}())
 function union_rewrites!(n, ts)
     for t in ts
-        n[t] = Symbol(string(t))
+        n[t] = Symbol(string(t)::String)
     end
 end
 

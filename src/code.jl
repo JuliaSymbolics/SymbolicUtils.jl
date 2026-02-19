@@ -1215,7 +1215,7 @@ struct CSEState
     """
     A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
     """
-    visited::IdDict{Union{SymbolicUtils.IDType, AbstractArray, Tuple}, BasicSymbolic}
+    visited::IdDict{SymbolicUtils.IDType, Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}}
     """
     Integer counter, used to generate unique names for intermediate variables.
     """
@@ -1314,43 +1314,52 @@ and should have the same type as `x`.
 function cse! end
 
 function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
-    get!(state.visited, expr.id) do
-        @match expr begin
-            BSImpl.Const(;) => begin
-                new_expr = expr
-                sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
-                push!(state.sorted_exprs, sym ← new_expr)
-                return sym
-            end
-            BSImpl.Sym(;) => return expr
-            BSImpl.ArrayOp(; term) => if term === nothing
-                sym = newsym!(state, T, symtype(expr), shape(expr))
-                push!(state.sorted_exprs, sym ← expr)
-                return sym
-            else
-                return cse!(term, state)
-            end
-            BSImpl.ArrayMaker(; regions, values, type, shape) => begin
-                return BSImpl.ArrayMaker{T}(regions, map(Base.Fix2(cse!, state), values); type, shape)
-            end
-            _ => begin
-                op = operation(expr)
-                args = arguments(expr)
-                if op isa BasicSymbolic{T}
-                    SymbolicUtils.is_function_symbolic(op) || return expr
+    cse_visitor = let expr = expr, state = state
+        function _cse_visitor()
+            @match expr begin
+                BSImpl.Const(;) => begin
+                    new_expr = expr
+                    sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
+                    push!(state.sorted_exprs, sym ← new_expr)
+                    return sym
                 end
-                cse_inside_expr(expr, op) || return expr
-                args = map(Base.Fix2(cse!, state), args)
-                # use `term` instead of `maketerm` because we only care about the operation being performed
-                # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-                new_expr = Term{T}(operation(expr), args; type = symtype(expr))
-                sym = newsym!(state, T, symtype(new_expr), shape(expr))
-                push!(state.sorted_exprs, sym ← new_expr)
-                return sym
+                BSImpl.Sym(;) => return expr
+                BSImpl.ArrayOp(; term) => if term === nothing
+                    sym = newsym!(state, T, symtype(expr), shape(expr))
+                    push!(state.sorted_exprs, sym ← expr)
+                    return sym
+                else
+                    return cse!(term, state)
+                end
+                BSImpl.ArrayMaker(; regions, values, type, shape) => begin
+                    values = copy(parent(values))
+                    for i in eachindex(values)
+                        values[i] = cse!(values[i], state)::BasicSymbolic{T}
+                    end
+                    return BSImpl.ArrayMaker{T}(regions, values; type, shape)
+                end
+                _ => begin
+                    op = operation(expr)
+                    args = arguments(expr)
+                    if op isa BasicSymbolic{T}
+                        SymbolicUtils.is_function_symbolic(op) || return expr
+                    end
+                    cse_inside_expr(expr, op)::Bool || return expr
+                    args = copy(parent(args))
+                    for i in eachindex(args)
+                        args[i] = cse!(args[i], state)::BasicSymbolic{T}
+                    end
+                    # use `term` instead of `maketerm` because we only care about the operation being performed
+                    # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
+                    new_expr = Term{T}(op, args; type = symtype(expr), shape = shape(expr))
+                    sym = newsym!(state, T, symtype(expr), shape(expr))
+                    push!(state.sorted_exprs, sym ← new_expr)
+                    return sym
+                end
             end
         end
-
     end
+    return get!(cse_visitor, state.visited, expr.id)::BasicSymbolic{T}
 end
 
 cse!(x, ::CSEState) = x
@@ -1370,11 +1379,9 @@ function cse!(x::AbstractArray, state::CSEState)
 end
 
 function cse!(x::AbstractSparseArray, state::CSEState)
-    new_x = copy(x)
-    for (i, j, v) in zip(findnz(x)...)
-        new_x[i, j] = cse!(v, state)
-    end
-    return new_x
+    I, J, V = findnz(x)
+    V = map(Base.Fix2(cse!, state), V)
+    return SparseArrays.sparse(I, J, V, size(x)...)
 end
 
 function cse!(x::Tuple, state::CSEState)
@@ -1383,29 +1390,83 @@ function cse!(x::Tuple, state::CSEState)
 end
 
 function cse!(x::MakeArray, state::CSEState)
-    return MakeArray(cse!(x.elems, state), x.similarto, x.output_eltype)
+    elems = x.elems
+    if elems isa Vector{BasicSymbolic{SymReal}}
+        return MakeArray(cse!(elems, state), x.similarto, x.output_eltype)
+    elseif elems isa Matrix{BasicSymbolic{SymReal}}
+        return MakeArray(cse!(elems, state), x.similarto, x.output_eltype)
+    else
+        return MakeArray(cse!(elems, state), x.similarto, x.output_eltype)
+    end
 end
 
 function cse!(x::SetArray, state::CSEState)
-    return SetArray(x.inbounds, x.arr, cse!(x.elems, state), x.return_arr)
+    elems = x.elems
+    if elems isa Vector{BasicSymbolic{SymReal}}
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    elseif elems isa Matrix{BasicSymbolic{SymReal}}
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    elseif elems isa Vector{AtIndex}
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    elseif elems isa Matrix{AtIndex}
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    else
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    end
 end
 
 function cse!(x::MakeSparseArray, state::CSEState)
-    m, n = size(x.array)
-    i, j, v = findnz(x.array)
-    return MakeSparseArray(sparse(i, j, cse!(v, state), m, n))
+    arr = x.array
+    if arr isa SparseMatrixCSC{BasicSymbolic{SymReal}, Int}
+        return MakeSparseArray(cse!(arr, state))
+    else
+        return MakeSparseArray(cse!(arr, state))
+    end
 end
 
 function cse!(x::Assignment, state::CSEState)
-    result = Assignment(x.lhs, cse!(x.rhs, state))
-    if x.lhs isa BasicSymbolic
-        state.visited[x.lhs.id] = x.lhs
+    lhs = x.lhs
+    rhs = x.rhs
+    if rhs isa BasicSymbolic{SymReal}
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa Vector{BasicSymbolic{SymReal}}
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa Matrix{BasicSymbolic{SymReal}}
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa Let
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa MakeArray
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa SetArray
+        result = Assignment(lhs, cse!(rhs, state))
+    else
+        result = Assignment(lhs, cse!(rhs, state))
+    end
+    if lhs isa BasicSymbolic{SymReal}
+        state.visited[lhs.id] = lhs
+    elseif lhs isa BasicSymbolic{SafeReal}
+        state.visited[lhs.id] = lhs
+    elseif lhs isa BasicSymbolic{TreeReal}
+        state.visited[lhs.id] = lhs
     end
     return result
 end
 
 function cse!(x::DestructuredArgs, state::CSEState)
-    return DestructuredArgs(x.elems, x.inds, cse!(x.name, state), x.inbounds, x.create_bindings)
+    name = x.name
+    if name isa BasicSymbolic{SymReal}
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    elseif name isa BasicSymbolic{SafeReal}
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    elseif name isa BasicSymbolic{TreeReal}
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    elseif name isa Symbol
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    elseif name isa Expr
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    else
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    end
 end
 
 function cse!(x::Let, state::CSEState)
@@ -1415,16 +1476,70 @@ function cse!(x::Let, state::CSEState)
     # are imperative, so the CSE assignments for a given `p` can include previous `p`,
     # preventing us from simply wrapping the `Let` in another `Let`.
     for p in x.pairs
-        newp = cse!(p, state)
-        push!(state.sorted_exprs, newp)
+        if p isa Assignment
+            push!(state.sorted_exprs, cse!(p, state))
+        elseif p isa DestructuredArgs
+            push!(state.sorted_exprs, cse!(p, state))
+        else
+            _unreachable()
+        end
     end
-    newbody = cse!(x.body, state)
-    return Let(state.sorted_exprs, newbody, x.let_block)
+    body = x.body
+    if body isa BasicSymbolic{SymReal}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa BasicSymbolic{SafeReal}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa BasicSymbolic{TreeReal}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Vector{BasicSymbolic{SymReal}}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Matrix{BasicSymbolic{SymReal}}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Let
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa MakeArray
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa ForLoop
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Symbol
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Expr
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Nothing
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    else
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    end
 end
 
 function cse!(x::Func, state::CSEState)
     state = new_scope(state)
-    return Func(x.args, x.kwargs, apply_cse(cse!(x.body, state), state), x.pre)
+    body = x.body
+    if body isa BasicSymbolic{SymReal}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa BasicSymbolic{SafeReal}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa BasicSymbolic{TreeReal}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Vector{BasicSymbolic{SymReal}}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Matrix{BasicSymbolic{SymReal}}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Let
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa MakeArray
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa ForLoop
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Symbol
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Expr
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Nothing
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    else
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    end
 end
 
 function cse!(x::AtIndex, state::CSEState)

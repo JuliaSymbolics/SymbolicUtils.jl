@@ -17,7 +17,8 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
-                      ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal
+                      ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
+                      AddMulVariant, _isone, _iszero
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -48,6 +49,34 @@ end
 ##========================##
 
 abstract type CodegenPrimitive end
+
+function manual_dispatch_toexpr(@nospecialize(x), st)
+    if x isa BasicSymbolic{SymReal}
+        toexpr(x, st)
+    elseif x isa Vector{BasicSymbolic{SymReal}}
+        toexpr(x, st)
+    elseif x isa Matrix{BasicSymbolic{SymReal}}
+        toexpr(x, st)
+    elseif x isa Symbol
+        toexpr(x, st)
+    elseif x isa Expr
+        toexpr(x, st)
+    elseif x isa Let
+        toexpr(x, st)
+    elseif x isa Assignment
+        toexpr(x, st)
+    elseif x isa DestructuredArgs
+        toexpr(x, st)
+    elseif x isa MakeArray
+        toexpr(x, st)
+    elseif x isa SetArray
+        toexpr(x, st)
+    elseif x isa SetArray
+        toexpr(x, st)
+    else
+        toexpr(x, st)
+    end
+end
 
 """
     toexpr(ex, [st,])
@@ -143,7 +172,9 @@ const (←) = Assignment
 
 Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 
-toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
+function toexpr(a::Assignment, st)
+    return Expr(:(=), manual_dispatch_toexpr(a.lhs, st), manual_dispatch_toexpr(a.rhs, st))
+end
 
 const NaNMathFuns = (
     sin,
@@ -160,17 +191,60 @@ const NaNMathFuns = (
     log1p,
     sqrt,
 )
-function function_to_expr(op, O, st)
-    (get(st.rewrites, :nanmath, false) && op in NaNMathFuns) || return nothing
-    name = nameof(op)
-    fun = GlobalRef(NaNMath, name)
-    args = map(Base.Fix2(toexpr, st), arguments(O))
-    expr = Expr(:call, fun)
-    append!(expr.args, args)
+
+function function_to_expr_no_nanmath(@nospecialize(op), O::BasicSymbolic{T}, st) where {T}
+    expr = Expr(:call)
+    if op isa BasicSymbolic{T}
+        push!(expr.args, manual_dispatch_toexpr(op, st))
+    else
+        push!(expr.args, op)
+    end
+    args = parent(arguments(O))
+    @union_split_smallvec args for arg in args
+        push!(expr.args, toexpr(arg, st))
+    end
     return expr
 end
 
-function function_to_expr(op::SymbolicUtils.Mapper, O, st)
+function function_to_expr(@nospecialize(op), O, st)
+    # Avoid using `op in NaNMathFuns` since that is dynamic dispatch.
+    # Also avoid using `nameof(op)` for the same reason.
+    if !get(st.rewrites, :nanmath, false)::Bool
+        return function_to_expr_no_nanmath(op, O, st)
+    elseif op === sin
+        name = :sin
+    elseif op === cos
+        name = :cos
+    elseif op === tan
+        name = :tan
+    elseif op === asin
+        name = :asin
+    elseif op === acos
+        name = :acos
+    elseif op === acosh
+        name = :acosh
+    elseif op === atanh
+        name = :atanh
+    elseif op === log
+        name = :log
+    elseif op === log2
+        name = :log2
+    elseif op === log10
+        name = :log10
+    elseif op === lgamma
+        name = :lgamma
+    elseif op === log1p
+        name = :log1p
+    elseif op === sqrt
+        name = :sqrt
+    else
+        return function_to_expr_no_nanmath(op, O, st)
+    end
+    fun = GlobalRef(NaNMath, name)
+    return function_to_expr_no_nanmath(fun, O, st)
+end
+
+function function_to_expr(@nospecialize(op::SymbolicUtils.Mapper), O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
     expr = Expr(:call, map)
@@ -181,7 +255,7 @@ function function_to_expr(op::SymbolicUtils.Mapper, O, st)
     return expr
 end
 
-function function_to_expr(op::SymbolicUtils.Mapreducer, O, st)
+function function_to_expr(@nospecialize(op::SymbolicUtils.Mapreducer), O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
     expr = Expr(:call, mapreduce)
@@ -358,48 +432,69 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
     return toexpr(Let([Assignment(ARRAY_OUTSYM, output_buffer)], Let(ir, ARRAY_OUTSYM, false), true), st)
 end
 
-function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
+function function_to_expr(@nospecialize(op::Union{typeof(*),typeof(+)}), O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
-    args = map(Base.Fix2(toexpr, st), sorted_arguments(O))
-    if length(args) >= 3 && symtype(O) <: Number
-        x, xs = Iterators.peel(args)
-        foldl(xs, init=x) do a, b
-            Expr(:call, op, a, b)
+    if get(st.rewrites, :sort_addmul, true)::Bool
+        args = parent(sorted_arguments(O))
+    else
+        args = parent(arguments(O))
+    end
+
+    if length(args) == 1
+        return Expr(:call, op, toexpr(args[1], st))
+    end
+    if symtype(O) <: Number
+        cur = Expr(:call, op, toexpr(args[1], st), toexpr(args[2], st))
+        for i in 3:length(args)
+            cur = Expr(:call, op, cur, toexpr(args[i], st))
         end
+        return cur
     else
         expr = Expr(:call, op)
-        append!(expr.args, args)
-        expr
+        @union_split_smallvec args for arg in args
+            push!(expr.args, toexpr(arg, st))
+        end
+        return expr
     end
 end
 
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
-    base = unwrap_const(base)
-    exp = unwrap_const(exp)
-    if exp isa Real && exp < 0
-        base = Term{T}(inv, ArgsT{T}((base,)); type = symtype(O))
-        if SymbolicUtils._isone(-exp)
-            return toexpr(base, st)
-        else
-            exp = -exp
+    base = toexpr(base, st)
+    @match exp begin
+        BSImpl.Const(; val) => begin
+            if val isa Real
+                if _isone(val)
+                    return toexpr(base, st)
+                end
+                if _isone(-val)
+                    return Expr(:call, inv, base)
+                end
+                if (val < 0)::Bool
+                    val = -val
+                    base = Expr(:call, inv, base)
+                end
+                if !(val isa Integer) && get(st.rewrites, :nanmath, false)::Bool
+                    op = NaNMath.pow
+                end
+            end
+            return Expr(:call, op, base, val)
+        end
+        _ => begin
+            sT = symtype(exp)
+            if get(st.rewrites, :nanmath, false)::Bool
+                return Expr(:call, NaNMath.pow, base, toexpr(exp, st))
+            else
+                return Expr(:call, ^, base, toexpr(exp, st))
+            end
         end
     end
-    if get(st.rewrites, :nanmath, false) === true && !(exp isa Integer)
-        op = NaNMath.pow
-        return toexpr(Term{T}(op, ArgsT{T}((Const{T}(base), Const{T}(exp))); type = symtype(O)), st)
-    end
-    return nothing
 end
 
 function function_to_expr(::typeof(ifelse), O, st)
     args = arguments(O)
-    :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
-end
-
-function function_to_expr(x::BasicSymbolic, O, st)
-    issym(x) ? get(st.rewrites, O, nothing) : nothing
+    return Expr(:if, toexpr(args[1], st), toexpr(args[2], st), toexpr(args[3], st))
 end
 
 toexpr(O::Expr, st) = O
@@ -413,27 +508,54 @@ function substitute_name(O, st)
 end
 
 function toexpr(O, st)
-    O = unwrap_const(O)
-    if O isa CodegenPrimitive
-        return toexpr(O, st)
-    end
-    O = substitute_name(O, st)
-    if issym(O)
-        return nameof(O)
-    end
-
-    if _is_array_of_symbolics(O)
-        return issparse(O) ? toexpr(MakeSparseArray(O)) : toexpr(MakeArray(O, typeof(O)), st)
-    end
-    !iscall(O) && return O
-    op = operation(O)
-    expr′ = function_to_expr(op, O, st)
-    if expr′ !== nothing
-        return expr′
+    u = unwrap(O)
+    if u !== O
+        return toexpr(u, st)
+    elseif _is_array_of_symbolics(O)
+        return issparse(O) ? toexpr(MakeSparseArray(O), st) : toexpr(MakeArray(O, typeof(O)), st)
     else
-        !iscall(O) && return O
-        args = arguments(O)
-        return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
+        return O
+    end
+end
+
+function toexpr(O::BasicSymbolic{T}, st) where {T}
+    if haskey(st.rewrites, O)
+        O = st.rewrites[O]
+        if !(O isa BasicSymbolic{T})
+            return manual_dispatch_toexpr(O, st)
+        end
+    end
+    O = O::BasicSymbolic{T}
+    @match O begin
+        BSImpl.Const(; val) => if val isa CodegenPrimitive
+            return manual_dispatch_toexpr(val, st)
+        else
+            return val
+        end
+        BSImpl.Sym(; name) => return name
+        BSImpl.ArrayOp(; term) => if term isa BasicSymbolic{T}
+            return toexpr(term, st)
+        else
+            return function_to_expr(ArrayOp{T}, O, st)
+        end
+        BSImpl.ArrayMaker(;) => return function_to_expr(ArrayMaker{T}, O, st)
+        BSImpl.Term(; f) => begin
+            if f === (^)
+                return function_to_expr((^), O, st)
+            elseif f === ifelse
+                return function_to_expr(ifelse, O, st)
+            else
+                return function_to_expr(f, O, st)
+            end
+        end
+        BSImpl.Div(; num, den) => begin
+            return Expr(:call, /, toexpr(num, st), toexpr(den, st))
+        end
+        BSImpl.AddMul(; variant) => if variant === AddMulVariant.ADD
+            return function_to_expr((+), O, st)
+        else
+            return function_to_expr((*), O, st)
+        end
     end
 end
 
@@ -479,23 +601,36 @@ function search_variables!(buffer, dargs::DestructuredArgs; kw...)
 end
 
 toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
-get_rewrites(args::DestructuredArgs) = ()
+get_rewrites(args::DestructuredArgs) = []
 function get_rewrites(args::Union{AbstractArray, Tuple})
-    cflatten(map(get_rewrites, args))
+    rws = []
+    for arg in args
+        append!(rws, get_rewrites(arg))
+    end
+    return rws
 end
-get_rewrites(x) = iscall(x) ? (x,) : ()
-cflatten(x) = Iterators.flatten(x) |> collect
+get_rewrites(x) = []
+get_rewrites(x::BasicSymbolic) = iscall(x) ? Any[x] : []
 
 # Used in Symbolics
 Base.@deprecate_binding get_symbolify get_rewrites
 
 function get_assignments(d::DestructuredArgs, st)
-    name = toexpr(d, st)
-    map(d.inds, d.elems) do i, a
-        ex = (i isa Symbol ? :($name.$i) : :($name[$i]))
-        ex = d.inbounds && d.create_bindings ? :(@inbounds($ex)) : ex
-        a ← ex
+    name = manual_dispatch_toexpr(d, st)
+    assigns = Assignment[]
+    for i in 1:(length(d.inds)::Int)
+        idx = d.inds[i]
+        if idx isa Symbol
+            ex = Expr(:., name, QuoteNode(idx))
+        else
+            ex = Expr(:ref, name, idx)
+        end
+        if d.inbounds && d.create_bindings
+            ex = Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), ex)
+        end
+        push!(assigns, Assignment(d.elems[i], ex))
     end
+    return assigns
 end
 
 @matchable struct Let <: CodegenPrimitive
@@ -562,54 +697,68 @@ function search_variables!(buffer, l::Let; kw...)
     union!(buffer, rhsbuf)
 end
 
-function toexpr(l::Let, st)
-    if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
-        dargs = l.pairs
-    else
-        assignments = []
-        for x in l.pairs
-            if x isa DestructuredArgs
-                if x.create_bindings
-                    append!(assignments, get_assignments(x, st))
-                else
-                    for a in get_assignments(x, st)
-                        st.rewrites[a.lhs] = a.rhs
-                    end
-                end
-            elseif x isa Assignment && x.lhs isa DestructuredArgs
-                if x.lhs.create_bindings
-                    push!(assignments, x.lhs.name ← x.rhs)
-                    append!(assignments, get_assignments(x.lhs, st))
-                else
-                    push!(assignments, x.lhs.name ← x.rhs)
-                    for a in get_assignments(x.lhs, st)
-                        st.rewrites[a.lhs] = a.rhs
-                    end
-                end
-            else
-                push!(assignments, x)
+function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{DestructuredArgs, Assignment}), st)
+    if x isa DestructuredArgs
+        if x.create_bindings
+            for a in get_assignments(x, st)
+                handle_let_pair!(dargs, a, st)
+            end
+        else
+            for a in get_assignments(x, st)
+                st.rewrites[a.lhs] = a.rhs
             end
         end
-        # expand and come back
-        return toexpr(Let(assignments, l.body, l.let_block), st)
+    elseif x isa Assignment
+        lhs = x.lhs
+        if lhs isa DestructuredArgs
+            if lhs.create_bindings
+                handle_let_pair!(dargs, Assignment(lhs.name, x.rhs), st)
+                for a in get_assignments(lhs, st)
+                    handle_let_pair!(dargs, a, st)
+                end
+            else
+                handle_let_pair!(dargs, Assignment(lhs.name, x.rhs), st)
+                for a in get_assignments(lhs, st)
+                    st.rewrites[a.lhs] = a.rhs
+                end
+            end
+        else
+            push!(dargs, x)
+        end
+    else
+        _unreachable()
+    end
+end
+
+function toexpr(l::Let, st)
+    if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
+        dargs = Vector{Assignment}(l.pairs)
+    else
+        dargs = Assignment[]
+        for x in l.pairs
+            handle_let_pair!(dargs, x, st)
+        end
     end
 
-    funkyargs = get_rewrites(map(lhs, dargs))
-    union_rewrites!(st.rewrites, funkyargs)
+    bindings = Expr(:block)
+    for asg in dargs
+        union_rewrites!(st.rewrites, get_rewrites(asg.lhs))
+        push!(bindings.args, toexpr(asg, st))
+    end
 
-    bindings = map(p->toexpr(p, st), dargs)
-    l.let_block ? Expr(:let,
-                       Expr(:block, bindings...),
-                       toexpr(l.body, st)) : Expr(:block,
-                                                  bindings...,
-                                                  toexpr(l.body, st))
+    if l.let_block
+        return Expr(:let, bindings, manual_dispatch_toexpr(l.body, st))
+    end
+    isempty(bindings.args) && return manual_dispatch_toexpr(l.body, st)
+    push!(bindings.args, manual_dispatch_toexpr(l.body, st))
+    return bindings
 end
 
 @matchable struct Func <: CodegenPrimitive
-    args::Vector
+    args::Vector{Any}
     kwargs::Vector{Assignment}
     body
-    pre::Vector
+    pre::Vector{Any}
 end
 
 function search_variables!(buffer, f::Func; kw...)
@@ -699,26 +848,35 @@ Func
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 function toexpr(f::Func, st)
-    funkyargs = get_rewrites(vcat(f.args, map(lhs, f.kwargs)))
-    union_rewrites!(st.rewrites, funkyargs)
-    dargs = filter(x->x isa DestructuredArgs, f.args)
-    if !isempty(dargs)
-        body = Let(dargs, f.body, false)
-    else
-        body = f.body
+    for arg in f.args
+        union_rewrites!(st.rewrites, get_rewrites(arg))
     end
-    if isempty(f.kwargs)
-        :(function ($(map(x->toexpr(x, st), f.args)...),)
-              $(f.pre...)
-              $(toexpr(body, st))
-          end)
-    else
-        :(function ($(map(x->toexpr(x, st), f.args)...),;
-                    $(map(x->toexpr_kw(x, st), f.kwargs)...))
-              $(f.pre...)
-              $(toexpr(body, st))
-          end)
+    for arg in f.kwargs
+        union_rewrites!(st.rewrites, get_rewrites(arg.lhs))
     end
+    dargs = Union{Assignment, DestructuredArgs}[]
+    for arg in f.args
+        if arg isa DestructuredArgs
+            push!(dargs, arg)
+        end
+    end
+    body = manual_dispatch_toexpr(Let(dargs, f.body, false), st)
+    fn_args = Expr(:tuple)
+    if !isempty(f.kwargs)
+        fn_kws = Expr(:parameters)
+        for asg in f.kwargs
+            asg_expr = toexpr(asg, st)
+            push!(fn_kws.args, Expr(:kw, asg_expr.args[1], asg_expr.args[2]))
+        end
+        push!(fn_args.args, fn_kws)
+    end
+    for arg in f.args
+        push!(fn_args.args, manual_dispatch_toexpr(arg, st))
+    end
+    fn_body = Expr(:block)
+    append!(fn_body.args, f.pre)
+    push!(fn_body.args, body)
+    return Expr(:function, fn_args, fn_body)
 end
 
 @matchable struct SetArray <: CodegenPrimitive

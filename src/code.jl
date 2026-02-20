@@ -17,7 +17,8 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
-                      ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal
+                      ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
+                      AddMulVariant, _isone, _iszero
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -29,7 +30,7 @@ end
 NameState() = NameState(Dict{Any, Any}())
 function union_rewrites!(n, ts)
     for t in ts
-        n[t] = Symbol(string(t))
+        n[t] = Symbol(string(t)::String)
     end
 end
 
@@ -48,6 +49,34 @@ end
 ##========================##
 
 abstract type CodegenPrimitive end
+
+function manual_dispatch_toexpr(@nospecialize(x), st)
+    if x isa BasicSymbolic{SymReal}
+        toexpr(x, st)
+    elseif x isa Vector{BasicSymbolic{SymReal}}
+        toexpr(x, st)
+    elseif x isa Matrix{BasicSymbolic{SymReal}}
+        toexpr(x, st)
+    elseif x isa Symbol
+        toexpr(x, st)
+    elseif x isa Expr
+        toexpr(x, st)
+    elseif x isa Let
+        toexpr(x, st)
+    elseif x isa Assignment
+        toexpr(x, st)
+    elseif x isa DestructuredArgs
+        toexpr(x, st)
+    elseif x isa MakeArray
+        toexpr(x, st)
+    elseif x isa SetArray
+        toexpr(x, st)
+    elseif x isa SetArray
+        toexpr(x, st)
+    else
+        toexpr(x, st)
+    end
+end
 
 """
     toexpr(ex, [st,])
@@ -143,7 +172,9 @@ const (←) = Assignment
 
 Base.convert(::Type{Assignment}, p::Pair) = Assignment(pair[1], pair[2])
 
-toexpr(a::Assignment, st) = :($(toexpr(a.lhs, st)) = $(toexpr(a.rhs, st)))
+function toexpr(a::Assignment, st)
+    return Expr(:(=), manual_dispatch_toexpr(a.lhs, st), manual_dispatch_toexpr(a.rhs, st))
+end
 
 const NaNMathFuns = (
     sin,
@@ -160,17 +191,60 @@ const NaNMathFuns = (
     log1p,
     sqrt,
 )
-function function_to_expr(op, O, st)
-    (get(st.rewrites, :nanmath, false) && op in NaNMathFuns) || return nothing
-    name = nameof(op)
-    fun = GlobalRef(NaNMath, name)
-    args = map(Base.Fix2(toexpr, st), arguments(O))
-    expr = Expr(:call, fun)
-    append!(expr.args, args)
+
+function function_to_expr_no_nanmath(@nospecialize(op), O::BasicSymbolic{T}, st) where {T}
+    expr = Expr(:call)
+    if op isa BasicSymbolic{T}
+        push!(expr.args, manual_dispatch_toexpr(op, st))
+    else
+        push!(expr.args, op)
+    end
+    args = parent(arguments(O))
+    @union_split_smallvec args for arg in args
+        push!(expr.args, toexpr(arg, st))
+    end
     return expr
 end
 
-function function_to_expr(op::SymbolicUtils.Mapper, O, st)
+function function_to_expr(@nospecialize(op), O, st)
+    # Avoid using `op in NaNMathFuns` since that is dynamic dispatch.
+    # Also avoid using `nameof(op)` for the same reason.
+    if !get(st.rewrites, :nanmath, false)::Bool
+        return function_to_expr_no_nanmath(op, O, st)
+    elseif op === sin
+        name = :sin
+    elseif op === cos
+        name = :cos
+    elseif op === tan
+        name = :tan
+    elseif op === asin
+        name = :asin
+    elseif op === acos
+        name = :acos
+    elseif op === acosh
+        name = :acosh
+    elseif op === atanh
+        name = :atanh
+    elseif op === log
+        name = :log
+    elseif op === log2
+        name = :log2
+    elseif op === log10
+        name = :log10
+    elseif op === lgamma
+        name = :lgamma
+    elseif op === log1p
+        name = :log1p
+    elseif op === sqrt
+        name = :sqrt
+    else
+        return function_to_expr_no_nanmath(op, O, st)
+    end
+    fun = GlobalRef(NaNMath, name)
+    return function_to_expr_no_nanmath(fun, O, st)
+end
+
+function function_to_expr(@nospecialize(op::SymbolicUtils.Mapper), O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
     expr = Expr(:call, map)
@@ -181,7 +255,7 @@ function function_to_expr(op::SymbolicUtils.Mapper, O, st)
     return expr
 end
 
-function function_to_expr(op::SymbolicUtils.Mapreducer, O, st)
+function function_to_expr(@nospecialize(op::SymbolicUtils.Mapreducer), O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
     expr = Expr(:call, mapreduce)
@@ -358,48 +432,69 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
     return toexpr(Let([Assignment(ARRAY_OUTSYM, output_buffer)], Let(ir, ARRAY_OUTSYM, false), true), st)
 end
 
-function function_to_expr(op::Union{typeof(*),typeof(+)}, O, st)
+function function_to_expr(@nospecialize(op::Union{typeof(*),typeof(+)}), O, st)
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
-    args = map(Base.Fix2(toexpr, st), sorted_arguments(O))
-    if length(args) >= 3 && symtype(O) <: Number
-        x, xs = Iterators.peel(args)
-        foldl(xs, init=x) do a, b
-            Expr(:call, op, a, b)
+    if get(st.rewrites, :sort_addmul, true)::Bool
+        args = parent(sorted_arguments(O))
+    else
+        args = parent(arguments(O))
+    end
+
+    if length(args) == 1
+        return Expr(:call, op, toexpr(args[1], st))
+    end
+    if symtype(O) <: Number
+        cur = Expr(:call, op, toexpr(args[1], st), toexpr(args[2], st))
+        for i in 3:length(args)
+            cur = Expr(:call, op, cur, toexpr(args[i], st))
         end
+        return cur
     else
         expr = Expr(:call, op)
-        append!(expr.args, args)
-        expr
+        @union_split_smallvec args for arg in args
+            push!(expr.args, toexpr(arg, st))
+        end
+        return expr
     end
 end
 
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
-    base = unwrap_const(base)
-    exp = unwrap_const(exp)
-    if exp isa Real && exp < 0
-        base = Term{T}(inv, ArgsT{T}((base,)); type = symtype(O))
-        if SymbolicUtils._isone(-exp)
-            return toexpr(base, st)
-        else
-            exp = -exp
+    base = toexpr(base, st)
+    @match exp begin
+        BSImpl.Const(; val) => begin
+            if val isa Real
+                if _isone(val)
+                    return toexpr(base, st)
+                end
+                if _isone(-val)
+                    return Expr(:call, inv, base)
+                end
+                if (val < 0)::Bool
+                    val = -val
+                    base = Expr(:call, inv, base)
+                end
+                if !(val isa Integer) && get(st.rewrites, :nanmath, false)::Bool
+                    op = NaNMath.pow
+                end
+            end
+            return Expr(:call, op, base, val)
+        end
+        _ => begin
+            sT = symtype(exp)
+            if get(st.rewrites, :nanmath, false)::Bool
+                return Expr(:call, NaNMath.pow, base, toexpr(exp, st))
+            else
+                return Expr(:call, ^, base, toexpr(exp, st))
+            end
         end
     end
-    if get(st.rewrites, :nanmath, false) === true && !(exp isa Integer)
-        op = NaNMath.pow
-        return toexpr(Term{T}(op, ArgsT{T}((Const{T}(base), Const{T}(exp))); type = symtype(O)), st)
-    end
-    return nothing
 end
 
 function function_to_expr(::typeof(ifelse), O, st)
     args = arguments(O)
-    :($(toexpr(args[1], st)) ? $(toexpr(args[2], st)) : $(toexpr(args[3], st)))
-end
-
-function function_to_expr(x::BasicSymbolic, O, st)
-    issym(x) ? get(st.rewrites, O, nothing) : nothing
+    return Expr(:if, toexpr(args[1], st), toexpr(args[2], st), toexpr(args[3], st))
 end
 
 toexpr(O::Expr, st) = O
@@ -413,27 +508,54 @@ function substitute_name(O, st)
 end
 
 function toexpr(O, st)
-    O = unwrap_const(O)
-    if O isa CodegenPrimitive
-        return toexpr(O, st)
-    end
-    O = substitute_name(O, st)
-    if issym(O)
-        return nameof(O)
-    end
-
-    if _is_array_of_symbolics(O)
-        return issparse(O) ? toexpr(MakeSparseArray(O)) : toexpr(MakeArray(O, typeof(O)), st)
-    end
-    !iscall(O) && return O
-    op = operation(O)
-    expr′ = function_to_expr(op, O, st)
-    if expr′ !== nothing
-        return expr′
+    u = unwrap(O)
+    if u !== O
+        return toexpr(u, st)
+    elseif _is_array_of_symbolics(O)
+        return issparse(O) ? toexpr(MakeSparseArray(O), st) : toexpr(MakeArray(O, typeof(O)), st)
     else
-        !iscall(O) && return O
-        args = arguments(O)
-        return Expr(:call, toexpr(op, st), map(x->toexpr(x, st), args)...)
+        return O
+    end
+end
+
+function toexpr(O::BasicSymbolic{T}, st) where {T}
+    if haskey(st.rewrites, O)
+        O = st.rewrites[O]
+        if !(O isa BasicSymbolic{T})
+            return manual_dispatch_toexpr(O, st)
+        end
+    end
+    O = O::BasicSymbolic{T}
+    @match O begin
+        BSImpl.Const(; val) => if val isa CodegenPrimitive
+            return manual_dispatch_toexpr(val, st)
+        else
+            return val
+        end
+        BSImpl.Sym(; name) => return name
+        BSImpl.ArrayOp(; term) => if term isa BasicSymbolic{T}
+            return toexpr(term, st)
+        else
+            return function_to_expr(ArrayOp{T}, O, st)
+        end
+        BSImpl.ArrayMaker(;) => return function_to_expr(ArrayMaker{T}, O, st)
+        BSImpl.Term(; f) => begin
+            if f === (^)
+                return function_to_expr((^), O, st)
+            elseif f === ifelse
+                return function_to_expr(ifelse, O, st)
+            else
+                return function_to_expr(f, O, st)
+            end
+        end
+        BSImpl.Div(; num, den) => begin
+            return Expr(:call, /, toexpr(num, st), toexpr(den, st))
+        end
+        BSImpl.AddMul(; variant) => if variant === AddMulVariant.ADD
+            return function_to_expr((+), O, st)
+        else
+            return function_to_expr((*), O, st)
+        end
     end
 end
 
@@ -479,23 +601,36 @@ function search_variables!(buffer, dargs::DestructuredArgs; kw...)
 end
 
 toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
-get_rewrites(args::DestructuredArgs) = ()
+get_rewrites(args::DestructuredArgs) = []
 function get_rewrites(args::Union{AbstractArray, Tuple})
-    cflatten(map(get_rewrites, args))
+    rws = []
+    for arg in args
+        append!(rws, get_rewrites(arg))
+    end
+    return rws
 end
-get_rewrites(x) = iscall(x) ? (x,) : ()
-cflatten(x) = Iterators.flatten(x) |> collect
+get_rewrites(x) = []
+get_rewrites(x::BasicSymbolic) = iscall(x) ? Any[x] : []
 
 # Used in Symbolics
 Base.@deprecate_binding get_symbolify get_rewrites
 
 function get_assignments(d::DestructuredArgs, st)
-    name = toexpr(d, st)
-    map(d.inds, d.elems) do i, a
-        ex = (i isa Symbol ? :($name.$i) : :($name[$i]))
-        ex = d.inbounds && d.create_bindings ? :(@inbounds($ex)) : ex
-        a ← ex
+    name = manual_dispatch_toexpr(d, st)
+    assigns = Assignment[]
+    for i in 1:(length(d.inds)::Int)
+        idx = d.inds[i]
+        if idx isa Symbol
+            ex = Expr(:., name, QuoteNode(idx))
+        else
+            ex = Expr(:ref, name, idx)
+        end
+        if d.inbounds && d.create_bindings
+            ex = Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), ex)
+        end
+        push!(assigns, Assignment(d.elems[i], ex))
     end
+    return assigns
 end
 
 @matchable struct Let <: CodegenPrimitive
@@ -562,54 +697,68 @@ function search_variables!(buffer, l::Let; kw...)
     union!(buffer, rhsbuf)
 end
 
-function toexpr(l::Let, st)
-    if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
-        dargs = l.pairs
-    else
-        assignments = []
-        for x in l.pairs
-            if x isa DestructuredArgs
-                if x.create_bindings
-                    append!(assignments, get_assignments(x, st))
-                else
-                    for a in get_assignments(x, st)
-                        st.rewrites[a.lhs] = a.rhs
-                    end
-                end
-            elseif x isa Assignment && x.lhs isa DestructuredArgs
-                if x.lhs.create_bindings
-                    push!(assignments, x.lhs.name ← x.rhs)
-                    append!(assignments, get_assignments(x.lhs, st))
-                else
-                    push!(assignments, x.lhs.name ← x.rhs)
-                    for a in get_assignments(x.lhs, st)
-                        st.rewrites[a.lhs] = a.rhs
-                    end
-                end
-            else
-                push!(assignments, x)
+function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{DestructuredArgs, Assignment}), st)
+    if x isa DestructuredArgs
+        if x.create_bindings
+            for a in get_assignments(x, st)
+                handle_let_pair!(dargs, a, st)
+            end
+        else
+            for a in get_assignments(x, st)
+                st.rewrites[a.lhs] = a.rhs
             end
         end
-        # expand and come back
-        return toexpr(Let(assignments, l.body, l.let_block), st)
+    elseif x isa Assignment
+        lhs = x.lhs
+        if lhs isa DestructuredArgs
+            if lhs.create_bindings
+                handle_let_pair!(dargs, Assignment(lhs.name, x.rhs), st)
+                for a in get_assignments(lhs, st)
+                    handle_let_pair!(dargs, a, st)
+                end
+            else
+                handle_let_pair!(dargs, Assignment(lhs.name, x.rhs), st)
+                for a in get_assignments(lhs, st)
+                    st.rewrites[a.lhs] = a.rhs
+                end
+            end
+        else
+            push!(dargs, x)
+        end
+    else
+        _unreachable()
+    end
+end
+
+function toexpr(l::Let, st)
+    if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
+        dargs = Vector{Assignment}(l.pairs)
+    else
+        dargs = Assignment[]
+        for x in l.pairs
+            handle_let_pair!(dargs, x, st)
+        end
     end
 
-    funkyargs = get_rewrites(map(lhs, dargs))
-    union_rewrites!(st.rewrites, funkyargs)
+    bindings = Expr(:block)
+    for asg in dargs
+        union_rewrites!(st.rewrites, get_rewrites(asg.lhs))
+        push!(bindings.args, toexpr(asg, st))
+    end
 
-    bindings = map(p->toexpr(p, st), dargs)
-    l.let_block ? Expr(:let,
-                       Expr(:block, bindings...),
-                       toexpr(l.body, st)) : Expr(:block,
-                                                  bindings...,
-                                                  toexpr(l.body, st))
+    if l.let_block
+        return Expr(:let, bindings, manual_dispatch_toexpr(l.body, st))
+    end
+    isempty(bindings.args) && return manual_dispatch_toexpr(l.body, st)
+    push!(bindings.args, manual_dispatch_toexpr(l.body, st))
+    return bindings
 end
 
 @matchable struct Func <: CodegenPrimitive
-    args::Vector
+    args::Vector{Any}
     kwargs::Vector{Assignment}
     body
-    pre::Vector
+    pre::Vector{Any}
 end
 
 function search_variables!(buffer, f::Func; kw...)
@@ -699,26 +848,35 @@ Func
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
 function toexpr(f::Func, st)
-    funkyargs = get_rewrites(vcat(f.args, map(lhs, f.kwargs)))
-    union_rewrites!(st.rewrites, funkyargs)
-    dargs = filter(x->x isa DestructuredArgs, f.args)
-    if !isempty(dargs)
-        body = Let(dargs, f.body, false)
-    else
-        body = f.body
+    for arg in f.args
+        union_rewrites!(st.rewrites, get_rewrites(arg))
     end
-    if isempty(f.kwargs)
-        :(function ($(map(x->toexpr(x, st), f.args)...),)
-              $(f.pre...)
-              $(toexpr(body, st))
-          end)
-    else
-        :(function ($(map(x->toexpr(x, st), f.args)...),;
-                    $(map(x->toexpr_kw(x, st), f.kwargs)...))
-              $(f.pre...)
-              $(toexpr(body, st))
-          end)
+    for arg in f.kwargs
+        union_rewrites!(st.rewrites, get_rewrites(arg.lhs))
     end
+    dargs = Union{Assignment, DestructuredArgs}[]
+    for arg in f.args
+        if arg isa DestructuredArgs
+            push!(dargs, arg)
+        end
+    end
+    body = manual_dispatch_toexpr(Let(dargs, f.body, false), st)
+    fn_args = Expr(:tuple)
+    if !isempty(f.kwargs)
+        fn_kws = Expr(:parameters)
+        for asg in f.kwargs
+            asg_expr = toexpr(asg, st)
+            push!(fn_kws.args, Expr(:kw, asg_expr.args[1], asg_expr.args[2]))
+        end
+        push!(fn_args.args, fn_kws)
+    end
+    for arg in f.args
+        push!(fn_args.args, manual_dispatch_toexpr(arg, st))
+    end
+    fn_body = Expr(:block)
+    append!(fn_body.args, f.pre)
+    push!(fn_body.args, body)
+    return Expr(:function, fn_args, fn_body)
 end
 
 @matchable struct SetArray <: CodegenPrimitive
@@ -1175,6 +1333,8 @@ end
 
 ### Common subexprssion evaluation
 
+const CSE_PREFIX = Vector{UInt8}("##cse#")
+
 """
     newsym!(state::CSEState, ::Type{T})
 
@@ -1182,9 +1342,18 @@ Generates new symbol of type `T` with unique name in `state`.
 """
 @inline function newsym!(state, ::Type{T}, symtype::TypeT, sh::ShapeT) where {T <: SymVariant}
     @nospecialize symtype sh
-    name = "##cse#$(state.varid[])"
+
+    idx = state.varid[]
     state.varid[] += 1
-    Sym{T}(Symbol(name); type = symtype, shape = sh)
+    buffer = UInt8[]
+    sizehint!(buffer, length(CSE_PREFIX) + ndigits(idx))
+    append!(buffer, CSE_PREFIX)
+    while idx > 0
+        push!(buffer, '0' + (idx % 10))
+        idx = div(idx, 10)
+    end
+    reverse!(@view(buffer[(length(CSE_PREFIX) + 1):end]))
+    Sym{T}(Symbol(buffer); type = symtype, shape = sh)
 end
 
 """
@@ -1215,7 +1384,7 @@ struct CSEState
     """
     A mapping of symbolic expression to the LHS in `sorted_exprs` that computes it.
     """
-    visited::IdDict{Union{SymbolicUtils.IDType, AbstractArray, Tuple}, BasicSymbolic}
+    visited::IdDict{SymbolicUtils.IDType, Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}, BasicSymbolic{TreeReal}}}
     """
     Integer counter, used to generate unique names for intermediate variables.
     """
@@ -1314,43 +1483,52 @@ and should have the same type as `x`.
 function cse! end
 
 function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
-    get!(state.visited, expr.id) do
-        @match expr begin
-            BSImpl.Const(;) => begin
-                new_expr = expr
-                sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
-                push!(state.sorted_exprs, sym ← new_expr)
-                return sym
-            end
-            BSImpl.Sym(;) => return expr
-            BSImpl.ArrayOp(; term) => if term === nothing
-                sym = newsym!(state, T, symtype(expr), shape(expr))
-                push!(state.sorted_exprs, sym ← expr)
-                return sym
-            else
-                return cse!(term, state)
-            end
-            BSImpl.ArrayMaker(; regions, values, type, shape) => begin
-                return BSImpl.ArrayMaker{T}(regions, map(Base.Fix2(cse!, state), values); type, shape)
-            end
-            _ => begin
-                op = operation(expr)
-                args = arguments(expr)
-                if op isa BasicSymbolic{T}
-                    SymbolicUtils.is_function_symbolic(op) || return expr
+    cse_visitor = let expr = expr, state = state
+        function _cse_visitor()
+            @match expr begin
+                BSImpl.Const(;) => begin
+                    new_expr = expr
+                    sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
+                    push!(state.sorted_exprs, sym ← new_expr)
+                    return sym
                 end
-                cse_inside_expr(expr, op) || return expr
-                args = map(Base.Fix2(cse!, state), args)
-                # use `term` instead of `maketerm` because we only care about the operation being performed
-                # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-                new_expr = Term{T}(operation(expr), args; type = symtype(expr))
-                sym = newsym!(state, T, symtype(new_expr), shape(expr))
-                push!(state.sorted_exprs, sym ← new_expr)
-                return sym
+                BSImpl.Sym(;) => return expr
+                BSImpl.ArrayOp(; term) => if term === nothing
+                    sym = newsym!(state, T, symtype(expr), shape(expr))
+                    push!(state.sorted_exprs, sym ← expr)
+                    return sym
+                else
+                    return cse!(term, state)
+                end
+                BSImpl.ArrayMaker(; regions, values, type, shape) => begin
+                    values = copy(parent(values))
+                    for i in eachindex(values)
+                        values[i] = cse!(values[i], state)::BasicSymbolic{T}
+                    end
+                    return BSImpl.ArrayMaker{T}(regions, values; type, shape)
+                end
+                _ => begin
+                    op = operation(expr)
+                    args = arguments(expr)
+                    if op isa BasicSymbolic{T}
+                        SymbolicUtils.is_function_symbolic(op) || return expr
+                    end
+                    cse_inside_expr(expr, op)::Bool || return expr
+                    args = copy(parent(args))
+                    for i in eachindex(args)
+                        args[i] = cse!(args[i], state)::BasicSymbolic{T}
+                    end
+                    # use `term` instead of `maketerm` because we only care about the operation being performed
+                    # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
+                    new_expr = Term{T}(op, args; type = symtype(expr), shape = shape(expr))
+                    sym = newsym!(state, T, symtype(expr), shape(expr))
+                    push!(state.sorted_exprs, sym ← new_expr)
+                    return sym
+                end
             end
         end
-
     end
+    return get!(cse_visitor, state.visited, expr.id)::BasicSymbolic{T}
 end
 
 cse!(x, ::CSEState) = x
@@ -1370,11 +1548,9 @@ function cse!(x::AbstractArray, state::CSEState)
 end
 
 function cse!(x::AbstractSparseArray, state::CSEState)
-    new_x = copy(x)
-    for (i, j, v) in zip(findnz(x)...)
-        new_x[i, j] = cse!(v, state)
-    end
-    return new_x
+    I, J, V = findnz(x)
+    V = map(Base.Fix2(cse!, state), V)
+    return SparseArrays.sparse(I, J, V, size(x)...)
 end
 
 function cse!(x::Tuple, state::CSEState)
@@ -1383,29 +1559,83 @@ function cse!(x::Tuple, state::CSEState)
 end
 
 function cse!(x::MakeArray, state::CSEState)
-    return MakeArray(cse!(x.elems, state), x.similarto, x.output_eltype)
+    elems = x.elems
+    if elems isa Vector{BasicSymbolic{SymReal}}
+        return MakeArray(cse!(elems, state), x.similarto, x.output_eltype)
+    elseif elems isa Matrix{BasicSymbolic{SymReal}}
+        return MakeArray(cse!(elems, state), x.similarto, x.output_eltype)
+    else
+        return MakeArray(cse!(elems, state), x.similarto, x.output_eltype)
+    end
 end
 
 function cse!(x::SetArray, state::CSEState)
-    return SetArray(x.inbounds, x.arr, cse!(x.elems, state), x.return_arr)
+    elems = x.elems
+    if elems isa Vector{BasicSymbolic{SymReal}}
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    elseif elems isa Matrix{BasicSymbolic{SymReal}}
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    elseif elems isa Vector{AtIndex}
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    elseif elems isa Matrix{AtIndex}
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    else
+        return SetArray(x.inbounds, x.arr, cse!(elems, state), x.return_arr)
+    end
 end
 
 function cse!(x::MakeSparseArray, state::CSEState)
-    m, n = size(x.array)
-    i, j, v = findnz(x.array)
-    return MakeSparseArray(sparse(i, j, cse!(v, state), m, n))
+    arr = x.array
+    if arr isa SparseMatrixCSC{BasicSymbolic{SymReal}, Int}
+        return MakeSparseArray(cse!(arr, state))
+    else
+        return MakeSparseArray(cse!(arr, state))
+    end
 end
 
 function cse!(x::Assignment, state::CSEState)
-    result = Assignment(x.lhs, cse!(x.rhs, state))
-    if x.lhs isa BasicSymbolic
-        state.visited[x.lhs.id] = x.lhs
+    lhs = x.lhs
+    rhs = x.rhs
+    if rhs isa BasicSymbolic{SymReal}
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa Vector{BasicSymbolic{SymReal}}
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa Matrix{BasicSymbolic{SymReal}}
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa Let
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa MakeArray
+        result = Assignment(lhs, cse!(rhs, state))
+    elseif rhs isa SetArray
+        result = Assignment(lhs, cse!(rhs, state))
+    else
+        result = Assignment(lhs, cse!(rhs, state))
+    end
+    if lhs isa BasicSymbolic{SymReal}
+        state.visited[lhs.id] = lhs
+    elseif lhs isa BasicSymbolic{SafeReal}
+        state.visited[lhs.id] = lhs
+    elseif lhs isa BasicSymbolic{TreeReal}
+        state.visited[lhs.id] = lhs
     end
     return result
 end
 
 function cse!(x::DestructuredArgs, state::CSEState)
-    return DestructuredArgs(x.elems, x.inds, cse!(x.name, state), x.inbounds, x.create_bindings)
+    name = x.name
+    if name isa BasicSymbolic{SymReal}
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    elseif name isa BasicSymbolic{SafeReal}
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    elseif name isa BasicSymbolic{TreeReal}
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    elseif name isa Symbol
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    elseif name isa Expr
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    else
+        return DestructuredArgs(x.elems, x.inds, cse!(name, state), x.inbounds, x.create_bindings)
+    end
 end
 
 function cse!(x::Let, state::CSEState)
@@ -1415,16 +1645,70 @@ function cse!(x::Let, state::CSEState)
     # are imperative, so the CSE assignments for a given `p` can include previous `p`,
     # preventing us from simply wrapping the `Let` in another `Let`.
     for p in x.pairs
-        newp = cse!(p, state)
-        push!(state.sorted_exprs, newp)
+        if p isa Assignment
+            push!(state.sorted_exprs, cse!(p, state))
+        elseif p isa DestructuredArgs
+            push!(state.sorted_exprs, cse!(p, state))
+        else
+            _unreachable()
+        end
     end
-    newbody = cse!(x.body, state)
-    return Let(state.sorted_exprs, newbody, x.let_block)
+    body = x.body
+    if body isa BasicSymbolic{SymReal}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa BasicSymbolic{SafeReal}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa BasicSymbolic{TreeReal}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Vector{BasicSymbolic{SymReal}}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Matrix{BasicSymbolic{SymReal}}
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Let
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa MakeArray
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa ForLoop
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Symbol
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Expr
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    elseif body isa Nothing
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    else
+        return Let(state.sorted_exprs, cse!(body, state), x.let_block)
+    end
 end
 
 function cse!(x::Func, state::CSEState)
     state = new_scope(state)
-    return Func(x.args, x.kwargs, apply_cse(cse!(x.body, state), state), x.pre)
+    body = x.body
+    if body isa BasicSymbolic{SymReal}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa BasicSymbolic{SafeReal}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa BasicSymbolic{TreeReal}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Vector{BasicSymbolic{SymReal}}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Matrix{BasicSymbolic{SymReal}}
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Let
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa MakeArray
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa ForLoop
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Symbol
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Expr
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    elseif body isa Nothing
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    else
+        return Func(x.args, x.kwargs, apply_cse(cse!(body, state), state), x.pre)
+    end
 end
 
 function cse!(x::AtIndex, state::CSEState)

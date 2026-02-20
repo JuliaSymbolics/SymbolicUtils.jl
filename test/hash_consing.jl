@@ -141,3 +141,16 @@ end
         @test ex2.hash2[] != h
     end
 end
+
+@testset "Metadata type is considered in hashconsing" begin
+    @syms x
+    x1 = setmetadata(x, Int, 1)
+    x2 = setmetadata(x, Int, 1.0)
+    @test x1 !== x2
+    @test hash2(x1) != hash2(x2)
+
+    x1 = setmetadata(x, Int, [1])
+    x2 = setmetadata(x, Int, [1])
+    @test x1 === x2
+    @test hash2(x1) == hash2(x2)
+end

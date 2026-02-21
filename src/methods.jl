@@ -430,6 +430,34 @@ for f in monadic
     end
 end
 
+"""
+promote_symtype(f::ComposedFunction, arg_symtypes...)
+
+Compute the symbolic type of applying a composed function to arguments.
+
+For a composed function `f ∘ g ∘ h`, this computes the result type by propagating
+type information from the innermost function outward:
+1. Apply `h` to the input argument types
+2. Use that result type as input to `g`
+3. Use that result type as input to `f`
+
+This implementation assumes each function returns a single value that becomes
+the argument to the next function. Multi-argument returns (tuples) are not
+currently supported but could be added if needed.
+"""
+function promote_symtype(f::Base.ComposedFunction, arg_symtypes...)
+    # Unwrap the composition into a vector [innermost, ..., outermost]
+    funcs = Base.unwrap_composed(f)
+    
+    current_type = promote_symtype(funcs[1], arg_symtypes...)
+    
+    for i in 2:length(funcs)
+        current_type = promote_symtype(funcs[i], current_type)
+    end
+    
+    return current_type
+end
+
 for f in [one, zero, *, +, -]
     @eval promote_symtype(::$(typeof(f)), T::TypeT) = T
 end

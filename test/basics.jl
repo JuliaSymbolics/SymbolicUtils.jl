@@ -1340,3 +1340,29 @@ end
     arr2 = Const{SymReal}(ones(3, 3))
     @test isequal(arr1 + arr2, Const{SymReal}(2ones(3, 3)))
 end
+
+@testset "ComposedFunction promote_symtype" begin
+    # Test basic two-function compositions
+    @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Real) == Real
+    @test SymbolicUtils.promote_symtype(cos ∘ sin, Real) == Real
+    @test SymbolicUtils.promote_symtype(abs ∘ sin, Real) == Real
+    @test SymbolicUtils.promote_symtype(exp ∘ log, Real) == Real
+    
+    # Test three-function compositions
+    @test SymbolicUtils.promote_symtype(sin ∘ abs ∘ sqrt, Real) == Real
+    @test SymbolicUtils.promote_symtype(cos ∘ sin ∘ abs, Real) == Real
+    @test SymbolicUtils.promote_symtype(exp ∘ sin ∘ sqrt, Real) == Real
+    
+    # Test four-function compositions
+    @test SymbolicUtils.promote_symtype(exp ∘ sin ∘ abs ∘ sqrt, Real) == Real
+    
+    # Test type propagation with different input types
+    @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Number) == Number
+    @test SymbolicUtils.promote_symtype(sin ∘ abs ∘ sqrt, Number) == Number
+    @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Complex) == Number
+    
+    # Test edge cases
+    @test SymbolicUtils.promote_symtype(abs ∘ abs, Real) == Real
+    @test SymbolicUtils.promote_symtype(sin ∘ sin, Real) == Real
+end
+

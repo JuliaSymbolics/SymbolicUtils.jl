@@ -233,7 +233,8 @@ end
 function show_add(io::IO, args::ArgsT{T}) where {T}
     @union_split_smallvec args begin
         for (i, t) in enumerate(args)
-            neg = isnegative(t)
+            neg_result = isnegative(t)
+            neg = neg_result isa Bool ? neg_result : false
             if i == 1
                 neg && print(io, "-")
             else

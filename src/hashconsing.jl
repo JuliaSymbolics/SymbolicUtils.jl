@@ -156,6 +156,16 @@ function metadata_isequal(m1, m2)
     end
 end
 
+function isequal_shapes(@nospecialize(sh1::ShapeT), @nospecialize(sh2::ShapeT))
+    if sh1 isa Unknown && sh2 isa Unknown
+        return sh1.ndims == sh2.ndims
+    elseif sh1 isa ShapeVecT && sh2 isa ShapeVecT
+        length(sh1) == length(sh2) || return false
+        return @union_split_smallvec sh1 @union_split_smallvec sh2 all(splat(isequal), zip(sh1, sh2))
+    end
+    return false
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -181,22 +191,22 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
             isequal_somescalar(v1, v2)::Bool && (!full || (typeof(v1) === typeof(v2))::Bool)
         end
         (BSImpl.Sym(; name = n1, shape = s1, type = t1), BSImpl.Sym(; name = n2, shape = s2, type = t2)) => begin
-            n1 === n2 && s1 == s2 && t1 === t2
+            n1 === n2 && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.Term(; f = f1, args = args1, shape = s1, type = t1), BSImpl.Term(; f = f2, args = args2, shape = s2, type = t2)) => begin
-            isequal(f1, f2)::Bool && isequal_argsvec(args1, args2, full) && s1 == s2 && t1 === t2
+            isequal(f1, f2)::Bool && isequal_argsvec(args1, args2, full) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
-            isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && s1 == s2 && t1 === t2
+            isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.Div(; num = n1, den = d1, type = t1, shape = s1), BSImpl.Div(; num = n2, den = d2, type = t2, shape = s2)) => begin
-            isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && s1 == s2 && t1 === t2
+            isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.ArrayOp(; output_idx = o1, expr = e1, reduce = f1, term = t1, ranges = r1, shape = s1, type = type1), BSImpl.ArrayOp(; output_idx = o2, expr = e2, reduce = f2, term = t2, ranges = r2, shape = s2, type = type2)) => begin
-            isequal(o1, o2) && isequal(e1, e2) && isequal(f1, f2)::Bool && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && s1 == s2 && type1 === type2
+            isequal(o1, o2) && isequal(e1, e2) && isequal(f1, f2)::Bool && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && isequal_shapes(s1, s2) && type1 === type2
         end
         (BSImpl.ArrayMaker(; regions = r1, values = v1, shape = s1, type = t1), BSImpl.ArrayMaker(; regions = r2, values = v2, shape = s2, type = t2)) => begin
-            r1 == r2 && isequal_argsvec(v1, v2, full) && s1 == s2 && t1 === t2
+            r1 == r2 && isequal_argsvec(v1, v2, full) && isequal_shapes(s1, s2) && t1 === t2
         end
     end
     if full && partial && !(Ta <: BSImpl.Const)

@@ -431,7 +431,7 @@ for f in monadic
 end
 
 """
-promote_symtype(f::ComposedFunction, arg_symtypes...)
+promote_symtype(f::ComposedFunction, arg_symtypes::TypeT...)
 
 Compute the symbolic type of applying a composed function to arguments.
 
@@ -445,17 +445,9 @@ This implementation assumes each function returns a single value that becomes
 the argument to the next function. Multi-argument returns (tuples) are not
 currently supported but could be added if needed.
 """
-function promote_symtype(f::Base.ComposedFunction, arg_symtypes...)
-    # Unwrap the composition into a vector [innermost, ..., outermost]
-    funcs = Base.unwrap_composed(f)
-    
-    current_type = promote_symtype(funcs[1], arg_symtypes...)
-    
-    for i in 2:length(funcs)
-        current_type = promote_symtype(funcs[i], current_type)
-    end
-    
-    return current_type
+function promote_symtype(f::Base.ComposedFunction, arg_symtypes::TypeT...)
+    inner_result = promote_symtype(f.inner, arg_symtypes...)
+    return promote_symtype(f.outer, inner_result)  
 end
 
 for f in [one, zero, *, +, -]

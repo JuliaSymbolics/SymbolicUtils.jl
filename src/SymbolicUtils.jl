@@ -34,6 +34,7 @@ PrecompileTools.@recompile_invalidations begin
     import SparseArrays: SparseMatrixCSC, findnz, sparse
     using DataStructures
     using ReadOnlyArrays
+    import Graphs
 end
 import LinearAlgebra
 
@@ -164,6 +165,9 @@ include("simplify.jl")
 
 export substitute
 include("substitute.jl")
+
+export IRStructure, populate_ir!
+include("irstructure.jl")
 
 include("code.jl")
 

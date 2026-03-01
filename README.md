@@ -32,16 +32,14 @@ If you are a Julia package developer in need of a rule rewriting system for your
 ```julia
 julia> using SymbolicUtils
 
-julia> SymbolicUtils.show_simplified[] = true
-
 julia> @syms x::Real y::Real z::Complex f(::Number)::Real
-(x, y, z, f(::Number)::Real)
+(x, y, z, f)
 
 julia> 2x^2 - y + x^2
-(3 * (x ^ 2)) + (-1 * y)
+-y + 3(x^2)
 
-julia> f(sin(x)^2 + cos(x)^2) + z
-f(1) + z
+julia> simplify(f(sin(x)^2 + cos(x)^2) + z)
+z + f(1)
 
 julia> r = @rule sinh(im * ~x) => sin(~x)
 sinh(im * ~x) => sin(~x)
@@ -49,7 +47,10 @@ sinh(im * ~x) => sin(~x)
 julia> r(sinh(im * y))
 sin(y)
 
-julia> simplify(cos(y)^2 + sinh(im*y)^2, RuleSet([r]))
+julia> expr = cos(y)^2 + sinh(im*y)^2
+cos(y)^2 + sinh((0 + 1im)*y)^2
+
+julia> simplify(Rewriters.Postwalk(r)(expr))
 1
 ```
 

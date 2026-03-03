@@ -138,8 +138,7 @@ function term_matcher_constructor(term, acSets)
     # if the operation is a pow, we have to match also 1/(...)^(...) with negative exponent
     if operation(term) === ^
         function pow_term_matcher(success, data, bindings)
-            data = extract_call(data)
-            data === nothing && return nothing
+            extract_call(data) === nothing && return nothing
             
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
@@ -182,8 +181,7 @@ function term_matcher_constructor(term, acSets)
     elseif acSets!==nothing && (operation(term) === (+) || operation(term) === (*))
         has_segment = any([isa(unwrap_const(a),Segment) for a in arguments(term)])
         function commutative_term_matcher(success, data, bindings)
-            data = extract_call(data)
-            data === nothing && return nothing
+            extract_call(data) === nothing && return nothing
             operation(term) !== operation(data) && return nothing # if the operation of data is not the correct one, don't even try
             data_args = arguments(data)
             # if the number of arguments is different, and the rule doesnt have a segment, return nothing
@@ -212,8 +210,7 @@ function term_matcher_constructor(term, acSets)
     # if the operation is sqrt, we have to match also ^(1//2)
     elseif operation(term)==sqrt
         function sqrt_matcher(success, data, bindings)
-            data = extract_call(data)
-            data === nothing && return nothing
+            extract_call(data) === nothing && return nothing
             
             # do the normal matcher
             result = loop(data, bindings, matchers)
@@ -231,8 +228,7 @@ function term_matcher_constructor(term, acSets)
     # if the operation is exp, we have to match also ℯ^
     elseif operation(term)==exp
         function exp_matcher(success, data, bindings)
-            data = extract_call(data)
-            data === nothing && return nothing
+            extract_call(data) === nothing && return nothing
             
             # do the normal matcher
             result = loop(data, bindings, matchers)
@@ -251,8 +247,7 @@ function term_matcher_constructor(term, acSets)
     # because -x is internally represented as (-1) * x
     elseif operation(term) === (-) && length(arguments(term)) == 1
         function neg_term_matcher(success, data, bindings)
-            data = extract_call(data)
-            data === nothing && return nothing
+            extract_call(data) === nothing && return nothing
 
             # try the normal matcher first (in case it's actually stored as -(x))
             result = loop(data, bindings, matchers)
@@ -283,8 +278,7 @@ function term_matcher_constructor(term, acSets)
         return neg_term_matcher
     else
         function term_matcher(success, data, bindings)
-            data = extract_call(data)
-            data === nothing && return nothing
+            extract_call(data) === nothing && return nothing
             
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)

@@ -79,6 +79,15 @@ function trymatchexpr(data, value, n)
     end
 end
 
+# Extract the first callable expression from data, returning nothing if data is not
+# a list or does not contain a callable expression.
+@inline function extract_call(data)
+    !islist(data) && return nothing
+    d = car(data)
+    !iscall(d) && return nothing
+    return d
+end
+
 function matcher(segment::Segment, acSets)
     function segment_matcher(success, data, bindings)
         val = get(bindings, segment.name, nothing)
@@ -129,9 +138,8 @@ function term_matcher_constructor(term, acSets)
     # if the operation is a pow, we have to match also 1/(...)^(...) with negative exponent
     if operation(term) === ^
         function pow_term_matcher(success, data, bindings)
-            !islist(data) && return nothing # if data is not a list, return nothing
-            data = car(data) # from (..., ) to ...
-            !iscall(data) && return nothing # if first element is not a call, return nothing
+            data = extract_call(data)
+            data === nothing && return nothing
             
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
@@ -174,9 +182,8 @@ function term_matcher_constructor(term, acSets)
     elseif acSets!==nothing && (operation(term) === (+) || operation(term) === (*))
         has_segment = any([isa(unwrap_const(a),Segment) for a in arguments(term)])
         function commutative_term_matcher(success, data, bindings)
-            !islist(data) && return nothing # if data is not a list, return nothing
-            data = car(data)
-            !iscall(data) && return nothing # if first element is not a call, return nothing
+            data = extract_call(data)
+            data === nothing && return nothing
             operation(term) !== operation(data) && return nothing # if the operation of data is not the correct one, don't even try
             data_args = arguments(data)
             # if the number of arguments is different, and the rule doesnt have a segment, return nothing
@@ -205,9 +212,8 @@ function term_matcher_constructor(term, acSets)
     # if the operation is sqrt, we have to match also ^(1//2)
     elseif operation(term)==sqrt
         function sqrt_matcher(success, data, bindings)
-            !islist(data) && return nothing # if data is not a list, return nothing
-            data = car(data)
-            !iscall(data) && return nothing # if first element is not a call, return nothing
+            data = extract_call(data)
+            data === nothing && return nothing
             
             # do the normal matcher
             result = loop(data, bindings, matchers)
@@ -225,9 +231,8 @@ function term_matcher_constructor(term, acSets)
     # if the operation is exp, we have to match also ℯ^
     elseif operation(term)==exp
         function exp_matcher(success, data, bindings)
-            !islist(data) && return nothing # if data is not a list, return nothing
-            data = car(data)
-            !iscall(data) && return nothing # if first element is not a call, return nothing
+            data = extract_call(data)
+            data === nothing && return nothing
             
             # do the normal matcher
             result = loop(data, bindings, matchers)
@@ -242,12 +247,46 @@ function term_matcher_constructor(term, acSets)
             return nothing
         end
         return exp_matcher
+    # if the operation is unary minus, we have to also match (-1) * x
+    # because -x is internally represented as (-1) * x
+    elseif operation(term) === (-) && length(arguments(term)) == 1
+        function neg_term_matcher(success, data, bindings)
+            data = extract_call(data)
+            data === nothing && return nothing
+
+            # try the normal matcher first (in case it's actually stored as -(x))
+            result = loop(data, bindings, matchers)
+            result !== nothing && return success(result, 1)
+
+            # if data is (-1) * x or (-1) * x * y * ..., reconstruct as -(x) or -(x*y*...) for matching
+            if operation(data) === (*)
+                data_args = arguments(data)
+                neg_idx = nothing
+                for i in eachindex(data_args)
+                    ai = unwrap_const(data_args[i])
+                    if ai isa Number && isone(-ai)
+                        neg_idx = i
+                        break
+                    end
+                end
+                if neg_idx !== nothing
+                    remaining = [data_args[j] for j in eachindex(data_args) if j != neg_idx]
+                    negated_arg = length(remaining) == 1 ? remaining[1] : Term{vartype(data)}(*, remaining)
+                    T = vartype(data)
+                    frankestein = Term{T}(-, [negated_arg])
+                    result = loop(frankestein, bindings, matchers)
+                    result !== nothing && return success(result, 1)
+                end
+            end
+            return nothing
+        end
+        return neg_term_matcher
     else
         function term_matcher(success, data, bindings)
-            !islist(data) && return nothing # if data is not a list, return nothing
-            !iscall(car(data)) && return nothing # if first element is not a call, return nothing
+            data = extract_call(data)
+            data === nothing && return nothing
             
-            result = loop(car(data), bindings, matchers)
+            result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
             return nothing
         end

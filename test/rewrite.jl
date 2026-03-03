@@ -200,6 +200,37 @@ end
     @test rexp(ℯ^x) === x
 end
 
+@testset "Negation matcher" begin
+    # -x is internally stored as (-1)*x, so -(~x) patterns need special handling
+    r_neg = @rule -(~x) => ~x
+    @test r_neg(-a) === a
+    @test r_neg(-b) === b
+    @test r_neg(a) === nothing
+
+    # Negation inside function calls (the original bug: cos(-(~x)) didn't match cos(-α))
+    r_cos = @rule cos(-(~x)) => cos(~x)
+    @eqtest r_cos(cos(-a)) == cos(a)
+    @test r_cos(cos(a)) === nothing
+
+    r_sin = @rule sin(-(~x)) => -(sin(~x))
+    @eqtest r_sin(sin(-a)) == -sin(a)
+    @test r_sin(sin(a)) === nothing
+
+    # Negation of a compound expression: -(a*b) is stored as (-1)*a*b
+    r_neg2 = @rule -(~x * ~y) => (~x, ~y)
+    res = r_neg2(-(a * b))
+    @test res !== nothing
+    @test Set(res) == Set((a, b))
+
+    # Using negation rules in a RuleSet with simplify
+    rules = RuleSet([
+        @rule(sin(-(~x)) => -(sin(~x))),
+        @rule(cos(-(~x)) => cos(~x))
+    ])
+    @eqtest simplify(cos(-a), rewriter=rules) == cos(a)
+    @eqtest simplify(sin(-a), rewriter=rules) == -sin(a)
+end
+
 using SymbolicUtils: @capture
 
 @testset "Capture form" begin

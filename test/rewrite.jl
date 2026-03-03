@@ -223,10 +223,10 @@ end
     @test Set(res) == Set((a, b))
 
     # Using negation rules in a RuleSet with simplify
-    rules = RuleSet([
+    rules = Postwalk(Chain([
         @rule(sin(-(~x)) => -(sin(~x))),
         @rule(cos(-(~x)) => cos(~x))
-    ])
+    ]))
     @eqtest simplify(cos(-a), rewriter=rules) == cos(a)
     @eqtest simplify(sin(-a), rewriter=rules) == -sin(a)
 end

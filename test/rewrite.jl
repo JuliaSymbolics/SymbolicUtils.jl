@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: unwrap_const
+using SymbolicUtils: unwrap_const, Postwalk, Chain
 using Test 
 include("utils.jl")
 

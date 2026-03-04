@@ -1366,3 +1366,11 @@ end
     @test SymbolicUtils.promote_symtype(sin ∘ sin, Real) == Real
 end
 
+@testset "issue #1747" begin
+    indices = repeat([1:2], 2)
+    final_indices = 1:3
+    
+    @syms y[indices..., final_indices]
+    @test SymbolicUtils.symtype(y) == Array{Number, 3}
+    @test y[1, 1, 1] isa SymbolicUtils.BasicSymbolic
+end

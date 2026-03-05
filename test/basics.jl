@@ -1366,7 +1366,8 @@ end
     @test SymbolicUtils.promote_symtype(sin ∘ sin, Real) == Real
 end
 
-@testset "issue #1747" begin
+# https://github.com/JuliaSymbolics/Symbolics.jl/issues/1747
+@testset "Composite splatted indices in array indexing" begin
     indices = repeat([1:2], 2)
     final_indices = 1:3
     

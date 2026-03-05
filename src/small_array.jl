@@ -85,7 +85,7 @@ Base.@propagate_inbounds function Base.pop!(x::Backing{T}) where {T}
     v
 end
 
-function Base.any(f::Function, x::Backing)
+function Base.any(f::F, x::Backing) where {F <: Function}
     if x.len == 0
         return false
     elseif x.len == 1
@@ -98,7 +98,7 @@ function Base.any(f::Function, x::Backing)
     _unreachable()
 end
 
-function Base.all(f::Function, x::Backing)
+function Base.all(f::F, x::Backing) where {F <: Function}
     if x.len == 0
         return true
     elseif x.len == 1
@@ -111,7 +111,7 @@ function Base.all(f::Function, x::Backing)
     _unreachable()
 end
 
-function Base.map(f, x::Backing{T}) where {T}
+function Base.map(f::F, x::Backing{T}) where {F, T}
     if x.len == 0
         # StaticArrays does this, so we are only as bad as they are
         return Backing{Core.Compiler.return_type(f, Tuple{T})}()
@@ -307,9 +307,9 @@ end
 
 Base.iterate(x::SmallVec) = iterate(x.data)
 Base.iterate(x::SmallVec, st::Int) = iterate(x.data, st)
-Base.any(f::Function, x::SmallVec) = any(f, x.data)
-Base.all(f::Function, x::SmallVec) = all(f, x.data)
-function Base.map(f, x::SmallVec{T, Vector{T}}) where {T}
+Base.any(f::F, x::SmallVec) where {F <: Function} = any(f, x.data)
+Base.all(f::F, x::SmallVec) where {F <: Function} = all(f, x.data)
+function Base.map(f::F, x::SmallVec{T, Vector{T}}) where {F, T}
     arr = map(f, x.data)
     SmallVec{eltype(arr),Vector{eltype(arr)}}(arr)
 end

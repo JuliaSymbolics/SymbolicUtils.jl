@@ -294,6 +294,33 @@ SymbolicUtils.Code.cse_inside_expr(sym, ::typeof(foo), args...) = false
     @test any(isequal(exfoo), arguments(ex3))
 end
 
+@testset "CSE does not alias constants with function arguments" begin
+    # When build_function is given argument arrays containing constants (e.g., zeros
+    # from erased cache variables), CSE should not replace identical constants in the
+    # expression body with references to those argument positions. This is a regression
+    # test for https://github.com/JuliaSymbolics/Symbolics.jl/issues/1811.
+    @syms x1 x2 x3 x4 x5 x6
+    x_vars = [x1, x2, x3, x4, x5, x6]
+    # A sparse diagonal jacobian-like expression
+    ZERO = SymbolicUtils.Const{SymReal}(0)
+    expr = fill(ZERO, 12, 6)
+    for i in 1:6
+        expr[i, i] = cos(x_vars[i])
+        expr[i + 6, i] = -sin(x_vars[i])
+    end
+    # Second argument is all-zeros (simulating erased cache variables passed to build_function)
+    zero_args = [SymbolicUtils.Const{SymReal}(0) for _ in 1:12]
+    f_cse = eval(toexpr(Func([DestructuredArgs(x_vars, :arg1, inbounds = true, create_bindings = false),
+                               DestructuredArgs(zero_args, :arg2, inbounds = true, create_bindings = false)],
+                              [], Code.cse(MakeArray(expr, Array)))))
+    # Call with non-zero values for arg2 to expose incorrect aliasing
+    result = @invokelatest f_cse(collect(1.0:6.0), ones(12) * 99.0)
+    @test result[1, 2] == 0.0  # off-diagonal should be 0, NOT 99.0
+    @test result[2, 1] == 0.0
+    @test result[1, 1] ≈ cos(1.0)
+    @test result[2, 2] ≈ cos(2.0)
+end
+
 @testset "`AtIndex` with symbolic index" begin
     @syms a b c::Matrix{Int}
     ex = SetArray(false, c, [AtIndex(MakeArray([a, b], Array), [a + b, a - b])])

@@ -418,7 +418,9 @@ function quick_mulmul(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
 
             return xx, yy
         end
-        _ => _unreachable()
+        # Not `_unreachable` since `adjoint(vec) * vec` can end up here, and we just want
+        # to ignore it.
+        _ => (x, y)
     end
 end
 

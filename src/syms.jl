@@ -230,9 +230,13 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
         result = parse_variable(x.args[1]; default_type)
         shape = Expr(:call, ShapeVecT, Expr(:tuple, x.args[2:end]...))
         ntype = result[:type]
-        ndim = length(x.args) - 1
-        if ndim > 0 && Meta.isexpr(x.args[end], :...)
-            ndim = :($(ndim - 1) + length($(x.args[end].args[1])))
+        ndim = 0
+        for i in 2:length(x.args)
+            if Meta.isexpr(x.args[i], :...)
+                ndim = :($(ndim) + length($(x.args[i].args[1])))
+            else 
+                ndim = ndim isa Int ? ndim + 1 : :($(ndim) + 1)
+            end
         end
         if Meta.isexpr(ntype, :curly) && ntype.args[1] === FnType
             ntype.args[3] = :($Array{$(ntype.args[3]), $(ndim)})

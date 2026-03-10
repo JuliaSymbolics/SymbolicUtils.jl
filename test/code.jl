@@ -385,3 +385,58 @@ end
     block = cse(ex)
     @test SymbolicUtils.shape(block.pairs[1].lhs) == [1:3, 1:3]
 end
+
+@testset "`with_allocator`" begin
+    @testset "`array_literal`" begin
+        @syms x y z
+        arr = SymbolicUtils.Const{SymReal}([x, y + 2x^2 + sin(z), 2z + 1])
+        wrapped = Code.with_allocator(ones, arr)
+        test_repr(
+            toexpr(wrapped), quote
+                __array_literal_allocator = ones
+                __array_literal_result = __array_literal_allocator((3,))
+                $(setindex!)(__array_literal_result, x, 1)
+                $(setindex!)(__array_literal_result, $(+)($(+)(y, $(sin)(z)), $(*)(2, $(^)(x, 2))), 2)
+                $(setindex!)(__array_literal_result, $(+)(1, $(*)(2, z)), 3)
+                __array_literal_result
+            end
+        )
+
+        reference = eval(
+            quote
+                let x = 1, y = 2, z = 3
+                    $(toexpr(arr))
+                end
+            end
+        )
+        value = eval(
+            quote
+                let x = 1, y = 2, z = 3
+                    $(toexpr(wrapped))
+                end
+            end
+        )
+        @test isequal(reference, value)
+    end
+
+    @testset "`@arrayop`" begin
+        @syms x[1:3] y[1:3]
+        arr = @arrayop (i,) x[i] * y[i]
+        wrapped = Code.with_allocator(ones, arr)
+        test_repr(
+            toexpr(wrapped), (
+                quote
+                    let _out = $(ones)((3,))
+                        var"%_out" = for _1 in 1:1:3
+                            begin
+                                _out[$(CartesianIndex)(_1)] = $(+)($(getindex)(_out, _1), $(*)($(getindex)(x, _1), $(getindex)(y, _1)))
+                                nothing
+                            end
+                        end
+                        _out
+                    end
+                end
+            ).args[2]
+        )
+    end
+end

@@ -126,6 +126,13 @@ function with_allocator(@nospecialize(alloc), ex::BasicSymbolic{T}) where {T}
     )
 end
 
+SymbolicUtils.scalarization_function(::typeof(with_allocator)) = _with_allocator_scalarize
+
+function _with_allocator_scalarize(::typeof(with_allocator), ex::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    args = arguments(ex)
+    return SymbolicUtils.scalarize(args[2], Val{toplevel}())
+end
+
 SymbolicUtils.promote_symtype(::typeof(with_allocator), ::TypeT, T::TypeT) = T
 function SymbolicUtils.promote_shape(::typeof(with_allocator), _sh::ShapeT, sh::ShapeT)
     @nospecialize _sh sh

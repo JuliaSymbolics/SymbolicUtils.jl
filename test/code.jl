@@ -391,6 +391,7 @@ end
         @syms x y z
         arr = SymbolicUtils.Const{SymReal}([x, y + 2x^2 + sin(z), 2z + 1])
         wrapped = Code.with_allocator(ones, arr)
+        @test isequal(collect(arr), collect(wrapped))
         test_repr(
             toexpr(wrapped), quote
                 __array_literal_allocator = ones
@@ -423,6 +424,7 @@ end
         @syms x[1:3] y[1:3]
         arr = @arrayop (i,) x[i] * y[i]
         wrapped = Code.with_allocator(ones, arr)
+        @test isequal(collect(arr), collect(wrapped))
         test_repr(
             toexpr(wrapped), (
                 quote

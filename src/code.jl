@@ -48,6 +48,97 @@ end
 
 ##========================##
 
+"""
+The rewrite key used in conjunction with [`SymbolicUtils.Code.with_allocator`](@ref) to
+store user-provided allocators.
+"""
+const ALLOCATOR_REWRITES_KEY = :__internal_allocator
+
+"""
+    $TYPEDSIGNATURES
+
+Get the allocator to use for a symbolic expression. If the rewrite rules contain
+an entry for `ALLOCATOR_REWRITES_KEY`, will return that value and erase the rule
+(since allocators cannot be reused). Otherwise, returns `default`.
+"""
+function get_allocator!(state::Union{NameState, LazyState}, @nospecialize(default))
+    result = get(state.rewrites, ALLOCATOR_REWRITES_KEY, default)
+    delete!(state.rewrites, ALLOCATOR_REWRITES_KEY)
+    return result
+end
+
+function add_allocator!(state::Union{NameState, LazyState}, @nospecialize(alloc))
+    old_allocator = get(state.rewrites, ALLOCATOR_REWRITES_KEY, nothing)
+    state.rewrites[ALLOCATOR_REWRITES_KEY] = alloc
+    return old_allocator
+end
+
+function reset_allocator!(state::Union{NameState, LazyState}, @nospecialize(old_alloc))
+    state.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    return nothing
+end
+
+@noinline function throw_bad_allocator()
+    throw(ArgumentError("`with_allocator` can only be used on `array_literal`, `@arrayop` and `@makearray` expressions."))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Associate an allocating expression with an allocator. Expressions such as [`@arrayop`](@ref),
+[`@makearray`](@ref), and [`SymbolicUtils.array_literal`](@ref) need to allocate an array
+for their results. By default, the generated code will allocate an array using any method it
+deems appropriate (such as `zeros`). To use a specific allocation method, or perhaps provide
+a preallocated array of the appropriate size and `eltype`, `with_allocator` can be used.
+The first argument is an allocator (API described below), and the second argument is
+an expression which allocates an array. The array allocation will use the provided allocator.
+Note that this only applies to immediate next allocation in `ex`. For example, an
+`array_literal` containing an `@arrayop` has two allocations. `with_allocator` on the
+outer `array_literal` will only control the allocation used for `array_literal`, and not
+`@arrayop`. Each allocating expression needs its own `with_allocator`.
+
+# Allocator API
+
+The API for the allocator is relatively simple. It should be a callable accepting an
+`NTuple{N, Int}` indicating the size of the required array, and returning an array of the
+appropriate `eltype` and indicated size. The array should be mutable, allowing `setindex!`.
+
+Note that the `eltype` of the array is not provided, and is the responsibility of the
+allocator to identify. This is intentional, since figuring this out ahead of time can be
+prohibitively expensive. For example, to obtain a value representing the `eltype` of an
+`@arrayop` can require running the entire set of reduction loops. The `symtype` of the
+expression is also typically very wide - it is usually a type like `Real` or `Number`. The
+provider of the allocator typically has more information about the required `eltype`, since
+they know how the expression is involved in the larger code, where the arguments come from,
+and the concrete types of the buffers.
+"""
+function with_allocator(@nospecialize(alloc), ex::BasicSymbolic{T}) where {T}
+    @match ex begin
+        BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => nothing
+        BSImpl.ArrayOp(; term, shape) && if term === nothing && is_array_shape(shape) end => nothing
+        BSImpl.ArrayMaker(;) => nothing
+        _ => _throw_bad_allocator()
+    end
+
+    return BSImpl.Term{T}(
+        with_allocator, ArgsT{T}((BSImpl.Const{T}(alloc), ex));
+        type = symtype(ex), shape = shape(ex)
+    )
+end
+
+SymbolicUtils.scalarization_function(::typeof(with_allocator)) = _with_allocator_scalarize
+
+function _with_allocator_scalarize(::typeof(with_allocator), ex::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    args = arguments(ex)
+    return SymbolicUtils.scalarize(args[2], Val{toplevel}())
+end
+
+SymbolicUtils.promote_symtype(::typeof(with_allocator), ::TypeT, T::TypeT) = T
+function SymbolicUtils.promote_shape(::typeof(with_allocator), _sh::ShapeT, sh::ShapeT)
+    @nospecialize _sh sh
+    return sh
+end
+
 abstract type CodegenPrimitive end
 
 function manual_dispatch_toexpr(@nospecialize(x), st)
@@ -299,11 +390,20 @@ function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
     out === nothing || return out
 
     # TODO: better infer default eltype from `O`
+    _allocator = get_allocator!(st, nothing)
+    
     output_eltype = get(st.rewrites, :arrayop_eltype, Float64)
     delete!(st.rewrites, :arrayop_eltype)
     sh = shape(O)
     default_output_buffer = if is_array_shape(sh)
-        term(zeros, output_eltype, size(O))
+        if _allocator === nothing
+            term(zeros, output_eltype, size(O))
+        else
+            @match _allocator begin
+                if _allocator isa BasicSymbolic{T} end && BSImpl.Const(; val) => term(val, size(O))
+                _ => term(_allocator, size(O))
+            end
+        end
     else
         term(zero, output_eltype)
     end
@@ -395,11 +495,16 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
 
+    _allocator = get_allocator!(st, nothing)
     # TODO: better infer default eltype from `O`
     output_eltype = get(st.rewrites, :arraymaker_eltype, Float64)
     delete!(st.rewrites, :arraymaker_eltype)
     sh = shape(O)
-    default_output_buffer = term(zeros, output_eltype, size(O))
+    default_output_buffer = if _allocator === nothing
+        term(zeros, output_eltype, size(O))
+    else
+        term(_allocator, size(O))
+    end
     output_buffer = get(st.rewrites, :arraymaker_output, default_output_buffer)
     delete!(st.rewrites, :arraymaker_output)
     ir = Assignment[]
@@ -430,6 +535,26 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
         end
     end
     return toexpr(Let([Assignment(ARRAY_OUTSYM, output_buffer)], Let(ir, ARRAY_OUTSYM, false), true), st)
+end
+
+function function_to_expr(::typeof(SymbolicUtils.array_literal), O::BasicSymbolic{T}, st) where {T}
+    _allocator = get_allocator!(st, nothing)
+    if _allocator === nothing
+        return function_to_expr_no_nanmath(SymbolicUtils.array_literal, O, st)
+    end
+    expr = Expr(:block)
+    if _allocator isa BasicSymbolic{T}
+        push!(expr.args, Expr(:(=), :__array_literal_allocator, toexpr(_allocator, st)))
+    else
+        push!(expr.args, Expr(:(=), :__array_literal_allocator, _allocator))
+    end
+    args = parent(arguments(O))
+    push!(expr.args, Expr(:(=), :__array_literal_result, Expr(:call, :__array_literal_allocator, unwrap_const(args[1]))))
+    @union_split_smallvec args for (idx, arg) in enumerate(Iterators.drop(args, 1))
+        push!(expr.args, Expr(:call, setindex!, :__array_literal_result, toexpr(arg, st), idx))
+    end
+    push!(expr.args, :__array_literal_result)
+    return expr
 end
 
 function function_to_expr(@nospecialize(op::Union{typeof(*),typeof(+)}), O, st)
@@ -542,11 +667,18 @@ function toexpr(O::BasicSymbolic{T}, st) where {T}
             return function_to_expr(ArrayOp{T}, O, st)
         end
         BSImpl.ArrayMaker(;) => return function_to_expr(ArrayMaker{T}, O, st)
-        BSImpl.Term(; f) => begin
+        BSImpl.Term(; f, args) => begin
             if f === (^)
                 return function_to_expr((^), O, st)
             elseif f === ifelse
                 return function_to_expr(ifelse, O, st)
+            elseif f === SymbolicUtils.array_literal
+                return function_to_expr(SymbolicUtils.array_literal, O, st)
+            elseif f === with_allocator
+                old_allocator = add_allocator!(st, args[1])
+                result = toexpr(args[2], st)
+                reset_allocator!(st, old_allocator)
+                return result
             else
                 return function_to_expr(f, O, st)
             end

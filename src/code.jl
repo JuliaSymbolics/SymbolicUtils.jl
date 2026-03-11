@@ -1642,6 +1642,37 @@ function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
                     end
                     return BSImpl.ArrayMaker{T}(regions, values; type, shape)
                 end
+                BSImpl.Term(; f, args, type, shape) && if f === SymbolicUtils.array_literal end => begin
+                    args = copy(args)
+                    # don't CSE the size
+                    for i in Iterators.drop(eachindex(args), 1)
+                        args[i] = cse!(args[i], state)::BasicSymbolic{T}
+                    end
+                    sym = newsym!(state, T, type, shape)
+                    push!(state.sorted_exprs, sym ← BSImpl.Term{T}(f, args; type, shape))
+                    return sym
+                end
+                BSImpl.Term(; f, args, type = atype, shape = ashape) && if f === with_allocator end => begin
+                    allocop = @match args[2] begin
+                        BSImpl.Term(; f = finner, args = argsinner, shape, type) && if finner === SymbolicUtils.array_literal end => begin
+                            argsinner = copy(argsinner)
+                            for i in Iterators.drop(eachindex(argsinner), 1)
+                                argsinner[i] = cse!(argsinner[i], state)::BasicSymbolic{T}
+                            end
+                            BSImpl.Term{T}(finner, argsinner; type, shape)
+                        end
+                        BSImpl.ArrayOp(;) => args[2]
+                        BSImpl.ArrayMaker(; regions, values, type, shape) => begin
+                            values = copy(parent(values))
+                            for i in eachindex(values)
+                                values[i] = cse!(values[i], state)::BasicSymbolic{T}
+                            end
+                            BSImpl.ArrayMaker{T}(regions, values; type, shape)
+                        end
+                    end
+
+                    return BSImpl.Term{T}(with_allocator, ArgsT{T}((args[1], allocop)); type = atype, shape = ashape)
+                end
                 _ => begin
                     op = operation(expr)
                     args = arguments(expr)

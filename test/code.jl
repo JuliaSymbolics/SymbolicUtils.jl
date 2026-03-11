@@ -418,6 +418,15 @@ end
             end
         )
         @test isequal(reference, value)
+
+        value = eval(
+            quote
+                let x = 1, y = 2, z = 3
+                    $(toexpr(Code.cse(wrapped)))
+                end
+            end
+        )
+        @test isequal(reference, value)
     end
 
     @testset "`@arrayop`" begin

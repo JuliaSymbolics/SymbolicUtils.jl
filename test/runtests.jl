@@ -31,5 +31,6 @@ using Pkg, Test, SafeTestsets
         @safetestset "Recursive utilities" begin include("recursive_utils.jl") end
         @safetestset "Misc" begin include("misc.jl") end
         @safetestset "Method library" begin include("methods.jl") end
+        @safetestset "IRStructure" begin include("irstructure.jl") end
     end
 end

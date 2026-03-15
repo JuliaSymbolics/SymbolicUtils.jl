@@ -40,7 +40,10 @@ const CANONICALIZE_TIMES = (
     @rule(*(~x) => ~x),
 )
 
-const MUL_DISTRIBUTE = @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m))
+const MUL_DISTRIBUTE = Chain((
+    @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m)),
+    @acrule((~y)^(~n) * ~y => (~y)^(~n + 1)),
+))
 
 const CANONICALIZE_POW = (
     @rule(^(*(~~x), ~y::_isinteger) => *(map(a->pow(a, ~y), ~~x)...)),

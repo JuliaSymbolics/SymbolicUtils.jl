@@ -42,6 +42,10 @@ end
 
     @eqtest simplify(a * x^y * b * x^d) == simplify(a * b * (x^(d + y)))
 
+    # Issue JuliaSymbolics/Symbolics.jl#1815: x^a * x should simplify to x^(a + 1)
+    @eqtest simplify(x^a * x) == simplify(x^(a + 1))
+    @eqtest simplify(x * x^a) == simplify(x^(a + 1))
+
     @eqtest simplify(a + b + 0 * c + d) == simplify(a + b + d)
     @eqtest simplify(a * b * c^0 * d) == simplify(a * b * d)
     @eqtest simplify(a * b * 1 * c * d) == simplify(a * b * c * d)

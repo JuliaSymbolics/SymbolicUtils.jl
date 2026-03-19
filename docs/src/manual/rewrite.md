@@ -168,7 +168,7 @@ acpyid = @acrule sin(~x)^2 + cos(~x)^2 => 1
 acpyid(cos(x)^2 + sin(x)^2 + 2cos(x)*sin(x))
 ```
 
-It has been some work. Fortunately rules may be [chained together](#chaining rewriters) into more sophisticated rewriters to avoid manual application of the rules.
+It has been some work. Fortunately rules may be [chained together](@ref "Chaining rewriters") into more sophisticated rewriters to avoid manual application of the rules.
 
 
 ## Composing rewriters
@@ -208,7 +208,7 @@ rewriters.
 
 Several rules may be chained to give chain of rules. Chain is an array of rules which are subsequently applied to the expression.
 
-To check that, we will combine rules from [previous example](#example of applying the rules to simplify expression) into a chain
+To check that, we will combine rules from [previous example](@ref "Example of applying the rules to simplify expression") into a chain
 
 ```@example composing
 using SymbolicUtils

@@ -332,7 +332,7 @@ function search_variables!(
         recurse::G = iscall
     ) where {T, F, G}
     if is_atomic(expr)
-        push!(buffer. expr)
+        push!(buffer, expr)
         return
     end
     recurse(expr) || return

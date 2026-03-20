@@ -1375,3 +1375,9 @@ end
     @test SymbolicUtils.symtype(y) == Array{Number, 3}
     @test y[1, 1, 1] isa SymbolicUtils.BasicSymbolic
 end
+
+@testset "`adjoint(::Matrix) * ::Vector` promotes to `::Vector`" begin
+    @syms R[1:3, 1:3] n[1:3]
+    @test symtype(R') === LinearAlgebra.Adjoint{Number, Matrix{Number}}
+    @test symtype(R' * n) === Vector{Number}
+end

@@ -1464,11 +1464,37 @@ function toexpr(f::ForLoop, st)
     end)
 end
 
+include("faster_code.jl")
+
 ### Code-related utilities
 
 ### Common subexprssion evaluation
 
 const CSE_PREFIX = Vector{UInt8}("##cse#")
+const IDXS_SYM_PREFIX = Vector{UInt8}("_")
+
+function get_numbered_symbol_with_prefix(prefix::Vector{UInt8}, idx)
+    buffer = UInt8[]
+    sizehint!(buffer, length(prefix) + ndigits(idx))
+    append!(buffer, prefix)
+    if idx == 0
+        push!(buffer, '0')
+    end
+    while idx > 0
+        push!(buffer, '0' + (idx % 10))
+        idx = div(idx, 10)
+    end
+    reverse!(@view(buffer[(length(prefix) + 1):end]))
+    return Symbol(buffer)
+end
+
+function get_cse_name(idx::Int)
+    return get_numbered_symbol_with_prefix(CSE_PREFIX, idx)
+end
+
+function codegen_arrayop_indexer(idx::Int)
+    return get_numbered_symbol_with_prefix(IDXS_SYM_PREFIX, idx)
+end
 
 """
     newsym!(state::CSEState, ::Type{T})
@@ -1480,14 +1506,7 @@ Generates new symbol of type `T` with unique name in `state`.
 
     idx = state.varid[]
     state.varid[] += 1
-    buffer = UInt8[]
-    sizehint!(buffer, length(CSE_PREFIX) + ndigits(idx))
-    append!(buffer, CSE_PREFIX)
-    while idx > 0
-        push!(buffer, '0' + (idx % 10))
-        idx = div(idx, 10)
-    end
-    reverse!(@view(buffer[(length(CSE_PREFIX) + 1):end]))
+    name = get_cse_name(idx)
     Sym{T}(Symbol(buffer); type = symtype, shape = sh)
 end
 

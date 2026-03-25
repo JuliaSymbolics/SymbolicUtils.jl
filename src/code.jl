@@ -1511,7 +1511,7 @@ Generates new symbol of type `T` with unique name in `state`.
     idx = state.varid[]
     state.varid[] += 1
     name = get_cse_name(idx)
-    Sym{T}(Symbol(buffer); type = symtype, shape = sh)
+    Sym{T}(name; type = symtype, shape = sh)
 end
 
 """

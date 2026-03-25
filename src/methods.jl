@@ -134,10 +134,15 @@ for f in vcat(diadic, [+, -, *, ^, Base.add_sum, Base.mul_prod])
             # `Adjoint` and `Transpose` need special handling since `x'x` is a scalar
             return promote_symtype($f, T.parameters[1]::TypeT, S.parameters[1]::TypeT)
         elseif $(f === (*) || f === Base.mul_prod) && T <: AdjointOrTranspose
-            # `AdjointOrTranspose * anything` should stay an `Adjoint`
-            # This mimics the behavior of e.g. `rand(3)' * rand(3, 4)` being an `Adjoint`
-            pT = promote_symtype($f, T.parameters[2]::TypeT, S)
-            return LinearAlgebra.Adjoint{pT.parameters[1]::TypeT, pT}
+            wrapped_arr = T.parameters[2]::TypeT
+            if wrapped_arr.parameters[2]::Int == 1
+                # `AdjointOrTranspose{<:Vector} * anything` should stay an `Adjoint`
+                # This mimics the behavior of e.g. `rand(3)' * rand(3, 4)` being an `Adjoint`
+                pT = promote_symtype($f, wrapped_arr, S)
+                return LinearAlgebra.Adjoint{pT.parameters[1]::TypeT, pT}
+            else
+                return promote_symtype($f, wrapped_arr, S)
+            end
         elseif $(f === (*) || f === Base.mul_prod) && T <: Number && S <: AdjointOrTranspose
             # scalar * `AdjointOrTranspose` should retain the `Adjoint`
             # This handles a multiplication chain with interspersed scalars

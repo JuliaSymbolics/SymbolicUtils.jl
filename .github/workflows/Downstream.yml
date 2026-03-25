@@ -57,7 +57,11 @@ jobs:
           using Pkg
           try
             # force it to use this PR's version of the package
-            Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
+            pkgs = PackageSpec[PackageSpec(; path = ".")]
+            if "${{ matrix.package.repo }}" == "ModelingToolkit.jl"
+              push!(pkgs, PackageSpec(; path = "downstream/lib/ModelingToolkitBase"))
+            end
+            Pkg.develop(pkgs)  # resolver may fail with main deps
             Pkg.update()
             Pkg.test()  # resolver may fail with test time deps
           catch err

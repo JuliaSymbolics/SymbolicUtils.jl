@@ -82,6 +82,15 @@ end
     throw(ArgumentError("`with_allocator` can only be used on `array_literal`, `@arrayop` and `@makearray` expressions."))
 end
 
+function supports_with_allocator(ex::BasicSymbolic{T}) where {T}
+    return @match ex begin
+        BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => true
+        BSImpl.ArrayOp(; term, shape) && if term === nothing && is_array_shape(shape) end => true
+        BSImpl.ArrayMaker(;) => true
+        _ => false
+    end
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -113,12 +122,7 @@ they know how the expression is involved in the larger code, where the arguments
 and the concrete types of the buffers.
 """
 function with_allocator(@nospecialize(alloc), ex::BasicSymbolic{T}) where {T}
-    @match ex begin
-        BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => nothing
-        BSImpl.ArrayOp(; term, shape) && if term === nothing && is_array_shape(shape) end => nothing
-        BSImpl.ArrayMaker(;) => nothing
-        _ => _throw_bad_allocator()
-    end
+    supports_with_allocator(ex) || _throw_bad_allocator()
 
     return BSImpl.Term{T}(
         with_allocator, ArgsT{T}((BSImpl.Const{T}(alloc), ex));

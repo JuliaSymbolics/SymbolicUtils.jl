@@ -1,0 +1,127 @@
+using SymbolicUtils
+using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir
+import SymbolicUtils as SU
+import Graphs
+
+@syms t x y z(..) w[1:3] fn(::Number)
+z = z(t)
+
+function sanity_check(ir, expr)
+    idx = ir[expr]
+    @test isequal(ir[idx], expr)
+    if !iscall(expr)
+        # Ensure this is a leaf
+        @test isempty(ir.reachability[idx])
+        @test isempty(Graphs.outneighbors(ir.dependency_graph, idx))
+        return
+    end
+    # Reachability should be sorted
+    @test issorted(ir.reachability[idx])
+    reference = Int[]
+    # Arguments should all have smaller indices and be present in reachability
+    for arg in arguments(expr)
+        sanity_check(ir, arg)
+        @test ir[arg] < idx
+        @test ir[arg] in ir.reachability[idx]
+        append!(reference, ir.reachability[ir[arg]])
+        push!(reference, ir[arg])
+    end
+    if operation(expr) isa SU.BasicSymbolic{SymReal}
+        op = operation(expr)::SU.BasicSymbolic{SymReal}
+        @test ir[op] < idx
+        @test ir[op] in ir.reachability[idx]
+        append!(reference, ir.reachability[ir[op]])
+        push!(reference, ir[op])
+    end
+    # Check reachability
+    sort!(reference)
+    unique!(reference)
+    @test issetequal(ir.reachability[idx], reference)
+end
+
+@testset "Construction and invariants" begin
+    ir = IRStructure{SymReal}()
+
+    expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    idx = populate_ir!(ir, expr)
+    @test length(ir) == idx
+    sanity_check(ir, expr)
+
+    # Invalid accesses should error
+    expr2 = sin(x)
+    @test_throws KeyError ir[expr2]
+    @test_throws BoundsError ir[idx + 1]
+
+    # `eachindex` should work and iterate integers
+    @test all(Base.Fix2(isa, BasicSymbolic{SymReal}), [ir[i] for i in eachindex(ir)])
+
+    # re-inserting the same expression should return the same index
+    subidx = ir[2y]
+    @test populate_ir!(ir, 2y) == subidx
+end
+
+@testset "`subset_ir`" begin
+    expr1 = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    expr2 = 2x + 3y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    ir1 = IRStructure{SymReal}()
+    populate_ir!(ir1, expr1)
+    populate_ir!(ir1, expr2)
+
+    subexpr = 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    subidx = ir1[subexpr]
+
+    ir2 = subset_ir(ir1, [subexpr])
+    ir_reference = IRStructure{SymReal}()
+    populate_ir!(ir_reference, subexpr)
+    @test length(ir2) == length(ir_reference)
+    # SimpleDiGraph is lazy
+    for i in eachindex(ir2)
+        nbors = Graphs.outneighbors(ir2.dependency_graph, i)
+        nbors_ref = Graphs.outneighbors(ir_reference.dependency_graph, i)
+        @test isequal(nbors, nbors_ref)
+    end
+    @test isequal(ir2.symbols, ir_reference.symbols)
+    @test isequal(ir2.definition, ir_reference.definition)
+    @test ir2.reachability == ir_reference.reachability
+end
+
+@testset "`search_variables!`" begin
+    expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, expr)
+    
+    buffer = Set{BasicSymbolic{SymReal}}()
+    SU.search_variables!(buffer, ir, expr)
+    buffer2 = empty(buffer)
+    SU.search_variables!(buffer2, expr)
+    @test issetequal(buffer, buffer)
+end
+
+@testset "`query`" begin
+    expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, expr)
+
+    @test SU.query(isequal(y), ir, expr)
+    @test !SU.query(isequal(w[2]), ir, expr)
+    @test !SU.query(isequal(z), ir, expr; recurse = ex -> iscall(ex) && operation(ex) !== sin)
+end
+
+@testset "`IRSubstituter`" begin
+    expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, expr)
+
+    rules = Dict(w => SU.Const{SymReal}(ones(3)))
+    irsub = IRSubstituter{false}(ir, rules)
+    sub = SU.Substituter{false}(rules)
+    @test isequal(irsub(expr), sub(expr))
+
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, expr)
+
+    rules = Dict(w => SU.Const{SymReal}(ones(3)))
+    irsub = IRSubstituter{true}(ir, rules)
+    sub = SU.Substituter{true}(rules)
+    @test isequal(irsub(expr), sub(expr))
+end

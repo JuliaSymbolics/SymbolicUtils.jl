@@ -82,6 +82,15 @@ end
     throw(ArgumentError("`with_allocator` can only be used on `array_literal`, `@arrayop` and `@makearray` expressions."))
 end
 
+function supports_with_allocator(ex::BasicSymbolic{T}) where {T}
+    return @match ex begin
+        BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => true
+        BSImpl.ArrayOp(; term, shape) && if term === nothing && is_array_shape(shape) end => true
+        BSImpl.ArrayMaker(;) => true
+        _ => false
+    end
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -113,12 +122,7 @@ they know how the expression is involved in the larger code, where the arguments
 and the concrete types of the buffers.
 """
 function with_allocator(@nospecialize(alloc), ex::BasicSymbolic{T}) where {T}
-    @match ex begin
-        BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => nothing
-        BSImpl.ArrayOp(; term, shape) && if term === nothing && is_array_shape(shape) end => nothing
-        BSImpl.ArrayMaker(;) => nothing
-        _ => _throw_bad_allocator()
-    end
+    supports_with_allocator(ex) || _throw_bad_allocator()
 
     return BSImpl.Term{T}(
         with_allocator, ArgsT{T}((BSImpl.Const{T}(alloc), ex));
@@ -1464,11 +1468,37 @@ function toexpr(f::ForLoop, st)
     end)
 end
 
+include("faster_code.jl")
+
 ### Code-related utilities
 
 ### Common subexprssion evaluation
 
 const CSE_PREFIX = Vector{UInt8}("##cse#")
+const IDXS_SYM_PREFIX = Vector{UInt8}("_")
+
+function get_numbered_symbol_with_prefix(prefix::Vector{UInt8}, idx)
+    buffer = UInt8[]
+    sizehint!(buffer, length(prefix) + ndigits(idx))
+    append!(buffer, prefix)
+    if idx == 0
+        push!(buffer, '0')
+    end
+    while idx > 0
+        push!(buffer, '0' + (idx % 10))
+        idx = div(idx, 10)
+    end
+    reverse!(@view(buffer[(length(prefix) + 1):end]))
+    return Symbol(buffer)
+end
+
+function get_cse_name(idx::Int)
+    return get_numbered_symbol_with_prefix(CSE_PREFIX, idx)
+end
+
+function codegen_arrayop_indexer(idx::Int)
+    return get_numbered_symbol_with_prefix(IDXS_SYM_PREFIX, idx)
+end
 
 """
     newsym!(state::CSEState, ::Type{T})
@@ -1480,15 +1510,8 @@ Generates new symbol of type `T` with unique name in `state`.
 
     idx = state.varid[]
     state.varid[] += 1
-    buffer = UInt8[]
-    sizehint!(buffer, length(CSE_PREFIX) + ndigits(idx))
-    append!(buffer, CSE_PREFIX)
-    while idx > 0
-        push!(buffer, '0' + (idx % 10))
-        idx = div(idx, 10)
-    end
-    reverse!(@view(buffer[(length(CSE_PREFIX) + 1):end]))
-    Sym{T}(Symbol(buffer); type = symtype, shape = sh)
+    name = get_cse_name(idx)
+    Sym{T}(name; type = symtype, shape = sh)
 end
 
 """

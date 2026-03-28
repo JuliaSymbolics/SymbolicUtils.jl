@@ -13,7 +13,7 @@ include("utils.jl")
 
 @testset "@syms" begin
     let
-        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int 
+        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
 
         @test issym(a) && symtype(a) == Number
         @test a.name === :a
@@ -39,8 +39,8 @@ include("utils.jl")
         @test symtype(g(b, f)) === Int
 
         # issue #91
-        @syms h(a,b,c)
-        @test isequal(h(1,2,3), h(1,2,3))
+        @syms h(a, b, c)
+        @test isequal(h(1, 2, 3), h(1, 2, 3))
 
         @syms (f::typeof(max))(::Real, ::AbstractFloat)::Number a::Real
         @test issym(f)
@@ -79,22 +79,22 @@ end
     @syms a b f(x, y)
     @test hash(a) == hash(a)
     @test hash(a) != hash(b)
-    @test hash(a+1) == hash(a+1)
-    @test hash(sin(a+1)) == hash(sin(a+1))
-    @test hash(f(1,a)) == hash(f(1, a))
+    @test hash(a + 1) == hash(a + 1)
+    @test hash(sin(a + 1)) == hash(sin(a + 1))
+    @test hash(f(1, a)) == hash(f(1, a))
 
     c = a
     g = f
     @syms a f(x, y)
     @test hash(a) == hash(c)
-    @test hash(g(a, b)) == hash(f(a,b))
-    @test hash(f(a, b)) == hash(f(c,b))
-    @test hash(sin(a+1)) == hash(sin(c+1))
+    @test hash(g(a, b)) == hash(f(a, b))
+    @test hash(f(a, b)) == hash(f(c, b))
+    @test hash(sin(a + 1)) == hash(sin(c + 1))
 
-    ex = sin(a+1)
+    ex = sin(a + 1)
     h = hash(ex, UInt(0))
     @test ex.hash[] == h
-    ex1 = sin(a+1)
+    ex1 = sin(a + 1)
     hash(asin(ex1), UInt(0))
     @test ex1.hash[] == h
 
@@ -112,7 +112,7 @@ struct Ctx2 end
 # needs to be written like this to avoid a segfault on Julia 1.10
 @info "Metadata test"
 @syms a b c
-for a = [a, sin(a), a+b, a*b, a^3]
+for a in [a, sin(a), a + b, a * b, a^3]
 
     a′ = setmetadata(a, Ctx1, "meta_1")
 
@@ -133,14 +133,22 @@ end
 @syms f(t) t
 f = setmetadata(f(t), Ctx1, "yes")
 hasmetadata(f, Ctx1) # true
-newf = substitute(f, Dict(a=>b)) # unrelated substitution
+newf = substitute(f, Dict(a => b)) # unrelated substitution
 @test hasmetadata(newf, Ctx1)
 @test getmetadata(newf, Ctx1) == "yes"
 
 
-@test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=Val(false)),
-              1 + term(sqrt, 2, type=Real))
-@test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=Val(true))) isa Float64
+@test isequal(
+    substitute(1 + sqrt(a), Dict(a => 2), fold = Val(false)),
+    1 + term(sqrt, 2, type = Real)
+)
+@test unwrap_const(substitute(1 + sqrt(a), Dict(a => 2), fold = Val(true))) isa Float64
+# Test that Bool values for fold are accepted (deprecated but working)
+@test unwrap_const(substitute(1 + sqrt(a), Dict(a => 2), fold = true)) isa Float64
+@test isequal(
+    substitute(1 + sqrt(a), Dict(a => 2), fold = false),
+    1 + term(sqrt, 2, type = Real)
+)
 @info "Metadata test ends"
 
 @testset "Base methods" begin
@@ -153,7 +161,7 @@ newf = substitute(f, Dict(a=>b)) # unrelated substitution
 
     foo(w, z, a, b) = 1.0
     SymbolicUtils.promote_symtype(::typeof(foo), args...) = Real
-    @test SymbolicUtils._promote_symtype(foo, (w, z, a, b,)) === Real
+    @test SymbolicUtils._promote_symtype(foo, (w, z, a, b)) === Real
 
     # promote_symtype of identity
     @test isequal(Term{SymReal}(identity, [w]), Term{SymReal}(identity, [w]; type = Complex{Real}))
@@ -177,7 +185,7 @@ newf = substitute(f, Dict(a=>b)) # unrelated substitution
 
     @syms x::Integer a::Integer
     @eqtest x // 5 == SymbolicUtils.Div{SymReal}(x, 5, false; type = Real)
-    @eqtest (1//2 * x) / 5 == (1 // 10) * x
+    @eqtest (1 // 2 * x) / 5 == (1 // 10) * x
     @eqtest 5 // x == 5 / x
     @eqtest x // a == x / a
 
@@ -286,7 +294,7 @@ end
 
     var = 2 * c * h * c * im
     @test var.f === *
-    @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, c ^ 2)))
+    @test isequal(arguments(var), ArgsT{SymReal}((2 * h * im, c^2)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
     var = var * a
@@ -342,71 +350,71 @@ end
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
-    @test unwrap_const(1 ^ c) == LinearAlgebra.I(2)
-    @test unwrap_const(1 ^ e) == LinearAlgebra.I
+    @test unwrap_const(1^c) == LinearAlgebra.I(2)
+    @test unwrap_const(1^e) == LinearAlgebra.I
 
-    var = 2 ^ c
+    var = 2^c
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((Const{SymReal}(2), c)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
     # we can't support this without committing type piracy
-    @test_throws MethodError 2 ^ symmat
+    @test_throws MethodError 2^symmat
 
-    var = 2 ^ e
+    var = 2^e
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((Const{SymReal}(2), e)))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
 
-    var = c ^ 2
+    var = c^2
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((c, Const{SymReal}(2))))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
-    var = symmat ^ 2
+    var = symmat^2
     @test var isa Matrix{BasicSymbolic{SymReal}}
     @test size(var) == size(symmat)
 
-    var = e ^ 2
+    var = e^2
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((e, Const{SymReal}(2))))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
 
-    var = h ^ c
+    var = h^c
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((h, c)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
-    var = h ^ symmat
+    var = h^symmat
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((h, csymmat)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
-    var = h ^ e
+    var = h^e
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((h, e)))
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
 
-    var = c ^ h
+    var = c^h
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((c, h)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
-    var = symmat ^ h
+    var = symmat^h
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((csymmat, h)))
     @test shape(var) == ShapeVecT([1:2, 1:2])
     @test symtype(var) == Matrix{Number}
 
-    var = e ^ h
+    var = e^h
     @test var.f === ^
     @test isequal(var.args, ArgsT{SymReal}((e, h)))
     @test shape(var) == SymbolicUtils.Unknown(2)
@@ -420,46 +428,46 @@ end
     @test_throws ArgumentError f * a
     @test_throws ArgumentError c * a * c
     @test_throws ArgumentError c * a * a
-    @test_throws ArgumentError 2 ^ a
-    @test_throws ArgumentError 2 ^ f
-    @test_throws ArgumentError a ^ 2
-    @test_throws ArgumentError f ^ 2
-    @test_throws ArgumentError 2 ^ d
-    @test_throws ArgumentError d ^ 2
-    @test_throws ArgumentError q ^ 2
-    @test_throws ArgumentError 2 ^ q
+    @test_throws ArgumentError 2^a
+    @test_throws ArgumentError 2^f
+    @test_throws ArgumentError a^2
+    @test_throws ArgumentError f^2
+    @test_throws ArgumentError 2^d
+    @test_throws ArgumentError d^2
+    @test_throws ArgumentError q^2
+    @test_throws ArgumentError 2^q
 
     @syms r[1:2, 1:2]::Real r2::Matrix{Real} i::Int j::Real
 
-    var = r ^ 2
+    var = r^2
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Real}
-    var = r ^ i
+    var = r^i
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Real}
-    var = r ^ 2.4
+    var = r^2.4
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Complex{Real}}
-    var = r ^ h
+    var = r^h
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Number}
-    var = r ^ j
+    var = r^j
     @test shape(var) == ShapeVecT((1:2, 1:2))
     @test symtype(var) == Matrix{Complex{Real}}
 
-    var = r2 ^ 2
+    var = r2^2
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Real}
-    var = r2 ^ i
+    var = r2^i
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Real}
-    var = r2 ^ 2.4
+    var = r2^2.4
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Complex{Real}}
-    var = r2 ^ h
+    var = r2^h
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Number}
-    var = r2 ^ j
+    var = r2^j
     @test shape(var) == SymbolicUtils.Unknown(2)
     @test symtype(var) == Matrix{Complex{Real}}
 
@@ -859,88 +867,88 @@ end
 
 @testset "substitute" begin
     @syms a b
-    @test unwrap_const(substitute(a, Dict(a=>1))) == 1
-    @test isequal(substitute(sin(a+b), Dict(a=>1)), sin(b+1))
-    @test unwrap_const(substitute(a+b, Dict(a=>1, b=>3))) == 4
-    @test unwrap_const(substitute(exp(a), Dict(a=>2); fold = Val(true))) ≈ exp(2)
+    @test unwrap_const(substitute(a, Dict(a => 1))) == 1
+    @test isequal(substitute(sin(a + b), Dict(a => 1)), sin(b + 1))
+    @test unwrap_const(substitute(a + b, Dict(a => 1, b => 3))) == 4
+    @test unwrap_const(substitute(exp(a), Dict(a => 2); fold = Val(true))) ≈ exp(2)
 end
 
 @testset "query" begin
     @syms a b c
     @test query(isequal(a), a + b)
     @test !query(isequal(sin(a)), a + b + c)
-    @test query(isequal(sin(a)),  a * b + c + sin(a^2 * sin(a)))
+    @test query(isequal(sin(a)), a * b + c + sin(a^2 * sin(a)))
     @test query(isequal(Const{SymReal}(0.01)), 0.01^a)
     @test !query(isequal(Const{SymReal}(0.01)), a * b * c)
 end
 
 @testset "printing" begin
     @syms a b c
-    @test repr(a+b) == "a + b"
+    @test repr(a + b) == "a + b"
     @test repr(-a) == "-a"
     @test repr(term(-, a; type = Real)) == "-a"
     @test repr(-a + 3) == "3 - a"
     @test repr(-(a + b)) == "-a - b"
     @test repr((2a)^(-2a)) == "(2a)^(-2a)"
-    @test repr(1/2a) == "1 / (2a)"
-    @test repr(2/(2*a)) == "1 / a"
+    @test repr(1 / 2a) == "1 / (2a)"
+    @test repr(2 / (2 * a)) == "1 / a"
     @test repr(Term{SymReal}(*, [1, 1])) == "1"
     @test repr(Term{SymReal}(*, [2, 1])) == "2*1"
     @test repr((a + b) - (b + c)) == "a - c"
-    @test repr(a + -1*(b + c)) == "a - b - c"
-    @test repr(a + -1*b) == "a - b"
+    @test repr(a + -1 * (b + c)) == "a - b - c"
+    @test repr(a + -1 * b) == "a - b"
     @test repr(-1^a) == "-(1^a)"
     @test repr((-1)^a) == "(-1)^a"
 end
 
 @testset "polynomial printing" begin
     @syms a b c x[1:3]
-    @test repr(b+a) == "a + b"
-    @test repr(b-a) == "-a + b"
-    @test repr(2a+1+3a^2) == "1 + 2a + 3(a^2)"
-    @test repr(2a+1+3a^2+2b+3b^2+4a*b) == "1 + 2a + 2b + 3(a^2) + 4a*b + 3(b^2)"
+    @test repr(b + a) == "a + b"
+    @test repr(b - a) == "-a + b"
+    @test repr(2a + 1 + 3a^2) == "1 + 2a + 3(a^2)"
+    @test repr(2a + 1 + 3a^2 + 2b + 3b^2 + 4a * b) == "1 + 2a + 2b + 3(a^2) + 4a*b + 3(b^2)"
 
     @syms a b[1:3] c d[1:3]
-    _get(x, i) = term(getindex, x, i, type=Number)
-    b1, b3, d1, d2 = _get(b,1),_get(b,3), _get(d,1), _get(d,2)
+    _get(x, i) = term(getindex, x, i, type = Number)
+    b1, b3, d1, d2 = _get(b, 1), _get(b, 3), _get(d, 1), _get(d, 2)
     @test repr(a + b3 + b1 + d2 + c) == "a + b[1] + b[3] + c + d[2]"
     @test repr(expand((c + b3 - d1)^3)) == "b[3]^3 + 3(b[3]^2)*c - 3(b[3]^2)*d[1] + 3b[3]*(c^2) - 6b[3]*c*d[1] + 3b[3]*(d[1]^2) + c^3 - 3(c^2)*d[1] + 3c*(d[1]^2) - (d[1]^3)"
     # test negative powers sorting
-    @test repr((b3^2)^(-2) + a^(-3) + (c*d1)^(-2)) == "1 / (a^3) + 1 / (b[3]^4) + 1 / ((c^2)*(d[1]^2))"
+    @test repr((b3^2)^(-2) + a^(-3) + (c * d1)^(-2)) == "1 / (a^3) + 1 / (b[3]^4) + 1 / ((c^2)*(d[1]^2))"
 
     # test that the "x^2 + y^-1 + sin(a)^3.5 + 2t + 1//1" expression from Symbolics.jl/build_targets.jl is properly sorted
     @syms x1 y1 a1 t1
-    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1//1) == "(1//1) + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
+    @test repr(x1^2 + y1^-1 + sin(a1)^3.5 + 2t1 + 1 // 1) == "(1//1) + 2t1 + 1 / y1 + x1^2 + sin(a1)^3.5"
 end
 
 @testset "inspect" begin
     @syms x y z
     y = SymbolicUtils.setmetadata(y, Integer, 42) # Set some metadata
-    ex = z*(2x + 3y + 1)^2/(z+2x)
-    @test_reference "inspect_output/ex.txt" sprint(io->SymbolicUtils.inspect(io, ex))
-    @test_reference "inspect_output/ex-md.txt" sprint(io->SymbolicUtils.inspect(io, ex, metadata=true))
-    @test_reference "inspect_output/ex-nohint.txt" sprint(io->SymbolicUtils.inspect(io, ex, hint=false))
+    ex = z * (2x + 3y + 1)^2 / (z + 2x)
+    @test_reference "inspect_output/ex.txt" sprint(io -> SymbolicUtils.inspect(io, ex))
+    @test_reference "inspect_output/ex-md.txt" sprint(io -> SymbolicUtils.inspect(io, ex, metadata = true))
+    @test_reference "inspect_output/ex-nohint.txt" sprint(io -> SymbolicUtils.inspect(io, ex, hint = false))
     @test unwrap_const(SymbolicUtils.pluck(ex, 12)) == 2
-    @test_reference "inspect_output/sub10.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 9)))
-    @test_reference "inspect_output/sub14.txt" sprint(io->SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
+    @test_reference "inspect_output/sub10.txt" sprint(io -> SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 9)))
+    @test_reference "inspect_output/sub14.txt" sprint(io -> SymbolicUtils.inspect(io, SymbolicUtils.pluck(ex, 14)))
 end
 
 @testset "maketerm" begin
     @syms a b c
-    t = SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing)
+    t = SymbolicUtils.maketerm(typeof(b + c), +, [a, (b + c)], nothing)
     @test isequal(t.dict, ACDict{SymReal}(a => 1, b => 1, c => 1))
-    @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  1//2],  nothing), b)
+    @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2, 1 // 2], nothing), b)
 
     # test that maketerm doesn't hard-code BasicSymbolic subtype
     # and is consistent with BasicSymbolic arithmetic operations
-    @test isequal(SymbolicUtils.maketerm(typeof(a / b), *, [a / b, c],  nothing), (a / b) * c)
-    @test isequal(SymbolicUtils.maketerm(typeof(a * b), *, [0, c],  nothing), Const{SymReal}(0))
-    @test isequal(SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3],  nothing), (a * b)^3)
+    @test isequal(SymbolicUtils.maketerm(typeof(a / b), *, [a / b, c], nothing), (a / b) * c)
+    @test isequal(SymbolicUtils.maketerm(typeof(a * b), *, [0, c], nothing), Const{SymReal}(0))
+    @test isequal(SymbolicUtils.maketerm(typeof(a^b), ^, [a * b, 3], nothing), (a * b)^3)
 
     # test that maketerm sets metadata correctly
     metadata = Base.ImmutableDict{DataType, Any}(Ctx1, "meta_1")
     metadata2 = Base.ImmutableDict{DataType, Any}(Ctx2, "meta_2")
-    
+
     d = b * c
     @set! d.metadata = metadata2
 
@@ -969,20 +977,21 @@ end
     @test symtype(new_expr) == Bool
 
     # Doesn't know return type, promoted symtype is Any
-    foo(x,y) = x^2 + x 
+    foo(x, y) = x^2 + x
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), foo, [a, b], nothing)
     @test symtype(new_expr) == Any
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), foo, [a, b], nothing; type = Number)
     @test symtype(new_expr) == Number
 
     # Promoted symtype is a subtype of referred
-    @syms x::Int y::Int 
+    @syms x::Int y::Int
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), (+), [x, y], nothing)
     @test symtype(new_expr) == Int64
 
     # Check that the Array type does not get changed to AbstractArray
     new_expr = SymbolicUtils.maketerm(
-        SymbolicUtils.BasicSymbolic{SymReal}, sin, [1.0, 2.0], nothing; type = Vector{Float64})
+        SymbolicUtils.BasicSymbolic{SymReal}, sin, [1.0, 2.0], nothing; type = Vector{Float64}
+    )
     @test symtype(new_expr) == Vector{Float64}
 end
 
@@ -991,7 +1000,7 @@ toterm(t) = Term{vartype(t)}(operation(t), sorted_arguments(t); type = symtype(t
 @testset "diffs" begin
     @syms a b c
     @test isequal(toterm(-1c), Term{SymReal}(*, [-1, c]; type = Number))
-    @test isequal(toterm(-1(a+b)), Term{SymReal}(+, [-a, -b]; type = Number))
+    @test isequal(toterm(-1(a + b)), Term{SymReal}(+, [-a, -b]; type = Number))
     @test isequal(toterm((a + b) - (b + c)), Term{SymReal}(+, [a, -c]; type = Number))
 end
 
@@ -1010,7 +1019,7 @@ end
 
 @testset "canonical form" begin
     @syms a b c
-    for x in [a, a*b, a^2, sin(a)]
+    for x in [a, a * b, a^2, sin(a)]
         @test isequal(x * 1, x)
         @test x * 0 === Const{SymReal}(0)
         @test isequal(x + 0, x)
@@ -1019,7 +1028,7 @@ end
         @test unwrap_const(x - x) === 0
         @test isequal(-x, -1x)
         @test isequal(x^1, x)
-        @test isequal(unwrap_const((x^-1)*inv(x^-1)), 1)
+        @test isequal(unwrap_const((x^-1) * inv(x^-1)), 1)
     end
 end
 
@@ -1042,48 +1051,48 @@ end
 end
 
 @testset "subtyping" begin
-    T = FnType{Tuple{T,S,Int} where {T,S}, Real, Nothing}
+    T = FnType{Tuple{T, S, Int} where {T, S}, Real, Nothing}
     s = Sym{SymReal}(:t; type = T)
     @syms a b c::Int
     @test isequal(arguments(s(a, b, c)), [a, b, c])
 end
 
 @testset "div" begin
-    @syms x y::Real vartype=SafeReal
-    @test issym((2x/2y).num)
-    @test get_mul_coefficient((2x/3y).num) == 2
-    @test get_mul_coefficient((2x/3y).den) == 3
-    @test get_mul_coefficient((2x/-3x).num) == -2
-    @test get_mul_coefficient((2x/-3x).den) == 3
-    @test get_mul_coefficient((2.5x/3x).num) == 2.5
-    @test get_mul_coefficient((2.5x/3x).den) == 3
-    @test get_mul_coefficient((x/3x).den) == 3
+    @syms x y::Real vartype = SafeReal
+    @test issym((2x / 2y).num)
+    @test get_mul_coefficient((2x / 3y).num) == 2
+    @test get_mul_coefficient((2x / 3y).den) == 3
+    @test get_mul_coefficient((2x / -3x).num) == -2
+    @test get_mul_coefficient((2x / -3x).den) == 3
+    @test get_mul_coefficient((2.5x / 3x).num) == 2.5
+    @test get_mul_coefficient((2.5x / 3x).den) == 3
+    @test get_mul_coefficient((x / 3x).den) == 3
 
     @syms x y
-    @test issym((2x/2y).num)
-    @test get_mul_coefficient((2x/3y).num) == 2
-    @test get_mul_coefficient((2x/3y).den) == 3
-    @test unwrap_const(2x/-3x) == -2//3
-    @test unwrap_const((2.5x/3x)) == 2.5/3
-    @test unwrap_const(x/3x) == 1//3
+    @test issym((2x / 2y).num)
+    @test get_mul_coefficient((2x / 3y).num) == 2
+    @test get_mul_coefficient((2x / 3y).den) == 3
+    @test unwrap_const(2x / -3x) == -2 // 3
+    @test unwrap_const((2.5x / 3x)) == 2.5 / 3
+    @test unwrap_const(x / 3x) == 1 // 3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)
 end
 
 @testset "Issue#717: Power with complex exponent" begin
     @syms x
-    t = x ^ im
+    t = x^im
     @test iscall(t)
     @test operation(t) == (^)
     @test isequal(unwrap_const.(arguments(t)), [x, im])
 end
 
 @testset "LiteralReal" begin
-    @syms x y z vartype=TreeReal
-    @test repr(x+x) == "x + x"
-    @test repr(x*x) == "x * x"
-    @test repr(x*x + x*x) == "(x * x) + (x * x)"
-    for ex in [sin(x), x+x, x*x, x\x, x/x]
+    @syms x y z vartype = TreeReal
+    @test repr(x + x) == "x + x"
+    @test repr(x * x) == "x * x"
+    @test repr(x * x + x * x) == "(x * x) + (x * x)"
+    for ex in [sin(x), x + x, x * x, x \ x, x / x]
         @test typeof(sin(x)) === BasicSymbolic{TreeReal}
     end
     @test repr(sin(x) + sin(x)) == "sin(x) + sin(x)"
@@ -1094,7 +1103,7 @@ end
     ax = adjoint(x)
     @test isequal(ax, x)
     @test ax === x
-    @test isequal(adjoint(y), conj(y)) 
+    @test isequal(adjoint(y), conj(y))
 end
 
 @testset "`setproperties` clears hash" begin
@@ -1155,9 +1164,9 @@ end
     @syms x
     v1 = 0.5x
     @test isequal(v1.coeff, 0.5)
-    v2 = (1//2)x
+    v2 = (1 // 2)x
     @test v2.coeff !== 0.5
-    @test v2.coeff === 1//2
+    @test v2.coeff === 1 // 2
 end
 
 @testset "`imag(::Real)`" begin
@@ -1226,11 +1235,11 @@ end
     @test isequal(LinearAlgebra.cross(x, xx), Const{SymReal}(LinearAlgebra.cross(collect(x), collect(xx))))
     @test isequal(LinearAlgebra.cross(x, y), Const{SymReal}(LinearAlgebra.cross(collect(x), [y[1], y[2], y[3]])))
     @test isequal(LinearAlgebra.cross(x, collect(xx)), Const{SymReal}(LinearAlgebra.cross(collect(x), collect(xx))))
-    @test isequal(LinearAlgebra.cross(x, [1,2,3]), Const{SymReal}(LinearAlgebra.cross(collect(x), [1,2,3])))
+    @test isequal(LinearAlgebra.cross(x, [1, 2, 3]), Const{SymReal}(LinearAlgebra.cross(collect(x), [1, 2, 3])))
     @test isequal(LinearAlgebra.cross(xx, x), Const{SymReal}(LinearAlgebra.cross(collect(xx), collect(x))))
     @test isequal(LinearAlgebra.cross(y, x), Const{SymReal}(LinearAlgebra.cross([y[1], y[2], y[3]], collect(x))))
     @test isequal(LinearAlgebra.cross(collect(xx), x), Const{SymReal}(LinearAlgebra.cross(collect(xx), collect(x))))
-    @test isequal(LinearAlgebra.cross([1,2,3], x), Const{SymReal}(LinearAlgebra.cross([1,2,3], collect(x))))
+    @test isequal(LinearAlgebra.cross([1, 2, 3], x), Const{SymReal}(LinearAlgebra.cross([1, 2, 3], collect(x))))
     @test_throws "3-vector" LinearAlgebra.cross(x, z)
     @test_throws "3-vector" LinearAlgebra.cross(y, z)
     @test_throws "expects vectors" LinearAlgebra.cross(x, w)
@@ -1272,9 +1281,9 @@ end
 
 @testset "`^` doesn't distribute into `/`" begin
     @syms a b c
-    ex = (a / b) ^ c
+    ex = (a / b)^c
     @test operation(ex) === (^)
-    @test isequal(arguments(ex), [a/b, c])
+    @test isequal(arguments(ex), [a / b, c])
 end
 
 @testset "Vector * transpose(Vector) works" begin
@@ -1347,20 +1356,20 @@ end
     @test SymbolicUtils.promote_symtype(cos ∘ sin, Real) == Real
     @test SymbolicUtils.promote_symtype(abs ∘ sin, Real) == Real
     @test SymbolicUtils.promote_symtype(exp ∘ log, Real) == Real
-    
+
     # Test three-function compositions
     @test SymbolicUtils.promote_symtype(sin ∘ abs ∘ sqrt, Real) == Real
     @test SymbolicUtils.promote_symtype(cos ∘ sin ∘ abs, Real) == Real
     @test SymbolicUtils.promote_symtype(exp ∘ sin ∘ sqrt, Real) == Real
-    
+
     # Test four-function compositions
     @test SymbolicUtils.promote_symtype(exp ∘ sin ∘ abs ∘ sqrt, Real) == Real
-    
+
     # Test type propagation with different input types
     @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Number) == Number
     @test SymbolicUtils.promote_symtype(sin ∘ abs ∘ sqrt, Number) == Number
     @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Complex) == Number
-    
+
     # Test edge cases
     @test SymbolicUtils.promote_symtype(abs ∘ abs, Real) == Real
     @test SymbolicUtils.promote_symtype(sin ∘ sin, Real) == Real
@@ -1370,7 +1379,7 @@ end
 @testset "Composite splatted indices in array indexing" begin
     indices = repeat([1:2], 2)
     final_indices = 1:3
-    
+
     @syms y[indices..., final_indices]
     @test SymbolicUtils.symtype(y) == Array{Number, 3}
     @test y[1, 1, 1] isa SymbolicUtils.BasicSymbolic

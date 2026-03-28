@@ -86,7 +86,7 @@ Clear the cached values associated with `subst`. See the documentation of
 [`SymbolicUtils.Substituter`](@ref) for more details.
 """
 function clear_cache!(subst::DefaultSubstituter)
-    empty!(subst.cache)
+    return empty!(subst.cache)
 end
 
 """
@@ -133,10 +133,10 @@ end
     return DefaultSubstituter{Fold}(d, filter, infer_vartype(d))
 end
 @inline function DefaultSubstituter{Fold}(d::Pair, filter::F) where {Fold, F}
-    DefaultSubstituter{Fold}(Dict(d), filter)
+    return DefaultSubstituter{Fold}(Dict(d), filter)
 end
 @inline function DefaultSubstituter{Fold}(d::AbstractArray{<:Pair}, filter::F) where {Fold, F}
-    DefaultSubstituter{Fold}(Dict(d), filter)
+    return DefaultSubstituter{Fold}(Dict(d), filter)
 end
 
 function (s::Substituter)(ex)
@@ -144,7 +144,7 @@ function (s::Substituter)(ex)
 end
 
 function (s::Substituter)(ex::AbstractArray)
-    [s(x) for x in ex]
+    return [s(x) for x in ex]
 end
 
 function (s::Substituter)(ex::SparseMatrixCSC)
@@ -208,7 +208,7 @@ end
 
 function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta::MetadataT, can_fold::Bool) where {T}
     @nospecialize op args meta
-    if can_fold
+    return if can_fold
         if length(args) == 1
             Const{T}(op(unwrap_const(args[1])))
         elseif length(args) == 2
@@ -237,7 +237,7 @@ the operation (preventing substitution within operator calls), and `true` otherw
 - `Bool`: `false` if the expression should not be substituted into, `true` otherwise.
 """
 @inline function default_substitute_filter(ex::BasicSymbolic{T}) where {T}
-    @match ex begin
+    return @match ex begin
         BSImpl.Term(; f) && if f isa Operator end => false
         BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => is_function_symbolic(f)
         _ => true
@@ -258,7 +258,12 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(false))
 1 + sqrt(2)
 ```
 """
-@inline function substitute(expr, dict; fold::Val{Fold}=Val{false}(), filterer=default_substitute_filter) where {Fold}
+@inline function substitute(expr, dict; fold = Val{false}(), filterer = default_substitute_filter)
+    _fold = fold isa Bool ? (Base.depwarn("`substitute(expr, dict; fold=$fold)` is deprecated, use `substitute(expr, dict; fold=Val($fold))` instead.", :substitute); Val(fold)) : fold
+    return _substitute(expr, dict, _fold, filterer)
+end
+
+@inline function _substitute(expr, dict, ::Val{Fold}, filterer) where {Fold}
     isempty(dict) && !Fold && return expr
     return DefaultSubstituter{Fold}(dict, filterer)(expr)
 end
@@ -324,7 +329,7 @@ atomic if one of the following conditions is true:
 - It is a `Term`, the operation is `getindex` and the variable being indexed is atomic.
 """
 function default_is_atomic(ex::BasicSymbolic{T}) where {T}
-    @match ex begin
+    return @match ex begin
         BSImpl.Sym(; name) => name !== IDXS_SYM
         BSImpl.Term(; f) && if f isa Operator end => true
         BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => !is_function_symbolic(f)
@@ -381,10 +386,11 @@ function search_variables!(buffer, expr::Union{AbstractArray, AbstractSet}; kw..
     for el in expr
         search_variables!(buffer, unwrap(el); kw...)
     end
+    return
 end
 function search_variables!(buffer, expr::SparseMatrixCSC; kw...)
     _, _, V = findnz(expr)
-    search_variables!(buffer, V; kw...)
+    return search_variables!(buffer, V; kw...)
 end
 
 _default_buffer(::BasicSymbolic{T}) where {T} = Set{BasicSymbolic{T}}()
@@ -404,7 +410,7 @@ struct ArrayOpReduceCache{T}
 end
 
 function ArrayOpReduceCache{T}() where {T}
-    ArrayOpReduceCache{T}(RangesT{T}(), Dict{BasicSymbolic{T}, Int}(), Set{BasicSymbolic{T}}(), StepRange{Int, Int}[])
+    return ArrayOpReduceCache{T}(RangesT{T}(), Dict{BasicSymbolic{T}, Int}(), Set{BasicSymbolic{T}}(), StepRange{Int, Int}[])
 end
 
 function Base.empty!(x::ArrayOpReduceCache)
@@ -474,7 +480,7 @@ function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, 
     elseif T === SafeReal
         return reduce_eliminated_idxs_2(expr, output_idx, ranges, reduce)::BasicSymbolic{T}
     end
-    _unreachable()
+    return _unreachable()
 end
 
 """
@@ -502,7 +508,7 @@ scalarization_function(::typeof(+)) = _scalarize_add
 function _scalarize_add(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = arguments(x)
-    reduce(+, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))
+    return reduce(+, map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args))
 end
 
 scalarization_function(::typeof(*)) = _scalarize_mul
@@ -546,7 +552,7 @@ function _scalarize_adjoint_transpose(f, x::BasicSymbolic{T}, ::Val{toplevel}) w
     elseif f === transpose
         return transpose(val)
     end
-    _unreachable()
+    return _unreachable()
 end
 
 scalarization_function(::typeof(/)) = _scalarize_rdiv
@@ -590,7 +596,7 @@ scalarization_function(::Union{typeof(-), typeof(^)}) = _default_scalarize_array
 function _default_scalarize_array(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = arguments(x)
-    if toplevel
+    return if toplevel
         f(map(unwrap_const, args)...)
     else
         f(map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), args)...)
@@ -604,7 +610,7 @@ function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
     is_array_shape(sh) && return [x[idx] for idx in eachindex(x)]
 
     args = arguments(x)
-    if toplevel
+    return if toplevel
         f(map(unwrap_const, args)...)
     else
         f(map(unwrap_const ∘ scalarize, args)...)
@@ -614,7 +620,7 @@ end
 scalarization_function(::Type{ArrayOp{T}}) where {T} = _scalarize_arrayop
 
 function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
-    @match x begin
+    return @match x begin
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce, shape = sh) => begin
             subrules = Dict()
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
@@ -663,25 +669,25 @@ scalarization_function(::Mapper) = _scalarize_arrayop
 scalarization_function(::Mapreducer) = _scalarize_arrayop
 
 function _scalarize_norm(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
-    @match x begin
+    return @match x begin
         BSImpl.Term(; args) => begin
             if length(args) == 1
                 return sqrt(scalarize(sum(abs2, args[1]), Val{toplevel}())::BasicSymbolic{T})
             end
             @match args[2] begin
-                BSImpl.Const(;val) => begin
+                BSImpl.Const(; val) => begin
                     if val === Inf
                         return scalarize(mapreduce(abs, max, args[1]), Val{toplevel}())::BasicSymbolic{T}
                     elseif val === -Inf
                         return scalarize(mapreduce(abs, min, args[1]), Val{toplevel}())::BasicSymbolic{T}
                     elseif safe_isinteger(val::Number) && iseven(Int(val::Number))
                         exp = Int(val::Number)
-                        return (sum(scalarize(args[1], Val{toplevel}()) .^ args[2])) ^ (1 / args[2])
+                        return (sum(scalarize(args[1], Val{toplevel}()) .^ args[2]))^(1 / args[2])
                     else
-                        return (sum(abs.(scalarize(args[1], Val{toplevel}())) .^ args[2])) ^ (1 / args[2])
+                        return (sum(abs.(scalarize(args[1], Val{toplevel}())) .^ args[2]))^(1 / args[2])
                     end
                 end
-                _ => return (sum(scalarize(args[1], Val{toplevel}()) .^ args[2])) ^ (1 / args[2])
+                _ => return (sum(scalarize(args[1], Val{toplevel}()) .^ args[2]))^(1 / args[2])
             end
         end
     end
@@ -713,7 +719,7 @@ values for output indices to generate scalar expressions for each array element.
 function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T, toplevel}
     sh = shape(x)
     sh isa Unknown && return x
-    @match x begin
+    return @match x begin
         BSImpl.Const(; val) => begin
             is_array_shape(sh) || return x
             if val isa SparseMatrixCSC
@@ -724,7 +730,7 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
                 return Const{T}.(val)
             end
         end
-        BSImpl.Sym(;) => is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
+        BSImpl.Sym() => is_array_shape(sh) ? [x[idx] for idx in eachindex(x)] : x
         _ => begin
             f = operation(x)
             if f isa BasicSymbolic{T} || f isa Operator
@@ -735,7 +741,7 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
     end
 end
 function scalarize(arr::AbstractArray, ::Val{toplevel} = Val{false}()) where {toplevel}
-    map(Base.Fix2(scalarize, Val{toplevel}()), arr)
+    return map(Base.Fix2(scalarize, Val{toplevel}()), arr)
 end
 scalarize(x, _...) = x
 
@@ -743,7 +749,7 @@ scalarization_function(::typeof(inv)) = _inv_scal
 
 function _inv_scal(::typeof(inv), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     sh = shape(x)
-    (sh isa ShapeVecT && !isempty(sh)) ? [x[idx] for idx in eachindex(x)] : x
+    return (sh isa ShapeVecT && !isempty(sh)) ? [x[idx] for idx in eachindex(x)] : x
 end
 
 scalarization_function(::typeof(LinearAlgebra.det)) = _det_scal
@@ -755,7 +761,7 @@ function _det_scal(::typeof(LinearAlgebra.det), x::BasicSymbolic{T}, ::Val{tople
     sh = sh::ShapeVecT
     isempty(sh) && return x
     sarg = toplevel ? collect(arg) : scalarize(arg)
-    _det_scal(LinearAlgebra.det, T, sarg)
+    return _det_scal(LinearAlgebra.det, T, sarg)
 end
 
 function _det_scal(::typeof(LinearAlgebra.det), ::Type{T}, x::AbstractMatrix) where {T}
@@ -784,7 +790,7 @@ function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}
     if idx !== nothing
         return getindex(scalarize(args[1]), idx)
     end
-    
+
     idxs = Iterators.map((-), Iterators.map(unwrap_const, Iterators.drop(args, 1)), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
     return getindex(scalarize(args[1]), idxs...)
 end

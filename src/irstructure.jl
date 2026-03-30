@@ -142,6 +142,39 @@ Iterate over valid node indices in `ir`.
 """
 Base.eachindex(ir::IRStructure) = eachindex(ir.symbols)
 
+function _print_ssa_var(io::IO, i::Int)
+    printstyled(io, "%", i; color = :yellow)
+end
+
+function Base.show(io::IO, ir::IRStructure)
+    n = length(ir)
+    println(io, "IRStructure with $n node$(n == 1 ? "" : "s"):")
+    for i in eachindex(ir)
+        sym = ir[i]
+        print(io, "  ")
+        _print_ssa_var(io, i)
+        print(io, " = ")
+        if iscall(sym)
+            op = operation(sym)
+            args = arguments(sym)
+            if op isa BasicSymbolic && haskey(ir.definition, op)
+                _print_ssa_var(io, ir.definition[op])
+            else
+                print(io, op)
+            end
+            print(io, "(")
+            for (j, arg) in enumerate(args)
+                j > 1 && print(io, ", ")
+                _print_ssa_var(io, ir.definition[arg])
+            end
+            print(io, ")")
+        else
+            print(io, sym)
+        end
+        println(io)
+    end
+end
+
 const IRBookmarkT = Int
 
 """

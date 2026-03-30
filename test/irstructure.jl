@@ -107,6 +107,31 @@ end
     @test !SU.query(isequal(z), ir, expr; recurse = ex -> iscall(ex) && operation(ex) !== sin)
 end
 
+@testset "show" begin
+    # Single leaf node: exact output check
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, x)
+    @test sprint(show, ir) == "IRStructure with 1 node:\n  %1 = x\n"
+
+    # Compound expression: structural checks
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, x^2 + y)
+    output = sprint(show, ir)
+    lines = split(output, '\n'; keepempty = false)
+    @test startswith(lines[1], "IRStructure with ")
+    @test endswith(lines[1], "nodes:")
+    # Every definition line has the SSA format
+    @test all(l -> occursin(r"^\s+%\d+ = ", l), lines[2:end])
+    # SSA refs appear in call nodes (arguments rendered as %i, not raw symbols)
+    @test any(l -> occursin(r"\(%\d+", l), lines)
+
+    # Color: %i identifiers are highlighted yellow (ANSI code 33)
+    colored = sprint(show, ir; context = :color => true)
+    @test occursin("\e[33m%", colored)
+    # Plain output (no color context) must not contain escape codes
+    @test !occursin('\e', output)
+end
+
 @testset "`IRSubstituter`" begin
     expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
     ir = IRStructure{SymReal}()

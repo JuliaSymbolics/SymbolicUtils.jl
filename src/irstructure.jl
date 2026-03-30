@@ -149,28 +149,50 @@ end
 function Base.show(io::IO, ir::IRStructure)
     n = length(ir)
     println(io, "IRStructure with $n node$(n == 1 ? "" : "s"):")
-    for i in eachindex(ir)
+
+    g = ir.dependency_graph
+    # A node with exactly one user can be inlined into that user's expression.
+    # Roots (indegree 0) and shared nodes (indegree > 1) must remain as SSA vars.
+    inlineable = [Graphs.indegree(g, i) == 1 for i in 1:n]
+
+    # Assign new consecutive SSA indices to the nodes that will be printed.
+    new_idx = zeros(Int, n)
+    counter = 0
+    for i in 1:n
+        inlineable[i] && continue
+        new_idx[i] = (counter += 1)
+    end
+
+    # Print the expression rooted at node `i`, inlining single-use children.
+    function print_expr(i)
         sym = ir[i]
-        print(io, "  ")
-        _print_ssa_var(io, i)
-        print(io, " = ")
-        if iscall(sym)
-            op = operation(sym)
-            args = arguments(sym)
-            if op isa BasicSymbolic && haskey(ir.definition, op)
-                _print_ssa_var(io, ir.definition[op])
-            else
-                print(io, op)
-            end
-            print(io, "(")
-            for (j, arg) in enumerate(args)
-                j > 1 && print(io, ", ")
-                _print_ssa_var(io, ir.definition[arg])
-            end
-            print(io, ")")
-        else
+        if !iscall(sym)
             print(io, sym)
+            return
         end
+        op = operation(sym)
+        args = arguments(sym)
+        if op isa BasicSymbolic && haskey(ir.definition, op)
+            op_idx = ir.definition[op]
+            inlineable[op_idx] ? print_expr(op_idx) : _print_ssa_var(io, new_idx[op_idx])
+        else
+            print(io, op)
+        end
+        print(io, "(")
+        for (j, arg) in enumerate(args)
+            j > 1 && print(io, ", ")
+            arg_idx = ir.definition[arg]
+            inlineable[arg_idx] ? print_expr(arg_idx) : _print_ssa_var(io, new_idx[arg_idx])
+        end
+        print(io, ")")
+    end
+
+    for i in 1:n
+        inlineable[i] && continue
+        print(io, "  ")
+        _print_ssa_var(io, new_idx[i])
+        print(io, " = ")
+        print_expr(i)
         println(io)
     end
 end

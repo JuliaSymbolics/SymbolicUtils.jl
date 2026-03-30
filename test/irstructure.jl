@@ -108,12 +108,12 @@ end
 end
 
 @testset "show" begin
-    # Single leaf node: exact output check
+    # Single leaf node: exact output check (indegree 0, never inlined)
     ir = IRStructure{SymReal}()
     populate_ir!(ir, x)
     @test sprint(show, ir) == "IRStructure with 1 node:\n  %1 = x\n"
 
-    # Compound expression: structural checks
+    # Single-use nodes are inlined: x^2 + y has no sharing, collapses to one line
     ir = IRStructure{SymReal}()
     populate_ir!(ir, x^2 + y)
     output = sprint(show, ir)
@@ -122,14 +122,24 @@ end
     @test endswith(lines[1], "nodes:")
     # Every definition line has the SSA format
     @test all(l -> occursin(r"^\s+%\d+ = ", l), lines[2:end])
-    # SSA refs appear in call nodes (arguments rendered as %i, not raw symbols)
-    @test any(l -> occursin(r"\(%\d+", l), lines)
+    # With full inlining only the root remains, raw symbols appear inline
+    @test occursin("x", lines[end]) && occursin("y", lines[end])
+
+    # Shared subexpressions are kept as SSA vars and referenced by %i
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, x^2 + sin(x^2))  # x^2 used twice → stays as %1
+    shared_output = sprint(show, ir)
+    shared_lines = split(shared_output, '\n'; keepempty = false)
+    # At least two printed lines (shared node + root)
+    @test length(shared_lines) >= 3
+    # Some line contains a call with an SSA ref as argument
+    @test any(l -> occursin(r"\(%\d+", l), shared_lines)
 
     # Color: %i identifiers are highlighted yellow (ANSI code 33)
     colored = sprint(show, ir; context = :color => true)
     @test occursin("\e[33m%", colored)
     # Plain output (no color context) must not contain escape codes
-    @test !occursin('\e', output)
+    @test !occursin('\e', shared_output)
 end
 
 @testset "`IRSubstituter`" begin

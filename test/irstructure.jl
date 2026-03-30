@@ -135,11 +135,24 @@ end
     # Some line contains a call with an SSA ref as argument
     @test any(l -> occursin(r"\(%\d+", l), shared_lines)
 
+    # Symbolic-op calls (default_is_atomic OR operation isa BasicSymbolic) are
+    # printed as a single unit; their internal dependencies are never assigned SSA
+    # variables.  z(..) creates a dependent variable; z(t) is a print-leaf.
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, z + 2t)   # z = z(t) defined at top of file
+    atomic_output = sprint(show, ir)
+    # z(t) appears literally, not decomposed as z(%1) or z(%i)
+    @test occursin("z(t)", atomic_output)
+    @test !occursin("z(%", atomic_output)
+    # t only appears inside the print-leaf z(t) and once in *(2,t); with
+    # visible ref-count 1 it is inlined, so no standalone "%i = t" line exists.
+    @test !occursin(r"%\d+ = t\b", atomic_output)
+
     # Color: %i identifiers are highlighted yellow (ANSI code 33)
     colored = sprint(show, ir; context = :color => true)
     @test occursin("\e[33m%", colored)
     # Plain output (no color context) must not contain escape codes
-    @test !occursin('\e', shared_output)
+    @test !occursin('\e', atomic_output)
 end
 
 @testset "`IRSubstituter`" begin

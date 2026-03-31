@@ -142,6 +142,86 @@ Iterate over valid node indices in `ir`.
 """
 Base.eachindex(ir::IRStructure) = eachindex(ir.symbols)
 
+function _print_ssa_var(io::IO, i::Int)
+    printstyled(io, "%", i; color = :yellow)
+end
+
+function Base.show(io::IO, ir::IRStructure)
+    n = length(ir)
+    println(io, "IRStructure with $n node$(n == 1 ? "" : "s"):")
+    n == 0 && return
+
+    g = ir.dependency_graph
+
+    # A node is a "print leaf" if it will be emitted as a single unit by Julia's
+    # symbolic printer rather than decomposed into op + SSA-ref arguments.
+    # This covers:
+    #   - default_is_atomic: plain Syms, Operator calls, dependent-variable calls
+    #   - calls whose operation is any BasicSymbolic (e.g. x(t) from @syms x(t)),
+    #     since those will be printed as "x(t)" directly regardless of whether x
+    #     is a function symbolic or a dependent variable.
+    is_print_leaf = default_is_atomic ∘ Base.Fix1(getindex, ir)
+
+    # Single-pass traversal in reverse topological order (parents have higher indices
+    # than their arguments, so n:-1:1 visits each parent before its children).
+    # We stop expanding at print-leaves so that their internal dependencies are
+    # never assigned SSA variables.
+    #
+    # `to_expand[i]`: i is visible (reachable from a root without crossing print-leaves)
+    # `indeg[i]`:     number of visible non-leaf ancestors that directly use i
+    to_expand = falses(n)
+    indeg = zeros(Int, n)
+    for i in 1:n
+        Graphs.indegree(g, i) == 0 && (to_expand[i] = true)
+    end
+    for i in n:-1:1
+        to_expand[i] || continue
+        is_print_leaf(i) && continue
+        for j in Graphs.outneighbors(g, i)
+            indeg[j] += 1
+            to_expand[j] = true
+        end
+    end
+
+    # Assign consecutive SSA indices to non-inlineable visible nodes
+    # (indeg == 0 are roots; indeg > 1 are shared).
+    new_idx = zeros(Int, n)
+    counter = 0
+    for i in 1:n
+        (to_expand[i] && indeg[i] != 1) || continue
+        new_idx[i] = (counter += 1)
+    end
+
+    # Recursively print the expression at node `i`. Print-leaves are emitted
+    # directly via Julia's symbolic printer so their internal structure is never
+    # decomposed into SSA references. Single-use (inlineable) non-leaf nodes are
+    # expanded in place; shared nodes are referenced by their SSA variable.
+    function print_expr(i)
+        sym = ir[i]
+        if is_print_leaf(i) || !iscall(sym)
+            print(io, sym)
+            return
+        end
+        print(io, operation(sym))
+        print(io, "(")
+        for (j, arg) in enumerate(arguments(sym))
+            j > 1 && print(io, ", ")
+            arg_idx = ir.definition[arg]
+            indeg[arg_idx] == 1 ? print_expr(arg_idx) : _print_ssa_var(io, new_idx[arg_idx])
+        end
+        print(io, ")")
+    end
+
+    for i in 1:n
+        (to_expand[i] && indeg[i] != 1) || continue
+        print(io, "  ")
+        _print_ssa_var(io, new_idx[i])
+        print(io, " = ")
+        print_expr(i)
+        println(io)
+    end
+end
+
 const IRBookmarkT = Int
 
 """

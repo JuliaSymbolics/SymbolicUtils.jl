@@ -107,6 +107,54 @@ end
     @test !SU.query(isequal(z), ir, expr; recurse = ex -> iscall(ex) && operation(ex) !== sin)
 end
 
+@testset "show" begin
+    # Single leaf node: exact output check (indegree 0, never inlined)
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, x)
+    @test sprint(show, ir) == "IRStructure with 1 node:\n  %1 = x\n"
+
+    # Single-use nodes are inlined: x^2 + y has no sharing, collapses to one line
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, x^2 + y)
+    output = sprint(show, ir)
+    lines = split(output, '\n'; keepempty = false)
+    @test startswith(lines[1], "IRStructure with ")
+    @test endswith(lines[1], "nodes:")
+    # Every definition line has the SSA format
+    @test all(l -> occursin(r"^\s+%\d+ = ", l), lines[2:end])
+    # With full inlining only the root remains, raw symbols appear inline
+    @test occursin("x", lines[end]) && occursin("y", lines[end])
+
+    # Shared subexpressions are kept as SSA vars and referenced by %i
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, x^2 + sin(x^2))  # x^2 used twice → stays as %1
+    shared_output = sprint(show, ir)
+    shared_lines = split(shared_output, '\n'; keepempty = false)
+    # At least two printed lines (shared node + root)
+    @test length(shared_lines) >= 3
+    # Some line contains a call with an SSA ref as argument
+    @test any(l -> occursin(r"\(%\d+", l), shared_lines)
+
+    # Symbolic-op calls (default_is_atomic OR operation isa BasicSymbolic) are
+    # printed as a single unit; their internal dependencies are never assigned SSA
+    # variables.  z(..) creates a dependent variable; z(t) is a print-leaf.
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, z + 2t)   # z = z(t) defined at top of file
+    atomic_output = sprint(show, ir)
+    # z(t) appears literally, not decomposed as z(%1) or z(%i)
+    @test occursin("z(t)", atomic_output)
+    @test !occursin("z(%", atomic_output)
+    # t only appears inside the print-leaf z(t) and once in *(2,t); with
+    # visible ref-count 1 it is inlined, so no standalone "%i = t" line exists.
+    @test !occursin(r"%\d+ = t\b", atomic_output)
+
+    # Color: %i identifiers are highlighted yellow (ANSI code 33)
+    colored = sprint(show, ir; context = :color => true)
+    @test occursin("\e[33m%", colored)
+    # Plain output (no color context) must not contain escape codes
+    @test !occursin('\e', atomic_output)
+end
+
 @testset "`IRSubstituter`" begin
     expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
     ir = IRStructure{SymReal}()

@@ -619,15 +619,26 @@ function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
             subrules = Dict()
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
             empty!(subrules)
+
+            outer_indices = Set(ii for ii in output_idx if !(ii isa Int))
+
+            scope_filter = function (y)
+                @match y begin
+                    BSImpl.ArrayOp(; output_idx=inner_idx) => !any(k -> k in outer_indices, inner_idx)
+                    _ => true
+                end
+            end
+
             res = map(Iterators.product(sh...)) do idxs
                 for (i, ii) in enumerate(output_idx)
                     ii isa Int && continue
                     subrules[ii] = idxs[i]
                 end
+
                 if toplevel
-                    substitute(new_expr, subrules; fold = Val{true}())
+                    substitute(new_expr, subrules; filterer = scope_filter, fold = Val{true}())
                 else
-                    scalarize(substitute(new_expr, subrules; fold = Val{true}()))
+                    scalarize(substitute(new_expr, subrules; filterer = scope_filter, fold = Val{true}()))
                 end
             end
             return isempty(sh) ? res[] : res

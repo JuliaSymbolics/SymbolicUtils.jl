@@ -178,7 +178,7 @@ example a `for` loop or `let` block. `enter_scope` can be used to introduce a ne
 where expressions can be generated inside the block and are not accessible once the scope
 is exited. This function takes the current `CodegenState`. It returns a new `CodegenState`
 which contains an alias of this block and will write to it, alongside a bookmark object.
-When the scope is exited, the caller is responible for calling
+When the scope is exited, the caller is responsible for calling
 [`SymbolicUtils.Code.exit_scope!`](@ref) with this returned `CodegenState` and bookmark
 object.
 
@@ -270,7 +270,7 @@ end
     function codegen_function!(fn::F, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {F, T}
 
 Generate code for `expr` whose operation is `fn` and index in `cs.ir` is `expr_idx`.
-Implementators of this function should _only_ dispatch on `F`, and the rest of the types should
+Implementers of this function should _only_ dispatch on `F`, and the rest of the types should
 be as provided in the signature above.
 
 This function should generate a Julia expression `result` for `expr`, and call

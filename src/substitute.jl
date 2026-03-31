@@ -36,7 +36,7 @@ changes invalidates the substituter. It can be reused by clearing the
 cache using [`SymbolicUtils.clear_cache!`](@ref).
 
 The caching is only available when the [`SymbolicUtils.vartype`](@ref) of the
-expressions is inferrable from the substitution rules, or explicitly specified.
+expressions is inferable from the substitution rules, or explicitly specified.
 As long as either the keys or values of the substitution rules are all
 `BasicSymbolic{T}` (for some `T`) the automatic inference will work. To allow
 the inference to work for your custom wrapper type, implement
@@ -620,11 +620,9 @@ function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
             empty!(subrules)
 
-            outer_indices = Set(ii for ii in output_idx if !(ii isa Int))
-
             scope_filter = function (y)
                 @match y begin
-                    BSImpl.ArrayOp(; output_idx=inner_idx) => !any(k -> k in outer_indices, inner_idx)
+                    BSImpl.ArrayOp(; output_idx=_) => false
                     _ => true
                 end
             end

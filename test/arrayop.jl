@@ -288,3 +288,16 @@ end
     end
     @test eval(expr) ≈ xval * yval
 end
+
+@testset "ArrayOp: nested substitution scoping (#876)" begin
+    using SymbolicUtils: idxs_for_arrayop, ArrayOp, term, scalarize
+
+    @syms A[1:3]
+    i = idxs_for_arrayop(SymReal)[1]
+
+    inner = ArrayOp{SymReal}([i], 2A[i], +, nothing, Dict(i => 1:3))
+    expr  = term(getindex, inner, i) + 1
+    outer = ArrayOp{SymReal}([i], expr, +, nothing, Dict(i => 1:3))
+
+    @test isequal(scalarize(outer), [2A[1]+1, 2A[2]+1, 2A[3]+1])
+end

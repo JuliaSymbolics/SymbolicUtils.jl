@@ -124,4 +124,11 @@ end
     irsub = IRSubstituter{true}(ir, rules)
     sub = SU.Substituter{true}(rules)
     @test isequal(irsub(expr), sub(expr))
+
+    @testset "On dependent variables" begin
+        @syms t foo(..)
+        foo = foo(t) # `foo` is now a dependent variable
+        irsub = IRSubstituter{false}(ir, Dict(foo => 2t + 1))
+        @test isequal(irsub(foo), 2t+1)
+    end
 end

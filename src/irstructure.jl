@@ -442,13 +442,13 @@ function __check_substitution_conditions!(sub::IRSubstituter{Fold, T}, i::Int) w
     iszero(cached) || return cached
 
     sym = ir[i]
-    if !filterer(sym)
-        return sub.cache[i] = i
-    end
-
     other = get(rules, sym, nothing)
     if other isa BasicSymbolic{T}
         return sub.cache[i] = populate_ir!(ir, other)
+    end
+
+    if !filterer(sym)
+        return sub.cache[i] = i
     end
 
     if !iscall(sym)

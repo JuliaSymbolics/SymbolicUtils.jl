@@ -137,3 +137,35 @@ let
     ex2 = random_term(50; atoms, funs)
     arith["division"] = @benchmarkable $ex1 / $ex2
 end
+
+@static if length(methods(SymbolicUtils.clear_cache!)) < 4
+    SymbolicUtils.clear_cache!(sub::SymbolicUtils.IRSubstituter) = empty!(sub.cache)
+end
+
+function bench_sub(subber, ex)
+    SymbolicUtils.clear_cache!(subber)
+    subber(ex)
+end
+
+let
+    atoms = atoms = [a, b, c, d, a^2, b^2, a^1.5, (b + c), b^c, 1, 2.0]
+    funs = [+, *, hypot, (x, y) -> abs(x), (x, y) -> exp(x)]
+    ex = random_term(100000; atoms, funs)
+    rules = Dict(a => 2sin(b))
+    SUITE["irstructure"] = BenchmarkGroup()
+    SUITE["irstructure"]["substitute"] = BenchmarkGroup()
+
+    subber = SymbolicUtils.Substituter{false}(rules)
+    SUITE["irstructure"]["substitute"]["reference"] = @benchmarkable bench_sub($subber, $ex)
+    ir = IRStructure{SymReal}()
+    subber = SymbolicUtils.IRSubstituter{false}(ir, rules)
+    SUITE["irstructure"]["substitute"]["IRSubstituter"] = @benchmarkable bench_sub($subber, $ex)
+
+    # To benchmark a much more sparse substitution
+    rules = Dict(abs(b + c) => 2sin(b))
+    subber = SymbolicUtils.Substituter{false}(rules)
+    SUITE["irstructure"]["substitute"]["sparse reference"] = @benchmarkable bench_sub($subber, $ex)
+    ir = IRStructure{SymReal}()
+    subber = SymbolicUtils.IRSubstituter{false}(ir, rules)
+    SUITE["irstructure"]["substitute"]["sparse IRSubstituter"] = @benchmarkable bench_sub($subber, $ex)
+end

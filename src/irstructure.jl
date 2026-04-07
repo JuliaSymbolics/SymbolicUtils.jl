@@ -498,6 +498,15 @@ function __substitute_ir_element!(sub::IRSubstituter{Fold, T}, i::Int) where {Fo
         end
     end
     op = operation(i_sym)
+    if op isa BasicSymbolic{T}
+        op_i = ir[op]
+        op = ir[get(sub.cache, op_i, op_i)]
+        if isconst(op)
+            op = unwrap_const(op)
+        elseif Fold
+            can_fold = false
+        end
+    end
     # Get the new symbolic expression
     newsym = if Fold
         can_fold &= !(op isa BasicSymbolic{T})

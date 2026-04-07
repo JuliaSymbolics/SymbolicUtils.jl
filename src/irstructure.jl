@@ -507,96 +507,6 @@ end
 get_substitution_dict(sub::IRSubstituter) = sub.rules
 clear_cache!(sub::IRSubstituter) = empty!(sub.cache)
 
-"""
-    $TYPEDSIGNATURES
-
-Check the preconditions for substituting the expression at index `i`. If it exists in cache,
-is filtered out, or present in the rules, this will return the index of the new expression
-to use. If none of those conditions are satisfied and `__substitute_ir_element!` is required
-to find the index of the new expression, returns `0`. Used by `substitute_ir!`.
-"""
-function __check_substitution_conditions!(sub::IRSubstituter{Fold, T}, i::Int) where {Fold, T}
-    (; rules, filterer, ir) = sub
-    # Check the cache, filter, and rules for `i`
-    cached = get(sub.cache, i, 0)
-    iszero(cached) || return cached
-
-    sym = ir[i]
-    other = get(rules, sym, nothing)
-    if other isa BasicSymbolic{T}
-        return sub.cache[i] = populate_ir!(ir, other)
-    end
-
-    if !filterer(sym)
-        return sub.cache[i] = i
-    end
-
-    if !iscall(sym)
-        return sub.cache[i] = i
-    end
-
-    # We haven't substituted `i` before, it isn't filtered out and it isn't directly
-    # in the rules.
-    return 0
-end
-
-"""
-    $TYPEDSIGNATURES
-
-Used by `substitute_ir!`. Does not check cache/filter/rules, but simply performs the
-substitution assuming `idx` points to an `iscall` symbolic. Returns the index of the
-substituted symbolic expression.
-"""
-function __substitute_ir_element!(sub::IRSubstituter{Fold, T}, i::Int) where {Fold, T}
-    (; rules, filterer, ir) = sub
-
-    is_dirty = false
-    children = Graphs.outneighbors(ir.dependency_graph, i)
-    for (j, c) in enumerate(children)
-        # Children have already been substituted, so we just check the cache
-        newchild = get(sub.cache, c, c)
-        is_dirty |= c != newchild
-    end
-
-    # If we didn't change anything, exit
-    if !is_dirty
-        return sub.cache[i] = i
-    end
-
-    i_sym = ir[i]
-    # Get the new `args` using `new_children`
-    args = copy(parent(arguments(i_sym)))
-    # `Fold` is a type parameter, so we statically elide the `can_fold` checking
-    # if we don't need it.
-    if Fold
-        can_fold = true
-    end
-    for j in eachindex(args)
-        new_child = args[j] = ir[sub.cache[ir[args[j]]]]
-        if Fold
-            can_fold &= isconst(new_child)
-        end
-    end
-    op = operation(i_sym)
-    if op isa BasicSymbolic{T}
-        op_i = ir[op]
-        op = ir[get(sub.cache, op_i, op_i)]
-        if isconst(op)
-            op = unwrap_const(op)
-        elseif Fold
-            can_fold = false
-        end
-    end
-    # Get the new symbolic expression
-    newsym = if Fold
-        can_fold &= !(op isa BasicSymbolic{T})
-        combine_fold(T, op, args, metadata(i_sym), can_fold)::BasicSymbolic{T}
-    else
-        maketerm(BasicSymbolic{T}, op, args, metadata(i_sym))::BasicSymbolic{T}
-    end
-
-    return sub.cache[i] = populate_ir!(ir, newsym)
-end
 
 """
     $TYPEDSIGNATURES
@@ -607,26 +517,116 @@ element.
 function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int) where {Fold, T}
     (; rules, filterer, ir) = sub
 
-    # Check if we have a trivial solution for `idx` and can early-exit.
-    result = __check_substitution_conditions!(sub, idx)
-    iszero(result) || return result
+    # Check the cache, filter, and rules for `idx`
+    cached = get(sub.cache, idx, 0)
+    iszero(cached) || return cached
+    idxsym = ir[idx]
+    other = get(rules, idxsym, nothing)
+    if other isa BasicSymbolic{T}
+        return sub.cache[idx] = populate_ir!(ir, other)
+    end
+    if !filterer(idxsym)
+        return sub.cache[idx] = idx
+    end
+    if !iscall(idxsym)
+        return sub.cache[idx] = idx
+    end
 
-    # Go through the transitive closure of `idx` in order (so we process a node
-    # only after processing its children) and substitute them.
+    # Now, it's _possible_ `idx` is changed by the substitution
+
+    # `modified` keeps track of which indices in `ir.reachability[idx]` are modified by the
+    # substitution
+    modified = get_cached_mask!(ir, idx)
+    # Queue of indices that are modified but the modified version isn't present in the IR
+    # (needs to be computed)
+    queue = get_cached_idxs!(ir)
+    empty!(queue)
     for i in ir.reachability[idx]
-        # Same checking process for each element
-        i_result = __check_substitution_conditions!(sub, i)
-        if !iszero(i_result)
-            sub.cache[i] = i_result
+        # Check the cache, filter, and rules for `i`
+        cached = get(sub.cache, i, 0)
+        if !iszero(cached) && cached != i
+            modified[i] = true
             continue
         end
 
-        # Update the cache with the substituted version of `i`.
-        __substitute_ir_element!(sub, i)
+        sym = ir[i]
+        other = get(rules, sym, nothing)
+        if other isa BasicSymbolic{T}
+            sub.cache[i] = populate_ir!(ir, other)
+            modified[i] = true
+            continue
+        end
+        if !filterer(sym)
+            sub.cache[i] = i
+            continue
+        end
+        if !iscall(sym)
+            sub.cache[i] = i
+            continue
+        end
+
+        # We will already have processed the children since we're iterating
+        # `ir.reachability` in order
+        children = Graphs.outneighbors(ir.dependency_graph, i)
+        # If none of the children are modified, `i` isn't modified and we can skip it
+        if !any(Base.Fix1(getindex, modified), children)
+            sub.cache[i] = i
+            continue
+        end
+        # We need to find the updated expression and insert it into `ir`
+        modified[i] = true
+        push!(queue, i)
     end
 
-    # Return the substituted version of `idx`.
-    return __substitute_ir_element!(sub, idx)
+    # The reason we used a queue is that it is possible for `idx` to remain unmodified.
+    # This avoids unnecessary work substituting the intermediates only for `idx` to
+    # be skipped since the children are all filtered out. As a result, this method is
+    # very useful for sparse substitutions.
+    children = Graphs.outneighbors(ir.dependency_graph, idx)
+    if !any(Base.Fix1(getindex, modified), children)
+        return sub.cache[idx] = idx
+    end
+    push!(queue, idx)
+
+    for i in queue
+        # Process the queue
+        i_sym = ir[i]
+        # Get the new `args` using `new_children`
+        args = copy(parent(arguments(i_sym)))
+        # `Fold` is a type parameter, so we statically elide the `can_fold` checking
+        # if we don't need it.
+        if Fold
+            can_fold = true
+        end
+        for j in eachindex(args)
+            new_child = args[j] = ir[sub.cache[ir[args[j]]]]
+            if Fold
+                can_fold &= isconst(new_child)
+            end
+        end
+        op = operation(i_sym)
+        if op isa BasicSymbolic{T}
+            op_i = ir[op]
+            op = ir[sub.cache[op_i]]
+            if isconst(op)
+                op = unwrap_const(op)
+            elseif Fold
+                can_fold = false
+            end
+        end
+        # Get the new symbolic expression
+        newsym = if Fold
+            can_fold &= !(op isa BasicSymbolic{T})
+            combine_fold(T, op, args, metadata(i_sym), can_fold)::BasicSymbolic{T}
+        else
+            maketerm(BasicSymbolic{T}, op, args, metadata(i_sym))::BasicSymbolic{T}
+        end
+
+        sub.cache[i] = populate_ir!(ir, newsym)
+    end
+
+    # `idx` was in the queue, so it is now in the cache
+    return sub.cache[idx]
 end
 
 function (sub::IRSubstituter{Fold, T})(expr::BasicSymbolic{T}) where {Fold, T}

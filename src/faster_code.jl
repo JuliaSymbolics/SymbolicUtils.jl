@@ -674,6 +674,10 @@ function codegen_ir!(cs::CodegenState{T}, idx::Int) where {T}
 end
 
 function (cs::CodegenState)(arr::AbstractArray)
+    uarr = unwrap(arr)
+    if uarr !== arr
+        return cs(uarr)
+    end
     return cs(MakeArray(arr, typeof(arr)))
 end
 
@@ -682,6 +686,10 @@ function (cs::CodegenState)(arr::Union{SparseVector, SparseMatrixCSC})
 end
 
 function (cs::CodegenState)(@nospecialize(thing))
+    uthing = unwrap(thing)
+    if uthing !== thing
+        return cs(uthing)
+    end
     return declare!(cs, get_misc_identifier(cs), thing)
 end
 

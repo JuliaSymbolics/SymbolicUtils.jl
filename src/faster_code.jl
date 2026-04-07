@@ -674,6 +674,10 @@ function codegen_ir!(cs::CodegenState{T}, idx::Int) where {T}
 end
 
 function (cs::CodegenState)(arr::AbstractArray)
+    uarr = unwrap(arr)
+    if uarr !== arr
+        return cs(uarr)
+    end
     return cs(MakeArray(arr, typeof(arr)))
 end
 
@@ -682,6 +686,10 @@ function (cs::CodegenState)(arr::Union{SparseVector, SparseMatrixCSC})
 end
 
 function (cs::CodegenState)(@nospecialize(thing))
+    uthing = unwrap(thing)
+    if uthing !== thing
+        return cs(uthing)
+    end
     return declare!(cs, get_misc_identifier(cs), thing)
 end
 
@@ -790,7 +798,12 @@ function (cs::CodegenState{T})(fn::Func) where {T}
             lhs = manual_dispatch_toexpr(arg.lhs, NameState(cs.rewrites))
             push!(fn_args.args, Expr(:(=), lhs, rhs))
         elseif arg isa DestructuredArgs
-            push!(fn_args.args, arg.name)
+            name = arg.name
+            if name isa BasicSymbolic{T}
+                push!(fn_args.args, manual_dispatch_toexpr(name, NameState(cs.rewrites)))
+            else
+                push!(fn_args.args, name::Symbol)
+            end
         else
             push!(fn_args.args, manual_dispatch_toexpr(arg, NameState(cs.rewrites)))
         end

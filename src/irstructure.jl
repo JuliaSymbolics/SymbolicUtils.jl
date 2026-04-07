@@ -505,6 +505,7 @@ function IRSubstituter{Fold}(
 end
 
 get_substitution_dict(sub::IRSubstituter) = sub.rules
+clear_cache!(sub::IRSubstituter) = empty!(sub.cache)
 
 """
     $TYPEDSIGNATURES
@@ -521,13 +522,13 @@ function __check_substitution_conditions!(sub::IRSubstituter{Fold, T}, i::Int) w
     iszero(cached) || return cached
 
     sym = ir[i]
-    if !filterer(sym)
-        return sub.cache[i] = i
-    end
-
     other = get(rules, sym, nothing)
     if other isa BasicSymbolic{T}
         return sub.cache[i] = populate_ir!(ir, other)
+    end
+
+    if !filterer(sym)
+        return sub.cache[i] = i
     end
 
     if !iscall(sym)
@@ -577,6 +578,15 @@ function __substitute_ir_element!(sub::IRSubstituter{Fold, T}, i::Int) where {Fo
         end
     end
     op = operation(i_sym)
+    if op isa BasicSymbolic{T}
+        op_i = ir[op]
+        op = ir[get(sub.cache, op_i, op_i)]
+        if isconst(op)
+            op = unwrap_const(op)
+        elseif Fold
+            can_fold = false
+        end
+    end
     # Get the new symbolic expression
     newsym = if Fold
         can_fold &= !(op isa BasicSymbolic{T})

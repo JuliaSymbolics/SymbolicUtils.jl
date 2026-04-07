@@ -1,4 +1,22 @@
-function Base.show(io::IO, x::BasicSymbolic{TreeReal})
+"""
+    show_metadata(io, x) -> Bool
+
+Hook for custom printing based on metadata. Return `true` if printing has been handled.
+Downstream packages can extend `show_metadata(io, x, ::Type{Ctx}, val)` for their
+metadata context and call `show_plain(io, x)` to bypass this hook.
+"""
+function show_metadata(io::IO, x::BasicSymbolic)
+    md = metadata(x)
+    md isa AbstractDict || return false
+    for (ctx, val) in md
+        show_metadata(io, x, ctx, val) && return true
+    end
+    return false
+end
+
+show_metadata(::IO, ::BasicSymbolic, ::DataType, @nospecialize(val)) = false
+
+function show_plain(io::IO, x::BasicSymbolic{TreeReal})
     @match x begin
         BSImpl.Sym(; name) => Base.show_unquoted(io, name)
         BSImpl.Const(; val) => begin
@@ -15,7 +33,7 @@ function Base.show(io::IO, x::BasicSymbolic{TreeReal})
     end
 end
 
-function Base.show(io::IO, x::BasicSymbolic)
+function show_plain(io::IO, x::BasicSymbolic)
     @match x begin
         BSImpl.Sym(; name) => Base.show_unquoted(io, name)
         BSImpl.Const(; val) => begin
@@ -37,6 +55,16 @@ function Base.show(io::IO, x::BasicSymbolic)
             end
         _ => show_term(io, x)
     end
+end
+
+function Base.show(io::IO, x::BasicSymbolic{TreeReal})
+    show_metadata(io, x) && return
+    show_plain(io, x)
+end
+
+function Base.show(io::IO, x::BasicSymbolic)
+    show_metadata(io, x) && return
+    show_plain(io, x)
 end
 
 show_term(io::IO, x::BasicSymbolic{TreeReal}) = show_call(io, operation(x), x)

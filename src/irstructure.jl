@@ -425,6 +425,7 @@ function IRSubstituter{Fold}(
 end
 
 get_substitution_dict(sub::IRSubstituter) = sub.rules
+clear_cache!(sub::IRSubstituter) = empty!(sub.cache)
 
 """
     $TYPEDSIGNATURES

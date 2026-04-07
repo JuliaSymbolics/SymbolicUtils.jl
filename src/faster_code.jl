@@ -798,7 +798,12 @@ function (cs::CodegenState{T})(fn::Func) where {T}
             lhs = manual_dispatch_toexpr(arg.lhs, NameState(cs.rewrites))
             push!(fn_args.args, Expr(:(=), lhs, rhs))
         elseif arg isa DestructuredArgs
-            push!(fn_args.args, arg.name)
+            name = arg.name
+            if name isa BasicSymbolic{T}
+                push!(fn_args.args, manual_dispatch_toexpr(name, NameState(cs.rewrites)))
+            else
+                push!(fn_args.args, name::Symbol)
+            end
         else
             push!(fn_args.args, manual_dispatch_toexpr(arg, NameState(cs.rewrites)))
         end

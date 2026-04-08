@@ -35,7 +35,7 @@ struct IRStructure{T}
     """
     Inverse mapping of `symbols`.
     """
-    definition::Dict{BasicSymbolic{T}, Int}
+    definition::IdDict{BasicSymbolic{T}, Int}
     """
     The transitive closure of `dependency_graph`, indicating all of the nodes that a given
     node (directly or indirectly) depends on. The inverse mapping is not maintained.
@@ -62,7 +62,7 @@ Create an empty `IRStructure` to store `BasicSymbolic{T}` expressions.
 function IRStructure{T}() where {T}
     ir = IRStructure{T}(
         Graphs.SimpleDiGraph{Int}(), BasicSymbolic{T}[],
-        Dict{BasicSymbolic{T}, Int}(), Vector{Int}[], BitVector(), Int[]
+        IdDict{BasicSymbolic{T}, Int}(), Vector{Int}[], BitVector(), Int[]
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)

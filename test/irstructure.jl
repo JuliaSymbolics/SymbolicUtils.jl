@@ -58,6 +58,15 @@ end
     # re-inserting the same expression should return the same index
     subidx = ir[2y]
     @test populate_ir!(ir, 2y) == subidx
+
+    @testset "Uses hashconsing equality" begin
+        ir2 = IRStructure{SymReal}()
+        a = SU.Const{SymReal}(1)
+        b = SU.Const{SymReal}(1.0)
+        populate_ir!(ir2, a)
+        populate_ir!(ir2, b)
+        @test ir2[a] != ir2[b]
+    end
 end
 
 @testset "`subset_ir`" begin

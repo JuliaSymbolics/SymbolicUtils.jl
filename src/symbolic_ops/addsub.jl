@@ -1,5 +1,5 @@
 @noinline function throw_unequal_shape_error(x, y)
-    throw(ArgumentError("Cannot add arguments of different sizes - encountered shapes $x and $y."))
+    throw(ArgumentError(LazyString("Cannot add arguments of different sizes - encountered shapes ", x, " and ", y, ".")))
 end
 
 promote_shape(::typeof(+), shape::ShapeT) = shape
@@ -117,7 +117,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                 end
             end
         elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal} || term isa BasicSymbolic{TreeReal}
-            error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
+            error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
         elseif term isa AbstractIrrational
             term = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
             result[term] = get(result, term, 0) + 1

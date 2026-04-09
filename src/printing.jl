@@ -54,7 +54,8 @@ function show_term(io::IO, x::BasicSymbolic)
     elseif f === identity && (arg = arguments(x)[1]; isconst(arg))
         show(io, arg)
     else
-        show_call(io, f, x)
+        # Break the back edge to avoid invalidations cascading up
+        @invokelatest show_call(io, f, x)
     end
 end
 

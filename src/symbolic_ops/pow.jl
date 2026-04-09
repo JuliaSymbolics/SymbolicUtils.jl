@@ -1,32 +1,24 @@
 @noinline function throw_matmatpow(x, y)
-    throw(ArgumentError("""
-    Cannot raise matrix to matrix power - tried to raise array of shape $x to array of \
-    shape $y.
-    """))
+    throw(ArgumentError(LazyString(
+        "Cannot raise matrix to matrix power -",
+        " tried to raise array of shape ", x,
+        " to array of shape ", y, ".")))
 end
 
 @noinline function throw_nonmatbase(x)
-    throw(ArgumentError("""
-    Matrices are the only arrays that can be raised to a power. Found array of shape $x.
-    """))
+    throw(ArgumentError(LazyString("Matrices are the only arrays that can be raised to a power. Found array of shape ", x, ".")))
 end
 
 @noinline function throw_nonmatexp(x)
-    throw(ArgumentError("""
-    Matrices are the only arrays that can be an exponent. Found array of shape $x.
-    """))
+    throw(ArgumentError(LazyString("Matrices are the only arrays that can be an exponent. Found array of shape ", x, ".")))
 end
 
 @noinline function throw_nonsquarebase(x)
-    throw(ArgumentError("""
-    Only square matrices can be raised to a power. Found array of shape $x.
-    """))
+    throw(ArgumentError(LazyString("Only square matrices can be raised to a power. Found array of shape ", x, ".")))
 end
 
 @noinline function throw_nonsquareexp(x)
-    throw(ArgumentError("""
-    Only a square matrix can be an exponent. Found array of shape $x.
-    """))
+    throw(ArgumentError(LazyString("Only a square matrix can be an exponent. Found array of shape ", x, ".")))
 end
 
 function promote_shape(::typeof(^), sh1::ShapeT, sh2::ShapeT)

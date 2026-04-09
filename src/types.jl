@@ -679,7 +679,7 @@ variants with `MUL` operation, it returns the stored coefficient. Throws an erro
 the input is not a multiplication expression.
 """
 function get_mul_coefficient(x)
-    iscall(x) && operation(x) === (*) || throw(ArgumentError("$x is not a multiplication"))
+    iscall(x) && operation(x) === (*) || throw(ArgumentError(LazyString(x, " is not a multiplication")))
     @match x begin
         BSImpl.Term(; args) => begin
             if ismul(args[1])
@@ -841,7 +841,7 @@ function getmetadata(s::BasicSymbolic, ctx)
     if md isa AbstractDict
         md[ctx]
     else
-        throw(ArgumentError("$s does not have metadata for $ctx"))
+        throw(ArgumentError(LazyString(s, " does not have metadata for ", ctx)))
     end
 end
 
@@ -1058,7 +1058,7 @@ function promote_symtype(f::BasicSymbolic, args...)
     # parameters of the `Tuple` in `FnType`.
     t = Tuple{args...}
     if !(t <: X)
-        error("$t is not a subtype of $X.")
+        error(LazyString(t, " is not a subtype of ", X, "."))
     end
     return Y
 end

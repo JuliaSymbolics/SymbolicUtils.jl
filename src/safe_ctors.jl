@@ -414,10 +414,10 @@ function get_indexed_axes!(ix::IndexedAxes{T}, expr::BasicSymbolic{T}) where {T}
         empty!(vars)
         search_variables!(vars, idx; is_atomic = _is_index_variable)
         if length(vars) != 1
-            throw(ArgumentError("""
-            Expected $dim-th index of $expr to be a function of a single index variable. \
-            Found expression $idx involving variables $vars.
-            """))
+            throw(ArgumentError(LazyString(
+                "Expected ", dim, "-th index of ", expr,
+                " to be a function of a single index variable.",
+                " Found expression ", idx, " involving variables ", vars, ".")))
         end
         idxsym = first(vars)
         _pad = idx - idxsym
@@ -500,21 +500,22 @@ function arrayop_shape(output_idx::AbstractVector, expr::BasicSymbolic{T}, range
             if is_bound
                 iaxis.pad === nothing && continue
                 if !issubset(reference_axis .+ iaxis.pad, sh[iaxis.dim])
-                    throw(ArgumentError("""
-                    Expected bound range $reference_axis of $idxsym with offset \
-                    $(iaxis.pad) to be within bounds \
-                    of dimension $(iaxis.dim) of variable $(iaxis.sym) ($(sh[iaxis.dim])) \
-                    where it is used.
-                    """))
+                    throw(ArgumentError(LazyString(
+                        "Expected bound range ", reference_axis,
+                        " of ", idxsym, " with offset ", iaxis.pad,
+                        " to be within bounds of dimension ", iaxis.dim,
+                        " of variable ", iaxis.sym,
+                        " (", sh[iaxis.dim], ") where it is used.")))
                 end
             else
                 if !isequal(length(reference_axis), length(sh[iaxis.dim]))
-                    throw(ArgumentError("""
-                    Expected all usages of index variable $idxsym be in axes of equal \
-                    range. Found usage in dimension $(iaxis.dim) of variable $(iaxis.sym) \
-                    which has range $(sh[iaxis.dim]) different from inferred range \
-                    $reference_axis.
-                    """))
+                    throw(ArgumentError(LazyString(
+                        "Expected all usages of index variable ", idxsym,
+                        " be in axes of equal range.",
+                        " Found usage in dimension ", iaxis.dim,
+                        " of variable ", iaxis.sym,
+                        " which has range ", sh[iaxis.dim],
+                        " different from inferred range ", reference_axis, ".")))
                 end
             end
         end
@@ -530,7 +531,7 @@ function arrayop_shape(output_idx::AbstractVector, expr::BasicSymbolic{T}, range
                 continue
             end
             if !haskey(idx_to_axes, idx)
-                throw(ArgumentError("Could not infer range of output index $idx."))
+                throw(ArgumentError(LazyString("Could not infer range of output index ", idx, ".")))
             end
             iaxes = idx_to_axes[idx]
             canonical_axis_idx = findfirst(iaxes) do iaxis
@@ -590,10 +591,9 @@ function ArrayOp{T}(output_idx, expr, reduce, term, ranges; metadata = nothing, 
     term = unwrap_const(unwrap(term))
     sh = arrayop_shape(collect(unwrap(output_idx)), unwrap(expr), unwrap_const(ranges))
     if term !== nothing && shape(term) != sh
-        throw(ArgumentError("""
-        Shape of `term` $term provided to `ArrayOp` ($(shape(term))) must be identical to \
-        inferred shape $sh.
-        """))
+        throw(ArgumentError(LazyString(
+            "Shape of `term` ", term, " provided to `ArrayOp` (",
+            shape(term), ") must be identical to inferred shape ", sh, ".")))
     end
     return BSImpl.ArrayOp{T}(output_idx, expr, reduce, term, ranges; type, shape = sh, metadata, unsafe)
 end
@@ -661,7 +661,7 @@ function shape_from_regions(regions::RegionsT)::ShapeVecT
         @union_split_smallvec stops begin
             for (i, (start, stop)) in enumerate(zip(starts, stops))
                 if start == typemax(Int) || stop == typemin(Int)
-                    throw(ArgumentError("Unable to infer bounds for $i-th dimension of `ArrayMaker`."))
+                    throw(ArgumentError(LazyString("Unable to infer bounds for ", i, "-th dimension of `ArrayMaker`.")))
                 end
                 push!(shape, start:stop)
             end
@@ -686,10 +686,9 @@ function symtype_from_values(values::ArgsT, ndims::Int)
 end
 
 function _throw_arraymaker_incompatible_shapes(region, val)
-    throw(ArgumentError("""
-    Incompatible shapes found in `@arraymaker`: Value `$val` of shape $(shape(val)) \
-    assigned to region $region.
-    """))
+    throw(ArgumentError(LazyString(
+        "Incompatible shapes found in `@arraymaker`: Value `", val,
+        "` of shape ", shape(val), " assigned to region ", region, ".")))
 end
 
 function validate_values_shapes(regions::RegionsT, values::ArgsT{T}) where {T}

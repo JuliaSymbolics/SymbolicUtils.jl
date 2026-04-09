@@ -52,8 +52,11 @@ end
 assert_like(f, T) = nothing
 # a and b are objects, arguments gets recursively checked
 function assert_like(f, T, a, b...)
-    islike(a, T) || throw(ArgumentError("The function $f cannot be applied to $a which is not a $T-like object." *
-                                        "Define `islike(::$(typeof(a)), ::Type{$T}) = true` to enable this."))
+    islike(a, T) || throw(ArgumentError(LazyString(
+        "The function ", f, " cannot be applied to ", a,
+        " which is not a ", T, "-like object.",
+        " Define `islike(::", typeof(a), ", ::Type{", T,
+        "}) = true` to enable this.")))
     assert_like(f, T, b...)
 end
 
@@ -270,7 +273,7 @@ end
 promote_symtype(::typeof(rem2pi), T::TypeT, mode::TypeT) = T
 
 @noinline function _throw_array(f, shs...)
-    throw(ArgumentError("Invalid shapes for $f: $shs."))
+    throw(ArgumentError(LazyString("Invalid shapes for ", f, ": ", shs, ".")))
 end
 
 for f in diadic
@@ -342,7 +345,7 @@ function promote_symtype(::typeof(exp), T::TypeT)
 end
 
 @noinline function _throw_not_square(sh)
-    throw(ArgumentError("Expected square matrix, got argument of shape $sh"))
+    throw(ArgumentError(LazyString("Expected square matrix, got argument of shape ", sh)))
 end
 
 function promote_shape(::typeof(exp), sh::ShapeT)
@@ -365,7 +368,7 @@ function Base.exp(x::BasicSymbolic{T}) where {T}
     return BSImpl.Term{T}(exp, ArgsT{T}((x,)); type, shape = sh)
 end
 
-error_f_symbolic(f, T) = error("$f is not defined for $T.")
+error_f_symbolic(f, T) = error(LazyString(f, " is not defined for ", T, "."))
 
 function promote_shape(::typeof(rem2pi), sha::ShapeT, shb::ShapeT)
     is_array_shape(sha) && _throw_array(rem2pi, sha, shb)
@@ -383,7 +386,7 @@ function promote_symtype(::typeof(inv), T::TypeT)
     elseif T <: AbstractMatrix
         return Matrix{promote_symtype(/, T.parameters[1]::TypeT)}
     else
-        error("Cannot call `inv` on $T.")
+        error(LazyString("Cannot call `inv` on ", T, "."))
     end
 end
 function promote_shape(::typeof(inv), sh::ShapeT)
@@ -452,7 +455,7 @@ currently supported but could be added if needed.
 """
 function promote_symtype(f::Base.ComposedFunction, arg_symtypes::TypeT...)
     inner_result = promote_symtype(f.inner, arg_symtypes...)
-    return promote_symtype(f.outer, inner_result)  
+    return promote_symtype(f.outer, inner_result)
 end
 
 for f in [one, zero, *, +, -]
@@ -508,14 +511,12 @@ function promote_symtype(::typeof(adjoint), T::TypeT)
     elseif T <: AbstractVecOrMat
         return LinearAlgebra.Adjoint{T.parameters[1]::TypeT, T}
     else
-        error("Invalid type $T for `adjoint`")
+        error(LazyString("Invalid type ", T, " for `adjoint`"))
     end
 end
 
 @noinline function _throw_adjont_vec_or_mat(sh)
-    throw(ArgumentError("""
-    `adjoint` is only applicable to vectors and matrices - found argument of shape $sh.
-    """))
+    throw(ArgumentError(LazyString("`adjoint` is only applicable to vectors and matrices - found argument of shape ", sh, ".")))
 end
 
 function promote_shape(::typeof(adjoint), @nospecialize(sh::ShapeT))
@@ -695,7 +696,8 @@ Base.broadcastable(x::BasicSymbolic) = is_array_shape(shape(x)) ? x : Ref(x)
 function Base.eachindex(x::BasicSymbolic)
     sh = shape(x)
     if sh isa Unknown
-        throw(ArgumentError("Indices of variable $x with unknown shape $sh are not defined."))
+        throw(ArgumentError(LazyString("Indices of variable ", x, " with unknown shape ", sh, " are not defined.")))
+        # throw(ArgumentError("Indices of variable $x with unknown shape $sh are not defined."))
     end
     CartesianIndices(Tuple(sh))
 end
@@ -900,7 +902,7 @@ function promote_symtype(::typeof(clamp),
     elseif T <: AbstractVector && S <: AbstractVector && R <: AbstractVector
         return Vector{promote_symtype(clamp, T.parameters[1]::TypeT, S.parameters[1]::TypeT, R.parameters[1]::TypeT)}
     else
-        error("Invalid types for `clamp`: $T, $S, $R.")
+        error(LazyString("Invalid types for `clamp`: ", T, ", ", S, ", ", R, "."))
     end
 end
 
@@ -951,7 +953,7 @@ Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::Broadcast.BroadcastStyle) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{T}) where {T} = SymBroadcast{T}()
 function Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{R}) where {T, R}
-    throw(ArgumentError("Cannot broadcast symbolics of different `vartype`s $T and $R."))
+    throw(ArgumentError(LazyString("Cannot broadcast symbolics of different `vartype`s ", T, " and ", R, ".")))
 end
 
 mutable struct BroadcastBuffer{T}
@@ -1078,15 +1080,13 @@ function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{
 end
 
 @noinline function _throw_unequal_lengths(x, y)
-    throw(ArgumentError("""
-    Arguments must have equal lengths. Got arguments with shapes $x and $y.
-    """))
+    throw(ArgumentError(LazyString("Arguments must have equal lengths. Got arguments with shapes ", x, " and ", y, ".")))
 end
 
 function promote_shape(::typeof(LinearAlgebra.dot), sha::ShapeT, shb::ShapeT)
     @nospecialize sha shb
     if sha isa ShapeVecT && shb isa ShapeVecT
-        _length_from_shape(sha) == _length_from_shape(shb) 
+        _length_from_shape(sha) == _length_from_shape(shb)
     end
     ShapeVecT()
 end
@@ -1097,7 +1097,7 @@ function promote_symtype(::typeof(LinearAlgebra.dot), T::TypeT, S::TypeT)
     elseif T <: AbstractArray && S <: AbstractArray
         return promote_symtype(LinearAlgebra.dot, T.parameters[1]::TypeT, S.parameters[1]::TypeT)
     else
-        error("Invalid types for `LinearAlgebra.dot`: $T, $S.")
+        error(LazyString("Invalid types for `LinearAlgebra.dot`: ", T, ", ", S, "."))
     end
 end
 
@@ -1134,12 +1134,12 @@ function promote_symtype(::typeof(LinearAlgebra.det), T::TypeT)
     elseif T <: AbstractMatrix
         return T.parameters[1]::TypeT
     else
-        error("Invalid type for `LinearAlgebra.det`: $T.")
+        error(LazyString("Invalid type for `LinearAlgebra.det`: ", T, "."))
     end
 end
 
 @noinline function _throw_not_matrix(x)
-    throw(ArgumentError("Expected argument to be a matrix, got argument of shape $x."))
+    throw(ArgumentError(LazyString("Expected argument to be a matrix, got argument of shape ", x, ".")))
 end
 
 function promote_shape(::typeof(LinearAlgebra.det), sh::ShapeT)
@@ -1168,7 +1168,7 @@ function promote_symtype(::typeof(LinearAlgebra.norm), T::TypeT)
     elseif T <: AbstractArray
         return promote_symtype(LinearAlgebra.norm, T.parameters[1]::TypeT)
     else
-        error("Invalid type for `LinearAlgebra.norm`: $T")
+        error(LazyString("Invalid type for `LinearAlgebra.norm`: ", T))
     end
 end
 function promote_symtype(::typeof(LinearAlgebra.norm), T::TypeT, S::TypeT)
@@ -1203,10 +1203,10 @@ function LinearAlgebra.norm(x::Union{BasicSymbolic{T}, AbstractArray}, y::BasicS
 end
 
 @noinline function _vec_throw_non_array(T::TypeT)
-    throw(ArgumentError("`Base.vec` only accepts arrays. Got argument of type $T."))
+    throw(ArgumentError(LazyString("`Base.vec` only accepts arrays. Got argument of type ", T, ".")))
 end
 @noinline function _vec_throw_non_array(@nospecialize(sh::ShapeT))
-    throw(ArgumentError("`Base.vec` only accepts arrays. Got argument of shape $sh."))
+    throw(ArgumentError(LazyString("`Base.vec` only accepts arrays. Got argument of shape ", sh, ".")))
 end
 
 function promote_symtype(::typeof(vec), T::TypeT)
@@ -1279,10 +1279,10 @@ function promote_symtype(f::Mapper, T::TypeT, Ts::TypeT...)
 end
 
 @noinline function _throw_map_unequal_shapes_same_ndims(shs::ShapeT...)
-    throw(ArgumentError("""
-    If all arguments to `map` have the same `ndims`, they must have the same shape. Found \
-    arguments of shapes $shs.
-    """))
+    throw(ArgumentError(LazyString(
+        "If all arguments to `map` have the same `ndims`,",
+        " they must have the same shape.",
+        " Found arguments of shapes ", shs, ".")))
 end
 
 function promote_shape(::Mapper, sh::ShapeT, shs::ShapeT...)
@@ -1594,7 +1594,7 @@ function promote_symtype(::typeof(complex), T::TypeT)
     elseif T <: Number
         return T
     else
-        error("Invalid type for `complex`: $T.")
+        error(LazyString("Invalid type for `complex`: ", T, "."))
     end
 end
 function promote_symtype(::typeof(complex), T::TypeT, S::TypeT)
@@ -1636,22 +1636,14 @@ function promote_shape(::typeof(LinearAlgebra.cross), shx::ShapeT, shy::ShapeT)
     @nospecialize shx shy
 
     if shx isa Unknown
-        shx.ndims == 1 || shx.ndims == -1 || error("""
-        `LinearAlgebra.cross` expects vectors. Got argument of shape $shx.
-        """)
+        shx.ndims == 1 || shx.ndims == -1 || error(LazyString("`LinearAlgebra.cross` expects vectors. Got argument of shape ", shx, "."))
     else
-        length(shx) == 1 && length(shx[1]) == 3 || error("""
-        `LinearAlgebra.cross` expects a 3-vector. Got argument of shape $shx.
-        """)
+        length(shx) == 1 && length(shx[1]) == 3 || error(LazyString("`LinearAlgebra.cross` expects a 3-vector. Got argument of shape ", shx, "."))
     end
     if shy isa Unknown
-        shy.ndims == 1 || shy.ndims == -1 || error("""
-        `LinearAlgebra.cross` expects vectors. Got argument of shape $shy.
-        """)
+        shy.ndims == 1 || shy.ndims == -1 || error(LazyString("`LinearAlgebra.cross` expects vectors. Got argument of shape ", shy, "."))
     else
-        length(shy) == 1 && length(shy[1]) == 3 || error("""
-        `LinearAlgebra.cross` expects a 3-vector. Got argument of shape $shy.
-        """)
+        length(shy) == 1 && length(shy[1]) == 3 || error(LazyString("`LinearAlgebra.cross` expects a 3-vector. Got argument of shape ", shy, "."))
     end
 
     return ShapeVecT((1:3,))

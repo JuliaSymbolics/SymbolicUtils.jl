@@ -1,17 +1,13 @@
 *(a::BasicSymbolic) = a
 
 @noinline function throw_expected_matrix(x)
-    throw(ArgumentError("Expected matrix in multiplication, got argument of shape $x."))
+    throw(ArgumentError(LazyString("Expected matrix in multiplication, got argument of shape ", x, ".")))
 end
 @noinline function throw_expected_matvec(x)
-    throw(ArgumentError("""
-    Expected matrix or vector in multiplication, got argument of shape $x.
-    """))
+    throw(ArgumentError(LazyString("Expected matrix or vector in multiplication, got argument of shape ", x, ".")))
 end
 @noinline function throw_incompatible_shapes(x, y)
-    throw(ArgumentError("""
-    Encountered incompatible shapes $x and $y when multiplying.
-    """))
+    throw(ArgumentError(LazyString("Encountered incompatible shapes ", x, " and ", y, " when multiplying.")))
 end
 
 is_array_shape(sh::ShapeT) = sh isa Unknown || _ndims_from_shape(sh) > 0
@@ -167,7 +163,7 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
             end
         end
     elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal}
-        error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
+        error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
     elseif term isa AbstractIrrational
         base = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
         num_dict[base] = get(num_dict, base, 0) + 1

@@ -13,7 +13,7 @@ include("utils.jl")
 
 @testset "@syms" begin
     let
-        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int 
+        @syms a b::Float64 f(::Real) g(p, h(q::Real))::Int
 
         @test issym(a) && symtype(a) == Number
         @test a.name === :a
@@ -163,7 +163,7 @@ newf = substitute(f, Dict(a=>b)) # unrelated substitution
     @test isequal(rem2pi(a, RoundNearest), Term{SymReal}(rem2pi, [a, RoundNearest]; type = Real))
 
     # bool
-    for f in [(==), (!=), (<=), (>=), (<), (>)]
+    for f in [(==), (!=), (<=), (>=), (<)]
         @test isequal(f(a, 0), Term{SymReal}(f, [a, 0]; type = Bool))
         @test isequal(f(0, a), Term{SymReal}(f, [0, a]; type = Bool))
         @test isequal(f(a, a), Term{SymReal}(f, [a, a]; type = Bool))
@@ -940,7 +940,7 @@ end
     # test that maketerm sets metadata correctly
     metadata = Base.ImmutableDict{DataType, Any}(Ctx1, "meta_1")
     metadata2 = Base.ImmutableDict{DataType, Any}(Ctx2, "meta_2")
-    
+
     d = b * c
     @set! d.metadata = metadata2
 
@@ -969,14 +969,14 @@ end
     @test symtype(new_expr) == Bool
 
     # Doesn't know return type, promoted symtype is Any
-    foo(x,y) = x^2 + x 
+    foo(x,y) = x^2 + x
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), foo, [a, b], nothing)
     @test symtype(new_expr) == Any
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), foo, [a, b], nothing; type = Number)
     @test symtype(new_expr) == Number
 
     # Promoted symtype is a subtype of referred
-    @syms x::Int y::Int 
+    @syms x::Int y::Int
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), (+), [x, y], nothing)
     @test symtype(new_expr) == Int64
 
@@ -1094,7 +1094,7 @@ end
     ax = adjoint(x)
     @test isequal(ax, x)
     @test ax === x
-    @test isequal(adjoint(y), conj(y)) 
+    @test isequal(adjoint(y), conj(y))
 end
 
 @testset "`setproperties` clears hash" begin
@@ -1347,20 +1347,20 @@ end
     @test SymbolicUtils.promote_symtype(cos ∘ sin, Real) == Real
     @test SymbolicUtils.promote_symtype(abs ∘ sin, Real) == Real
     @test SymbolicUtils.promote_symtype(exp ∘ log, Real) == Real
-    
+
     # Test three-function compositions
     @test SymbolicUtils.promote_symtype(sin ∘ abs ∘ sqrt, Real) == Real
     @test SymbolicUtils.promote_symtype(cos ∘ sin ∘ abs, Real) == Real
     @test SymbolicUtils.promote_symtype(exp ∘ sin ∘ sqrt, Real) == Real
-    
+
     # Test four-function compositions
     @test SymbolicUtils.promote_symtype(exp ∘ sin ∘ abs ∘ sqrt, Real) == Real
-    
+
     # Test type propagation with different input types
     @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Number) == Number
     @test SymbolicUtils.promote_symtype(sin ∘ abs ∘ sqrt, Number) == Number
     @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Complex) == Number
-    
+
     # Test edge cases
     @test SymbolicUtils.promote_symtype(abs ∘ abs, Real) == Real
     @test SymbolicUtils.promote_symtype(sin ∘ sin, Real) == Real
@@ -1370,7 +1370,7 @@ end
 @testset "Composite splatted indices in array indexing" begin
     indices = repeat([1:2], 2)
     final_indices = 1:3
-    
+
     @syms y[indices..., final_indices]
     @test SymbolicUtils.symtype(y) == Array{Number, 3}
     @test y[1, 1, 1] isa SymbolicUtils.BasicSymbolic

@@ -573,7 +573,7 @@ end
 for (f, Domain) in [(==) => Number, (!=) => Number,
                     (<=) => Real,   (>=) => Real,
                     (isless) => Real,
-                    (<) => Real,   (> ) => Real,
+                    (<) => Real,
                     (& ) => Bool,   (| ) => Bool,
                     xor => Bool]
     @eval begin

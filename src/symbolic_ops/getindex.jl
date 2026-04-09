@@ -2,7 +2,7 @@
 @inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{<:AbstractVector{<:Integer}}, rest...) = 1 + _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{Colon}, rest...) = 1 + _indexed_ndims(rest...)
-@inline _indexed_ndims(::Type{T}, rest...) where {T} = throw(ArgumentError("Invalid index type $T."))
+@inline _indexed_ndims(::Type{T}, rest...) where {T} = throw(ArgumentError(LazyString("Invalid index type ", T, ".")))
 
 function promote_symtype(::typeof(getindex), ::Type{T}, Ts::Vararg{Any, N}) where {N, eT, T <: AbstractArray{eT, N}}
     nD = _indexed_ndims(Ts...)
@@ -33,15 +33,11 @@ end
 end
 
 @noinline function throw_index_larger_than_shape(i, ii, shi)
-    throw(ArgumentError("""
-    Tried to index array whose `$i`th dimension has shape $shi with index $ii.
-    """))
+    throw(ArgumentError(LazyString("Tried to index array whose `", i, "`th dimension has shape ", shi, " with index ", ii, ".")))
 end
 
 @noinline function throw_not_array(x)
-    throw(ArgumentError("""
-    Cannot call `getindex` on non-array symbolics - found array of shape $x.
-    """))
+    throw(ArgumentError(LazyString("Cannot call `getindex` on non-array symbolics - found array of shape ", x, ".")))
 end
 
 function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
@@ -221,7 +217,7 @@ function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)
 end
 
 function _throw_arraymaker_out_of_range(x::BasicSymbolic, idx)
-    throw(ArgumentError("Index $idx is out of range for `$x`."))
+    throw(ArgumentError(LazyString("Index ", idx, " is out of range for `", x, "`.")))
 end
 
 function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {T, I}

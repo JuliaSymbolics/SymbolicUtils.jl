@@ -260,7 +260,7 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
     @nospecialize f
     args = unwrap_args(args)
     if f isa Symbol
-        error("$f must not be a Symbol")
+        error(LazyString(f, " must not be a Symbol"))
     elseif f === ArrayOp{T}
         return ArrayOp{T}(args...)::BasicSymbolic{T}
     elseif f === ArrayMaker{T}

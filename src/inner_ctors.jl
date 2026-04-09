@@ -288,11 +288,11 @@ The `unsafe` flag skips hash consing for performance in internal operations.
     if val isa BasicSymbolic{T}
         return val
     elseif val isa BasicSymbolic{SymReal}
-        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
+        error(LazyString("Cannot construct `BasicSymbolic{", T, "}` from `BasicSymbolic{SymReal}`."))
     elseif val isa BasicSymbolic{SafeReal}
-        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
+        error(LazyString("Cannot construct `BasicSymbolic{", T, "}` from `BasicSymbolic{SymReal}`."))
     elseif val isa BasicSymbolic{TreeReal}
-        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
+        error(LazyString("Cannot construct `BasicSymbolic{", T, "}` from `BasicSymbolic{TreeReal}`."))
     elseif val isa AbstractArray && _is_array_of_symbolics(val)
         isadjoint = val isa LinearAlgebra.Adjoint
         istranspose = val isa LinearAlgebra.Transpose

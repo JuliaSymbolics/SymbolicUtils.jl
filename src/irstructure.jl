@@ -146,7 +146,16 @@ function _print_ssa_var(io::IO, i::Int)
     printstyled(io, "%", i; color = :yellow)
 end
 
-function Base.show(io::IO, ir::IRStructure)
+"""
+    $TYPEDSIGNATURES
+
+Print the IR representation of `ir` to `io`, showing at most `limit` statements.
+If the IR has more statements than `limit`, the remaining statements are truncated
+and a summary line is printed instead. Pass `limit = nothing` to print all statements.
+
+See also [`SymbolicUtils.print_ir`](@ref) which defaults to printing all statements.
+"""
+function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
     n = length(ir)
     println(io, "IRStructure with $n node$(n == 1 ? "" : "s"):")
     n == 0 && return
@@ -192,6 +201,8 @@ function Base.show(io::IO, ir::IRStructure)
         new_idx[i] = (counter += 1)
     end
 
+    total_stmts = counter
+
     # Recursively print the expression at node `i`. Print-leaves are emitted
     # directly via Julia's symbolic printer so their internal structure is never
     # decomposed into SSA references. Single-use (inlineable) non-leaf nodes are
@@ -212,15 +223,38 @@ function Base.show(io::IO, ir::IRStructure)
         print(io, ")")
     end
 
+    printed = 0
     for i in 1:n
         (to_expand[i] && indeg[i] != 1) || continue
+        if limit !== nothing && printed >= limit
+            remaining = total_stmts - printed
+            print(io, "  ⋮ ($remaining more statement$(remaining == 1 ? "" : "s") omitted; use `print_ir` to show all)")
+            println(io)
+            return
+        end
         print(io, "  ")
         _print_ssa_var(io, new_idx[i])
         print(io, " = ")
         print_expr(i)
         println(io)
+        printed += 1
     end
 end
+
+function Base.show(io::IO, ir::IRStructure)
+    _show_ir(io, ir; limit = 50)
+end
+
+"""
+    print_ir([io::IO], ir::IRStructure)
+
+Print the complete IR of `ir` to `io` (defaulting to `stdout`) without truncation.
+
+By default, `show` limits the output to 50 statements. Use this function when
+you need to inspect an `IRStructure` with more statements than that limit.
+"""
+print_ir(io::IO, ir::IRStructure) = _show_ir(io, ir; limit = nothing)
+print_ir(ir::IRStructure) = print_ir(stdout, ir)
 
 const IRBookmarkT = Int
 

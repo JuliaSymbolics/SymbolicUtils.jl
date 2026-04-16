@@ -2037,7 +2037,8 @@ function apply_optimization_rules(expr, state, rules)
 end
 
 function apply_optimization_rules(ir::IRStructure, expr, state, rules)
-    isempty(rules) && return ir
+    isnothing(rules) && return ir, expr
+    isempty(rules) && return ir, expr
     for rule in sort(rules, by = x -> x.priority)
         ir_new, expr_new = apply_optimization_rule(ir, expr, state, rule)
         expr = expr_new

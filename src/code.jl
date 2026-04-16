@@ -2010,7 +2010,6 @@ Base.isempty(l::Code.Let) = isempty(l.pairs)
 # Apply optimization rules during CSE
 function apply_optimization_rule(expr::Code.Let, state::Union{Code.CSEState, Code.LazyState}, rules::OptimizationRule)
     match_data = rules.detector(expr, state)
-    @show match_data
     if match_data !== nothing
         return rules.transformer(expr, match_data, state)
     end

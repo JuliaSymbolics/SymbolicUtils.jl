@@ -101,7 +101,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                 BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
-                            newcoeff += coeff
+                            newcoeff = newcoeff .+ coeff
                             for (k, v) in dict
                                 result[k] = get(result, k, 0) + v
                             end
@@ -122,7 +122,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
             term = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
             result[term] = get(result, term, 0) + 1
         else
-            newcoeff += term
+            newcoeff = newcoeff .+ term
         end
     end
     filter!(!(iszero ∘ last), result)

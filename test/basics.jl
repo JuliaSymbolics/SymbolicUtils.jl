@@ -1381,3 +1381,13 @@ end
     @test symtype(R') === LinearAlgebra.Adjoint{Number, Matrix{Number}}
     @test symtype(R' * n) === Vector{Number}
 end
+
+@testset "symbolic array + literal array" begin
+    @syms x[1:3]::Real
+    ex = x + [1, 2, 3]
+    @test isequal(ex.coeff, [1, 2, 3])
+    @test isequal(ex.dict, Dict(x => 1))
+    ex = ex + [3, 4, 5]
+    @test isequal(ex.coeff, [4, 6, 8])
+    @test isequal(ex.dict, Dict(x => 1))
+end

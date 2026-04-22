@@ -891,6 +891,15 @@ end
     @test repr(a + -1*b) == "a - b"
     @test repr(-1^a) == "-(1^a)"
     @test repr((-1)^a) == "(-1)^a"
+
+    struct PrintCtx end
+    function SymbolicUtils.show_metadata(io::IO, x::SymbolicUtils.BasicSymbolic, ::Type{PrintCtx}, val)
+        print(io, "CTX(", val, "):")
+        SymbolicUtils.show_plain(io, x)
+        return true
+    end
+    expr = SymbolicUtils.setmetadata(a + b, PrintCtx, "sum")
+    @test repr(expr) == "CTX(sum):a + b"
 end
 
 @testset "polynomial printing" begin

@@ -224,7 +224,7 @@ function codegen_allocator_call!(
     allocator_sym::Symbol = if allocator isa BasicSymbolic{T}
         cs(allocator)
     else
-        declare!(cs, :__internal_arrayop_allocator, allocator)
+        declare!(cs, get_misc_identifier(cs), allocator)
     end
     sh = shape(expr)::ShapeVecT
     sz_expr = Expr(:tuple)
@@ -350,48 +350,59 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
     return output_buffer
 end
 
+function write_constant_array!(cs::CodegenState{T}, vw::Symbol, val::AbstractArray) where {T}
+    for (i, v) in enumerate(val)
+        write_target = Expr(:ref, vw, i)
+        declare!(cs, write_target, v)
+    end
+end
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
     _allocator = get_allocator!(cs, zeros)
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
-    regions, values = @match O begin
+    regions, values = @match expr begin
         BSImpl.ArrayMaker(; regions, values) => (regions, values)
     end
     
     @union_split_smallvec regions @union_split_smallvec values begin
         for (region, val) in zip(regions, values)
-            view_expr = Expr(:call, view)
-            @union_split_smallvec region append!(view_expr.args, regions)
-            vw = declare!(cs, :__region_view, view_expr)
+            # We are writing to a single element
+            if all(isone ∘ length, region)
+                lhs = Expr(:ref, output_buffer)
+                @union_split_smallvec region for ax in region
+                    push!(lhs.args, first(ax))
+                end
+                rhs = cs(val[SymbolicUtils.stable_eachindex(val)[1]])
+                declare!(cs, lhs, rhs)
+                continue
+            end
+            view_expr = Expr(:call, view, output_buffer)
+            @union_split_smallvec region append!(view_expr.args, region)
+            vw = declare!(cs, get_misc_identifier(cs), view_expr)
             @match val begin
-                BSImpl.Term(; f, args) => if f === with_allocator
-                    # Replace the allocator. We want it to write directly to the output
-                    # No point constructing a new expression, just do what `with_allocator`
-                    # would do in `codegen_ir!`.
-                    old_allocator = add_allocator!(cs, vw)
+                # Replace the allocator. We want it to write directly to the output
+                # No point constructing a new expression, just do what `with_allocator`
+                # would do in `codegen_ir!`.
+                BSImpl.Term(; f, args) && if f === with_allocator end => begin
+                    old_allocator = add_allocator!(cs, Expr(:call, Returns, vw))
                     cs(args[2])
                     reset_allocator!(cs, old_allocator)
-                elseif f === SymbolicUtils.array_literal
-                    old_allocator = add_allocator!(cs, vw)
-                    cs(val)
-                    reset_allocator!(cs, old_allocator)
-                else
-                    temp_array = cs(val)
-                    declare!(cs, :_, Expr(:call, copyto!, vw, temp_array))
                 end
-                BSImpl.ArrayOp(;) || BSImpl.ArrayMaker(;) => begin
-                    old_allocator = add_allocator!(cs, vw)
+                _ && if supports_with_allocator(val) end => begin
+                    old_allocator = add_allocator!(cs, Expr(:call, Returns, vw))
                     cs(val)
                     reset_allocator!(cs, old_allocator)
                 end
+                BSImpl.Const(; val) => write_constant_array!(cs, vw, val)
                 _ => begin
                     temp_array = cs(val)
-                    declare!(cs, :_, Expr(:call, copyto!, vw, temp_array))
+                    declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, temp_array))
                 end
             end
         end
     end
 
-    return codegen!(cs, expr_idx, output_buffer)
+    return declare!(cs, get_misc_identifier(cs), output_buffer)
 end
 
 function codegen_function!(

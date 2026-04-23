@@ -18,7 +18,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
                       ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
-                      AddMulVariant, _isone, _iszero
+                      AddMulVariant, _isone, _iszero, IRStructure, populate_ir!
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -2024,6 +2024,7 @@ function apply_optimization_rule(func::Code.Func, state, rule)
          func.pre)
 end
 
+apply_optimization_rules(expr, state, ::Nothing) = expr
 function apply_optimization_rules(expr, state, rules)
     isempty(rules) && return expr
     for rule in sort(rules, by = x -> x.priority)
@@ -2034,4 +2035,47 @@ function apply_optimization_rules(expr, state, rules)
     expr
 end
 
+function apply_optimization_rules(ir::IRStructure, expr, rules)
+    isnothing(rules) && return ir, expr
+    isempty(rules) && return ir, expr
+    for rule in sort(rules, by = x -> x.priority)
+        ir_new, expr_new = apply_optimization_rule(ir, expr, rule)
+        expr = expr_new
+        ir = ir_new
+    end
+    ir, expr
+end
+
+function apply_optimization_rule(ir::IRStructure, expr, rules)
+    match_data = rules.detector(ir, expr)
+    if match_data !== nothing
+        new_ir, new_expr = rules.transformer(ir, expr, match_data)
+        return new_ir, new_expr
+    end
+
+    return ir, expr
+end
+
+function apply_optimization_rules(ir::IRStructure, expr, rules)
+    isnothing(rules) && return ir, expr
+    isempty(rules) && return ir, expr
+    for rule in sort(rules, by = x -> x.priority)
+        ir_new, expr_new = apply_optimization_rule(ir, expr, rule)
+        expr = expr_new
+        ir = ir_new
+    end
+
+    ir, expr
+end
+
+function apply_optimization_rule(ir::IRStructure, expr, rules)
+    match_data = rules.detector(ir, expr)
+    if match_data !== nothing
+        new_ir, new_expr = rules.transformer(ir, expr, match_data)
+        return new_ir, new_expr
+    end
+
+    return ir, expr
+
+end
 end

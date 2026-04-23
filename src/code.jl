@@ -2068,7 +2068,7 @@ function apply_optimization_rules(ir::IRStructure, expr, rules)
 end
 
 function apply_optimization_rule(ir::IRStructure, expr, rules)
-    match_data = rules.detector(ir, expr, state)
+    match_data = rules.detector(ir, expr)
     if match_data !== nothing
         new_ir, new_expr = rules.transformer(ir, expr, match_data)
         return new_ir, new_expr

@@ -192,12 +192,73 @@ expand(x, _...) = x
 
 ## Rational Polynomial form with Div
 
+_is_neg_number(x) = x isa Number && x < 0
+
+function has_neg_lead(x)
+    x = unwrap(x)
+    _is_neg_number(x) && return true
+    if ismul(x)
+        return _is_neg_number(x.coeff)
+    end
+    if isadd(x)
+        return _is_neg_number(x.coeff) ||
+               (x.coeff == 0 && all(c -> c < 0, values(x.dict)))
+    end
+    return false
+end
+
+function canon_sign(expr)
+    v = unwrap(expr)
+    
+    if isdiv(v)
+        n, d = arguments(v)
+        n2, d2 = canon_sign(n), canon_sign(d)
+        # Only flip if BOTH are negative
+        if has_neg_lead(n2) && has_neg_lead(d2)
+            return canon_sign((-n2) / (-d2))
+        end
+        return n2 / d2
+    end
+    
+    if ismul(v)
+        args = map(canon_sign, arguments(v))
+        nneg = count(has_neg_lead, args)
+        if nneg >= 2
+            flipped = map(a -> has_neg_lead(a) ? (-a) : a, args)
+            sign = iseven(nneg) ? 1 : -1
+            return sign * reduce(*, flipped)
+        end
+        return reduce(*, args)
+    end
+    
+    if ispow(v)
+        base, exp = arguments(v)
+        if isconst(exp)
+            exp_val = unwrap_const(exp)
+            if has_neg_lead(base) && exp_val isa Integer
+                pos_base = (-base)
+                pos_base_canon = canon_sign(pos_base)
+                if iseven(exp_val)
+                    return pos_base_canon^exp
+                else
+                    return -(pos_base_canon^exp)
+                end
+            end
+        end
+        base2 = canon_sign(base)
+        return base2^exp
+    end
+    
+    return expr
+end
+
 function simplify_div(d::T)::T where {T <: BasicSymbolic}
     isdiv(d) || return d
     d.simplified && return d
     num, den = simplify_div(d.num, d.den)
     isequal(num, d) && return d
-    return simplify_fractions(num) / simplify_fractions(den)
+    result = simplify_fractions(num) / simplify_fractions(den)
+    return canon_sign(result)
 end
 
 function canonicalize_coeffs!(coeffs::Vector{PolyCoeffT})
@@ -520,4 +581,3 @@ end
 function has_div(x)
     return isdiv(x) || (iscall(x) && any(has_div, arguments(x)))
 end
-

@@ -18,7 +18,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
                       ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
-                      AddMulVariant, _isone, _iszero
+                      AddMulVariant, _isone, _iszero, Fill
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 
@@ -85,7 +85,14 @@ end
 function supports_with_allocator(ex::BasicSymbolic{T}) where {T}
     return @match ex begin
         BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => true
-        BSImpl.ArrayOp(; term, shape) && if term === nothing && is_array_shape(shape) end => true
+        BSImpl.ArrayOp(; term, shape) => if term === nothing && is_array_shape(shape)
+            true
+        else
+            @match term begin
+                BSImpl.Term(; f) => f isa Fill
+                _ => false
+            end
+        end
         BSImpl.ArrayMaker(;) => true
         _ => false
     end
@@ -122,7 +129,7 @@ they know how the expression is involved in the larger code, where the arguments
 and the concrete types of the buffers.
 """
 function with_allocator(@nospecialize(alloc), ex::BasicSymbolic{T}) where {T}
-    supports_with_allocator(ex) || _throw_bad_allocator()
+    supports_with_allocator(ex) || throw_bad_allocator()
 
     return BSImpl.Term{T}(
         with_allocator, ArgsT{T}((BSImpl.Const{T}(alloc), ex));

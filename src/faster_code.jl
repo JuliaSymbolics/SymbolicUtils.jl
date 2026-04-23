@@ -350,6 +350,27 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
     return output_buffer
 end
 
+function codegen_function!(f::SymbolicUtils.Fill, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+    _allocator = get_allocator!(cs, nothing)
+    result = Expr(:call)
+    if _allocator === nothing
+        push!(result.args, fill)
+    else
+        push!(result.args, fill!)
+        output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
+        push!(result.args, output_buffer)
+    end
+    push!(result.args, cs(arguments(expr)[1]))
+    if _allocator === nothing
+        for ax in f.sh
+            push!(result.args, length(ax))
+        end
+        return codegen!(cs, expr_idx, result)
+    end
+    declare!(cs, get_misc_identifier(cs), result)
+    return output_buffer
+end
+
 function write_constant_array!(cs::CodegenState{T}, vw::Symbol, val::AbstractArray) where {T}
     for (i, v) in enumerate(val)
         write_target = Expr(:ref, vw, i)

@@ -759,3 +759,47 @@ end
         @test result2d_wa == fill(xv, 2, 4)
     end
 end
+
+@testset "fast_toexpr" begin
+    @syms x[1:3] y[1:3] z[1:3]
+    w = @makearray w[1:3, 1:3] begin
+        w[1:1, 1:3] => x'
+        w[2:2, 1:3] => @arrayop (1, i) y[i] + z[i]
+        w[3:3, 1:1] => [1;;]
+        w[3:3, 2:2] => [z[1];;]
+        w[3:3, 3:3] => [z'z;;]
+    end
+    xv = rand(3)
+    yv = rand(3)
+    zv = rand(3)
+    expected = eval(quote
+        let x = $xv, y = $yv, z = $zv
+            $(Code.toexpr(w))
+        end
+    end)
+    actual = eval(quote
+        let x = $xv, y = $yv, z = $zv
+            $(Code.fast_toexpr(w, Dict{Any,Any}()))
+        end
+    end)
+    @test expected ≈ actual
+end
+
+@testset "Fill in region" begin
+    @syms a::Real b::Real
+    f = SymbolicUtils.Fill(SymbolicUtils.ShapeVecT((1:3,)))
+    w = @makearray w[1:6] begin
+        w[1:3] => f(a)
+        w[4:6] => f(b)
+    end
+    av = 2.0
+    bv = 5.0
+    wv = eval(quote
+        let a = $av, b = $bv
+            $(Code.fast_toexpr(w, Dict{Any,Any}()))
+        end
+    end)
+    @test wv[1:3] == fill(av, 3)
+    @test wv[4:6] == fill(bv, 3)
+end
+

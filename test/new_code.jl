@@ -718,4 +718,44 @@ end
             end
         )
     end
+
+    @testset "`Fill`" begin
+        @syms x::Real
+        ir = IRStructure{SymReal}()
+        f1d = SymbolicUtils.Fill(SymbolicUtils.ShapeVecT((1:3,)))
+        expr1d = f1d(x)
+
+        xv = 2.0
+        result1d = eval(quote
+            let x = $xv
+                $(Code.fast_toexpr(expr1d, ir, Dict()))
+            end
+        end)
+        @test result1d == fill(xv, 3)
+
+        wrapped1d = Code.with_allocator(ones, expr1d)
+        result1d_wa = eval(quote
+            let x = $xv
+                $(Code.fast_toexpr(wrapped1d, ir, Dict()))
+            end
+        end)
+        @test result1d_wa == fill(xv, 3)
+
+        f2d = SymbolicUtils.Fill(SymbolicUtils.ShapeVecT((1:2, 1:4)))
+        expr2d = f2d(x)
+        result2d = eval(quote
+            let x = $xv
+                $(Code.fast_toexpr(expr2d, ir, Dict()))
+            end
+        end)
+        @test result2d == fill(xv, 2, 4)
+
+        wrapped2d = Code.with_allocator(ones, expr2d)
+        result2d_wa = eval(quote
+            let x = $xv
+                $(Code.fast_toexpr(wrapped2d, ir, Dict()))
+            end
+        end)
+        @test result2d_wa == fill(xv, 2, 4)
+    end
 end

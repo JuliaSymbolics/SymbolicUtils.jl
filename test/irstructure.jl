@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir
+using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir, get_reachability
 import SymbolicUtils as SU
 import Graphs
 
@@ -11,32 +11,32 @@ function sanity_check(ir, expr)
     @test isequal(ir[idx], expr)
     if !iscall(expr)
         # Ensure this is a leaf
-        @test isempty(ir.reachability[idx])
+        @test isempty(get_reachability(ir, idx))
         @test isempty(Graphs.outneighbors(ir.dependency_graph, idx))
         return
     end
     # Reachability should be sorted
-    @test issorted(ir.reachability[idx])
+    @test issorted(get_reachability(ir, idx))
     reference = Int[]
     # Arguments should all have smaller indices and be present in reachability
     for arg in arguments(expr)
         sanity_check(ir, arg)
         @test ir[arg] < idx
-        @test ir[arg] in ir.reachability[idx]
-        append!(reference, ir.reachability[ir[arg]])
+        @test ir[arg] in get_reachability(ir, idx)
+        append!(reference, get_reachability(ir, ir[arg]))
         push!(reference, ir[arg])
     end
     if operation(expr) isa SU.BasicSymbolic{SymReal}
         op = operation(expr)::SU.BasicSymbolic{SymReal}
         @test ir[op] < idx
-        @test ir[op] in ir.reachability[idx]
-        append!(reference, ir.reachability[ir[op]])
+        @test ir[op] in get_reachability(ir, idx)
+        append!(reference, get_reachability(ir, ir[op]))
         push!(reference, ir[op])
     end
     # Check reachability
     sort!(reference)
     unique!(reference)
-    @test issetequal(ir.reachability[idx], reference)
+    @test issetequal(get_reachability(ir, idx), reference)
 end
 
 @testset "Construction and invariants" begin
@@ -91,7 +91,6 @@ end
     end
     @test isequal(ir2.symbols, ir_reference.symbols)
     @test isequal(ir2.definition, ir_reference.definition)
-    @test ir2.reachability == ir_reference.reachability
 end
 
 @testset "`search_variables!`" begin

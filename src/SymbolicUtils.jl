@@ -166,7 +166,7 @@ include("simplify.jl")
 export substitute
 include("substitute.jl")
 
-export IRStructure, populate_ir!, print_ir
+export IRStructure, populate_ir!, print_ir, get_reachability
 include("irstructure.jl")
 
 include("code.jl")

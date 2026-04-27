@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal
+using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill
 using Test
 import NaNMath
 import LinearAlgebra
@@ -373,4 +373,30 @@ end
     @syms x::Float64
     sym = Symbol(x)
     @test isa(sym, Symbol)
+end
+
+@testset "Fill" begin
+    f1 = Fill(ShapeVecT((1:3,)))
+    f2 = Fill(ShapeVecT((1:2, 1:4)))
+
+    @testset "promote_symtype" begin
+        @test promote_symtype(f1, Float64) == Array{Float64, 1}
+        @test promote_symtype(f2, Int) == Array{Int, 2}
+        @test promote_symtype(f1, Real) == Array{Real, 1}
+    end
+
+    @testset "promote_shape" begin
+        @test promote_shape(f1, ShapeVecT()) == ShapeVecT((1:3,))
+        @test promote_shape(f2, ShapeVecT()) == ShapeVecT((1:2, 1:4))
+        @test promote_shape(f1, ShapeVecT((1:5,))) == ShapeVecT((1:3,))
+    end
+
+    @testset "symbolic expression" begin
+        @syms x::Real
+        expr = f1(x)
+        @test symtype(expr) == Array{Real, 1}
+        @test SymbolicUtils.shape(expr) == ShapeVecT((1:3,))
+        @test SymbolicUtils.operation(expr) === f1
+        @test isequal(SymbolicUtils.arguments(expr), [x])
+    end
 end

@@ -167,6 +167,7 @@ export substitute
 include("substitute.jl")
 
 export IRStructure, populate_ir!, print_ir, get_reachability
+include("ordered_digraph.jl")
 include("irstructure.jl")
 
 include("code.jl")

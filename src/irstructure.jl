@@ -11,7 +11,9 @@ expressions.
 # Invariants
 
 The `dependency_graph` correctly encodes the argument structure of every expression in the
-IR. No ordering constraint is imposed on the indices of expressions and their arguments.
+IR. For expression at index `i`, `Graphs.outneighbors(dependency_graph, i)` yields
+dependency indices in the following order: the index of `operation(ir[i])` first (if it is
+a `BasicSymbolic`), then the indices of `arguments(ir[i])` in order.
 
 ## Extended help
 
@@ -24,10 +26,10 @@ $TYPEDFIELDS
 struct IRStructure{T}
     """
     Dependency graph (DAG), where `Graphs.outneighbors(g, v)` denotes the nodes that the
-    expression at index `v` depends on. In other words, `outneighbors` is the analogue of
-    `arguments`.
+    expression at index `v` depends on. Out-neighbors are in argument order: the operation
+    (if symbolic) comes first, followed by `arguments` in order.
     """
-    dependency_graph::Graphs.SimpleDiGraph{Int}
+    dependency_graph::OrderedDiGraph
     """
     Mapping from linear indices to the expression at that index.
     """
@@ -55,7 +57,7 @@ Create an empty `IRStructure` to store `BasicSymbolic{T}` expressions.
 """
 function IRStructure{T}() where {T}
     ir = IRStructure{T}(
-        Graphs.SimpleDiGraph{Int}(), BasicSymbolic{T}[],
+        OrderedDiGraph(), BasicSymbolic{T}[],
         IdDict{BasicSymbolic{T}, Int}(), BitVector(), Int[]
     )
     # It's pretty easy to hit this
@@ -346,35 +348,25 @@ struct PopulateClosure{T} <: Function
 end
 
 function (pc::PopulateClosure{T})() where {T}
-    (; ir, expr) = pc
-    # `outneighbors`
-    expr_uses = Int[]
-    if iscall(expr)
-        args = parent(arguments(expr))
-        # This avoids a lot of allocations
-        sizehint!(expr_uses, length(args))
-        @union_split_smallvec args for arg in args
-            # Add each argument to the IR. This is effectively a postorder traversal.
-            arg_idx = populate_ir!(ir, arg)
-            push!(expr_uses, arg_idx)
-        end
-        op = operation(expr)
-        if op isa BasicSymbolic{T}
-            op_idx = populate_ir!(ir, op)
-            push!(expr_uses, op_idx)
-        end
-    end
-    # Sorting ensures `add_edge!` is a `push!`
-    sort!(expr_uses)
-    Graphs.add_vertex!(ir.dependency_graph)
-    idx = Graphs.nv(ir.dependency_graph)
-    for dst in expr_uses
-        Graphs.add_edge!(ir.dependency_graph, idx, dst)
-    end
-    # Add `expr` to the IR
-    push!(ir.symbols, expr)
-    return idx
-end
+     (; ir, expr) = pc
+     Graphs.add_vertex!(ir.dependency_graph)
+     idx = Graphs.nv(ir.dependency_graph)
+     push!(ir.symbols, expr)           # must happen before add_edge! calls below
+                                       # so recursive populate_ir! sees correct nv
+     if iscall(expr)
+         op = operation(expr)
+         if op isa BasicSymbolic{T}
+             op_idx = populate_ir!(ir, op)
+             Graphs.add_edge!(ir.dependency_graph, idx, op_idx)
+         end
+         args = parent(arguments(expr))
+         @union_split_smallvec args for arg in args
+             arg_idx = populate_ir!(ir, arg)
+             Graphs.add_edge!(ir.dependency_graph, idx, arg_idx)
+         end
+     end
+     return idx
+ end
 
 """
     $TYPEDSIGNATURES

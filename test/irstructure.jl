@@ -201,7 +201,8 @@ function make_reversed_ir(T, root_expr::BasicSymbolic)
     populate_ir!(ir_normal, root_expr)
     n = length(ir_normal)
 
-    dep_graph = Graphs.SimpleDiGraph{Int}(n)
+    dep_graph = SU.OrderedDiGraph()
+    Graphs.add_vertices!(dep_graph, n)
     reversed_symbols = reverse(ir_normal.symbols)  # root at index 1, leaves at end
     reversed_def = IdDict{BasicSymbolic{T}, Int}()
     for (i, sym) in enumerate(reversed_symbols)

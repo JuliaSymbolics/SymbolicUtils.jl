@@ -307,7 +307,7 @@ implementation, which uses `objectid`, which changes across runs.
 """
 hash_addmulvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
 
-const FNTYPE_SEED = 0x8b414291138f6c45
+const FNTYPE_SEED = 0x8b414291138f6c45 % UInt
 
 """
     $TYPEDSIGNATURES

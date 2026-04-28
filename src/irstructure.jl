@@ -10,8 +10,8 @@ expressions.
 
 # Invariants
 
-For every expression in the IR, if it is present at index `i`, then all of its arguments
-are present with indices `< i`
+The `dependency_graph` correctly encodes the argument structure of every expression in the
+IR. No ordering constraint is imposed on the indices of expressions and their arguments.
 
 ## Extended help
 
@@ -96,12 +96,23 @@ function get_cached_idxs!(ir::IRStructure)
     return ir.cached_idxs
 end
 
+function _get_reachability_dfs!(reachability::Vector{Int}, visited::BitVector, ir::IRStructure, cur::Int)
+    visited[cur] = true
+    for nbor in Graphs.outneighbors(ir.dependency_graph, cur)
+        visited[nbor] && continue
+        _get_reachability_dfs!(reachability, visited, ir, nbor)
+    end
+    push!(reachability, cur)
+    return nothing
+end
+
 """
     $TYPEDSIGNATURES
 
-Compute the transitive closure of `dependency_graph` from node `idx` via BFS, returning a
-sorted `Vector{Int}` of all node indices that `idx` (directly or indirectly) depends on.
-Writes the result to and returns `reachability`.
+Compute the transitive closure of `dependency_graph` from node `idx` via DFS postorder,
+returning a topologically sorted `Vector{Int}` of all node indices that `idx` (directly or
+indirectly) depends on. Dependencies (children) appear before the expressions that depend on
+them (parents). Writes the result to and returns `reachability`.
 
 This function allocates its own scratch space and does not use `ir.cached_mask` or
 `ir.cached_idxs`, so it is safe to call even when those are held by an outer caller.
@@ -111,24 +122,11 @@ function get_reachability!(reachability::Vector{Int}, ir::IRStructure, idx::Int)
     n = length(ir)
     visited = falses(n)
     sizehint!(reachability, n)
+    visited[idx] = true
     for nbor in Graphs.outneighbors(g, idx)
-        if !visited[nbor]
-            visited[nbor] = true
-            push!(reachability, nbor)
-        end
+        visited[nbor] && continue
+        _get_reachability_dfs!(reachability, visited, ir, nbor)
     end
-    head = 1
-    while head <= length(reachability)
-        cur = reachability[head]
-        head += 1
-        for nbor in Graphs.outneighbors(g, cur)
-            if !visited[nbor]
-                visited[nbor] = true
-                push!(reachability, nbor)
-            end
-        end
-    end
-    sort!(reachability)
     return reachability
 end
 
@@ -207,19 +205,22 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
     #     is a function symbolic or a dependent variable.
     is_print_leaf = default_is_atomic ∘ Base.Fix1(getindex, ir)
 
-    # Single-pass traversal in reverse topological order (parents have higher indices
-    # than their arguments, so n:-1:1 visits each parent before its children).
-    # We stop expanding at print-leaves so that their internal dependencies are
-    # never assigned SSA variables.
-    #
+    # Compute topological order once: parents before children (since edges go
+    # parent→dependency). Used to propagate visibility top-down and to print
+    # dependencies before the nodes that reference them.
+    topo = Graphs.topological_sort_by_dfs(g)
+
     # `to_expand[i]`: i is visible (reachable from a root without crossing print-leaves)
     # `indeg[i]`:     number of visible non-leaf ancestors that directly use i
+    #
+    # Expansion pass: iterate parents before children so that `to_expand` is
+    # propagated correctly from roots downward.
     to_expand = falses(n)
     indeg = zeros(Int, n)
     for i in 1:n
         Graphs.indegree(g, i) == 0 && (to_expand[i] = true)
     end
-    for i in n:-1:1
+    for i in topo
         to_expand[i] || continue
         is_print_leaf(i) && continue
         for j in Graphs.outneighbors(g, i)
@@ -230,9 +231,10 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
 
     # Assign consecutive SSA indices to non-inlineable visible nodes
     # (indeg == 0 are roots; indeg > 1 are shared).
+    # Iterate children before parents so dependencies receive lower SSA numbers.
     new_idx = zeros(Int, n)
     counter = 0
-    for i in 1:n
+    for i in Iterators.reverse(topo)
         (to_expand[i] && indeg[i] != 1) || continue
         new_idx[i] = (counter += 1)
     end
@@ -259,8 +261,10 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
         print(io, ")")
     end
 
+    # Print in children-before-parents order so that each SSA variable is defined
+    # before it is referenced by a later statement.
     printed = 0
-    for i in 1:n
+    for i in Iterators.reverse(topo)
         (to_expand[i] && indeg[i] != 1) || continue
         if limit !== nothing && printed >= limit
             remaining = total_stmts - printed
@@ -402,35 +406,27 @@ along with their dependencies.
 """
 function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) where {T}
     new_ir = IRStructure{T}()
-    # Since everything is sorted and we have the transitive closure, all that is
-    # necessary is to union all the transitive closures and add those expressions
-    # to `new_ir` in order.
-    #
-    # This is a `BitVector` because iterating over it is equivalent in time complexity
-    # to iterating over `ir`, and it iterates elements in sorted order. `SortedSet`
-    # and `Set + collect + sort` are `O(n * log(n))` where `n` can be close to
-    # `length(ir)`.
     reachables = get_cached_mask!(ir, length(ir))
     expr_reach = get_cached_idxs!(ir)
-    first_reachable = length(reachables)
     for expr in exprs
         expr_i = get(ir.definition, expr, 0)
         iszero(expr_i) && _throw_expr_not_in_ir(expr)
         reachables[expr_i] = true
         empty!(expr_reach)
         get_reachability!(expr_reach, ir, expr_i)
-        first_reachable = isempty(expr_reach) ? min(first_reachable, expr_i) :
-                                                min(first_reachable, expr_i, first(expr_reach))
         reachables[expr_reach] .= true
     end
-    
+
     n_new_verts = count(reachables)
     Graphs.add_vertices!(new_ir.dependency_graph, n_new_verts)
     sizehint!(new_ir, n_new_verts)
 
-    # Instead of calling `populate_ir!`, we can directly build the new IR
+    # Instead of calling `populate_ir!`, we can directly build the new IR.
+    # Iterate in topological order (children before parents) so that when we
+    # translate edges to new indices, the dependency is already in `new_ir.definition`.
+    topo_order = Graphs.topological_sort_by_dfs(ir.dependency_graph)
     inew = 0
-    for iold in first_reachable:length(reachables)
+    for iold in Iterators.reverse(topo_order)
         reachables[iold] || continue
         inew += 1
         # Add expression to the IR
@@ -439,7 +435,7 @@ function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) 
         new_ir.definition[sym] = inew
 
         # Translate old neighbors to new ones. Since we're iterating
-        # `reachables` in sorted order, we can guarantee that these
+        # `reachables` in topologically sorted order, we can guarantee that these
         # have already been added to `new_ir`.
         oldnbors = Graphs.outneighbors(ir.dependency_graph, iold)
         for nbor in oldnbors
@@ -447,7 +443,6 @@ function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) 
             nbor_idx = new_ir.definition[nsym]
             Graphs.add_edge!(new_ir.dependency_graph, inew, nbor_idx)
         end
-
     end
 
     return new_ir
@@ -474,7 +469,7 @@ function search_variables!(
 
     # This is basically equivalent to a BFS, since `recurse` may filter out sections of the
     # DAG which means we can't just iterate over the reachable vertices.
-    mask = get_cached_mask!(ir, idx)
+    mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
         mask[arg_i] = true
     end
@@ -519,7 +514,7 @@ function query(predicate::F, ir::IRStructure{T}, expr::BasicSymbolic{T}; recurse
     end
 
     # Similar to BFS in `search_variables!`
-    mask = get_cached_mask!(ir, idx)
+    mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
         mask[arg_i] = true
     end
@@ -597,7 +592,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int) where {Fold, T}
 
     # `modified` keeps track of which reachable indices from `idx` are modified by the
     # substitution
-    modified = get_cached_mask!(ir, idx)
+    modified = get_cached_mask!(ir, length(ir))
     # Queue of indices that are modified but the modified version isn't present in the IR
     # (needs to be computed)
     queue = get_cached_idxs!(ir)
@@ -630,7 +625,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int) where {Fold, T}
         end
 
         # We will already have processed the children since we're iterating
-        # reachable nodes in ascending index order
+        # reachable nodes in topological order (dependencies before dependents)
         children = Graphs.outneighbors(ir.dependency_graph, i)
         # If none of the children are modified, `i` isn't modified and we can skip it
         if !any(Base.Fix1(getindex, modified), children)

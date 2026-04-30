@@ -1,5 +1,6 @@
 using BenchmarkTools, SymbolicUtils
-using SymbolicUtils: is_literal_number, @rule, ArrayMaker, IRStructure, populate_ir!, BasicSymbolic
+using SymbolicUtils: is_literal_number, @rule, ArrayMaker, IRStructure, populate_ir!, BasicSymbolic,
+                     search_variables!
 
 using Random
 
@@ -213,6 +214,43 @@ let
     ir = IRStructure{SymReal}()
     subber = SymbolicUtils.IRSubstituter{false}(ir, rules)
     SUITE["irstructure"]["substitute"]["sparse IRSubstituter"] = @benchmarkable bench_sub($subber, $ex)
+end
+
+let
+    sv = SUITE["irstructure"]["search_variables"] = BenchmarkGroup()
+
+    atoms_sv = [a, b, c, d, a^2, b^2, a^1.5, (b + c), b^c, 1, 2.0]
+    funs_sv  = [+, *, hypot, (x, y) -> abs(x), (x, y) -> exp(x)]
+
+    # Common structure: 10 expressions all containing a large shared subtree.
+    # hypot wraps base_expr as a direct child, preventing AC-flattening that would
+    # eliminate the shared node.
+    base_expr    = random_term(5000; atoms=atoms_sv, funs=funs_sv)
+    exprs_common = [hypot(base_expr, _poly_x + i) for i in 1:10]
+    ir_common    = IRStructure{SymReal}()
+    for e in exprs_common; populate_ir!(ir_common, e); end
+
+    buf_common = Set{BasicSymbolic{SymReal}}()
+    sv["common:reference"]   = @benchmarkable search_variables!($buf_common, $exprs_common) setup=(empty!($buf_common))
+    sv["common:IRStructure"] = @benchmarkable begin
+        for e in $exprs_common
+            search_variables!($buf_common, $ir_common, e)
+        end
+    end setup=(empty!($buf_common))
+
+    # Dissimilar structure: 10 independently-generated expressions with no intentional
+    # shared subtrees.
+    exprs_dissimilar = [random_term(1000; atoms=atoms_sv, funs=funs_sv) for _ in 1:10]
+    ir_dissimilar    = IRStructure{SymReal}()
+    for e in exprs_dissimilar; populate_ir!(ir_dissimilar, e); end
+
+    buf_dissimilar = Set{BasicSymbolic{SymReal}}()
+    sv["dissimilar:reference"]   = @benchmarkable search_variables!($buf_dissimilar, $exprs_dissimilar) setup=(empty!($buf_dissimilar))
+    sv["dissimilar:IRStructure"] = @benchmarkable begin
+        for e in $exprs_dissimilar
+            search_variables!($buf_dissimilar, $ir_dissimilar, e)
+        end
+    end setup=(empty!($buf_dissimilar))
 end
 
 let

@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill
+using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound
 using Test
 import NaNMath
 import LinearAlgebra
@@ -399,4 +399,59 @@ end
         @test SymbolicUtils.operation(expr) === f1
         @test isequal(SymbolicUtils.arguments(expr), [x])
     end
+end
+
+@testset "SymbolicRound promote_symtype" begin
+    sr = SymbolicRound{Int, typeof(RoundNearest)}(RoundNearest)
+    @test promote_symtype(sr, Float64) == Int
+    @test promote_symtype(sr, Real) == Int
+
+    sr2 = SymbolicRound{Float32, typeof(RoundDown)}(RoundDown)
+    @test promote_symtype(sr2, Float64) == Float32
+end
+
+@testset "SymbolicRound promote_shape" begin
+    sr = SymbolicRound{Int, typeof(RoundNearest)}(RoundNearest)
+    @test promote_shape(sr, ShapeVecT()) == ShapeVecT()
+    @test promote_shape(sr, ShapeVecT((1:3,))) == ShapeVecT((1:3,))
+    @test promote_shape(sr, ShapeVecT((1:2, 1:4))) == ShapeVecT((1:2, 1:4))
+end
+
+@testset "Base.round on symbolic" begin
+    @syms x::Float64
+
+    expr = round(Int, x, RoundNearest)
+    @test isa(expr, BasicSymbolic)
+    @test symtype(expr) == Int
+    @test isa(operation(expr), SymbolicRound{Int, typeof(RoundNearest)})
+    @test isequal(arguments(expr), [x])
+
+    expr_down = round(Int, x, RoundDown)
+    @test isa(expr_down, BasicSymbolic)
+    @test symtype(expr_down) == Int
+    @test isa(operation(expr_down), SymbolicRound{Int, typeof(RoundDown)})
+
+    expr_up = round(Float32, x, RoundUp)
+    @test isa(expr_up, BasicSymbolic)
+    @test symtype(expr_up) == Float32
+end
+
+@testset "Base.round on concrete value via SymbolicRound" begin
+    sr = SymbolicRound{Int, typeof(RoundNearest)}(RoundNearest)
+    @test sr(3.7) == 4
+    @test sr(3.2) == 3
+
+    sr_down = SymbolicRound{Int, typeof(RoundDown)}(RoundDown)
+    @test sr_down(3.9) == 3
+    @test sr_down(-3.1) == -4
+end
+
+@testset "Base.round printing" begin
+    @syms x::Float64
+    expr = round(Int, x, RoundNearest)
+    str = string(expr)
+    @test occursin("round", str)
+    @test occursin("Int", str)
+    @test occursin(string(x), str)
+    @test occursin("Nearest", str)
 end

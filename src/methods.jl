@@ -1697,3 +1697,31 @@ function promote_shape(f::Fill, ::ShapeT)
     @nospecialize sh
     return f.sh
 end
+
+struct SymbolicRound{T, R <: RoundingMode}
+    mode::R
+end
+
+function promote_symtype(::SymbolicRound{T}, ::TypeT) where {T}
+    return T::TypeT
+end
+
+function promote_shape(::SymbolicRound{T}, sh::ShapeT) where {T}
+    @nospecialize sh
+    return sh
+end
+
+function (fn::SymbolicRound{T})(ex::BasicSymbolic{R}) where {T, R}
+    return BSImpl.Term{R}(fn, ArgsT{R}((ex,)); type = T, shape = shape(ex))
+end
+function (fn::SymbolicRound{T})(val) where {T}
+    uval = unwrap(val)
+    if uval === val
+        return round(T, uval, fn.mode)
+    end
+    return fn(uval)
+end
+
+function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T, R}
+    SymbolicRound{T, typeof(mode)}(mode)(ex)
+end

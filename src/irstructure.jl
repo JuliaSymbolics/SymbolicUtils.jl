@@ -27,7 +27,7 @@ struct IRStructure{T}
     expression at index `v` depends on. In other words, `outneighbors` is the analogue of
     `arguments`.
     """
-    dependency_graph::Graphs.SimpleDiGraph{Int}
+    dependency_graph::OrderedDiGraph{Int}
     """
     Mapping from linear indices to the expression at that index.
     """
@@ -55,7 +55,7 @@ Create an empty `IRStructure` to store `BasicSymbolic{T}` expressions.
 """
 function IRStructure{T}() where {T}
     ir = IRStructure{T}(
-        Graphs.SimpleDiGraph{Int}(), BasicSymbolic{T}[],
+        OrderedDiGraph{Int}(), BasicSymbolic{T}[],
         IdDict{BasicSymbolic{T}, Int}(), BitVector(), Int[]
     )
     # It's pretty easy to hit this

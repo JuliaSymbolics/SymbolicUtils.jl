@@ -28,7 +28,8 @@ jobs:
           - {user: SciML, repo: Catalyst.jl, group: Hybrid}
           - {user: SciML, repo: Catalyst.jl, group: Misc}
           - {user: SciML, repo: Catalyst.jl, group: Spatial}
-          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
+          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE1}
+          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE2}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Core}
           - {user: JuliaSymbolics, repo: Symbolics.jl, group: Core}
           - {user: JuliaSymbolics, repo: Symbolics.jl, group: GroebnerExt}

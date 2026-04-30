@@ -169,6 +169,8 @@ include("substitute.jl")
 export IRStructure, populate_ir!, print_ir, get_reachability
 include("irstructure.jl")
 
+include("ordereddigraph.jl")
+
 include("code.jl")
 
 PrecompileTools.@recompile_invalidations begin

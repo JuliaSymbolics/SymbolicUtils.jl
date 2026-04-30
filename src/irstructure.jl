@@ -27,7 +27,7 @@ struct IRStructure{T}
     expression at index `v` depends on. In other words, `outneighbors` is the analogue of
     `arguments`.
     """
-    dependency_graph::OrderedDiGraph{Int}
+    dependency_graph::OrderedDiGraph{Int32}
     """
     Mapping from linear indices to the expression at that index.
     """
@@ -35,7 +35,7 @@ struct IRStructure{T}
     """
     Inverse mapping of `symbols`.
     """
-    definition::IdDict{BasicSymbolic{T}, Int}
+    definition::IdDict{BasicSymbolic{T}, Int32}
     """
     A cached `BitVector` to be used for several operations supported by this struct. It
     is required for many common operations, and `fill!(false, cached_mask)` is much faster
@@ -43,9 +43,9 @@ struct IRStructure{T}
     """
     cached_mask::BitVector
     """
-    Similar to `cached_mask` but a `Vector{Int}`.
+    Similar to `cached_mask` but a `Vector{Int32}`.
     """
-    cached_idxs::Vector{Int}
+    cached_idxs::Vector{Int32}
 end
 
 """
@@ -55,8 +55,8 @@ Create an empty `IRStructure` to store `BasicSymbolic{T}` expressions.
 """
 function IRStructure{T}() where {T}
     ir = IRStructure{T}(
-        OrderedDiGraph{Int}(), BasicSymbolic{T}[],
-        IdDict{BasicSymbolic{T}, Int}(), BitVector(), Int[]
+        OrderedDiGraph{Int32}(), BasicSymbolic{T}[],
+        IdDict{BasicSymbolic{T}, Int32}(), BitVector(), Int32[]
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)
@@ -90,13 +90,13 @@ end
 """
     $TYPEDSIGNATURES
 
-Get the cached `Vector{Int}` inside IR.
+Get the cached `Vector{Int32}` inside IR.
 """
 function get_cached_idxs!(ir::IRStructure)
     return ir.cached_idxs
 end
 
-function _get_reachability_dfs!(reachability::Vector{Int}, visited::BitVector, ir::IRStructure, cur::Int)
+function _get_reachability_dfs!(reachability::Vector{Int32}, visited::BitVector, ir::IRStructure, cur::Int32)
     visited[cur] = true
     for nbor in Graphs.outneighbors(ir.dependency_graph, cur)
         visited[nbor] && continue
@@ -110,14 +110,14 @@ end
     $TYPEDSIGNATURES
 
 Compute the transitive closure of `dependency_graph` from node `idx` via DFS postorder,
-returning a topologically sorted `Vector{Int}` of all node indices that `idx` (directly or
+returning a topologically sorted `Vector{Int32}` of all node indices that `idx` (directly or
 indirectly) depends on. Dependencies (children) appear before the expressions that depend on
 them (parents). Writes the result to and returns `reachability`.
 
 This function allocates its own scratch space and does not use `ir.cached_mask` or
 `ir.cached_idxs`, so it is safe to call even when those are held by an outer caller.
 """
-function get_reachability!(reachability::Vector{Int}, ir::IRStructure, idx::Int)
+function get_reachability!(reachability::Vector{Int32}, ir::IRStructure, idx::Int32)
     g = ir.dependency_graph
     n = length(ir)
     visited = falses(n)
@@ -135,7 +135,7 @@ end
 
 Out-of-place version of [`get_reachability!`](@ref).
 """
-get_reachability(ir::IRStructure, idx::Int) = get_reachability!(Int[], ir, idx)
+get_reachability(ir::IRStructure, idx::Int32) = get_reachability!(Int32[], ir, idx)
 
 """
     $TYPEDSIGNATURES
@@ -176,7 +176,7 @@ Iterate over valid node indices in `ir`.
 """
 Base.eachindex(ir::IRStructure) = eachindex(ir.symbols)
 
-function _print_ssa_var(io::IO, i::Int)
+function _print_ssa_var(io::IO, i::Int32)
     printstyled(io, "%", i; color = :yellow)
 end
 
@@ -189,7 +189,7 @@ and a summary line is printed instead. Pass `limit = nothing` to print all state
 
 See also [`SymbolicUtils.print_ir`](@ref) which defaults to printing all statements.
 """
-function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
+function _show_ir(io::IO, ir::IRStructure; limit::Union{Integer, Nothing} = 50)
     n = length(ir)
     println(io, "IRStructure with $n node$(n == 1 ? "" : "s"):")
     n == 0 && return
@@ -216,7 +216,7 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
     # Expansion pass: iterate parents before children so that `to_expand` is
     # propagated correctly from roots downward.
     to_expand = falses(n)
-    indeg = zeros(Int, n)
+    indeg = zeros(Int32, n)
     for i in 1:n
         Graphs.indegree(g, i) == 0 && (to_expand[i] = true)
     end
@@ -232,7 +232,7 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
     # Assign consecutive SSA indices to non-inlineable visible nodes
     # (indeg == 0 are roots; indeg > 1 are shared).
     # Iterate children before parents so dependencies receive lower SSA numbers.
-    new_idx = zeros(Int, n)
+    new_idx = zeros(Int32, n)
     counter = 0
     for i in Iterators.reverse(topo)
         (to_expand[i] && indeg[i] != 1) || continue
@@ -315,7 +315,7 @@ end
 function (pc::PopulateClosure{T})() where {T}
     (; ir, expr) = pc
     # `outneighbors`
-    expr_uses = Int[]
+    expr_uses = Int32[]
     if iscall(expr)
         args = parent(arguments(expr))
         # This avoids a lot of allocations
@@ -512,8 +512,8 @@ struct IRSubstituter{Fold, T, D <: AbstractDict{BasicSymbolic{T}, BasicSymbolic{
     ir::IRStructure{T}
     rules::D
     filterer::F
-    cache::Dict{Int, Int}
-    reachability::Vector{Int}
+    cache::Dict{Int32, Int32}
+    reachability::Vector{Int32}
 end
 
 """
@@ -524,7 +524,7 @@ Create an `IRSubstituter` using the given `ir` and `rules`.
 function IRSubstituter{Fold}(
         ir::IRStructure{T}, rules::D; filterer::F = default_substitute_filter
     ) where {Fold, T, D <: AbstractDict, F}
-    IRSubstituter{Fold, T, D, F}(ir, rules, filterer, Dict{Int, Int}(), Int[])
+    IRSubstituter{Fold, T, D, F}(ir, rules, filterer, Dict{Int32, Int32}(), Int32[])
 end
 
 get_substitution_dict(sub::IRSubstituter) = sub.rules
@@ -537,11 +537,11 @@ clear_cache!(sub::IRSubstituter) = empty!(sub.cache)
 Perform the substitution on element `idx` in the IR, returning the index of the new
 element.
 """
-function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int) where {Fold, T}
+function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
     (; rules, filterer, ir) = sub
 
     # Check the cache, filter, and rules for `idx`
-    cached = get(sub.cache, idx, 0)
+    cached = get(sub.cache, idx, zero(Int32))
     iszero(cached) || return cached
     idxsym = ir[idx]
     other = get(rules, idxsym, nothing)
@@ -569,7 +569,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int) where {Fold, T}
     get_reachability!(reachability, ir, idx)
     for i in reachability
         # Check the cache, filter, and rules for `i`
-        cached = get(sub.cache, i, 0)
+        cached = get(sub.cache, i, zero(Int32))
         if !iszero(cached) && cached != i
             modified[i] = true
             continue

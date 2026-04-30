@@ -46,7 +46,7 @@ mutable struct CodegenState{T}
     In such a case, if we assume that the index of `x + y` in `ir` is `4`, then
     `cache[4] == Symbol("%3")`.
     """
-    const cache::Dictionary{Int, Symbol}
+    const cache::Dictionary{Int32, Symbol}
     """
     Rewrite rules, similar to `NameState`.
     """
@@ -68,7 +68,7 @@ written to `block` and `ir` is the underlying `IRStructure`. Rewrite rules can o
 be supplied as the last argument.
 """
 function CodegenState(expr::Expr, block::Expr, ir::IRStructure{T}, rewrites = Dict()) where {T}
-    CodegenState{T}(expr, block, ir, Dictionary{Int, Symbol}(), rewrites, 0)
+    CodegenState{T}(expr, block, ir, Dictionary{Int32, Symbol}(), rewrites, 0)
 end
 
 """
@@ -82,7 +82,7 @@ Note that this is intended to be used to generate individual atomic expressions 
 In case a symbolic requires a larger compound expression, prefer to declare intermediates
 via [`SymbolicUtils.Code.declare!`](@ref) and use them here.
 """
-function codegen!(cs::CodegenState, idx::Int, @nospecialize(sym))
+function codegen!(cs::CodegenState, idx::Integer, @nospecialize(sym))
     lhs = get_cse_name(length(cs.cache))
     push!(cs.block.args, Expr(:(=), lhs, sym))
     insert!(cs.cache, idx, lhs)
@@ -137,7 +137,7 @@ function get_allocator!(cs::CodegenState, @nospecialize(default))
     return result
 end
 
-const CodegenBookmarkT = Int
+const CodegenBookmarkT = Int32
 
 """
     $TYPEDSIGNATURES
@@ -146,7 +146,7 @@ Return a bookmark for `cs`, typically used to introduce new scopes and end them 
 [`rollback!`](@ref).
 """
 function bookmark(cs::CodegenState)
-    return isempty(cs.cache) ? 0 : lastindex(cs.cache)
+    return isempty(cs.cache) ? zero(Int32) : lastindex(cs.cache)
 end
 
 """
@@ -218,7 +218,7 @@ end
 Generate an expression for calling the allocator `allocator` to store the result of `expr`.
 """
 function codegen_allocator_call!(
-        cs::CodegenState{T}, @nospecialize(allocator), expr::BasicSymbolic{T}, expr_idx::Int
+        cs::CodegenState{T}, @nospecialize(allocator), expr::BasicSymbolic{T}, expr_idx::Integer
     ) where {T}
     allocator_sym::Symbol = if allocator isa BasicSymbolic{T}
         cs(allocator)
@@ -266,7 +266,7 @@ function fast_toexpr(sym::CodegenPrimitive, ir::IRStructure{T}, rewrites::Dict{A
 end
 
 """
-    function codegen_function!(fn::F, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {F, T}
+    function codegen_function!(fn::F, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {F, T}
 
 Generate code for `expr` whose operation is `fn` and index in `cs.ir` is `expr_idx`.
 Implementers of this function should _only_ dispatch on `F`, and the rest of the types should
@@ -298,7 +298,7 @@ The code generation in this function does not need to handle checking if `expr` 
 """
 function codegen_function! end
 
-function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
     ranges, innerexpr, output_idx = @match expr begin
@@ -349,7 +349,7 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
     return output_buffer
 end
 
-function codegen_function!(f::SymbolicUtils.Fill, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(f::SymbolicUtils.Fill, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, nothing)
     result = Expr(:call)
     if _allocator === nothing
@@ -377,7 +377,7 @@ function write_constant_array!(cs::CodegenState{T}, vw::Symbol, val::AbstractArr
     end
 end
 
-function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
     regions, values = @match expr begin
@@ -427,7 +427,7 @@ end
 
 function codegen_function!(
         ::typeof(SymbolicUtils.array_literal), cs::CodegenState{T}, expr::BasicSymbolic{T},
-        expr_idx::Int
+        expr_idx::Integer
     ) where {T}
     _allocator = get_allocator!(cs, nothing)
     if _allocator === nothing
@@ -444,7 +444,7 @@ function codegen_function!(
     return output_buffer
 end
 
-function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     if get(cs.rewrites, :sort_addmul, true)::Bool
         args = parent(sorted_arguments(expr))
     else
@@ -470,7 +470,7 @@ function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::C
     return codegen!(cs, expr_idx, result)
 end
 
-function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     base, exp = arguments(expr)
     base_sym = cs(base)
     @match exp begin
@@ -500,12 +500,12 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
     end
 end
 
-function codegen_function!(::typeof(ifelse), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(::typeof(ifelse), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     cond, iftrue, iffalse = arguments(expr)
     return codegen!(cs, expr_idx, Expr(:if, cs(cond), cs(iftrue), cs(iffalse)))
 end
 
-function codegen_function_no_nanmath!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function_no_nanmath!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     result = Expr(:call)
     if op isa BasicSymbolic{T}
         opsym = cs(op)
@@ -520,7 +520,7 @@ function codegen_function_no_nanmath!(@nospecialize(op), cs::CodegenState{T}, ex
     return codegen!(cs, expr_idx, result)
 end
 
-function codegen_function!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     # Avoid using `op in NaNMathFuns` since that is dynamic dispatch.
     # Also avoid using `nameof(op)` for the same reason.
     if !get(cs.rewrites, :nanmath, false)::Bool
@@ -558,7 +558,7 @@ function codegen_function!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSy
     return codegen_function_no_nanmath!(op, cs, expr, expr_idx)
 end
 
-function codegen_function!(::typeof(getindex), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(::typeof(getindex), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     args = parent(arguments(expr))
     if isequal(args[1], SymbolicUtils.idxs_for_arrayop(T))
         offset = unwrap_const(args[2])::Int
@@ -571,7 +571,7 @@ function codegen_function!(::typeof(getindex), cs::CodegenState{T}, expr::BasicS
     return codegen!(cs, expr_idx, result)
 end
 
-function codegen_function!(@nospecialize(op::SymbolicUtils.Mapper), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(@nospecialize(op::SymbolicUtils.Mapper), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     result = Expr(:call, map)
     fn = op.f
     if fn isa BasicSymbolic{T}
@@ -588,7 +588,7 @@ function codegen_function!(@nospecialize(op::SymbolicUtils.Mapper), cs::CodegenS
     return codegen!(cs, expr_idx, result)
 end
 
-function codegen_function!(@nospecialize(op::SymbolicUtils.Mapreducer), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Int) where {T}
+function codegen_function!(@nospecialize(op::SymbolicUtils.Mapreducer), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     result = Expr(:call, mapreduce)
     kws = Expr(:parameters)
     if op.dims isa Int
@@ -642,7 +642,7 @@ function reset_allocator!(cs::CodegenState, @nospecialize(old_alloc))
     return nothing
 end
 
-function codegen_ir!(cs::CodegenState{T}, idx::Int) where {T}
+function codegen_ir!(cs::CodegenState{T}, idx::Integer) where {T}
     cached = get(cs.cache, idx, nothing)
     if cached isa Symbol
         return cached

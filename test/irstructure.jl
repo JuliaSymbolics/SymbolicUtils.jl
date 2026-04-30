@@ -201,9 +201,9 @@ function make_reversed_ir(T, root_expr::BasicSymbolic)
     populate_ir!(ir_normal, root_expr)
     n = length(ir_normal)
 
-    dep_graph = SymbolicUtils.OrderedDiGraph{Int}(n)
+    dep_graph = SymbolicUtils.OrderedDiGraph{Int32}(n)
     reversed_symbols = reverse(ir_normal.symbols)  # root at index 1, leaves at end
-    reversed_def = IdDict{BasicSymbolic{T}, Int}()
+    reversed_def = IdDict{BasicSymbolic{T}, Int32}()
     for (i, sym) in enumerate(reversed_symbols)
         reversed_def[sym] = i
     end
@@ -220,7 +220,7 @@ function make_reversed_ir(T, root_expr::BasicSymbolic)
             end
         end
     end
-    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, BitVector(), Int[])
+    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, BitVector(), Int32[])
 end
 
 @testset "Out-of-order IRStructure" begin

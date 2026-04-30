@@ -137,16 +137,16 @@ function get_allocator!(cs::CodegenState, @nospecialize(default))
     return result
 end
 
-const CodegenBookmarkT = Tuple{Int, SymbolicUtils.IRBookmarkT}
+const CodegenBookmarkT = Int
 
 """
     $TYPEDSIGNATURES
 
 Return a bookmark for `cs`, typically used to introduce new scopes and end them via
-[`SymbolicUtils.rollback!`](@ref).
+[`rollback!`](@ref).
 """
-function SymbolicUtils.bookmark(cs::CodegenState)
-    return (isempty(cs.cache) ? 0 : lastindex(cs.cache), SymbolicUtils.bookmark(cs.ir))
+function bookmark(cs::CodegenState)
+    return isempty(cs.cache) ? 0 : lastindex(cs.cache)
 end
 
 """
@@ -155,8 +155,8 @@ end
 Rollback `cs` to the state identified by `bm`. This has similar semantics to `rollback!` for
 [`SymbolicUtils.IRStructure`](@ref). It is typically used for scoping in `cs`.
 """
-function SymbolicUtils.rollback!(cs::CodegenState, bm::CodegenBookmarkT)
-    last_cache_key, ir_bm = bm
+function rollback!(cs::CodegenState, bm::CodegenBookmarkT)
+    last_cache_key = bm
     if iszero(last_cache_key)
         empty!(cs.cache)
     else
@@ -166,7 +166,6 @@ function SymbolicUtils.rollback!(cs::CodegenState, bm::CodegenBookmarkT)
             k = lastindex(cs.cache)
         end
     end
-    SymbolicUtils.rollback!(cs.ir, ir_bm)
     return cs
 end
 
@@ -188,7 +187,7 @@ in the enclosing scope (the scope of `cs`). Calling `enter_scope` without a corr
 """
 function enter_scope(cs::CodegenState{T}) where {T}
     new_scope = Expr(:block)
-    bm = SymbolicUtils.bookmark(cs)
+    bm = bookmark(cs)
     scoped_cs = CodegenState{T}(new_scope, new_scope, cs.ir, cs.cache, cs.rewrites, cs.misc_idx)
     
     return scoped_cs, bm
@@ -209,7 +208,7 @@ scope. That is the responsibility of the caller. Calling `exit_scope!` twice on 
 """
 function exit_scope!(cs::CodegenState, bm::CodegenBookmarkT)
     result = cs.block
-    SymbolicUtils.rollback!(cs, bm)
+    rollback!(cs, bm)
     return result
 end
 

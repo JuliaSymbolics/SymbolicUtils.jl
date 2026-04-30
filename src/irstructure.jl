@@ -296,39 +296,6 @@ you need to inspect an `IRStructure` with more statements than that limit.
 print_ir(io::IO, ir::IRStructure) = _show_ir(io, ir; limit = nothing)
 print_ir(ir::IRStructure) = print_ir(stdout, ir)
 
-const IRBookmarkT = Int
-
-"""
-    $TYPEDSIGNATURES
-
-Obtain a token representing the current state of `ir`. After populating `ir` with additional
-expressions, it can be rolled back to the point of the bookmark using
-[`SymbolicUtils.rollback!`](@ref). Note that deleting nodes present in `ir` when it was
-bookmarked is undefined behavior, and will invalidate the bookmark. Attempting to rollback
-to invalidated bookmarks is undefined behavior. In case multiple bookmarks are made,
-rolling back to an earlier bookmark invalidates subsequent bookmarks.
-"""
-function bookmark(ir::IRStructure)::IRBookmarkT
-    return length(ir)
-end
-
-"""
-    $TYPEDSIGNATURES
-
-Revert `ir` to the state it had when the bookmark `bm` was made. See
-[`SymbolicUtils.bookmark`](@ref) for further details.
-"""
-function rollback!(ir::IRStructure, bm::IRBookmarkT)
-    to_rm = length(ir):-1:(bm + 1)
-    # `rem_vertices!` is pretty slow
-    for vert in to_rm
-        Graphs.rem_vertex!(ir.dependency_graph, vert)
-        delete!(ir.definition, ir.symbols[vert])
-    end
-    resize!(ir.symbols, bm)
-    return ir
-end
-
 """
     $TYPEDEF
 

@@ -97,6 +97,17 @@ function show_call(io::IO, @nospecialize(f), x::BasicSymbolic; @nospecialize(kw.
     print(io, ")")
 end
 
+function show_call(io::IO, @nospecialize(f::SymbolicRound), x::BasicSymbolic{T}) where {T}
+    inner = first(arguments(x))
+    print(io, "round(")
+    printstyled(io, symtype(x); color = :blue)
+    print(io, ", ")
+    print(io, inner)
+    print(io, ", ")
+    printstyled(io, f.mode; color = :blue)
+    print(io, ")")
+end
+
 function show_call(io::IO, @nospecialize(f::Mapper), x::BasicSymbolic{T}) where {T}
     _args = arguments(x)
     args = ArgsT{T}()

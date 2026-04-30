@@ -22,6 +22,9 @@ jobs:
           - 'min'
           - '1.11' # to test inference
           - '1'
+        group:
+          - 'Core'
+          - 'QA'
       fail-fast: false
     steps:
       - uses: actions/checkout@v4

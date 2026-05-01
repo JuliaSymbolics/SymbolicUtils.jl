@@ -220,15 +220,31 @@ function poly_to_gcd_form(p::PolynomialT)
         any_complex |= c isa Complex
         all_int || all_rat || break
     end
-    if all_int
-        return DP.Polynomial(Integer.(MP.coefficients(p)), MP.monomials(p))
+    cs = if all_int
+        Integer.(MP.coefficients(p))
     elseif all_rat
-        return DP.Polynomial(rationalize.(MP.coefficients(p)), MP.monomials(p))
+        rationalize.(MP.coefficients(p))
     elseif any_complex
-        return DP.Polynomial((complex ∘ float).(MP.coefficients(p)), MP.monomials(p))
+        (complex ∘ float).(MP.coefficients(p))
     else
-        return DP.Polynomial(float.(MP.coefficients(p)), MP.monomials(p))
+        float.(MP.coefficients(p))
     end
+    # Broadcast preserves the abstractness of the input vector's eltype:
+    # `Integer.(::Vector{Number})` returns `Vector{Number}` if the values
+    # are heterogeneous concrete subtypes of Integer (e.g. `Int8 + Int64`
+    # broadcasts to `Vector{Signed}`). The resulting `DP.Polynomial` then
+    # carries an abstract type parameter (`Integer`/`Signed`/`AbstractFloat`/
+    # `Real`), which crashes `MP.gcd`'s `isolate_variable` reconstruction.
+    # Narrow to a concrete eltype here when needed; on the homogeneous fast
+    # path (eltype already concrete) this is a single `isconcretetype` check
+    # and no extra allocation.
+    if !isconcretetype(eltype(cs))
+        T = isempty(cs) ? (all_int ? Int : all_rat ? Rational{Int} :
+                           any_complex ? ComplexF64 : Float64) :
+            mapreduce(typeof, promote_type, cs)
+        cs = Vector{T}(cs)
+    end
+    return DP.Polynomial(cs, MP.monomials(p))
 end
 
 function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, PolynomialT})

@@ -272,6 +272,8 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
             @set! res.metadata = metadata
         end
         return res::BasicSymbolic{T}
+    elseif f isa Fill
+        return f(args[1])
     elseif f === getindex
         # This can't call `getindex` because that goes through `@cache`, which is unstable
         # and doesn't precompile.

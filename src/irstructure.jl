@@ -96,16 +96,6 @@ function get_cached_idxs!(ir::IRStructure)
     return ir.cached_idxs
 end
 
-function _get_reachability_dfs!(reachability::Vector{Int32}, visited::BitVector, ir::IRStructure, cur::Int32)
-    visited[cur] = true
-    for nbor in Graphs.outneighbors(ir.dependency_graph, cur)
-        visited[nbor] && continue
-        _get_reachability_dfs!(reachability, visited, ir, nbor)
-    end
-    push!(reachability, cur)
-    return nothing
-end
-
 """
     $TYPEDSIGNATURES
 
@@ -119,13 +109,13 @@ This function allocates its own scratch space and does not use `ir.cached_mask` 
 """
 function get_reachability!(reachability::Vector{Int32}, ir::IRStructure, idx::Int32)
     g = ir.dependency_graph
+    rdfs = RecursiveDFS(g; on_exit = PushToBuffer(reachability))
     n = length(ir)
-    visited = falses(n)
     sizehint!(reachability, n)
-    visited[idx] = true
+    rdfs.visited[idx] = true
     for nbor in Graphs.outneighbors(g, idx)
-        visited[nbor] && continue
-        _get_reachability_dfs!(reachability, visited, ir, nbor)
+        rdfs.visited[nbor] && continue
+        rdfs(nbor)
     end
     return reachability
 end

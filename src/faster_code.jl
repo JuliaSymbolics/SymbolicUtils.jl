@@ -444,6 +444,12 @@ function codegen_function!(
     return output_buffer
 end
 
+"""
+Somewhat arbitrary limit for the maximum number of arguments when calling n-ary
+functions such as `+` or `*`.
+"""
+const NARY_CALL_LIMIT = 12
+
 function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     if get(cs.rewrites, :sort_addmul, true)::Bool
         args = parent(sorted_arguments(expr))
@@ -456,9 +462,13 @@ function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::C
     end
 
     if symtype(expr) <: Number
-        cur = Expr(:call, op, cs(args[1]), cs(args[2]))
-        for i in 3:length(args)
-            cur = Expr(:call, op, cur, cs(args[i]))
+        cur = Expr(:call, op, cs(args[1]))
+        for i in 2:length(args)
+            if i % NARY_CALL_LIMIT == 1
+                cur = Expr(:call, op, cur, cs(args[i]))
+            else
+                push!(cur.args, cs(args[i]))
+            end
         end
         return codegen!(cs, expr_idx, cur)
     end

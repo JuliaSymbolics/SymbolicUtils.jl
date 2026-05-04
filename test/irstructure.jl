@@ -220,7 +220,7 @@ function make_reversed_ir(T, root_expr::BasicSymbolic)
             end
         end
     end
-    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, BitVector(), Int32[])
+    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, Dict{BasicSymbolic{T}, Int32}(), BitVector(), Int32[])
 end
 
 @testset "Out-of-order IRStructure" begin

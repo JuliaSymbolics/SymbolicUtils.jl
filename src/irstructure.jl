@@ -37,6 +37,11 @@ struct IRStructure{T}
     """
     definition::IdDict{BasicSymbolic{T}, Int32}
     """
+    Map from expressions to all nodes they are `isequal` to. This is not `definition` since
+    that uses `===` equality.
+    """
+    weak_definitions::Dict{BasicSymbolic{T}, Vector{Int32}}
+    """
     A cached `BitVector` to be used for several operations supported by this struct. It
     is required for many common operations, and `fill!(false, cached_mask)` is much faster
     than allocating a new one of the appropriate size.
@@ -56,7 +61,8 @@ Create an empty `IRStructure` to store `BasicSymbolic{T}` expressions.
 function IRStructure{T}() where {T}
     ir = IRStructure{T}(
         OrderedDiGraph{Int32}(), BasicSymbolic{T}[],
-        IdDict{BasicSymbolic{T}, Int32}(), BitVector(), Int32[]
+        IdDict{BasicSymbolic{T}, Int32}(), Dict{BasicSymbolic{T}, Vector{Int32}}(),
+        BitVector(), Int32[]
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)
@@ -135,6 +141,7 @@ Preallocate space for `n` nodes in `ir`.
 function Base.sizehint!(ir::IRStructure, n::Integer)
     sizehint!(ir.symbols, n)
     sizehint!(ir.definition, n)
+    sizehint!(ir.weak_definitions, n)
     sizehint!(ir.cached_mask, n)
     sizehint!(ir.cached_idxs, n)
     return ir
@@ -330,6 +337,10 @@ function (pc::PopulateClosure{T})() where {T}
     end
     # Add `expr` to the IR
     push!(ir.symbols, expr)
+
+    buffer = get!(() -> Int32[], ir.weak_definitions, expr)
+    push!(buffer, idx)
+
     return idx
 end
 
@@ -390,6 +401,8 @@ function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) 
         sym = ir.symbols[iold]
         push!(new_ir.symbols, sym)
         new_ir.definition[sym] = inew
+        buffer = get!(() -> Int32[], new_ir.weak_definitions, sym)
+        push!(buffer, inew)
 
         # Translate old neighbors to new ones. Since we're iterating
         # `reachables` in topologically sorted order, we can guarantee that these

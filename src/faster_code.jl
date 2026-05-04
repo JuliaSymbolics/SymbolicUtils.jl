@@ -217,6 +217,36 @@ function __default_allocator_call_expr(allocator_sym::Symbol, sz_expr::Expr)
 end
 
 """
+    $TYPEDEF
+
+Wraps an identifier already assigned to in codegen which represents a buffer that
+should be written to by `with_allocator`. This pattern avoids having to do something
+like
+
+```julia
+# Outer `codegen_function!` call
+buffer = view(other_buffer, 1:4)
+allocator = Returns(buffer)
+# Inner `codegen_function!`
+my_buffer = allocator((4,))
+# stuff...
+```
+
+By enabling codegen to call `add_allocator!` with `ExistingBufferAllocator(:buffer)`.
+This will then codegen into something like
+
+```julia
+# Outer `codegen_function!`
+buffer = view(other_buffer, 1:4)
+# Inner `codegen_function`
+# Do stuff with `buffer`
+```
+"""
+struct ExistingBufferAllocator
+    name::Symbol
+end
+
+"""
     $TYPEDSIGNATURES
 
 Generate an expression for calling the allocator `allocator` to store the result of `expr`.
@@ -225,6 +255,7 @@ function codegen_allocator_call!(
         cs::CodegenState{T}, @nospecialize(allocator), expr::BasicSymbolic{T}, expr_idx::Integer;
         allocator_call_expr = __default_allocator_call_expr
     ) where {T}
+    allocator isa ExistingBufferAllocator && return allocator.name
     allocator_sym::Symbol = if allocator isa BasicSymbolic{T}
         cs(allocator)
     else
@@ -469,12 +500,12 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 # No point constructing a new expression, just do what `with_allocator`
                 # would do in `codegen_ir!`.
                 BSImpl.Term(; f, args) && if f === with_allocator end => begin
-                    old_allocator = add_allocator!(cs, Expr(:call, Returns, vw))
+                    old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
                     cs(args[2])
                     reset_allocator!(cs, old_allocator)
                 end
                 _ && if supports_with_allocator(val) end => begin
-                    old_allocator = add_allocator!(cs, Expr(:call, Returns, vw))
+                    old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
                     cs(val)
                     reset_allocator!(cs, old_allocator)
                 end

@@ -418,27 +418,119 @@ function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) 
     return new_ir
 end
 
-"""
-    $TYPEDSIGNATURES
+struct IRStructureSearchBuffer{T, S <: AbstractSet{BasicSymbolic{T}}} <: AbstractSet{BasicSymbolic{T}}
+    ir::IRStructure{T}
+    buffer::S
+    searched::BitSet
+end
 
-Optimized version of [`SymbolicUtils.search_variables!`](@ref) that leverages the provided
-[`SymbolicUtils.IRStructure`](@ref). May also add `expr` to `ir` in the process.
-"""
+function IRStructureSearchBuffer(ir::IRStructure{T}, buffer::S) where {T, S <: AbstractSet{BasicSymbolic{T}}}
+    return IRStructureSearchBuffer{T, S}(ir, buffer, BitSet())
+end
+
+Base.length(s::IRStructureSearchBuffer) = length(s.buffer)
+Base.iterate(s::IRStructureSearchBuffer, state...) = iterate(s.buffer, state...)
+Base.in(x::BasicSymbolic{T}, s::IRStructureSearchBuffer{T}) where {T} = in(x, s.buffer)
+
+function Base.empty(s::IRStructureSearchBuffer{T, S}) where {T, S}
+    return IRStructureSearchBuffer{T, S}(s.ir, empty(s.buffer), empty(s.searched))
+end
+
+function Base.push!(s::IRStructureSearchBuffer{T}, x::BasicSymbolic{T}) where {T}
+    push!(s.buffer, x)
+    return s
+end
+
+Base.keytype(::Type{I}) where {T, I <: IRStructureSearchBuffer{T}} = BasicSymbolic{T}
+
+function Base.delete!(s::IRStructureSearchBuffer{T}, x::BasicSymbolic{T}) where {T}
+    was_in_buffer = x in s.buffer
+    delete!(s.buffer, x)
+    was_in_buffer || return s
+    # Deleting invalidates the cache. Find all nodes `isequal` to this one.
+    defs = get(s.ir.weak_definitions, x, nothing)
+    defs isa Vector{Int32} || return s
+    # Go through `defs`, walk the dependency tree backwards and delete any entries in
+    # `s.searched` that we find.
+    rdfs = RecursiveDFS(
+        s.ir.dependency_graph;
+        neighbors_fn = FilteredNeighbors(in(s.searched), Graphs.inneighbors),
+        on_exit = Base.Fix1(delete!, s.searched)
+    )
+    for def in defs
+        def in s.searched || continue
+        rdfs(def)
+    end
+    return s
+end
+
+function Base.setdiff!(s::IRStructureSearchBuffer{T}, ss...) where {T}
+    idxs = get_cached_idxs!(s.ir)
+    empty!(idxs)
+    for other in ss
+        for x in other
+            was_in_buffer = x in s.buffer
+            delete!(s.buffer, x)
+            was_in_buffer || continue
+            defs = get(s.ir.weak_definitions, x, nothing)
+            if defs isa Vector{Int32}
+                append!(idxs, defs)
+            end
+        end
+    end
+    isempty(idxs) && return s
+    rdfs = RecursiveDFS(
+        s.ir.dependency_graph;
+        neighbors_fn = FilteredNeighbors(in(s.searched), Graphs.inneighbors),
+        on_exit = Base.Fix1(delete!, s.searched)
+    )
+    for idx in idxs
+        def in s.searched || continue
+        rdfs(idx)
+    end
+    return s
+end
+
+function Base.filter!(pred::F, s::IRStructureSearchBuffer{T}) where {F, T}
+    idxs = get_cached_idxs!(s.ir)
+    empty!(idxs)
+
+    for x in s
+        pred(x) && continue
+        delete!(s.buffer, x)
+        defs = get(s.ir.weak_definitions, x, nothing)
+        if defs isa Vector{Int32}
+            append!(idxs, defs)
+        end
+    end
+    isempty(idxs) && return s
+    rdfs = RecursiveDFS(
+        s.ir.dependency_graph;
+        neighbors_fn = FilteredNeighbors(in(s.searched), Graphs.inneighbors),
+        on_exit = Base.Fix1(delete!, s.searched)
+    )
+    for idx in idxs
+        def in s.searched || continue
+        rdfs(idx)
+    end
+    return s
+end
+
 function search_variables!(
-        buffer, ir::IRStructure{T}, expr::BasicSymbolic{T}; is_atomic::F = default_is_atomic,
-        recurse::G = iscall
-    ) where {T, F, G}
+        buffer::IRStructureSearchBuffer{T, S}, expr::BasicSymbolic{T};
+        is_atomic::F = default_is_atomic, recurse::G = iscall
+    ) where {T, S, F, G}
     if is_atomic(expr)
         push!(buffer, expr)
         return
     end
     recurse(expr) || return
+    # We call `populate_ir!` late because it's possible that `recurse` filters
+    # out a big expression before we have to put it into the IR.
+    ir = buffer.ir
     idx = populate_ir!(ir, expr)
-    # We don't have a fast path here, since `is_atomic` also prevents recursing into
-    # subtrees. Thus, we always have to use the general BFS approach.
+    idx in buffer.searched && return
 
-    # This is basically equivalent to a BFS, since `recurse` may filter out sections of the
-    # DAG which means we can't just iterate over the reachable vertices.
     mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
         mask[arg_i] = true
@@ -449,6 +541,8 @@ function search_variables!(
     get_reachability!(reachability, ir, idx)
     for cur_i in Iterators.reverse(reachability)
         mask[cur_i] || continue
+        cur_i in buffer.searched && continue
+        push!(buffer.searched, cur_i)
         cur = ir[cur_i]
         if is_atomic(cur)
             push!(buffer, cur)
@@ -459,6 +553,23 @@ function search_variables!(
             mask[arg_i] = true
         end
     end
+
+    push!(buffer.searched, idx)
+
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Optimized version of [`SymbolicUtils.search_variables!`](@ref) that leverages the provided
+[`SymbolicUtils.IRStructure`](@ref). May also add `expr` to `ir` in the process.
+"""
+function search_variables!(
+        buffer::AbstractSet{BasicSymbolic{T}}, ir::IRStructure{T}, expr::BasicSymbolic{T};
+        is_atomic::F = default_is_atomic, recurse::G = iscall
+    ) where {T, F, G}
+    search_variables!(IRStructureSearchBuffer(ir, buffer), expr; is_atomic, recurse)
     return nothing
 end
 

@@ -27,7 +27,7 @@ struct IRStructure{T}
     expression at index `v` depends on. In other words, `outneighbors` is the analogue of
     `arguments`.
     """
-    dependency_graph::Graphs.SimpleDiGraph{Int}
+    dependency_graph::OrderedDiGraph{Int32}
     """
     Mapping from linear indices to the expression at that index.
     """
@@ -35,7 +35,12 @@ struct IRStructure{T}
     """
     Inverse mapping of `symbols`.
     """
-    definition::IdDict{BasicSymbolic{T}, Int}
+    definition::IdDict{BasicSymbolic{T}, Int32}
+    """
+    Map from expressions to all nodes they are `isequal` to. This is not `definition` since
+    that uses `===` equality.
+    """
+    weak_definitions::Dict{BasicSymbolic{T}, Vector{Int32}}
     """
     A cached `BitVector` to be used for several operations supported by this struct. It
     is required for many common operations, and `fill!(false, cached_mask)` is much faster
@@ -43,9 +48,9 @@ struct IRStructure{T}
     """
     cached_mask::BitVector
     """
-    Similar to `cached_mask` but a `Vector{Int}`.
+    Similar to `cached_mask` but a `Vector{Int32}`.
     """
-    cached_idxs::Vector{Int}
+    cached_idxs::Vector{Int32}
 end
 
 """
@@ -55,8 +60,9 @@ Create an empty `IRStructure` to store `BasicSymbolic{T}` expressions.
 """
 function IRStructure{T}() where {T}
     ir = IRStructure{T}(
-        Graphs.SimpleDiGraph{Int}(), BasicSymbolic{T}[],
-        IdDict{BasicSymbolic{T}, Int}(), BitVector(), Int[]
+        OrderedDiGraph{Int32}(), BasicSymbolic{T}[],
+        IdDict{BasicSymbolic{T}, Int32}(), Dict{BasicSymbolic{T}, Vector{Int32}}(),
+        BitVector(), Int32[]
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)
@@ -90,42 +96,32 @@ end
 """
     $TYPEDSIGNATURES
 
-Get the cached `Vector{Int}` inside IR.
+Get the cached `Vector{Int32}` inside IR.
 """
 function get_cached_idxs!(ir::IRStructure)
     return ir.cached_idxs
-end
-
-function _get_reachability_dfs!(reachability::Vector{Int}, visited::BitVector, ir::IRStructure, cur::Int)
-    visited[cur] = true
-    for nbor in Graphs.outneighbors(ir.dependency_graph, cur)
-        visited[nbor] && continue
-        _get_reachability_dfs!(reachability, visited, ir, nbor)
-    end
-    push!(reachability, cur)
-    return nothing
 end
 
 """
     $TYPEDSIGNATURES
 
 Compute the transitive closure of `dependency_graph` from node `idx` via DFS postorder,
-returning a topologically sorted `Vector{Int}` of all node indices that `idx` (directly or
+returning a topologically sorted `Vector{Int32}` of all node indices that `idx` (directly or
 indirectly) depends on. Dependencies (children) appear before the expressions that depend on
 them (parents). Writes the result to and returns `reachability`.
 
 This function allocates its own scratch space and does not use `ir.cached_mask` or
 `ir.cached_idxs`, so it is safe to call even when those are held by an outer caller.
 """
-function get_reachability!(reachability::Vector{Int}, ir::IRStructure, idx::Int)
+function get_reachability!(reachability::Vector{Int32}, ir::IRStructure, idx::Int32)
     g = ir.dependency_graph
+    rdfs = RecursiveDFS(g; on_exit = PushToBuffer(reachability))
     n = length(ir)
-    visited = falses(n)
     sizehint!(reachability, n)
-    visited[idx] = true
+    rdfs.visited[idx] = true
     for nbor in Graphs.outneighbors(g, idx)
-        visited[nbor] && continue
-        _get_reachability_dfs!(reachability, visited, ir, nbor)
+        rdfs.visited[nbor] && continue
+        rdfs(nbor)
     end
     return reachability
 end
@@ -135,7 +131,7 @@ end
 
 Out-of-place version of [`get_reachability!`](@ref).
 """
-get_reachability(ir::IRStructure, idx::Int) = get_reachability!(Int[], ir, idx)
+get_reachability(ir::IRStructure, idx::Int32) = get_reachability!(Int32[], ir, idx)
 
 """
     $TYPEDSIGNATURES
@@ -145,6 +141,7 @@ Preallocate space for `n` nodes in `ir`.
 function Base.sizehint!(ir::IRStructure, n::Integer)
     sizehint!(ir.symbols, n)
     sizehint!(ir.definition, n)
+    sizehint!(ir.weak_definitions, n)
     sizehint!(ir.cached_mask, n)
     sizehint!(ir.cached_idxs, n)
     return ir
@@ -176,7 +173,7 @@ Iterate over valid node indices in `ir`.
 """
 Base.eachindex(ir::IRStructure) = eachindex(ir.symbols)
 
-function _print_ssa_var(io::IO, i::Int)
+function _print_ssa_var(io::IO, i::Int32)
     printstyled(io, "%", i; color = :yellow)
 end
 
@@ -189,7 +186,7 @@ and a summary line is printed instead. Pass `limit = nothing` to print all state
 
 See also [`SymbolicUtils.print_ir`](@ref) which defaults to printing all statements.
 """
-function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
+function _show_ir(io::IO, ir::IRStructure; limit::Union{Integer, Nothing} = 50)
     n = length(ir)
     println(io, "IRStructure with $n node$(n == 1 ? "" : "s"):")
     n == 0 && return
@@ -216,7 +213,7 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
     # Expansion pass: iterate parents before children so that `to_expand` is
     # propagated correctly from roots downward.
     to_expand = falses(n)
-    indeg = zeros(Int, n)
+    indeg = zeros(Int32, n)
     for i in 1:n
         Graphs.indegree(g, i) == 0 && (to_expand[i] = true)
     end
@@ -232,7 +229,7 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Int, Nothing} = 50)
     # Assign consecutive SSA indices to non-inlineable visible nodes
     # (indeg == 0 are roots; indeg > 1 are shared).
     # Iterate children before parents so dependencies receive lower SSA numbers.
-    new_idx = zeros(Int, n)
+    new_idx = zeros(Int32, n)
     counter = 0
     for i in Iterators.reverse(topo)
         (to_expand[i] && indeg[i] != 1) || continue
@@ -296,39 +293,6 @@ you need to inspect an `IRStructure` with more statements than that limit.
 print_ir(io::IO, ir::IRStructure) = _show_ir(io, ir; limit = nothing)
 print_ir(ir::IRStructure) = print_ir(stdout, ir)
 
-const IRBookmarkT = Int
-
-"""
-    $TYPEDSIGNATURES
-
-Obtain a token representing the current state of `ir`. After populating `ir` with additional
-expressions, it can be rolled back to the point of the bookmark using
-[`SymbolicUtils.rollback!`](@ref). Note that deleting nodes present in `ir` when it was
-bookmarked is undefined behavior, and will invalidate the bookmark. Attempting to rollback
-to invalidated bookmarks is undefined behavior. In case multiple bookmarks are made,
-rolling back to an earlier bookmark invalidates subsequent bookmarks.
-"""
-function bookmark(ir::IRStructure)::IRBookmarkT
-    return length(ir)
-end
-
-"""
-    $TYPEDSIGNATURES
-
-Revert `ir` to the state it had when the bookmark `bm` was made. See
-[`SymbolicUtils.bookmark`](@ref) for further details.
-"""
-function rollback!(ir::IRStructure, bm::IRBookmarkT)
-    to_rm = length(ir):-1:(bm + 1)
-    # `rem_vertices!` is pretty slow
-    for vert in to_rm
-        Graphs.rem_vertex!(ir.dependency_graph, vert)
-        delete!(ir.definition, ir.symbols[vert])
-    end
-    resize!(ir.symbols, bm)
-    return ir
-end
-
 """
     $TYPEDEF
 
@@ -348,7 +312,7 @@ end
 function (pc::PopulateClosure{T})() where {T}
     (; ir, expr) = pc
     # `outneighbors`
-    expr_uses = Int[]
+    expr_uses = Int32[]
     if iscall(expr)
         args = parent(arguments(expr))
         # This avoids a lot of allocations
@@ -373,6 +337,10 @@ function (pc::PopulateClosure{T})() where {T}
     end
     # Add `expr` to the IR
     push!(ir.symbols, expr)
+
+    buffer = get!(() -> Int32[], ir.weak_definitions, expr)
+    push!(buffer, idx)
+
     return idx
 end
 
@@ -433,6 +401,8 @@ function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) 
         sym = ir.symbols[iold]
         push!(new_ir.symbols, sym)
         new_ir.definition[sym] = inew
+        buffer = get!(() -> Int32[], new_ir.weak_definitions, sym)
+        push!(buffer, inew)
 
         # Translate old neighbors to new ones. Since we're iterating
         # `reachables` in topologically sorted order, we can guarantee that these
@@ -448,27 +418,119 @@ function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) 
     return new_ir
 end
 
-"""
-    $TYPEDSIGNATURES
+struct IRStructureSearchBuffer{T, S <: AbstractSet{BasicSymbolic{T}}} <: AbstractSet{BasicSymbolic{T}}
+    ir::IRStructure{T}
+    buffer::S
+    searched::BitSet
+end
 
-Optimized version of [`SymbolicUtils.search_variables!`](@ref) that leverages the provided
-[`SymbolicUtils.IRStructure`](@ref). May also add `expr` to `ir` in the process.
-"""
+function IRStructureSearchBuffer(ir::IRStructure{T}, buffer::S) where {T, S <: AbstractSet{BasicSymbolic{T}}}
+    return IRStructureSearchBuffer{T, S}(ir, buffer, BitSet())
+end
+
+Base.length(s::IRStructureSearchBuffer) = length(s.buffer)
+Base.iterate(s::IRStructureSearchBuffer, state...) = iterate(s.buffer, state...)
+Base.in(x::BasicSymbolic{T}, s::IRStructureSearchBuffer{T}) where {T} = in(x, s.buffer)
+
+function Base.empty(s::IRStructureSearchBuffer{T, S}) where {T, S}
+    return IRStructureSearchBuffer{T, S}(s.ir, empty(s.buffer), empty(s.searched))
+end
+
+function Base.push!(s::IRStructureSearchBuffer{T}, x::BasicSymbolic{T}) where {T}
+    push!(s.buffer, x)
+    return s
+end
+
+Base.keytype(::Type{I}) where {T, I <: IRStructureSearchBuffer{T}} = BasicSymbolic{T}
+
+function Base.delete!(s::IRStructureSearchBuffer{T}, x::BasicSymbolic{T}) where {T}
+    was_in_buffer = x in s.buffer
+    delete!(s.buffer, x)
+    was_in_buffer || return s
+    # Deleting invalidates the cache. Find all nodes `isequal` to this one.
+    defs = get(s.ir.weak_definitions, x, nothing)
+    defs isa Vector{Int32} || return s
+    # Go through `defs`, walk the dependency tree backwards and delete any entries in
+    # `s.searched` that we find.
+    rdfs = RecursiveDFS(
+        s.ir.dependency_graph;
+        neighbors_fn = FilteredNeighbors(in(s.searched), Graphs.inneighbors),
+        on_exit = Base.Fix1(delete!, s.searched)
+    )
+    for def in defs
+        def in s.searched || continue
+        rdfs(def)
+    end
+    return s
+end
+
+function Base.setdiff!(s::IRStructureSearchBuffer{T}, ss...) where {T}
+    idxs = get_cached_idxs!(s.ir)
+    empty!(idxs)
+    for other in ss
+        for x in other
+            was_in_buffer = x in s.buffer
+            delete!(s.buffer, x)
+            was_in_buffer || continue
+            defs = get(s.ir.weak_definitions, x, nothing)
+            if defs isa Vector{Int32}
+                append!(idxs, defs)
+            end
+        end
+    end
+    isempty(idxs) && return s
+    rdfs = RecursiveDFS(
+        s.ir.dependency_graph;
+        neighbors_fn = FilteredNeighbors(in(s.searched), Graphs.inneighbors),
+        on_exit = Base.Fix1(delete!, s.searched)
+    )
+    for idx in idxs
+        def in s.searched || continue
+        rdfs(idx)
+    end
+    return s
+end
+
+function Base.filter!(pred::F, s::IRStructureSearchBuffer{T}) where {F, T}
+    idxs = get_cached_idxs!(s.ir)
+    empty!(idxs)
+
+    for x in s
+        pred(x) && continue
+        delete!(s.buffer, x)
+        defs = get(s.ir.weak_definitions, x, nothing)
+        if defs isa Vector{Int32}
+            append!(idxs, defs)
+        end
+    end
+    isempty(idxs) && return s
+    rdfs = RecursiveDFS(
+        s.ir.dependency_graph;
+        neighbors_fn = FilteredNeighbors(in(s.searched), Graphs.inneighbors),
+        on_exit = Base.Fix1(delete!, s.searched)
+    )
+    for idx in idxs
+        def in s.searched || continue
+        rdfs(idx)
+    end
+    return s
+end
+
 function search_variables!(
-        buffer, ir::IRStructure{T}, expr::BasicSymbolic{T}; is_atomic::F = default_is_atomic,
-        recurse::G = iscall
-    ) where {T, F, G}
+        buffer::IRStructureSearchBuffer{T, S}, expr::BasicSymbolic{T};
+        is_atomic::F = default_is_atomic, recurse::G = iscall
+    ) where {T, S, F, G}
     if is_atomic(expr)
         push!(buffer, expr)
         return
     end
     recurse(expr) || return
+    # We call `populate_ir!` late because it's possible that `recurse` filters
+    # out a big expression before we have to put it into the IR.
+    ir = buffer.ir
     idx = populate_ir!(ir, expr)
-    # We don't have a fast path here, since `is_atomic` also prevents recursing into
-    # subtrees. Thus, we always have to use the general BFS approach.
+    idx in buffer.searched && return
 
-    # This is basically equivalent to a BFS, since `recurse` may filter out sections of the
-    # DAG which means we can't just iterate over the reachable vertices.
     mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
         mask[arg_i] = true
@@ -479,6 +541,8 @@ function search_variables!(
     get_reachability!(reachability, ir, idx)
     for cur_i in Iterators.reverse(reachability)
         mask[cur_i] || continue
+        cur_i in buffer.searched && continue
+        push!(buffer.searched, cur_i)
         cur = ir[cur_i]
         if is_atomic(cur)
             push!(buffer, cur)
@@ -489,6 +553,23 @@ function search_variables!(
             mask[arg_i] = true
         end
     end
+
+    push!(buffer.searched, idx)
+
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Optimized version of [`SymbolicUtils.search_variables!`](@ref) that leverages the provided
+[`SymbolicUtils.IRStructure`](@ref). May also add `expr` to `ir` in the process.
+"""
+function search_variables!(
+        buffer::AbstractSet{BasicSymbolic{T}}, ir::IRStructure{T}, expr::BasicSymbolic{T};
+        is_atomic::F = default_is_atomic, recurse::G = iscall
+    ) where {T, F, G}
+    search_variables!(IRStructureSearchBuffer(ir, buffer), expr; is_atomic, recurse)
     return nothing
 end
 
@@ -545,8 +626,8 @@ struct IRSubstituter{Fold, T, D <: AbstractDict{BasicSymbolic{T}, BasicSymbolic{
     ir::IRStructure{T}
     rules::D
     filterer::F
-    cache::Dict{Int, Int}
-    reachability::Vector{Int}
+    cache::Dict{Int32, Int32}
+    reachability::Vector{Int32}
 end
 
 """
@@ -557,7 +638,7 @@ Create an `IRSubstituter` using the given `ir` and `rules`.
 function IRSubstituter{Fold}(
         ir::IRStructure{T}, rules::D; filterer::F = default_substitute_filter
     ) where {Fold, T, D <: AbstractDict, F}
-    IRSubstituter{Fold, T, D, F}(ir, rules, filterer, Dict{Int, Int}(), Int[])
+    IRSubstituter{Fold, T, D, F}(ir, rules, filterer, Dict{Int32, Int32}(), Int32[])
 end
 
 get_substitution_dict(sub::IRSubstituter) = sub.rules
@@ -570,11 +651,11 @@ clear_cache!(sub::IRSubstituter) = empty!(sub.cache)
 Perform the substitution on element `idx` in the IR, returning the index of the new
 element.
 """
-function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int) where {Fold, T}
+function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
     (; rules, filterer, ir) = sub
 
     # Check the cache, filter, and rules for `idx`
-    cached = get(sub.cache, idx, 0)
+    cached = get(sub.cache, idx, zero(Int32))
     iszero(cached) || return cached
     idxsym = ir[idx]
     other = get(rules, idxsym, nothing)
@@ -602,7 +683,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int) where {Fold, T}
     get_reachability!(reachability, ir, idx)
     for i in reachability
         # Check the cache, filter, and rules for `i`
-        cached = get(sub.cache, i, 0)
+        cached = get(sub.cache, i, zero(Int32))
         if !iszero(cached) && cached != i
             modified[i] = true
             continue

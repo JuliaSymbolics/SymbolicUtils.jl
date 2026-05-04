@@ -377,11 +377,40 @@ function write_constant_array!(cs::CodegenState{T}, vw::Symbol, val::AbstractArr
     end
 end
 
+@generated function fill_arr!(buffer::AbstractArray, ::Val{sz}, args...) where {sz}
+    @assert prod(sz) == length(args)
+    result = Expr(:block)
+    for (i, idx) in enumerate(CartesianIndices(sz))
+        push!(result.args, :(buffer[$(Tuple(idx)...)] = args[$i]))
+    end
+    push!(result.args, :(return buffer))
+    return result
+end
+
+"""
+Limit until which the generated code for an `ArrayMaker`/`array_literal` will use `fill_arr!`
+over the standard codegen.
+"""
+const FILL_ARR_LIMIT = 16
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
-    regions, values = @match expr begin
-        BSImpl.ArrayMaker(; regions, values) => (regions, values)
+    len = length(expr)::Int
+    regions, values, sh = @match expr begin
+        BSImpl.ArrayMaker(; regions, values, shape) => (regions, values, shape)
+    end
+    if len <= FILL_ARR_LIMIT
+        result = Expr(:call, fill_arr!, output_buffer)
+        sz_expr = Expr(:tuple)
+        for ax in sh
+            push!(sz_expr.args, length(ax))
+        end
+        push!(result.args, Expr(:call, Val, sz_expr))
+        for idx in SymbolicUtils.stable_eachindex(expr)
+            push!(result.args, cs(expr[idx]))
+        end
+        return declare!(cs, get_misc_identifier(cs), result)
     end
     
     @union_split_smallvec regions @union_split_smallvec values begin
@@ -434,9 +463,18 @@ function codegen_function!(
         return codegen_function_no_nanmath!(SymbolicUtils.array_literal, cs, expr, expr_idx)
     end
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
-    args = @match expr begin
-        BSImpl.Term(; args) => args
+    args, sh = @match expr begin
+        BSImpl.Term(; args, shape) => (args, shape)
     end
+
+    if length(expr)::Int <= FILL_ARR_LIMIT
+        result = Expr(:call, fill_arr!, output_buffer, Expr(:call, Val, unwrap_const(args[1])))
+        for arg in Iterators.drop(args, 1)
+            push!(result.args, cs(arg))
+        end
+        return declare!(cs, get_misc_identifier(cs), result)
+    end
+
     @union_split_smallvec args for (idx, arg) in enumerate(Iterators.drop(args, 1))
         declare!(cs, :_, Expr(:call, setindex!, output_buffer, cs(arg), idx))
     end

@@ -1669,3 +1669,59 @@ function LinearAlgebra.cross(x::Union{AbstractVector{<:Number}, AbstractVector{B
     promote_shape(LinearAlgebra.cross, shape(x), shape(y))
     BSImpl.Const{T}(ArgsT{T}((x[2] * y[3] - x[3] * y[2], -x[1] * y[3] + x[3] * y[1], x[1] * y[2] - x[2] * y[1])))
 end
+
+struct Fill
+    sh::ShapeVecT
+end
+
+function (f::Fill)(x::BasicSymbolic{T}) where {T}
+    term = BSImpl.Term{T}(
+        f, ArgsT{T}((x,)); type = promote_symtype(f, symtype(x)), shape = promote_shape(f, shape(x))
+    )
+    out_idxs = OutIdxT{T}()
+    ranges = RangesT{T}()
+    idx = idxs_for_arrayop(T)
+    for i in eachindex(f.sh)
+        idxi = idx[i]
+        push!(out_idxs, idxi)
+        ranges[idxi] = f.sh[i]
+    end
+    return BSImpl.ArrayOp{T}(out_idxs, x, +, term, ranges; type = term.type, shape = term.shape)
+end
+
+function promote_symtype(f::Fill, T::TypeT)
+    return Array{T, length(f.sh)}
+end
+
+function promote_shape(f::Fill, ::ShapeT)
+    @nospecialize sh
+    return f.sh
+end
+
+struct SymbolicRound{T, R <: RoundingMode}
+    mode::R
+end
+
+function promote_symtype(::SymbolicRound{T}, ::TypeT) where {T}
+    return T::TypeT
+end
+
+function promote_shape(::SymbolicRound{T}, sh::ShapeT) where {T}
+    @nospecialize sh
+    return sh
+end
+
+function (fn::SymbolicRound{T})(ex::BasicSymbolic{R}) where {T, R}
+    return BSImpl.Term{R}(fn, ArgsT{R}((ex,)); type = T, shape = shape(ex))
+end
+function (fn::SymbolicRound{T})(val) where {T}
+    uval = unwrap(val)
+    if uval === val
+        return round(T, uval, fn.mode)
+    end
+    return fn(uval)
+end
+
+function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T, R}
+    SymbolicRound{T, typeof(mode)}(mode)(ex)
+end

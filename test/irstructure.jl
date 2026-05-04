@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir
+using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir, get_reachability
 import SymbolicUtils as SU
 import Graphs
 
@@ -11,32 +11,30 @@ function sanity_check(ir, expr)
     @test isequal(ir[idx], expr)
     if !iscall(expr)
         # Ensure this is a leaf
-        @test isempty(ir.reachability[idx])
+        @test isempty(get_reachability(ir, idx))
         @test isempty(Graphs.outneighbors(ir.dependency_graph, idx))
         return
     end
-    # Reachability should be sorted
-    @test issorted(ir.reachability[idx])
     reference = Int[]
     # Arguments should all have smaller indices and be present in reachability
     for arg in arguments(expr)
         sanity_check(ir, arg)
         @test ir[arg] < idx
-        @test ir[arg] in ir.reachability[idx]
-        append!(reference, ir.reachability[ir[arg]])
+        @test ir[arg] in get_reachability(ir, idx)
+        append!(reference, get_reachability(ir, ir[arg]))
         push!(reference, ir[arg])
     end
     if operation(expr) isa SU.BasicSymbolic{SymReal}
         op = operation(expr)::SU.BasicSymbolic{SymReal}
         @test ir[op] < idx
-        @test ir[op] in ir.reachability[idx]
-        append!(reference, ir.reachability[ir[op]])
+        @test ir[op] in get_reachability(ir, idx)
+        append!(reference, get_reachability(ir, ir[op]))
         push!(reference, ir[op])
     end
     # Check reachability
     sort!(reference)
     unique!(reference)
-    @test issetequal(ir.reachability[idx], reference)
+    @test issetequal(get_reachability(ir, idx), reference)
 end
 
 @testset "Construction and invariants" begin
@@ -91,7 +89,6 @@ end
     end
     @test isequal(ir2.symbols, ir_reference.symbols)
     @test isequal(ir2.definition, ir_reference.definition)
-    @test ir2.reachability == ir_reference.reachability
 end
 
 @testset "`search_variables!`" begin
@@ -194,4 +191,74 @@ end
         irsub = IRSubstituter{false}(ir, Dict(foo => SU.Const{SymReal}(sin)))
         @test isequal(irsub(foo(t + 1)), sin(t + 1))
     end
+end
+
+# Helper: build an IRStructure for `expr` with the ordering invariant intentionally
+# violated. Expressions are added in reverse of the natural postorder (roots first),
+# so parents end up at lower indices than their children.
+function make_reversed_ir(T, root_expr::BasicSymbolic)
+    ir_normal = IRStructure{T}()
+    populate_ir!(ir_normal, root_expr)
+    n = length(ir_normal)
+
+    dep_graph = Graphs.SimpleDiGraph{Int}(n)
+    reversed_symbols = reverse(ir_normal.symbols)  # root at index 1, leaves at end
+    reversed_def = IdDict{BasicSymbolic{T}, Int}()
+    for (i, sym) in enumerate(reversed_symbols)
+        reversed_def[sym] = i
+    end
+    for (i, sym) in enumerate(reversed_symbols)
+        if iscall(sym)
+            for arg in arguments(sym)
+                arg isa BasicSymbolic{T} || continue
+                haskey(reversed_def, arg) || continue
+                Graphs.add_edge!(dep_graph, i, reversed_def[arg])
+            end
+            op = operation(sym)
+            if op isa BasicSymbolic{T} && haskey(reversed_def, op)
+                Graphs.add_edge!(dep_graph, i, reversed_def[op])
+            end
+        end
+    end
+    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, BitVector(), Int[])
+end
+
+@testset "Out-of-order IRStructure" begin
+    # Use a simple expression so the reversed layout is easy to reason about.
+    # x + y: normal layout x=1,y=2,x+y=3; reversed: x+y=1,y=2,x=3.
+    expr = x + y
+    ir = make_reversed_ir(SymReal, expr)
+
+    # Verify the invariant is intentionally violated
+    @test ir[expr] < ir[x]
+    @test ir[expr] < ir[y]
+
+    # get_reachability returns indices of x and y (in some topological order)
+    reach = get_reachability(ir, ir[expr])
+    @test Set(reach) == Set([ir[x], ir[y]])
+
+    # search_variables! finds both variables
+    buffer = Set{BasicSymbolic{SymReal}}()
+    SU.search_variables!(buffer, ir, expr)
+    @test x in buffer
+    @test y in buffer
+
+    # query detects x but not an unrelated symbol
+    @test SU.query(isequal(x), ir, expr)
+    @test !SU.query(isequal(z), ir, expr)
+
+    # show / print_ir produce valid output without errors
+    ir_output = sprint(show, ir)
+    @test occursin(r"IRStructure with \d+ node", ir_output)
+    @test occursin(r"%\d+ = ", ir_output)
+
+    # subset_ir extracts the full sub-expression correctly
+    ir_sub = subset_ir(ir, [expr])
+    @test length(ir_sub) == 3  # x, y, x+y
+
+    # IRSubstituter applies substitution correctly on out-of-order IR
+    rules = Dict{BasicSymbolic{SymReal}, BasicSymbolic{SymReal}}(x => 2y)
+    irsub = IRSubstituter{false}(ir, rules)
+    sub = SU.Substituter{false}(rules)
+    @test isequal(irsub(expr), sub(expr))
 end

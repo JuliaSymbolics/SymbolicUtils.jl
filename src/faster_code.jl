@@ -212,13 +212,18 @@ function exit_scope!(cs::CodegenState, bm::CodegenBookmarkT)
     return result
 end
 
+function __default_allocator_call_expr(allocator_sym::Symbol, sz_expr::Expr)
+    return Expr(:call, allocator_sym, sz_expr)
+end
+
 """
     $TYPEDSIGNATURES
 
 Generate an expression for calling the allocator `allocator` to store the result of `expr`.
 """
 function codegen_allocator_call!(
-        cs::CodegenState{T}, @nospecialize(allocator), expr::BasicSymbolic{T}, expr_idx::Integer
+        cs::CodegenState{T}, @nospecialize(allocator), expr::BasicSymbolic{T}, expr_idx::Integer;
+        allocator_call_expr = __default_allocator_call_expr
     ) where {T}
     allocator_sym::Symbol = if allocator isa BasicSymbolic{T}
         cs(allocator)
@@ -230,7 +235,7 @@ function codegen_allocator_call!(
     @union_split_smallvec sh for ax in sh
         push!(sz_expr.args, length(ax))
     end
-    return codegen!(cs, expr_idx, Expr(:call, allocator_sym, sz_expr))
+    return codegen!(cs, expr_idx, allocator_call_expr(allocator_sym, sz_expr))
 end
 
 """
@@ -393,14 +398,34 @@ over the standard codegen.
 """
 const FILL_ARR_LIMIT = 16
 
+function get_allocator_and_fill_zero!(allocator, sz)
+    buffer = allocator(sz)
+    fill!(buffer, 0)
+    return buffer
+end
+
+function __allocator_call_and_fill_expr(allocator_sym::Symbol, sz_expr::Expr)
+    return Expr(:call, get_allocator_and_fill_zero!, allocator_sym, sz_expr)
+end
+
+function __is_fill_zero(ex::BasicSymbolic{T}) where {T}
+    @match ex begin
+        BSImpl.ArrayOp(; term) && if term !== nothing end => @match term begin
+            BSImpl.Term(; f, args) => f isa SymbolicUtils.Fill && SymbolicUtils._iszero(args[1])
+            _ => false
+        end
+        _ => false
+    end
+end
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
-    output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
     len = length(expr)::Int
     regions, values, sh = @match expr begin
         BSImpl.ArrayMaker(; regions, values, shape) => (regions, values, shape)
     end
     if len <= FILL_ARR_LIMIT
+        output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
         result = Expr(:call, fill_arr!, output_buffer)
         sz_expr = Expr(:tuple)
         for ax in sh
@@ -413,8 +438,19 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         return declare!(cs, get_misc_identifier(cs), result)
     end
     
+    if _allocator !== zeros && isequal(regions[1], sh) && __is_fill_zero(values[1])
+        output_buffer = codegen_allocator_call!(
+            cs, _allocator, expr, expr_idx;
+            allocator_call_expr = __allocator_call_and_fill_expr
+        )
+        ndrop = 1
+    else
+        output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
+        ndrop = 0
+    end
+    
     @union_split_smallvec regions @union_split_smallvec values begin
-        for (region, val) in zip(regions, values)
+        for (region, val) in Iterators.drop(zip(regions, values), ndrop)
             # We are writing to a single element
             if all(isone ∘ length, region)
                 lhs = Expr(:ref, output_buffer)

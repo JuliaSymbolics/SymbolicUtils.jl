@@ -850,3 +850,63 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     return nothing
 end
 
+"""
+    $TYPEDSIGNATURES
+
+If `ir.is_canonical[]`, return `ir[idx]`. Otherwise, find the canonical expression that `ir[idx]`
+should be, were `IRSubstituter` used instead of `replace_node!`.
+"""
+function get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
+    ir.is_canonical[] && return ir[idx]
+
+    return __get_canonical_expr(ir, idx)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Helper function for `get_canonical_expr`. Returns the canonical expression at index `idx`
+by recursively descending through the DAG.
+"""
+function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
+    i_sym = ir[idx]
+    nbors = Graphs.outneighbors(ir.dependency_graph, idx)
+    # If this is a leaf, there's nothing to do
+    isempty(nbors) && return i_sym
+
+    # Track whether the expression actually needs to change
+    dirty = false
+    n_drop = 0
+    op = operation(i_sym)
+    # If the operation is symbolic, it is the first entry in `nbors`.
+    if op isa BasicSymbolic{T}
+        n_drop = 1
+        new_op = __get_canonical_expr(ir, first(nbors))
+        # If the operation is different, the tree is dirty
+        if new_op !== op
+            op = new_op
+            dirty = true
+        end
+    end
+    new_args = parent(arguments(i_sym))
+    # Avoid copying and allocating a new buffer if possible
+    args_dirty = false
+    for (i, arg_idx) in enumerate(Iterators.drop(nbors, n_drop))
+        new_expr = __get_canonical_expr(ir, arg_idx)
+        # If the argument changed, then it is dirty
+        if new_expr !== new_args[i]
+            # Allocate a new buffer if we haven't already
+            if !args_dirty
+                new_args = copy(new_args)
+            end
+            dirty = true
+            args_dirty = true
+            new_args[i] = new_expr
+        end
+    end
+
+    # If the expression is unchanged, no need to do anything
+    dirty || return i_sym
+    # Build the new canonical expression
+    return maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+end

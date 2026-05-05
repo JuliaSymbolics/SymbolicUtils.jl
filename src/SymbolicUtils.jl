@@ -166,6 +166,9 @@ include("simplify.jl")
 export substitute
 include("substitute.jl")
 
+include("ordereddigraph.jl")
+include("graph_traversal.jl")
+
 export IRStructure, populate_ir!, print_ir, get_reachability
 include("irstructure.jl")
 

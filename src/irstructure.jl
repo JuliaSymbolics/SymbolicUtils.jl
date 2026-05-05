@@ -814,3 +814,38 @@ function (sub::IRSubstituter{Fold, T})(expr::BasicSymbolic{T}) where {Fold, T}
     return ir[newidx]
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Replace the expression `old` in `ir` with the expression `new`. `old` must already exist in `ir`.
+Note that this is not symbolic substitution, since any expressions that depend on `old` will not
+be updated. This will simply update the internal graph data structure such that the expression
+at `old` is now `new`, and the arguments of `new` form the out-neighbors of the vertex. This breaks
+the canonical form of `ir`.
+"""
+function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
+    ir.is_canonical[] = false
+    idx = ir[old]
+    ir.symbols[idx] = new
+    delete!(ir.definition, old)
+    weakdefs = ir.weak_definitions[old]
+    filter!(!isequal(idx), weakdefs)
+    isempty(weakdefs) && delete!(ir.weak_definitions, old)
+
+    buffer = get!(() -> Int32[], ir.weak_definitions, new)
+    push!(buffer, idx)
+
+    iszero(Graphs.outdegree(ir.dependency_graph, idx)) && return
+
+    rem_outedges!(ir.dependency_graph, idx)
+    op = operation(new)
+    if op isa BasicSymbolic{T}
+        Graphs.add_edge!(ir.dependency_graph, idx, populate_ir!(ir, op))
+    end
+    args = parent(arguments(new))
+    @union_split_smallvec args for arg in args
+        Graphs.add_edge!(ir.dependency_graph, idx, populate_ir!(ir, arg))
+    end
+    return nothing
+end
+

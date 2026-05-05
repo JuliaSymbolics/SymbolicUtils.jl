@@ -212,14 +212,50 @@ function exit_scope!(cs::CodegenState, bm::CodegenBookmarkT)
     return result
 end
 
+function __default_allocator_call_expr(allocator_sym::Symbol, sz_expr::Expr)
+    return Expr(:call, allocator_sym, sz_expr)
+end
+
+"""
+    $TYPEDEF
+
+Wraps an identifier already assigned to in codegen which represents a buffer that
+should be written to by `with_allocator`. This pattern avoids having to do something
+like
+
+```julia
+# Outer `codegen_function!` call
+buffer = view(other_buffer, 1:4)
+allocator = Returns(buffer)
+# Inner `codegen_function!`
+my_buffer = allocator((4,))
+# stuff...
+```
+
+By enabling codegen to call `add_allocator!` with `ExistingBufferAllocator(:buffer)`.
+This will then codegen into something like
+
+```julia
+# Outer `codegen_function!`
+buffer = view(other_buffer, 1:4)
+# Inner `codegen_function`
+# Do stuff with `buffer`
+```
+"""
+struct ExistingBufferAllocator
+    name::Symbol
+end
+
 """
     $TYPEDSIGNATURES
 
 Generate an expression for calling the allocator `allocator` to store the result of `expr`.
 """
 function codegen_allocator_call!(
-        cs::CodegenState{T}, @nospecialize(allocator), expr::BasicSymbolic{T}, expr_idx::Integer
+        cs::CodegenState{T}, @nospecialize(allocator), expr::BasicSymbolic{T}, expr_idx::Integer;
+        allocator_call_expr = __default_allocator_call_expr
     ) where {T}
+    allocator isa ExistingBufferAllocator && return allocator.name
     allocator_sym::Symbol = if allocator isa BasicSymbolic{T}
         cs(allocator)
     else
@@ -230,7 +266,7 @@ function codegen_allocator_call!(
     @union_split_smallvec sh for ax in sh
         push!(sz_expr.args, length(ax))
     end
-    return codegen!(cs, expr_idx, Expr(:call, allocator_sym, sz_expr))
+    return codegen!(cs, expr_idx, allocator_call_expr(allocator_sym, sz_expr))
 end
 
 """
@@ -377,15 +413,75 @@ function write_constant_array!(cs::CodegenState{T}, vw::Symbol, val::AbstractArr
     end
 end
 
+@generated function fill_arr!(buffer::AbstractArray, ::Val{sz}, args...) where {sz}
+    @assert prod(sz) == length(args)
+    result = Expr(:block)
+    for (i, idx) in enumerate(CartesianIndices(sz))
+        push!(result.args, :(buffer[$(Tuple(idx)...)] = args[$i]))
+    end
+    push!(result.args, :(return buffer))
+    return result
+end
+
+"""
+Limit until which the generated code for an `ArrayMaker`/`array_literal` will use `fill_arr!`
+over the standard codegen.
+"""
+const FILL_ARR_LIMIT = 16
+
+function get_allocator_and_fill_zero!(allocator, sz)
+    buffer = allocator(sz)
+    fill!(buffer, 0)
+    return buffer
+end
+
+function __allocator_call_and_fill_expr(allocator_sym::Symbol, sz_expr::Expr)
+    return Expr(:call, get_allocator_and_fill_zero!, allocator_sym, sz_expr)
+end
+
+function __is_fill_zero(ex::BasicSymbolic{T}) where {T}
+    @match ex begin
+        BSImpl.ArrayOp(; term) && if term !== nothing end => @match term begin
+            BSImpl.Term(; f, args) => f isa SymbolicUtils.Fill && SymbolicUtils._iszero(args[1])
+            _ => false
+        end
+        _ => false
+    end
+end
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
-    output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
-    regions, values = @match expr begin
-        BSImpl.ArrayMaker(; regions, values) => (regions, values)
+    len = length(expr)::Int
+    regions, values, sh = @match expr begin
+        BSImpl.ArrayMaker(; regions, values, shape) => (regions, values, shape)
+    end
+    if len <= FILL_ARR_LIMIT
+        output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
+        result = Expr(:call, fill_arr!, output_buffer)
+        sz_expr = Expr(:tuple)
+        for ax in sh
+            push!(sz_expr.args, length(ax))
+        end
+        push!(result.args, Expr(:call, Val, sz_expr))
+        for idx in SymbolicUtils.stable_eachindex(expr)
+            push!(result.args, cs(expr[idx]))
+        end
+        return declare!(cs, get_misc_identifier(cs), result)
+    end
+    
+    if _allocator !== zeros && isequal(regions[1], sh) && __is_fill_zero(values[1])
+        output_buffer = codegen_allocator_call!(
+            cs, _allocator, expr, expr_idx;
+            allocator_call_expr = __allocator_call_and_fill_expr
+        )
+        ndrop = 1
+    else
+        output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
+        ndrop = 0
     end
     
     @union_split_smallvec regions @union_split_smallvec values begin
-        for (region, val) in zip(regions, values)
+        for (region, val) in Iterators.drop(zip(regions, values), ndrop)
             # We are writing to a single element
             if all(isone ∘ length, region)
                 lhs = Expr(:ref, output_buffer)
@@ -404,12 +500,12 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 # No point constructing a new expression, just do what `with_allocator`
                 # would do in `codegen_ir!`.
                 BSImpl.Term(; f, args) && if f === with_allocator end => begin
-                    old_allocator = add_allocator!(cs, Expr(:call, Returns, vw))
+                    old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
                     cs(args[2])
                     reset_allocator!(cs, old_allocator)
                 end
                 _ && if supports_with_allocator(val) end => begin
-                    old_allocator = add_allocator!(cs, Expr(:call, Returns, vw))
+                    old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
                     cs(val)
                     reset_allocator!(cs, old_allocator)
                 end
@@ -434,15 +530,30 @@ function codegen_function!(
         return codegen_function_no_nanmath!(SymbolicUtils.array_literal, cs, expr, expr_idx)
     end
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
-    args = @match expr begin
-        BSImpl.Term(; args) => args
+    args, sh = @match expr begin
+        BSImpl.Term(; args, shape) => (args, shape)
     end
+
+    if length(expr)::Int <= FILL_ARR_LIMIT
+        result = Expr(:call, fill_arr!, output_buffer, Expr(:call, Val, unwrap_const(args[1])))
+        for arg in Iterators.drop(args, 1)
+            push!(result.args, cs(arg))
+        end
+        return declare!(cs, get_misc_identifier(cs), result)
+    end
+
     @union_split_smallvec args for (idx, arg) in enumerate(Iterators.drop(args, 1))
         declare!(cs, :_, Expr(:call, setindex!, output_buffer, cs(arg), idx))
     end
 
     return output_buffer
 end
+
+"""
+Somewhat arbitrary limit for the maximum number of arguments when calling n-ary
+functions such as `+` or `*`.
+"""
+const NARY_CALL_LIMIT = 12
 
 function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     if get(cs.rewrites, :sort_addmul, true)::Bool
@@ -456,9 +567,13 @@ function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::C
     end
 
     if symtype(expr) <: Number
-        cur = Expr(:call, op, cs(args[1]), cs(args[2]))
-        for i in 3:length(args)
-            cur = Expr(:call, op, cur, cs(args[i]))
+        cur = Expr(:call, op, cs(args[1]))
+        for i in 2:length(args)
+            if i % NARY_CALL_LIMIT == 1
+                cur = Expr(:call, op, cur, cs(args[i]))
+            else
+                push!(cur.args, cs(args[i]))
+            end
         end
         return codegen!(cs, expr_idx, cur)
     end

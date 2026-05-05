@@ -26,6 +26,10 @@ struct IRStructure{T}
     Dependency graph (DAG), where `Graphs.outneighbors(g, v)` denotes the nodes that the
     expression at index `v` depends on. In other words, `outneighbors` is the analogue of
     `arguments`.
+
+    Specifically, `outneighbors` is guaranteed to have the same order as `arguments`. In
+    case the operation is also symbolic, it will prefix the neighbors corresponding to the
+    arguments. This invariant is maintained even when the canonical form is broken.
     """
     dependency_graph::OrderedDiGraph{Int32}
     """
@@ -51,6 +55,15 @@ struct IRStructure{T}
     Similar to `cached_mask` but a `Vector{Int32}`.
     """
     cached_idxs::Vector{Int32}
+    """
+    Flag indicating whether the struct is in canonical form. Canonical form implies that
+    for an expression `ex` at index `idx` in `ir::IRStructure`, there exists an edge
+    from `idx` to `ir[arguments(ex)[j]]` for all valid `j` and that
+    `arguments(ex)[j] === ir[ir[arguments(ex)[j]]]`. This is typically broken by
+    [`SymbolicUtils.replace_node!`](@ref). The graph invariants are still maintained
+    after the canonical form is broken.
+    """
+    is_canonical::Base.RefValue{Bool}
 end
 
 """
@@ -62,7 +75,7 @@ function IRStructure{T}() where {T}
     ir = IRStructure{T}(
         OrderedDiGraph{Int32}(), BasicSymbolic{T}[],
         IdDict{BasicSymbolic{T}, Int32}(), Dict{BasicSymbolic{T}, Vector{Int32}}(),
-        BitVector(), Int32[]
+        BitVector(), Int32[], Ref{Bool}(true)
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)
@@ -100,6 +113,22 @@ Get the cached `Vector{Int32}` inside IR.
 """
 function get_cached_idxs!(ir::IRStructure)
     return ir.cached_idxs
+end
+
+struct IRStructureNotCanonicalError <: Exception
+end
+
+function Base.showerror(io::IO, err::IRStructureNotCanonicalError)
+    print(io, """
+    This operation requires the `IRStructure` to be in canonical form. Canonical form \
+    is typically broken when `SymbolicUtils.replace_node!` is used. Prefer using \
+    `SymbolicUtils.IRSubstituter` to maintain canonical form at the cost of performance.
+    """)
+end
+
+@noinline function require_canonical(ir::IRStructure)
+    ir.is_canonical[] && return
+    throw(IRStructureNotCanonicalError())
 end
 
 """
@@ -652,6 +681,12 @@ Perform the substitution on element `idx` in the IR, returning the index of the 
 element.
 """
 function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
+    # Substitution requires checking if argument expressions are present in the
+    # substitution rules. If canonical form is violated, the symbolic expressions
+    # are not necessarily accurate and thus substitution cannot be guaranteed to
+    # work correctly.
+    require_canonical(sub.ir)
+
     (; rules, filterer, ir) = sub
 
     # Check the cache, filter, and rules for `idx`

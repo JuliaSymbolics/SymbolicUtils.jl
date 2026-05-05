@@ -2033,6 +2033,7 @@ end
 
 apply_optimization_rules(expr, state, ::Nothing) = expr
 function apply_optimization_rules(expr, state, rules)
+    isnothing(rules) && return expr
     isempty(rules) && return expr
     for rule in sort(rules, by = x -> x.priority)
         expr_new = apply_optimization_rule(expr, state, rule)
@@ -2040,6 +2041,17 @@ function apply_optimization_rules(expr, state, rules)
     end
 
     expr
+end
+
+apply_optimization_rules(ir::IRStructure, expr::Any, ::Nothing) = ir, expr
+function apply_optimization_rule(ir::IRStructure, expr, rules)
+    match_data = rules.detector(ir, expr)
+    if match_data !== nothing
+        new_ir, new_expr = rules.transformer(ir, expr, match_data)
+        return new_ir, new_expr
+    end
+
+    return ir, expr
 end
 
 function apply_optimization_rules(ir::IRStructure, expr, rules)
@@ -2050,17 +2062,8 @@ function apply_optimization_rules(ir::IRStructure, expr, rules)
         expr = expr_new
         ir = ir_new
     end
+
     ir, expr
-end
-
-function apply_optimization_rule(ir::IRStructure, expr, rules)
-    match_data = rules.detector(ir, expr)
-    if match_data !== nothing
-        new_ir, new_expr = rules.transformer(ir, expr, match_data)
-        return new_ir, new_expr
-    end
-
-    return ir, expr
 end
 
 end

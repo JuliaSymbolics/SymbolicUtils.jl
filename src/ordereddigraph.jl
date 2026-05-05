@@ -66,6 +66,21 @@ end
 @inline _fin(v::Vector, x) = x in v
 @inline _fin(s::Set, x) = x in s
 
+# Remove s from badjlist[d]. Assumes the edge s→d exists.
+@inline function _rem_badjlist_entry!(g::OrderedDiGraph{T}, d::T, s::T) where {T}
+    @inbounds bentry = g.badjlist[d]
+    if bentry isa Set{T}
+        delete!(bentry, s)
+    else
+        a, b = bentry
+        if iszero(b)
+            @inbounds g.badjlist[d] = (zero(T), zero(T))
+        else
+            @inbounds g.badjlist[d] = a == s ? (b, zero(T)) : (a, zero(T))
+        end
+    end
+end
+
 #
 # AdjView{T}: lightweight non-allocating view over an adjacency list entry.
 # The entry field stores one of three concrete backing types:
@@ -391,6 +406,39 @@ end
 
 function Graphs.rem_edge!(g::OrderedDiGraph{T}, e::Graphs.AbstractEdge) where {T}
     return Graphs.rem_edge!(g, T(Graphs.src(e)), T(Graphs.dst(e)))
+end
+
+"""
+    rem_outedges!(g::OrderedDiGraph, v) -> Bool
+
+Remove all outgoing edges from vertex `v` in `g`. The backward adjacency lists
+of every out-neighbor of `v` are updated accordingly. Returns `true` on success,
+`false` if `v` is not a vertex of `g`.
+"""
+function rem_outedges!(g::OrderedDiGraph{T}, v::Integer) where {T}
+    Graphs.has_vertex(g, v) || return false
+    @inbounds entry = g.fadjlist[v]
+
+    if entry isa NTuple{2, T}
+        a, b = entry
+        iszero(a) && return true
+        _rem_badjlist_entry!(g, a, T(v))
+        if iszero(b)
+            g.ne -= 1
+        else
+            _rem_badjlist_entry!(g, b, T(v))
+            g.ne -= 2
+        end
+    else
+        n = length(entry::Vector{T})
+        for d in entry::Vector{T}
+            _rem_badjlist_entry!(g, d, T(v))
+        end
+        g.ne -= n
+    end
+
+    @inbounds g.fadjlist[v] = (zero(T), zero(T))
+    return true
 end
 
 Graphs.rem_vertex!(g::OrderedDiGraph, v::Integer) =

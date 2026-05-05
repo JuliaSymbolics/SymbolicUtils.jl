@@ -1,4 +1,4 @@
-using SymbolicUtils: OrderedDiGraph, AdjView, OrderedDiGraphEdgeIter
+using SymbolicUtils: OrderedDiGraph, AdjView, OrderedDiGraphEdgeIter, rem_outedges!
 using Graphs
 using Test
 
@@ -465,6 +465,85 @@ end
     end
 end
 
+# ── rem_outedges! ─────────────────────────────────────────────────────────────
+
+@testset "rem_outedges!" begin
+    @testset "returns true on success, false for invalid vertex" begin
+        g = make_graph(3, 1=>2, 1=>3)
+        @test rem_outedges!(g, 1) == true
+        @test rem_outedges!(g, 0) == false
+        @test rem_outedges!(g, 4) == false
+    end
+
+    @testset "empty vertex: returns true without changing ne" begin
+        g = make_graph(3, 2=>3)
+        @test rem_outedges!(g, 1) == true
+        @test ne(g) == 1
+        @test isempty(outneighbors(g, 1))
+    end
+
+    @testset "NTuple backing: 1 out-edge" begin
+        g = make_graph(2, 1=>2)
+        @test rem_outedges!(g, 1) == true
+        @test ne(g) == 0
+        @test isempty(outneighbors(g, 1))
+        @test !(1 in inneighbors(g, 2))
+    end
+
+    @testset "NTuple backing: 2 out-edges" begin
+        g = make_graph(3, 1=>2, 1=>3)
+        @test rem_outedges!(g, 1) == true
+        @test ne(g) == 0
+        @test isempty(outneighbors(g, 1))
+        @test !(1 in inneighbors(g, 2))
+        @test !(1 in inneighbors(g, 3))
+    end
+
+    @testset "Vector backing: 3+ out-edges" begin
+        g = make_graph(5, 1=>2, 1=>3, 1=>4, 1=>5)
+        @test rem_outedges!(g, 1) == true
+        @test ne(g) == 0
+        @test isempty(outneighbors(g, 1))
+        for d in 2:5
+            @test !(1 in inneighbors(g, d))
+        end
+    end
+
+    @testset "destination with Set-backed badjlist" begin
+        # vertex 5 acquires 4 in-edges, so its badjlist transitions to Set
+        g = make_graph(5, 1=>5, 2=>5, 3=>5, 4=>5)
+        @test g.badjlist[5] isa Set{Int}
+        @test rem_outedges!(g, 1) == true
+        @test ne(g) == 3
+        @test !(1 in inneighbors(g, 5))
+        @test 2 in inneighbors(g, 5)
+        @test 3 in inneighbors(g, 5)
+        @test 4 in inneighbors(g, 5)
+    end
+
+    @testset "unrelated edges are unaffected" begin
+        g = make_graph(4, 1=>2, 1=>3, 4=>2)
+        rem_outedges!(g, 1)
+        @test ne(g) == 1
+        @test has_edge(g, 4, 2)
+        @test 4 in inneighbors(g, 2)
+    end
+
+    @testset "internal consistency after rem_outedges!" begin
+        g = make_graph(5, 1=>2, 1=>3, 1=>4, 2=>3, 3=>5)
+        rem_outedges!(g, 1)
+        for v in vertices(g)
+            for u in outneighbors(g, v)
+                @test v in inneighbors(g, u)
+            end
+            for u in inneighbors(g, v)
+                @test v in outneighbors(g, u)
+            end
+        end
+        @test ne(g) == sum(outdegree(g, v) for v in vertices(g); init=0)
+    end
+end
+
 # ── rem_vertex! / rem_vertices! ───────────────────────────────────────────────
 
 @testset "rem_vertex! and rem_vertices! are unsupported" begin
@@ -715,9 +794,10 @@ end
     # ── Graphs.jl API: mutation ───────────────────────────────────────────────
     gm = OrderedDiGraph{Int}(4)
     add_edge!(gm, 1, 2)
-    @test @inferred(add_vertex!(gm))     === true
-    @test @inferred(add_edge!(gm, 2, 3)) === true
-    @test @inferred(rem_edge!(gm, 2, 3)) === true
+    @test @inferred(add_vertex!(gm))        === true
+    @test @inferred(add_edge!(gm, 2, 3))    === true
+    @test @inferred(rem_edge!(gm, 2, 3))    === true
+    @test @inferred(rem_outedges!(gm, 1))   === true
 
     # ── copy / zero / == ──────────────────────────────────────────────────────
     @test @inferred(copy(g))                   isa OrderedDiGraph{Int}

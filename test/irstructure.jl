@@ -230,6 +230,105 @@ end
     end
 end
 
+@testset "`replace_node!`" begin
+    @testset "Leaf replacement" begin
+        # Replacing a leaf: edges unchanged (early return after symbol update)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x))
+        x_idx = ir[x]
+        n_before = length(ir)
+
+        replace_node!(ir, x, y)
+
+        @test isequal(ir[x_idx], y)
+        @test length(ir) == n_before          # no new node created
+        @test !haskey(ir.definition, x)       # old removed from definition
+        @test x_idx in ir.weak_definitions[y] # new registered at same index
+        @test !ir.is_canonical[]
+        # leaf had no outgoing edges; they are still absent
+        @test isempty(Graphs.outneighbors(ir.dependency_graph, x_idx))
+    end
+
+    @testset "Callable → callable, non-symbolic op" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx    = ir[x + y]
+        n_before = length(ir)
+
+        replace_node!(ir, x + y, x * y)
+
+        @test isequal(ir[idx], x * y)
+        @test length(ir) == n_before          # no new node for the expression itself
+        @test !haskey(ir.definition, x + y)
+        @test idx in ir.weak_definitions[x * y]
+        @test !ir.is_canonical[]
+        # outneighbors now match x*y's arguments in argument order
+        nbors    = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        expected = [ir.definition[arg] for arg in arguments(x * y)
+                    if arg isa BasicSymbolic{SymReal}]
+        @test nbors == expected
+    end
+
+    @testset "Callable → callable, symbolic op" begin
+        @syms rn_symfn(..)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx = ir[x + y]
+
+        replace_node!(ir, x + y, rn_symfn(x, y))
+
+        @test isequal(ir[idx], rn_symfn(x, y))
+        @test !haskey(ir.definition, x + y)
+        @test !ir.is_canonical[]
+        # symbolic op must be first outneighbor, then args in order
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        @test nbors[1] == ir.definition[rn_symfn]
+        @test nbors[2] == ir.definition[x]
+        @test nbors[3] == ir.definition[y]
+    end
+
+    @testset "Missing arguments are added to IR" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)          # IR contains x, y, x+y; t absent
+        @test !haskey(ir.definition, t)
+        n_before = length(ir)
+
+        replace_node!(ir, x + y, x + t)
+
+        @test haskey(ir.definition, t)   # t was inserted by populate_ir! inside replace_node!
+        @test length(ir) == n_before + 1
+    end
+
+    @testset "old weak_definitions entry is pruned" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx = ir[x + y]
+        @test idx in ir.weak_definitions[x + y]
+
+        replace_node!(ir, x + y, x * y)
+
+        old_defs = get(ir.weak_definitions, x + y, Int32[])
+        @test !(idx in old_defs)
+    end
+
+    @testset "Old outgoing edges are removed" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx   = ir[x + y]
+        x_idx = ir[x]
+        y_idx = ir[y]
+        # Before: idx → x_idx and idx → y_idx
+        @test x_idx in Graphs.outneighbors(ir.dependency_graph, idx)
+        @test y_idx in Graphs.outneighbors(ir.dependency_graph, idx)
+
+        replace_node!(ir, x + y, sin(x))   # different arg set
+
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        @test !(y_idx in nbors)             # y is no longer a dependency
+        @test x_idx in nbors               # x is still used
+    end
+end
+
 @testset "`IRSubstituter`" begin
     expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
     ir = IRStructure{SymReal}()

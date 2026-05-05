@@ -343,31 +343,32 @@ function (pc::PopulateClosure{T})() where {T}
     # `outneighbors`
     expr_uses = Int32[]
     if iscall(expr)
+        # `op` must be processed before `args` to maintain the `outneighbors` ordering
+        # invariant: op prefixes the arg neighbors when op isa BasicSymbolic{T}.
+        op = operation(expr)
+        if op isa BasicSymbolic{T}
+            op_idx = populate_ir!(ir, op)
+            push!(expr_uses, op_idx)
+        end
         args = parent(arguments(expr))
-        # This avoids a lot of allocations
         sizehint!(expr_uses, length(args))
         @union_split_smallvec args for arg in args
             # Add each argument to the IR. This is effectively a postorder traversal.
             arg_idx = populate_ir!(ir, arg)
             push!(expr_uses, arg_idx)
         end
-        op = operation(expr)
-        if op isa BasicSymbolic{T}
-            op_idx = populate_ir!(ir, op)
-            push!(expr_uses, op_idx)
-        end
     end
-    # Sorting ensures `add_edge!` is a `push!`
-    sort!(expr_uses)
+    # Edges are added in argument order to preserve the outneighbors == arguments invariant.
     Graphs.add_vertex!(ir.dependency_graph)
     idx = Graphs.nv(ir.dependency_graph)
     for dst in expr_uses
         Graphs.add_edge!(ir.dependency_graph, idx, dst)
     end
+    empty!(expr_uses)
     # Add `expr` to the IR
     push!(ir.symbols, expr)
 
-    buffer = get!(() -> Int32[], ir.weak_definitions, expr)
+    buffer = get!(Returns(expr_uses), ir.weak_definitions, expr)
     push!(buffer, idx)
 
     return idx

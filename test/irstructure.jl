@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir, get_reachability
+using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir, get_reachability, replace_node!
 import SymbolicUtils as SU
 import Graphs
 
@@ -159,6 +159,75 @@ end
     @test occursin("\e[33m%", colored)
     # Plain output (no color context) must not contain escape codes
     @test !occursin('\e', atomic_output)
+end
+
+@testset "Edge/outneighbor ordering invariant" begin
+    # Verify that outneighbors of each callable node agree with the invariant:
+    # - For a non-symbolic op:  outneighbors == [ir[arg] for arg in arguments(expr)]
+    # - For a symbolic op:       outneighbors == [ir[op], ir[arg1], ir[arg2], ...]
+    function check_edge_ordering_invariant(ir::IRStructure{T}) where {T}
+        g = ir.dependency_graph
+        for i in eachindex(ir)
+            sym = ir[i]
+            iscall(sym) || continue
+            nbors = collect(Graphs.outneighbors(g, i))
+            op = operation(sym)
+            expected = Int32[]
+            if op isa BasicSymbolic{T}
+                push!(expected, ir.definition[op])
+            end
+            for arg in arguments(sym)
+                arg isa BasicSymbolic{T} || continue
+                push!(expected, ir.definition[arg])
+            end
+            @test nbors == expected
+        end
+    end
+
+    @testset "Non-symbolic operation" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x + y))
+        check_edge_ordering_invariant(ir)
+    end
+
+    @testset "Symbolic operation prefixes arguments" begin
+        @syms ordtest_fn(..)
+        ir = IRStructure{SymReal}()
+        expr = ordtest_fn(x, y)
+        @test operation(expr) isa BasicSymbolic{SymReal}
+        populate_ir!(ir, expr)
+        check_edge_ordering_invariant(ir)
+        # The symbolic op must be the first outneighbor after sorting
+        idx = ir[expr]
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        @test nbors[1] == ir.definition[operation(expr)]
+    end
+
+    @testset "Complex expression" begin
+        ir = IRStructure{SymReal}()
+        # z = z(t) so operation(z) isa BasicSymbolic{SymReal}; exercises the symbolic-op path
+        populate_ir!(ir, x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w))))
+        check_edge_ordering_invariant(ir)
+    end
+
+    @testset "After replace_node! (non-symbolic op)" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx = ir[x + y]
+        replace_node!(ir, x + y, x * y)
+        check_edge_ordering_invariant(ir)
+    end
+
+    @testset "After replace_node! (symbolic op)" begin
+        @syms ordtest_replace_fn(..)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx = ir[x + y]
+        replace_node!(ir, x + y, ordtest_replace_fn(x, y))
+        check_edge_ordering_invariant(ir)
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        @test nbors[1] == ir.definition[ordtest_replace_fn]
+    end
 end
 
 @testset "`IRSubstituter`" begin

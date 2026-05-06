@@ -953,6 +953,16 @@ function (cs::CodegenState)(expr::Assignment)
     return declare!(cs, lhs, rhs)
 end
 
+const ARGNAME_PREFIX = Vector{UInt8}("__argₛᵧₘ")
+
+function add_arg_to_rewrites!(rewrites::Dict{Any, Any}, lhs::BasicSymbolic{T}) where {T}
+    rewrites[lhs] = if get(rewrites, :readable_variables, false)::Bool
+        Symbol(string(lhs)::String)
+    else
+        get_numbered_symbol_with_prefix(ARGNAME_PREFIX, hash(lhs))
+    end
+end
+
 function (cs::CodegenState{T})(l::Let) where {T}
     if all(x->x isa Assignment && !(x.lhs isa DestructuredArgs), l.pairs)
         dargs = Vector{Assignment}(l.pairs)
@@ -968,7 +978,7 @@ function (cs::CodegenState{T})(l::Let) where {T}
         for asg in dargs
             lhs = asg.lhs
             if lhs isa BasicSymbolic{T} && iscall(lhs)
-                scs.rewrites[lhs] = Symbol(string(lhs)::String)
+                add_arg_to_rewrites!(scs.rewrites, lhs)
             end
             scs(asg)
         end
@@ -985,7 +995,7 @@ function (cs::CodegenState{T})(l::Let) where {T}
     for asg in dargs
         lhs = asg.lhs
         if lhs isa BasicSymbolic{T} && iscall(lhs)
-            cs.rewrites[lhs] = Symbol(string(lhs)::String)
+            add_arg_to_rewrites!(cs.rewrites, lhs)
         end
         cs(asg)
     end
@@ -997,11 +1007,11 @@ function (cs::CodegenState{T})(fn::Func) where {T}
     dargs = Union{Assignment, DestructuredArgs}[]
     for arg in fn.args
         if arg isa BasicSymbolic{T}
-            cs.rewrites[arg] = Symbol(string(arg)::String)
+            add_arg_to_rewrites!(cs.rewrites, arg)
         elseif arg isa Assignment
             lhs = arg.lhs
             if lhs isa BasicSymbolic{T}
-                cs.rewrites[lhs] = Symbol(string(lhs)::String)
+                add_arg_to_rewrites!(cs.rewrites, lhs)
             end
         elseif arg isa DestructuredArgs
             push!(dargs, arg)
@@ -1010,6 +1020,7 @@ function (cs::CodegenState{T})(fn::Func) where {T}
     for kw in fn.kwargs
         lhs = kw.lhs
         if lhs isa BasicSymbolic{T}
+            # Does not use `add_arg_to_rewrites!` because kwarg names matter
             cs.rewrites[lhs] = Symbol(string(lhs)::String)
         end
     end

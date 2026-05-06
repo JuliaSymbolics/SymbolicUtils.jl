@@ -329,7 +329,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
             Let(
                 [DestructuredArgs([x(t), b, c], :foo) ← [3, 3, [1, 4]], DestructuredArgs([p, q], c)],
                 x(t) + a + b + c
-            ), ir, Dict()
+            ), ir, Dict{Any, Any}(:readable_variables => true)
         ),
         :(
             let __miscₛᵧₘ0 = Vector{Any}, __miscₛᵧₘ1 = 3, __miscₛᵧₘ2 = 3, __miscₛᵧₘ3 = Vector{Int64}, __miscₛᵧₘ4 = 1, __miscₛᵧₘ5 = 4, __miscₛᵧₘ6 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ3, nothing, $(Val){1}(), $(Val){(2,)}(), __miscₛᵧₘ4, __miscₛᵧₘ5), __miscₛᵧₘ7 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ0, nothing, $(Val){1}(), $(Val){(3,)}(), __miscₛᵧₘ1, __miscₛᵧₘ2, __miscₛᵧₘ6), foo = __miscₛᵧₘ7, __miscₛᵧₘ8 = foo[1], var"x(t)" = __miscₛᵧₘ8, __miscₛᵧₘ9 = foo[2], b = __miscₛᵧₘ9, __miscₛᵧₘ10 = foo[3], c = __miscₛᵧₘ10, __miscₛᵧₘ11 = c[1], p = __miscₛᵧₘ11, __miscₛᵧₘ12 = c[2], q = __miscₛᵧₘ12

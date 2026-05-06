@@ -708,7 +708,7 @@ end
                             var"##cse#4" = y
                             var"##cse#5" = var"##cse#4"[_1]
                             var"##cse#6" = $(*)(var"##cse#3", var"##cse#5")
-                            __accum = var"##cse#1"[$(CartesianIndex)(_1)] + var"##cse#6"
+                            __accum = $(+)(var"##cse#1"[$(CartesianIndex)(_1)], var"##cse#6")
                             _ = (var"##cse#1"[$(CartesianIndex)(_1)] = __accum)
                         end
                     end

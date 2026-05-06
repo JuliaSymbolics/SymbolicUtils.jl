@@ -8,6 +8,9 @@ using ReverseDiff
 using LinearAlgebra
 
 using SymbolicUtils: Const
+import SymbolicUtils: replace_node!
+using Moshi.Match: @match
+import SymbolicUtils.BasicSymbolicImpl as BSImpl
 
 test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
 
@@ -799,5 +802,217 @@ end
     end)
     @test wv[1:3] == fill(av, 3)
     @test wv[4:6] == fill(bv, 3)
+end
+
+# Helper: build a CodegenState, run codegen for `expr`, and append the result symbol so the
+# block evaluates to the generated buffer (needed for ArrayOp / Fill whose codegen writes
+# into a buffer rather than returning it as the last block statement).
+function _codegen_to_block(ir, expr, rewrites = Dict{Any,Any}())
+    block = Expr(:block)
+    cs = Code.CodegenState(block, block, ir, rewrites)
+    result_sym = cs(expr)
+    push!(block.args, result_sym)
+    return block
+end
+
+@testset "codegen on non-canonical `IRStructure`" begin
+    # Extract the `term` field from an ArrayOp (used by Fill / map / mapreduce).
+    # That inner Term must be pre-populated before replace_node! so that its
+    # outneighbors in the graph already point to the replaced node.
+    function _arrayop_term(expr)
+        @match expr begin
+            BSImpl.ArrayOp(; term) => term
+            _ => error("expected ArrayOp")
+        end
+    end
+
+    @testset "generic op" begin
+        # sin(a + b) with a+b → a*b: codegen should produce sin(a*b)
+        @syms a::Real b::Real
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(a + b))
+        replace_node!(ir, a + b, a * b)
+        @test !ir.is_canonical[]
+        expr = Code.fast_toexpr(sin(a + b), ir, Dict{Any,Any}(:sort_addmul => false))
+        result = eval(quote let a = 2.0, b = 3.0; $expr end end)
+        @test result ≈ sin(2.0 * 3.0)
+    end
+
+    @testset "nanmath op" begin
+        @syms a::Real b::Real
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(a + b))
+        replace_node!(ir, a + b, a * b)
+        @test !ir.is_canonical[]
+        expr = Code.fast_toexpr(
+            sin(a + b), ir, Dict{Any,Any}(:nanmath => true, :sort_addmul => false)
+        )
+        result = eval(quote let a = 2.0, b = 3.0; $expr end end)
+        @test result ≈ sin(2.0 * 3.0)
+    end
+
+    @testset "`+` and `*`" begin
+        @syms a::Real b::Real c::Real d::Real
+        let ir = IRStructure{SymReal}()
+            populate_ir!(ir, a + b + c)
+            replace_node!(ir, a, d)
+            @test !ir.is_canonical[]
+            expr = Code.fast_toexpr(a + b + c, ir, Dict{Any,Any}(:sort_addmul => false))
+            result = eval(quote let a = 1.0, b = 2.0, c = 3.0, d = 10.0; $expr end end)
+            @test result ≈ 10.0 + 2.0 + 3.0
+        end
+
+        let ir = IRStructure{SymReal}()
+            populate_ir!(ir, a * b * c)
+            replace_node!(ir, a, d)
+            @test !ir.is_canonical[]
+            expr = Code.fast_toexpr(a * b * c, ir, Dict{Any,Any}(:sort_addmul => false))
+            result = eval(quote let a = 1.0, b = 2.0, c = 3.0, d = 10.0; $expr end end)
+            @test result ≈ 10.0 * 2.0 * 3.0
+        end
+    end
+
+    @testset "`^`" begin
+        @syms a::Real b::Real c::Real
+        # symbolic exponent: a^b with a → c
+        let ir = IRStructure{SymReal}()
+            populate_ir!(ir, a^b)
+            replace_node!(ir, a, c)
+            @test !ir.is_canonical[]
+            expr = Code.fast_toexpr(a^b, ir, Dict{Any,Any}(:sort_addmul => false))
+            result = eval(quote let a = 2.0, b = 3.0, c = 4.0; $expr end end)
+            @test result ≈ 4.0^3.0
+        end
+        # constant exponent: a^2 with a → c
+        let ir = IRStructure{SymReal}()
+            populate_ir!(ir, a^2)
+            replace_node!(ir, a, c)
+            @test !ir.is_canonical[]
+            expr = Code.fast_toexpr(a^2, ir, Dict{Any,Any}(:sort_addmul => false))
+            result = eval(quote let a = 2.0, c = 3.0; $expr end end)
+            @test result ≈ 3.0^2
+        end
+    end
+
+    @testset "`ifelse`" begin
+        @syms a::Real b::Real c::Real d::Real
+        cond = a < 0
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, ifelse(cond, b, c))
+        replace_node!(ir, b, d)
+        @test !ir.is_canonical[]
+        expr = Code.fast_toexpr(ifelse(cond, b, c), ir, Dict{Any,Any}(:sort_addmul => false))
+        result = eval(quote let a = -1.0, b = 10.0, c = 20.0, d = 30.0; $expr end end)
+        @test result ≈ 30.0  # a < 0 is true, so uses d (replaced from b)
+    end
+
+    @testset "`getindex`" begin
+        @syms x[1:3]::Real idx1::Int idx2::Int
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x[idx1])
+        replace_node!(ir, idx1, idx2)
+        @test !ir.is_canonical[]
+        expr = Code.fast_toexpr(x[idx1], ir, Dict{Any,Any}())
+        result = eval(quote let x = [10, 20, 30], idx1 = 1, idx2 = 2; $expr end end)
+        @test result == 20  # x[idx2] = x[2] = 20
+    end
+
+    @testset "`ArrayOp`" begin
+        @syms xv[1:3]::Real yv[1:3]::Real zv[1:3]::Real
+        arr = @arrayop (i,) xv[i] * yv[i]
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, arr)
+        replace_node!(ir, Const{SymReal}(yv), Const{SymReal}(zv))
+        @test !ir.is_canonical[]
+        block = _codegen_to_block(ir, arr, Dict{Any,Any}(:sort_addmul => false))
+        xdata = [1.0, 2.0, 3.0]; ydata = [10.0, 10.0, 10.0]; zdata = [4.0, 5.0, 6.0]
+        result = eval(quote let xv = $xdata, yv = $ydata, zv = $zdata; $block end end)
+        @test result ≈ xdata .* zdata
+    end
+
+    @testset "`Fill`" begin
+        @syms a::Real b::Real
+        f = SymbolicUtils.Fill(SymbolicUtils.ShapeVecT((1:3,)))
+        fill_expr = f(a)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, fill_expr)
+        # Pre-populate the inner Term so its graph edges already exist before replace_node!
+        populate_ir!(ir, _arrayop_term(fill_expr))
+        replace_node!(ir, a, b)
+        @test !ir.is_canonical[]
+        block = _codegen_to_block(ir, fill_expr)
+        result = eval(quote let a = 2.0, b = 5.0; $block end end)
+        @test result == fill(5.0, 3)
+    end
+
+    @testset "`ArrayMaker`" begin
+        @syms a::Real b::Real c::Real
+        f = SymbolicUtils.Fill(SymbolicUtils.ShapeVecT((1:3,)))
+        w = @makearray w[1:6] begin
+            w[1:3] => f(a)
+            w[4:6] => f(b)
+        end
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, w)
+        replace_node!(ir, a, c)
+        @test !ir.is_canonical[]
+        expr = Code.fast_toexpr(w, ir, Dict{Any,Any}(:sort_addmul => false))
+        av = 2.0; bv = 5.0; cv = 7.0
+        result = eval(quote let a = $av, b = $bv, c = $cv; $expr end end)
+        @test result[1:3] == fill(cv, 3)
+        @test result[4:6] == fill(bv, 3)
+    end
+
+    @testset "`array_literal`" begin
+        @syms a::Real b::Real c::Real d::Real
+        # without allocator
+        arr_lit = Const{SymReal}([a, b, c])
+        let ir = IRStructure{SymReal}()
+            populate_ir!(ir, arr_lit)
+            replace_node!(ir, a, d)
+            @test !ir.is_canonical[]
+            expr = Code.fast_toexpr(arr_lit, ir, Dict{Any,Any}())
+            result = eval(quote let a = 1.0, b = 2.0, c = 3.0, d = 10.0; $expr end end)
+            @test result ≈ [10.0, 2.0, 3.0]
+        end
+        # with allocator
+        let ir = IRStructure{SymReal}()
+            populate_ir!(ir, arr_lit)
+            replace_node!(ir, a, d)
+            @test !ir.is_canonical[]
+            wrapped = Code.with_allocator(ones, arr_lit)
+            expr = Code.fast_toexpr(wrapped, ir, Dict{Any,Any}(:sort_addmul => false))
+            result = eval(quote let a = 1.0, b = 2.0, c = 3.0, d = 10.0; $expr end end)
+            @test result ≈ [10.0, 2.0, 3.0]
+        end
+    end
+
+    @testset "`Mapper`" begin
+        @syms av[1:3]::Real bv[1:3]::Real cv[1:3]::Real
+        ex_map = map(+, av, bv)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, ex_map)
+        populate_ir!(ir, _arrayop_term(ex_map))
+        replace_node!(ir, Const{SymReal}(bv), Const{SymReal}(cv))
+        @test !ir.is_canonical[]
+        block = _codegen_to_block(ir, ex_map, Dict{Any,Any}(:sort_addmul => false))
+        xdata = [1.0, 2.0, 3.0]; ydata = [10.0, 10.0, 10.0]; zdata = [4.0, 5.0, 6.0]
+        result = eval(quote let av = $xdata, bv = $ydata, cv = $zdata; $block end end)
+        @test result ≈ xdata .+ zdata
+    end
+
+    @testset "`Mapreducer`" begin
+        @syms av[1:3]::Real bv[1:3]::Real cv[1:3]::Real
+        ex_mapred = mapreduce(+, +, av, bv)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, ex_mapred)
+        populate_ir!(ir, _arrayop_term(ex_mapred))
+        replace_node!(ir, Const{SymReal}(bv), Const{SymReal}(cv))
+        @test !ir.is_canonical[]
+        block = _codegen_to_block(ir, ex_mapred, Dict{Any,Any}(:sort_addmul => false))
+        xdata = [1.0, 2.0, 3.0]; ydata = [10.0, 10.0, 10.0]; zdata = [4.0, 5.0, 6.0]
+        result = eval(quote let av = $xdata, bv = $ydata, cv = $zdata; $block end end)
+        @test result ≈ sum(xdata .+ zdata)
+    end
 end
 

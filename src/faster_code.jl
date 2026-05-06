@@ -6,6 +6,16 @@ using Dictionaries
 # caching the length of the Dictionary at that point. This allows efficiently implementing
 # scoping behavior, for example for loop-local CSE variables.
 
+# NOTE:
+# Codegen relies on fewer invariants than `IRStructure` in general. It is designed to work
+# even when `ir.is_canonical[] == false`. The invariants that it relies on are:
+# 1. `operation(ir[idx::Integer])` is the correct operation to generate.
+# 2. `symtype(ir[idx])` and `shape(ir[idx])` are the correct symtype and shape of the expression.
+# 3. `outneighbors(ir.dependency_graph, idx)` corresponds in order to `arguments(ir[idx])`. In
+#    case `operation(ir[idx]) isa BasicSymbolic{T}`, it is the first element in `outneighbors`,
+#    followed by the arguments in order.
+# 4. If `isarrayop(ir[idx::Integer])`, then `ir[idx].term` is correct.
+
 """
     $TYPEDEF
 
@@ -337,12 +347,13 @@ function codegen_function! end
 function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
-    ranges, innerexpr, output_idx = @match expr begin
-        BSImpl.ArrayOp(; ranges, expr = innerexpr, output_idx) => begin
-            (ranges, innerexpr, output_idx)
-        end
-        _ => _unreachable()
-    end
+
+    # Use graph instead of destructuring `expr`
+    nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    innerexpr = cs.ir[nbors[2]]::BasicSymbolic{T}
+    reducer = unwrap_const(cs.ir[nbors[3]])
+    ranges = unwrap_const(cs.ir[nbors[5]])::SymbolicUtils.RangesT{T}
+
     new_ranges = RangesT{T}()
     new_expr = unidealize_indices(innerexpr, ranges, new_ranges)
 
@@ -351,18 +362,47 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
     inner_result = scoped_cs(new_expr)
 
     loopvar_order = BasicSymbolic{T}[]
-
     index_expr = Expr(:call, CartesianIndex)
-    @union_split_smallvec output_idx for i in output_idx
-        push!(index_expr.args, scoped_cs(i))
-        if i isa BasicSymbolic{T}
-            push!(loopvar_order, i)
+
+    # `output_idxs` can be empty/all integers/symbolic. The first two cases are captured by
+    # the `Const`, where all loops are reduction loops and we output a scalar or singleton
+    # array. If we have parallel loops, then `output_idxs` will contain symbolic entries and
+    # it will thus be present as an `array_literal`.
+    out_idx_sym = cs.ir[nbors[1]]
+    @match out_idx_sym begin
+        BSImpl.Const(; val) && if val isa SymbolicUtils.OutIdxT{T} end => begin
+            # If this is a `Const`, then none of the elements in `output_idx` are symbolic,
+            # so we never populate `loopvar_order`.
+            output_idx = val::SymbolicUtils.OutIdxT{T}
+            @union_split_smallvec output_idx for i in output_idx
+                push!(index_expr.args, scoped_cs(i))
+                if i isa BasicSymbolic{T}
+                    push!(loopvar_order, i)
+                end
+            end
+        end
+        BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
+            # Get the neighbors of the `array_literal`.
+            out_idx_nbors = Graphs.outneighbors(cs.ir.dependency_graph, nbors[1])
+            # The first neighbor is the size tuple, so ignore it.
+            for out_idx_i in Iterators.drop(out_idx_nbors, 1)
+                out_idx = cs.ir[out_idx_i]
+                @match out_idx begin
+                    # Constant index - singleton dimension
+                    BSImpl.Const(; val) => push!(index_expr.args, val::Int)
+                    # Symbolic index - parallel loop
+                    _ => begin
+                        push!(index_expr.args, scoped_cs(out_idx))
+                        push!(loopvar_order, out_idx)
+                    end
+                end
+            end
         end
     end
     reverse!(loopvar_order)
     ref_expr = Expr(:ref, output_buffer, index_expr)
 
-    declare!(scoped_cs, :__accum, Expr(:call, :+, ref_expr, inner_result))
+    declare!(scoped_cs, :__accum, Expr(:call, reducer, ref_expr, inner_result))
     declare!(scoped_cs, :_, Expr(:(=), ref_expr, :__accum))
 
     merge!(new_ranges, ranges)
@@ -395,7 +435,8 @@ function codegen_function!(f::SymbolicUtils.Fill, cs::CodegenState{T}, expr::Bas
         output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
         push!(result.args, output_buffer)
     end
-    push!(result.args, cs(arguments(expr)[1]))
+
+    push!(result.args, cs(cs.ir[Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)[1]]))
     if _allocator === nothing
         for ax in f.sh
             push!(result.args, length(ax))
@@ -452,10 +493,16 @@ end
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     len = length(expr)::Int
-    regions, values, sh = @match expr begin
-        BSImpl.ArrayMaker(; regions, values, shape) => (regions, values, shape)
-    end
+
+    expr_nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    regions = unwrap_const(cs.ir[expr_nbors[1]])::SymbolicUtils.RegionsT
+    values_expr_idx = expr_nbors[2]
+    values_args = Graphs.outneighbors(cs.ir.dependency_graph, values_expr_idx)
+    values_exprs_idxs = Iterators.drop(values_args, 1)
+    sh = shape(expr)
+
     if len <= FILL_ARR_LIMIT
+        expr = SymbolicUtils.get_canonical_expr(cs.ir, expr_idx)
         output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
         result = Expr(:call, fill_arr!, output_buffer)
         sz_expr = Expr(:tuple)
@@ -469,7 +516,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         return declare!(cs, get_misc_identifier(cs), result)
     end
     
-    if _allocator !== zeros && isequal(regions[1], sh) && __is_fill_zero(values[1])
+    if _allocator !== zeros && isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
         output_buffer = codegen_allocator_call!(
             cs, _allocator, expr, expr_idx;
             allocator_call_expr = __allocator_call_and_fill_expr
@@ -480,18 +527,34 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         ndrop = 0
     end
     
-    @union_split_smallvec regions @union_split_smallvec values begin
-        for (region, val) in Iterators.drop(zip(regions, values), ndrop)
+    @union_split_smallvec regions begin
+        for (region, val_idx) in Iterators.drop(zip(regions, values_exprs_idxs), ndrop)
+            val = cs.ir[val_idx]
             # We are writing to a single element
             if all(isone ∘ length, region)
                 lhs = Expr(:ref, output_buffer)
                 @union_split_smallvec region for ax in region
                     push!(lhs.args, first(ax))
                 end
-                rhs = cs(val[SymbolicUtils.stable_eachindex(val)[1]])
+                # The most common case here is that `val` is an `array_literal` with one element.
+                # Instead of fetching the canonical expr for it, special case this to work on the
+                # graph.
+                rhs = @match val begin
+                    BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
+                        first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
+                        cs(cs.ir[first_val_idx])
+                    end
+                    _ => begin
+                        # Unfortunately, scalarizing `val` requires getting the canonical expr.
+                        val = cs(SymbolicUtils.get_canonical_expr(cs.ir, val_idx))
+                        cs(val[SymbolicUtils.stable_eachindex(val)[1]])
+                    end
+                end
                 declare!(cs, lhs, rhs)
                 continue
             end
+
+            # Materialize the view into the output buffer that we will write to.
             view_expr = Expr(:call, view, output_buffer)
             @union_split_smallvec region append!(view_expr.args, region)
             vw = declare!(cs, get_misc_identifier(cs), view_expr)
@@ -499,17 +562,23 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 # Replace the allocator. We want it to write directly to the output
                 # No point constructing a new expression, just do what `with_allocator`
                 # would do in `codegen_ir!`.
-                BSImpl.Term(; f, args) && if f === with_allocator end => begin
+                BSImpl.Term(; f) && if f === with_allocator end => begin
                     old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
-                    cs(args[2])
+                    val_nbors = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)
+                    cs(cs.ir[val_nbors[2]])
                     reset_allocator!(cs, old_allocator)
                 end
+                # Any other operation that supports `with_allocator` should be generated to
+                # write to the buffer directly.
                 _ && if supports_with_allocator(val) end => begin
                     old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
                     cs(val)
                     reset_allocator!(cs, old_allocator)
                 end
+                # Constant arrays can special-case
                 BSImpl.Const(; val) => write_constant_array!(cs, vw, val)
+                # We don't have a fallback, so materialize the array corresponding to `val`
+                # and `copyto!` it into the output buffer.
                 _ => begin
                     temp_array = cs(val)
                     declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, temp_array))
@@ -530,20 +599,21 @@ function codegen_function!(
         return codegen_function_no_nanmath!(SymbolicUtils.array_literal, cs, expr, expr_idx)
     end
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
-    args, sh = @match expr begin
-        BSImpl.Term(; args, shape) => (args, shape)
+    args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    sh = @match expr begin
+        BSImpl.Term(; shape) => shape
     end
 
     if length(expr)::Int <= FILL_ARR_LIMIT
-        result = Expr(:call, fill_arr!, output_buffer, Expr(:call, Val, unwrap_const(args[1])))
-        for arg in Iterators.drop(args, 1)
-            push!(result.args, cs(arg))
+        result = Expr(:call, fill_arr!, output_buffer, Expr(:call, Val, unwrap_const(cs.ir[first(args_idxs)])))
+        for arg_idx in Iterators.drop(args_idxs, 1)
+            push!(result.args, cs(cs.ir[arg_idx]))
         end
         return declare!(cs, get_misc_identifier(cs), result)
     end
 
-    @union_split_smallvec args for (idx, arg) in enumerate(Iterators.drop(args, 1))
-        declare!(cs, :_, Expr(:call, setindex!, output_buffer, cs(arg), idx))
+    for (idx, arg_idx) in enumerate(Iterators.drop(args_idxs, 1))
+        declare!(cs, :_, Expr(:call, setindex!, output_buffer, cs(cs.ir[arg_idx]), idx))
     end
 
     return output_buffer
@@ -557,37 +627,45 @@ const NARY_CALL_LIMIT = 12
 
 function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     if get(cs.rewrites, :sort_addmul, true)::Bool
-        args = parent(sorted_arguments(expr))
+        @assert cs.ir.is_canonical[] "Sorted add/mul requires canonical IRStructure"
+        args_idxs = Int32[]
+        sargs = sorted_arguments(expr)
+        for arg in sargs
+            push!(args_idxs, cs.ir[arg])
+        end
+        # For type-stability, so it matches with the other branch
+        args_idxs = SymbolicUtils.AdjView{Int32}(args_idxs)
     else
-        args = parent(arguments(expr))
+        args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
     end
 
-    if length(args) == 1
-        return codegen!(cs, expr_idx, Expr(:call, op, cs(args[1])))
+    if length(args_idxs) == 1
+        return codegen!(cs, expr_idx, Expr(:call, op, cs(cs.ir[first(args_idxs)])))
     end
 
     if symtype(expr) <: Number
-        cur = Expr(:call, op, cs(args[1]))
-        for i in 2:length(args)
-            if i % NARY_CALL_LIMIT == 1
-                cur = Expr(:call, op, cur, cs(args[i]))
+        cur = Expr(:call, op)
+        for (i, idx) in enumerate(args_idxs)
+            if i % NARY_CALL_LIMIT == 0
+                cur = Expr(:call, op, cur, cs(cs.ir[idx]))
             else
-                push!(cur.args, cs(args[i]))
+                push!(cur.args, cs(cs.ir[idx]))
             end
         end
         return codegen!(cs, expr_idx, cur)
     end
 
     result = Expr(:call, op)
-    @union_split_smallvec args for arg in args
-        push!(result.args, cs(arg))
+    for idx in args_idxs
+        push!(result.args, cs(cs.ir[idx]))
     end
     return codegen!(cs, expr_idx, result)
 end
 
 function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
-    base, exp = arguments(expr)
-    base_sym = cs(base)
+    base_idx, exp_idx = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    base_sym = cs(cs.ir[base_idx])
+    exp = cs.ir[exp_idx]
     @match exp begin
         BSImpl.Const(; val) => begin
             if val isa Real
@@ -616,21 +694,20 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
 end
 
 function codegen_function!(::typeof(ifelse), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
-    cond, iftrue, iffalse = arguments(expr)
-    return codegen!(cs, expr_idx, Expr(:if, cs(cond), cs(iftrue), cs(iffalse)))
+    cond_idx, true_idx, false_idx = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    return codegen!(cs, expr_idx, Expr(:if, cs(cs.ir[cond_idx]), cs(cs.ir[true_idx]), cs(cs.ir[false_idx])))
 end
 
 function codegen_function_no_nanmath!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     result = Expr(:call)
-    if op isa BasicSymbolic{T}
-        opsym = cs(op)
-        push!(result.args, opsym)
-    else
+    if !(op isa BasicSymbolic{T})
         push!(result.args, op)
     end
-    args = parent(arguments(expr))
-    @union_split_smallvec args for arg in args
-        push!(result.args, cs(arg))
+    # If the operation is symbolic, we'll push it as the function to call here.
+    # If it isn't symbolic, we'll push it above and here we add the arguments.
+    nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    for nbor in nbors
+        push!(result.args, cs(cs.ir[nbor]))
     end
     return codegen!(cs, expr_idx, result)
 end
@@ -674,14 +751,14 @@ function codegen_function!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSy
 end
 
 function codegen_function!(::typeof(getindex), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
-    args = parent(arguments(expr))
-    if isequal(args[1], SymbolicUtils.idxs_for_arrayop(T))
-        offset = unwrap_const(args[2])::Int
+    args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    if isequal(cs.ir[first(args_idxs)], SymbolicUtils.idxs_for_arrayop(T))
+        offset = unwrap_const(cs.ir[args_idxs[2]])::Int
         return codegen_arrayop_indexer(offset)
     end
     result = Expr(:ref)
-    @union_split_smallvec args for arg in args
-        push!(result.args, cs(arg))
+    for idx in args_idxs
+        push!(result.args, cs(cs.ir[idx]))
     end
     return codegen!(cs, expr_idx, result)
 end
@@ -694,11 +771,9 @@ function codegen_function!(@nospecialize(op::SymbolicUtils.Mapper), cs::CodegenS
     else
         push!(result.args, fn)
     end
-    args = @match expr begin
-        BSImpl.Term(; args) => args
-    end
-    @union_split_smallvec args for arg in args
-        push!(result.args, cs(arg))
+    args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    for idx in args_idxs
+        push!(result.args, cs(cs.ir[idx]))
     end
     return codegen!(cs, expr_idx, result)
 end
@@ -737,11 +812,9 @@ function codegen_function!(@nospecialize(op::SymbolicUtils.Mapreducer), cs::Code
     else
         push!(result.args, reducer)
     end
-    args = @match expr begin
-        BSImpl.Term(; args) => args
-    end
-    @union_split_smallvec args for arg in args
-        push!(result.args, cs(arg))
+    args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    for idx in args_idxs
+        push!(result.args, cs(cs.ir[idx]))
     end
     return codegen!(cs, expr_idx, result)
 end
@@ -792,7 +865,7 @@ function codegen_ir!(cs::CodegenState{T}, idx::Integer) where {T}
             return codegen_function!(ArrayOp{T}, cs, sym, idx)
         end
         BSImpl.ArrayMaker(;) => return codegen_function!(ArrayMaker{T}, cs, sym, idx)
-        BSImpl.Term(; f, args) => begin
+        BSImpl.Term(; f) => begin
             if f === (^)
                 return codegen_function!(^, cs, sym, idx)
             elseif f === ifelse
@@ -800,16 +873,19 @@ function codegen_ir!(cs::CodegenState{T}, idx::Integer) where {T}
             elseif f === getindex
                 return codegen_function!(getindex, cs, sym, idx)
             elseif f === with_allocator
-                old_allocator = add_allocator!(cs, args[1])
-                result = cs(args[2])
+                args_idxs = Graphs.outneighbors(ir.dependency_graph, idx)
+                new_allocator = ir[first(args_idxs)]
+                old_allocator = add_allocator!(cs, new_allocator)
+                result = cs(ir[args_idxs[2]])
                 reset_allocator!(cs, old_allocator)
                 return result
             else
                 return codegen_function!(f, cs, sym, idx)::Symbol
             end
         end
-        BSImpl.Div(; num, den) => begin
-            return codegen!(cs, idx, Expr(:call, /, cs(num), cs(den)))
+        BSImpl.Div(;) => begin
+            num_idx, den_idx = Graphs.outneighbors(ir.dependency_graph, idx)
+            return codegen!(cs, idx, Expr(:call, /, cs(ir[num_idx]), cs(ir[den_idx])))
         end
         BSImpl.AddMul(; variant) => if variant === AddMulVariant.ADD
             return codegen_function!((+), cs, sym, idx)

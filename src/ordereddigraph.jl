@@ -5,6 +5,8 @@ A directed graph where the forward adjacency list preserves edge insertion
 order. Mirrors `Graphs.SimpleDiGraph` with two differences:
 - `outneighbors(g, v)` returns neighbors in the order edges were inserted.
 - `inneighbors(g, v)` returns an `AdjView` (unordered); membership tests are O(1).
+- Multi-edges are supported: the same `(src, dst)` pair may appear more than
+  once in `fadjlist`, each occurrence representing a distinct edge.
 
 ### Adjacency representation
 
@@ -12,12 +14,13 @@ Each entry of `fadjlist` is a `Union{NTuple{2,T}, Vector{T}}`:
 - `NTuple{2,T}` for vertices with 0, 1, or 2 out-edges. `zero(T)` is a
   sentinel: `(0,0)` means 0 edges, `(dst,0)` means 1 edge, `(a,b)` (both
   non-zero) means 2 edges. Non-zero entries always occupy the front slots.
-- `Vector{T}` once a vertex acquires a third out-edge. The vector is never
-  shrunk back to a tuple after removal.
+- `Vector{T}` once a vertex acquires a third out-edge.
 
 Each entry of `badjlist` is a `Union{NTuple{2,T}, Set{T}}`:
 - `NTuple{2,T}` for vertices with 0, 1, or 2 in-edges (same sentinel convention).
-- `Set{T}` once a vertex acquires a third in-edge. Never shrunk back to a tuple.
+- `Set{T}` once a vertex acquires a third in-edge.
+- Each source vertex is recorded **at most once**, regardless of how many
+  parallel edges connect it to the destination.
 
 For example, after inserting edges `2 => 3`, `1 => 3`, `1 => 2` in that order:
 - `outneighbors(g, 1)` returns `[3, 2]`
@@ -66,6 +69,21 @@ end
 @inline _fin(v::Vector, x) = x in v
 @inline _fin(s::Set, x) = x in s
 
+# Remove s from badjlist[d]. Assumes the edge s→d exists.
+@inline function _rem_badjlist_entry!(g::OrderedDiGraph{T}, d::T, s::T) where {T}
+    @inbounds bentry = g.badjlist[d]
+    if bentry isa Set{T}
+        delete!(bentry, s)
+    else
+        a, b = bentry
+        if iszero(b)
+            @inbounds g.badjlist[d] = (zero(T), zero(T))
+        else
+            @inbounds g.badjlist[d] = a == s ? (b, zero(T)) : (a, zero(T))
+        end
+    end
+end
+
 #
 # AdjView{T}: lightweight non-allocating view over an adjacency list entry.
 # The entry field stores one of three concrete backing types:
@@ -88,11 +106,14 @@ end
 Base.eltype(::Type{AdjView{T}}) where {T} = T
 
 # length and membership dispatch through _flen / _fin (defined for all three).
-Base.length(v::AdjView) = _flen(v.entry)
-Base.in(x, v::AdjView) = _fin(v.entry, x)
+@inline Base.length(v::AdjView) = _flen(v.entry)
+@inline Base.in(x, v::AdjView) = _fin(v.entry, x)
 
 # getindex: valid only for ordered backing (NTuple / Vector).
-Base.getindex(v::AdjView, i::Int) = _fget(v.entry, i)
+Base.@propagate_inbounds function Base.getindex(v::AdjView, i::Int)
+    @boundscheck 1 <= i <= length(v)
+    _fget(v.entry, i)
+end
 
 # --- iterate: manual union-split on entry type ---
 # NTuple and Vector use sequential Int indices as state; Set uses its internal
@@ -302,8 +323,6 @@ function Graphs.add_edge!(g::OrderedDiGraph{T}, e::Graphs.Edge{T}) where {T}
 
     @inbounds entry = g.fadjlist[s]
     @inbounds bentry = g.badjlist[d]
-    # Parallel edge guard. This checks `bentry` since it is a `Set`.
-    _fin(bentry, s) && return false  # parallel edge guard
 
     if entry isa Vector{T}
         push!(entry, d)
@@ -319,16 +338,19 @@ function Graphs.add_edge!(g::OrderedDiGraph{T}, e::Graphs.Edge{T}) where {T}
     end
 
     g.ne += 1
-    if bentry isa Set{T}
-        push!(bentry, s)
-    else
-        a, b = bentry
-        if iszero(a)
-            @inbounds g.badjlist[d] = (s, zero(T))
-        elseif iszero(b)
-            @inbounds g.badjlist[d] = (a, s)
+    # Record s in badjlist[d] only if not already present (deduplication).
+    if !_fin(bentry, s)
+        if bentry isa Set{T}
+            push!(bentry, s)
         else
-            @inbounds g.badjlist[d] = Set{T}((a, b, s))
+            a, b = bentry
+            if iszero(a)
+                @inbounds g.badjlist[d] = (s, zero(T))
+            elseif iszero(b)
+                @inbounds g.badjlist[d] = (a, s)
+            else
+                @inbounds g.badjlist[d] = Set{T}((a, b, s))
+            end
         end
     end
     return true
@@ -342,55 +364,41 @@ function Graphs.add_edge!(g::OrderedDiGraph{T}, e::Graphs.AbstractEdge) where {T
     return Graphs.add_edge!(g, T(Graphs.src(e)), T(Graphs.dst(e)))
 end
 
-function Graphs.rem_edge!(g::OrderedDiGraph{T}, e::Graphs.Edge{T}) where {T}
-    s, d = Graphs.src(e), Graphs.dst(e)
-    verts = Graphs.vertices(g)
-    (s in verts && d in verts) || return false
+"""
+    rem_outedges!(g::OrderedDiGraph, v) -> Bool
 
-    @inbounds entry = g.fadjlist[s]
-    if entry isa Vector{T}
-        idx = findfirst(==(d), entry)
-        idx === nothing && return false
-        deleteat!(entry, idx)
-    else
+Remove all outgoing edges from vertex `v` in `g`. The backward adjacency lists
+of every out-neighbor of `v` are updated accordingly. Returns `true` on success,
+`false` if `v` is not a vertex of `g`.
+"""
+function rem_outedges!(g::OrderedDiGraph{T}, v::Integer) where {T}
+    Graphs.has_vertex(g, v) || return false
+    @inbounds entry = g.fadjlist[v]
+
+    if entry isa NTuple{2, T}
         a, b = entry
-        if iszero(a)
-            return false
-        elseif iszero(b)
-            a == d || return false
-            @inbounds g.fadjlist[s] = (zero(T), zero(T))
+        iszero(a) && return true
+        _rem_badjlist_entry!(g, a, T(v))
+        if iszero(b)
+            g.ne -= 1
         else
-            if a == d
-                @inbounds g.fadjlist[s] = (b, zero(T))
-            elseif b == d
-                @inbounds g.fadjlist[s] = (a, zero(T))
-            else
-                return false
+            # Skip badjlist removal for b if it equals a (multi-edge: already removed).
+            a != b && _rem_badjlist_entry!(g, b, T(v))
+            g.ne -= 2
+        end
+    else
+        n = length(entry::Vector{T})
+        for d in entry::Vector{T}
+            # Guard against double-removal for duplicate destinations (multi-edges).
+            if _fin(@inbounds(g.badjlist[d]), T(v))
+                _rem_badjlist_entry!(g, d, T(v))
             end
         end
+        g.ne -= n
     end
 
-    g.ne -= 1
-    @inbounds bentry = g.badjlist[d]
-    if bentry isa Set{T}
-        delete!(bentry, s)
-    else
-        a, b = bentry
-        if iszero(b)
-            @inbounds g.badjlist[d] = (zero(T), zero(T))
-        else
-            @inbounds g.badjlist[d] = a == s ? (b, zero(T)) : (a, zero(T))
-        end
-    end
+    @inbounds g.fadjlist[v] = (zero(T), zero(T))
     return true
-end
-
-function Graphs.rem_edge!(g::OrderedDiGraph{T}, s::Integer, d::Integer) where {T}
-    return Graphs.rem_edge!(g, Graphs.Edge{T}(T(s), T(d)))
-end
-
-function Graphs.rem_edge!(g::OrderedDiGraph{T}, e::Graphs.AbstractEdge) where {T}
-    return Graphs.rem_edge!(g, T(Graphs.src(e)), T(Graphs.dst(e)))
 end
 
 Graphs.rem_vertex!(g::OrderedDiGraph, v::Integer) =

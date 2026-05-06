@@ -26,6 +26,10 @@ struct IRStructure{T}
     Dependency graph (DAG), where `Graphs.outneighbors(g, v)` denotes the nodes that the
     expression at index `v` depends on. In other words, `outneighbors` is the analogue of
     `arguments`.
+
+    Specifically, `outneighbors` is guaranteed to have the same order as `arguments`. In
+    case the operation is also symbolic, it will prefix the neighbors corresponding to the
+    arguments. This invariant is maintained even when the canonical form is broken.
     """
     dependency_graph::OrderedDiGraph{Int32}
     """
@@ -51,6 +55,15 @@ struct IRStructure{T}
     Similar to `cached_mask` but a `Vector{Int32}`.
     """
     cached_idxs::Vector{Int32}
+    """
+    Flag indicating whether the struct is in canonical form. Canonical form implies that
+    for an expression `ex` at index `idx` in `ir::IRStructure`, there exists an edge
+    from `idx` to `ir[arguments(ex)[j]]` for all valid `j` and that
+    `arguments(ex)[j] === ir[ir[arguments(ex)[j]]]`. This is typically broken by
+    [`SymbolicUtils.replace_node!`](@ref). The graph invariants are still maintained
+    after the canonical form is broken.
+    """
+    is_canonical::Base.RefValue{Bool}
 end
 
 """
@@ -62,7 +75,7 @@ function IRStructure{T}() where {T}
     ir = IRStructure{T}(
         OrderedDiGraph{Int32}(), BasicSymbolic{T}[],
         IdDict{BasicSymbolic{T}, Int32}(), Dict{BasicSymbolic{T}, Vector{Int32}}(),
-        BitVector(), Int32[]
+        BitVector(), Int32[], Ref{Bool}(true)
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)
@@ -100,6 +113,22 @@ Get the cached `Vector{Int32}` inside IR.
 """
 function get_cached_idxs!(ir::IRStructure)
     return ir.cached_idxs
+end
+
+struct IRStructureNotCanonicalError <: Exception
+end
+
+function Base.showerror(io::IO, err::IRStructureNotCanonicalError)
+    print(io, """
+    This operation requires the `IRStructure` to be in canonical form. Canonical form \
+    is typically broken when `SymbolicUtils.replace_node!` is used. Prefer using \
+    `SymbolicUtils.IRSubstituter` to maintain canonical form at the cost of performance.
+    """)
+end
+
+@noinline function require_canonical(ir::IRStructure)
+    ir.is_canonical[] && return
+    throw(IRStructureNotCanonicalError())
 end
 
 """
@@ -314,31 +343,32 @@ function (pc::PopulateClosure{T})() where {T}
     # `outneighbors`
     expr_uses = Int32[]
     if iscall(expr)
+        # `op` must be processed before `args` to maintain the `outneighbors` ordering
+        # invariant: op prefixes the arg neighbors when op isa BasicSymbolic{T}.
+        op = operation(expr)
+        if op isa BasicSymbolic{T}
+            op_idx = populate_ir!(ir, op)
+            push!(expr_uses, op_idx)
+        end
         args = parent(arguments(expr))
-        # This avoids a lot of allocations
         sizehint!(expr_uses, length(args))
         @union_split_smallvec args for arg in args
             # Add each argument to the IR. This is effectively a postorder traversal.
             arg_idx = populate_ir!(ir, arg)
             push!(expr_uses, arg_idx)
         end
-        op = operation(expr)
-        if op isa BasicSymbolic{T}
-            op_idx = populate_ir!(ir, op)
-            push!(expr_uses, op_idx)
-        end
     end
-    # Sorting ensures `add_edge!` is a `push!`
-    sort!(expr_uses)
+    # Edges are added in argument order to preserve the outneighbors == arguments invariant.
     Graphs.add_vertex!(ir.dependency_graph)
     idx = Graphs.nv(ir.dependency_graph)
     for dst in expr_uses
         Graphs.add_edge!(ir.dependency_graph, idx, dst)
     end
+    empty!(expr_uses)
     # Add `expr` to the IR
     push!(ir.symbols, expr)
 
-    buffer = get!(() -> Int32[], ir.weak_definitions, expr)
+    buffer = get!(Returns(expr_uses), ir.weak_definitions, expr)
     push!(buffer, idx)
 
     return idx
@@ -652,6 +682,12 @@ Perform the substitution on element `idx` in the IR, returning the index of the 
 element.
 """
 function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
+    # Substitution requires checking if argument expressions are present in the
+    # substitution rules. If canonical form is violated, the symbolic expressions
+    # are not necessarily accurate and thus substitution cannot be guaranteed to
+    # work correctly.
+    require_canonical(sub.ir)
+
     (; rules, filterer, ir) = sub
 
     # Check the cache, filter, and rules for `idx`
@@ -779,3 +815,98 @@ function (sub::IRSubstituter{Fold, T})(expr::BasicSymbolic{T}) where {Fold, T}
     return ir[newidx]
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Replace the expression `old` in `ir` with the expression `new`. `old` must already exist in `ir`.
+Note that this is not symbolic substitution, since any expressions that depend on `old` will not
+be updated. This will simply update the internal graph data structure such that the expression
+at `old` is now `new`, and the arguments of `new` form the out-neighbors of the vertex. This breaks
+the canonical form of `ir`.
+"""
+function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
+    ir.is_canonical[] = false
+    idx = ir[old]
+    ir.symbols[idx] = new
+    delete!(ir.definition, old)
+    weakdefs = ir.weak_definitions[old]
+    filter!(!isequal(idx), weakdefs)
+    isempty(weakdefs) && delete!(ir.weak_definitions, old)
+
+    buffer = get!(() -> Int32[], ir.weak_definitions, new)
+    push!(buffer, idx)
+
+    iszero(Graphs.outdegree(ir.dependency_graph, idx)) && return
+
+    rem_outedges!(ir.dependency_graph, idx)
+    op = operation(new)
+    if op isa BasicSymbolic{T}
+        Graphs.add_edge!(ir.dependency_graph, idx, populate_ir!(ir, op))
+    end
+    args = parent(arguments(new))
+    @union_split_smallvec args for arg in args
+        Graphs.add_edge!(ir.dependency_graph, idx, populate_ir!(ir, arg))
+    end
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
+If `ir.is_canonical[]`, return `ir[idx]`. Otherwise, find the canonical expression that `ir[idx]`
+should be, were `IRSubstituter` used instead of `replace_node!`.
+"""
+function get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
+    ir.is_canonical[] && return ir[idx]
+
+    return __get_canonical_expr(ir, idx)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Helper function for `get_canonical_expr`. Returns the canonical expression at index `idx`
+by recursively descending through the DAG.
+"""
+function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
+    i_sym = ir[idx]
+    nbors = Graphs.outneighbors(ir.dependency_graph, idx)
+    # If this is a leaf, there's nothing to do
+    isempty(nbors) && return i_sym
+
+    # Track whether the expression actually needs to change
+    dirty = false
+    n_drop = 0
+    op = operation(i_sym)
+    # If the operation is symbolic, it is the first entry in `nbors`.
+    if op isa BasicSymbolic{T}
+        n_drop = 1
+        new_op = __get_canonical_expr(ir, first(nbors))
+        # If the operation is different, the tree is dirty
+        if new_op !== op
+            op = new_op
+            dirty = true
+        end
+    end
+    new_args = parent(arguments(i_sym))
+    # Avoid copying and allocating a new buffer if possible
+    args_dirty = false
+    for (i, arg_idx) in enumerate(Iterators.drop(nbors, n_drop))
+        new_expr = __get_canonical_expr(ir, arg_idx)
+        # If the argument changed, then it is dirty
+        if new_expr !== new_args[i]
+            # Allocate a new buffer if we haven't already
+            if !args_dirty
+                new_args = copy(new_args)
+            end
+            dirty = true
+            args_dirty = true
+            new_args[i] = new_expr
+        end
+    end
+
+    # If the expression is unchanged, no need to do anything
+    dirty || return i_sym
+    # Build the new canonical expression
+    return maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+end

@@ -21,6 +21,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       AddMulVariant, _isone, _iszero, Fill, IRStructure, populate_ir!
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
+import Graphs
 
 ##== state management ==##
 

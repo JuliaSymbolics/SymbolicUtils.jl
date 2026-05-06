@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir, get_reachability
+using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir, get_reachability, replace_node!
 import SymbolicUtils as SU
 import Graphs
 
@@ -161,6 +161,242 @@ end
     @test !occursin('\e', atomic_output)
 end
 
+@testset "Edge/outneighbor ordering invariant" begin
+    # Verify that outneighbors of each callable node agree with the invariant:
+    # - For a non-symbolic op:  outneighbors == [ir[arg] for arg in arguments(expr)]
+    # - For a symbolic op:       outneighbors == [ir[op], ir[arg1], ir[arg2], ...]
+    function check_edge_ordering_invariant(ir::IRStructure{T}) where {T}
+        g = ir.dependency_graph
+        for i in eachindex(ir)
+            sym = ir[i]
+            iscall(sym) || continue
+            nbors = collect(Graphs.outneighbors(g, i))
+            op = operation(sym)
+            expected = Int32[]
+            if op isa BasicSymbolic{T}
+                push!(expected, ir.definition[op])
+            end
+            for arg in arguments(sym)
+                arg isa BasicSymbolic{T} || continue
+                push!(expected, ir.definition[arg])
+            end
+            @test nbors == expected
+        end
+    end
+
+    @testset "Non-symbolic operation" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x + y))
+        check_edge_ordering_invariant(ir)
+    end
+
+    @testset "Symbolic operation prefixes arguments" begin
+        @syms ordtest_fn(..)
+        ir = IRStructure{SymReal}()
+        expr = ordtest_fn(x, y)
+        @test operation(expr) isa BasicSymbolic{SymReal}
+        populate_ir!(ir, expr)
+        check_edge_ordering_invariant(ir)
+        # The symbolic op must be the first outneighbor after sorting
+        idx = ir[expr]
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        @test nbors[1] == ir.definition[operation(expr)]
+    end
+
+    @testset "Complex expression" begin
+        ir = IRStructure{SymReal}()
+        # z = z(t) so operation(z) isa BasicSymbolic{SymReal}; exercises the symbolic-op path
+        populate_ir!(ir, x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w))))
+        check_edge_ordering_invariant(ir)
+    end
+
+    @testset "After replace_node! (non-symbolic op)" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx = ir[x + y]
+        replace_node!(ir, x + y, x * y)
+        check_edge_ordering_invariant(ir)
+    end
+
+    @testset "array_literal with duplicated arguments" begin
+        # Const{T}([x, y, x]) creates an array_literal Term whose argument list is
+        # [Const((3,)), x, y, x].  Because x appears twice, the dependency graph
+        # must have two edges from the array_literal node to ir[x] (multi-edges).
+        arr = SU.Const{SymReal}([x, y, x])
+        @test operation(arr) === SymbolicUtils.array_literal
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, arr)
+        check_edge_ordering_invariant(ir)
+        arr_idx = ir[arr]
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, arr_idx))
+        x_idx = ir.definition[x]
+        # x must appear at position 2 and 4 of outneighbors (after the size Const)
+        @test count(==(x_idx), nbors) == 2
+        @test nbors[2] == x_idx
+        @test nbors[4] == x_idx
+    end
+
+    @testset "After replace_node! (symbolic op)" begin
+        @syms ordtest_replace_fn(..)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx = ir[x + y]
+        replace_node!(ir, x + y, ordtest_replace_fn(x, y))
+        check_edge_ordering_invariant(ir)
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        @test nbors[1] == ir.definition[ordtest_replace_fn]
+    end
+end
+
+@testset "`replace_node!`" begin
+    @testset "Leaf replacement" begin
+        # Replacing a leaf: edges unchanged (early return after symbol update)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x))
+        x_idx = ir[x]
+        n_before = length(ir)
+
+        replace_node!(ir, x, y)
+
+        @test isequal(ir[x_idx], y)
+        @test length(ir) == n_before          # no new node created
+        @test !haskey(ir.definition, x)       # old removed from definition
+        @test x_idx in ir.weak_definitions[y] # new registered at same index
+        @test !ir.is_canonical[]
+        # leaf had no outgoing edges; they are still absent
+        @test isempty(Graphs.outneighbors(ir.dependency_graph, x_idx))
+    end
+
+    @testset "Callable → callable, non-symbolic op" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx    = ir[x + y]
+        n_before = length(ir)
+
+        replace_node!(ir, x + y, x * y)
+
+        @test isequal(ir[idx], x * y)
+        @test length(ir) == n_before          # no new node for the expression itself
+        @test !haskey(ir.definition, x + y)
+        @test idx in ir.weak_definitions[x * y]
+        @test !ir.is_canonical[]
+        # outneighbors now match x*y's arguments in argument order
+        nbors    = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        expected = [ir.definition[arg] for arg in arguments(x * y)
+                    if arg isa BasicSymbolic{SymReal}]
+        @test nbors == expected
+    end
+
+    @testset "Callable → callable, symbolic op" begin
+        @syms rn_symfn(..)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx = ir[x + y]
+
+        replace_node!(ir, x + y, rn_symfn(x, y))
+
+        @test isequal(ir[idx], rn_symfn(x, y))
+        @test !haskey(ir.definition, x + y)
+        @test !ir.is_canonical[]
+        # symbolic op must be first outneighbor, then args in order
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        @test nbors[1] == ir.definition[rn_symfn]
+        @test nbors[2] == ir.definition[x]
+        @test nbors[3] == ir.definition[y]
+    end
+
+    @testset "Missing arguments are added to IR" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)          # IR contains x, y, x+y; t absent
+        @test !haskey(ir.definition, t)
+        n_before = length(ir)
+
+        replace_node!(ir, x + y, x + t)
+
+        @test haskey(ir.definition, t)   # t was inserted by populate_ir! inside replace_node!
+        @test length(ir) == n_before + 1
+    end
+
+    @testset "old weak_definitions entry is pruned" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx = ir[x + y]
+        @test idx in ir.weak_definitions[x + y]
+
+        replace_node!(ir, x + y, x * y)
+
+        old_defs = get(ir.weak_definitions, x + y, Int32[])
+        @test !(idx in old_defs)
+    end
+
+    @testset "Old outgoing edges are removed" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        idx   = ir[x + y]
+        x_idx = ir[x]
+        y_idx = ir[y]
+        # Before: idx → x_idx and idx → y_idx
+        @test x_idx in Graphs.outneighbors(ir.dependency_graph, idx)
+        @test y_idx in Graphs.outneighbors(ir.dependency_graph, idx)
+
+        replace_node!(ir, x + y, sin(x))   # different arg set
+
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
+        @test !(y_idx in nbors)             # y is no longer a dependency
+        @test x_idx in nbors               # x is still used
+    end
+end
+
+@testset "`get_canonical_expr`" begin
+    @testset "Canonical IR: returns ir[idx] directly" begin
+        ir = IRStructure{SymReal}()
+        expr = x + sin(y)
+        populate_ir!(ir, expr)
+        @test ir.is_canonical[]
+        idx = ir[expr]
+        @test SU.get_canonical_expr(ir, idx) === ir[idx]
+    end
+
+    @testset "Non-canonical, unaffected subtree: returns same object" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x))
+        populate_ir!(ir, cos(y))
+        sin_idx = ir[sin(x)]
+        replace_node!(ir, y, x)   # affects cos(y) only, not sin(x)
+        @test !ir.is_canonical[]
+        @test SU.get_canonical_expr(ir, sin_idx) === ir[sin_idx]
+    end
+
+    @testset "After leaf replacement: parent argument updated" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x))
+        sin_idx = ir[sin(x)]
+        replace_node!(ir, x, y)
+        @test !ir.is_canonical[]
+        @test isequal(SU.get_canonical_expr(ir, sin_idx), sin(y))
+    end
+
+    @testset "After callable replacement: grandparent updated" begin
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, cos(x + y))
+        cos_idx = ir[cos(x + y)]
+        replace_node!(ir, x + y, x * y)
+        @test !ir.is_canonical[]
+        @test isequal(SU.get_canonical_expr(ir, cos_idx), cos(x * y))
+    end
+
+    @testset "Symbolic operation: arg replaced (n_drop=1 path)" begin
+        # fn is a symbolic function; operation(fn(x)) isa BasicSymbolic, so the op
+        # node is the first outneighbor and must be skipped when iterating args.
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, fn(x))
+        fn_x_idx = ir[fn(x)]
+        replace_node!(ir, x, y)
+        @test !ir.is_canonical[]
+        @test isequal(SU.get_canonical_expr(ir, fn_x_idx), fn(y))
+    end
+end
+
 @testset "`IRSubstituter`" begin
     expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
     ir = IRStructure{SymReal}()
@@ -220,7 +456,7 @@ function make_reversed_ir(T, root_expr::BasicSymbolic)
             end
         end
     end
-    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, Dict{BasicSymbolic{T}, Int32}(), BitVector(), Int32[])
+    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, Dict{BasicSymbolic{T}, Vector{Int32}}(), BitVector(), Int32[], Ref{Bool}(true))
 end
 
 @testset "Out-of-order IRStructure" begin

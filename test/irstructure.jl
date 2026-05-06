@@ -218,6 +218,24 @@ end
         check_edge_ordering_invariant(ir)
     end
 
+    @testset "array_literal with duplicated arguments" begin
+        # Const{T}([x, y, x]) creates an array_literal Term whose argument list is
+        # [Const((3,)), x, y, x].  Because x appears twice, the dependency graph
+        # must have two edges from the array_literal node to ir[x] (multi-edges).
+        arr = SU.Const{SymReal}([x, y, x])
+        @test operation(arr) === SymbolicUtils.array_literal
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, arr)
+        check_edge_ordering_invariant(ir)
+        arr_idx = ir[arr]
+        nbors = collect(Graphs.outneighbors(ir.dependency_graph, arr_idx))
+        x_idx = ir.definition[x]
+        # x must appear at position 2 and 4 of outneighbors (after the size Const)
+        @test count(==(x_idx), nbors) == 2
+        @test nbors[2] == x_idx
+        @test nbors[4] == x_idx
+    end
+
     @testset "After replace_node! (symbolic op)" begin
         @syms ordtest_replace_fn(..)
         ir = IRStructure{SymReal}()

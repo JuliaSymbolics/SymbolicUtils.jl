@@ -759,6 +759,37 @@ end
         end)
         @test result2d_wa == fill(xv, 2, 4)
     end
+
+    @testset "`Returns(buf)` allocator" begin
+        @syms x y z buf[1:3]
+        ir = IRStructure{SymReal}()
+        arr = SymbolicUtils.Const{SymReal}([x, y, z])
+        returns_alloc = SymbolicUtils.Term{SymReal}(Returns{SymReal}, (buf,))
+
+        test_repr(
+            Code.fast_toexpr(arr, ir, Dict{Any,Any}(Code.ALLOCATOR_REWRITES_KEY => returns_alloc)),
+            quote
+                var"##cse#0" = buf
+                var"##cse#1" = var"##cse#0"
+                var"##cse#2" = x
+                var"##cse#3" = y
+                var"##cse#4" = z
+                __miscₛᵧₘ0 = $(Code.fill_arr!)(var"##cse#1", $Val($((3,))), var"##cse#2", var"##cse#3", var"##cse#4")
+            end
+        )
+
+        reference = eval(quote
+            let x = 1.0, y = 2.0, z = 3.0
+                $(Code.fast_toexpr(arr, ir, Dict{Any,Any}()))
+            end
+        end)
+        result = eval(quote
+            let x = 1.0, y = 2.0, z = 3.0, buf = zeros(3)
+                $(Code.fast_toexpr(arr, ir, Dict{Any,Any}(Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(Returns{SymReal}, (buf,)))))
+            end
+        end)
+        @test isequal(reference, result)
+    end
 end
 
 @testset "fast_toexpr" begin

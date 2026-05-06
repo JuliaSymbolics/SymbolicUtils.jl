@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound
+using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType
 using Test
 import NaNMath
 import LinearAlgebra
@@ -454,4 +454,17 @@ end
     @test occursin("Int", str)
     @test occursin(string(x), str)
     @test occursin("Nearest", str)
+end
+
+@testset "promote_symtype and promote_shape for Returns" begin
+    @test promote_symtype(Returns{Float64}, Vector{Float64}) == FnType{Tuple, Vector{Float64}, Nothing}
+    @test promote_symtype(Returns{Int}, Matrix{Int}) == FnType{Tuple, Matrix{Int}, Nothing}
+    @test promote_symtype(Returns{Nothing}, Int) == FnType{Tuple, Int, Nothing}
+
+    sh1d = ShapeVecT((1:3,))
+    sh2d = ShapeVecT((1:2, 1:4))
+    @test promote_shape(Returns{Float64}, sh1d) === sh1d
+    @test promote_shape(Returns{Float64}, sh2d) === sh2d
+    @test promote_shape(Returns{Int}, Unknown(1)) == Unknown(1)
+    @test promote_shape(Returns{Int}, Unknown(-1)) == Unknown(-1)
 end

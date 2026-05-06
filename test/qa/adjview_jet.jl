@@ -122,11 +122,10 @@ end
     @test_opt _edges_sum_jet(g)
 end
 
-@testset "JET: add_vertex!, add_edge!, rem_edge!" begin
+@testset "JET: add_vertex!, add_edge!" begin
     g = OrderedDiGraph{Int}(4)
     @test_opt add_vertex!(g)
     @test_opt add_edge!(g, 1, 3)
-    @test_opt rem_edge!(g, 1, 3)
 end
 
 @testset "JET: copy, ==, zero" begin

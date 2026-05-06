@@ -172,7 +172,7 @@ end
         @test Set(inneighbors(g, 2)) == Set([1])
     end
 
-    @testset "order is preserved through other mutations" begin
+    @testset "order is preserved through insertions" begin
         g = OrderedDiGraph{Int}(5)
         add_edge!(g, 1, 5)
         add_edge!(g, 1, 3)
@@ -180,13 +180,9 @@ end
         add_edge!(g, 1, 4)
         @test collect(outneighbors(g, 1)) == [5, 3, 2, 4]
 
-        # Removing a non-1 edge does not disturb order
-        rem_edge!(g, 1, 3)
-        @test collect(outneighbors(g, 1)) == [5, 2, 4]
-
-        # Adding a new edge appends
+        # Adding another edge appends
         add_edge!(g, 1, 3)
-        @test collect(outneighbors(g, 1)) == [5, 2, 4, 3]
+        @test collect(outneighbors(g, 1)) == [5, 3, 2, 4, 3]
     end
 
     @testset "differs from SimpleDiGraph sorted order" begin
@@ -240,33 +236,6 @@ end
         @test collect(outneighbors(g, 1)) == [2, 3, 4]
     end
 
-    @testset "no regression back to NTuple after rem_edge! on Vector" begin
-        g = OrderedDiGraph{Int}(4)
-        add_edge!(g, 1, 2); add_edge!(g, 1, 3); add_edge!(g, 1, 4)
-        rem_edge!(g, 1, 4)
-        # Vector is never shrunk back to NTuple
-        @test g.fadjlist[1] isa Vector{Int}  # internal representation
-        @test collect(outneighbors(g, 1)) == [2, 3]
-    end
-
-    @testset "rem_edge! on NTuple: 2→1 out-edges" begin
-        g = OrderedDiGraph{Int}(3)
-        add_edge!(g, 1, 3); add_edge!(g, 1, 2)
-        rem_edge!(g, 1, 3)
-        nbrs = outneighbors(g, 1)
-        @test nbrs isa AdjView{Int}
-        @test collect(nbrs) == [2]
-    end
-
-    @testset "rem_edge! on NTuple: 1→0 out-edges" begin
-        g = OrderedDiGraph{Int}(2)
-        add_edge!(g, 1, 2)
-        rem_edge!(g, 1, 2)
-        nbrs = outneighbors(g, 1)
-        @test nbrs isa AdjView{Int}
-        @test length(nbrs) == 0
-    end
-
     @testset "AdjView supports in-operator" begin
         g = OrderedDiGraph{Int}(3)
         add_edge!(g, 1, 3); add_edge!(g, 1, 2)
@@ -318,32 +287,6 @@ end
         @test Set(nbrs) == Set([2, 3, 4])
     end
 
-    @testset "no regression back to NTuple after rem_edge! on Set" begin
-        g = OrderedDiGraph{Int}(4)
-        add_edge!(g, 2, 1); add_edge!(g, 3, 1); add_edge!(g, 4, 1)
-        rem_edge!(g, 4, 1)
-        @test g.badjlist[1] isa Set{Int}         # still Set after removal
-        @test Set(inneighbors(g, 1)) == Set([2, 3])
-    end
-
-    @testset "rem_edge! on NTuple: 2→1 in-edges" begin
-        g = OrderedDiGraph{Int}(3)
-        add_edge!(g, 2, 1); add_edge!(g, 3, 1)
-        rem_edge!(g, 3, 1)
-        @test g.badjlist[1] isa NTuple{2, Int}
-        nbrs = inneighbors(g, 1)
-        @test length(nbrs) == 1
-        @test 2 in nbrs
-    end
-
-    @testset "rem_edge! on NTuple: 1→0 in-edges" begin
-        g = OrderedDiGraph{Int}(2)
-        add_edge!(g, 2, 1)
-        rem_edge!(g, 2, 1)
-        @test g.badjlist[1] isa NTuple{2, Int}
-        @test length(inneighbors(g, 1)) == 0
-    end
-
     @testset "AdjView supports in-operator (in-neighbors)" begin
         g = OrderedDiGraph{Int}(3)
         add_edge!(g, 2, 1); add_edge!(g, 3, 1)
@@ -387,13 +330,13 @@ end
 # ── add_edge! ──────────────────────────────────────────────────────────────────
 
 @testset "add_edge!" begin
-    @testset "returns true on success, false otherwise" begin
+    @testset "returns true on success, false for out-of-range vertices" begin
         g = OrderedDiGraph{Int}(3)
         @test add_edge!(g, 1, 2)           == true
-        @test add_edge!(g, 1, 2)           == false  # duplicate
+        @test add_edge!(g, 1, 2)           == true   # multi-edge allowed
         @test add_edge!(g, 0, 1)           == false  # src out of range
         @test add_edge!(g, 1, 4)           == false  # dst out of range
-        @test ne(g) == 1
+        @test ne(g) == 2
     end
 
     @testset "via Edge object" begin
@@ -416,8 +359,9 @@ end
         @test has_edge(g, 1, 1)
         @test 1 in outneighbors(g, 1)
         @test 1 in inneighbors(g, 1)
-        # Duplicate self-loop blocked
-        @test !add_edge!(g, 1, 1)
+        # Duplicate self-loop is a multi-edge, also allowed
+        @test add_edge!(g, 1, 1)
+        @test ne(g) == 2
     end
 
     @testset "adjacency state after insertion" begin
@@ -431,37 +375,68 @@ end
     end
 end
 
-# ── rem_edge! ──────────────────────────────────────────────────────────────────
+# ── multi-edges ────────────────────────────────────────────────────────────────
 
-@testset "rem_edge!" begin
-    @testset "returns true on success, false otherwise" begin
-        g = make_graph(3, 1=>2, 1=>3)
-        @test rem_edge!(g, 1, 2)          == true
-        @test rem_edge!(g, 1, 2)          == false  # already gone
-        @test rem_edge!(g, 2, 1)          == false  # was never there
-        @test rem_edge!(g, 0, 1)          == false  # out of range
-        @test rem_edge!(g, 1, 5)          == false  # out of range
-        @test ne(g) == 1
+@testset "multi-edges" begin
+    @testset "same src→dst edge can be added multiple times" begin
+        g = OrderedDiGraph{Int}(3)
+        @test add_edge!(g, 1, 2) == true
+        @test add_edge!(g, 1, 2) == true   # second edge allowed
+        @test ne(g) == 2
+        @test collect(outneighbors(g, 1)) == [2, 2]
+        # badjlist records src only once
+        @test length(inneighbors(g, 2)) == 1
+        @test 1 in inneighbors(g, 2)
     end
 
-    @testset "forward and backward adjacency both updated" begin
-        g = make_graph(3, 1=>2, 1=>3, 2=>3)
-        rem_edge!(g, 1, 3)
-        @test collect(outneighbors(g, 1)) == [2]
-        @test !(1 in inneighbors(g, 3))
+    @testset "has_edge returns true with multi-edges" begin
+        g = make_graph(2, 1=>2)
+        add_edge!(g, 1, 2)
+        @test has_edge(g, 1, 2)
         @test ne(g) == 2
     end
 
-    @testset "via Edge object" begin
-        g = make_graph(2, 1=>2)
-        @test rem_edge!(g, Graphs.Edge(1, 2))
-        @test !has_edge(g, 1, 2)
+    @testset "rem_outedges! correctly handles NTuple-backed multi-edge" begin
+        g = OrderedDiGraph{Int}(3)
+        add_edge!(g, 1, 2); add_edge!(g, 1, 2)
+        @test g.fadjlist[1] isa NTuple{2, Int}
+        rem_outedges!(g, 1)
+        @test ne(g) == 0
+        @test isempty(outneighbors(g, 1))
+        @test !(1 in inneighbors(g, 2))
     end
 
-    @testset "via AbstractEdge" begin
-        g = make_graph(3, 1=>3)
-        @test rem_edge!(g, Graphs.Edge{Int32}(1, 3))
-        @test !has_edge(g, 1, 3)
+    @testset "rem_outedges! correctly handles Vector-backed multi-edge" begin
+        g = OrderedDiGraph{Int}(3)
+        add_edge!(g, 1, 2); add_edge!(g, 1, 2); add_edge!(g, 1, 3)
+        @test g.fadjlist[1] isa Vector{Int}
+        rem_outedges!(g, 1)
+        @test ne(g) == 0
+        @test isempty(outneighbors(g, 1))
+        @test !(1 in inneighbors(g, 2))
+        @test !(1 in inneighbors(g, 3))
+    end
+
+    @testset "multi-edge self-loop" begin
+        g = OrderedDiGraph{Int}(2)
+        @test add_edge!(g, 1, 1) == true
+        @test add_edge!(g, 1, 1) == true
+        @test ne(g) == 2
+        @test collect(outneighbors(g, 1)) == [1, 1]
+        @test length(inneighbors(g, 1)) == 1
+    end
+
+    @testset "three or more identical edges" begin
+        g = OrderedDiGraph{Int}(2)
+        for _ in 1:4
+            add_edge!(g, 1, 2)
+        end
+        @test ne(g) == 4
+        @test collect(outneighbors(g, 1)) == [2, 2, 2, 2]
+        @test length(inneighbors(g, 2)) == 1
+        rem_outedges!(g, 1)
+        @test ne(g) == 0
+        @test !(1 in inneighbors(g, 2))
     end
 end
 
@@ -620,8 +595,10 @@ end
 
     @testset "badjlist independence" begin
         h = copy(g)
-        rem_edge!(h, 1, 2)
-        @test has_edge(g, 1, 2)
+        add_edge!(h, 3, 1)
+        @test !has_edge(g, 3, 1)
+        @test 3 in inneighbors(h, 1)
+        @test !(3 in inneighbors(g, 1))
     end
 
     @testset "inequality on different structure" begin
@@ -716,12 +693,6 @@ end
         check_consistent(g)
     end
 
-    @testset "after rem_edge!" begin
-        g = make_graph(4, 1=>2, 1=>3, 2=>3, 3=>4)
-        rem_edge!(g, 1, 3)
-        check_consistent(g)
-    end
-
 end
 
 # ── Type stability (@inferred) ─────────────────────────────────────────────────
@@ -796,7 +767,6 @@ end
     add_edge!(gm, 1, 2)
     @test @inferred(add_vertex!(gm))        === true
     @test @inferred(add_edge!(gm, 2, 3))    === true
-    @test @inferred(rem_edge!(gm, 2, 3))    === true
     @test @inferred(rem_outedges!(gm, 1))   === true
 
     # ── copy / zero / == ──────────────────────────────────────────────────────

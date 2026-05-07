@@ -451,3 +451,11 @@ end
         )
     end
 end
+
+@testset "`create_array` with `ReshapedArray`" begin
+    v = rand(5)
+    r = reshape(view(v, 1:4), 2, 2)
+    @test r isa Base.ReshapedArray
+    a = Code.create_array(typeof(r), nothing, Val(2), Val((2, 2)), r...)
+    @test a isa Matrix{Float64}
+end

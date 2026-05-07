@@ -1725,3 +1725,11 @@ end
 function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T, R}
     SymbolicRound{T, typeof(mode)}(mode)(ex)
 end
+
+function promote_symtype(::Type{T}, R::TypeT) where {T <: Returns}
+    return FnType{Tuple, R, Nothing}
+end
+
+function promote_shape(::Type{T}, @nospecialize(sh::ShapeT)) where {T <: Returns}
+    return sh
+end

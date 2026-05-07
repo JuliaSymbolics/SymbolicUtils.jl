@@ -267,6 +267,16 @@ function codegen_allocator_call!(
     ) where {T}
     allocator isa ExistingBufferAllocator && return allocator.name
     allocator_sym::Symbol = if allocator isa BasicSymbolic{T}
+        # If the allocator is a `Returns(buf)` expression, don't bother calling it. Just generate
+        # `buf` and use it.
+        @match allocator begin
+            BSImpl.Term(; f) && if f === Returns || f isa DataType && f <: Returns end => begin
+                allocator_idx = populate_ir!(cs.ir, allocator)
+                buffer_sym = cs(cs.ir[Graphs.outneighbors(cs.ir.dependency_graph, allocator_idx)[1]])
+                return codegen!(cs, expr_idx, buffer_sym)
+            end
+            _ => nothing
+        end
         cs(allocator)
     else
         declare!(cs, get_misc_identifier(cs), allocator)
@@ -490,6 +500,16 @@ function __is_fill_zero(ex::BasicSymbolic{T}) where {T}
     end
 end
 
+function __allocator_is_returns_expr(::Type{T}, @nospecialize(ex)) where {T}
+    if ex isa BasicSymbolic{T}
+        @match ex begin
+            BSImpl.Term(; f) => return f === Returns || f isa DataType && f <: Returns
+            _ => return false
+        end
+    end
+    return false
+end
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     len = length(expr)::Int
@@ -516,7 +536,8 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         return declare!(cs, get_misc_identifier(cs), result)
     end
     
-    if _allocator !== zeros && isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
+    if _allocator !== zeros && !__allocator_is_returns_expr(T, _allocator) &&
+            isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
         output_buffer = codegen_allocator_call!(
             cs, _allocator, expr, expr_idx;
             allocator_call_expr = __allocator_call_and_fill_expr

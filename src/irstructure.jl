@@ -182,6 +182,19 @@ end
 Number of nodes in `ir`.
 """
 Base.length(ir::IRStructure) = length(ir.symbols)
+
+function Base.copy(ir::IRStructure{T}) where {T}
+    return IRStructure{T}(
+        copy(ir.dependency_graph),
+        copy(ir.symbols),
+        copy(ir.definition),
+        Dict(k => copy(v) for (k, v) in ir.weak_definitions),
+        copy(ir.cached_mask),
+        copy(ir.cached_idxs),
+        Ref{Bool}(ir.is_canonical[]),
+    )
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -402,7 +415,18 @@ end
 Return a new [`SymbolicUtils.IRStructure`](@ref) containing only the expressions in `exprs`
 along with their dependencies.
 """
-function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) where {T}
+function subset_ir(ir::IRStructure{T}, expr) where {T}
+    exprs = Set{BasicSymbolic{T}}()
+    buffer = IRStructureSearchBuffer(ir, exprs)
+    # `Returns(true)` gets all top-level expressions
+    search_variables!(buffer, expr; is_atomic = Returns(true))
+    return subset_ir(ir, exprs)
+end
+
+function subset_ir(
+        ir::IRStructure{T},
+        exprs::Union{AbstractArray{BasicSymbolic{T}}, AbstractSet{BasicSymbolic{T}}}
+    ) where {T}
     new_ir = IRStructure{T}()
     reachables = get_cached_mask!(ir, length(ir))
     expr_reach = get_cached_idxs!(ir)

@@ -1273,6 +1273,10 @@ end
     create_array(P, S, nd, d, elems...)
 end
 
+@inline function create_array(::Type{A}, S, ::Val{ND}, ::Val{D}, elems...) where {E, N, I, A <: Base.ReshapedArray{E, N, I}, ND, D}
+    create_array(I, S, Val(ND), Val(D), elems...)
+end
+
 ## SArray
 @inline function create_array(::Type{<:SArray}, ::Nothing, nd::Val, ::Val{dims}, elems...) where dims
     SArray{Tuple{dims...}}(elems)

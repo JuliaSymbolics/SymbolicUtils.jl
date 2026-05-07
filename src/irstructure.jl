@@ -415,7 +415,18 @@ end
 Return a new [`SymbolicUtils.IRStructure`](@ref) containing only the expressions in `exprs`
 along with their dependencies.
 """
-function subset_ir(ir::IRStructure{T}, exprs::AbstractVector{BasicSymbolic{T}}) where {T}
+function subset_ir(ir::IRStructure{T}, expr) where {T}
+    exprs = Set{BasicSymbolic{T}}()
+    buffer = IRStructureSearchBuffer(ir, exprs)
+    # `Returns(true)` gets all top-level expressions
+    search_variables!(buffer, expr; is_atomic = Returns(true))
+    return subset_ir(ir, exprs)
+end
+
+function subset_ir(
+        ir::IRStructure{T},
+        exprs::Union{AbstractArray{BasicSymbolic{T}}, AbstractSet{BasicSymbolic{T}}}
+    ) where {T}
     new_ir = IRStructure{T}()
     reachables = get_cached_mask!(ir, length(ir))
     expr_reach = get_cached_idxs!(ir)

@@ -182,6 +182,19 @@ end
 Number of nodes in `ir`.
 """
 Base.length(ir::IRStructure) = length(ir.symbols)
+
+function Base.copy(ir::IRStructure{T}) where {T}
+    return IRStructure{T}(
+        copy(ir.dependency_graph),
+        copy(ir.symbols),
+        copy(ir.definition),
+        Dict(k => copy(v) for (k, v) in ir.weak_definitions),
+        copy(ir.cached_mask),
+        copy(ir.cached_idxs),
+        Ref{Bool}(ir.is_canonical[]),
+    )
+end
+
 """
     $TYPEDSIGNATURES
 

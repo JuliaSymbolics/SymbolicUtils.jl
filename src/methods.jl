@@ -635,7 +635,8 @@ end
 # An ifelse node
 function Base.ifelse(_if::BasicSymbolic{T}, _then, _else) where {T}
     type = promote_symtype(ifelse, symtype(_if), symtype(_then), symtype(_else))
-    Term{T}(ifelse, ArgsT{T}((_if, _then, _else)); type)
+    sh = promote_shape(ifelse, shape(_if), shape(_then), shape(_else))
+    Term{T}(ifelse, ArgsT{T}((_if, _then, _else)); type, shape = sh)
 end
 function promote_symtype(::typeof(ifelse), C::TypeT, T::TypeT, S::TypeT)
     C === Bool || throw(ArgumentError("Condition of `ifelse` must be a `Bool`"))

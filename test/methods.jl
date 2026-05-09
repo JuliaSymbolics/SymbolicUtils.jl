@@ -468,3 +468,9 @@ end
     @test promote_shape(Returns{Int}, Unknown(1)) == Unknown(1)
     @test promote_shape(Returns{Int}, Unknown(-1)) == Unknown(-1)
 end
+
+@testset "`ifelse` with array cases" begin
+    @syms cond::Bool x[1:3] y[1:3] z[1:4]
+    @test_throws ErrorException ifelse(cond, x, z)
+    @test SymbolicUtils.shape(ifelse(cond, x, y)) == [1:3]
+end

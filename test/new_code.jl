@@ -1047,3 +1047,142 @@ end
     end
 end
 
+@testset "batched_setindex!" begin
+    # NTuple of values, NTuple of CartesianIndex (1D)
+    buf = zeros(Int, 5)
+    Code.batched_setindex!(buf, (10, 20, 30), (CartesianIndex(1), CartesianIndex(3), CartesianIndex(5)))
+    @test buf == [10, 0, 20, 0, 30]
+
+    # NTuple of values, NTuple of CartesianIndex (2D)
+    buf2d = zeros(Int, 3, 3)
+    Code.batched_setindex!(buf2d, (7, 8), (CartesianIndex(1, 2), CartesianIndex(3, 2)))
+    @test buf2d[1, 2] == 7
+    @test buf2d[3, 2] == 8
+    @test count(!iszero, buf2d) == 2
+
+    # Broadcast single value, array of CartesianIndex (1D)
+    buf = zeros(Int, 5)
+    Code.batched_setindex!(buf, 42, [CartesianIndex(1), CartesianIndex(3), CartesianIndex(5)])
+    @test buf == [42, 0, 42, 0, 42]
+
+    # Broadcast single value, array of CartesianIndex (2D)
+    buf2d = zeros(Int, 3, 3)
+    Code.batched_setindex!(buf2d, -1, [CartesianIndex(1, 1), CartesianIndex(2, 2), CartesianIndex(3, 3)])
+    @test buf2d == [-1 0 0; 0 -1 0; 0 0 -1]
+
+    # Empty index array is a no-op
+    buf = zeros(Int, 3)
+    Code.batched_setindex!(buf, 99, CartesianIndex{1}[])
+    @test buf == [0, 0, 0]
+end
+
+@testset "ArrayMaker batched scalar-write codegen" begin
+    @syms a::Real b::Real
+
+    # 20-element array: exercises the batched_setindex! codegen path.
+    # FILL_ARR_LIMIT == 16, so arrays of size > 16 use batched_setindex! for scalar writes.
+    # Entries 1–3 are 1 (→ idxs_buffer broadcast path for value 1).
+    # Entries 4–5 are -1 (→ idxs_buffer broadcast path for value -1).
+    # Entries 6–20 are symbolic (→ NTuple batching, split across multiple calls because
+    # BATCHED_SETINDEX_BATCH_SIZE == 8).
+    w = @makearray w[1:20] begin
+        w[1:1]   => [1]
+        w[2:2]   => [1]
+        w[3:3]   => [1]
+        w[4:4]   => [-1]
+        w[5:5]   => [-1]
+        w[6:6]   => [a]
+        w[7:7]   => [b]
+        w[8:8]   => [a + b]
+        w[9:9]   => [2a]
+        w[10:10] => [2b]
+        w[11:11] => [a - b]
+        w[12:12] => [3a]
+        w[13:13] => [a^2]
+        w[14:14] => [b^2]
+        w[15:15] => [a + 1]
+        w[16:16] => [b + 1]
+        w[17:17] => [a * b]
+        w[18:18] => [a - 1]
+        w[19:19] => [b - 1]
+        w[20:20] => Const{SymReal}([a + b + 1])
+    end
+    av = 3.0
+    bv = 2.0
+    result = eval(quote
+        let a = $av, b = $bv
+            $(Code.fast_toexpr(w, Dict{Any,Any}()))
+        end
+    end)
+    expected = [1.0, 1.0, 1.0, -1.0, -1.0, av, bv, av+bv, 2av, 2bv, av-bv, 3av, av^2, bv^2, av+1, bv+1, av*bv, av-1, bv-1, av+bv+1]
+    @test result ≈ expected
+
+    @testset "later scalar writes overwrite earlier ones" begin
+        # Scalar writes to the same index are stored in a Dict; later entries win.
+        w2 = @makearray w2[1:20] begin
+            w2[1:1]  => [a]
+            w2[2:2]  => [1]
+            w2[3:3]  => [1]
+            w2[4:4]  => [1]
+            w2[5:5]  => [1]
+            w2[6:6]  => [1]
+            w2[7:7]  => [1]
+            w2[8:8]  => [1]
+            w2[9:9]  => [1]
+            w2[10:10] => [1]
+            w2[11:11] => [1]
+            w2[12:12] => [1]
+            w2[13:13] => [1]
+            w2[14:14] => [1]
+            w2[15:15] => [1]
+            w2[16:16] => [1]
+            w2[17:17] => [1]
+            w2[18:18] => [1]
+            w2[19:19] => [1]
+            w2[20:20] => [1]
+            w2[1:1]  => Const{SymReal}([b])
+        end
+        result2 = eval(quote
+            let a = $av, b = $bv
+                $(Code.fast_toexpr(w2, Dict{Any,Any}()))
+            end
+        end)
+        @test result2[1] ≈ bv
+        @test all(result2[2:end] .≈ 1.0)
+    end
+
+    @testset "scalar writes flushed before block write" begin
+        @syms xv[1:3]::Real
+        # Scalar writes at indices 1–17 followed by a block write at 18–20.
+        # The block write must trigger flushing of all preceding scalar writes.
+        w3 = @makearray w3[1:20] begin
+            w3[1:1]   => [1]
+            w3[2:2]   => [1]
+            w3[3:3]   => [1]
+            w3[4:4]   => [1]
+            w3[5:5]   => [1]
+            w3[6:6]   => [1]
+            w3[7:7]   => [1]
+            w3[8:8]   => [1]
+            w3[9:9]   => [1]
+            w3[10:10] => [1]
+            w3[11:11] => [1]
+            w3[12:12] => [1]
+            w3[13:13] => [1]
+            w3[14:14] => [1]
+            w3[15:15] => [1]
+            w3[16:16] => [1]
+            w3[17:17] => [1]
+            w3[18:20] => xv
+        end
+        xdata = [10.0, 20.0, 30.0]
+        result3 = eval(quote
+            let xv = $xdata
+                $(Code.fast_toexpr(w3, Dict{Any,Any}()))
+            end
+        end)
+        @test all(result3[1:17] .≈ 1.0)
+        @test result3[18:20] ≈ xdata
+    end
+end
+

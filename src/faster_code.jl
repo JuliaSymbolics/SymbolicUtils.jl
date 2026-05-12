@@ -510,17 +510,34 @@ function __allocator_is_returns_expr(::Type{T}, @nospecialize(ex)) where {T}
     return false
 end
 
+function batched_setindex!(buffer::AbstractArray{T, D}, values::NTuple{N, T}, idxs::NTuple{N, CartesianIndex{D}}) where {T, D, N}
+    @inbounds for i in 1:N
+        buffer[idxs[i]] = values[i]
+    end
+end
+function batched_setindex!(buffer::AbstractArray{T, D}, value::T, idxs::AbstractArray{CartesianIndex{D}}) where {T, D}
+    @inbounds for idx in idxs
+        buffer[idx] = value
+    end
+end
+
+BATCHED_SETINDEX_BATCH_SIZE::Int = 64
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     len = length(expr)::Int
 
+    # We can only rely on the graph during codegen, so this is a roundabout way of obtaining
+    # the `regions` and `values` fields of the `ArrayMaker`.
     expr_nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
     regions = unwrap_const(cs.ir[expr_nbors[1]])::SymbolicUtils.RegionsT
     values_expr_idx = expr_nbors[2]
     values_args = Graphs.outneighbors(cs.ir.dependency_graph, values_expr_idx)
-    values_exprs_idxs = Iterators.drop(values_args, 1)
+    # Indices of the expressions in `values`.
+    values_exprs_idxs = collect(Iterators.drop(values_args, 1))
     sh = shape(expr)
 
+    # The array is small enough, so scalarize it and use `fill_arr!`.
     if len <= FILL_ARR_LIMIT
         expr = SymbolicUtils.get_canonical_expr(cs.ir, expr_idx)
         output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
@@ -547,67 +564,137 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
         ndrop = 0
     end
-    
-    @union_split_smallvec regions begin
-        for (region, val_idx) in Iterators.drop(zip(regions, values_exprs_idxs), ndrop)
-            val = cs.ir[val_idx]
-            # We are writing to a single element
-            if all(isone ∘ length, region)
-                lhs = Expr(:ref, output_buffer)
-                @union_split_smallvec region for ax in region
-                    push!(lhs.args, first(ax))
-                end
-                # The most common case here is that `val` is an `array_literal` with one element.
-                # Instead of fetching the canonical expr for it, special case this to work on the
-                # graph.
-                rhs = @match val begin
-                    BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
-                        first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
-                        cs(cs.ir[first_val_idx])
-                    end
-                    _ => begin
-                        # Unfortunately, scalarizing `val` requires getting the canonical expr.
-                        val = cs(SymbolicUtils.get_canonical_expr(cs.ir, val_idx))
-                        cs(val[SymbolicUtils.stable_eachindex(val)[1]])
-                    end
-                end
-                declare!(cs, lhs, rhs)
-                continue
-            end
 
-            # Materialize the view into the output buffer that we will write to.
-            view_expr = Expr(:call, view, output_buffer)
-            @union_split_smallvec region append!(view_expr.args, region)
-            vw = declare!(cs, get_misc_identifier(cs), view_expr)
-            @match val begin
-                # Replace the allocator. We want it to write directly to the output
-                # No point constructing a new expression, just do what `with_allocator`
-                # would do in `codegen_ir!`.
-                BSImpl.Term(; f) && if f === with_allocator end => begin
-                    old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
-                    val_nbors = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)
-                    cs(cs.ir[val_nbors[2]])
-                    reset_allocator!(cs, old_allocator)
-                end
-                # Any other operation that supports `with_allocator` should be generated to
-                # write to the buffer directly.
-                _ && if supports_with_allocator(val) end => begin
-                    old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
-                    cs(val)
-                    reset_allocator!(cs, old_allocator)
-                end
-                # Constant arrays can special-case
-                BSImpl.Const(; val) => write_constant_array!(cs, vw, val)
-                # We don't have a fallback, so materialize the array corresponding to `val`
-                # and `copyto!` it into the output buffer.
-                _ => begin
-                    temp_array = cs(val)
-                    declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, temp_array))
-                end
+    # Indices and values of regions that write to a scalar
+    scalar_idxs = Dict{ShapeVecT, Any}()
+    D = length(sh)::Int
+    # Utility buffers
+    one_regions = ShapeVecT[]
+    negone_regions = ShapeVecT[]
+    other_regions = ShapeVecT[]
+    other_values = Any[]
+
+    eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
+    one_expr = Expr(:call, one, eltype_expr)
+    negone_expr = Expr(:call, :(-), one_expr)
+
+    function materialize_scalar_writes()
+        empty!(one_regions)
+        empty!(negone_regions)
+        empty!(other_regions)
+        empty!(other_values)
+        # Batch all writes of +-1 together
+        for region in keys(scalar_idxs)
+            _val = scalar_idxs[region]
+            if _val === 1
+                push!(one_regions, region)
+            elseif _val === -1
+                push!(negone_regions, region)
+            else
+                push!(other_regions, region)
+                push!(other_values, _val)
             end
+        end
+        if !isempty(one_regions)
+            idxs_buffer = Vector{CartesianIndex{D}}(map(CartesianIndex{D} ∘ Tuple ∘ Base.Fix1(map, first), one_regions))
+            # Directly interpolating an array into an expression avoids the allocation.
+            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, one_expr, idxs_buffer))
+        end
+        if !isempty(negone_regions)
+            idxs_buffer = Vector{CartesianIndex{D}}(map(CartesianIndex{D} ∘ Tuple ∘ Base.Fix1(map, first), negone_regions))
+            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, negone_expr, idxs_buffer))
+        end
+        # Use `Iterators.partition` to avoid creating overly large tuples
+        for (regs, vals) in zip(
+                Iterators.partition(other_regions, BATCHED_SETINDEX_BATCH_SIZE),
+                Iterators.partition(other_values, BATCHED_SETINDEX_BATCH_SIZE)
+            )
+            vals_expr = Expr(:tuple)
+            for val in vals
+                push!(vals_expr.args, Expr(:call, eltype_expr, val))
+            end
+            idxs_expr = Expr(:tuple)
+            for reg in regs
+                push!(idxs_expr.args, CartesianIndex{D}(Tuple(map(first, reg))))
+            end
+            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, vals_expr, idxs_expr))
         end
     end
 
+    for cur_region in Iterators.drop(eachindex(regions), ndrop)
+        region = regions[cur_region]
+        val_idx = values_exprs_idxs[cur_region]
+        val = cs.ir[val_idx]
+        # We are writing to a single element
+        if all(isone ∘ length, region)
+            # The goal is to batch scalar writes, so we defer them. Storing them in a
+            # `Dict` allows later writes to overwrite earlier ones without additional
+            # codegen.
+            @match val begin
+                BSImpl.Const(; val = _val) => begin
+                    _inner = first(_val)
+                    if _isone(_inner)
+                        scalar_idxs[region] = 1
+                    elseif _isone(-_inner)
+                        scalar_idxs[region] = -1
+                    else
+                        scalar_idxs[region] = _inner
+                    end
+                end
+                BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
+                    first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
+                    scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                end
+                _ => begin
+                    # Unfortunately, scalarizing `val` requires getting the canonical expr.
+                    val = cs(SymbolicUtils.get_canonical_expr(cs.ir, val_idx))
+                    scalar_idxs[region] = cs(val[SymbolicUtils.stable_eachindex(val)[1]])
+                end
+            end
+            continue
+        end
+
+        # We are writing to a block. First, materialize all scalar writes that happened until now.
+        # This is operating on the assumption that non-scalar writes conflict with all scalar writes.
+        # If this case is hit frequently, it might be useful to check for actual conflicts.
+        if !isempty(scalar_idxs)
+            materialize_scalar_writes()
+        end
+        empty!(scalar_idxs)
+        # Materialize the view into the output buffer that we will write to.
+        view_expr = Expr(:call, view, output_buffer)
+        @union_split_smallvec region append!(view_expr.args, region)
+        vw = declare!(cs, get_misc_identifier(cs), view_expr)
+        @match val begin
+            # Replace the allocator. We want it to write directly to the output
+            # No point constructing a new expression, just do what `with_allocator`
+            # would do in `codegen_ir!`.
+            BSImpl.Term(; f) && if f === with_allocator end => begin
+                old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
+                val_nbors = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)
+                cs(cs.ir[val_nbors[2]])
+                reset_allocator!(cs, old_allocator)
+            end
+            # Any other operation that supports `with_allocator` should be generated to
+            # write to the buffer directly.
+            _ && if supports_with_allocator(val) end => begin
+                old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
+                cs(val)
+                reset_allocator!(cs, old_allocator)
+            end
+            # Constant arrays can special-case
+            BSImpl.Const(; val) => write_constant_array!(cs, vw, val)
+            # We don't have a fallback, so materialize the array corresponding to `val`
+            # and `copyto!` it into the output buffer.
+            _ => begin
+                temp_array = cs(val)
+                declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, temp_array))
+            end
+        end
+    end
+    if !isempty(scalar_idxs)
+        materialize_scalar_writes()
+    end
     return declare!(cs, get_misc_identifier(cs), output_buffer)
 end
 

@@ -510,18 +510,18 @@ function __allocator_is_returns_expr(::Type{T}, @nospecialize(ex)) where {T}
     return false
 end
 
-function batched_setindex!(buffer::AbstractArray{T, D}, values::Tuple{Vararg{Any, N}}, idxs::NTuple{N, CartesianIndex{D}}) where {T, D, N}
+function batched_setindex!(buffer::AbstractArray{T, D}, values::NTuple{N, T}, idxs::NTuple{N, CartesianIndex{D}}) where {T, D, N}
     @inbounds for i in 1:N
         buffer[idxs[i]] = values[i]
     end
 end
-function batched_setindex!(buffer::AbstractArray{T, D}, value, idxs::AbstractArray{CartesianIndex{D}}) where {T, D}
+function batched_setindex!(buffer::AbstractArray{T, D}, value::T, idxs::AbstractArray{CartesianIndex{D}}) where {T, D}
     @inbounds for idx in idxs
         buffer[idx] = value
     end
 end
 
-BATCHED_SETINDEX_BATCH_SIZE::Int = 32
+BATCHED_SETINDEX_BATCH_SIZE::Int = 64
 
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
@@ -574,6 +574,10 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     other_regions = ShapeVecT[]
     other_values = Any[]
 
+    eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
+    one_expr = Expr(:call, one, eltype_expr)
+    negone_expr = Expr(:call, :(-), one_expr)
+
     function materialize_scalar_writes()
         empty!(one_regions)
         empty!(negone_regions)
@@ -594,11 +598,11 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         if !isempty(one_regions)
             idxs_buffer = Vector{CartesianIndex{D}}(map(CartesianIndex{D} ∘ Tuple ∘ Base.Fix1(map, first), one_regions))
             # Directly interpolating an array into an expression avoids the allocation.
-            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, 1, idxs_buffer))
+            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, one_expr, idxs_buffer))
         end
         if !isempty(negone_regions)
             idxs_buffer = Vector{CartesianIndex{D}}(map(CartesianIndex{D} ∘ Tuple ∘ Base.Fix1(map, first), negone_regions))
-            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, -1, idxs_buffer))
+            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, negone_expr, idxs_buffer))
         end
         # Use `Iterators.partition` to avoid creating overly large tuples
         for (regs, vals) in zip(
@@ -606,7 +610,9 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 Iterators.partition(other_values, BATCHED_SETINDEX_BATCH_SIZE)
             )
             vals_expr = Expr(:tuple)
-            append!(vals_expr.args, vals)
+            for val in vals
+                push!(vals_expr.args, Expr(:call, eltype_expr, val))
+            end
             idxs_expr = Expr(:tuple)
             for reg in regs
                 push!(idxs_expr.args, CartesianIndex{D}(Tuple(map(first, reg))))

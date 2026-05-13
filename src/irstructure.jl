@@ -850,7 +850,8 @@ the canonical form of `ir`.
 """
 function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
     idx = ir[old]
-    push!(ir.non_canonical_idxs, idx)
+    # Any nodes that currently depend on `old` are non-canonical
+    union!(ir.non_canonical_idxs, Graphs.inneighbors(ir.dependency_graph, idx))
     ir.symbols[idx] = new
     delete!(ir.definition, old)
     weakdefs = ir.weak_definitions[old]

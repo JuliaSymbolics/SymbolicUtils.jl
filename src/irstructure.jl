@@ -56,14 +56,14 @@ struct IRStructure{T}
     """
     cached_idxs::Vector{Int32}
     """
-    Flag indicating whether the struct is in canonical form. Canonical form implies that
+    Set of indices whose expressions have been replaced via [`SymbolicUtils.replace_node!`](@ref).
+    The `IRStructure` is in canonical form when this set is empty. Canonical form implies that
     for an expression `ex` at index `idx` in `ir::IRStructure`, there exists an edge
     from `idx` to `ir[arguments(ex)[j]]` for all valid `j` and that
-    `arguments(ex)[j] === ir[ir[arguments(ex)[j]]]`. This is typically broken by
-    [`SymbolicUtils.replace_node!`](@ref). The graph invariants are still maintained
+    `arguments(ex)[j] === ir[ir[arguments(ex)[j]]]`. The graph invariants are still maintained
     after the canonical form is broken.
     """
-    is_canonical::Base.RefValue{Bool}
+    non_canonical_idxs::BitSet
 end
 
 """
@@ -75,7 +75,7 @@ function IRStructure{T}() where {T}
     ir = IRStructure{T}(
         OrderedDiGraph{Int32}(), BasicSymbolic{T}[],
         IdDict{BasicSymbolic{T}, Int32}(), Dict{BasicSymbolic{T}, Vector{Int32}}(),
-        BitVector(), Int32[], Ref{Bool}(true)
+        BitVector(), Int32[], BitSet()
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)
@@ -127,7 +127,7 @@ function Base.showerror(io::IO, err::IRStructureNotCanonicalError)
 end
 
 @noinline function require_canonical(ir::IRStructure)
-    ir.is_canonical[] && return
+    isempty(ir.non_canonical_idxs) && return
     throw(IRStructureNotCanonicalError())
 end
 
@@ -191,7 +191,7 @@ function Base.copy(ir::IRStructure{T}) where {T}
         Dict(k => copy(v) for (k, v) in ir.weak_definitions),
         copy(ir.cached_mask),
         copy(ir.cached_idxs),
-        Ref{Bool}(ir.is_canonical[]),
+        copy(ir.non_canonical_idxs),
     )
 end
 
@@ -849,8 +849,8 @@ at `old` is now `new`, and the arguments of `new` form the out-neighbors of the 
 the canonical form of `ir`.
 """
 function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
-    ir.is_canonical[] = false
     idx = ir[old]
+    push!(ir.non_canonical_idxs, idx)
     ir.symbols[idx] = new
     delete!(ir.definition, old)
     weakdefs = ir.weak_definitions[old]
@@ -877,11 +877,11 @@ end
 """
     $TYPEDSIGNATURES
 
-If `ir.is_canonical[]`, return `ir[idx]`. Otherwise, find the canonical expression that `ir[idx]`
-should be, were `IRSubstituter` used instead of `replace_node!`.
+If `ir.non_canonical_idxs` is empty, return `ir[idx]`. Otherwise, find the canonical expression
+that `ir[idx]` should be, were `IRSubstituter` used instead of `replace_node!`.
 """
 function get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
-    ir.is_canonical[] && return ir[idx]
+    isempty(ir.non_canonical_idxs) && return ir[idx]
 
     return __get_canonical_expr(ir, idx)
 end

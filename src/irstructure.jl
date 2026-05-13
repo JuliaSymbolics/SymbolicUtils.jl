@@ -895,43 +895,51 @@ by recursively descending through the DAG.
 """
 function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
     i_sym = ir[idx]
-    nbors = Graphs.outneighbors(ir.dependency_graph, idx)
-    # If this is a leaf, there's nothing to do
-    isempty(nbors) && return i_sym
 
-    # Track whether the expression actually needs to change
-    dirty = false
-    n_drop = 0
-    op = operation(i_sym)
-    # If the operation is symbolic, it is the first entry in `nbors`.
-    if op isa BasicSymbolic{T}
-        n_drop = 1
-        new_op = __get_canonical_expr(ir, first(nbors))
-        # If the operation is different, the tree is dirty
-        if new_op !== op
-            op = new_op
-            dirty = true
-        end
-    end
-    new_args = parent(arguments(i_sym))
-    # Avoid copying and allocating a new buffer if possible
-    args_dirty = false
-    for (i, arg_idx) in enumerate(Iterators.drop(nbors, n_drop))
-        new_expr = __get_canonical_expr(ir, arg_idx)
-        # If the argument changed, then it is dirty
-        if new_expr !== new_args[i]
-            # Allocate a new buffer if we haven't already
-            if !args_dirty
-                new_args = copy(new_args)
+    reachability = get_cached_idxs!(ir)
+    empty!(reachability)
+    get_reachability!(reachability, ir, idx)
+    push!(reachability, idx)
+    # `reachability` is in topological order. We can iterate over it, and update
+    # any non-canonical nodes as we encounter them. Once we update a node, we mark
+    # all its `inneighbors` as non-canonical.
+    for node in reachability
+        node in ir.non_canonical_idxs || continue
+        i_sym = ir[node]
+        nbors = Graphs.outneighbors(ir.dependency_graph, node)
+        n_drop = 0
+        op = operation(i_sym)
+        # If the operation is symbolic, it is the first entry in `nbors`.
+        if op isa BasicSymbolic{T}
+            n_drop = 1
+            new_op = ir[first(nbors)]
+            # If the operation is different, the tree is dirty
+            if new_op !== op
+                op = new_op
             end
-            dirty = true
-            args_dirty = true
-            new_args[i] = new_expr
         end
+        new_args = parent(arguments(i_sym))
+        # Avoid copying and allocating a new buffer if possible
+        args_dirty = false
+        for (i, arg_idx) in enumerate(Iterators.drop(nbors, n_drop))
+            new_expr = ir[arg_idx]
+            # If the argument changed, then it is dirty
+            if new_expr !== new_args[i]
+                # Allocate a new buffer if we haven't already
+                if !args_dirty
+                    new_args = copy(new_args)
+                end
+                args_dirty = true
+                new_args[i] = new_expr
+            end
+        end
+        # Update the expression for this node
+        ir.symbols[node] = maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+        # `node` is now canonical
+        delete!(ir.non_canonical_idxs, node)
+        # All its `inneighbors` are still non-canonical
+        union!(ir.non_canonical_idxs, Graphs.inneighbors(ir.dependency_graph, node))
     end
 
-    # If the expression is unchanged, no need to do anything
-    dirty || return i_sym
-    # Build the new canonical expression
-    return maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+    return ir[idx]
 end

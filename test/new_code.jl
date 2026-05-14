@@ -863,7 +863,7 @@ end
         ir = IRStructure{SymReal}()
         populate_ir!(ir, sin(a + b))
         replace_node!(ir, a + b, a * b)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         expr = Code.fast_toexpr(sin(a + b), ir, Dict{Any,Any}(:sort_addmul => false))
         result = eval(quote let a = 2.0, b = 3.0; $expr end end)
         @test result ≈ sin(2.0 * 3.0)
@@ -874,7 +874,7 @@ end
         ir = IRStructure{SymReal}()
         populate_ir!(ir, sin(a + b))
         replace_node!(ir, a + b, a * b)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         expr = Code.fast_toexpr(
             sin(a + b), ir, Dict{Any,Any}(:nanmath => true, :sort_addmul => false)
         )
@@ -887,7 +887,7 @@ end
         let ir = IRStructure{SymReal}()
             populate_ir!(ir, a + b + c)
             replace_node!(ir, a, d)
-            @test !ir.is_canonical[]
+            @test !isempty(ir.non_canonical_idxs)
             expr = Code.fast_toexpr(a + b + c, ir, Dict{Any,Any}(:sort_addmul => false))
             result = eval(quote let a = 1.0, b = 2.0, c = 3.0, d = 10.0; $expr end end)
             @test result ≈ 10.0 + 2.0 + 3.0
@@ -896,7 +896,7 @@ end
         let ir = IRStructure{SymReal}()
             populate_ir!(ir, a * b * c)
             replace_node!(ir, a, d)
-            @test !ir.is_canonical[]
+            @test !isempty(ir.non_canonical_idxs)
             expr = Code.fast_toexpr(a * b * c, ir, Dict{Any,Any}(:sort_addmul => false))
             result = eval(quote let a = 1.0, b = 2.0, c = 3.0, d = 10.0; $expr end end)
             @test result ≈ 10.0 * 2.0 * 3.0
@@ -909,7 +909,7 @@ end
         let ir = IRStructure{SymReal}()
             populate_ir!(ir, a^b)
             replace_node!(ir, a, c)
-            @test !ir.is_canonical[]
+            @test !isempty(ir.non_canonical_idxs)
             expr = Code.fast_toexpr(a^b, ir, Dict{Any,Any}(:sort_addmul => false))
             result = eval(quote let a = 2.0, b = 3.0, c = 4.0; $expr end end)
             @test result ≈ 4.0^3.0
@@ -918,7 +918,7 @@ end
         let ir = IRStructure{SymReal}()
             populate_ir!(ir, a^2)
             replace_node!(ir, a, c)
-            @test !ir.is_canonical[]
+            @test !isempty(ir.non_canonical_idxs)
             expr = Code.fast_toexpr(a^2, ir, Dict{Any,Any}(:sort_addmul => false))
             result = eval(quote let a = 2.0, c = 3.0; $expr end end)
             @test result ≈ 3.0^2
@@ -931,7 +931,7 @@ end
         ir = IRStructure{SymReal}()
         populate_ir!(ir, ifelse(cond, b, c))
         replace_node!(ir, b, d)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         expr = Code.fast_toexpr(ifelse(cond, b, c), ir, Dict{Any,Any}(:sort_addmul => false))
         result = eval(quote let a = -1.0, b = 10.0, c = 20.0, d = 30.0; $expr end end)
         @test result ≈ 30.0  # a < 0 is true, so uses d (replaced from b)
@@ -942,7 +942,7 @@ end
         ir = IRStructure{SymReal}()
         populate_ir!(ir, x[idx1])
         replace_node!(ir, idx1, idx2)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         expr = Code.fast_toexpr(x[idx1], ir, Dict{Any,Any}())
         result = eval(quote let x = [10, 20, 30], idx1 = 1, idx2 = 2; $expr end end)
         @test result == 20  # x[idx2] = x[2] = 20
@@ -954,7 +954,7 @@ end
         ir = IRStructure{SymReal}()
         populate_ir!(ir, arr)
         replace_node!(ir, Const{SymReal}(yv), Const{SymReal}(zv))
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         block = _codegen_to_block(ir, arr, Dict{Any,Any}(:sort_addmul => false))
         xdata = [1.0, 2.0, 3.0]; ydata = [10.0, 10.0, 10.0]; zdata = [4.0, 5.0, 6.0]
         result = eval(quote let xv = $xdata, yv = $ydata, zv = $zdata; $block end end)
@@ -970,7 +970,7 @@ end
         # Pre-populate the inner Term so its graph edges already exist before replace_node!
         populate_ir!(ir, _arrayop_term(fill_expr))
         replace_node!(ir, a, b)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         block = _codegen_to_block(ir, fill_expr)
         result = eval(quote let a = 2.0, b = 5.0; $block end end)
         @test result == fill(5.0, 3)
@@ -986,7 +986,7 @@ end
         ir = IRStructure{SymReal}()
         populate_ir!(ir, w)
         replace_node!(ir, a, c)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         expr = Code.fast_toexpr(w, ir, Dict{Any,Any}(:sort_addmul => false))
         av = 2.0; bv = 5.0; cv = 7.0
         result = eval(quote let a = $av, b = $bv, c = $cv; $expr end end)
@@ -1001,7 +1001,7 @@ end
         let ir = IRStructure{SymReal}()
             populate_ir!(ir, arr_lit)
             replace_node!(ir, a, d)
-            @test !ir.is_canonical[]
+            @test !isempty(ir.non_canonical_idxs)
             expr = Code.fast_toexpr(arr_lit, ir, Dict{Any,Any}())
             result = eval(quote let a = 1.0, b = 2.0, c = 3.0, d = 10.0; $expr end end)
             @test result ≈ [10.0, 2.0, 3.0]
@@ -1010,7 +1010,7 @@ end
         let ir = IRStructure{SymReal}()
             populate_ir!(ir, arr_lit)
             replace_node!(ir, a, d)
-            @test !ir.is_canonical[]
+            @test !isempty(ir.non_canonical_idxs)
             wrapped = Code.with_allocator(ones, arr_lit)
             expr = Code.fast_toexpr(wrapped, ir, Dict{Any,Any}(:sort_addmul => false))
             result = eval(quote let a = 1.0, b = 2.0, c = 3.0, d = 10.0; $expr end end)
@@ -1025,7 +1025,7 @@ end
         populate_ir!(ir, ex_map)
         populate_ir!(ir, _arrayop_term(ex_map))
         replace_node!(ir, Const{SymReal}(bv), Const{SymReal}(cv))
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         block = _codegen_to_block(ir, ex_map, Dict{Any,Any}(:sort_addmul => false))
         xdata = [1.0, 2.0, 3.0]; ydata = [10.0, 10.0, 10.0]; zdata = [4.0, 5.0, 6.0]
         result = eval(quote let av = $xdata, bv = $ydata, cv = $zdata; $block end end)
@@ -1039,7 +1039,7 @@ end
         populate_ir!(ir, ex_mapred)
         populate_ir!(ir, _arrayop_term(ex_mapred))
         replace_node!(ir, Const{SymReal}(bv), Const{SymReal}(cv))
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         block = _codegen_to_block(ir, ex_mapred, Dict{Any,Any}(:sort_addmul => false))
         xdata = [1.0, 2.0, 3.0]; ydata = [10.0, 10.0, 10.0]; zdata = [4.0, 5.0, 6.0]
         result = eval(quote let av = $xdata, bv = $ydata, cv = $zdata; $block end end)

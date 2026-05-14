@@ -262,7 +262,7 @@ end
         @test length(ir) == n_before          # no new node created
         @test !haskey(ir.definition, x)       # old removed from definition
         @test x_idx in ir.weak_definitions[y] # new registered at same index
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         # leaf had no outgoing edges; they are still absent
         @test isempty(Graphs.outneighbors(ir.dependency_graph, x_idx))
     end
@@ -279,7 +279,8 @@ end
         @test length(ir) == n_before          # no new node for the expression itself
         @test !haskey(ir.definition, x + y)
         @test idx in ir.weak_definitions[x * y]
-        @test !ir.is_canonical[]
+        # Nothing depends on `idx`, so the IR is still canonical
+        @test isempty(ir.non_canonical_idxs)
         # outneighbors now match x*y's arguments in argument order
         nbors    = collect(Graphs.outneighbors(ir.dependency_graph, idx))
         expected = [ir.definition[arg] for arg in arguments(x * y)
@@ -297,7 +298,7 @@ end
 
         @test isequal(ir[idx], rn_symfn(x, y))
         @test !haskey(ir.definition, x + y)
-        @test !ir.is_canonical[]
+        @test isempty(ir.non_canonical_idxs)
         # symbolic op must be first outneighbor, then args in order
         nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))
         @test nbors[1] == ir.definition[rn_symfn]
@@ -352,7 +353,7 @@ end
         ir = IRStructure{SymReal}()
         expr = x + sin(y)
         populate_ir!(ir, expr)
-        @test ir.is_canonical[]
+        @test isempty(ir.non_canonical_idxs)
         idx = ir[expr]
         @test SU.get_canonical_expr(ir, idx) === ir[idx]
     end
@@ -363,7 +364,7 @@ end
         populate_ir!(ir, cos(y))
         sin_idx = ir[sin(x)]
         replace_node!(ir, y, x)   # affects cos(y) only, not sin(x)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         @test SU.get_canonical_expr(ir, sin_idx) === ir[sin_idx]
     end
 
@@ -372,7 +373,7 @@ end
         populate_ir!(ir, sin(x))
         sin_idx = ir[sin(x)]
         replace_node!(ir, x, y)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         @test isequal(SU.get_canonical_expr(ir, sin_idx), sin(y))
     end
 
@@ -381,7 +382,7 @@ end
         populate_ir!(ir, cos(x + y))
         cos_idx = ir[cos(x + y)]
         replace_node!(ir, x + y, x * y)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         @test isequal(SU.get_canonical_expr(ir, cos_idx), cos(x * y))
     end
 
@@ -392,7 +393,7 @@ end
         populate_ir!(ir, fn(x))
         fn_x_idx = ir[fn(x)]
         replace_node!(ir, x, y)
-        @test !ir.is_canonical[]
+        @test !isempty(ir.non_canonical_idxs)
         @test isequal(SU.get_canonical_expr(ir, fn_x_idx), fn(y))
     end
 end
@@ -456,7 +457,7 @@ function make_reversed_ir(T, root_expr::BasicSymbolic)
             end
         end
     end
-    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, Dict{BasicSymbolic{T}, Vector{Int32}}(), BitVector(), Int32[], Ref{Bool}(true))
+    IRStructure{T}(dep_graph, reversed_symbols, reversed_def, Dict{BasicSymbolic{T}, Vector{Int32}}(), BitVector(), Int32[], BitSet())
 end
 
 @testset "Out-of-order IRStructure" begin

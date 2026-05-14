@@ -8,7 +8,7 @@ using Dictionaries
 
 # NOTE:
 # Codegen relies on fewer invariants than `IRStructure` in general. It is designed to work
-# even when `ir.is_canonical[] == false`. The invariants that it relies on are:
+# even when `ir.non_canonical_idxs` is non-empty. The invariants that it relies on are:
 # 1. `operation(ir[idx::Integer])` is the correct operation to generate.
 # 2. `symtype(ir[idx])` and `shape(ir[idx])` are the correct symtype and shape of the expression.
 # 3. `outneighbors(ir.dependency_graph, idx)` corresponds in order to `arguments(ir[idx])`. In
@@ -735,7 +735,7 @@ const NARY_CALL_LIMIT = 12
 
 function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     if get(cs.rewrites, :sort_addmul, true)::Bool
-        @assert cs.ir.is_canonical[] "Sorted add/mul requires canonical IRStructure"
+        @assert isempty(cs.ir.non_canonical_idxs) "Sorted add/mul requires canonical IRStructure"
         args_idxs = Int32[]
         sargs = sorted_arguments(expr)
         for arg in sargs

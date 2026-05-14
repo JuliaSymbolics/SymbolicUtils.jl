@@ -56,14 +56,14 @@ struct IRStructure{T}
     """
     cached_idxs::Vector{Int32}
     """
-    Flag indicating whether the struct is in canonical form. Canonical form implies that
+    Set of indices whose expressions have been replaced via [`SymbolicUtils.replace_node!`](@ref).
+    The `IRStructure` is in canonical form when this set is empty. Canonical form implies that
     for an expression `ex` at index `idx` in `ir::IRStructure`, there exists an edge
     from `idx` to `ir[arguments(ex)[j]]` for all valid `j` and that
-    `arguments(ex)[j] === ir[ir[arguments(ex)[j]]]`. This is typically broken by
-    [`SymbolicUtils.replace_node!`](@ref). The graph invariants are still maintained
+    `arguments(ex)[j] === ir[ir[arguments(ex)[j]]]`. The graph invariants are still maintained
     after the canonical form is broken.
     """
-    is_canonical::Base.RefValue{Bool}
+    non_canonical_idxs::BitSet
 end
 
 """
@@ -75,7 +75,7 @@ function IRStructure{T}() where {T}
     ir = IRStructure{T}(
         OrderedDiGraph{Int32}(), BasicSymbolic{T}[],
         IdDict{BasicSymbolic{T}, Int32}(), Dict{BasicSymbolic{T}, Vector{Int32}}(),
-        BitVector(), Int32[], Ref{Bool}(true)
+        BitVector(), Int32[], BitSet()
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)
@@ -127,7 +127,7 @@ function Base.showerror(io::IO, err::IRStructureNotCanonicalError)
 end
 
 @noinline function require_canonical(ir::IRStructure)
-    ir.is_canonical[] && return
+    isempty(ir.non_canonical_idxs) && return
     throw(IRStructureNotCanonicalError())
 end
 
@@ -191,7 +191,7 @@ function Base.copy(ir::IRStructure{T}) where {T}
         Dict(k => copy(v) for (k, v) in ir.weak_definitions),
         copy(ir.cached_mask),
         copy(ir.cached_idxs),
-        Ref{Bool}(ir.is_canonical[]),
+        copy(ir.non_canonical_idxs),
     )
 end
 
@@ -849,8 +849,9 @@ at `old` is now `new`, and the arguments of `new` form the out-neighbors of the 
 the canonical form of `ir`.
 """
 function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
-    ir.is_canonical[] = false
     idx = ir[old]
+    # Any nodes that currently depend on `old` are non-canonical
+    union!(ir.non_canonical_idxs, Graphs.inneighbors(ir.dependency_graph, idx))
     ir.symbols[idx] = new
     delete!(ir.definition, old)
     weakdefs = ir.weak_definitions[old]
@@ -877,11 +878,11 @@ end
 """
     $TYPEDSIGNATURES
 
-If `ir.is_canonical[]`, return `ir[idx]`. Otherwise, find the canonical expression that `ir[idx]`
-should be, were `IRSubstituter` used instead of `replace_node!`.
+If `ir.non_canonical_idxs` is empty, return `ir[idx]`. Otherwise, find the canonical expression
+that `ir[idx]` should be, were `IRSubstituter` used instead of `replace_node!`.
 """
 function get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
-    ir.is_canonical[] && return ir[idx]
+    isempty(ir.non_canonical_idxs) && return ir[idx]
 
     return __get_canonical_expr(ir, idx)
 end
@@ -894,43 +895,51 @@ by recursively descending through the DAG.
 """
 function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
     i_sym = ir[idx]
-    nbors = Graphs.outneighbors(ir.dependency_graph, idx)
-    # If this is a leaf, there's nothing to do
-    isempty(nbors) && return i_sym
 
-    # Track whether the expression actually needs to change
-    dirty = false
-    n_drop = 0
-    op = operation(i_sym)
-    # If the operation is symbolic, it is the first entry in `nbors`.
-    if op isa BasicSymbolic{T}
-        n_drop = 1
-        new_op = __get_canonical_expr(ir, first(nbors))
-        # If the operation is different, the tree is dirty
-        if new_op !== op
-            op = new_op
-            dirty = true
-        end
-    end
-    new_args = parent(arguments(i_sym))
-    # Avoid copying and allocating a new buffer if possible
-    args_dirty = false
-    for (i, arg_idx) in enumerate(Iterators.drop(nbors, n_drop))
-        new_expr = __get_canonical_expr(ir, arg_idx)
-        # If the argument changed, then it is dirty
-        if new_expr !== new_args[i]
-            # Allocate a new buffer if we haven't already
-            if !args_dirty
-                new_args = copy(new_args)
+    reachability = get_cached_idxs!(ir)
+    empty!(reachability)
+    get_reachability!(reachability, ir, idx)
+    push!(reachability, idx)
+    # `reachability` is in topological order. We can iterate over it, and update
+    # any non-canonical nodes as we encounter them. Once we update a node, we mark
+    # all its `inneighbors` as non-canonical.
+    for node in reachability
+        node in ir.non_canonical_idxs || continue
+        i_sym = ir[node]
+        nbors = Graphs.outneighbors(ir.dependency_graph, node)
+        n_drop = 0
+        op = operation(i_sym)
+        # If the operation is symbolic, it is the first entry in `nbors`.
+        if op isa BasicSymbolic{T}
+            n_drop = 1
+            new_op = ir[first(nbors)]
+            # If the operation is different, the tree is dirty
+            if new_op !== op
+                op = new_op
             end
-            dirty = true
-            args_dirty = true
-            new_args[i] = new_expr
         end
+        new_args = parent(arguments(i_sym))
+        # Avoid copying and allocating a new buffer if possible
+        args_dirty = false
+        for (i, arg_idx) in enumerate(Iterators.drop(nbors, n_drop))
+            new_expr = ir[arg_idx]
+            # If the argument changed, then it is dirty
+            if new_expr !== new_args[i]
+                # Allocate a new buffer if we haven't already
+                if !args_dirty
+                    new_args = copy(new_args)
+                end
+                args_dirty = true
+                new_args[i] = new_expr
+            end
+        end
+        # Update the expression for this node
+        ir.symbols[node] = maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+        # `node` is now canonical
+        delete!(ir.non_canonical_idxs, node)
+        # All its `inneighbors` are still non-canonical
+        union!(ir.non_canonical_idxs, Graphs.inneighbors(ir.dependency_graph, node))
     end
 
-    # If the expression is unchanged, no need to do anything
-    dirty || return i_sym
-    # Build the new canonical expression
-    return maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+    return ir[idx]
 end

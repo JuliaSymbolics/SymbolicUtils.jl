@@ -47,3 +47,6 @@ isbinop(::__InternalInvalidator1) = false
 operator_to_term(::__InternalInvalidator4, ::BasicSymbolic) = _unreachable()
 operator_to_term(::__InternalInvalidator5, ::BasicSymbolic) = _unreachable()
 operator_to_term(::__InternalInvalidator6, ::BasicSymbolic) = _unreachable()
+show_metadata(::IO, ::BasicSymbolic, ::Type{__InternalInvalidator1}, ::Any) = _unreachable()
+show_metadata(::IO, ::BasicSymbolic, ::Type{__InternalInvalidator2}, ::Any) = _unreachable()
+show_metadata(::IO, ::BasicSymbolic, ::Type{__InternalInvalidator3}, ::Any) = _unreachable()

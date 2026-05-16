@@ -7,7 +7,7 @@ metadata context and call `show_plain(io, x)` to bypass this hook.
 """
 function show_metadata(io::IO, x::BasicSymbolic)
     md = metadata(x)
-    md isa AbstractDict || return false
+    md isa Base.ImmutableDict{DataType, Any} || return false
     for (ctx, val) in md
         show_metadata(io, x, ctx, val) && return true
     end

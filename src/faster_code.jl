@@ -14,7 +14,6 @@ using Dictionaries
 # 3. `outneighbors(ir.dependency_graph, idx)` corresponds in order to `arguments(ir[idx])`. In
 #    case `operation(ir[idx]) isa BasicSymbolic{T}`, it is the first element in `outneighbors`,
 #    followed by the arguments in order.
-# 4. If `isarrayop(ir[idx::Integer])`, then `ir[idx].term` is correct.
 
 """
     $TYPEDEF
@@ -967,8 +966,13 @@ function codegen_ir!(cs::CodegenState{T}, idx::Integer) where {T}
         end
         BSImpl.Sym(; name) => return codegen!(cs, idx, name)
         BSImpl.ArrayOp(; term) => if term isa BasicSymbolic{T}
-            new_idx = populate_ir!(ir, term)
-            return codegen_ir!(cs, new_idx)
+            # NOTE: This used to call `populate_ir!(ir, term)` and
+            # then `codegen_ir!` on that. However, if the IR is non-canonical
+            # this leads to incorrect results since `term` is incorrect
+            # and we should use the graph at this node (which reflects what
+            # `term` should be). `codegen_function!` overcomes this by doing
+            # the "normal" thing with the correct operation.
+            return codegen_function!(operation(term), cs, sym, idx)
         else
             return codegen_function!(ArrayOp{T}, cs, sym, idx)
         end

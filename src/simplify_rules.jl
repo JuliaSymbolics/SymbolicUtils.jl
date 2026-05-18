@@ -70,15 +70,6 @@ const ASSORTED_RULES = (
     @rule(conj(~x::_isreal) => ~x),
     @rule(real(~x::_isreal) => ~x),
     @rule(imag(~x::_isreal) => zero(symtype(~x))),
-    # Fold `complex(re, im)` literals (produced e.g. by
-    # `Symbolics.unwrap(::Complex{Num})` when re/im are symbolic) into the
-    # additive form `re + 1im*im`. `Term(complex, [re, im])` is otherwise
-    # opaque to `expand` / `simplify(...; expand=true)`, so identically-zero
-    # diffs that contain it never reduce to 0. `unwrap(::Complex{Num})`
-    # always produces Real-typed re/im, so `1im * ~im` stays in clean
-    # `Complex{Bool} * BasicSymbolic{<:Real}` arithmetic and doesn't loop
-    # back into a literal.
-    @rule(complex(~re, ~im) => ~re + 1im * ~im),
     @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
     @rule(ifelse(~x, ~y, ~y) => ~y),
 )

@@ -480,7 +480,7 @@ over the standard codegen.
 """
 const FILL_ARR_LIMIT = 16
 
-function get_allocator_and_fill_zero!(allocator, sz)
+@noinline function get_allocator_and_fill_zero!(allocator, sz)
     buffer = allocator(sz)
     fill!(buffer, 0)
     return buffer
@@ -510,12 +510,12 @@ function __allocator_is_returns_expr(::Type{T}, @nospecialize(ex)) where {T}
     return false
 end
 
-function batched_setindex!(buffer::AbstractArray{T, D}, values::NTuple{N, T}, idxs::NTuple{N, CartesianIndex{D}}) where {T, D, N}
+@noinline function batched_setindex!(buffer::AbstractArray{T, D}, values::NTuple{N, T}, idxs::NTuple{N, CartesianIndex{D}}) where {T, D, N}
     @inbounds for i in 1:N
         buffer[idxs[i]] = values[i]
     end
 end
-function batched_setindex!(buffer::AbstractArray{T, D}, value::T, idxs::AbstractArray{CartesianIndex{D}}) where {T, D}
+@noinline function batched_setindex!(buffer::AbstractArray{T, D}, value::T, idxs::AbstractArray{CartesianIndex{D}}) where {T, D}
     @inbounds for idx in idxs
         buffer[idx] = value
     end

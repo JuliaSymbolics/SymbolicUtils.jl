@@ -854,6 +854,7 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     union!(ir.non_canonical_idxs, Graphs.inneighbors(ir.dependency_graph, idx))
     ir.symbols[idx] = new
     delete!(ir.definition, old)
+    ir.definition[new] = idx
     weakdefs = ir.weak_definitions[old]
     filter!(!isequal(idx), weakdefs)
     isempty(weakdefs) && delete!(ir.weak_definitions, old)

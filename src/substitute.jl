@@ -345,33 +345,48 @@ Wrappers for [`BasicSymbolic`](@ref) should implement this function by unwrappin
 
 See also: [`default_is_atomic`](@ref).
 """
-function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = default_is_atomic, recurse::G = iscall) where {F, G}
+function search_variables!(buffer, expr::BasicSymbolic{T}; is_atomic::F = default_is_atomic, recurse::G = iscall, _seen::Union{Base.IdSet{BasicSymbolic{T}}, Nothing} = nothing) where {T, F, G}
     if is_atomic(expr)
         push!(buffer, expr)
-        return
+        return nothing
     end
-    recurse(expr) || return
+    recurse(expr) || return nothing
+    seen = _seen === nothing ? Base.IdSet{BasicSymbolic{T}}() : _seen
+    _search_variables_impl!(buffer, expr, is_atomic, recurse, seen)
+    return nothing
+end
+
+function _search_variables_impl!(buffer, expr::BasicSymbolic{T}, is_atomic::F, recurse::G, seen::Base.IdSet{BasicSymbolic{T}}) where {T, F, G}
+    expr in seen && return nothing
+    push!(seen, expr)
+    if is_atomic(expr)
+        push!(buffer, expr)
+        return nothing
+    end
+    recurse(expr) || return nothing
     @match expr begin
         BSImpl.Term(; f, args) => begin
-            search_variables!(buffer, f; is_atomic, recurse)
+            if f isa BasicSymbolic{T}
+                _search_variables_impl!(buffer, f, is_atomic, recurse, seen)
+            end
             for arg in args
-                search_variables!(buffer, arg; is_atomic, recurse)
+                _search_variables_impl!(buffer, arg, is_atomic, recurse, seen)
             end
         end
         BSImpl.AddMul(; dict) => begin
             for k in keys(dict)
-                search_variables!(buffer, k; is_atomic, recurse)
+                _search_variables_impl!(buffer, k, is_atomic, recurse, seen)
             end
         end
         BSImpl.Div(; num, den) => begin
-            search_variables!(buffer, num; is_atomic, recurse)
-            search_variables!(buffer, den; is_atomic, recurse)
+            _search_variables_impl!(buffer, num, is_atomic, recurse, seen)
+            _search_variables_impl!(buffer, den, is_atomic, recurse, seen)
         end
         BSImpl.ArrayOp(; expr = inner_expr, term) => begin
-            search_variables!(buffer, @something(term, inner_expr); is_atomic, recurse)
+            _search_variables_impl!(buffer, @something(term, inner_expr), is_atomic, recurse, seen)
         end
         BSImpl.ArrayMaker(; values) => @union_split_smallvec values for val in values
-            search_variables!(buffer, val; is_atomic, recurse)
+            _search_variables_impl!(buffer, val, is_atomic, recurse, seen)
         end
     end
     return nothing

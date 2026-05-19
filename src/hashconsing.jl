@@ -253,6 +253,22 @@ Manual dispatch on `hash` for common scalar types, avoiding dynamic dispatch whe
     end
 end
 
+const UNITRANGE_SALT = 0x65888b97ed76e7a3 % UInt
+const STEPRANGE_SALT = 0x84a577a5769bf2c2 % UInt
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized `hash` for range types used in `BasicSymbolic`, since the one in `Base`
+iterates over the full range and is thus `O(n)` in the length.
+"""
+function hash_range(a::UnitRange{Int}, h::UInt)
+    hash(first(a), hash(last(a), h)) ⊻ UNITRANGE_SALT
+end
+function hash_range(a::StepRange{Int, Int}, h::UInt)
+    hash(first(a), hash(last(a), h)) ⊻ STEPRANGE_SALT
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -282,12 +298,27 @@ Compute a hash value for a ranges dictionary used in `ArrayOp` variants.
 function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
     hv = Base.hasha_seed
     for (k, v) in d
-        h1 = hash(v, zero(UInt))
+        h1 = hash_range(v, zero(UInt))
         h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
     end
     return hash(hv, h)
 end
+
+const SHAPEVECT_SEED = 0x70840b1b2d005176 % UInt
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized hash for `ShapeT` to hit `hash_range`.
+"""
+function hash_shape(sh::ShapeVecT, h::UInt)
+    @union_split_smallvec sh for ax in sh
+        h = hash_range(ax, h)
+    end
+    return h ⊻ SHAPEVECT_SEED
+end
+hash_shape(sh::Unknown, h::UInt) = hash(sh, h)
 
 """
     $METHODLIST
@@ -427,7 +458,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
-            h = Base.hash(shape, h)
+            h = hash_shape(shape, h)
             h = hash_maybe_fntype(type, h)
             h ⊻ SYM_SALT
         end
@@ -436,9 +467,9 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             !full && !iszero(hash) && return hash
             h = hash_maybe_fntype(type, h)
             if shape isa Unknown
-                h = Base.hash(shape, h)
+                h = hash_shape(shape, h)
             elseif shape isa ShapeVecT
-                h = Base.hash(shape, h)
+                h = hash_shape(shape, h)
             else
                 _unreachable()
             end
@@ -448,26 +479,26 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, Base.hash(shape, hash_maybe_fntype(type, h))), full))
+            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
             if full
                 htmp = hash_maybe_fntype(typeof(coeff)::TypeT, htmp)
             end
             htmp
         end
-        BSImpl.Div(; num, den, type, hash, hash2) => begin
+        BSImpl.Div(; num, den, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            hash_bsimpl(num, hash_bsimpl(den, Base.hash(shape, hash_maybe_fntype(type, h)), full), full) ⊻ DIV_SALT
+            hash_bsimpl(num, hash_bsimpl(den, hash_shape(shape, hash_maybe_fntype(type, h)), full), full) ⊻ DIV_SALT
         end
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, Base.hash(shape, hash_maybe_fntype(type, h)), full)))::UInt, full))
+            Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, hash_shape(shape, hash_maybe_fntype(type, h)), full)))::UInt, full))
         end
         BSImpl.ArrayMaker(; regions, values, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(regions, Base.hash(values, Base.hash(shape, hash_maybe_fntype(type, h))))
+            Base.hash(regions, Base.hash(values, hash_shape(shape, hash_maybe_fntype(type, h))))
         end
     end
 

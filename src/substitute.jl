@@ -258,14 +258,24 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(false))
 1 + sqrt(2)
 ```
 """
-@inline function substitute(expr, dict; fold::Val{Fold}=Val{false}(), filterer=default_substitute_filter) where {Fold}
-    isempty(dict) && !Fold && return expr
-    return DefaultSubstituter{Fold}(dict, filterer)(expr)
+function substitute(expr, dict; fold::Val{Fold}=Val{false}(), filterer=default_substitute_filter) where {Fold}
+    # This is kind of ugly (inlines some of the constructor logic of `DefaultSubstituter` but is needed to avoid runtime subtyping in
+    # when calling this function. It makes a very big difference in runtime.
+    d = dict isa AbstractDict ? dict : Dict(dict)
+    isempty(d) && !Fold && return expr
+    VT = infer_vartype(d)
+    if VT === Nothing
+        sub = DefaultSubstituter{Fold, typeof(d), typeof(filterer), Nothing}(d, filterer, nothing)
+    else
+        cache = IdDict{BasicSymbolic{VT}, BasicSymbolic{VT}}()
+        sub = DefaultSubstituter{Fold, typeof(d), typeof(filterer), typeof(cache)}(d, filterer, cache)
+    end
+    return sub(expr)
 end
 
 const EMPTY_DICT = Dict{Int, Int}()
 
-@inline function evaluate(expr; filterer = default_substitute_filter)
+function evaluate(expr; filterer = default_substitute_filter)
     return substitute(expr, EMPTY_DICT; fold = Val{true}(), filterer)
 end
 
@@ -438,7 +448,7 @@ function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T},
         for (idx, ii) in zip(iidxs, collapsed)
             subrules[ii] = idx
         end
-        return substitute(new_expr, subrules; fold = Val{false}())::BasicSymbolic{T}
+        return substitute(new_expr, subrules)::BasicSymbolic{T}
     end::BasicSymbolic{T}
 end
 @cache function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges::RangesT{SymReal}, reduce)::BasicSymbolic{SymReal}
@@ -793,7 +803,7 @@ function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}
     if idx !== nothing
         return getindex(scalarize(args[1]), idx)
     end
-    
+
     idxs = Iterators.map((-), Iterators.map(unwrap_const, Iterators.drop(args, 1)), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
     return getindex(scalarize(args[1]), idxs...)
 end

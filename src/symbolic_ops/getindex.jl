@@ -303,7 +303,7 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
                 end
             end
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
-            result = substitute(new_expr, subrules; fold = Val{false}(), filterer = !isarrayop)
+            result = substitute(new_expr, subrules; filterer = !isarrayop)
             return result
         end
         _ => begin
@@ -414,10 +414,10 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
             end
             if isempty(new_output_idx)
                 new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
-                result = substitute(new_expr, subrules; fold = Val{false}(), filterer = !isarrayop)
+                result = substitute(new_expr, subrules; filterer = !isarrayop)
                 return result
             else
-                new_expr = substitute(expr, subrules; fold = Val{false}(), filterer = !isarrayop)
+                new_expr = substitute(expr, subrules; filterer = !isarrayop)
                 if term !== nothing
                     term = getindex(term, idxs...)
                 end

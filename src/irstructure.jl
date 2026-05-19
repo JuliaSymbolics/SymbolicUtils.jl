@@ -490,6 +490,12 @@ function Base.empty(s::IRStructureSearchBuffer{T, S}) where {T, S}
     return IRStructureSearchBuffer{T, S}(s.ir, empty(s.buffer), empty(s.searched))
 end
 
+function Base.empty!(s::IRStructureSearchBuffer)
+    empty!(s.buffer)
+    empty!(s.searched)
+    return s
+end
+
 function Base.push!(s::IRStructureSearchBuffer{T}, x::BasicSymbolic{T}) where {T}
     push!(s.buffer, x)
     return s

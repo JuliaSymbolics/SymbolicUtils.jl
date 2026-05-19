@@ -64,6 +64,10 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
 end
 
 Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+    # Fast path: scalar integer indexing into ArrayOp bypasses @cache (each index is unique)
+    if isarrayop(arr) && all(x -> x isa Int, idxs)
+        return _getindex(T, arr, idxs...)
+    end
     if T === SymReal
         return _getindex_1(arr, idxs...)
     elseif T === SafeReal
@@ -353,6 +357,28 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
             end
             @assert idxs_i == length(idxs) + 1
             return BSImpl.Term{T}(f, newargs; type, shape = newshape)
+        end
+        _ => nothing
+    end
+
+    # Fast path: scalar integer indexing into ArrayOp (dominant path during scalarize).
+    @match arr begin
+        BSImpl.ArrayOp(; output_idx, expr, ranges, reduce, term) && if all(x -> x isa Int, idxs) end => begin
+            subrules = Dict{BasicSymbolic{T}, Union{BasicSymbolic{T}, Int}}()
+            for i in 1:length(idxs)
+                outidx = output_idx[i]
+                newidx = idxs[i]::Int
+                if outidx isa BasicSymbolic{T}
+                    if haskey(ranges, outidx)
+                        subrules[outidx] = ranges[outidx][newidx]
+                    else
+                        subrules[outidx] = newidx
+                    end
+                end
+            end
+            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+            result = substitute(new_expr, subrules; filterer = !isarrayop)
+            return result
         end
         _ => nothing
     end

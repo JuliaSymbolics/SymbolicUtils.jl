@@ -261,6 +261,7 @@ end
         @test isequal(ir[x_idx], y)
         @test length(ir) == n_before          # no new node created
         @test !haskey(ir.definition, x)       # old removed from definition
+        @test ir.definition[y] == x_idx
         @test x_idx in ir.weak_definitions[y] # new registered at same index
         @test !isempty(ir.non_canonical_idxs)
         # leaf had no outgoing edges; they are still absent
@@ -278,6 +279,7 @@ end
         @test isequal(ir[idx], x * y)
         @test length(ir) == n_before          # no new node for the expression itself
         @test !haskey(ir.definition, x + y)
+        @test ir.definition[x * y] == idx
         @test idx in ir.weak_definitions[x * y]
         # Nothing depends on `idx`, so the IR is still canonical
         @test isempty(ir.non_canonical_idxs)
@@ -298,6 +300,7 @@ end
 
         @test isequal(ir[idx], rn_symfn(x, y))
         @test !haskey(ir.definition, x + y)
+        @test ir.definition[rn_symfn(x, y)] == idx
         @test isempty(ir.non_canonical_idxs)
         # symbolic op must be first outneighbor, then args in order
         nbors = collect(Graphs.outneighbors(ir.dependency_graph, idx))

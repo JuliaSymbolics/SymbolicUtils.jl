@@ -1186,3 +1186,19 @@ end
     end
 end
 
+@testset "`replace_node!` on an argument of `ArrayOp` with a `term` codegens correctly" begin
+    @syms x[1:3]
+    ir = IRStructure{SymReal}()
+    inner = x .+ 1
+    inner_idx = populate_ir!(ir, inner)
+    outer_idx = populate_ir!(ir, sum(inner))
+    replace_node!(ir, ir[inner_idx], x .+ 2)
+    x_val = [1, 2, 3]
+    reference = sum(x_val .+ 2)
+    value = eval(quote
+        let x = $x_val
+            $(Code.fast_toexpr(ir[outer_idx], ir, Dict()))
+        end
+    end)
+    @test reference == value
+end

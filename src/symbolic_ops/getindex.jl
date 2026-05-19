@@ -64,9 +64,13 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
 end
 
 Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
-    # Fast path: scalar integer indexing into ArrayOp bypasses @cache (each index is unique)
-    if isarrayop(arr) && all(x -> x isa Int, idxs)
-        return _getindex(T, arr, idxs...)
+    # Fast path: scalar integer indexing into ArrayOp bypasses @cache (each index is unique).
+    # Guarded on VERSION because calling _getindex directly from this Vararg Union method
+    # triggers a segfault in Julia 1.10's codegen (general_use_analysis).
+    @static if VERSION >= v"1.11"
+        if isarrayop(arr) && all(x -> x isa Int, idxs)
+            return _getindex(T, arr, idxs...)
+        end
     end
     if T === SymReal
         return _getindex_1(arr, idxs...)

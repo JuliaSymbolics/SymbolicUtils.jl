@@ -3,6 +3,10 @@ $(DocStringExtensions.README)
 """
 module SymbolicUtils
 
+if isdefined(Base, :Experimental) && isdefined(Base.Experimental, Symbol("@max_methods"))
+    @eval Base.Experimental.@compiler_options max_methods=1
+end
+
 using DocStringExtensions
 
 export @syms, term, hasmetadata, getmetadata, setmetadata
@@ -221,5 +225,10 @@ end
 
 precompile(Tuple{typeof(Base.show), Base.TTY, SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}})
 precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:color,), Tuple{Symbol}}, typeof(Base.printstyled), Base.TTY, Int64})
+
+let BS = BasicSymbolic{SymReal}
+    precompile(Tuple{typeof(Base.collect), BS})
+    precompile(Tuple{typeof(SymbolicUtils._getindex), Type{SymReal}, BS, Int64, Vararg{Int64}})
+end
 
 end # module

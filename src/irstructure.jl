@@ -183,12 +183,25 @@ Number of nodes in `ir`.
 """
 Base.length(ir::IRStructure) = length(ir.symbols)
 
+# Copies a dictionary where the values are shallow copied
+# without having to rehash the keys
+function dict_copy_depth_1_no_rehash(d)
+    d2 = copy(d)
+    vals = d2.vals
+    for i in eachindex(vals)
+        if isassigned(vals, i)
+            @inbounds vals[i] = copy(vals[i])
+        end
+    end
+    return d2
+end
+
 function Base.copy(ir::IRStructure{T}) where {T}
     return IRStructure{T}(
         copy(ir.dependency_graph),
         copy(ir.symbols),
         copy(ir.definition),
-        Dict(k => copy(v) for (k, v) in ir.weak_definitions),
+        dict_copy_depth_1_no_rehash(ir.weak_definitions),
         copy(ir.cached_mask),
         copy(ir.cached_idxs),
         copy(ir.non_canonical_idxs),

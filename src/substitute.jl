@@ -355,33 +355,48 @@ Wrappers for [`BasicSymbolic`](@ref) should implement this function by unwrappin
 
 See also: [`default_is_atomic`](@ref).
 """
-function search_variables!(buffer, expr::BasicSymbolic; is_atomic::F = default_is_atomic, recurse::G = iscall) where {F, G}
+function search_variables!(buffer, expr::BasicSymbolic{T}; is_atomic::F = default_is_atomic, recurse::G = iscall, _seen::Union{Base.IdSet{BasicSymbolic{T}}, Nothing} = nothing) where {T, F, G}
     if is_atomic(expr)
         push!(buffer, expr)
-        return
+        return nothing
     end
-    recurse(expr) || return
+    recurse(expr) || return nothing
+    seen = _seen === nothing ? Base.IdSet{BasicSymbolic{T}}() : _seen
+    _search_variables_impl!(buffer, expr, is_atomic, recurse, seen)
+    return nothing
+end
+
+function _search_variables_impl!(buffer, expr::BasicSymbolic{T}, is_atomic::F, recurse::G, seen::Base.IdSet{BasicSymbolic{T}}) where {T, F, G}
+    expr in seen && return nothing
+    push!(seen, expr)
+    if is_atomic(expr)
+        push!(buffer, expr)
+        return nothing
+    end
+    recurse(expr) || return nothing
     @match expr begin
         BSImpl.Term(; f, args) => begin
-            search_variables!(buffer, f; is_atomic, recurse)
+            if f isa BasicSymbolic{T}
+                _search_variables_impl!(buffer, f, is_atomic, recurse, seen)
+            end
             for arg in args
-                search_variables!(buffer, arg; is_atomic, recurse)
+                _search_variables_impl!(buffer, arg, is_atomic, recurse, seen)
             end
         end
         BSImpl.AddMul(; dict) => begin
             for k in keys(dict)
-                search_variables!(buffer, k; is_atomic, recurse)
+                _search_variables_impl!(buffer, k, is_atomic, recurse, seen)
             end
         end
         BSImpl.Div(; num, den) => begin
-            search_variables!(buffer, num; is_atomic, recurse)
-            search_variables!(buffer, den; is_atomic, recurse)
+            _search_variables_impl!(buffer, num, is_atomic, recurse, seen)
+            _search_variables_impl!(buffer, den, is_atomic, recurse, seen)
         end
         BSImpl.ArrayOp(; expr = inner_expr, term) => begin
-            search_variables!(buffer, @something(term, inner_expr); is_atomic, recurse)
+            _search_variables_impl!(buffer, @something(term, inner_expr), is_atomic, recurse, seen)
         end
         BSImpl.ArrayMaker(; values) => @union_split_smallvec values for val in values
-            search_variables!(buffer, val; is_atomic, recurse)
+            _search_variables_impl!(buffer, val, is_atomic, recurse, seen)
         end
     end
     return nothing
@@ -451,13 +466,22 @@ function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T},
         return substitute(new_expr, subrules)::BasicSymbolic{T}
     end::BasicSymbolic{T}
 end
-@cache function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges::RangesT{SymReal}, reduce)::BasicSymbolic{SymReal}
-    @nospecialize reduce
-    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)::BasicSymbolic{SymReal}
+
+struct IdHashWrapper{T}
+    val::T
+    h::UInt
 end
-@cache function reduce_eliminated_idxs_2(expr::BasicSymbolic{SafeReal}, output_idx::OutIdxT{SafeReal}, ranges::RangesT{SafeReal}, reduce)::BasicSymbolic{SafeReal}
+IdHashWrapper(x) = IdHashWrapper(x, objectid(x))
+Base.hash(x::IdHashWrapper, h::UInt) = hash(x.h, h)
+Base.isequal(a::IdHashWrapper, b::IdHashWrapper) = a.val === b.val
+
+@cache function reduce_eliminated_idxs_1(expr::BasicSymbolic{SymReal}, output_idx::OutIdxT{SymReal}, ranges_wrapped::IdHashWrapper{RangesT{SymReal}}, reduce)::BasicSymbolic{SymReal}
     @nospecialize reduce
-    _reduce_eliminated_idxs(expr, output_idx, ranges, reduce)::BasicSymbolic{SafeReal}
+    _reduce_eliminated_idxs(expr, output_idx, ranges_wrapped.val, reduce)::BasicSymbolic{SymReal}
+end
+@cache function reduce_eliminated_idxs_2(expr::BasicSymbolic{SafeReal}, output_idx::OutIdxT{SafeReal}, ranges_wrapped::IdHashWrapper{RangesT{SafeReal}}, reduce)::BasicSymbolic{SafeReal}
+    @nospecialize reduce
+    _reduce_eliminated_idxs(expr, output_idx, ranges_wrapped.val, reduce)::BasicSymbolic{SafeReal}
 end
 
 """
@@ -479,10 +503,11 @@ using the provided reduction function.
   reduction function.
 """
 function reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, @nospecialize(reduce)) where {T}
+    wrapped = IdHashWrapper(ranges)
     if T === SymReal
-        return reduce_eliminated_idxs_1(expr, output_idx, ranges, reduce)::BasicSymbolic{T}
+        return reduce_eliminated_idxs_1(expr, output_idx, wrapped, reduce)::BasicSymbolic{T}
     elseif T === SafeReal
-        return reduce_eliminated_idxs_2(expr, output_idx, ranges, reduce)::BasicSymbolic{T}
+        return reduce_eliminated_idxs_2(expr, output_idx, wrapped, reduce)::BasicSymbolic{T}
     end
     _unreachable()
 end

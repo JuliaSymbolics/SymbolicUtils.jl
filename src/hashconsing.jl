@@ -321,67 +321,12 @@ end
 hash_shape(sh::Unknown, h::UInt) = hash(sh, h)
 
 """
-    $METHODLIST
-
-Custom hash functions for `vartype(x)`, since hashes of types defined in a module are not
-stable across machines or processes.
-"""
-vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a, h)
-vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d, h)
-vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
-
-"""
     $TYPEDSIGNATURES
 
 Custom hash functions for `AddMul.variant`, since it falls back to the `Base.Enum`
 implementation, which uses `objectid`, which changes across runs.
 """
 hash_addmulvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
-
-const FNTYPE_SEED = 0x8b414291138f6c45
-
-"""
-    $TYPEDSIGNATURES
-
-Custom hash function for a type that may be an `FnType`, since hashes of types defined in a module are not
-stable across machines or processes.
-"""
-function hash_maybe_fntype(T::TypeT, h::UInt)
-    @nospecialize T
-    if T === Number
-        hash(Number, h)
-    elseif T === Real
-        hash(Real, h)
-    elseif T === Bool
-        hash(Bool, h)
-    elseif T === Int
-        hash(Int, h)
-    elseif T === BigInt
-        hash(BigInt, h)
-    elseif T === Float64
-        hash(Float64, h)
-    elseif T === Rational{Int}
-        hash(Rational{Int}, h)
-    elseif T === Integer
-        hash(Integer, h)
-    elseif T === Vector{Real}
-        hash(Vector{Real}, h)
-    elseif T === Vector{Number}
-        hash(Vector{Number}, h)
-    elseif T === Vector{Bool}
-        hash(Vector{Bool}, h)
-    elseif T === Matrix{Real}
-        hash(Matrix{Real}, h)
-    elseif T === Matrix{Number}
-        hash(Matrix{Number}, h)
-    elseif T === Matrix{Bool}
-        hash(Matrix{Bool}, h)
-    elseif T <: FnType
-        hash(T.parameters[1], hash(T.parameters[2], hash(T.parameters[3], h)::UInt)::UInt)::UInt ⊻ FNTYPE_SEED
-    else
-        hash(T, h)::UInt
-    end
-end
 
 function value_typed_hash(m, h::UInt)
     @nospecialize m
@@ -431,6 +376,23 @@ function hash_metadata(m::MetadataT, h::UInt)
 end
 
 """
+    $TYPEDSIGNATURES
+
+Hashes of types are not stable across Julia versions, and more importantly across machines. This
+means there can be significant observable differences in how expressions print on different machines.
+It also leads to bugs that cannot be reproduced on another machine in case algorithms indirectly
+depend on the hash ordering of expressions. This function converts types to strings and encodes the
+hash in the generated function. Since the hash of a string is stable across machines, the same
+type should consistently get the same hash.
+
+In benchmarks, the dynamic dispatch incurred by calling this function was found to be comparable
+to or even cheaper than `hash(::DataType)`, depending on the type hashed.
+"""
+@generated function hash_type(::Type{T}, h::UInt) where {T}
+    return :(hash($(hash(string(T))), h))
+end
+
+"""
     hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 
 Core hash function for `BasicSymbolic`. `full` must be equal to the current value of
@@ -440,7 +402,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
     if !iszero(h)
         return hash(hash_bsimpl(s, zero(h), full), h)::UInt
     end
-    h = vartype_hash(T, h)
+    h = hash_type(T, h)
 
     partial::UInt = @match s begin
         BSImpl.Const(; val, hash) => begin
@@ -450,7 +412,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
                 h = hash
             end
             if full
-                h = hash_maybe_fntype(typeof(val)::TypeT, h)::UInt
+                h = hash_type(typeof(val)::TypeT, h)::UInt
             end
             return h
         end
@@ -459,13 +421,13 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
             h = hash_shape(shape, h)
-            h = hash_maybe_fntype(type, h)
+            h = hash_type(type, h)
             h ⊻ SYM_SALT
         end
         BSImpl.Term(; f, args, shape, hash, hash2, type) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            h = hash_maybe_fntype(type, h)
+            h = hash_type(type, h)
             if shape isa Unknown
                 h = hash_shape(shape, h)
             elseif shape isa ShapeVecT
@@ -479,26 +441,26 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
+            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_type(type, h))), full))
             if full
-                htmp = hash_maybe_fntype(typeof(coeff)::TypeT, htmp)
+                htmp = hash_type(typeof(coeff)::TypeT, htmp)
             end
             htmp
         end
         BSImpl.Div(; num, den, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            hash_bsimpl(num, hash_bsimpl(den, hash_shape(shape, hash_maybe_fntype(type, h)), full), full) ⊻ DIV_SALT
+            hash_bsimpl(num, hash_bsimpl(den, hash_shape(shape, hash_type(type, h)), full), full) ⊻ DIV_SALT
         end
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, hash_shape(shape, hash_maybe_fntype(type, h)), full)))::UInt, full))
+            Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, hash_shape(shape, hash_type(type, h)), full)))::UInt, full))
         end
         BSImpl.ArrayMaker(; regions, values, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(regions, Base.hash(values, hash_shape(shape, hash_maybe_fntype(type, h))))
+            Base.hash(regions, Base.hash(values, hash_shape(shape, hash_type(type, h))))
         end
     end
 

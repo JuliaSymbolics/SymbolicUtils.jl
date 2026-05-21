@@ -1202,3 +1202,15 @@ end
     end)
     @test reference == value
 end
+
+@testset "`LHS_HOOK_KEY`" begin
+    @syms x
+    ir = IRStructure{SymReal}()
+    rw = Dict()
+    rw[Code.LHS_HOOK_KEY] = (_, _, lhs) -> :($lhs::Any)
+    expr = Code.fast_toexpr(sin(x), ir, rw)
+    test_repr(expr, quote
+        var"##cse#0"::Any = x
+        var"##cse#1"::Any = $sin(var"##cse#0")
+    end)
+end

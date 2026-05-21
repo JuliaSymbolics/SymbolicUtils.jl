@@ -502,3 +502,17 @@ end
     sub = SU.Substituter{false}(rules)
     @test isequal(irsub(expr), sub(expr))
 end
+
+@testset "`IRSubstituter` doesn't process filtered subtrees" begin
+    # It used to still give the correct result, but processed (and thus cached)
+    # subtrees which are filtered out.
+    @syms x y
+    filterer = x -> iscall(x) && operation(x) !== sin
+    expr = sin(x) + cos(y)
+    ir = IRStructure{SymReal}()
+    subber = IRSubstituter{false}(ir, Dict(y => x); filterer)
+    res = subber(expr)
+    @test isequal(res, sin(x) + cos(x))
+    x_idx = ir[x]
+    @test !haskey(subber.cache, x_idx)
+end

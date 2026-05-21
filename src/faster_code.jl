@@ -81,6 +81,15 @@ function CodegenState(expr::Expr, block::Expr, ir::IRStructure{T}, rewrites = Di
 end
 
 """
+Key to use in the `rewrites` dictionary passed to [`fast_toexpr`](@ref) or [`CodegenState`](@ref)
+for modifying the LHS of any declarations. The value should be a function which takes
+`cs::CodegenState`, `idx::Integer` the integer index in `IRStructure` of the value
+being generated (or `-1` if it is a miscellaneous variable), and `lhs::Symbol` the
+current assignment LHS.
+"""
+const LHS_HOOK_KEY = :__lhs_hookₛᵧₘ
+
+"""
     $TYPEDSIGNATURES
 
 Generate the code in `sym` for the symbolic expression at index `idx` in `cs.ir::IRStructure`.
@@ -93,7 +102,12 @@ via [`SymbolicUtils.Code.declare!`](@ref) and use them here.
 """
 function codegen!(cs::CodegenState, idx::Integer, @nospecialize(sym))
     lhs = get_cse_name(length(cs.cache))
-    push!(cs.block.args, Expr(:(=), lhs, sym))
+    lhs_hook = get(cs.rewrites, LHS_HOOK_KEY, nothing)
+    if lhs_hook !== nothing
+        push!(cs.block.args, Expr(:(=), lhs_hook(cs, idx, lhs), sym))
+    else
+        push!(cs.block.args, Expr(:(=), lhs, sym))
+    end
     insert!(cs.cache, idx, lhs)
     return lhs
 end
@@ -116,7 +130,12 @@ declared via this function are intended as temporaries, and repeated declaration
 overwrite the previous value.
 """
 function declare!(cs::CodegenState, lhs, @nospecialize(rhs))
-    push!(cs.block.args, Expr(:(=), lhs, rhs))
+    lhs_hook = get(cs.rewrites, LHS_HOOK_KEY, nothing)
+    if lhs_hook !== nothing
+        push!(cs.block.args, Expr(:(=), lhs_hook(cs, -1, lhs), rhs))
+    else
+        push!(cs.block.args, Expr(:(=), lhs, rhs))
+    end
     return lhs
 end
 

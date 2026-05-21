@@ -103,6 +103,8 @@ struct AdjView{T <: Integer}
     entry::Union{NTuple{2, T}, Vector{T}, Set{T}}
 end
 
+Base.empty(::AdjView{T}) where {T} = AdjView((zero(T), zero(T)))
+
 Base.eltype(::Type{AdjView{T}}) where {T} = T
 
 # length and membership dispatch through _flen / _fin (defined for all three).

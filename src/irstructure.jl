@@ -688,6 +688,7 @@ struct IRSubstituter{Fold, T, D <: AbstractDict{BasicSymbolic{T}, BasicSymbolic{
     filterer::F
     cache::Dict{Int32, Int32}
     reachability::Vector{Int32}
+    dfs_visited::BitVector
 end
 
 """
@@ -698,7 +699,7 @@ Create an `IRSubstituter` using the given `ir` and `rules`.
 function IRSubstituter{Fold}(
         ir::IRStructure{T}, rules::D; filterer::F = default_substitute_filter
     ) where {Fold, T, D <: AbstractDict, F}
-    IRSubstituter{Fold, T, D, F}(ir, rules, filterer, Dict{Int32, Int32}(), Int32[])
+    IRSubstituter{Fold, T, D, F}(ir, rules, filterer, Dict{Int32, Int32}(), Int32[], falses(length(ir)))
 end
 
 get_substitution_dict(sub::IRSubstituter) = sub.rules
@@ -718,7 +719,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
     # work correctly.
     require_canonical(sub.ir)
 
-    (; rules, filterer, ir) = sub
+    (; rules, filterer, ir, dfs_visited) = sub
 
     # Check the cache, filter, and rules for `idx`
     cached = get(sub.cache, idx, zero(Int32))
@@ -746,7 +747,20 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
     empty!(queue)
     reachability = sub.reachability
     empty!(reachability)
-    get_reachability!(reachability, ir, idx)
+    # We don't use `get_reachability!` because that won't respect `filterer`
+    nbors_fn = let filterer = filterer, ir = ir
+        function __nbors_fn(graph, idx)
+            nbors = Graphs.outneighbors(graph, idx)
+            return filterer(ir[idx]) ? nbors : empty(nbors)
+        end
+    end
+    resize!(dfs_visited, length(ir))
+    fill!(dfs_visited, false)
+    rdfs = RecursiveDFS(ir.dependency_graph; neighbors_fn = nbors_fn, on_exit = PushToBuffer(reachability), visited = dfs_visited)
+    rdfs(idx)
+    # Remove `idx` from the end
+    pop!(reachability)
+
     for i in reachability
         # Check the cache, filter, and rules for `i`
         cached = get(sub.cache, i, zero(Int32))

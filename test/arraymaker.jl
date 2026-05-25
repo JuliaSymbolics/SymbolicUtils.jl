@@ -1,7 +1,9 @@
 using SymbolicUtils
 using SymbolicUtils.Code
 using TermInterface
+using StaticArrays
 using Test
+import SymbolicUtils as SU
 
 @syms x[1:3]::Real y[1:3]::Real z[1:3]::Real
 @testset "macro" begin
@@ -88,3 +90,15 @@ end
     @test isequal(collect(w), truew)
 end
 
+@testset "`SVector` in arguments" begin
+    @syms x y z
+    regions = SU.RegionsT((SU.ShapeVecT((1:1,)), SU.ShapeVecT((2:2,)), SU.ShapeVecT((3:3,))))
+    vals = SymbolicUtils.term(SVector{3}, [x], [y], [z])
+    maker = maketerm(typeof(x), SymbolicUtils.ArrayMaker{SymReal}, SymbolicUtils.ArgsT{SymReal}((regions, vals)), nothing)
+    reference = @makearray w[1:3] begin
+        w[1:1] => vals[1]
+        w[2:2] => vals[2]
+        w[3:3] => vals[3]
+    end
+    @test isequal(maker, reference)
+end

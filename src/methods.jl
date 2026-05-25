@@ -270,6 +270,15 @@ function promote_symtype(::typeof(array_literal), Tp::TypeT, Ts::TypeT...)
     return Array{_sequential_promote(Ts...), length(Tp.parameters)}
 end
 
+function promote_symtype(::Type{T}, args::TypeT...) where {T <: StaticArraysCore.StaticArray}
+    # We don't gain anything by making the symtype `SArray`, just more cases to handle
+    return Array{_sequential_promote(args...), ndims(T)}
+end
+
+function promote_shape(::Type{T}, @nospecialize(shs::ShapeT...)) where {T <: StaticArraysCore.StaticArray}
+    return ShapeVecT((:).(1, size(T)))
+end
+
 promote_symtype(::typeof(rem2pi), T::TypeT, mode::TypeT) = T
 
 @noinline function _throw_array(f, shs...)

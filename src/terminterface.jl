@@ -264,7 +264,18 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
     elseif f === ArrayOp{T}
         return ArrayOp{T}(args...)::BasicSymbolic{T}
     elseif f === ArrayMaker{T}
-        return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, @view(arguments(args[2])[2:end]))
+        values_arg = args[2]
+        @match values_arg begin
+            BSImpl.Term(; f = vf, args = vargs) => if vf === array_literal
+                return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, @view(vargs[2:end]))
+            elseif vf <: StaticArraysCore.SVector
+                return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, vargs)
+            else
+                _unreachable()
+            end
+            BSImpl.Const(; val) => return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, val)
+            _ => _unreachable()
+        end
     elseif f === broadcast
         _f, _args = Iterators.peel(args)
         res = broadcast(unwrap_const(_f), _args...)

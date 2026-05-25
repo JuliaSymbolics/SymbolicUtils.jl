@@ -665,8 +665,8 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 end
                 _ => begin
                     # Unfortunately, scalarizing `val` requires getting the canonical expr.
-                    val = cs(SymbolicUtils.get_canonical_expr(cs.ir, val_idx))
-                    scalar_idxs[region] = cs(val[SymbolicUtils.stable_eachindex(val)[1]])
+                    canon_ex = SymbolicUtils.get_canonical_expr(cs.ir, val_idx)
+                    scalar_idxs[region] = cs(canon_ex[SymbolicUtils.stable_eachindex(canon_ex)[1]])
                 end
             end
             continue

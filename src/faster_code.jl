@@ -663,6 +663,10 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
                 end
+                BSImpl.Term(; f) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray end => begin
+                    first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[1]
+                    scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                end
                 _ => begin
                     # Unfortunately, scalarizing `val` requires getting the canonical expr.
                     canon_ex = SymbolicUtils.get_canonical_expr(cs.ir, val_idx)

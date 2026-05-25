@@ -239,6 +239,9 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
             BSImpl.Term(; f, args) && if f === array_literal end => begin
                 return args[1 + as_linear_idx(sh, sidxs)]
             end
+            BSImpl.Term(; f, args) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray end => begin
+                return args[as_linear_idx(sh, sidxs)]
+            end
             BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => begin
                 return args[as_linear_idx(sh, sidxs)]
             end
@@ -329,6 +332,9 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
         BSImpl.Const(; val) && if all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => return Const{T}(val[unwrap_const.(idxs)...])
         BSImpl.Term(; f) && if f === array_literal && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
             return Const{T}(reshape(@view(arguments(arr)[2:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
+        end
+        BSImpl.Term(; f) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
+            return Const{T}(reshape(arguments(arr), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin

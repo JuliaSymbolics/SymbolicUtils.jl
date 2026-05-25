@@ -39,6 +39,7 @@ PrecompileTools.@recompile_invalidations begin
     using DataStructures
     using ReadOnlyArrays
     import Graphs
+    import StaticArraysCore
 end
 import LinearAlgebra
 

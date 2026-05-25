@@ -7,6 +7,7 @@ using Setfield
 import SymbolicIndexingInterface as SII
 using Test, ReferenceTests
 import LinearAlgebra
+using StaticArrays
 using SparseArrays
 
 include("utils.jl")
@@ -1399,4 +1400,14 @@ end
     ex = ex + [3, 4, 5]
     @test isequal(ex.coeff, [4, 6, 8])
     @test isequal(ex.dict, Dict(x => 1))
+end
+
+@testset "`StaticArray` as operation" begin
+    @syms x y z
+    t = term(SVector{3}, x, y, z)
+    @test symtype(t) === Vector{Number}
+    @test shape(t) == [1:3]
+    @test isequal(t[1], x)
+    @test isequal(t[2], y)
+    @test isequal(t[3], z)
 end

@@ -742,8 +742,16 @@ function codegen_function!(
         return declare!(cs, get_misc_identifier(cs), result)
     end
 
-    for (idx, arg_idx) in enumerate(Iterators.drop(args_idxs, 1))
-        declare!(cs, :_, Expr(:call, setindex!, output_buffer, cs(cs.ir[arg_idx]), idx))
+    eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
+    cart_idxs = CartesianIndices(Tuple(sh::ShapeVecT))
+    for iter in Iterators.partition(enumerate(Iterators.drop(args_idxs, 1)), BATCHED_SETINDEX_BATCH_SIZE)
+        vals_expr = Expr(:tuple)
+        idxs_expr = Expr(:tuple)
+        for (idx, arg_idx) in iter
+            push!(vals_expr.args, Expr(:call, eltype_expr, cs(cs.ir[arg_idx])))
+            push!(idxs_expr.args, cart_idxs[idx])
+        end
+        declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, vals_expr, idxs_expr))
     end
 
     return output_buffer

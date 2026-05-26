@@ -579,7 +579,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         for ax in sh
             push!(sz_expr.args, length(ax))
         end
-        if all(<=(STATIC_ARRAY_LIMIT), sz_expr.args) && length(sz_expr.args) <= 2
+        if all(<=(STATIC_ARRAY_LIMIT), sz_expr.args) && length(sz_expr.args) <= 2 && _allocator === zeros
             result = Expr(:call, fill_sarr, Expr(:call, Val, sz_expr))
             for idx in SymbolicUtils.stable_eachindex(expr)
                 push!(result.args, cs(expr[idx]))
@@ -757,7 +757,7 @@ function codegen_function!(
     if len <= FILL_ARR_LIMIT
         sz_val = unwrap_const(cs.ir[first(args_idxs)])
         ndims_arr = length(sz_val)
-        if all(<=(STATIC_ARRAY_LIMIT), sz_val) && ndims_arr <= 2
+        if all(<=(STATIC_ARRAY_LIMIT), sz_val) && ndims_arr <= 2 && _allocator === zeros
             result = Expr(:call, fill_sarr, Expr(:call, Val, sz_val))
             for arg_idx in Iterators.drop(args_idxs, 1)
                 push!(result.args, cs(cs.ir[arg_idx]))

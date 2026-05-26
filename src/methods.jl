@@ -1743,3 +1743,7 @@ end
 function promote_shape(::Type{T}, @nospecialize(sh::ShapeT)) where {T <: Returns}
     return sh
 end
+
+function promote_symtype(::Type{SparseMatrixCSC}, Tm::TypeT, Tn::TypeT, TI::TypeT, TJ::TypeT, TV::TypeT)
+    return Matrix{TV.parameters[1]::TypeT}
+end

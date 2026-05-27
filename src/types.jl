@@ -313,9 +313,7 @@ non-symbolic `x`, but also works on non-array values.
 """
 function shape end
 
-Base.@nospecializeinfer @generated function _shape_notsymbolic(x)
-    @nospecialize x
-    
+macro __generate_shape_notsymbolic()
     expr = Expr(:if)
     cur_expr = expr
     i = 0
@@ -351,10 +349,12 @@ Base.@nospecializeinfer @generated function _shape_notsymbolic(x)
     push!(cur_expr.args, :(x isa $(AbstractArray)))
     push!(cur_expr.args, :($ShapeVecT(axes(x))))
     push!(cur_expr.args, :($ShapeVecT()))
-    quote
-        @nospecialize x
-        $expr
-    end
+
+    return esc(expr)
+end
+
+Base.@nospecializeinfer function _shape_notsymbolic(@nospecialize(x))
+    @__generate_shape_notsymbolic
 end
 
 function shape(x::BasicSymbolic)

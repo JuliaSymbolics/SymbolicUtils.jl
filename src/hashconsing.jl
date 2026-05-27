@@ -9,15 +9,7 @@ information.
 """
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
-"""
-    $TYPEDSIGNATURES
-
-Generated function which manually dispatches on `isequal` for common scalar types,
-avoiding dynamic dispatch in common cases.
-"""
-@generated function isequal_somescalar(a, b)
-    @nospecialize a b
-    
+macro __generate_isequal_somescalar()
     expr = Expr(:if)
     cur_expr = expr
 
@@ -32,10 +24,17 @@ avoiding dynamic dispatch in common cases.
     end
     
     push!(cur_expr.args, :(isequal(a, b)::Bool))
-    quote
-        @nospecialize a b
-        $expr
-    end
+    return esc(expr)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Generated function which manually dispatches on `isequal` for common scalar types,
+avoiding dynamic dispatch in common cases.
+"""
+function isequal_somescalar(@nospecialize(a), @nospecialize(b))
+    @__generate_isequal_somescalar
 end
 
 """
@@ -225,14 +224,7 @@ Base.isequal(a::WeakRef, b::BSImpl.Type) = isequal(a.value, b)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 
-"""
-    $TYPEDSIGNATURES
-
-Manual dispatch on `hash` for common scalar types, avoiding dynamic dispatch when
-`a` is uninferred.
-"""
-@inline @generated function hash_somescalar(a, h::UInt)
-    @nospecialize a
+macro __generate_hash_somescalar()
     expr = Expr(:if)
     cur_expr = expr
 
@@ -247,10 +239,19 @@ Manual dispatch on `hash` for common scalar types, avoiding dynamic dispatch whe
     end
     
     push!(cur_expr.args, :(hash(a, h)::UInt))
-    quote
-        @nospecialize a
-        $expr
-    end
+    return esc(expr)
+end
+"""
+    $TYPEDSIGNATURES
+
+Manual dispatch on `hash` for common scalar types, avoiding dynamic dispatch when
+`a` is uninferred.
+"""
+function hash_somescalar(@nospecialize(a), h::UInt)
+    # Done this way because the manual dispatch chain is too long to write out
+    # by hand, `@eval` causes Revise to error, and `@generated` completely
+    # negates the `@nospecialize`.
+    @__generate_hash_somescalar
 end
 
 const UNITRANGE_SALT = 0x65888b97ed76e7a3 % UInt

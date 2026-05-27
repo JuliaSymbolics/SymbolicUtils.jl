@@ -2,9 +2,7 @@ const NonTreeSym = Union{BasicSymbolic{SymReal}, BasicSymbolic{SafeReal}}
 
 import Base: (+), (-), (*), (//), (/), (\), (^)
 
-@generated function _numeric_or_arrnumeric_type(S::TypeT)
-    @nospecialize S
-    
+macro __generate_numeric_or_arrrnumeric_type()
     expr = Expr(:if)
     cur_expr = expr
     push!(cur_expr.args, :(S === Number))
@@ -58,10 +56,12 @@ import Base: (+), (-), (*), (//), (/), (\), (^)
         end
     end
     push!(cur_expr.args, :(S <: Union{Number, AbstractArray{<:Number}}))
-    quote
-        @nospecialize S
-        $expr
-    end
+
+    return esc(expr)
+end
+
+function _numeric_or_arrnumeric_type(@nospecialize(S::TypeT))
+    @__generate_numeric_or_arrrnumeric_type
 end
 
 function _numeric_or_arrnumeric_symtype(x)
@@ -72,9 +72,7 @@ function _numeric_or_arrnumeric_symtype(x)
     end
 end
 
-@generated function _rational_or_arrrational_type(S::TypeT)
-    @nospecialize S
-    
+macro __generate_rational_or_arrrational_type()
     expr = Expr(:if)
     cur_expr = expr
     i = 0
@@ -91,10 +89,11 @@ end
         end
     end
     push!(cur_expr.args, :(S <: Union{Rat, AbstractArray{<:Rat}}))
-    quote
-        @nospecialize S
-        $expr
-    end
+    return esc(expr)
+end
+
+function _rational_or_arrrational_type(@nospecialize(S::TypeT))
+    @__generate_rational_or_arrrational_type
 end
 
 function _rational_or_arrrational_symtype(x)

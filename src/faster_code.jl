@@ -217,7 +217,7 @@ function enter_scope(cs::CodegenState{T}) where {T}
     new_scope = Expr(:block)
     bm = bookmark(cs)
     scoped_cs = CodegenState{T}(new_scope, new_scope, cs.ir, cs.cache, cs.rewrites, cs.misc_idx)
-    
+
     return scoped_cs, bm
 end
 
@@ -492,6 +492,23 @@ end
     return result
 end
 
+@generated function fill_sarr(::Val{sz}, args...) where {sz}
+    @assert prod(sz) == length(args)
+    if length(sz) == 1
+        return :(SVector{$(sz[1])}(args...))
+    elseif length(sz) == 2
+        return :(SMatrix{$(sz[1]), $(sz[2])}(args...))
+    else
+        error("fill_sarr only supports 1D and 2D arrays, got shape $sz")
+    end
+end
+
+"""
+Maximum total element count for which `fill_sarr` (returning a StaticArray)
+will be used instead of the mutable `fill_arr!`.
+"""
+const STATIC_ARRAY_LIMIT::Int = 4
+
 """
 Limit until which the generated code for an `ArrayMaker`/`array_literal` will use `fill_arr!`
 over the standard codegen.
@@ -555,22 +572,29 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     values_exprs_idxs = collect(Iterators.drop(values_args, 1))
     sh = shape(expr)
 
-    # The array is small enough, so scalarize it and use `fill_arr!`.
+    # The array is small enough, so scalarize it and use `fill_arr!` or `fill_sarr`.
     if len <= FILL_ARR_LIMIT
         expr = SymbolicUtils.get_canonical_expr(cs.ir, expr_idx)
-        output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
-        result = Expr(:call, fill_arr!, output_buffer)
         sz_expr = Expr(:tuple)
         for ax in sh
             push!(sz_expr.args, length(ax))
         end
-        push!(result.args, Expr(:call, Val, sz_expr))
-        for idx in SymbolicUtils.stable_eachindex(expr)
-            push!(result.args, cs(expr[idx]))
+        if all(<=(STATIC_ARRAY_LIMIT), sz_expr.args) && length(sz_expr.args) <= 2 && _allocator === zeros
+            result = Expr(:call, fill_sarr, Expr(:call, Val, sz_expr))
+            for idx in SymbolicUtils.stable_eachindex(expr)
+                push!(result.args, cs(expr[idx]))
+            end
+        else
+            output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
+            result = Expr(:call, fill_arr!, output_buffer)
+            push!(result.args, Expr(:call, Val, sz_expr))
+            for idx in SymbolicUtils.stable_eachindex(expr)
+                push!(result.args, cs(expr[idx]))
+            end
         end
         return declare!(cs, get_misc_identifier(cs), result)
     end
-    
+
     if _allocator !== zeros && !__allocator_is_returns_expr(T, _allocator) &&
             isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
         output_buffer = codegen_allocator_call!(
@@ -728,19 +752,30 @@ function codegen_function!(
     if _allocator === nothing
         return codegen_function_no_nanmath!(SymbolicUtils.array_literal, cs, expr, expr_idx)
     end
-    output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
     args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
     sh = @match expr begin
         BSImpl.Term(; shape) => shape
     end
+    len = length(expr)::Int
 
-    if length(expr)::Int <= FILL_ARR_LIMIT
-        result = Expr(:call, fill_arr!, output_buffer, Expr(:call, Val, unwrap_const(cs.ir[first(args_idxs)])))
-        for arg_idx in Iterators.drop(args_idxs, 1)
-            push!(result.args, cs(cs.ir[arg_idx]))
+    if len <= FILL_ARR_LIMIT
+        sz_val = unwrap_const(cs.ir[first(args_idxs)])
+        ndims_arr = length(sz_val)
+        if all(<=(STATIC_ARRAY_LIMIT), sz_val) && ndims_arr <= 2 && _allocator === zeros
+            result = Expr(:call, fill_sarr, Expr(:call, Val, sz_val))
+            for arg_idx in Iterators.drop(args_idxs, 1)
+                push!(result.args, cs(cs.ir[arg_idx]))
+            end
+        else
+            output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
+            result = Expr(:call, fill_arr!, output_buffer, Expr(:call, Val, sz_val))
+            for arg_idx in Iterators.drop(args_idxs, 1)
+                push!(result.args, cs(cs.ir[arg_idx]))
+            end
         end
         return declare!(cs, get_misc_identifier(cs), result)
     end
+    output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
 
     eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
     cart_idxs = CartesianIndices(Tuple(sh::ShapeVecT))

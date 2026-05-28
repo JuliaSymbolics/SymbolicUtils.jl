@@ -1650,6 +1650,9 @@ function promote_shape(::typeof(LinearAlgebra.cross), shx::ShapeT, shy::ShapeT)
     return ShapeVecT((1:3,))
 end
 
+function _cross_product(::Type{T}, x, y) where {T}
+    BSImpl.Const{T}(ArgsT{T}((x[2] * y[3] - x[3] * y[2], -x[1] * y[3] + x[3] * y[1], x[1] * y[2] - x[2] * y[1])))
+end
 function LinearAlgebra.cross(x::BasicSymbolic{T}, y::Union{BasicSymbolic{T}, AbstractVector{<:Number}, AbstractVector{BasicSymbolic{T}}}) where {T}
     if y isa Vector{BasicSymbolic{T}}
         st_y = symtype(BSImpl.Const{T}(y))
@@ -1658,7 +1661,7 @@ function LinearAlgebra.cross(x::BasicSymbolic{T}, y::Union{BasicSymbolic{T}, Abs
     end
     promote_symtype(LinearAlgebra.cross, symtype(x), st_y)
     promote_shape(LinearAlgebra.cross, shape(x), shape(y))
-    BSImpl.Const{T}(ArgsT{T}((x[2] * y[3] - x[3] * y[2], -x[1] * y[3] + x[3] * y[1], x[1] * y[2] - x[2] * y[1])))
+    _cross_product(T, x, y)
 end
 function LinearAlgebra.cross(x::Union{AbstractVector{<:Number}, AbstractVector{BasicSymbolic{T}}}, y::BasicSymbolic{T}) where {T}
     if x isa Vector{BasicSymbolic{T}}
@@ -1668,7 +1671,7 @@ function LinearAlgebra.cross(x::Union{AbstractVector{<:Number}, AbstractVector{B
     end
     promote_symtype(LinearAlgebra.cross, symtype(x), symtype(y))
     promote_shape(LinearAlgebra.cross, shape(x), shape(y))
-    BSImpl.Const{T}(ArgsT{T}((x[2] * y[3] - x[3] * y[2], -x[1] * y[3] + x[3] * y[1], x[1] * y[2] - x[2] * y[1])))
+    _cross_product(T, x, y)
 end
 
 struct Fill

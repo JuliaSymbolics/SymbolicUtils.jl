@@ -63,7 +63,7 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
     throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
 end
 
-Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     # Fast path: scalar integer indexing into ArrayOp bypasses @cache (each index is unique).
     # Guarded on VERSION because calling _getindex directly from this Vararg Union method
     # triggers a segfault in Julia 1.10's codegen (general_use_analysis).
@@ -324,7 +324,7 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
     end
 end
 
-Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     @match arr begin
         BSImpl.Const(; val) && if all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => return Const{T}(val[unwrap_const.(idxs)...])
         BSImpl.Term(; f) && if f === array_literal && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin

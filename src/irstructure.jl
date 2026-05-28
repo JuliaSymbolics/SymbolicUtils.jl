@@ -603,14 +603,15 @@ function search_variables!(
     idx = populate_ir!(ir, expr)
     idx in buffer.searched && return
 
+    reachability = get_cached_idxs!(ir)
+    empty!(reachability)
+    get_reachability!(reachability, ir, idx; visited = get_cached_mask!(ir, length(ir)))
+
     mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
         mask[arg_i] = true
     end
 
-    reachability = get_cached_idxs!(ir)
-    empty!(reachability)
-    get_reachability!(reachability, ir, idx)
     for cur_i in Iterators.reverse(reachability)
         mask[cur_i] || continue
         cur_i in buffer.searched && continue

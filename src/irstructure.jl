@@ -146,7 +146,6 @@ function get_reachability!(reachability::Vector{Int32}, ir::IRStructure, idx::In
     g = ir.dependency_graph
     rdfs = RecursiveDFS(g; on_exit = PushToBuffer(reachability), visited)
     n = length(ir)
-    sizehint!(reachability, n)
     rdfs.visited[idx] = true
     for nbor in Graphs.outneighbors(g, idx)
         rdfs.visited[nbor] && continue

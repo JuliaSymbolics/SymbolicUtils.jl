@@ -96,10 +96,12 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
             end
             BSImpl.Term(; f, args) && if f === sqrt && (safe_isinteger(b) && Int(b) % 2 == 0 || b isa Rational && numerator(b)%2 == 0) end => begin
                 exp = safe_isinteger(b) ? (Int(b) // 2) : (b::Rational // 2)
+                exp = safe_isinteger(exp) ? Int(exp) : exp
                 return Const{T}(args[1] ^ exp)
             end
             BSImpl.Term(; f, args) && if f === cbrt && (safe_isinteger(b) && Int(b) % 3 == 0 || b isa Rational && numerator(b)%3 == 0) end => begin
                 exp = safe_isinteger(b) ? (Int(b) // 3) : (b::Rational // 3)
+                exp = safe_isinteger(exp) ? Int(exp) : exp
                 return Const{T}(args[1] ^ exp)
             end
             _ => nothing

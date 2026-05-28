@@ -142,11 +142,10 @@ them (parents). Writes the result to and returns `reachability`.
 This function allocates its own scratch space and does not use `ir.cached_mask` or
 `ir.cached_idxs`, so it is safe to call even when those are held by an outer caller.
 """
-function get_reachability!(reachability::Vector{Int32}, ir::IRStructure, idx::Int32)
+function get_reachability!(reachability::Vector{Int32}, ir::IRStructure, idx::Int32; visited::BitVector = falses(Graphs.nv(ir.dependency_graph)))
     g = ir.dependency_graph
-    rdfs = RecursiveDFS(g; on_exit = PushToBuffer(reachability))
+    rdfs = RecursiveDFS(g; on_exit = PushToBuffer(reachability), visited)
     n = length(ir)
-    sizehint!(reachability, n)
     rdfs.visited[idx] = true
     for nbor in Graphs.outneighbors(g, idx)
         rdfs.visited[nbor] && continue
@@ -604,14 +603,15 @@ function search_variables!(
     idx = populate_ir!(ir, expr)
     idx in buffer.searched && return
 
+    reachability = get_cached_idxs!(ir)
+    empty!(reachability)
+    get_reachability!(reachability, ir, idx; visited = get_cached_mask!(ir, length(ir)))
+
     mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
         mask[arg_i] = true
     end
 
-    reachability = get_cached_idxs!(ir)
-    empty!(reachability)
-    get_reachability!(reachability, ir, idx)
     for cur_i in Iterators.reverse(reachability)
         mask[cur_i] || continue
         cur_i in buffer.searched && continue

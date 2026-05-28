@@ -26,7 +26,7 @@ Alias for [`BSImpl.Sym{T}`](@ref).
 
 Alias for [`BSImpl.Term{T}`](@ref) except it also unwraps `args`.
 """
-@inline function Term{T}(f, args; type = _promote_symtype(f, args), kw...) where {T}
+@inline function Term{T}(@nospecialize(f), args; type = _promote_symtype(f, args), kw...) where {T}
     args = unwrap_args(args)
     BSImpl.Term{T}(f, args; type, kw...)
 end

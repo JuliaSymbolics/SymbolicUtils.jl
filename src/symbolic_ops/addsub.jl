@@ -14,7 +14,12 @@ function promote_shape(::typeof(+), sh1::ShapeT, sh2::ShapeT, shs::ShapeT...)
         promote_shape(+, sh2, shs...)
     elseif sh2 isa Unknown
         promote_shape(+, sh1, shs...)
-    else
+    elseif sh1 isa ShapeVecT && sh2 isa ShapeVecT
+        if isempty(sh1)
+            # `isempty(sh2)` guaranteed because `nd1 == nd2`
+            all(s -> s isa ShapeVecT && isempty(s), shs) && return sh1
+            return promote_shape(+, sh1, shs...)
+        end
         new_shape = ShapeVecT()
         sizehint!(new_shape, length(sh1))
         for (shi, shj) in zip(sh1, sh2)

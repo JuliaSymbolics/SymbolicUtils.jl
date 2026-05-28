@@ -142,9 +142,9 @@ them (parents). Writes the result to and returns `reachability`.
 This function allocates its own scratch space and does not use `ir.cached_mask` or
 `ir.cached_idxs`, so it is safe to call even when those are held by an outer caller.
 """
-function get_reachability!(reachability::Vector{Int32}, ir::IRStructure, idx::Int32)
+function get_reachability!(reachability::Vector{Int32}, ir::IRStructure, idx::Int32; visited::BitVector = falses(Graphs.nv(ir.dependency_graph)))
     g = ir.dependency_graph
-    rdfs = RecursiveDFS(g; on_exit = PushToBuffer(reachability))
+    rdfs = RecursiveDFS(g; on_exit = PushToBuffer(reachability), visited)
     n = length(ir)
     sizehint!(reachability, n)
     rdfs.visited[idx] = true

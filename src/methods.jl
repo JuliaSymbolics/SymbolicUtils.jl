@@ -580,6 +580,21 @@ end
 
 ## Booleans
 
+function promote_symtype(::typeof(==), T::TypeT, S::TypeT)
+    return Bool
+end
+function promote_shape(::typeof(==), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    return ShapeVecT()
+end
+function promote_symtype(::typeof(!=), T::TypeT, S::TypeT)
+    return Bool
+end
+function promote_shape(::typeof(!=), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    return ShapeVecT()
+end
+
 # binary ops that return Bool
 for (f, Domain) in [(==) => Number, (!=) => Number,
                     (<=) => Real,   (>=) => Real,
@@ -587,18 +602,22 @@ for (f, Domain) in [(==) => Number, (!=) => Number,
                     (<) => Real,
                     (& ) => Bool,   (| ) => Bool,
                     xor => Bool]
+    if f !== (==) && f !== (!=)
+        @eval begin
+            function promote_symtype(::$(typeof(f)), T::TypeT, S::TypeT)
+                @assert T <: $Domain
+                @assert S <: $Domain
+                return Bool
+            end
+            function promote_shape(::$(typeof(f)), sha::ShapeT, shb::ShapeT)
+                @nospecialize sha shb
+                is_array_shape(sha) && _throw_array($f, sha, shb)
+                is_array_shape(shb) && _throw_array($f, sha, shb)
+                return ShapeVecT()
+            end
+        end
+    end
     @eval begin
-        function promote_symtype(::$(typeof(f)), T::TypeT, S::TypeT)
-            @assert T <: $Domain
-            @assert S <: $Domain
-            return Bool
-        end
-        function promote_shape(::$(typeof(f)), sha::ShapeT, shb::ShapeT)
-            @nospecialize sha shb
-            is_array_shape(sha) && _throw_array($f, sha, shb)
-            is_array_shape(shb) && _throw_array($f, sha, shb)
-            return ShapeVecT()
-        end
         function (::$(typeof(f)))(a::BasicSymbolic{T}, b::$Domain) where {T}
             if !(symtype(a) <: $Domain)
                 throw(MethodError($f, (a, b)))

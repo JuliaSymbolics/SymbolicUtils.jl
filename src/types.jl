@@ -868,7 +868,7 @@ julia> getmetadata(x, Float64, "no type")
 "no type"
 ```
 """
-function getmetadata(s::BasicSymbolic, ctx, default)
+function getmetadata(s::BasicSymbolic, @nospecialize(ctx), default)
     md = metadata(s)
     md === nothing && return default
     return get(md, ctx, default)
@@ -1065,7 +1065,7 @@ end
 
 @inline isassociative(op) = op === (+) || op === (*)
 
-function _promote_symtype(f, args)
+function _promote_symtype(@nospecialize(f), @nospecialize(args))
     if issym(f)
         promote_symtype(f, map(symtype, args)...)
     else

@@ -401,7 +401,7 @@ should be the expected return type of calling `f` with `args`.
 The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
 performance in internal operations.
 """
-@inline function BSImpl.Term{T}(f, args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
+@inline function BSImpl.Term{T}(@nospecialize(f), args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
     args = parse_args(T, args)

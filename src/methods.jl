@@ -49,9 +49,10 @@ end
     end
 end
 
-assert_like(f, T) = nothing
+assert_like(@nospecialize(f), @nospecialize(T)) = nothing
 # a and b are objects, arguments gets recursively checked
 function assert_like(f, T, a, b...)
+    @nospecialize f T a b
     islike(a, T) || throw(ArgumentError(LazyString(
         "The function ", f, " cannot be applied to ", a,
         " which is not a ", T, "-like object.",

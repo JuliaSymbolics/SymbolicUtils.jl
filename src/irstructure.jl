@@ -436,7 +436,7 @@ Return a new [`SymbolicUtils.IRStructure`](@ref) containing only the expressions
 along with their dependencies.
 """
 function subset_ir(ir::IRStructure{T}, expr) where {T}
-    exprs = Set{BasicSymbolic{T}}()
+    exprs = OrderedSet{BasicSymbolic{T}}()
     buffer = IRStructureSearchBuffer(ir, exprs)
     # `Returns(true)` gets all top-level expressions
     search_variables!(buffer, expr; is_atomic = Returns(true))

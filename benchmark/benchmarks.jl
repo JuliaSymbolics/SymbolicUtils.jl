@@ -53,6 +53,11 @@ function make_bench_makearray(n::Int; seed::Int = 42)
     return ArrayMaker{T}(regions, values)
 end
 
+function _make_chain_expr(atoms, n)
+    n == 0 && return atoms[1]
+    return hypot(_make_chain_expr(atoms, n - 1), atoms[mod1(n, length(atoms))])
+end
+
 function random_term(len; atoms, funs, fallback_atom=1)
     xs = rand(atoms, len)
     while length(xs) > 1
@@ -251,6 +256,33 @@ let
             search_variables!($buf_dissimilar, $ir_dissimilar, e)
         end
     end setup=(empty!($buf_dissimilar))
+end
+
+let
+    si = SUITE["irstructure"]["subset_ir"] = BenchmarkGroup()
+
+    n_chains    = 20
+    chain_depth = 500
+
+    # Build n_chains disjoint chains of chain_depth hypot nodes each using non-overlapping
+    # slices of _wide_xs so that no node is shared across chains.
+    # Max recursion depth = chain_depth, which is safe for populate_ir!.
+    chains_si = [_make_chain_expr(_wide_xs[5i-4:5i], chain_depth) for i in 1:n_chains]
+
+    rules = Dict(a => 2sin(b))
+    ir_si = IRStructure{SymReal}()
+    for ch in chains_si
+        populate_ir!(ir_si, ch)
+    end
+    subber_si = SymbolicUtils.IRSubstituter{false}(ir_si, rules)
+
+    # Small: 1 chain covers ~5% of the IR (<10%)
+    small_exprs_si = Set{BasicSymbolic{SymReal}}([chains_si[1]])
+    # Large: first 12 chains cover ~60% of the IR (>50%), leaving 8 chains out
+    large_exprs_si = Set{BasicSymbolic{SymReal}}(chains_si[1:12])
+
+    si["small"] = @benchmarkable SymbolicUtils.subset_ir($(subber_si.ir), $small_exprs_si)
+    si["large"] = @benchmarkable SymbolicUtils.subset_ir($(subber_si.ir), $large_exprs_si)
 end
 
 let

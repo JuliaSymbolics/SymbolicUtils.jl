@@ -418,7 +418,7 @@ function populate_ir!(ir::IRStructure{T}, exprs::AbstractArray{BasicSymbolic{T}}
 end
 
 @noinline function _throw_expr_not_in_ir(expr)
-    throw(ArgumentError(lazy"Expression $expr was not found in the IR!"))
+    throw(ArgumentError(lazy"Expression was not found in the IR!"))
 end
 
 """

@@ -11,7 +11,7 @@ function RecursiveDFS(
         on_enter::E = Returns(nothing), on_exit::X = Returns(nothing),
         visited::BitVector = falses(Graphs.nv(g))
     ) where {G <: Graphs.AbstractGraph, N, E, X}
-    return RecursiveDFS{G, N, E, X}(g, falses(Graphs.nv(g)), neighbors_fn, on_enter, on_exit)
+    return RecursiveDFS{G, N, E, X}(g, visited, neighbors_fn, on_enter, on_exit)
 end
 
 function (rdfs::RecursiveDFS)(cur::Integer)

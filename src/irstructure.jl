@@ -220,6 +220,14 @@ Get the index that a symbolic expression occurs at in `ir`. Does not modify `ir`
 """
 Base.getindex(ir::IRStructure{T}, i::BasicSymbolic{T}) where {T} = ir.definition[i]
 Base.IndexStyle(::Type{T}) where {T <: IRStructure} = IndexLinear()
+
+"""
+    $TYPEDSIGNATURES
+
+Check if `x` exists in `ir`.
+"""
+Base.haskey(ir::IRStructure{T}, x::BasicSymbolic{T}) where {T} = haskey(ir.definition, x)
+
 """
     $TYPEDSIGNATURES
 
@@ -881,6 +889,18 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     idx = ir[old]
     # Any nodes that currently depend on `old` are non-canonical
     union!(ir.non_canonical_idxs, Graphs.inneighbors(ir.dependency_graph, idx))
+
+    # If `ir` already contains `new`, then proceeding normally would
+    # break `IRStructure` invariants. `ir.definition` already contains `new`,
+    # so after this function it would point to `old`, and the index it used
+    # to point to would also contain `new` but not be referred to in `definition`.
+    # To fix this, we simply add metadata to `new`. We know `old` is unique in
+    # `ir`, so its `objectid` is a simple way to make `new` unique even if
+    # there are additional `replace_node!` calls with the same `new`, since they
+    # will have different `old`.
+    if haskey(ir, new)
+        new = setmetadata(new, typeof(replace_node!), objectid(old))
+    end
     ir.symbols[idx] = new
     delete!(ir.definition, old)
     ir.definition[new] = idx
@@ -891,9 +911,10 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     buffer = get!(() -> Int32[], ir.weak_definitions, new)
     push!(buffer, idx)
 
-    iszero(Graphs.outdegree(ir.dependency_graph, idx)) && return
-
     rem_outedges!(ir.dependency_graph, idx)
+
+    iscall(new) || return
+
     op = operation(new)
     if op isa BasicSymbolic{T}
         Graphs.add_edge!(ir.dependency_graph, idx, populate_ir!(ir, op))

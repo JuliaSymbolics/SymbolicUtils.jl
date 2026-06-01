@@ -516,3 +516,35 @@ end
     x_idx = ir[x]
     @test !haskey(subber.cache, x_idx)
 end
+
+@testset "Calling `replace_node!` when `new` already exists in `IRStructure`" begin
+    @syms x y z
+    ir = IRStructure{SymReal}()
+    xidx = populate_ir!(ir, x)
+    yidx = populate_ir!(ir, y)
+    zidx = populate_ir!(ir, z)
+    replace_node!(ir, x, y)
+    @test !haskey(ir, x)
+    @test isequal(ir[xidx], y)
+    @test ir[xidx] !== y # different metadata
+    @test ir[ir[xidx]] == xidx
+    @test ir[ir[yidx]] == yidx
+    replace_node!(ir, z, y)
+    @test !haskey(ir, z)
+    @test isequal(ir[zidx], y)
+    @test ir[zidx] !== y # different metadata
+    @test ir[ir[zidx]] == zidx
+    @test ir[ir[yidx]] == yidx
+end
+
+@testset "`replace_node!` replacing `!iscall(old)` with `iscall(new)`" begin
+    @syms x
+    ir = IRStructure{SymReal}()
+    xidx = populate_ir!(ir, x)
+    @test length(ir) == 1
+    replace_node!(ir, x, sin(x))
+    @test length(ir) == 2
+    @test ir[x] != xidx
+    @test isequal(ir[xidx], sin(x))
+    @test collect(Graphs.outneighbors(ir.dependency_graph, xidx)) == [ir[x]]
+end

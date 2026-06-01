@@ -279,7 +279,7 @@ let
     # Small: 1 chain covers ~5% of the IR (<10%)
     small_exprs_si = Set{BasicSymbolic{SymReal}}([chains_si[1]])
     # Large: first 12 chains cover ~60% of the IR (>50%), leaving 8 chains out
-    large_exprs_si = Set{BasicSymbolic{SymReal}}(chains_si[1:12])
+    large_exprs_si = chains_si[1:12]
 
     si["small"] = @benchmarkable SymbolicUtils.subset_ir($(subber_si.ir), $small_exprs_si)
     si["large"] = @benchmarkable SymbolicUtils.subset_ir($(subber_si.ir), $large_exprs_si)

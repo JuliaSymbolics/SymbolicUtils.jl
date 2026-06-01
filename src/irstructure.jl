@@ -440,28 +440,24 @@ function subset_ir(
         exprs::Union{AbstractArray{BasicSymbolic{T}}, AbstractSet{BasicSymbolic{T}}}
     ) where {T}
     new_ir = IRStructure{T}()
-    reachables = get_cached_mask!(ir, length(ir))
-    expr_reach = get_cached_idxs!(ir)
+    visited = get_cached_mask!(ir, length(ir))
+    reachables = get_cached_idxs!(ir)
+    empty!(reachables)
     for expr in exprs
         expr_i = get(ir.definition, expr, 0)
         iszero(expr_i) && _throw_expr_not_in_ir(expr)
-        reachables[expr_i] = true
-        empty!(expr_reach)
-        get_reachability!(expr_reach, ir, expr_i)
-        reachables[expr_reach] .= true
+        get_reachability!(reachables, ir, expr_i; visited)
+        visited[expr_i] = true
+        push!(reachables, expr_i)
     end
 
-    n_new_verts = count(reachables)
+    n_new_verts = length(reachables)
     Graphs.add_vertices!(new_ir.dependency_graph, n_new_verts)
     sizehint!(new_ir, n_new_verts)
 
-    # Instead of calling `populate_ir!`, we can directly build the new IR.
-    # Iterate in topological order (children before parents) so that when we
-    # translate edges to new indices, the dependency is already in `new_ir.definition`.
-    topo_order = Graphs.topological_sort_by_dfs(ir.dependency_graph)
     inew = 0
-    for iold in Iterators.reverse(topo_order)
-        reachables[iold] || continue
+    # `reachables` is in topological order
+    for iold in reachables
         inew += 1
         # Add expression to the IR
         sym = ir.symbols[iold]

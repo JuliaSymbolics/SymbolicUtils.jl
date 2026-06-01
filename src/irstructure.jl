@@ -220,6 +220,14 @@ Get the index that a symbolic expression occurs at in `ir`. Does not modify `ir`
 """
 Base.getindex(ir::IRStructure{T}, i::BasicSymbolic{T}) where {T} = ir.definition[i]
 Base.IndexStyle(::Type{T}) where {T <: IRStructure} = IndexLinear()
+
+"""
+    $TYPEDSIGNATURES
+
+Check if `x` exists in `ir`.
+"""
+Base.haskey(ir::IRStructure{T}, x::BasicSymbolic{T}) where {T} = haskey(ir.definition, x)
+
 """
     $TYPEDSIGNATURES
 

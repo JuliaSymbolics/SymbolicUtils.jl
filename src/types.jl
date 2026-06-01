@@ -142,7 +142,7 @@ end
 
 Core ADT for symbolic expressions.
 """
-@data mutable BasicSymbolicImpl{T <: SymVariant} begin 
+@data mutable BasicSymbolicImpl{T <: SymVariant} begin
     struct Const
         const val::Any
         hash::UInt
@@ -263,6 +263,25 @@ The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to th
 allocating a new dictionary.
 """
 const ACDict{T} = Dict{BasicSymbolic{T}, Number}
+
+
+# Add `val` to the value stored at `key` in `h`, inserting `val` if `key` is absent.
+function _accumulate!(h::AbstractDict, key, val)
+    h[key] = get(h, key, 0) + val
+    return h
+end
+# Specialized for `Dict` to only do one lookup.
+function _accumulate!(h::Dict{K, V}, key::K, val) where {K, V}
+    index, sh = Base.ht_keyindex2_shorthash!(h, key)
+    if index > 0
+        @inbounds h.vals[index] = h.vals[index] + val
+    else
+        v = val isa V ? val : convert(V, val)::V
+        @inbounds Base._setindex!(h, v, key, -index, sh)
+    end
+    return h
+end
+
 """
 The type of the `output_idxs` field in [`BSImpl.ArrayOp`](@ref).
 """

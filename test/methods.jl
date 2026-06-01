@@ -474,3 +474,12 @@ end
     @test_throws ErrorException ifelse(cond, x, z)
     @test SymbolicUtils.shape(ifelse(cond, x, y)) == [1:3]
 end
+
+@testset "`promote_symtype`, `promote_shape` for `tuple`" begin
+    @test SymbolicUtils.promote_symtype(tuple) == Tuple{}
+    @test SymbolicUtils.promote_symtype(tuple, Real) == Tuple{Real}
+    @test SymbolicUtils.promote_symtype(tuple, Real, Int) == Tuple{Real, Int}
+    @test SymbolicUtils.promote_symtype(tuple, Float64, Float64, Int) == Tuple{Float64, Float64, Int}
+    @test SymbolicUtils.promote_shape(tuple, Unknown(1), ShapeVecT((1:3, 1:3,)), ShapeVecT()) == [1:3]
+end
+

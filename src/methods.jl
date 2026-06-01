@@ -266,6 +266,13 @@ function _sequential_promote(T::TypeT, Ts::TypeT...)
 end
 
 
+function promote_symtype(::typeof(tuple), Ts::TypeT...)
+    return Tuple{Ts...}::TypeT
+end
+function promote_shape(::typeof(tuple), @nospecialize(shs::ShapeT...))
+    return ShapeVecT((1:length(shs),))
+end
+
 function promote_symtype(::typeof(array_literal), Tp::TypeT, Ts::TypeT...)
     @assert Tp <: Tuple
     return Array{_sequential_promote(Ts...), length(Tp.parameters)}

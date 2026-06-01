@@ -5,7 +5,7 @@ using StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       SpawnFetch, Multithreaded, ForLoop, cse
+       SpawnFetch, Multithreaded, ForLoop, cse, symFunc
 
 export OptimizationRule, substitute_in_ir, apply_optimization_rules
 
@@ -18,7 +18,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
                       ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
-                      AddMulVariant, _isone, _iszero, Fill, IRStructure, populate_ir!
+                      AddMulVariant, _isone, _iszero, Fill, IRStructure, populate_ir!, FnType
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 import Graphs
@@ -991,6 +991,8 @@ julia> executable(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
 ```
 """
 Func
+
+include("symbolic_codegen_primitives.jl")
 
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 

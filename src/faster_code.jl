@@ -1310,3 +1310,54 @@ function (cs::CodegenState)(f::ForLoop)
     push!(result.args, body)
     return declare!(cs, get_misc_identifier(cs), result)
 end
+
+function codegen_function!(::Type{Func}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    args_term_idx = nbors[1]
+    body_idx = nbors[2]
+
+    # Extract individual arg syms from the tuple term
+    args_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_term_idx)
+    args = map(i -> cs.ir[i], args_nbors)
+    body = cs.ir[body_idx]
+
+    # Save pre-existing rewrite entries so they can be restored after codegen
+    old_rewrites = map(args) do arg
+        arg isa BasicSymbolic{T} ? get(cs.rewrites, arg, nothing) : nothing
+    end
+
+    # Register each arg as a function parameter (bypasses CSE for args inside the body)
+    for arg in args
+        if arg isa BasicSymbolic{T}
+            add_arg_to_rewrites!(cs.rewrites, arg)
+        end
+    end
+
+    scs, bm = enter_scope(cs)
+    scs(body)
+    fn_body_block = exit_scope!(scs, bm)
+
+    fn_args = Expr(:tuple)
+    for arg in args
+        if arg isa BasicSymbolic{T}
+            push!(fn_args.args, cs.rewrites[arg]::Symbol)
+        else
+            push!(fn_args.args, manual_dispatch_toexpr(arg, NameState(cs.rewrites)))
+        end
+    end
+
+    result = codegen!(cs, expr_idx, Expr(:function, fn_args, Expr(:block, fn_body_block)))
+
+    # Restore rewrites to their state before this call
+    for (arg, old_val) in zip(args, old_rewrites)
+        if arg isa BasicSymbolic{T}
+            if old_val === nothing
+                delete!(cs.rewrites, arg)
+            else
+                cs.rewrites[arg] = old_val
+            end
+        end
+    end
+
+    return result
+end

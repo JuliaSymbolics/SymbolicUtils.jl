@@ -536,3 +536,15 @@ end
     @test ir[ir[zidx]] == zidx
     @test ir[ir[yidx]] == yidx
 end
+
+@testset "`replace_node!` replacing `!iscall(old)` with `iscall(new)`" begin
+    @syms x
+    ir = IRStructure{SymReal}()
+    xidx = populate_ir!(ir, x)
+    @test length(ir) == 1
+    replace_node!(ir, x, sin(x))
+    @test length(ir) == 2
+    @test ir[x] != xidx
+    @test isequal(ir[xidx], sin(x))
+    @test collect(Graphs.outneighbors(ir.dependency_graph, xidx)) == [ir[x]]
+end

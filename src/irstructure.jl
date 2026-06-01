@@ -911,9 +911,10 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     buffer = get!(() -> Int32[], ir.weak_definitions, new)
     push!(buffer, idx)
 
-    iszero(Graphs.outdegree(ir.dependency_graph, idx)) && return
-
     rem_outedges!(ir.dependency_graph, idx)
+
+    iscall(new) || return
+
     op = operation(new)
     if op isa BasicSymbolic{T}
         Graphs.add_edge!(ir.dependency_graph, idx, populate_ir!(ir, op))

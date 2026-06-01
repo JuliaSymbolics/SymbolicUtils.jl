@@ -1,3 +1,24 @@
+function SymbolicUtils.promote_symtype(::Type{Let}, Ts::TypeT...)
+    return last(Ts)
+end
+
+function SymbolicUtils.promote_shape(::Type{Let}, @nospecialize(shs::ShapeT...))
+    return last(shs)
+end
+
+"""
+    symLet(assignments, body)
+
+Construct a symbolic expression representing a `let` block. `assignments` must be an
+iterable of `symAssignment` terms. Returns a `Term{T}(Code.Let, [asgn..., body])` with
+`symtype` and `shape` equal to those of `body`.
+"""
+function symLet(assignments::AbstractArray{BasicSymbolic{T}}, body::BasicSymbolic{T}) where {T}
+    args = ArgsT{T}(assignments)
+    push!(args, body)
+    return BSImpl.Term{T}(Let, args; type = symtype(body), shape = shape(body))
+end
+
 function SymbolicUtils.promote_symtype(::Type{Assignment}, lhs_type::TypeT, rhs_type::TypeT)
     return rhs_type
 end

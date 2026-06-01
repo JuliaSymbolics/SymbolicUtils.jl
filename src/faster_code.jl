@@ -1311,6 +1311,19 @@ function (cs::CodegenState)(f::ForLoop)
     return declare!(cs, get_misc_identifier(cs), result)
 end
 
+function codegen_function!(::Type{Let}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    n = length(nbors)
+    body_idx = nbors[n]
+
+    # Codegen each symAssignment as a side effect in order
+    for i in 1:n-1
+        cs(cs.ir[nbors[i]])
+    end
+
+    return codegen!(cs, expr_idx, cs(cs.ir[body_idx]))
+end
+
 function codegen_function!(::Type{Assignment}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
     lhs_expr = cs.ir[nbors[1]]

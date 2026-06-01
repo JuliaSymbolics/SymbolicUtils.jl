@@ -146,3 +146,83 @@ end
     @test fn(3.0, 4.0) ≈ 7.0
 end
 
+@testset "`promote_symtype` for `Let`" begin
+    @test SymbolicUtils.promote_symtype(Code.Let, Real) == Real
+    @test SymbolicUtils.promote_symtype(Code.Let, Real, Float64) == Float64
+    @test SymbolicUtils.promote_symtype(Code.Let, Real, Real, Vector{Real}) == Vector{Real}
+end
+
+@testset "`symLet` construction" begin
+    @syms x::Real y::Real z::Real
+    asgn = Code.symAssignment(x, y + 1)
+    l = Code.symLet([asgn], x * z)
+    @test SymbolicUtils.iscall(l)
+    @test SymbolicUtils.operation(l) === Code.Let
+    args = SymbolicUtils.arguments(l)
+    @test length(args) == 2
+    @test isequal(args[1], asgn)
+    @test isequal(args[2], x * z)
+    @test SymbolicUtils.symtype(l) == Real
+    @test SymbolicUtils.shape(l) == ShapeVecT()
+
+    # Empty assignments — body type propagates
+    l_empty = Code.symLet(typeof(x)[], x + y)
+    @test SymbolicUtils.symtype(l_empty) == Real
+    @test length(SymbolicUtils.arguments(l_empty)) == 1
+end
+
+@testset "`symLet` codegen — single assignment" begin
+    @syms x::Real y::Real
+    # let x = y + 1; x * 2 end  →  (y+1)*2
+    l = Code.symLet([Code.symAssignment(x, y + 1)], x * 2)
+    ir = IRStructure{SymReal}()
+    expr = Code.fast_toexpr(l, ir, Dict{Any,Any}())
+    result = eval(quote
+        let x = 0.0, y = 3.0
+            $expr
+        end
+    end)
+    @test result ≈ 8.0   # (3+1)*2
+end
+
+@testset "`symLet` codegen — sequential assignments" begin
+    @syms x::Real y::Real z::Real
+    # let x = y + 1; z = x * 2; z + x end  →  ((y+1)*2) + (y+1)
+    asgn1 = Code.symAssignment(x, y + 1)
+    asgn2 = Code.symAssignment(z, x * 2)
+    l = Code.symLet([asgn1, asgn2], z + x)
+    ir = IRStructure{SymReal}()
+    expr = Code.fast_toexpr(l, ir, Dict{Any,Any}())
+    result = eval(quote
+        let x = 0.0, y = 3.0, z = 0.0
+            $expr
+        end
+    end)
+    @test result ≈ 12.0  # (3+1)*2 + (3+1) = 8 + 4
+end
+
+@testset "`symLet` codegen — empty assignments" begin
+    @syms x::Real y::Real
+    l = Code.symLet(typeof(x)[], x + y)
+    ir = IRStructure{SymReal}()
+    expr = Code.fast_toexpr(l, ir, Dict{Any,Any}())
+    result = eval(quote
+        let x = 3.0, y = 4.0
+            $expr
+        end
+    end)
+    @test result ≈ 7.0
+end
+
+@testset "`symLet` inside `symFunc`" begin
+    @syms x::Real y::Real tmp::Real
+    # f(x,y) = let tmp = x+y; tmp*tmp end  →  (x+y)^2
+    l = Code.symLet([Code.symAssignment(tmp, x + y)], tmp * tmp)
+    f = Code.symFunc([x, y], l)
+    @test SymbolicUtils.symtype(f) == FnType{Tuple{Real,Real}, Real, Nothing}
+    ir = IRStructure{SymReal}()
+    expr = Code.fast_toexpr(f, ir, Dict{Any,Any}())
+    fn = eval(expr)
+    @test fn(2.0, 3.0) ≈ 25.0
+    @test fn(1.0, 0.0) ≈ 1.0
+end

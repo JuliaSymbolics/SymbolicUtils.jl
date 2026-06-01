@@ -1311,6 +1311,23 @@ function (cs::CodegenState)(f::ForLoop)
     return declare!(cs, get_misc_identifier(cs), result)
 end
 
+function codegen_function!(::Type{Assignment}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    lhs_expr = cs.ir[nbors[1]]
+    rhs = cs.ir[nbors[2]]
+
+    lhs = manual_dispatch_toexpr(lhs_expr, NameState(cs.rewrites))
+    if Meta.isexpr(lhs, :call)
+        scs, bm = enter_scope(cs)
+        scs(rhs)
+        rhs_result = exit_scope!(scs, bm)
+    else
+        rhs_result = cs(rhs)
+    end
+    declare!(cs, lhs, rhs_result)
+    return codegen!(cs, expr_idx, lhs)
+end
+
 function codegen_function!(::Type{Func}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
     args_term_idx = nbors[1]

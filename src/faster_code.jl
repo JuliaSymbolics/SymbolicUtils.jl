@@ -1346,46 +1346,71 @@ function codegen_function!(::Type{Func}, cs::CodegenState{T}, expr::BasicSymboli
     args_term_idx = nbors[1]
     body_idx = nbors[2]
 
-    # Extract individual arg syms from the tuple term
     args_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_term_idx)
-    args = map(i -> cs.ir[i], args_nbors)
+    n_args = length(args_nbors)
     body = cs.ir[body_idx]
 
-    # Save pre-existing rewrite entries so they can be restored after codegen
-    old_rewrites = map(args) do arg
-        arg isa BasicSymbolic{T} ? get(cs.rewrites, arg, nothing) : nothing
-    end
+    # Walk the args once to: register rewrites and collect DestructuredArgs info.
+    # Each entry is (sym_registered_in_rewrites, old_value) for later restoration.
+    rewrites_to_restore = Pair{BasicSymbolic{T}, Any}[]
+    # (name, elems): array param + the element variables to bind inside the body
+    dargs_info = Tuple{BasicSymbolic{T}, Vector{BasicSymbolic{T}}}[]
 
-    # Register each arg as a function parameter (bypasses CSE for args inside the body)
-    for arg in args
-        if arg isa BasicSymbolic{T}
-            add_arg_to_rewrites!(cs.rewrites, arg)
+    for i in 1:n_args
+        arg = cs.ir[args_nbors[i]]
+        @match arg begin
+            BSImpl.Sym(;) => begin
+                push!(rewrites_to_restore, arg => get(cs.rewrites, arg, nothing))
+                add_arg_to_rewrites!(cs.rewrites, arg)
+            end
+            BSImpl.Term(; f) && if f === DestructuredArgs end => begin
+                da_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_nbors[i])
+                name = cs.ir[da_nbors[1]]
+                elems = BasicSymbolic{T}[cs.ir[da_nbors[j]] for j in 2:length(da_nbors)]
+                push!(rewrites_to_restore, name => get(cs.rewrites, name, nothing))
+                add_arg_to_rewrites!(cs.rewrites, name)
+                push!(dargs_info, (name, elems))
+            end
+            _ => nothing
         end
     end
 
     scs, bm = enter_scope(cs)
+
+    # Emit destructuring bindings — elem_i = array_param[i] — before the body
+    for (name, elems) in dargs_info
+        name_sym = cs.rewrites[name]::Symbol
+        for (i, elem) in enumerate(elems)
+            elem_name = manual_dispatch_toexpr(elem, NameState(scs.rewrites))
+            declare!(scs, elem_name, Expr(:ref, name_sym, i))
+        end
+    end
+
     scs(body)
     fn_body_block = exit_scope!(scs, bm)
 
     fn_args = Expr(:tuple)
-    for arg in args
-        if arg isa BasicSymbolic{T}
-            push!(fn_args.args, cs.rewrites[arg]::Symbol)
-        else
-            push!(fn_args.args, manual_dispatch_toexpr(arg, NameState(cs.rewrites)))
+    for i in 1:n_args
+        arg = cs.ir[args_nbors[i]]
+        @match arg begin
+            BSImpl.Sym(;) => push!(fn_args.args, cs.rewrites[arg]::Symbol)
+            BSImpl.Term(; f) && if f === DestructuredArgs end => begin
+                da_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_nbors[i])
+                name = cs.ir[da_nbors[1]]
+                push!(fn_args.args, cs.rewrites[name]::Symbol)
+            end
+            _ => push!(fn_args.args, manual_dispatch_toexpr(arg, NameState(cs.rewrites)))
         end
     end
 
     result = codegen!(cs, expr_idx, Expr(:function, fn_args, Expr(:block, fn_body_block)))
 
     # Restore rewrites to their state before this call
-    for (arg, old_val) in zip(args, old_rewrites)
-        if arg isa BasicSymbolic{T}
-            if old_val === nothing
-                delete!(cs.rewrites, arg)
-            else
-                cs.rewrites[arg] = old_val
-            end
+    for (sym, old_val) in rewrites_to_restore
+        if old_val === nothing
+            delete!(cs.rewrites, sym)
+        else
+            cs.rewrites[sym] = old_val
         end
     end
 

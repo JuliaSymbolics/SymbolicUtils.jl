@@ -5,7 +5,8 @@ using StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       SpawnFetch, Multithreaded, ForLoop, cse, symFunc
+       SpawnFetch, Multithreaded, ForLoop, cse,
+       symFunc, symAssignment, symLet, symDestructuredArgs
 
 export OptimizationRule, substitute_in_ir, apply_optimization_rules
 

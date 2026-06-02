@@ -226,3 +226,64 @@ end
     @test fn(2.0, 3.0) ≈ 25.0
     @test fn(1.0, 0.0) ≈ 1.0
 end
+
+@testset "`promote_symtype` for `DestructuredArgs`" begin
+    @test SymbolicUtils.promote_symtype(Code.DestructuredArgs, Vector{Real}) == Vector{Real}
+    @test SymbolicUtils.promote_symtype(Code.DestructuredArgs, Vector{Real}, Real, Real) == Vector{Real}
+end
+
+@testset "`symDestructuredArgs` construction" begin
+    @syms arr[1:2]::Real x::Real y::Real
+    da = Code.symDestructuredArgs(arr, [x, y])
+    @test SymbolicUtils.iscall(da)
+    @test SymbolicUtils.operation(da) === Code.DestructuredArgs
+    args = SymbolicUtils.arguments(da)
+    @test length(args) == 3
+    @test isequal(args[1], arr)
+    @test isequal(args[2], x)
+    @test isequal(args[3], y)
+    @test SymbolicUtils.symtype(da) == SymbolicUtils.symtype(arr)
+    @test SymbolicUtils.shape(da) == SymbolicUtils.shape(arr)
+end
+
+@testset "`symDestructuredArgs` in `symFunc` — basic destructuring" begin
+    @syms arr[1:2]::Real x::Real y::Real
+    da = Code.symDestructuredArgs(arr, [x, y])
+    f = Code.symFunc([da], x + y)
+    @test SymbolicUtils.symtype(f) == FnType{Tuple{Vector{Real}}, Real, Nothing}
+    ir = IRStructure{SymReal}()
+    expr = Code.fast_toexpr(f, ir, Dict{Any,Any}())
+    fn = eval(expr)
+    @test fn([3.0, 4.0]) ≈ 7.0
+    @test fn([1.0, -1.0]) ≈ 0.0
+end
+
+@testset "`symDestructuredArgs` in `symFunc` — mixed with plain args" begin
+    # f(x, arr) = x + arr[1] + arr[2]
+    @syms arr[1:2]::Real x::Real a::Real b::Real
+    da = Code.symDestructuredArgs(arr, [a, b])
+    f = Code.symFunc([x, da], x + a + b)
+    @test SymbolicUtils.symtype(f) == FnType{Tuple{Real, Vector{Real}}, Real, Nothing}
+    ir = IRStructure{SymReal}()
+    expr = Code.fast_toexpr(f, ir, Dict{Any,Any}())
+    fn = eval(expr)
+    @test fn(1.0, [2.0, 3.0]) ≈ 6.0
+    @test fn(10.0, [0.0, -5.0]) ≈ 5.0
+end
+
+@testset "`symDestructuredArgs` rewrites restored after `symFunc`" begin
+    @syms arr[1:2]::Real x::Real y::Real
+    da = Code.symDestructuredArgs(arr, [x, y])
+    f = Code.symFunc([da], x + y)
+    rewrites = Dict{Any,Any}()
+    ir1 = IRStructure{SymReal}()
+    Code.fast_toexpr(f, ir1, rewrites)   # must not leave arr, x, y in rewrites
+    ir2 = IRStructure{SymReal}()
+    expr_xy = Code.fast_toexpr(x + y, ir2, rewrites)
+    result = eval(quote
+        let x = 3.0, y = 4.0
+            $expr_xy
+        end
+    end)
+    @test result ≈ 7.0
+end

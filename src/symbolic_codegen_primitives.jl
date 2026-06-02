@@ -1,3 +1,36 @@
+function SymbolicUtils.promote_symtype(::Type{DestructuredArgs}, name_type::TypeT, elem_types::TypeT...)
+    return name_type
+end
+
+function SymbolicUtils.promote_shape(::Type{DestructuredArgs}, name_shape::ShapeT, @nospecialize(elem_shapes::ShapeT...))
+    @nospecialize name_shape
+    return name_shape
+end
+
+"""
+    symDestructuredArgs(name, elems)
+
+Construct a symbolic expression representing an array argument that is destructured into
+its elements. `name` is a symbolic variable representing the array argument; `elems` is an
+iterable of symbolic variables that will be bound to successive elements of the array.
+
+The result is a `Term{T}(Code.DestructuredArgs, [name, elem1, ...])` with `symtype` and
+`shape` equal to those of `name`. It may only be used as an argument in [`symFunc`](@ref).
+
+!!! note
+    `symDestructuredArgs` cannot be nested: the element variables (`elems`) must be plain
+    symbolic variables, not themselves `symDestructuredArgs` terms.
+"""
+function symDestructuredArgs(name::BasicSymbolic{T}, elems) where {T}
+    args = ArgsT{T}()
+    sizehint!(args, 1 + length(elems))
+    push!(args, name)
+    for elem in elems
+        push!(args, elem isa BasicSymbolic{T} ? elem : BSImpl.Const{T}(elem))
+    end
+    return BSImpl.Term{T}(DestructuredArgs, args; type = symtype(name), shape = shape(name))
+end
+
 function SymbolicUtils.promote_symtype(::Type{Let}, Ts::TypeT...)
     return last(Ts)
 end

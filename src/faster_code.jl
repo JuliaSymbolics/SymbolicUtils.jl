@@ -1,10 +1,11 @@
 using SymbolicUtils: IRStructure, populate_ir!
-using Dictionaries
+
+include("stackdict.jl")
 
 # NOTE:
-# Dictionaries.Dictionary is an ordered container, and allows checkpointing its state by
-# caching the length of the Dictionary at that point. This allows efficiently implementing
-# scoping behavior, for example for loop-local CSE variables.
+# StackDict is an ordered container that tracks insertion order via a Vector of keys,
+# allowing checkpointing by recording the last inserted key and rolling back to that
+# state by popping entries in reverse order.
 
 # NOTE:
 # Codegen relies on fewer invariants than `IRStructure` in general. It is designed to work
@@ -55,7 +56,7 @@ mutable struct CodegenState{T}
     In such a case, if we assume that the index of `x + y` in `ir` is `4`, then
     `cache[4] == Symbol("%3")`.
     """
-    const cache::Dictionary{Int32, Symbol}
+    const cache::StackDict{Int32, Symbol}
     """
     Rewrite rules, similar to `NameState`.
     """
@@ -77,7 +78,7 @@ written to `block` and `ir` is the underlying `IRStructure`. Rewrite rules can o
 be supplied as the last argument.
 """
 function CodegenState(expr::Expr, block::Expr, ir::IRStructure{T}, rewrites = Dict()) where {T}
-    CodegenState{T}(expr, block, ir, Dictionary{Int32, Symbol}(), rewrites, 0)
+    CodegenState{T}(expr, block, ir, StackDict{Int32, Symbol}(), rewrites, 0)
 end
 
 """
@@ -378,7 +379,7 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
 
     # Use graph instead of destructuring `expr`
     nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
-    innerexpr = cs.ir[nbors[2]]::BasicSymbolic{T}
+    innerexpr = SymbolicUtils.get_canonical_expr(cs.ir, nbors[2])::BasicSymbolic{T}
     reducer = unwrap_const(cs.ir[nbors[3]])
     ranges = unwrap_const(cs.ir[nbors[5]])::SymbolicUtils.RangesT{T}
 

@@ -65,8 +65,8 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     test_repr(
         Code.fast_toexpr(Let([a ← 3, b ← 1 + a], a + b), ir, Dict()),
         :(
-            let __miscₛᵧₘ0 = 3, a = __miscₛᵧₘ0, var"##cse#0" = 1, var"##cse#1" = a,
-                    var"##cse#2" = $(+)(var"##cse#0", var"##cse#1"), b = var"##cse#2"
+            let a = 3, var"##cse#1" = a,
+                    var"##cse#2" = $(+)(1, var"##cse#1"), b = var"##cse#2"
                 var"##cse#0" = a
                 var"##cse#1" = b
                 var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
@@ -141,17 +141,15 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                 var"##cse#1" = x
                 var"##cse#2" = t
                 var"##cse#3" = var"##cse#1"(var"##cse#2")
-                __miscₛᵧₘ0 = 9
                 var"##cse#4" = b
-                __miscₛᵧₘ1 = 10
                 var"##cse#5" = d
                 var"##cse#6" = c
-                __miscₛᵧₘ3 = begin
+                __miscₛᵧₘ1 = begin
                     var"##cse#0"[1] = var"##cse#3"
-                    var"##cse#0"[__miscₛᵧₘ0] = var"##cse#4"
-                    var"##cse#0"[__miscₛᵧₘ1] = var"##cse#5"
+                    var"##cse#0"[9] = var"##cse#4"
+                    var"##cse#0"[10] = var"##cse#5"
                     var"##cse#0"[4] = var"##cse#6"
-                    __miscₛᵧₘ2 = nothing
+                    __miscₛᵧₘ0 = nothing
                 end
             end
         )
@@ -245,68 +243,60 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     test_repr(
         Code.fast_toexpr(a^-1, ir, Dict()),
         quote
-            var"##cse#0" = 1
             var"##cse#1" = a
-            var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
+            var"##cse#2" = $(/)(1, var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(a^-1, ir, Dict{Any, Any}(:nanmath => true)), quote
-            var"##cse#0" = 1
             var"##cse#1" = a
-            var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
+            var"##cse#2" = $(/)(1, var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, -1), ir, Dict()), quote
-            var"##cse#0" = 1
             var"##cse#1" = a
-            var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
+            var"##cse#2" = $(/)(1, var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, -1), ir, Dict{Any, Any}(:nanmath => true)),
         quote
-            var"##cse#0" = 1
             var"##cse#1" = a
-            var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
+            var"##cse#2" = $(/)(1, var"##cse#1")
         end
     )
 
     test_repr(
         Code.fast_toexpr(a^-2, ir, Dict()),
         quote
-            var"##cse#0" = 1
             var"##cse#1" = a
             var"##cse#2" = $(^)(var"##cse#1", 2)
-            var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
+            var"##cse#3" = $(/)(1, var"##cse#2")
         end
     )
     test_repr(
         Code.fast_toexpr(a^-2, ir, Dict{Any, Any}(:nanmath => true)),
         quote
-            var"##cse#0" = 1
             var"##cse#1" = a
             var"##cse#2" = $(^)(var"##cse#1", 2)
-            var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
+            var"##cse#3" = $(/)(1, var"##cse#2")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, -2), ir, Dict()),
         quote
-            var"##cse#0" = 1
             var"##cse#1" = a
             var"##cse#2" = $(^)(var"##cse#1", 2)
-            var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
+            var"##cse#3" = $(/)(1, var"##cse#2")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, -2), ir, Dict{Any, Any}(:nanmath => true)),
         quote
-            var"##cse#0" = 1
             var"##cse#1" = a
             var"##cse#2" = $(^)(var"##cse#1", 2)
-            var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
+            var"##cse#3" = $(/)(1, var"##cse#2")
         end
     )
 
@@ -332,7 +322,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
             ), ir, Dict{Any, Any}(:readable_variables => true)
         ),
         :(
-            let __miscₛᵧₘ0 = Vector{Any}, __miscₛᵧₘ1 = 3, __miscₛᵧₘ2 = 3, __miscₛᵧₘ3 = Vector{Int64}, __miscₛᵧₘ4 = 1, __miscₛᵧₘ5 = 4, __miscₛᵧₘ6 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ3, nothing, $(Val){1}(), $(Val){(2,)}(), __miscₛᵧₘ4, __miscₛᵧₘ5), __miscₛᵧₘ7 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ0, nothing, $(Val){1}(), $(Val){(3,)}(), __miscₛᵧₘ1, __miscₛᵧₘ2, __miscₛᵧₘ6), foo = __miscₛᵧₘ7, __miscₛᵧₘ8 = foo[1], var"x(t)" = __miscₛᵧₘ8, __miscₛᵧₘ9 = foo[2], b = __miscₛᵧₘ9, __miscₛᵧₘ10 = foo[3], c = __miscₛᵧₘ10, __miscₛᵧₘ11 = c[1], p = __miscₛᵧₘ11, __miscₛᵧₘ12 = c[2], q = __miscₛᵧₘ12
+            let __miscₛᵧₘ0 = Vector{Any}, __miscₛᵧₘ1 = Vector{Int64}, __miscₛᵧₘ2 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ1, nothing, $(Val){1}(), $(Val){(2,)}(), 1, 4), __miscₛᵧₘ3 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ0, nothing, $(Val){1}(), $(Val){(3,)}(), 3, 3, __miscₛᵧₘ2), foo = __miscₛᵧₘ3, __miscₛᵧₘ4 = foo[1], var"x(t)" = __miscₛᵧₘ4, __miscₛᵧₘ5 = foo[2], b = __miscₛᵧₘ5, __miscₛᵧₘ6 = foo[3], c = __miscₛᵧₘ6, __miscₛᵧₘ7 = c[1], p = __miscₛᵧₘ7, __miscₛᵧₘ8 = c[2], q = __miscₛᵧₘ8
                 var"##cse#0" = a
                 var"##cse#1" = b
                 var"##cse#2" = c
@@ -664,13 +654,11 @@ end
                 var"##cse#3" = y
                 var"##cse#4" = z
                 var"##cse#5" = $(sin)(var"##cse#4")
-                var"##cse#6" = 2
                 var"##cse#7" = $(^)(var"##cse#2", 2)
-                var"##cse#8" = $(*)(var"##cse#6", var"##cse#7")
+                var"##cse#8" = $(*)(2, var"##cse#7")
                 var"##cse#9" = $(+)(var"##cse#3", var"##cse#5", var"##cse#8")
-                var"##cse#10" = 1
-                var"##cse#11" = $(*)(var"##cse#6", var"##cse#4")
-                var"##cse#12" = $(+)(var"##cse#10", var"##cse#11")
+                var"##cse#11" = $(*)(2, var"##cse#4")
+                var"##cse#12" = $(+)(1, var"##cse#11")
                 __miscₛᵧₘ0 = $(Code.fill_arr!)(var"##cse#1", $Val($((3,))), var"##cse#2", var"##cse#9", var"##cse#12")
             end
         )

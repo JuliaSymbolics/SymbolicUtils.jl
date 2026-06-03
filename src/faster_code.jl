@@ -55,7 +55,7 @@ mutable struct CodegenState{T}
     In such a case, if we assume that the index of `x + y` in `ir` is `4`, then
     `cache[4] == Symbol("%3")`.
     """
-    const cache::Dictionary{Int32, Symbol}
+    const cache::Dictionary{Int32, Union{Symbol, Int, Float64, Float32}}
     """
     Rewrite rules, similar to `NameState`.
     """
@@ -77,7 +77,7 @@ written to `block` and `ir` is the underlying `IRStructure`. Rewrite rules can o
 be supplied as the last argument.
 """
 function CodegenState(expr::Expr, block::Expr, ir::IRStructure{T}, rewrites = Dict()) where {T}
-    CodegenState{T}(expr, block, ir, Dictionary{Int32, Symbol}(), rewrites, 0)
+    CodegenState{T}(expr, block, ir, Dictionary{Int32, Union{Symbol, Int, Float64, Float32}}(), rewrites, 0)
 end
 
 """
@@ -330,7 +330,10 @@ end
 function fast_toexpr(sym::CodegenPrimitive, ir::IRStructure{T}, rewrites::Dict{Any, Any}) where {T}
     expr = block = Expr(:block)
     state = CodegenState(expr, block, ir, rewrites)
-    lhs = state(sym)::Symbol
+    lhs = state(sym)
+    if !(lhs isa Symbol)
+        return lhs
+    end
     for line in expr.args
         if Meta.isexpr(line, :(=)) && line.args[1] === lhs
             return line.args[2]
@@ -1005,7 +1008,7 @@ end
 
 function codegen_ir!(cs::CodegenState{T}, idx::Integer) where {T}
     cached = get(cs.cache, idx, nothing)
-    if cached isa Symbol
+    if cached !== nothing
         return cached
     end
     ir = cs.ir
@@ -1027,6 +1030,9 @@ function codegen_ir!(cs::CodegenState{T}, idx::Integer) where {T}
     @match sym begin
         BSImpl.Const(; val) => if val isa CodegenPrimitive
             return cs(val)
+        elseif val isa Union{Int, Float64, Float32}
+            insert!(cs.cache, idx, val)
+            return val
         else
             return codegen!(cs, idx, val)
         end
@@ -1090,10 +1096,13 @@ function (cs::CodegenState)(@nospecialize(thing))
     if uthing !== thing
         return cs(uthing)
     end
+    if thing isa Union{Int, Float64, Float32}
+        return thing
+    end
     return declare!(cs, get_misc_identifier(cs), thing)
 end
 
-function (cs::CodegenState)(expr::BasicSymbolic{T})::Symbol where {T}
+function (cs::CodegenState)(expr::BasicSymbolic{T}) where {T}
     idx = populate_ir!(cs.ir, expr)
     codegen_ir!(cs, idx)
 end
@@ -1227,9 +1236,9 @@ function (cs::CodegenState{T})(fn::Func) where {T}
 end
 
 function (cs::CodegenState)(ex::SetArray)
-    arr = cs(ex.arr)::Symbol
+    arr = cs(ex.arr)::Union{Symbol, Int, Float64, Float32}
     lhss = []
-    rhss = Symbol[]
+    rhss = Union{Symbol, Int, Float64, Float32}[]
     for (i, elem) in enumerate(ex.elems)
         if elem isa AtIndex
             push!(lhss, cs(elem.i))

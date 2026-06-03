@@ -270,13 +270,23 @@ function _accumulate!(h::AbstractDict, key, val)
     return h
 end
 # Specialized to only do one lookup.
-function _accumulate!(h::Union{Dict{K, V}, OrderedDict{K, V}}, key::K, val) where {K, V}
+function _accumulate!(h::OrderedDict{K, V}, key::K, val) where {K, V}
     index = OrderedCollections.ht_keyindex2(h, key)
     if index > 0
         @inbounds h.vals[index] = h.vals[index] + val
     else
         v = val isa V ? val : convert(V, val)::V
         OrderedCollections._setindex!(h, v, key, -index)
+    end
+    return h
+end
+function _accumulate!(h::Dict{K, V}, key::K, val) where {K, V}
+    index, sh = Base.ht_keyindex2_shorthash!(h, key)
+    if index > 0
+        @inbounds h.vals[index] = h.vals[index] + val
+    else
+        v = val isa V ? val : convert(V, val)::V
+        @inbounds Base._setindex!(h, v, key, -index, sh)
     end
     return h
 end

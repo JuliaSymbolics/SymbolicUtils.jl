@@ -26,6 +26,16 @@ default_shape(::Type{T}) where {T <: AbstractArray} = Unknown(-1)
 default_shape(_) = ShapeVecT()
 
 """
+    normalize_symtype(t)
+
+Normalize a symbolic type to a concrete `DataType`. Handles common cases
+where users provide abstract types that need default type parameters:
+- `Complex` → `Complex{Real}`
+"""
+normalize_symtype(t::DataType) = t
+normalize_symtype(::Type{Complex}) = Complex{Real}
+
+"""
     $TYPEDSIGNATURES
 
 Convert argument tuples or vectors into standardized `ArgsT` format for a variant type.
@@ -365,6 +375,7 @@ The `unsafe` keyword argument (default: `false`) can be used to skip hash consin
 performance in internal operations.
 """
 @inline function BSImpl.Sym{T}(name::Symbol; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
+    type = normalize_symtype(type)
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
     props = ordered_override_properties(BSImpl.Sym)

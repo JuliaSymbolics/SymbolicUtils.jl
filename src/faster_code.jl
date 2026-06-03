@@ -1311,3 +1311,109 @@ function (cs::CodegenState)(f::ForLoop)
     push!(result.args, body)
     return declare!(cs, get_misc_identifier(cs), result)
 end
+
+function codegen_function!(::Type{Let}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    n = length(nbors)
+    body_idx = nbors[n]
+
+    # Codegen each symAssignment as a side effect in order
+    for i in 1:n-1
+        cs(cs.ir[nbors[i]])
+    end
+
+    return codegen!(cs, expr_idx, cs(cs.ir[body_idx]))
+end
+
+function codegen_function!(::Type{Assignment}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    lhs_expr = cs.ir[nbors[1]]
+    rhs = cs.ir[nbors[2]]
+
+    lhs = manual_dispatch_toexpr(lhs_expr, NameState(cs.rewrites))
+    if Meta.isexpr(lhs, :call)
+        scs, bm = enter_scope(cs)
+        scs(rhs)
+        rhs_result = exit_scope!(scs, bm)
+    else
+        rhs_result = cs(rhs)
+    end
+    declare!(cs, lhs, rhs_result)
+    return codegen!(cs, expr_idx, lhs)
+end
+
+function codegen_function!(::Type{Func}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    args_term_idx = nbors[1]
+    body_idx = nbors[2]
+
+    args_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_term_idx)
+    n_args = length(args_nbors)
+    body = cs.ir[body_idx]
+
+    # Walk the args once to: register rewrites and collect DestructuredArgs info.
+    # Each entry is (sym_registered_in_rewrites, old_value) for later restoration.
+    rewrites_to_restore = Pair{BasicSymbolic{T}, Any}[]
+    # (name, elems): array param + the element variables to bind inside the body
+    dargs_info = Tuple{BasicSymbolic{T}, Vector{BasicSymbolic{T}}}[]
+
+    for i in 1:n_args
+        arg = cs.ir[args_nbors[i]]
+        @match arg begin
+            BSImpl.Sym(;) => begin
+                push!(rewrites_to_restore, arg => get(cs.rewrites, arg, nothing))
+                add_arg_to_rewrites!(cs.rewrites, arg)
+            end
+            BSImpl.Term(; f) && if f === DestructuredArgs end => begin
+                da_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_nbors[i])
+                name = cs.ir[da_nbors[1]]
+                elems = BasicSymbolic{T}[cs.ir[da_nbors[j]] for j in 2:length(da_nbors)]
+                push!(rewrites_to_restore, name => get(cs.rewrites, name, nothing))
+                add_arg_to_rewrites!(cs.rewrites, name)
+                push!(dargs_info, (name, elems))
+            end
+            _ => nothing
+        end
+    end
+
+    scs, bm = enter_scope(cs)
+
+    # Emit destructuring bindings — elem_i = array_param[i] — before the body
+    for (name, elems) in dargs_info
+        name_sym = cs.rewrites[name]::Symbol
+        for (i, elem) in enumerate(elems)
+            elem_name = manual_dispatch_toexpr(elem, NameState(scs.rewrites))
+            declare!(scs, elem_name, Expr(:ref, name_sym, i))
+        end
+    end
+
+    scs(body)
+    fn_body_block = exit_scope!(scs, bm)
+
+    fn_args = Expr(:tuple)
+    for i in 1:n_args
+        arg = cs.ir[args_nbors[i]]
+        @match arg begin
+            BSImpl.Sym(;) => push!(fn_args.args, cs.rewrites[arg]::Symbol)
+            BSImpl.Term(; f) && if f === DestructuredArgs end => begin
+                da_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_nbors[i])
+                name = cs.ir[da_nbors[1]]
+                push!(fn_args.args, cs.rewrites[name]::Symbol)
+            end
+            _ => push!(fn_args.args, manual_dispatch_toexpr(arg, NameState(cs.rewrites)))
+        end
+    end
+
+    result = codegen!(cs, expr_idx, Expr(:function, fn_args, Expr(:block, fn_body_block)))
+
+    # Restore rewrites to their state before this call
+    for (sym, old_val) in rewrites_to_restore
+        if old_val === nothing
+            delete!(cs.rewrites, sym)
+        else
+            cs.rewrites[sym] = old_val
+        end
+    end
+
+    return result
+end

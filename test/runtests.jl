@@ -31,6 +31,7 @@ if GROUP == "Core"
             @safetestset "Inference" begin include("inference.jl") end
             @safetestset "Code" begin include("code.jl") end
             @safetestset "New codegen" begin include("new_code.jl") end
+            @safetestset "Symbolic codegen primitives" begin include("symbolic_codegen_primitives.jl") end
             @safetestset "CSE" begin include("cse.jl") end
             @safetestset "Interface" begin include("interface.jl") end
             # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed

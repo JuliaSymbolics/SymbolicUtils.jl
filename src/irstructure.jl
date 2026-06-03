@@ -899,6 +899,17 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     # there are additional `replace_node!` calls with the same `new`, since they
     # will have different `old`.
     if haskey(ir, new)
+        if isconst(new)
+            # We can't `setmetadata` on `Const`
+            new = BSImpl.Term{T}(
+                identity, ArgsT{T}((new,));
+                type = symtype(new), shape = shape(new),
+                metadata = Base.ImmutableDict(
+                    Base.ImmutableDict{DataType, Any}(),
+                    typeof(replace_node!) => objectid(old)
+                )
+            )
+        end
         new = setmetadata(new, typeof(replace_node!), objectid(old))
     end
     ir.symbols[idx] = new

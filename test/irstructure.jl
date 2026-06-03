@@ -535,6 +535,18 @@ end
     @test ir[zidx] !== y # different metadata
     @test ir[ir[zidx]] == zidx
     @test ir[ir[yidx]] == yidx
+
+    @testset "`isconst(new)`" begin
+        @syms x y z
+        ir = IRStructure{SymReal}()
+        xidx = populate_ir!(ir, x)
+        yidx = populate_ir!(ir, y)
+        zidx = populate_ir!(ir, z)
+        r = SymbolicUtils.Const{SymReal}(0)
+        replace_node!(ir, x, r)
+        replace_node!(ir, y, r)
+        @test operation(ir[yidx]) === identity
+    end
 end
 
 @testset "`replace_node!` replacing `!iscall(old)` with `iscall(new)`" begin

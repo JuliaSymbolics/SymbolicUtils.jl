@@ -37,6 +37,7 @@ PrecompileTools.@recompile_invalidations begin
     import MutableArithmetics as MA
     import SparseArrays: SparseMatrixCSC, findnz, sparse
     using DataStructures
+    import DataStructures: OrderedCollections
     using ReadOnlyArrays
     import Graphs
     import StaticArraysCore

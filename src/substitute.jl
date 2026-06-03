@@ -133,10 +133,10 @@ end
     return DefaultSubstituter{Fold}(d, filter, infer_vartype(d))
 end
 @inline function DefaultSubstituter{Fold}(d::Pair, filter::F) where {Fold, F}
-    DefaultSubstituter{Fold}(Dict(d), filter)
+    DefaultSubstituter{Fold}(OrderedDict(d), filter)
 end
 @inline function DefaultSubstituter{Fold}(d::AbstractArray{<:Pair}, filter::F) where {Fold, F}
-    DefaultSubstituter{Fold}(Dict(d), filter)
+    DefaultSubstituter{Fold}(OrderedDict(d), filter)
 end
 
 function (s::Substituter)(ex)
@@ -261,7 +261,7 @@ julia> substitute(1+sqrt(y), Dict(y => 2), fold=Val(false))
 function substitute(expr, dict; fold::Val{Fold}=Val{false}(), filterer=default_substitute_filter) where {Fold}
     # This is kind of ugly (inlines some of the constructor logic of `DefaultSubstituter` but is needed to avoid runtime subtyping in
     # when calling this function. It makes a very big difference in runtime.
-    d = dict isa AbstractDict ? dict : Dict(dict)
+    d = dict isa AbstractDict ? dict : OrderedDict(dict)
     isempty(d) && !Fold && return expr
     VT = infer_vartype(d)
     if VT === Nothing
@@ -412,7 +412,7 @@ function search_variables!(buffer, expr::SparseMatrixCSC; kw...)
     search_variables!(buffer, V; kw...)
 end
 
-_default_buffer(::BasicSymbolic{T}) where {T} = Set{BasicSymbolic{T}}()
+_default_buffer(::BasicSymbolic{T}) where {T} = OrderedSet{BasicSymbolic{T}}()
 _default_buffer(x::Any) = unwrap(x) === x ? Set() : _default_buffer(unwrap(x))
 
 function search_variables(expr; kw...)
@@ -423,13 +423,13 @@ end
 
 struct ArrayOpReduceCache{T}
     new_ranges::RangesT{T}
-    subrules::Dict{BasicSymbolic{T}, Int}
-    collapsed_idxs::Set{BasicSymbolic{T}}
+    subrules::OrderedDict{BasicSymbolic{T}, Int}
+    collapsed_idxs::OrderedSet{BasicSymbolic{T}}
     collapsed_ranges::Vector{StepRange{Int, Int}}
 end
 
 function ArrayOpReduceCache{T}() where {T}
-    ArrayOpReduceCache{T}(RangesT{T}(), Dict{BasicSymbolic{T}, Int}(), Set{BasicSymbolic{T}}(), StepRange{Int, Int}[])
+    ArrayOpReduceCache{T}(RangesT{T}(), OrderedDict{BasicSymbolic{T}, Int}(), OrderedSet{BasicSymbolic{T}}(), StepRange{Int, Int}[])
 end
 
 function Base.empty!(x::ArrayOpReduceCache)
@@ -651,7 +651,7 @@ scalarization_function(::Type{ArrayOp{T}}) where {T} = _scalarize_arrayop
 function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @match x begin
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce, shape = sh) => begin
-            subrules = Dict()
+            subrules = OrderedDict()
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
             empty!(subrules)
 

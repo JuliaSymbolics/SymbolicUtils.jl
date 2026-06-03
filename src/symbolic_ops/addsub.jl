@@ -108,24 +108,24 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                         AddMulVariant.ADD => begin
                             newcoeff = newcoeff .+ coeff
                             for (k, v) in dict
-                                result[k] = get(result, k, 0) + v
+                                _accumulate!(result, k, v)
                             end
                         end
                         AddMulVariant.MUL => begin
                             newterm = Mul{T}(1, dict; shape, type, metadata)
-                            result[newterm] = get(result, newterm, 0) + coeff
+                            _accumulate!(result, newterm, coeff)
                         end
                     end
                 end
                 _ => begin
-                    result[term] = get(result, term, 0) + 1
+                    _accumulate!(result, term, 1)
                 end
             end
         elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal} || term isa BasicSymbolic{TreeReal}
             error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
         elseif term isa AbstractIrrational
             term = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
-            result[term] = get(result, term, 0) + 1
+            _accumulate!(result, term, 1)
         else
             newcoeff = newcoeff .+ term
         end

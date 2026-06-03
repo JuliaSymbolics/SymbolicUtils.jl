@@ -291,7 +291,7 @@ Helper struct for tracking index variable usage in array operations.
 
 # Fields
 - `idx_to_axes::IdxToAxesT{T}`: Maps index variables to the axes they index
-- `search_buffer::Set{BasicSymbolic{T}}`: Reusable buffer for variable searches
+- `search_buffer::OrderedSet{BasicSymbolic{T}}`: Reusable buffer for variable searches
 - `buffers::Vector{Vector{IndexedAxis{T}}}`: Pool of reusable buffers
 
 # Details
@@ -300,12 +300,12 @@ are indexed by which index variables and validates consistency.
 """
 struct IndexedAxes{T}
     idx_to_axes::IdxToAxesT{T}
-    search_buffer::Set{BasicSymbolic{T}}
+    search_buffer::OrderedSet{BasicSymbolic{T}}
     buffers::Vector{Vector{IndexedAxis{T}}}
 end
 
 function IndexedAxes{T}() where {T}
-    IndexedAxes{T}(IdxToAxesT{T}(), Set{BasicSymbolic{T}}(), Vector{IndexedAxis{T}}[])
+    IndexedAxes{T}(IdxToAxesT{T}(), OrderedSet{BasicSymbolic{T}}(), Vector{IndexedAxis{T}}[])
 end
 
 function Base.empty!(ix::IndexedAxes)

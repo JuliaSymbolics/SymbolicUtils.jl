@@ -147,26 +147,26 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
             BSImpl.AddMul(; coeff, dict, variant) && if variant == AddMulVariant.MUL end => begin
                 num_coeff[] *= coeff
                 for (k, v) in dict
-                    num_dict[k] = get(num_dict, k, 0) + v
+                    _accumulate!(num_dict, k, v)
                 end
             end
             BSImpl.Term(; f, args) && if f === (^) && !isconst(args[1]) && isconst(args[2]) end => begin
                 base, exp = args
-                num_dict[base] = get(num_dict, base, 0) + unwrap_const(exp)
+                _accumulate!(num_dict, base, unwrap_const(exp))
             end
             BSImpl.Div(; num, den) => begin
                 _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, num)
                 _mul_worker!(T, den_coeff, num_coeff, den_dict, num_dict, den)
             end
             x => begin
-                num_dict[x] = get(num_dict, x, 0) + 1
+                _accumulate!(num_dict, x, 1)
             end
         end
     elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal}
         error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
     elseif term isa AbstractIrrational
         base = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
-        num_dict[base] = get(num_dict, base, 0) + 1
+        _accumulate!(num_dict, base, 1)
     else
         num_coeff[] *= term
     end

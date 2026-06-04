@@ -47,14 +47,27 @@ end
 
 mutable struct AddWorkerBuffer{T}
     dict::ACDict{T}
+    busy::Bool
 end
 
-AddWorkerBuffer{T}() where {T} = AddWorkerBuffer{T}(ACDict{T}())
+AddWorkerBuffer{T}() where {T} = AddWorkerBuffer{T}(ACDict{T}(), false)
 
 Base.empty!(awb::AddWorkerBuffer) = empty!(awb.dict)
 
 const SYMREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SymReal}}(AddWorkerBuffer{SymReal})
 const SAFEREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SafeReal}}(AddWorkerBuffer{SafeReal})
+
+@inline function _run_addbuffer(buf::AddWorkerBuffer{T}, terms) where {T}
+    if buf.busy
+        buf = AddWorkerBuffer{T}()
+    end
+    buf.busy = true
+    try
+        return buf(terms)
+    finally
+        buf.busy = false
+    end
+end
 
 """
     $METHODLIST
@@ -62,8 +75,8 @@ const SAFEREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SafeReal}}(AddWorkerBu
 Add an indexable list or tuple of terms `terms` with the given vartype. Applicable only for
 symbolic expressions with numeric or array of numeric symtype.
 """
-add_worker(::Type{SymReal}, terms) = SYMREAL_ADDBUFFER[](terms)
-add_worker(::Type{SafeReal}, terms) = SAFEREAL_ADDBUFFER[](terms)
+add_worker(::Type{SymReal}, terms) = _run_addbuffer(SYMREAL_ADDBUFFER[], terms)
+add_worker(::Type{SafeReal}, terms) = _run_addbuffer(SAFEREAL_ADDBUFFER[], terms)
 
 function _added_shape(terms::Tuple)
     promote_shape(+, ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms)))...)

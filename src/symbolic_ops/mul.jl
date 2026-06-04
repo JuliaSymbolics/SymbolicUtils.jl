@@ -178,10 +178,11 @@ mutable struct MulWorkerBuffer{T}
     den_dict::ACDict{T}
     const num_coeff::RefValue{PolyCoeffT}
     const den_coeff::RefValue{PolyCoeffT}
+    busy::Bool
 end
 
 function MulWorkerBuffer{T}() where {T}
-    MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1))
+    MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1), false)
 end
 
 function Base.empty!(mwb::MulWorkerBuffer)
@@ -348,14 +349,26 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     return Term{T}(*, new_arrterms; type, shape = newshape)
 end
 
+@inline function _run_mulbuffer(buf::MulWorkerBuffer{T}, terms) where {T}
+    if buf.busy
+        buf = MulWorkerBuffer{T}()
+    end
+    buf.busy = true
+    try
+        return buf(terms)
+    finally
+        buf.busy = false
+    end
+end
+
 """
     $METHODLIST
 
 Multiply an indexable list or tuple of terms `terms` with the given vartype. Applicable
 only for symbolic expressions with numeric or array of numeric symtype.
 """
-mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)
-mul_worker(::Type{SafeReal}, terms) = SAFEREAL_MULBUFFER[](terms)
+mul_worker(::Type{SymReal}, terms) = _run_mulbuffer(SYMREAL_MULBUFFER[], terms)
+mul_worker(::Type{SafeReal}, terms) = _run_mulbuffer(SAFEREAL_MULBUFFER[], terms)
 
 function *(x::T, args::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
     mul_worker(vartype(T), (x, args...))

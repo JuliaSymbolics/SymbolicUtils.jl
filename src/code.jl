@@ -404,7 +404,7 @@ function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
 
     # TODO: better infer default eltype from `O`
     _allocator = get_allocator!(st, nothing)
-    
+
     output_eltype = get(st.rewrites, :arrayop_eltype, Float64)
     delete!(st.rewrites, :arrayop_eltype)
     sh = shape(O)
@@ -1586,16 +1586,16 @@ end
 """
 $(SIGNATURES)
 
-Perform a topological sort on a symbolic expression represented as a Directed Acyclic 
+Perform a topological sort on a symbolic expression represented as a Directed Acyclic
 Graph (DAG).
 
-This function takes a symbolic expression `graph` (potentially containing shared common 
-sub-expressions) and returns an array of `Assignment` objects.  Each `Assignment` 
-represents a node in the sorted order, assigning a fresh symbol to its corresponding 
-expression. The order ensures that all dependencies of a node appear before the node itself 
+This function takes a symbolic expression `graph` (potentially containing shared common
+sub-expressions) and returns an array of `Assignment` objects.  Each `Assignment`
+represents a node in the sorted order, assigning a fresh symbol to its corresponding
+expression. The order ensures that all dependencies of a node appear before the node itself
 in the array.
 
-Hash consing is assumed, meaning that structurally identical expressions are represented by 
+Hash consing is assumed, meaning that structurally identical expressions are represented by
 the same object in memory. This allows for efficient equality checks using `IdDict`.
 """
 function topological_sort(graph)
@@ -1656,83 +1656,86 @@ and should have the same type as `x`.
 function cse! end
 
 function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
-    cse_visitor = let expr = expr, state = state
-        function _cse_visitor()
-            @match expr begin
-                BSImpl.Const(;) => begin
-                    new_expr = expr
-                    sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
-                    push!(state.sorted_exprs, sym ← new_expr)
-                    return sym
+    cached = get(state.visited, expr.id, nothing)
+    cached === nothing || return cached::BasicSymbolic{T}
+    result = _cse_compute(expr, state)::BasicSymbolic{T}
+    state.visited[expr.id] = result
+    return result
+end
+
+function _cse_compute(expr::BasicSymbolic{T}, state::CSEState) where {T}
+    @match expr begin
+        BSImpl.Const(;) => begin
+            new_expr = expr
+            sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
+            push!(state.sorted_exprs, sym ← new_expr)
+            return sym
+        end
+        BSImpl.Sym(;) => return expr
+        BSImpl.ArrayOp(; term) => if term === nothing
+            sym = newsym!(state, T, symtype(expr), shape(expr))
+            push!(state.sorted_exprs, sym ← expr)
+            return sym
+        else
+            return cse!(term, state)
+        end
+        BSImpl.ArrayMaker(; regions, values, type, shape) => begin
+            values = copy(parent(values))
+            for i in eachindex(values)
+                values[i] = cse!(values[i], state)::BasicSymbolic{T}
+            end
+            return BSImpl.ArrayMaker{T}(regions, values; type, shape)
+        end
+        BSImpl.Term(; f, args, type, shape) && if f === SymbolicUtils.array_literal end => begin
+            args = copy(args)
+            # don't CSE the size
+            for i in Iterators.drop(eachindex(args), 1)
+                args[i] = cse!(args[i], state)::BasicSymbolic{T}
+            end
+            sym = newsym!(state, T, type, shape)
+            push!(state.sorted_exprs, sym ← BSImpl.Term{T}(f, args; type, shape))
+            return sym
+        end
+        BSImpl.Term(; f, args, type = atype, shape = ashape) && if f === with_allocator end => begin
+            allocop = @match args[2] begin
+                BSImpl.Term(; f = finner, args = argsinner, shape, type) && if finner === SymbolicUtils.array_literal end => begin
+                    argsinner = copy(argsinner)
+                    for i in Iterators.drop(eachindex(argsinner), 1)
+                        argsinner[i] = cse!(argsinner[i], state)::BasicSymbolic{T}
+                    end
+                    BSImpl.Term{T}(finner, argsinner; type, shape)
                 end
-                BSImpl.Sym(;) => return expr
-                BSImpl.ArrayOp(; term) => if term === nothing
-                    sym = newsym!(state, T, symtype(expr), shape(expr))
-                    push!(state.sorted_exprs, sym ← expr)
-                    return sym
-                else
-                    return cse!(term, state)
-                end
+                BSImpl.ArrayOp(;) => args[2]
                 BSImpl.ArrayMaker(; regions, values, type, shape) => begin
                     values = copy(parent(values))
                     for i in eachindex(values)
                         values[i] = cse!(values[i], state)::BasicSymbolic{T}
                     end
-                    return BSImpl.ArrayMaker{T}(regions, values; type, shape)
-                end
-                BSImpl.Term(; f, args, type, shape) && if f === SymbolicUtils.array_literal end => begin
-                    args = copy(args)
-                    # don't CSE the size
-                    for i in Iterators.drop(eachindex(args), 1)
-                        args[i] = cse!(args[i], state)::BasicSymbolic{T}
-                    end
-                    sym = newsym!(state, T, type, shape)
-                    push!(state.sorted_exprs, sym ← BSImpl.Term{T}(f, args; type, shape))
-                    return sym
-                end
-                BSImpl.Term(; f, args, type = atype, shape = ashape) && if f === with_allocator end => begin
-                    allocop = @match args[2] begin
-                        BSImpl.Term(; f = finner, args = argsinner, shape, type) && if finner === SymbolicUtils.array_literal end => begin
-                            argsinner = copy(argsinner)
-                            for i in Iterators.drop(eachindex(argsinner), 1)
-                                argsinner[i] = cse!(argsinner[i], state)::BasicSymbolic{T}
-                            end
-                            BSImpl.Term{T}(finner, argsinner; type, shape)
-                        end
-                        BSImpl.ArrayOp(;) => args[2]
-                        BSImpl.ArrayMaker(; regions, values, type, shape) => begin
-                            values = copy(parent(values))
-                            for i in eachindex(values)
-                                values[i] = cse!(values[i], state)::BasicSymbolic{T}
-                            end
-                            BSImpl.ArrayMaker{T}(regions, values; type, shape)
-                        end
-                    end
-
-                    return BSImpl.Term{T}(with_allocator, ArgsT{T}((args[1], allocop)); type = atype, shape = ashape)
-                end
-                _ => begin
-                    op = operation(expr)
-                    args = arguments(expr)
-                    if op isa BasicSymbolic{T}
-                        SymbolicUtils.is_function_symbolic(op) || return expr
-                    end
-                    cse_inside_expr(expr, op)::Bool || return expr
-                    args = copy(parent(args))
-                    for i in eachindex(args)
-                        args[i] = cse!(args[i], state)::BasicSymbolic{T}
-                    end
-                    # use `term` instead of `maketerm` because we only care about the operation being performed
-                    # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-                    new_expr = Term{T}(op, args; type = symtype(expr), shape = shape(expr))
-                    sym = newsym!(state, T, symtype(expr), shape(expr))
-                    push!(state.sorted_exprs, sym ← new_expr)
-                    return sym
+                    BSImpl.ArrayMaker{T}(regions, values; type, shape)
                 end
             end
+
+            return BSImpl.Term{T}(with_allocator, ArgsT{T}((args[1], allocop)); type = atype, shape = ashape)
+        end
+        _ => begin
+            op = operation(expr)
+            args = arguments(expr)
+            if op isa BasicSymbolic{T}
+                SymbolicUtils.is_function_symbolic(op) || return expr
+            end
+            cse_inside_expr(expr, op)::Bool || return expr
+            args = copy(parent(args))
+            for i in eachindex(args)
+                args[i] = cse!(args[i], state)::BasicSymbolic{T}
+            end
+            # use `term` instead of `maketerm` because we only care about the operation being performed
+            # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
+            new_expr = Term{T}(op, args; type = symtype(expr), shape = shape(expr))
+            sym = newsym!(state, T, symtype(expr), shape(expr))
+            push!(state.sorted_exprs, sym ← new_expr)
+            return sym
         end
     end
-    return get!(cse_visitor, state.visited, expr.id)::BasicSymbolic{T}
 end
 
 cse!(x, ::CSEState) = x
@@ -1940,7 +1943,7 @@ end
 
 Defines an optimization rule with:
 - `name`: A string identifier for the optimization.
-- `detector`: A function that detects patterns in the IR. 
+- `detector`: A function that detects patterns in the IR.
 - `transformer`: A function that transforms the IR based on detected patterns, and returns updated IR
 - `priority`: Integer priority (higher = applied first)
 
@@ -2020,7 +2023,7 @@ function substitute_in_ir(expr::Code.Let, substitution_map::Dict)
     return Code.Let(new_pairs, new_body, expr.let_block)
 end
 
-Base.isempty(l::Code.Let) = isempty(l.pairs)   
+Base.isempty(l::Code.Let) = isempty(l.pairs)
 
 # Apply optimization rules during CSE
 function apply_optimization_rule(expr::Code.Let, state::Union{Code.CSEState, Code.LazyState}, rules::OptimizationRule)

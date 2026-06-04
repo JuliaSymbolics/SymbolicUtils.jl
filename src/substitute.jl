@@ -299,27 +299,42 @@ returns `true` for any node in the tree.
 - `Bool`: `true` if any subexpression satisfies the predicate, `false` otherwise.
 """
 function query(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
+    return _query(predicate, expr, recurse, default)
+end
+query(predicate::F, expr; kw...) where {F} = predicate(expr)
+
+function _query(predicate::F, expr::BasicSymbolic, recurse::G, default::Bool) where {F, G}
     predicate(expr) && return true
     iscall(expr) || return default
     recurse(expr) || return default
 
     return @match expr begin
-        BSImpl.Term(; f, args) => any(args) do arg
-            query(predicate, arg; recurse, default)
+        BSImpl.Term(; f, args) => begin
+            for arg in args
+                _query(predicate, arg, recurse, default) && return true
+            end
+            false
         end
-        BSImpl.AddMul(; dict) => any(keys(dict)) do arg
-            query(predicate, arg; recurse, default)
+        BSImpl.AddMul(; dict) => begin
+            for arg in keys(dict)
+                _query(predicate, arg, recurse, default) && return true
+            end
+            false
         end
-        BSImpl.Div(; num, den) => query(predicate, num; recurse, default) || query(predicate, den; recurse, default)
+        BSImpl.Div(; num, den) => _query(predicate, num, recurse, default) || _query(predicate, den, recurse, default)
         BSImpl.ArrayOp(; expr = inner_expr, term) => begin
-            query(predicate, @something(term, inner_expr); recurse, default)
+            _query(predicate, @something(term, inner_expr), recurse, default)
         end
-        BSImpl.ArrayMaker(; values) => any(values) do arg
-            query(predicate, arg; recurse, default)
+        BSImpl.ArrayMaker(; values) => begin
+            for arg in values
+                _query(predicate, arg, recurse, default) && return true
+            end
+            false
         end
     end
 end
-query(predicate::F, expr; kw...) where {F} = predicate(expr)
+_query(predicate::F, expr, recurse, default::Bool) where {F} = predicate(expr)
+
 
 search_variables!(buffer, expr; kw...) = nothing
 

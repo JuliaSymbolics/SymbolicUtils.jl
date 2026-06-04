@@ -463,10 +463,12 @@ function subset_ir(
     Graphs.add_vertices!(new_ir.dependency_graph, n_new_verts)
     sizehint!(new_ir, n_new_verts)
 
+    old2new = zeros(Int32, length(ir))
     inew = 0
     # `reachables` is in topological order
     for iold in reachables
         inew += 1
+        old2new[iold] = inew
         # Add expression to the IR
         sym = ir.symbols[iold]
         push!(new_ir.symbols, sym)
@@ -479,9 +481,7 @@ function subset_ir(
         # have already been added to `new_ir`.
         oldnbors = Graphs.outneighbors(ir.dependency_graph, iold)
         for nbor in oldnbors
-            nsym = ir.symbols[nbor]
-            nbor_idx = new_ir.definition[nsym]
-            Graphs.add_edge!(new_ir.dependency_graph, inew, nbor_idx)
+            Graphs.add_edge!(new_ir.dependency_graph, inew, old2new[nbor])
         end
     end
 

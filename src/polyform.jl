@@ -290,17 +290,16 @@ quick_cancel(d) = d
 function quick_cancel(d::BasicSymbolic{T})::BasicSymbolic{T} where {T}
     iscall(d) || return d
     op = operation(d)
-    type = symtype(d)
     if op === (^)
         base, exp = arguments(d)
         isconst(base) && return d
         isdiv(base) || return d
         num, den = quick_cancel(base.num, base.den)
-        return Div{T}(num ^ exp, den ^ exp, false; type)
+        return Div{T}(num ^ exp, den ^ exp, false; type = symtype(d))
     elseif op === (/)
         num, den = arguments(d)
         num, den = quick_cancel(num, den)
-        return Div{T}(num, den, false; type)
+        return Div{T}(num, den, false; type = symtype(d))
     else
         return d
     end

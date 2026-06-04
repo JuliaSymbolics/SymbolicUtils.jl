@@ -625,14 +625,15 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if !iscall(term) || operation(term) != operation(r.lhs)
+    if !iscall(term)
         # different operations -> try deflsot
         r(term)
     else
-        f =  operation(term)
+        f = operation(term)
         # Assume that the matcher was formed by closing over a term
-        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
-            return nothing
+        if f != operation(r.lhs)
+            # different operations -> try deflsot
+            return r(term)
         end
 
         T = vartype(term)

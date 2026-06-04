@@ -100,7 +100,7 @@ preferred over the `BSImpl.AddMul{T}` constructor.
         else
             return (k ^ v)::BasicSymbolic{T}
         end
-    elseif _isone(-coeff) && length(dict) == 1
+    elseif length(dict) == 1 && _isone(-coeff)
         k, v = first(dict)
         if _isone(v)
             @match k begin

@@ -181,7 +181,7 @@ mutable struct MulWorkerBuffer{T}
 end
 
 function MulWorkerBuffer{T}() where {T}
-    MulWorkerBuffer{T}(Dict{BasicSymbolic{T}, Any}(), Dict{BasicSymbolic{T}, Any}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1))
+    MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1))
 end
 
 function Base.empty!(mwb::MulWorkerBuffer)

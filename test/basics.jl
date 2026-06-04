@@ -1080,6 +1080,15 @@ end
     @test isequal(x / -1, -x)
 end
 
+@testset "mul worker buffer is reentrancy-safe" begin
+    @syms x y w
+    p = Mul{SymReal}(2, Dict((x / y) => -1); type = Real)
+    @test isequal(p * (1 // 2) * (1 / w), y / (x * w))
+
+    t = Term{SymReal}(^, ArgsT{SymReal}((x / y, Const{SymReal}(-1))); type = Real, shape = ShapeVecT())
+    @test isequal(t * (1 / w), y / (x * w))
+end
+
 @testset "Issue#717: Power with complex exponent" begin
     @syms x
     t = x ^ im

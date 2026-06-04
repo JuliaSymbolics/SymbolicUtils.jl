@@ -34,7 +34,7 @@ julia> using SymbolicUtils
 
 julia> SymbolicUtils.show_simplified[] = true
 
-julia> @syms x::Real y::Real z::Complex f(::Number)::Real
+julia> @syms x::Real y::Real z::Complex{Real} f(::Number)::Real
 (x, y, z, f(::Number)::Real)
 
 julia> 2x^2 - y + x^2

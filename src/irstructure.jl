@@ -943,11 +943,13 @@ end
 If `ir.non_canonical_idxs` is empty, return `ir[idx]`. Otherwise, find the canonical expression
 that `ir[idx]` should be, were `IRSubstituter` used instead of `replace_node!`.
 """
-function get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
+function get_canonical_expr!(ir::IRStructure{T}, idx::Integer) where {T}
     isempty(ir.non_canonical_idxs) && return ir[idx]
 
     return __get_canonical_expr(ir, idx)
 end
+
+@deprecate get_canonical_expr(ir, idx) get_canonical_expr!(ir, idx)
 
 """
     $TYPEDSIGNATURES

@@ -42,7 +42,7 @@ macro __generate_numeric_or_arrrnumeric_type()
     cur_expr = new_expr
 
     i = 0
-    
+
     N = length(SCALARS)
     for t1 in SCALARS
         for T in [t1, Vector{t1}, Matrix{t1}, LinearAlgebra.UniformScaling{t1}]

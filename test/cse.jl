@@ -46,7 +46,7 @@ end
     @test length(let_expr.pairs) == 1
     node = let_expr.pairs[end].rhs
     @test operation(node) === (+) && issetequal(arguments(node), [a, b])
-    
+
     expr = a
     sorted_nodes = topological_sort(expr)
     @test isempty(sorted_nodes)

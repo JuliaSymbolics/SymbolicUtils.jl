@@ -189,16 +189,16 @@ rewriters.
 - `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
    returns true, `rw2` if it returns false
 - `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
-- `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order 
-   (*from top to bottom and from left to right*) traversal of a given expression and applies 
+- `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
+   (*from top to bottom and from left to right*) traversal of a given expression and applies
    the rewriter `rw`. `threaded=true` will use multi threading for traversal.
    Note that if `rw` returns `nothing` when a match is not found, then `Prewalk(rw)` will
    also return nothing unless a match is found at every level of the walk. If you are
    applying multiple rules, then `Chain` already has the appropriate passthrough behavior.
    If you only want to apply one rule, then consider using `PassThrough`.
-   `thread_cutoff` 
+   `thread_cutoff`
    is the minimum number of nodes in a subtree which should be walked in a threaded spawn.
-- `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order 
+- `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order
    (*from left to right and from bottom to top*) traversal.
 - `Fixpoint(rw)` returns a rewriter which applies `rw` repeatedly until there are no changes to be made.
 - `PassThrough(rw)` returns a rewriter which if `rw(x)` returns `nothing` will instead

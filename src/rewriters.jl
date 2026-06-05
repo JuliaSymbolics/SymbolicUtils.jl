@@ -257,10 +257,10 @@ end
     FixpointNoCycle(rw)
 
 `FixpointNoCycle` behaves like [`Fixpoint`](@ref),
-but returns a rewriter which applies `rw` repeatedly until 
-it produces a result that was already produced before, for example, 
-if the repeated application of `rw` produces results `a, b, c, d, b` in order, 
-`FixpointNoCycle` stops because `b` has been already produced. 
+but returns a rewriter which applies `rw` repeatedly until
+it produces a result that was already produced before, for example,
+if the repeated application of `rw` produces results `a, b, c, d, b` in order,
+`FixpointNoCycle` stops because `b` has been already produced.
 """
 struct FixpointNoCycle{C}
     rw::C

@@ -234,7 +234,7 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
         for i in 2:length(x.args)
             if Meta.isexpr(x.args[i], :...)
                 ndim = :($(ndim) + length($(x.args[i].args[1])))
-            else 
+            else
                 ndim = ndim isa Int ? ndim + 1 : :($(ndim) + 1)
             end
         end

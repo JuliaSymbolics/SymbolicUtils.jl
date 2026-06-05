@@ -17,7 +17,7 @@ using SymbolicUtils
 expr1 = x + y
 operation(expr1)    # returns +
 
-expr2 = x * y  
+expr2 = x * y
 operation(expr2)    # returns *
 
 # Function calls
@@ -147,7 +147,7 @@ using SymbolicUtils
 expr1 = x + y
 arguments(expr1)    # returns collection containing x and y
 
-expr2 = x * y * z  
+expr2 = x * y * z
 arguments(expr2)    # returns collection containing x, y, and z
 
 # Function calls
@@ -221,11 +221,11 @@ end
 """
     $TYPEDSIGNATURES
 
-Check if a symbolic expression `expr` represents a function call. Returns `true` if the 
+Check if a symbolic expression `expr` represents a function call. Returns `true` if the
 expression is a composite expression with an operation and arguments, `false` otherwise.
 
-This function is fundamental for traversing and analyzing symbolic expressions. In 
-SymbolicUtils.jl, an expression is considered a "call" if it represents a function 
+This function is fundamental for traversing and analyzing symbolic expressions. In
+SymbolicUtils.jl, an expression is considered a "call" if it represents a function
 application (including operators like +, -, *, etc.).
 
 # Examples
@@ -236,7 +236,7 @@ using SymbolicUtils
 # Basic variables are not calls
 iscall(x)           # false
 
-# Function calls are calls  
+# Function calls are calls
 expr = sin(x + y)
 iscall(expr)        # true
 

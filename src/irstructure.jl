@@ -384,7 +384,7 @@ function (pc::PopulateClosure{T})() where {T}
             push!(expr_uses, op_idx)
         end
         args = parent(arguments(expr))
-        sizehint!(expr_uses, length(args))
+        sizehint!(expr_uses, length(args) + 1)
         @union_split_smallvec args for arg in args
             # Add each argument to the IR. This is effectively a postorder traversal.
             arg_idx = populate_ir!(ir, arg)
@@ -561,7 +561,7 @@ function Base.setdiff!(s::IRStructureSearchBuffer{T}, ss...) where {T}
         on_exit = Base.Fix1(delete!, s.searched)
     )
     for idx in idxs
-        def in s.searched || continue
+        idx in s.searched || continue
         rdfs(idx)
     end
     return s
@@ -586,7 +586,7 @@ function Base.filter!(pred::F, s::IRStructureSearchBuffer{T}) where {F, T}
         on_exit = Base.Fix1(delete!, s.searched)
     )
     for idx in idxs
-        def in s.searched || continue
+        idx in s.searched || continue
         rdfs(idx)
     end
     return s
@@ -960,7 +960,7 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
 
     reachability = get_cached_idxs!(ir)
     empty!(reachability)
-    get_reachability!(reachability, ir, idx)
+    get_reachability!(reachability, ir, idx; visited = get_cached_mask!(ir, length(ir)))
     push!(reachability, idx)
     # `reachability` is in topological order. We can iterate over it, and update
     # any non-canonical nodes as we encounter them. Once we update a node, we mark

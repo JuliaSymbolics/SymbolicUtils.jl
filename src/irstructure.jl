@@ -996,7 +996,16 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
             end
         end
         # Update the expression for this node
-        ir.symbols[node] = maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+        ir.symbols[node] = new_sym = maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+        ir.definition[new_sym] = node
+        weakdefs = ir.weak_definitions[i_sym]
+        if length(weakdefs) == 1
+            delete!(ir.weak_definitions, i_sym)
+        else
+            filter!(!isequal(node), weakdefs)
+        end
+        weakdefs = get!(Vector{Int32}, ir.weak_definitions, new_sym)
+        push!(weakdefs, node)
         # `node` is now canonical
         delete!(ir.non_canonical_idxs, node)
         # All its `inneighbors` are still non-canonical

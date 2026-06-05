@@ -22,7 +22,7 @@ macro __generate_isequal_somescalar()
         push!(cur_expr.args, new_expr)
         cur_expr = new_expr
     end
-    
+
     push!(cur_expr.args, :(isequal(a, b)::Bool))
     return esc(expr)
 end
@@ -237,7 +237,7 @@ macro __generate_hash_somescalar()
         push!(cur_expr.args, new_expr)
         cur_expr = new_expr
     end
-    
+
     push!(cur_expr.args, :(hash(a, h)::UInt))
     return esc(expr)
 end
@@ -320,6 +320,44 @@ function hash_shape(sh::ShapeVecT, h::UInt)
     return h ⊻ SHAPEVECT_SEED
 end
 hash_shape(sh::Unknown, h::UInt) = hash(sh, h)
+
+const ARGSVEC_SEED = 0x6b2f4a9c1d8e7053 % UInt
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized hash for a vector of symbolic arguments (e.g. `Term`/`ArrayMaker` args).
+"""
+function hash_argsvec(v::ArgsT{T}, h::UInt, full::Bool) where {T}
+    @union_split_smallvec v for el in v
+        h = hash_bsimpl(el, h, full)
+    end
+    return h ⊻ ARGSVEC_SEED
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized hash for `ArrayOp.output_idx`, whose elements are `Int` or symbolic.
+"""
+function hash_outputidx(v::SmallV{Union{Int, BasicSymbolic{T}}}, h::UInt, full::Bool) where {T}
+    @union_split_smallvec v for el in v
+        h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+    end
+    return h ⊻ ARGSVEC_SEED
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized hash for `ArrayMaker.regions`, a vector of shapes.
+"""
+function hash_regions(v::RegionsT, h::UInt)
+    @union_split_smallvec v for el in v
+        h = hash_shape(el, h)
+    end
+    return h ⊻ ARGSVEC_SEED
+end
 
 """
     $METHODLIST
@@ -474,8 +512,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             else
                 _unreachable()
             end
-            
-            Base.hash(f, Base.hash(args, h))::UInt
+            Base.hash(f, hash_argsvec(args, h, full))::UInt
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
@@ -494,12 +531,12 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, hash_shape(shape, hash_maybe_fntype(type, h)), full)))::UInt, full))
+            hash_outputidx(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, hash_shape(shape, hash_maybe_fntype(type, h)), full)))::UInt, full), full)
         end
         BSImpl.ArrayMaker(; regions, values, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(regions, Base.hash(values, hash_shape(shape, hash_maybe_fntype(type, h))))
+            hash_regions(regions, hash_argsvec(values, hash_shape(shape, hash_maybe_fntype(type, h)), full))
         end
     end
 
@@ -534,20 +571,20 @@ $(TYPEDSIGNATURES)
 
 Implements hash consing (flyweight design pattern) for `BasicSymbolic` objects.
 
-This function checks if an equivalent `BasicSymbolic` object already exists. It uses a 
-custom hash function (`hash2`) incorporating metadata and symtypes to search for existing 
-objects in a `WeakCacheSet` (`wcs`). Due to the possibility of hash collisions (where 
-different objects produce the same hash), a custom equality check (`isequal_with_metadata`) 
-which includes metadata comparison, is used to confirm the equivalence of objects with 
-matching hashes. If an equivalent object is found, the existing object is returned; 
-otherwise, the input `s` is returned. This reduces memory usage, improves compilation time 
-for runtime code generation, and supports built-in common subexpression elimination, 
+This function checks if an equivalent `BasicSymbolic` object already exists. It uses a
+custom hash function (`hash2`) incorporating metadata and symtypes to search for existing
+objects in a `WeakCacheSet` (`wcs`). Due to the possibility of hash collisions (where
+different objects produce the same hash), a custom equality check (`isequal_with_metadata`)
+which includes metadata comparison, is used to confirm the equivalence of objects with
+matching hashes. If an equivalent object is found, the existing object is returned;
+otherwise, the input `s` is returned. This reduces memory usage, improves compilation time
+for runtime code generation, and supports built-in common subexpression elimination,
 particularly when working with symbolic objects with metadata.
 
-Using a `WeakCacheSet` ensures that only weak references to `BasicSymbolic` objects are 
-stored, allowing objects that are no longer strongly referenced to be garbage collected. 
-Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and 
-`Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
+Using a `WeakCacheSet` ensures that only weak references to `BasicSymbolic` objects are
+stored, allowing objects that are no longer strongly referenced to be garbage collected.
+Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and
+`Base.isequal` to accommodate metadata without disrupting existing tests reliant on the
 original behavior of those functions.
 """
 
@@ -603,4 +640,3 @@ Return a `Const` representing `1` with the provided `vartype`.
 @inline one_of_vartype(::Type{SymReal}) = CONST_ONE_SYMREAL
 @inline one_of_vartype(::Type{SafeReal}) = CONST_ONE_SAFEREAL
 @inline one_of_vartype(::Type{TreeReal}) = CONST_ONE_TREEREAL
-

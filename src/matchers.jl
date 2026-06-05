@@ -29,16 +29,16 @@ end
 function matcher(slot::Slot, acSets)
     function slot_matcher(next, data, bindings)
         !islist(data) && return nothing
+        cd = unwrap_const(car(data))
         val = get(bindings, slot.name, nothing)
         # if slot name already is in bindings, check if it matches
         if val !== nothing
-            if isequal(val, unwrap_const(car(data)))::Bool
+            if isequal(val, cd)::Bool
                 return next(bindings, 1)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
-        elseif slot.predicate(unwrap_const(car(data)))::Bool
-            rest = car(data)
-            binds = assoc(bindings, slot.name, rest)
+        elseif slot.predicate(cd)::Bool
+            binds = assoc(bindings, slot.name, cd)
             next(binds, 1)
         end
     end
@@ -132,10 +132,10 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data) # from (..., ) to ...
             !iscall(data) && return nothing # if first element is not a call, return nothing
-            
+
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
-            
+
             frankestein = nothing
             if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && _isone(arguments(arguments(data)[1])[1])
                 # if data is of the alternative form (1/...)^(...)
@@ -173,24 +173,24 @@ function term_matcher_constructor(term, acSets)
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
     elseif acSets!==nothing && (operation(term) === (+) || operation(term) === (*))
         has_segment = any([isa(unwrap_const(a),Segment) for a in arguments(term)])
+        op = operation(term)
         function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data)
             !iscall(data) && return nothing # if first element is not a call, return nothing
-            operation(term) !== operation(data) && return nothing # if the operation of data is not the correct one, don't even try
+            f = operation(data)
+            op !== f && return nothing # if the operation of data is not the correct one, don't even try
             data_args = arguments(data)
             # if the number of arguments is different, and the rule doesnt have a segment, return nothing
             !has_segment && length(matchers)-1 !== length(data_args) && return nothing
 
-            
             T = vartype(data)
-            if symtype(data) <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
-                f = operation(data)
-                
+            ST = symtype(data)
+            if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
                 for inds in acSets(eachindex(data_args), length(data_args))
-                    candidate = Term{T}(f, @views data_args[inds])
+                    candidate = Term{T}(f, @views data_args[inds]; type = ST)
 
-                    result = loop(candidate, bindings, matchers)                
+                    result = loop(candidate, bindings, matchers)
                     result !== nothing && return success(result,1)
                 end
             # if data does not subtype to number, it might not be commutative
@@ -208,7 +208,7 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data)
             !iscall(data) && return nothing # if first element is not a call, return nothing
-            
+
             # do the normal matcher
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
@@ -228,7 +228,7 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data)
             !iscall(data) && return nothing # if first element is not a call, return nothing
-            
+
             # do the normal matcher
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
@@ -246,7 +246,7 @@ function term_matcher_constructor(term, acSets)
         function term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
-            
+
             result = loop(car(data), bindings, matchers)
             result !== nothing && return success(result, 1)
             return nothing
@@ -259,7 +259,7 @@ end
 # (~x + ...complicated pattern...)     *          ~!y
 #    normal part (can bee a tree)   operation     defslot part
 
-# Note: there is a bit of a waste here bc the matcher get created twice, both 
+# Note: there is a bit of a waste here bc the matcher get created twice, both
 # in the normal_matcher and in defslot_matcher and other_part_matcher
 function defslot_term_matcher_constructor(term, acSets)
     a = parent(arguments(term))
@@ -277,7 +277,7 @@ function defslot_term_matcher_constructor(term, acSets)
         f = operation(term)
         other_part_matcher = term_matcher_constructor(Term{T}(f, others), acSets)
     end
-    
+
     normal_matcher = term_matcher_constructor(term, acSets)
 
     function defslot_term_matcher(success, data, bindings)
@@ -289,7 +289,7 @@ function defslot_term_matcher_constructor(term, acSets)
         # if no match, try to match with a defslot.
         # checks whether it matches the normal part if yes executes foo2
         # foo2: adds the pair (default value name, default value) to the found bindings
-        #       after checking predicate and presence in the bindings. If added 
+        #       after checking predicate and presence in the bindings. If added
         #       successfully returns the bindings (foo3), otherwise return nothing
         #                           <-------------------foo2----------------------------------->
         #                                                  <-foo3->

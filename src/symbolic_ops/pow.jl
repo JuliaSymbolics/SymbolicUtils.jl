@@ -54,7 +54,10 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
     if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(^, (a, b)))
     end
-    isconst(a) && return Const{T}(^(unwrap_const(a), b))
+    if isconst(a)
+       c = unwrap_const(^(unwrap_const(a), b))
+       safe_isinteger(c) && return Const{T}(Int(c))
+    end
     b = unwrap_const(unwrap(b))
     sha = shape(a)
     shb = shape(b)
@@ -89,7 +92,6 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
     if b isa Number
         @match a begin
             BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) && symtype(args[2]) <: Number end => begin
-                base, exp = args
                 base, exp = arguments(a)
                 exp = unwrap_const(exp)
                 return Const{T}(base ^ (exp * b))

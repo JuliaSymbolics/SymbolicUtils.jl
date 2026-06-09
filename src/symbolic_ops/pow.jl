@@ -55,8 +55,13 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
         throw(MethodError(^, (a, b)))
     end
     if isconst(a)
-       c = unwrap_const(^(unwrap_const(a), b))
-       safe_isinteger(c) && return Const{T}(Int(c))
+       ac = unwrap_const(a)
+       c = unwrap_const(^(ac, b))
+       if safe_isinteger(c)
+            return Const{T}(Int(c))
+       elseif c isa Rational || !(ac isa Integer || ac isa Rational) # for c rational and when a was a float to begin with, we can safely simplify to a Const.
+            return Const{T}(c)
+       end
     end
     b = unwrap_const(unwrap(b))
     sha = shape(a)
@@ -122,6 +127,11 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                         return BSImpl.AddMul{T}(coeff, ACDict{T}(newmul => b), AddMulVariant.MUL; shape, type)
                     end
                     # return mul_worker(T, (coeff, newpow))
+                elseif (coeff isa Integer || coeff isa Rational) && !safe_isinteger(b) #integers and rationals keep the symbolic form to avoid float conversion
+                    coeff = isone(coeff) ? coeff :  Term{T}(^, ArgsT{T}((coeff, b)); shape, type)
+                    dict = copy(dict)
+                    map!(Base.Fix1(*, b), values(dict))
+                    return BSImpl.AddMul{T}(coeff, dict, variant; shape, type)
                 else
                     coeff = coeff ^ b
                     dict = copy(dict)

@@ -1171,8 +1171,12 @@ end
         _s = n5^(1//k)
         @test !SymbolicUtils.isconst(_s)
         @test unwrap_const(_s^k) === n
-    end
+        _s2 = (n*a)^(1//k)
+        @test unwrap_const((_s2^k).coeff) === n
 
+        _s3 = (1//n*a)^(1//k)
+        @test unwrap_const((_s3^k).coeff) === 1//n
+    end
 
 end
 

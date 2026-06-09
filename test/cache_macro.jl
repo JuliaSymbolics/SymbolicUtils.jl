@@ -54,7 +54,7 @@ end
     @test stats.misses == misses + 1
     @test f1(x) === val
     @test stats.hits == hits + 1
-    
+
     clear_cache!(f1)
     @test length(cache) == 0
     stats = SymbolicUtils.get_stats(f1)

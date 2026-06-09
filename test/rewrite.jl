@@ -1,6 +1,6 @@
 using SymbolicUtils
 using SymbolicUtils: unwrap_const
-using Test 
+using Test
 include("utils.jl")
 
 @syms a b c d x
@@ -102,7 +102,7 @@ end
     @test r_mult3(a*(c+2)) === a
     @test r_mult3(2*(c+2)) === 2
     @test r_mult3(c+2) === 1
-    
+
     r_pow = @rule (~x)^(~!m) => ~m
     @test isequal(r_pow(a^(b+1)), b+1)
     @test r_pow(a) === 1
@@ -208,7 +208,7 @@ using SymbolicUtils: @capture
 
     #note that @test inserts a soft local scope (try-catch) that would gobble
     #the matches from assignment statements in @capture macro, so we call it
-    #outside the test macro 
+    #outside the test macro
     ret = @capture ex (~x)^(~x)
     @test ret
     @test @isdefined x

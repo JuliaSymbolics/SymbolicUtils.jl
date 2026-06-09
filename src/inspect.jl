@@ -7,7 +7,7 @@ function AbstractTrees.nodevalue(x::BSImpl.Type)
     str = if !iscall(x)
         string(T, "(", x, ")")
     elseif isadd(x)
-        string(T, 
+        string(T,
             (variant=string(x.variant),))
     elseif ismul(x)
         string(T,

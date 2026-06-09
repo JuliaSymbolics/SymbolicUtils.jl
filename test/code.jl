@@ -197,7 +197,7 @@ nanmath_st.rewrites[:nanmath] = true
                           MakeArray([a b; a+b a/b], arr))))
     @test trackedarr isa ReverseDiff.TrackedArray
     @test trackedarr == [1 2; 3 1/2]
-    
+
 
     R1 = eval(toexpr(Let([a ← 1, b ← 2, arr ← @MVector([1,2])],MakeArray([a,b,a+b,a/b], arr))))
     @test R1 == (@MVector [1, 2, 3, 1/2]) && R1 isa MVector

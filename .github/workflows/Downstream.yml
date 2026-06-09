@@ -37,7 +37,7 @@ jobs:
           - {user: JuliaSymbolics, repo: Symbolics.jl, group: D3TreesExt}
           - {user: JuliaSymbolics, repo: Symbolics.jl, group: Downstream}
           - {user: SciML, repo: ModelOrderReduction.jl, group: All}
-          
+
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

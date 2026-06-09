@@ -22,7 +22,7 @@ macro __generate_isequal_somescalar()
         push!(cur_expr.args, new_expr)
         cur_expr = new_expr
     end
-    
+
     push!(cur_expr.args, :(isequal(a, b)::Bool))
     return esc(expr)
 end
@@ -237,7 +237,7 @@ macro __generate_hash_somescalar()
         push!(cur_expr.args, new_expr)
         cur_expr = new_expr
     end
-    
+
     push!(cur_expr.args, :(hash(a, h)::UInt))
     return esc(expr)
 end
@@ -474,7 +474,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             else
                 _unreachable()
             end
-            
+
             Base.hash(f, Base.hash(args, h))::UInt
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
@@ -534,20 +534,20 @@ $(TYPEDSIGNATURES)
 
 Implements hash consing (flyweight design pattern) for `BasicSymbolic` objects.
 
-This function checks if an equivalent `BasicSymbolic` object already exists. It uses a 
-custom hash function (`hash2`) incorporating metadata and symtypes to search for existing 
-objects in a `WeakCacheSet` (`wcs`). Due to the possibility of hash collisions (where 
-different objects produce the same hash), a custom equality check (`isequal_with_metadata`) 
-which includes metadata comparison, is used to confirm the equivalence of objects with 
-matching hashes. If an equivalent object is found, the existing object is returned; 
-otherwise, the input `s` is returned. This reduces memory usage, improves compilation time 
-for runtime code generation, and supports built-in common subexpression elimination, 
+This function checks if an equivalent `BasicSymbolic` object already exists. It uses a
+custom hash function (`hash2`) incorporating metadata and symtypes to search for existing
+objects in a `WeakCacheSet` (`wcs`). Due to the possibility of hash collisions (where
+different objects produce the same hash), a custom equality check (`isequal_with_metadata`)
+which includes metadata comparison, is used to confirm the equivalence of objects with
+matching hashes. If an equivalent object is found, the existing object is returned;
+otherwise, the input `s` is returned. This reduces memory usage, improves compilation time
+for runtime code generation, and supports built-in common subexpression elimination,
 particularly when working with symbolic objects with metadata.
 
-Using a `WeakCacheSet` ensures that only weak references to `BasicSymbolic` objects are 
-stored, allowing objects that are no longer strongly referenced to be garbage collected. 
-Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and 
-`Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
+Using a `WeakCacheSet` ensures that only weak references to `BasicSymbolic` objects are
+stored, allowing objects that are no longer strongly referenced to be garbage collected.
+Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and
+`Base.isequal` to accommodate metadata without disrupting existing tests reliant on the
 original behavior of those functions.
 """
 

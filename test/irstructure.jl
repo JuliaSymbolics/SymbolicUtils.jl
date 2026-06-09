@@ -95,7 +95,7 @@ end
     expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
     ir = IRStructure{SymReal}()
     populate_ir!(ir, expr)
-    
+
     buffer = Set{BasicSymbolic{SymReal}}()
     SU.search_variables!(buffer, ir, expr)
     buffer2 = empty(buffer)

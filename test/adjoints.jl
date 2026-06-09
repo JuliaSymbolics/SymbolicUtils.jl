@@ -25,4 +25,4 @@ using Zygote
       @test gs[1][i] == one(eltype(ŷ))
     end
   end
-end 
+end

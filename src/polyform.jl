@@ -381,7 +381,7 @@ function quick_mulpow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
                 argexp = 1
                 break
             end
-        
+
             if iscall(arg) && operation(arg) === (^) && isequal(arguments(arg)[1], base)
                 idx = i
                 argbase, argexp = arguments(arg)

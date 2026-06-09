@@ -716,6 +716,12 @@ produces `NaN`/`Inf`). Contrast with [`ifelse_eager`](@ref), which evaluates bot
 
 `ifelse`, `ifelse_eager` and `ifelse_branching` differ only in how code generation lowers them;
 `ifelse` is the default and is intended to eventually pick a strategy via a cost heuristic.
+
+!!! note
+    Opting the conditional out of CSE also means the `ifelse_branching` node itself is not
+    bound to a shared temporary, so when its result is referenced at multiple sites the
+    generated `if`/`else` is duplicated at each use (the branches stay lazy and the computed
+    values are unchanged).
 """
 ifelse_branching(cond, x, y) = cond ? x : y
 

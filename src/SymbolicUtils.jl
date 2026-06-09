@@ -132,6 +132,7 @@ export @makearray
 include("arraymaker.jl")
 
 # Methods on symbolic objects
+export ifelse_eager, ifelse_branching
 PrecompileTools.@recompile_invalidations begin
 using SpecialFunctions, NaNMath
 include("methods.jl")

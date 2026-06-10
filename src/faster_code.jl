@@ -872,6 +872,28 @@ function codegen_function!(::typeof(ifelse), cs::CodegenState{T}, expr::BasicSym
     return codegen!(cs, expr_idx, Expr(:if, cs(cs.ir[cond_idx]), cs(cs.ir[true_idx]), cs(cs.ir[false_idx])))
 end
 
+# `ifelse_branching` emits each branch body into its own codegen scope so it lands inside the
+# corresponding `if`/`else` arm rather than being hoisted ahead of the conditional. Together
+# with `cse_inside_expr(_, ::typeof(ifelse_branching)) = false`, this guarantees the untaken
+# branch is never evaluated, even when CSE is enabled. (`ifelse_eager` needs no method here:
+# it lowers via the generic `codegen_function!` fallback to an eager call.)
+function codegen_function!(::typeof(ifelse_branching), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    cond_idx, true_idx, false_idx = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    cond = cs(cs.ir[cond_idx])
+
+    true_cs, true_bm = enter_scope(cs)
+    true_val = true_cs(cs.ir[true_idx])
+    true_block = exit_scope!(true_cs, true_bm)
+    push!(true_block.args, true_val)
+
+    false_cs, false_bm = enter_scope(cs)
+    false_val = false_cs(cs.ir[false_idx])
+    false_block = exit_scope!(false_cs, false_bm)
+    push!(false_block.args, false_val)
+
+    return codegen!(cs, expr_idx, Expr(:if, cond, true_block, false_block))
+end
+
 function codegen_function_no_nanmath!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     result = Expr(:call)
     if !(op isa BasicSymbolic{T})

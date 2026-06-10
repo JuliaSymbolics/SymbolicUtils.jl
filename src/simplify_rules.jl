@@ -72,6 +72,10 @@ const ASSORTED_RULES = (
     @rule(imag(~x::_isreal) => zero(symtype(~x))),
     @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
     @rule(ifelse(~x, ~y, ~y) => ~y),
+    @rule(ifelse_eager(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
+    @rule(ifelse_eager(~x, ~y, ~y) => ~y),
+    @rule(ifelse_branching(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
+    @rule(ifelse_branching(~x, ~y, ~y) => ~y),
 )
 
 const TRIG_EXP_RULES = (

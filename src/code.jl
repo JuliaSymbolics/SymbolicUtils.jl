@@ -19,7 +19,8 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
                       ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
-                      AddMulVariant, _isone, _iszero, Fill, IRStructure, populate_ir!, FnType
+                      AddMulVariant, _isone, _iszero, Fill, IRStructure, populate_ir!, FnType,
+                      ifelse_eager, ifelse_branching
 using Moshi.Match: @match
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 import Graphs
@@ -631,6 +632,15 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
 end
 
 function function_to_expr(::typeof(ifelse), O, st)
+    args = arguments(O)
+    return Expr(:if, toexpr(args[1], st), toexpr(args[2], st), toexpr(args[3], st))
+end
+
+# `ifelse_branching` lowers to an `if`/`else` (only the taken branch is evaluated). `toexpr`
+# inlines recursively, so this slow path is naturally lazy. `ifelse_eager` needs no special
+# handling: it is a registered function whose definition calls `ifelse`, so the generic
+# `function_to_expr` fallback lowers it to a plain (eager) call.
+function function_to_expr(::typeof(ifelse_branching), O, st)
     args = arguments(O)
     return Expr(:if, toexpr(args[1], st), toexpr(args[2], st), toexpr(args[3], st))
 end
@@ -1537,6 +1547,10 @@ Return `true` if CSE should descend inside `sym`, which has operation `f`.
 function cse_inside_expr(sym, f)
     return true
 end
+
+# Keep the branches of `ifelse_branching` out of CSE so they are not hoisted ahead of the
+# conditional; the codegen for `ifelse_branching` emits them inside their `if`/`else` arms.
+cse_inside_expr(sym, ::typeof(ifelse_branching)) = false
 
 """
     $(TYPEDEF)

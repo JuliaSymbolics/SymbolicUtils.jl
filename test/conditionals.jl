@@ -53,3 +53,41 @@ end
     f = compile(ifelse_eager(x > 0, x^2, boomterm(x)), x)
     @test_throws ErrorException f(2.0)
 end
+
+# Counts how many times it is evaluated; used to detect duplicated computation.
+const FIRE_COUNT = Ref(0)
+fire(v) = (FIRE_COUNT[] += 1; v)
+fireterm(v) = term(fire, v; type = Real, shape = SymbolicUtils.shape(v))
+
+@testset "multiply-referenced ifelse_branching is computed once under CSE" begin
+    @syms x::Real
+    z = ifelse_branching(x > 0, fireterm(x)^2, boomterm(x))
+    # CSE binds the conditional itself to a temporary...
+    csex = cse(z + 2z)
+    @test csex isa Let
+    @test count(p -> p isa Assignment && iscall(p.rhs) &&
+        operation(p.rhs) === ifelse_branching, csex.pairs) == 1
+    # ...so referencing it twice evaluates the taken branch once and the untaken
+    # branch (`boom`) not at all.
+    f = compile(z + 2z, x)
+    FIRE_COUNT[] = 0
+    @test f(2.0) == 12.0
+    @test FIRE_COUNT[] == 1
+
+    # One-sided nesting stays linear: each level is emitted once, matching `ifelse`.
+    # (A conditional referenced inside *both* branches of an enclosing one is still
+    # emitted per branch — hoisting it out would evaluate it eagerly.)
+    nested_b = ifelse_branching(x > 0, x, -x)
+    nested_i = ifelse(x > 0, x, -x)
+    for i in 1:5
+        nested_b = ifelse_branching(x > i, nested_b + 1, -x)
+        nested_i = ifelse(x > i, nested_i + 1, -x)
+    end
+    code_b = string(toexpr(cse(Func([x], [], nested_b))))
+    code_i = string(toexpr(cse(Func([x], [], nested_i))))
+    nif(s) = length(collect(eachmatch(r"\bif\b", s)))
+    @test nif(code_b) == nif(code_i) == 6
+    fb = compile(nested_b, x)
+    fi = compile(nested_i, x)
+    @test fb(2.5) == fi(2.5) == -2.5
+end

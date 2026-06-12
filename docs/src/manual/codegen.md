@@ -49,4 +49,18 @@ called within the expression are pure. SymbolicUtils can and will change the num
 ```@docs
 SymbolicUtils.Code.cse
 SymbolicUtils.Code.cse_inside_expr
+SymbolicUtils.Code.cse_bind_expr
+```
+
+### Conditionals
+
+`ifelse` lowers to an `if`/`else` whose branches are still subject to CSE. Two variants pin
+the evaluation strategy: `ifelse_eager` always evaluates both branches, while
+`ifelse_branching` guarantees the untaken branch is never evaluated — its branch interiors
+are excluded from CSE (the conditional itself is still bound, see
+[`SymbolicUtils.Code.cse_bind_expr`](@ref)).
+
+```@docs
+SymbolicUtils.ifelse_eager
+SymbolicUtils.ifelse_branching
 ```

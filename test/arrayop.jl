@@ -305,11 +305,15 @@ end
 @testset "Array summand reconstruction (no `vector ^ 1`)" begin
     using SymbolicUtils: ismul, ACDict, Mul
 
-    @syms y[1:3]
+    @syms y[1:3] w[1:3]
+
+    @test isequal(y - y + y + y, 2y)
+    @test isequal(y - y, 0y)
+    @test isequal(y + w - y, w)
 
     # Reconstructing a `coeff * vector` summand must not raise the vector base to a
     # power (`y ^ 1`), which `^` rejects for non-matrix arrays.
-    ex = y - y + y + y
+    ex = 2y + 3w
     @test all(s -> operation(s) === (*) && length(arguments(s)) == 2, arguments(ex))
 
     # `Mul` keeps the invariant directly: an array base never becomes a MUL key.

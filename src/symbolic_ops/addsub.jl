@@ -131,7 +131,16 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                     end
                 end
                 _ => begin
-                    _accumulate!(result, term, 1)
+                    if is_array_shape(SymbolicUtils.shape(term))
+                        coeff, arrterm = _split_arrterm_scalar_coeff(T, term)
+                        if isconst(coeff)
+                            _accumulate!(result, arrterm, unwrap_const(coeff))
+                        else
+                            _accumulate!(result, term, 1)
+                        end
+                    else
+                        _accumulate!(result, term, 1)
+                    end
                 end
             end
         elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal} || term isa BasicSymbolic{TreeReal}
@@ -143,8 +152,25 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
             newcoeff = newcoeff .+ term
         end
     end
+    # If every term cancels we still need to preserve the array shape (a scalar `0` cannot
+    # stand in for a zero vector). Grab a surviving array-shaped key before filtering so the
+    # all-cancel case can be rebuilt as `coeff * arr` (e.g. `y - y` => `0y`).
+    arr_witness = nothing
+    if is_array_shape(shape)
+        for k in keys(result)
+            if is_array_shape(SymbolicUtils.shape(k))
+                arr_witness = k
+                break
+            end
+        end
+    end
     filter!(!(iszero ∘ last), result)
-    isempty(result) && return Const{T}(newcoeff)
+    if isempty(result)
+        if arr_witness !== nothing && !(newcoeff isa AbstractArray)
+            return (newcoeff * arr_witness)::BasicSymbolic{T}
+        end
+        return Const{T}(newcoeff)
+    end
     var = Add{T}(newcoeff, result; type, shape)::BasicSymbolic{T}
     @match var begin
         BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())

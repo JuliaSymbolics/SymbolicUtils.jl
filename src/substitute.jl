@@ -208,7 +208,7 @@ end
 
 function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta::MetadataT, can_fold::Bool) where {T}
     @nospecialize op args meta
-    if can_fold
+    if can_fold && !(op isa Fill)
         if length(args) == 1
             Const{T}(op(unwrap_const(args[1])))
         elseif length(args) == 2

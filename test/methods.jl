@@ -483,3 +483,10 @@ end
     @test SymbolicUtils.promote_shape(tuple, Unknown(1), ShapeVecT((1:3, 1:3,)), ShapeVecT()) == [1:3]
 end
 
+@testset "Fill const" begin
+    @syms x::Real
+    filled = Fill(ShapeVecT((1:3,)))(x)
+    res = substitute(filled, Dict(x => 1))
+    @test operation(res) isa Fill
+    @test unwrap_const(only(arguments(res))) == 1
+end

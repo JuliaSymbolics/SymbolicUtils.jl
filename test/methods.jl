@@ -91,6 +91,16 @@ end
     @test promote_shape(NaNMath.pow, ShapeVecT(), ShapeVecT()) == ShapeVecT()
 end
 
+@testset "identity power x^1 for non-matrix array bases" begin
+    # `x^1 == x` for any shape. A non-matrix array can appear as a
+    # multiplicity-1 factor of a `Mul`, materialized as `base^1`; this must
+    # not error in the generic array `^` path (promote_shape rejects
+    # non-matrix bases, but exponent 1 is an identity and never raises a power).
+    @syms a[1:3]::Float64
+    @test isequal(a ^ 1, a)
+    @test isequal(a ^ 1.0, a)
+end
+
 @testset "promote_shape for log with matrices" begin
     @test promote_shape(log, Unknown(2)) == Unknown(2)
     @test promote_shape(log, Unknown(-1)) == Unknown(-1)

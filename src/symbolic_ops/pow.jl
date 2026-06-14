@@ -54,8 +54,14 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
     if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(^, (a, b)))
     end
-    isconst(a) && return Const{T}(^(unwrap_const(a), b))
     b = unwrap_const(unwrap(b))
+    # `x^1 == x` for any shape. The array path below goes through
+    # `promote_shape(^, …)`, which rejects non-matrix array bases even for this
+    # identity exponent — but a non-matrix array can legitimately appear as a
+    # multiplicity-1 factor of a `Mul`, which `arguments` materializes as
+    # `base^1`. Handle it up front so an identity power never errors.
+    b isa Number && isone(b) && return a
+    isconst(a) && return Const{T}(^(unwrap_const(a), b))
     sha = shape(a)
     shb = shape(b)
     newshape = promote_shape(^, sha, shb)

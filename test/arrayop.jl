@@ -301,3 +301,23 @@ end
 
     @test isequal(scalarize(outer), [2A[1]+1, 2A[2]+1, 2A[3]+1])
 end
+
+@testset "Array summand reconstruction (no `vector ^ 1`)" begin
+    using SymbolicUtils: ismul, ACDict, Mul
+
+    @syms y[1:3] w[1:3]
+
+    @test isequal(y - y + y + y, 2y)
+    @test isequal(y - y, 0y)
+    @test isequal(y + w - y, w)
+
+    # Reconstructing a `coeff * vector` summand must not raise the vector base to a
+    # power (`y ^ 1`), which `^` rejects for non-matrix arrays.
+    ex = 2y + 3w
+    @test all(s -> operation(s) === (*) && length(arguments(s)) == 2, arguments(ex))
+
+    # `Mul` keeps the invariant directly: an array base never becomes a MUL key.
+    m = Mul{SymReal}(3, ACDict{SymReal}(y => 1))
+    @test operation(m) === (*) && !ismul(m)
+    @test isequal(Mul{SymReal}(1, ACDict{SymReal}(y => 1)), y)  # coeff 1, power 1 -> bare vector
+end

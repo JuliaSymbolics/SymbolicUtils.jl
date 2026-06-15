@@ -483,3 +483,8 @@ end
     @test SymbolicUtils.promote_shape(tuple, Unknown(1), ShapeVecT((1:3, 1:3,)), ShapeVecT()) == [1:3]
 end
 
+
+@testset "`Fill` with non-symbolic argument" begin
+    f = Fill(ShapeVecT((1:3, 1:3)))
+    @test f(1) == fill(1, 3, 3)
+end

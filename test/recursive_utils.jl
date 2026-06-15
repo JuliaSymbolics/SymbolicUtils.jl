@@ -138,7 +138,7 @@ end
         det_expr = LinearAlgebra.det(M)
 
         det_scal = SymbolicUtils.scalarize(det_expr)
-        
+
         vals = reshape(1:(N*N), N, N)
         @test det(vals) ≈ unwrap_const(substitute(det_scal, Dict(M => vals); fold = Val(true))) atol = 1e-16
     end

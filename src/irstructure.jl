@@ -384,7 +384,7 @@ function (pc::PopulateClosure{T})() where {T}
             push!(expr_uses, op_idx)
         end
         args = parent(arguments(expr))
-        sizehint!(expr_uses, length(args))
+        sizehint!(expr_uses, length(args) + 1)
         @union_split_smallvec args for arg in args
             # Add each argument to the IR. This is effectively a postorder traversal.
             arg_idx = populate_ir!(ir, arg)
@@ -561,7 +561,7 @@ function Base.setdiff!(s::IRStructureSearchBuffer{T}, ss...) where {T}
         on_exit = Base.Fix1(delete!, s.searched)
     )
     for idx in idxs
-        def in s.searched || continue
+        idx in s.searched || continue
         rdfs(idx)
     end
     return s
@@ -586,7 +586,7 @@ function Base.filter!(pred::F, s::IRStructureSearchBuffer{T}) where {F, T}
         on_exit = Base.Fix1(delete!, s.searched)
     )
     for idx in idxs
-        def in s.searched || continue
+        idx in s.searched || continue
         rdfs(idx)
     end
     return s
@@ -943,11 +943,13 @@ end
 If `ir.non_canonical_idxs` is empty, return `ir[idx]`. Otherwise, find the canonical expression
 that `ir[idx]` should be, were `IRSubstituter` used instead of `replace_node!`.
 """
-function get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
+function get_canonical_expr!(ir::IRStructure{T}, idx::Integer) where {T}
     isempty(ir.non_canonical_idxs) && return ir[idx]
 
     return __get_canonical_expr(ir, idx)
 end
+
+@deprecate get_canonical_expr(ir, idx) get_canonical_expr!(ir, idx)
 
 """
     $TYPEDSIGNATURES
@@ -960,7 +962,7 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
 
     reachability = get_cached_idxs!(ir)
     empty!(reachability)
-    get_reachability!(reachability, ir, idx)
+    get_reachability!(reachability, ir, idx; visited = get_cached_mask!(ir, length(ir)))
     push!(reachability, idx)
     # `reachability` is in topological order. We can iterate over it, and update
     # any non-canonical nodes as we encounter them. Once we update a node, we mark
@@ -996,7 +998,16 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
             end
         end
         # Update the expression for this node
-        ir.symbols[node] = maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+        ir.symbols[node] = new_sym = maketerm(BasicSymbolic{T}, op, new_args, metadata(i_sym))::BasicSymbolic{T}
+        ir.definition[new_sym] = node
+        weakdefs = ir.weak_definitions[i_sym]
+        if length(weakdefs) == 1
+            delete!(ir.weak_definitions, i_sym)
+        else
+            filter!(!isequal(node), weakdefs)
+        end
+        weakdefs = get!(Vector{Int32}, ir.weak_definitions, new_sym)
+        push!(weakdefs, node)
         # `node` is now canonical
         delete!(ir.non_canonical_idxs, node)
         # All its `inneighbors` are still non-canonical

@@ -322,11 +322,11 @@ macro cache(args...)
             end
             continue
         end
-            
+
         # use `eval` to get the type because we need to know if it's a `BasicSymbolic`
         T = Base.eval(__module__, Texpr)
         if T <: BasicSymbolic
-            push!(keytypes, SymbolicKey) 
+            push!(keytypes, SymbolicKey)
             push!(keyexprs, :($get_cache_key($argname)))
             valid_key_condition = :($valid_key_condition && !($(Symbol(:key_, length(keyexprs))) isa $CacheSentinel))
         else
@@ -447,7 +447,7 @@ macro cache(args...)
     return quote
         $(EL.codegen_ast(structdef))
         $(EL.codegen_ast(filterfn))
-        
+
         const $cachename = $cachector
 
         $(EL.codegen_ast(fn))

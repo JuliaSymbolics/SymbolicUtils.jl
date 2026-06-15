@@ -112,7 +112,7 @@ function makesegment(s::Expr, keys)
     end
 
     name = s.args[1]
-    
+
     push!(keys, name)
     :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
 end
@@ -631,7 +631,7 @@ function (acr::ACRule)(term)
     else
         f = operation(term)
         # Assume that the matcher was formed by closing over a term
-        if f != operation(r.lhs)
+        if f !== operation(r.lhs)
             # different operations -> try deflsot
             return r(term)
         end

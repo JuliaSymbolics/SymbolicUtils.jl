@@ -685,6 +685,64 @@ function promote_shape(::typeof(ifelse), shc::ShapeT, sht::ShapeT, shf::ShapeT)
     return sht
 end
 
+"""
+    ifelse_eager(cond, x, y)
+
+Conditional that builds the same kind of symbolic expression as `ifelse`, but **always lowers
+to an eager `ifelse` call** during code generation: both branches `x` and `y` are evaluated
+unconditionally and `cond` selects between the computed values.
+
+Use it when both branches are always valid to evaluate and branch-free code is desirable (e.g.
+to keep generated code vectorizable/SIMD-friendly or GPU-divergence-free). Contrast with
+[`ifelse_branching`](@ref), which never evaluates the untaken branch.
+
+`ifelse`, `ifelse_eager` and `ifelse_branching` differ only in how code generation lowers them;
+`ifelse` is the default and is intended to eventually pick a strategy via a cost heuristic.
+"""
+ifelse_eager(cond, x, y) = ifelse(cond, x, y)
+
+"""
+    ifelse_branching(cond, x, y)
+
+Conditional that builds the same kind of symbolic expression as `ifelse`, but **always lowers
+to an `if`/`else` branch** during code generation, so that only the taken branch is evaluated.
+The untaken branch's code is emitted inside the branch and is never executed when `cond`
+selects the other branch — even under common-subexpression elimination (`ifelse_branching`
+opts out of CSE for the conditional via [`cse_inside_expr`](@ref)).
+
+Use it when a branch is only valid to evaluate when its condition holds (it divides by a
+quantity that is zero otherwise, indexes into something that does not exist, errors, or
+produces `NaN`/`Inf`). Contrast with [`ifelse_eager`](@ref), which evaluates both branches.
+
+`ifelse`, `ifelse_eager` and `ifelse_branching` differ only in how code generation lowers them;
+`ifelse` is the default and is intended to eventually pick a strategy via a cost heuristic.
+
+!!! note
+    Opting the conditional out of CSE also means the `ifelse_branching` node itself is not
+    bound to a shared temporary, so when its result is referenced at multiple sites the
+    generated `if`/`else` is duplicated at each use (the branches stay lazy and the computed
+    values are unchanged).
+"""
+ifelse_branching(cond, x, y) = cond ? x : y
+
+# Symbolic nodes and type/shape promotion for the two variants mirror `ifelse`.
+for op in (:ifelse_eager, :ifelse_branching)
+    @eval begin
+        function $op(_if::BasicSymbolic{T}, _then, _else) where {T}
+            type = promote_symtype($op, symtype(_if), symtype(_then), symtype(_else))
+            sh = promote_shape($op, shape(_if), shape(_then), shape(_else))
+            Term{T}($op, ArgsT{T}((_if, _then, _else)); type, shape = sh)
+        end
+        function promote_symtype(::typeof($op), C::TypeT, T::TypeT, S::TypeT)
+            return promote_symtype(ifelse, C, T, S)
+        end
+        function promote_shape(::typeof($op), shc::ShapeT, sht::ShapeT, shf::ShapeT)
+            @nospecialize shc sht shf
+            return promote_shape(ifelse, shc, sht, shf)
+        end
+    end
+end
+
 # Array-like operations
 Base.IndexStyle(::Type{<:BasicSymbolic}) = Base.IndexCartesian()
 function _size_from_shape(shape::ShapeT)

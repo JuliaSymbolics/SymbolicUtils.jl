@@ -2,7 +2,7 @@ using .Rewriters
 """
   is_operation(f)
 Returns a single argument anonymous function predicate, that returns `true` if and only if
-the argument to the predicate satisfies `iscall` and `operation(x) == f` 
+the argument to the predicate satisfies `iscall` and `operation(x) == f`
 """
 is_operation(f) = @nospecialize(x) -> iscall(x) && (operation(x) === f)
 
@@ -72,6 +72,10 @@ const ASSORTED_RULES = (
     @rule(imag(~x::_isreal) => zero(symtype(~x))),
     @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
     @rule(ifelse(~x, ~y, ~y) => ~y),
+    @rule(ifelse_eager(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
+    @rule(ifelse_eager(~x, ~y, ~y) => ~y),
+    @rule(ifelse_branching(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
+    @rule(ifelse_branching(~x, ~y, ~y) => ~y),
 )
 
 const TRIG_EXP_RULES = (

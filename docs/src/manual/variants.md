@@ -26,7 +26,7 @@ A given expression must be pure in its `vartype`. In other words, no operation s
 of different `vartype`s.
 
 !!! warning "A short note on (im-)mutability"
-  
+
     While `ismutabletype(BasicSymbolic)` returns `true`, symbolic types are IMMUTABLE.
     Any mutation is undefined behavior and can lead to very confusing and hard-to-debug issues.
     This includes internal mutation, such as mutating `AddMul.dict`. The arrays returned from
@@ -296,7 +296,7 @@ range of indices over which they should iterate, in case such a range is explici
 provided.
 
 !!! note
-  
+
   The common global index variable is printed as `_1`, `_2`, ... in arrayops. It is not
   a valid symbolic variable outside of an `ArrayOp`'s `expr`.
 

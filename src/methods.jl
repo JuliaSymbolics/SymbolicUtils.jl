@@ -1787,6 +1787,14 @@ function (f::Fill)(x::BasicSymbolic{T}) where {T}
     return BSImpl.ArrayOp{T}(out_idxs, x, +, term, ranges; type = term.type, shape = term.shape)
 end
 
+function (f::Fill)(x)
+    ux = unwrap(x)
+    if ux !== x
+        return f(ux)
+    end
+    return fill(x, map(length, f.sh)...)
+end
+
 function promote_symtype(f::Fill, T::TypeT)
     return Array{T, length(f.sh)}
 end

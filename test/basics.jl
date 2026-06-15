@@ -1160,6 +1160,35 @@ end
     @test isequal((-5a)^0.5, sqrt(5) * Term{SymReal}(^, [-a, 0.5]; type = Number, shape = ShapeVecT()))
 end
 
+@testset "Avoid float in symbolic integer powers" begin
+    @syms a::Real
+    n::Int = 5
+    n5 = SymbolicUtils.Const{SymReal}(n)
+    s = sqrt(n5)
+    @test unwrap_const(s * s) === n
+    @test unwrap_const(s^2) === n
+    @test unwrap_const(s^4) === n^2 
+
+    # Non-even powers should remain symbolic
+    @test !SymbolicUtils.isconst(s^3)
+
+    c = cbrt(n5)
+    @test unwrap_const(c^3) === n
+
+
+    for k in 2:5
+        _s = n5^(1//k)
+        @test !SymbolicUtils.isconst(_s)
+        @test unwrap_const(_s^k) === n
+        _s2 = (n*a)^(1//k)
+        @test unwrap_const((_s2^k).coeff) === n
+
+        _s3 = (1//n*a)^(1//k)
+        @test unwrap_const((_s3^k).coeff) === 1//n
+    end
+
+end
+
 @testset "Equivalent expressions across tasks are equal" begin
     @syms a
     task = Threads.@spawn @syms a

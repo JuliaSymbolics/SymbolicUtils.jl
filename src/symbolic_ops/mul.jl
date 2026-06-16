@@ -377,7 +377,7 @@ end
 
 for T in [:(PolyadicNumericOpFirstArgT{T}), Int, Float64, Bool]
     @eval function *(a::$T, b::T, bs::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
-        isempty(bs) && a isa Number && isone(a) && return b
+        isempty(bs) && _isone(a) && return b
         return mul_worker(vartype(T), (a, b, bs...))
     end
 end

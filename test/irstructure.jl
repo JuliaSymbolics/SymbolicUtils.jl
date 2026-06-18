@@ -351,14 +351,14 @@ end
     end
 end
 
-@testset "`get_canonical_expr`" begin
+@testset "`get_canonical_expr!`" begin
     @testset "Canonical IR: returns ir[idx] directly" begin
         ir = IRStructure{SymReal}()
         expr = x + sin(y)
         populate_ir!(ir, expr)
         @test isempty(ir.non_canonical_idxs)
         idx = ir[expr]
-        @test SU.get_canonical_expr(ir, idx) === ir[idx]
+        @test SU.get_canonical_expr!(ir, idx) === ir[idx]
     end
 
     @testset "Non-canonical, unaffected subtree: returns same object" begin
@@ -368,7 +368,7 @@ end
         sin_idx = ir[sin(x)]
         replace_node!(ir, y, x)   # affects cos(y) only, not sin(x)
         @test !isempty(ir.non_canonical_idxs)
-        @test SU.get_canonical_expr(ir, sin_idx) === ir[sin_idx]
+        @test SU.get_canonical_expr!(ir, sin_idx) === ir[sin_idx]
     end
 
     @testset "After leaf replacement: parent argument updated" begin
@@ -377,7 +377,7 @@ end
         sin_idx = ir[sin(x)]
         replace_node!(ir, x, y)
         @test !isempty(ir.non_canonical_idxs)
-        @test isequal(SU.get_canonical_expr(ir, sin_idx), sin(y))
+        @test isequal(SU.get_canonical_expr!(ir, sin_idx), sin(y))
     end
 
     @testset "After callable replacement: grandparent updated" begin
@@ -386,7 +386,7 @@ end
         cos_idx = ir[cos(x + y)]
         replace_node!(ir, x + y, x * y)
         @test !isempty(ir.non_canonical_idxs)
-        @test isequal(SU.get_canonical_expr(ir, cos_idx), cos(x * y))
+        @test isequal(SU.get_canonical_expr!(ir, cos_idx), cos(x * y))
     end
 
     @testset "Symbolic operation: arg replaced (n_drop=1 path)" begin
@@ -397,7 +397,7 @@ end
         fn_x_idx = ir[fn(x)]
         replace_node!(ir, x, y)
         @test !isempty(ir.non_canonical_idxs)
-        @test isequal(SU.get_canonical_expr(ir, fn_x_idx), fn(y))
+        @test isequal(SU.get_canonical_expr!(ir, fn_x_idx), fn(y))
     end
 end
 

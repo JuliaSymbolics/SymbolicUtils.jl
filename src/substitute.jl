@@ -672,6 +672,22 @@ function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
     end
 end
 
+scalarization_function(::Fill) = _scalarize_fill
+# Fast path for scalarizing a constant `Fill` array
+function _scalarize_fill(f, x::BasicSymbolic{T}, v::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    sh = shape(x)
+    is_array_shape(sh) || return _default_scalarize(f, x, v)
+    val = @match x begin
+        BSImpl.ArrayOp(; expr) => expr
+        _ => nothing
+    end
+    if val isa BasicSymbolic{T} && !is_array_shape(shape(val))
+        return fill(val, prod(length, sh))
+    end
+    return _default_scalarize(f, x, v)
+end
+
 scalarization_function(::Type{ArrayOp{T}}) where {T} = _scalarize_arrayop
 
 function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}

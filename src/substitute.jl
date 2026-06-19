@@ -683,7 +683,7 @@ function _scalarize_fill(f, x::BasicSymbolic{T}, v::Val{toplevel}) where {T, top
         _ => nothing
     end
     if val isa BasicSymbolic{T} && !is_array_shape(shape(val))
-        return fill(val, prod(length, sh))
+        return fill(val, map(length, sh)...)
     end
     return _default_scalarize(f, x, v)
 end

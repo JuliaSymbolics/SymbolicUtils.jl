@@ -1,5 +1,6 @@
 using SymbolicUtils, Test
 using SymbolicUtils: Term, Add, Mul, Div, metadata, BasicSymbolic, PolyCoeffT, ACDict
+using SymbolicUtils: Fill, Mapper, Mapreducer, ShapeVecT, SymReal
 import MultivariatePolynomials as MP
 import TermInterface
 
@@ -153,4 +154,61 @@ end
     x2 = setmetadata(x, Int, [1])
     @test x1 === x2
     @test hash2(x1) == hash2(x2)
+end
+
+@testset "Operations hash by content" begin
+    @syms p q
+
+    @testset "Fill" begin
+        f1 = Fill(ShapeVecT([1:3, 1:2]))
+        f2 = Fill(ShapeVecT([1:3, 1:2]))
+        f3 = Fill(ShapeVecT([1:3, 1:4]))
+        @test f1 == f2
+        @test isequal(f1, f2)
+        @test hash(f1) == hash(f2)
+        @test isequal(f1, deepcopy(f1)) && hash(f1) == hash(deepcopy(f1))
+        @test f1 != f3
+        @test hash(f1) != hash(f3)
+        # As an `ArrayOp` operation, content-identical fills hash-cons together.
+        a1 = f1(p)
+        a2 = f2(p)
+        @test isequal(a1, a2)
+        @test hash(a1) == hash(a2)
+    end
+
+    @testset "Mapper" begin
+        m1 = Mapper(sin)
+        m2 = Mapper(sin)
+        m3 = Mapper(cos)
+        @test m1 == m2
+        @test isequal(m1, m2)
+        @test hash(m1) == hash(m2)
+        @test isequal(m1, deepcopy(m1)) && hash(m1) == hash(deepcopy(m1))
+        @test m1 != m3
+        @test hash(m1) != hash(m3)
+        # As a `Term` operation, content-identical mappers hash-cons to the same node.
+        t1 = Term{SymReal}(Mapper(sin), [p])
+        t2 = Term{SymReal}(Mapper(sin), [p])
+        @test t1.id === t2.id
+        @test hash(t1) == hash(t2)
+    end
+
+    @testset "Mapreducer" begin
+        r1 = Mapreducer(sin, +, 1, nothing)
+        r2 = Mapreducer(sin, +, 1, nothing)
+        r3 = Mapreducer(sin, +, 2, nothing)   # different dims
+        r4 = Mapreducer(cos, +, 1, nothing)   # different f
+        r5 = Mapreducer(sin, +, 1, 0.0)       # different init
+        @test r1 == r2
+        @test isequal(r1, r2)
+        @test hash(r1) == hash(r2)
+        @test isequal(r1, deepcopy(r1)) && hash(r1) == hash(deepcopy(r1))
+        @test r1 != r3 && hash(r1) != hash(r3)
+        @test r1 != r4 && hash(r1) != hash(r4)
+        @test r1 != r5 && hash(r1) != hash(r5)
+        t1 = Term{SymReal}(Mapreducer(sin, +, 1, nothing), [p])
+        t2 = Term{SymReal}(Mapreducer(sin, +, 1, nothing), [p])
+        @test t1.id === t2.id
+        @test hash(t1) == hash(t2)
+    end
 end

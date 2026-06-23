@@ -560,3 +560,29 @@ end
     @test isequal(ir[xidx], sin(x))
     @test collect(Graphs.outneighbors(ir.dependency_graph, xidx)) == [ir[x]]
 end
+
+@testset "Issue#981: `get_canonical_expr!` folding in `maketerm` resulting in different arguments" begin
+    @syms a::Real b::Real a2::Real
+    a = SU.unwrap(a); b = SU.unwrap(b); a2 = SU.unwrap(a2)
+
+    # An *unfolded* multiplication node  M = (-1) * (a / b)
+    # (raw `Term` ctor so it is not eagerly folded into a Div).
+    M = SU.Term{SymReal}(*, Any[SU.Const{SymReal}(-1), a / b]; type = Real)
+
+    ir  = IRStructure{SymReal}()
+    idx = populate_ir!(ir, M)
+
+    # Break canonical form (`a` is a descendant of M via a/b), then canonicalize.
+    replace_node!(ir, a, a2)
+    SU.get_canonical_expr!(ir, idx)
+
+    node  = ir[idx]
+    args  = collect(arguments(node))
+    edges = [ir[j] for j in Graphs.outneighbors(ir.dependency_graph, idx)]
+    @test isequal(args, edges)
+    expr1 = SU.Code.fast_toexpr(ir[idx], ir, Dict{Any,Any}())
+    Base.remove_linenums!(expr1)
+    expr2 = SU.Code.fast_toexpr((-1)*(a2/b), Dict{Any,Any}())
+    Base.remove_linenums!(expr2)
+    @test isequal(repr(expr1), repr(expr2))
+end

@@ -1008,6 +1008,15 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
         end
         weakdefs = get!(Vector{Int32}, ir.weak_definitions, new_sym)
         push!(weakdefs, node)
+        rem_outedges!(ir.dependency_graph, node)
+
+        if op isa BasicSymbolic{T}
+            Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, op))
+        end
+        args = parent(arguments(new_sym))
+        @union_split_smallvec args for arg in args
+            Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, arg))
+        end
         # `node` is now canonical
         delete!(ir.non_canonical_idxs, node)
         # All its `inneighbors` are still non-canonical

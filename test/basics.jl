@@ -1420,3 +1420,8 @@ end
     @test isequal(t[2], y)
     @test isequal(t[3], z)
 end
+
+@testset "Non-`Sym` expression as operation" begin
+    @syms x y z o(..)::FnType{Tuple{Number}, Number, Nothing}
+    @test_nowarn repr(o(x)(y + z))
+end

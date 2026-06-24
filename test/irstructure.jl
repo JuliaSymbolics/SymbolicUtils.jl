@@ -586,3 +586,16 @@ end
     Base.remove_linenums!(expr2)
     @test isequal(repr(expr1), repr(expr2))
 end
+
+@testset "`IRSubstituter` doesn't cache filtered expressions" begin
+    @syms t::Real a::Real b(..)::Real
+    expr = a + b(t)
+    @test !SU.default_substitute_filter(b(t))
+    rules = Dict{typeof(a), typeof(a)}(a => 2a)
+    ir = IRStructure{SymReal}()
+    subber = IRSubstituter{false}(ir, rules)
+    subber(expr)
+    @test !haskey(subber.cache, ir[b(t)])
+    subber(t)
+    @test !haskey(subber.cache, ir[t])
+end

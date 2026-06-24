@@ -747,10 +747,12 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
         return sub.cache[idx] = populate_ir!(ir, other)
     end
     if !filterer(idxsym)
-        return sub.cache[idx] = idx
+        # Match behavior with `DefaultSubstituter`. A filtered expression does not
+        # populate the cache.
+        return idx
     end
     if !iscall(idxsym)
-        return sub.cache[idx] = idx
+        return idx
     end
 
     # Now, it's _possible_ `idx` is changed by the substitution
@@ -794,11 +796,9 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
             continue
         end
         if !filterer(sym)
-            sub.cache[i] = i
             continue
         end
         if !iscall(sym)
-            sub.cache[i] = i
             continue
         end
 
@@ -836,7 +836,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
             can_fold = true
         end
         for j in eachindex(args)
-            new_child = args[j] = ir[sub.cache[ir[args[j]]]]
+            new_child = args[j] = ir[get(sub.cache, ir[args[j]], ir[args[j]])]
             if Fold
                 can_fold &= isconst(new_child)
             end
@@ -844,7 +844,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
         op = operation(i_sym)
         if op isa BasicSymbolic{T}
             op_i = ir[op]
-            op = ir[sub.cache[op_i]]
+            op = ir[get(sub.cache, op_i, op_i)]
             if isconst(op)
                 op = unwrap_const(op)
             elseif Fold

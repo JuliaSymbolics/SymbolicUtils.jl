@@ -87,10 +87,10 @@ function show_term(io::IO, x::BasicSymbolic)
     end
 end
 
-function show_call(io::IO, @nospecialize(f), x::BasicSymbolic; @nospecialize(kw...))
+function show_call(io::IO, @nospecialize(f), x::BasicSymbolic{T}; @nospecialize(kw...)) where {T}
     args = parent(arguments(x))
     len_args = length(args)
-    fname = applicable(nameof, f)::Bool ? nameof(f)::Symbol : :_
+    fname = applicable(nameof, f)::Bool && !(f isa BasicSymbolic{T}) ? nameof(f)::Symbol : :_
     if Base.isunaryoperator(fname) && len_args == 1
         print(io, fname)
         print_arg(io, args[1])

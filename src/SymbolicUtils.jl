@@ -43,6 +43,7 @@ PrecompileTools.@recompile_invalidations begin
     import StaticArraysCore
 end
 import LinearAlgebra
+using SciMLPublic: @public
 
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)
@@ -184,6 +185,8 @@ include("code.jl")
 PrecompileTools.@recompile_invalidations begin
     include("despecialize.jl")
 end
+
+@public add_worker, mul_worker
 
 PrecompileTools.@setup_workload begin
     fold1 = Val{false}()

@@ -187,6 +187,7 @@ PrecompileTools.@recompile_invalidations begin
 end
 
 @public add_worker, mul_worker
+@public BasicSymbolic, unwrap, isadd, ismul
 
 PrecompileTools.@setup_workload begin
     fold1 = Val{false}()

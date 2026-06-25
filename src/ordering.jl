@@ -54,7 +54,22 @@ end
 end
 
 function __default_degrees!(degrees::DegreesT, expr::BasicSymbolic{T}) where {T}
-    push!(degrees, SmallV{Symbol}((Symbol(:zzzzzzz, hash(expr)),)) => 1.0)
+    @match expr begin
+        BSImpl.Term(; f) => begin
+            if f isa BasicSymbolic{T}
+                if hasname(f)
+                    push!(degrees, SmallV{Symbol}((getname(f),)) => 1.0)
+                else
+                    __default_degrees!(degrees, f)
+                end
+            elseif applicable(nameof, f)
+                push!(degrees, SmallV{Symbol}((nameof(f),)) => 1.0)
+            else
+                push!(degrees, SmallV{Symbol}((:zzz_ZZZ_unknown,)) => 1.0)
+            end
+        end
+        _ => push!(degrees, SmallV{Symbol}((:zzz__ZZZ_unknown,)) => 1.0)
+    end
 end
 
 function __get_degrees(expr::BasicSymbolic{T})::RODegreesT where {T}
@@ -257,7 +272,7 @@ function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
     bw = monomial_lt(db, da)
     if fw === bw && !isequal(a, b)
         if _arglen(a) == _arglen(b) != 0
-            return (operation(a), arguments(a)...,) <ₑ (operation(b), arguments(b)...,)
+            return (operation(a), sorted_arguments(a)...,) <ₑ (operation(b), sorted_arguments(b)...,)
         else
             return _arglen(a) < _arglen(b)
         end

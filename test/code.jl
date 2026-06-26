@@ -397,7 +397,7 @@ end
                 __array_literal_allocator = ones
                 __array_literal_result = __array_literal_allocator((3,))
                 $(setindex!)(__array_literal_result, x, 1)
-                $(setindex!)(__array_literal_result, $(+)($(+)(y, $(sin)(z)), $(*)(2, $(^)(x, 2))), 2)
+                $(setindex!)(__array_literal_result, $(+)($(+)($(sin)(z), y), $(*)(2, $(^)(x, 2))), 2)
                 $(setindex!)(__array_literal_result, $(+)(1, $(*)(2, z)), 3)
                 __array_literal_result
             end

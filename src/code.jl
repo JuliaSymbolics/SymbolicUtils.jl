@@ -2042,6 +2042,32 @@ end
 
 Base.isempty(l::Code.Let) = isempty(l.pairs)
 
+"""
+    canonicalize_ir!(ir) -> IRStructure
+
+After a series of `replace_node!` calls, parent nodes still hold the
+old child symbols in their `arguments()` even though the children's
+IR-index positions hold the new symbols. `IRStructure` tracks these
+inconsistent parents in `ir.non_canonical_idxs`. Any pass that walks
+arguments and dereferences them via `ir.definition` will
+throw on the stale references.
+
+This drains `ir.non_canonical_idxs` by repeatedly calling SU's
+`get_canonical_expr`, which updates non-canonical nodes' args in place
+to match the current IR-index state. Returns when the set is empty.
+
+Idempotent on an already-canonical IR.
+"""
+function canonicalize_ir!(ir)
+    seen = 0
+    while !isempty(ir.non_canonical_idxs) && seen < length(ir.symbols) * 4
+        idx = Int32(first(ir.non_canonical_idxs))
+        SU.get_canonical_expr(ir, idx)
+        seen += 1
+    end
+    return ir
+end
+
 # Apply optimization rules during CSE
 function apply_optimization_rule(expr::Code.Let, state::Union{Code.CSEState, Code.LazyState}, rules::OptimizationRule)
     match_data = rules.detector(expr, state)
@@ -2091,6 +2117,7 @@ function apply_optimization_rules(ir::IRStructure, expr, rules)
         ir = ir_new
     end
 
+    canonicalize_ir!(ir)
     ir, expr
 end
 

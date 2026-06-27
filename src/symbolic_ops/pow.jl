@@ -90,7 +90,6 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
         @match a begin
             BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) && symtype(args[2]) <: Number end => begin
                 base, exp = args
-                base, exp = arguments(a)
                 exp = unwrap_const(exp)
                 return Const{T}(base ^ (exp * b))
             end

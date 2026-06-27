@@ -669,10 +669,13 @@ end
 function toexpr(O::BasicSymbolic{T}, st) where {T}
     @match O begin
         BSImpl.Const(;) => nothing # Constants should not be rewritten; they are literal values.
-        _ => if haskey(st.rewrites, O)
-            O = st.rewrites[O]
-            if !(O isa BasicSymbolic{T})
-                return manual_dispatch_toexpr(O, st)
+        _ => begin
+            rw = get(st.rewrites, O, nothing)
+            if rw !== nothing
+                O = rw
+                if !(O isa BasicSymbolic{T})
+                    return manual_dispatch_toexpr(O, st)
+                end
             end
         end
     end

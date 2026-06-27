@@ -169,7 +169,7 @@ Core ADT for symbolic expressions.
     end
     struct AddMul
         const coeff::Any
-        const dict::OrderedDict{BasicSymbolicImpl.Type{T}, Number}
+        const dict::Dict{BasicSymbolicImpl.Type{T}, Number}
         const variant::AddMulVariant.T
         const metadata::MetadataT
         const shape::ShapeT
@@ -211,7 +211,7 @@ Core ADT for symbolic expressions.
         const term::Union{BasicSymbolicImpl.Type{T}, Nothing}
         # Optional map from symbolic indices in `output_idx` to the range they can
         # take. Any index not present in this takes its full range of values.
-        const ranges::OrderedDict{BasicSymbolicImpl.Type{T}, StepRange{Int, Int}}
+        const ranges::Dict{BasicSymbolicImpl.Type{T}, StepRange{Int, Int}}
         const metadata::MetadataT
         const shape::ShapeT
         const type::TypeT
@@ -262,7 +262,7 @@ The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to th
 [`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will avoid
 allocating a new dictionary.
 """
-const ACDict{T} = OrderedDict{BasicSymbolic{T}, Number}
+const ACDict{T} = Dict{BasicSymbolic{T}, Number}
 
 # Add `val` to the value stored at `key` in `h`, inserting `val` if `key` is absent.
 function _accumulate!(h::AbstractDict, key, val)
@@ -299,7 +299,7 @@ const OutIdxT{T} = SmallV{Union{Int, BasicSymbolic{T}}}
 """
 The type of the `ranges` field in [`BSImpl.ArrayOp`](@ref).
 """
-const RangesT{T} = OrderedDict{BasicSymbolic{T}, StepRange{Int, Int}}
+const RangesT{T} = Dict{BasicSymbolic{T}, StepRange{Int, Int}}
 """
     The type of the `sequence` field in [`BSImpl.ArrayMaker`](@ref).
 """

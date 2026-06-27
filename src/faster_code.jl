@@ -379,7 +379,7 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
 
     # Use graph instead of destructuring `expr`
     nbors = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
-    innerexpr = SymbolicUtils.get_canonical_expr(cs.ir, nbors[2])::BasicSymbolic{T}
+    innerexpr = SymbolicUtils.get_canonical_expr!(cs.ir, nbors[2])::BasicSymbolic{T}
     reducer = unwrap_const(cs.ir[nbors[3]])
     ranges = unwrap_const(cs.ir[nbors[5]])::SymbolicUtils.RangesT{T}
 
@@ -575,7 +575,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
 
     # The array is small enough, so scalarize it and use `fill_arr!` or `fill_sarr`.
     if len <= FILL_ARR_LIMIT
-        expr = SymbolicUtils.get_canonical_expr(cs.ir, expr_idx)
+        expr = SymbolicUtils.get_canonical_expr!(cs.ir, expr_idx)
         sz_expr = Expr(:tuple)
         for ax in sh
             push!(sz_expr.args, length(ax))
@@ -694,7 +694,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 end
                 _ => begin
                     # Unfortunately, scalarizing `val` requires getting the canonical expr.
-                    canon_ex = SymbolicUtils.get_canonical_expr(cs.ir, val_idx)
+                    canon_ex = SymbolicUtils.get_canonical_expr!(cs.ir, val_idx)
                     scalar_idxs[region] = cs(canon_ex[SymbolicUtils.stable_eachindex(canon_ex)[1]])
                 end
             end

@@ -131,6 +131,7 @@ function unwrap_dict(dict)
         dict
     end
 end
+unwrap_dict(dict::OrderedDict{<:BasicSymbolic}) = dict
 
 """
     $TYPEDSIGNATURES

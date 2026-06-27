@@ -327,7 +327,7 @@ function Base.resize!(x::SmallVec{T, V}, sz::Integer) where {T, V}
     else
         resize!(tmp, sz)
     end
-    resize!(x.data, sz)
+    return x
 end
 function Base.insert!(x::SmallVec{T, V}, i::Integer, val) where {T, V}
     if x.data isa Backing{T} && isfull(x.data)

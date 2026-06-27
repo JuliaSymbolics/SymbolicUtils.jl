@@ -85,6 +85,13 @@ High-level constructor for multiplication expressions.
 This constructor maintains invariants required by the `AddMul` variant. This should be
 preferred over the `BSImpl.AddMul{T}` constructor.
 """
+function _has_array_key(dict)
+    for k in keys(dict)
+        is_array_shape(shape(k)) && return true
+    end
+    return false
+end
+
 @inline function Mul{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
     coeff = unwrap(coeff)
@@ -93,14 +100,25 @@ preferred over the `BSImpl.AddMul{T}` constructor.
         return Const{T}(coeff)
     elseif _iszero(coeff)
         return zero_of_vartype(T)
-    elseif _isone(coeff) && length(dict) == 1
+    end
+    if _has_array_key(dict)
+        factors = ArgsT{T}()
+        sizehint!(factors, length(dict) + 1)
+        push!(factors, Const{T}(coeff))
+        for (k, v) in dict
+            # `k ^ 1` is just `k`; avoid `^` so an array base isn't rejected.
+            push!(factors, _isone(v) ? k : k ^ v)
+        end
+        return mul_worker(T, factors)::BasicSymbolic{T}
+    end
+    if _isone(coeff) && length(dict) == 1
         k, v = first(dict)
         if _isone(v)
             return k
         else
             return (k ^ v)::BasicSymbolic{T}
         end
-    elseif _isone(-coeff) && length(dict) == 1
+    elseif length(dict) == 1 && _isone(-coeff)
         k, v = first(dict)
         if _isone(v)
             @match k begin

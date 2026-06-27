@@ -298,42 +298,53 @@ returns `true` for any node in the tree.
 # Returns
 - `Bool`: `true` if any subexpression satisfies the predicate, `false` otherwise.
 """
-function query(predicate::F, expr::BasicSymbolic; recurse::G = iscall, default::Bool = false) where {F, G}
-    return _query(predicate, expr, recurse, default)
+function query(predicate::F, expr::BasicSymbolic{T}; recurse::G = iscall, default::Bool = false) where {F, G, T}
+    return _query(predicate, expr, recurse, default, nothing)
 end
 query(predicate::F, expr; kw...) where {F} = predicate(expr)
 
-function _query(predicate::F, expr::BasicSymbolic, recurse::G, default::Bool) where {F, G}
+function _query(predicate::F, expr::BasicSymbolic{T}, recurse::G, default::Bool,
+        _seen::Union{Base.IdSet{BasicSymbolic{T}}, Nothing}) where {F, G, T}
     predicate(expr) && return true
     iscall(expr) || return default
     recurse(expr) || return default
 
+    # A node in `seen` was already explored
+    # without ending the query, so revisiting cannot change the result.
+    if _seen === nothing
+        seen = Base.IdSet{BasicSymbolic{T}}()
+    else
+        seen = _seen
+        expr in seen && return false
+    end
+    push!(seen, expr)
+
     return @match expr begin
         BSImpl.Term(; f, args) => begin
             for arg in args
-                _query(predicate, arg, recurse, default) && return true
+                _query(predicate, arg, recurse, default, seen) && return true
             end
             false
         end
         BSImpl.AddMul(; dict) => begin
             for arg in keys(dict)
-                _query(predicate, arg, recurse, default) && return true
+                _query(predicate, arg, recurse, default, seen) && return true
             end
             false
         end
-        BSImpl.Div(; num, den) => _query(predicate, num, recurse, default) || _query(predicate, den, recurse, default)
+        BSImpl.Div(; num, den) => _query(predicate, num, recurse, default, seen) || _query(predicate, den, recurse, default, seen)
         BSImpl.ArrayOp(; expr = inner_expr, term) => begin
-            _query(predicate, @something(term, inner_expr), recurse, default)
+            _query(predicate, @something(term, inner_expr), recurse, default, seen)
         end
         BSImpl.ArrayMaker(; values) => begin
             for arg in values
-                _query(predicate, arg, recurse, default) && return true
+                _query(predicate, arg, recurse, default, seen) && return true
             end
             false
         end
     end
 end
-_query(predicate::F, expr, recurse, default::Bool) where {F} = predicate(expr)
+_query(predicate::F, expr, recurse, default::Bool, _seen) where {F} = predicate(expr)
 
 
 search_variables!(buffer, expr; kw...) = nothing
@@ -659,6 +670,22 @@ function _default_scalarize(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
     else
         f(map(unwrap_const ∘ scalarize, args)...)
     end
+end
+
+scalarization_function(::Fill) = _scalarize_fill
+# Fast path for scalarizing a constant `Fill` array
+function _scalarize_fill(f, x::BasicSymbolic{T}, v::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    sh = shape(x)
+    is_array_shape(sh) || return _default_scalarize(f, x, v)
+    val = @match x begin
+        BSImpl.ArrayOp(; expr) => expr
+        _ => nothing
+    end
+    if val isa BasicSymbolic{T} && !is_array_shape(shape(val))
+        return fill(val, map(length, sh)...)
+    end
+    return _default_scalarize(f, x, v)
 end
 
 scalarization_function(::Type{ArrayOp{T}}) where {T} = _scalarize_arrayop

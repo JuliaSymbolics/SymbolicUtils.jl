@@ -463,10 +463,12 @@ function subset_ir(
     Graphs.add_vertices!(new_ir.dependency_graph, n_new_verts)
     sizehint!(new_ir, n_new_verts)
 
+    old2new = zeros(Int32, length(ir))
     inew = 0
     # `reachables` is in topological order
     for iold in reachables
         inew += 1
+        old2new[iold] = inew
         # Add expression to the IR
         sym = ir.symbols[iold]
         push!(new_ir.symbols, sym)
@@ -479,9 +481,7 @@ function subset_ir(
         # have already been added to `new_ir`.
         oldnbors = Graphs.outneighbors(ir.dependency_graph, iold)
         for nbor in oldnbors
-            nsym = ir.symbols[nbor]
-            nbor_idx = new_ir.definition[nsym]
-            Graphs.add_edge!(new_ir.dependency_graph, inew, nbor_idx)
+            Graphs.add_edge!(new_ir.dependency_graph, inew, old2new[nbor])
         end
     end
 
@@ -747,10 +747,12 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
         return sub.cache[idx] = populate_ir!(ir, other)
     end
     if !filterer(idxsym)
-        return sub.cache[idx] = idx
+        # Match behavior with `DefaultSubstituter`. A filtered expression does not
+        # populate the cache.
+        return idx
     end
     if !iscall(idxsym)
-        return sub.cache[idx] = idx
+        return idx
     end
 
     # Now, it's _possible_ `idx` is changed by the substitution
@@ -794,11 +796,9 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
             continue
         end
         if !filterer(sym)
-            sub.cache[i] = i
             continue
         end
         if !iscall(sym)
-            sub.cache[i] = i
             continue
         end
 
@@ -836,7 +836,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
             can_fold = true
         end
         for j in eachindex(args)
-            new_child = args[j] = ir[sub.cache[ir[args[j]]]]
+            new_child = args[j] = ir[get(sub.cache, ir[args[j]], ir[args[j]])]
             if Fold
                 can_fold &= isconst(new_child)
             end
@@ -844,7 +844,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
         op = operation(i_sym)
         if op isa BasicSymbolic{T}
             op_i = ir[op]
-            op = ir[sub.cache[op_i]]
+            op = ir[get(sub.cache, op_i, op_i)]
             if isconst(op)
                 op = unwrap_const(op)
             elseif Fold
@@ -1008,6 +1008,15 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
         end
         weakdefs = get!(Vector{Int32}, ir.weak_definitions, new_sym)
         push!(weakdefs, node)
+        rem_outedges!(ir.dependency_graph, node)
+
+        if op isa BasicSymbolic{T}
+            Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, op))
+        end
+        args = parent(arguments(new_sym))
+        @union_split_smallvec args for arg in args
+            Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, arg))
+        end
         # `node` is now canonical
         delete!(ir.non_canonical_idxs, node)
         # All its `inneighbors` are still non-canonical

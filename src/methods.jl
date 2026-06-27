@@ -1332,6 +1332,11 @@ struct Mapper{F}
     f::F
 end
 
+const MAPPER_SALT = 0x9e2a7b4c15d8f063
+Base.:(==)(a::Mapper, b::Mapper) = a.f == b.f
+Base.isequal(a::Mapper, b::Mapper) = isequal(a.f, b.f)
+Base.hash(m::Mapper, h::UInt) = hash(m.f, hash(MAPPER_SALT, h))
+
 function (f::Mapper)(xs...)
     map(f.f, xs...)
 end
@@ -1495,6 +1500,14 @@ struct Mapreducer{F, R, D <: Union{Int, Colon}, I}
     dims::D
     init::I
 end
+
+const MAPREDUCER_SALT = 0x3f51c0a6e9b27d48
+Base.:(==)(a::Mapreducer, b::Mapreducer) =
+    a.f == b.f && a.reduce == b.reduce && a.dims == b.dims && a.init == b.init
+Base.isequal(a::Mapreducer, b::Mapreducer) =
+    isequal(a.f, b.f) && isequal(a.reduce, b.reduce) && isequal(a.dims, b.dims) && isequal(a.init, b.init)
+Base.hash(m::Mapreducer, h::UInt) =
+    hash(m.init, hash(m.dims, hash(m.reduce, hash(m.f, hash(MAPREDUCER_SALT, h)))))
 
 function (f::Mapreducer{F, R, D, I})(xs...) where {F, R, D, I}
     if I === Nothing
@@ -1771,6 +1784,11 @@ struct Fill
     sh::ShapeVecT
 end
 
+const FILL_SALT = 0x7c8f3a1d6e2b9054
+Base.:(==)(a::Fill, b::Fill) = a.sh == b.sh
+Base.isequal(a::Fill, b::Fill) = isequal(a.sh, b.sh)
+Base.hash(f::Fill, h::UInt) = hash(f.sh, hash(FILL_SALT, h))
+
 function (f::Fill)(x::BasicSymbolic{T}) where {T}
     term = BSImpl.Term{T}(
         f, ArgsT{T}((x,)); type = promote_symtype(f, symtype(x)), shape = promote_shape(f, shape(x))
@@ -1784,6 +1802,14 @@ function (f::Fill)(x::BasicSymbolic{T}) where {T}
         ranges[idxi] = f.sh[i]
     end
     return BSImpl.ArrayOp{T}(out_idxs, x, +, term, ranges; type = term.type, shape = term.shape)
+end
+
+function (f::Fill)(x)
+    ux = unwrap(x)
+    if ux !== x
+        return f(ux)
+    end
+    return fill(x, map(length, f.sh)...)
 end
 
 function promote_symtype(f::Fill, T::TypeT)

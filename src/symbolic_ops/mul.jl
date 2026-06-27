@@ -371,11 +371,13 @@ mul_worker(::Type{SymReal}, terms) = _run_mulbuffer(SYMREAL_MULBUFFER[], terms)
 mul_worker(::Type{SafeReal}, terms) = _run_mulbuffer(SAFEREAL_MULBUFFER[], terms)
 
 function *(x::T, args::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
+    length(args) == 1 && args[1] isa Number && _isone(args[1]) && return x
     mul_worker(vartype(T), (x, args...))
 end
 
 for T in [:(PolyadicNumericOpFirstArgT{T}), Int, Float64, Bool]
     @eval function *(a::$T, b::T, bs::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
+        isempty(bs) && a isa Number && _isone(a) && return b
         return mul_worker(vartype(T), (a, b, bs...))
     end
 end

@@ -1556,6 +1556,22 @@ end
 cse_inside_expr(sym, ::typeof(ifelse_branching)) = false
 
 """
+    $(TYPEDSIGNATURES)
+
+Only consulted when [`cse_inside_expr`](@ref) returns `false` for `sym`, which has operation
+`f`. Return `true` if CSE should still bind `sym` itself to a temporary variable — so that
+multiple references to it share a single computation — while leaving its arguments un-CSEd.
+The default `false` leaves the expression fully inline at each reference site.
+"""
+function cse_bind_expr(sym, f)
+    return false
+end
+
+# Bind the conditional itself so multiple references share one `if`/`else` instead of
+# duplicating it per use site. The branches remain un-CSEd (and therefore lazy).
+cse_bind_expr(sym, ::typeof(ifelse_branching)) = true
+
+"""
     $(TYPEDEF)
 
 A struct maintaining the state of CSE across multiple expressions. This allows
@@ -1740,7 +1756,15 @@ function _cse_compute(expr::BasicSymbolic{T}, state::CSEState) where {T}
             if op isa BasicSymbolic{T}
                 SymbolicUtils.is_function_symbolic(op) || return expr
             end
-            cse_inside_expr(expr, op)::Bool || return expr
+            if !(cse_inside_expr(expr, op)::Bool)
+                cse_bind_expr(expr, op)::Bool || return expr
+                # Bind the node as-is (arguments un-CSEd) so references share one
+                # computation. `cse!` caches the binding by node id, so every reference
+                # in this scope resolves to the same temporary.
+                sym = newsym!(state, T, symtype(expr), shape(expr))
+                push!(state.sorted_exprs, sym ← expr)
+                return sym
+            end
             args = copy(parent(args))
             for i in eachindex(args)
                 args[i] = cse!(args[i], state)::BasicSymbolic{T}

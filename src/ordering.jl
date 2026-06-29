@@ -54,7 +54,22 @@ end
 end
 
 function __default_degrees!(degrees::DegreesT, expr::BasicSymbolic{T}) where {T}
-    push!(degrees, SmallV{Symbol}((Symbol(:zzzzzzz, hash(expr)),)) => 1.0)
+    @match expr begin
+        BSImpl.Term(; f) => begin
+            if f isa BasicSymbolic{T}
+                if hasname(f)
+                    push!(degrees, SmallV{Symbol}((getname(f),)) => 1.0)
+                else
+                    __default_degrees!(degrees, f)
+                end
+            elseif applicable(nameof, f)
+                push!(degrees, SmallV{Symbol}((nameof(f),)) => 1.0)
+            else
+                push!(degrees, SmallV{Symbol}((:zzz_ZZZ_unknown,)) => 1.0)
+            end
+        end
+        _ => push!(degrees, SmallV{Symbol}((:zzz__ZZZ_unknown,)) => 1.0)
+    end
 end
 
 function __get_degrees(expr::BasicSymbolic{T})::RODegreesT where {T}
@@ -248,7 +263,7 @@ function <ₑ(a::DegreesT, b::DegreesT)
     end
 end
 
-function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
+function <ₑ(a::BasicSymbolic{T}, b::BasicSymbolic{T}) where {T}
     if isconst(a) || isconst(b)
         return <ₑ(unwrap_const(a), unwrap_const(b))
     end
@@ -256,12 +271,22 @@ function <ₑ(a::BasicSymbolic, b::BasicSymbolic)
     fw = monomial_lt(da, db)
     bw = monomial_lt(db, da)
     if fw === bw && !isequal(a, b)
-        if _arglen(a) == _arglen(b) != 0
-            return (operation(a), arguments(a)...,) <ₑ (operation(b), arguments(b)...,)
-        else
-            return _arglen(a) < _arglen(b)
+        nargsa = _arglen(a)
+        nargsb = _arglen(b)
+        nargsa == nargsb || return nargsa < nargsb
+        nargsa == 0 && return false
+
+        opa = operation(a)
+        opb = operation(b)
+        if opa isa BasicSymbolic{T} && opb isa BasicSymbolic{T} && opa !== opb
+            return <ₑ(opa, opb)
         end
-    else
-        return fw
+        sargsa = sorted_arguments(a)
+        sargsb = sorted_arguments(b)
+        for i in eachindex(sargsa)
+            isequal(sargsa[i], sargsb[i]) && continue
+            return <ₑ(sargsa[i], sargsb[i])
+        end
     end
+    return fw
 end

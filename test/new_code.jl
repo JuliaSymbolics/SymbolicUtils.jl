@@ -661,15 +661,15 @@ end
                 var"##cse#0" = ones
                 var"##cse#1" = var"##cse#0"((3,))
                 var"##cse#2" = x
-                var"##cse#3" = y
-                var"##cse#4" = z
-                var"##cse#5" = $(sin)(var"##cse#4")
+                var"##cse#3" = z
+                var"##cse#4" = $(sin)(var"##cse#3")
+                var"##cse#5" = y
                 var"##cse#6" = 2
                 var"##cse#7" = $(^)(var"##cse#2", 2)
                 var"##cse#8" = $(*)(var"##cse#6", var"##cse#7")
-                var"##cse#9" = $(+)(var"##cse#3", var"##cse#5", var"##cse#8")
+                var"##cse#9" = $(+)(var"##cse#4", var"##cse#5", var"##cse#8")
                 var"##cse#10" = 1
-                var"##cse#11" = $(*)(var"##cse#6", var"##cse#4")
+                var"##cse#11" = $(*)(var"##cse#6", var"##cse#3")
                 var"##cse#12" = $(+)(var"##cse#10", var"##cse#11")
                 __miscₛᵧₘ0 = $(Code.fill_arr!)(var"##cse#1", $Val($((3,))), var"##cse#2", var"##cse#9", var"##cse#12")
             end

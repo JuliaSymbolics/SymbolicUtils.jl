@@ -91,7 +91,7 @@ function TermInterface.sorted_arguments(x::BasicSymbolic{T})::ROArgsT{T} where {
     elseif T === SafeReal
         return _sorted_args2(x)
     elseif T === TreeReal
-        return _sorted_args2(x)
+        return _sorted_args3(x)
     end
     _unreachable()
 end
@@ -109,20 +109,27 @@ function __sorted_args(x::BasicSymbolic{T})::ROArgsT{T} where {T}
     @match x begin
         BSImpl.AddMul(; variant) => begin
             args = copy(parent(arguments(x)))
-            degrees = SmallV{RODegreesT}()
-            sizehint!(degrees, length(args))
-            @union_split_smallvec args begin
-                for arg in args
-                    push!(degrees, get_degrees(arg))
+            @match variant begin
+                AddMulVariant.ADD => begin
+                    @union_split_smallvec args begin
+                        sort!(args; lt = <ₑ)
+                    end
+                    return ROArgsT{T}(ArgsT{T}(args))
+                end
+                AddMulVariant.MUL => begin
+                    degrees = SmallV{RODegreesT}()
+                    sizehint!(degrees, length(args))
+                    @union_split_smallvec args begin
+                        for arg in args
+                            push!(degrees, get_degrees(arg))
+                        end
+                    end
+                    idxs = @union_split_smallvec degrees begin
+                        sortperm(degrees)
+                    end
+                    return ROArgsT{T}(ArgsT{T}(args[idxs]))
                 end
             end
-            idxs = @union_split_smallvec degrees begin
-                @match variant begin
-                    AddMulVariant.ADD => sortperm(degrees; lt = monomial_lt)
-                    AddMulVariant.MUL => sortperm(degrees)
-                end
-            end
-            return ROArgsT{T}(ArgsT{T}(args[idxs]))
         end
         _ => return arguments(x)
     end

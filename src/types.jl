@@ -410,7 +410,12 @@ end
 shape(::Colon) = ShapeVecT((1:0,))
 
 function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
-    symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
+    if isconst(x)
+        # 0-dim arrays wrapped in `Const` are not `is_array_shape(shape(x))` but should presumably still be
+        # considered `ArraySymbolic`
+        return symtype(x) <: AbstractArray ? ArraySymbolic() : ScalarSymbolic()
+    end
+    return is_array_shape(shape(x)) ? ArraySymbolic() : ScalarSymbolic()
 end
 SymbolicIndexingInterface.symbolic_type(::Type{BasicSymbolic}) = ScalarSymbolic()
 SymbolicIndexingInterface.symbolic_type(::Type{BasicSymbolic{T}}) where {T} = ScalarSymbolic()

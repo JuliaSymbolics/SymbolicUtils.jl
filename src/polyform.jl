@@ -120,6 +120,13 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                     MA.operate!(f, poly, to_poly!(poly_to_bs, bs_to_poly, arg))
                 end
                 return poly
+            elseif f === complex && length(args) == 2
+                # `Term(complex, [re, im])` (produced by
+                # `Symbolics.unwrap(::Complex{Num})` when either component is
+                # symbolic) is otherwise opaque to expansion. Treat it as
+                # `re + 1im * im` polynomially so identically-zero diffs that
+                # contain such a literal reduce under `simplify(...; expand=true)`.
+                return to_poly!(poly_to_bs, bs_to_poly, args[1] + 1im * args[2], recurse)
             else
                 if recurse
                     expr = BSImpl.Term{T}(f, map(expand, args); type, shape)

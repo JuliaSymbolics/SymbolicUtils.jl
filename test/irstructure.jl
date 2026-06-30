@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir, get_reachability, replace_node!
+using SymbolicUtils: BasicSymbolic, IRStructure, IRSubstituter, populate_ir!, subset_ir, get_reachability, replace_node!, replace_edge!
 import SymbolicUtils as SU
 import Graphs
 
@@ -598,4 +598,116 @@ end
     @test !haskey(subber.cache, ir[b(t)])
     subber(t)
     @test !haskey(subber.cache, ir[t])
+end
+
+@testset "`replace_edge!`" begin
+    @testset "Basic single-edge replacement" begin
+        # sin(x): sin_idx → x_idx; replace with sin_idx → y_idx
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x))
+        sin_idx = ir[sin(x)]
+        x_idx   = ir[x]
+        y_idx   = populate_ir!(ir, y)
+        g = ir.dependency_graph
+
+        @test collect(Graphs.outneighbors(g, sin_idx)) == [x_idx]
+        @test isempty(ir.non_canonical_idxs)
+
+        replace_edge!(ir, sin_idx, x_idx, y_idx)
+
+        @test collect(Graphs.outneighbors(g, sin_idx)) == [y_idx]
+        @test sin_idx in ir.non_canonical_idxs
+    end
+
+    @testset "Only matching edges are replaced, others preserved" begin
+        # x + y: plus_idx → [x_idx, y_idx]; replace x_idx with z_idx
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        plus_idx = ir[x + y]
+        x_idx    = ir[x]
+        y_idx    = ir[y]
+        z_idx    = populate_ir!(ir, z)
+        g = ir.dependency_graph
+
+        replace_edge!(ir, plus_idx, x_idx, z_idx)
+
+        nbors = collect(Graphs.outneighbors(g, plus_idx))
+        @test z_idx in nbors          # old x_idx replaced by z_idx
+        @test y_idx in nbors          # y edge untouched
+        @test !(x_idx in nbors)       # original x edge removed
+        @test length(nbors) == 2      # edge count preserved
+    end
+
+    @testset "Multiple identical edges: all replaced" begin
+        # Build a Term with x appearing twice as an argument, producing two edges to x_idx.
+        @syms arr_x::Real arr_y::Real arr_z::Real
+        arr_x = SU.unwrap(arr_x); arr_y = SU.unwrap(arr_y); arr_z = SU.unwrap(arr_z)
+        # Term{SymReal}(+, [arr_x, arr_x]) creates x+x unfolded (two edges to arr_x)
+        dup_expr = SU.Term{SymReal}(+, Any[arr_x, arr_x]; type = Real)
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, dup_expr)
+        dup_idx = ir[dup_expr]
+        x_idx   = ir[arr_x]
+        z_idx   = populate_ir!(ir, arr_z)
+        g = ir.dependency_graph
+
+        # Confirm two edges to arr_x exist before replacement
+        nbors_before = collect(Graphs.outneighbors(g, dup_idx))
+        @test count(==(x_idx), nbors_before) == 2
+
+        replace_edge!(ir, dup_idx, x_idx, z_idx)
+
+        nbors_after = collect(Graphs.outneighbors(g, dup_idx))
+        @test count(==(z_idx), nbors_after) == 2   # both edges now point to z
+        @test !(x_idx in nbors_after)               # no residual edge to x
+        @test length(nbors_after) == 2              # edge count preserved
+        @test dup_idx in ir.non_canonical_idxs
+    end
+
+    @testset "get_canonical_expr! after replace_edge!" begin
+        # After redirecting an edge, get_canonical_expr! should reflect the new arg.
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x))
+        sin_idx = ir[sin(x)]
+        x_idx   = ir[x]
+        y_idx   = populate_ir!(ir, y)
+
+        replace_edge!(ir, sin_idx, x_idx, y_idx)
+
+        @test isequal(SU.get_canonical_expr!(ir, sin_idx), sin(y))
+        # IR should be canonical again after the call
+        @test isempty(ir.non_canonical_idxs)
+    end
+
+    @testset "old_dst == new_dst is a pure no-op" begin
+        # When old_dst === new_dst the function returns immediately — edges and
+        # non_canonical_idxs are both unchanged.
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, x + y)
+        plus_idx = ir[x + y]
+        x_idx    = ir[x]
+        g = ir.dependency_graph
+        nbors_before = collect(Graphs.outneighbors(g, plus_idx))
+
+        replace_edge!(ir, plus_idx, x_idx, x_idx)
+
+        @test collect(Graphs.outneighbors(g, plus_idx)) == nbors_before
+        @test isempty(ir.non_canonical_idxs)
+    end
+
+    @testset "no edge to old_dst is a pure no-op" begin
+        # When src has no edge to old_dst the function returns without mutating anything.
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, sin(x))
+        sin_idx = ir[sin(x)]
+        x_idx   = ir[x]
+        y_idx   = populate_ir!(ir, y)   # y is in the IR but not a neighbor of sin
+        g = ir.dependency_graph
+        nbors_before = collect(Graphs.outneighbors(g, sin_idx))
+
+        replace_edge!(ir, sin_idx, y_idx, x_idx)   # y_idx not an outneighbor of sin_idx
+
+        @test collect(Graphs.outneighbors(g, sin_idx)) == nbors_before
+        @test isempty(ir.non_canonical_idxs)
+    end
 end

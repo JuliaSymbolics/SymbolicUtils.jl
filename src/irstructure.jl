@@ -940,6 +940,31 @@ end
 """
     $TYPEDSIGNATURES
 
+Replace all out-edges from `src` to `old_dst` in `ir` with edges from `src` to `new_dst`.
+Similar to `replace_node!`, this does not change the symbolic information stored in `ir`.
+This is a no-op of `old_dst == new_dst` or if no edge from `src` to `old_dst` exists in the
+graph. Outside of these cases, `ir` is non-canonical after this operation.
+"""
+function replace_edge!(ir::IRStructure, src::Integer, old_dst::Integer, new_dst::Integer)
+    old_dst == new_dst && return
+
+    old_nbors = get_cached_idxs!(ir)
+    empty!(old_nbors)
+    append!(old_nbors, Graphs.outneighbors(ir.dependency_graph, src))
+    any(==(old_dst), old_nbors) || return
+
+    push!(ir.non_canonical_idxs, src)
+    rem_outedges!(ir.dependency_graph, src)
+    for v in old_nbors
+        Graphs.add_edge!(ir.dependency_graph, src, v == old_dst ? new_dst : v)
+    end
+
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
 If `ir.non_canonical_idxs` is empty, return `ir[idx]`. Otherwise, find the canonical expression
 that `ir[idx]` should be, were `IRSubstituter` used instead of `replace_node!`.
 """
@@ -1025,3 +1050,4 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
 
     return ir[idx]
 end
+

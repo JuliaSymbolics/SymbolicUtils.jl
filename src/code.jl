@@ -865,7 +865,9 @@ function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{Dest
                 handle_let_pair!(dargs, a, st)
             end
         else
-            for a in get_assignments(x, st)
+            asgns = get_assignments(x, st)
+            sizehint!(st.rewrites, length(st.rewrites) + length(asgns); shrink = false)
+            for a in asgns
                 st.rewrites[a.lhs] = a.rhs
             end
         end
@@ -879,7 +881,9 @@ function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{Dest
                 end
             else
                 handle_let_pair!(dargs, Assignment(lhs.name, x.rhs), st)
-                for a in get_assignments(lhs, st)
+                asgns = get_assignments(lhs, st)
+                sizehint!(st.rewrites, length(st.rewrites) + length(asgns); shrink = false)
+                for a in asgns
                     st.rewrites[a.lhs] = a.rhs
                 end
             end

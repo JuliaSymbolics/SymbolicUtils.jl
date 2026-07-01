@@ -778,8 +778,9 @@ Base.@deprecate_binding get_symbolify get_rewrites
 
 function get_assignments(d::DestructuredArgs, st)
     name = manual_dispatch_toexpr(d, st)
-    assigns = Assignment[]
-    for i in 1:(length(d.inds)::Int)
+    n = length(d.inds)::Int
+    assigns = Vector{Assignment}(undef, n)
+    for i in 1:n
         idx = d.inds[i]
         if idx isa Symbol
             ex = Expr(:., name, QuoteNode(idx))
@@ -789,7 +790,7 @@ function get_assignments(d::DestructuredArgs, st)
         if d.inbounds && d.create_bindings
             ex = Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), ex)
         end
-        push!(assigns, Assignment(d.elems[i], ex))
+        assigns[i] = Assignment(d.elems[i], ex)
     end
     return assigns
 end

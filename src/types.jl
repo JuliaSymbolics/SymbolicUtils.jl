@@ -491,15 +491,36 @@ function ConstructionBase.getproperties(obj::BSImpl.Type)
 end
 
 function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple) where {T}
-    props = getproperties(obj)
-    overrides = override_properties(obj)
-    # We only want to invalidate `args` if we're updating `coeff` or `dict`.
-    if isaddmul(obj) || isarrayop(obj) || isarraymaker(obj)
-        extras = (; args = ArgsT{T}())
-    else
-        extras = (;)
+    Z = zero(UInt)
+    p = patch
+    newobj = @match obj begin
+        BSImpl.Const(; val) =>
+            BSImpl.Const{T}(get(p, :val, val), Z, nothing)
+        BSImpl.Sym(; name, metadata, shape, type) =>
+            BSImpl.Sym{T}(get(p, :name, name), get(p, :metadata, metadata),
+                          get(p, :shape, shape), get(p, :type, type), Z, Z, nothing)
+        BSImpl.Term(; f, args, metadata, shape, type) =>
+            BSImpl.Term{T}(get(p, :f, f), get(p, :args, args), get(p, :metadata, metadata),
+                           get(p, :shape, shape), get(p, :type, type), Z, Z, nothing)
+        BSImpl.AddMul(; coeff, dict, variant, metadata, shape, type) =>
+            BSImpl.AddMul{T}(get(p, :coeff, coeff), get(p, :dict, dict), get(p, :variant, variant),
+                             get(p, :metadata, metadata), get(p, :shape, shape), get(p, :type, type),
+                             ArgsT{T}(), Z, Z, nothing)
+        BSImpl.Div(; num, den, simplified, metadata, shape, type) =>
+            BSImpl.Div{T}(get(p, :num, num), get(p, :den, den), get(p, :simplified, simplified),
+                          get(p, :metadata, metadata), get(p, :shape, shape), get(p, :type, type),
+                          Z, Z, nothing)
+        BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, metadata, shape, type) =>
+            BSImpl.ArrayOp{T}(get(p, :output_idx, output_idx), get(p, :expr, expr),
+                              get(p, :reduce, reduce), get(p, :term, term), get(p, :ranges, ranges),
+                              get(p, :metadata, metadata), get(p, :shape, shape), get(p, :type, type),
+                              ArgsT{T}(), Z, Z, nothing)
+        BSImpl.ArrayMaker(; regions, values, metadata, shape, type) =>
+            BSImpl.ArrayMaker{T}(get(p, :regions, regions), get(p, :values, values),
+                                 get(p, :metadata, metadata), get(p, :shape, shape),
+                                 get(p, :type, type), ArgsT{T}(), Z, Z, nothing)
     end
-    hashcons(MData.variant_type(obj)(; props..., patch..., overrides..., extras...)::BasicSymbolic{T})
+    hashcons(newobj::BasicSymbolic{T})
 end
 
 """

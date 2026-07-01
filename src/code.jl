@@ -858,7 +858,20 @@ function search_variables!(buffer, l::Let; kw...)
     union!(buffer, rhsbuf)
 end
 
-function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{DestructuredArgs, Assignment}), st)
+@inline function store_rewrite!(rewrites::Dict{Any, Any}, @nospecialize(key), @nospecialize(val))
+    if key isa BasicSymbolic{SymReal}
+        rewrites[key] = val
+    elseif key isa BasicSymbolic{SafeReal}
+        rewrites[key] = val
+    elseif key isa BasicSymbolic{TreeReal}
+        rewrites[key] = val
+    else
+        rewrites[key] = val
+    end
+    return nothing
+end
+
+function handle_let_pair!(dargs::Vector{Assignment}, x::Union{DestructuredArgs, Assignment}, st)
     if x isa DestructuredArgs
         if x.create_bindings
             for a in get_assignments(x, st)
@@ -866,7 +879,7 @@ function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{Dest
             end
         else
             for a in get_assignments(x, st)
-                st.rewrites[a.lhs] = a.rhs
+                store_rewrite!(st.rewrites, a.lhs, a.rhs)
             end
         end
     elseif x isa Assignment
@@ -880,7 +893,7 @@ function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{Dest
             else
                 handle_let_pair!(dargs, Assignment(lhs.name, x.rhs), st)
                 for a in get_assignments(lhs, st)
-                    st.rewrites[a.lhs] = a.rhs
+                    store_rewrite!(st.rewrites, a.lhs, a.rhs)
                 end
             end
         else

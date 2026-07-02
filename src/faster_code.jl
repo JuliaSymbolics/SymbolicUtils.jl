@@ -815,6 +815,8 @@ function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::C
 
     if length(args_idxs) == 1
         return codegen!(cs, expr_idx, Expr(:call, op, cs(cs.ir[first(args_idxs)])))
+    elseif length(args_idxs) == 2
+        return codegen!(cs, expr_idx, Expr(:call, op, cs(cs.ir[args_idxs[1]]), cs(cs.ir[args_idxs[2]])))
     end
 
     if symtype(expr) <: Number
@@ -829,11 +831,24 @@ function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::C
         return codegen!(cs, expr_idx, cur)
     end
 
-    result = Expr(:call, op)
-    for idx in args_idxs
-        push!(result.args, cs(cs.ir[idx]))
+    # This is tensor add/mul. Do a `foldl`-esque implementation reinserting into the IR. This
+    # CSEs identical matrix multiplications reliably. `A * B * C` and `A * B * D` will
+    # reuse the common prefix result. Reuse in addition relies on hash ordering.
+    prefix_args = ArgsT{T}()
+    resize!(prefix_args, length(args_idxs) - 1)
+    for i in 1:length(prefix_args)
+        prefix_args[i] = cs.ir[args_idxs[i]]
     end
-    return codegen!(cs, expr_idx, result)
+    # Yes, we could call `promote_symtype` and `promote_shape` but those don't really make
+    # a difference in codegen and the entire point is to reuse common prefixes. Reusing
+    # `symtype` and `shape` of `expr` is problematic because of `Matrix * Vector` et. al.
+    # All we want is to recurse back into this method and for identical prefixes to hashcons
+    # identically, which this accomplishes.
+    prefix_term = BSImpl.Term{T}(op, prefix_args; type = Any, shape = Unknown(-1))
+    prefix_expr = cs(prefix_term)
+    last_term = cs.ir[args_idxs[length(args_idxs)]]
+    last_expr = cs(last_term)
+    return codegen!(cs, expr_idx, Expr(:call, op, prefix_expr, last_expr))
 end
 
 function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}

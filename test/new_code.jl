@@ -1214,3 +1214,20 @@ end
         var"##cse#1"::Any = $sin(var"##cse#0")
     end)
 end
+
+@testset "Matrix multiplication CSEs common prefixes" begin
+    @syms x[1:3, 1:3] y[1:3, 1:3] z[1:3, 1:3] w[1:3, 1:3]
+    ir = IRStructure{SymReal}()
+    rw = Dict()
+    expr = Code.fast_toexpr((x * y * z) \ (x * y * w), ir, rw)
+    test_repr(expr, quote
+        var"##cse#0" = x
+        var"##cse#1" = y
+        var"##cse#2" = $(*)(var"##cse#0", var"##cse#1")
+        var"##cse#3" = z
+        var"##cse#4" = $(*)(var"##cse#2", var"##cse#3")
+        var"##cse#5" = w
+        var"##cse#6" = $(*)(var"##cse#2", var"##cse#5")
+        var"##cse#7" = $(\)(var"##cse#4", var"##cse#6")
+    end)
+end

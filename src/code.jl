@@ -22,6 +22,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
                       AddMulVariant, _isone, _iszero, Fill, IRStructure, populate_ir!, FnType,
                       ifelse_eager, ifelse_branching
 using Moshi.Match: @match
+import TaskLocalValues: TaskLocalValue
 import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 import Graphs
 
@@ -776,17 +777,20 @@ get_rewrites(x::BasicSymbolic) = iscall(x) ? Any[x] : []
 # Used in Symbolics
 Base.@deprecate_binding get_symbolify get_rewrites
 
+@inline function destructured_elem_expr(@nospecialize(name), @nospecialize(idx))
+    if idx isa Symbol
+        return Expr(:., name, QuoteNode(idx))
+    else
+        return Expr(:ref, name, idx)
+    end
+end
+
 function get_assignments(d::DestructuredArgs, st)
     name = manual_dispatch_toexpr(d, st)
     n = length(d.inds)::Int
     assigns = Vector{Assignment}(undef, n)
     for i in 1:n
-        idx = d.inds[i]
-        if idx isa Symbol
-            ex = Expr(:., name, QuoteNode(idx))
-        else
-            ex = Expr(:ref, name, idx)
-        end
+        ex = destructured_elem_expr(name, d.inds[i])
         if d.inbounds && d.create_bindings
             ex = Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), ex)
         end
@@ -872,6 +876,70 @@ end
     return nothing
 end
 
+"""
+    $TYPEDEF
+
+Cache entry for [`store_destructuring_rewrites!`](@ref). Holds strong references to the
+`elems` and `inds` of the `DestructuredArgs` it was created from so that the `objectid`s
+used in the cache key cannot be recycled while the entry is alive.
+"""
+struct DestructuringRewrites
+    elems::Any
+    inds::Any
+    exprs::Vector{Any}
+end
+
+const DESTRUCTURING_REWRITES_CACHE = TaskLocalValue{Dict{Tuple{Any, UInt, UInt}, DestructuringRewrites}}(
+    () -> Dict{Tuple{Any, UInt, UInt}, DestructuringRewrites}())
+
+const DESTRUCTURING_MARKER = :__destructuring_rewrites_marker
+
+"""
+    $TYPEDSIGNATURES
+
+Store the rewrites for a `create_bindings = false` `DestructuredArgs` directly into
+`st.rewrites` without materializing the `Vector{Assignment}` that
+[`get_assignments`](@ref) would allocate.
+
+The generated right-hand-side `Expr`s depend only on the destructured name, `elems` and
+`inds`, so they are memoized in a task-local cache. Codegen for a system with many
+functions destructures the same (shared, `===`) parameter buffers once per generated
+function; the cache turns every repeat into a lookup instead of `length(inds)` fresh
+`Expr` allocations.
+"""
+function store_destructuring_rewrites!(d::DestructuredArgs, st)
+    name = manual_dispatch_toexpr(d, st)
+    n = length(d.inds)::Int
+    elems = d.elems
+    key = (name, objectid(elems), objectid(d.inds))
+    # `Symbolics.codegen_function` generates the out-of-place and in-place variants with
+    # the same `rewrites` dict. The rewrites this function stores depend only on `key`,
+    # so mark the dict and skip the (identical) re-population on the second call.
+    marker = (DESTRUCTURING_MARKER, key)
+    len_before = length(st.rewrites)
+    get!(st.rewrites, marker, true)
+    length(st.rewrites) == len_before && return nothing
+
+    cache = DESTRUCTURING_REWRITES_CACHE[]
+    entry = get(cache, key, nothing)
+    if entry === nothing
+        exprs = Vector{Any}(undef, n)
+        for i in 1:n
+            exprs[i] = destructured_elem_expr(name, d.inds[i])
+        end
+        # crude bound to avoid unbounded growth over a long session
+        length(cache) > 10_000 && empty!(cache)
+        cache[key] = DestructuringRewrites(elems, d.inds, exprs)
+    else
+        exprs = entry.exprs
+    end
+    sizehint!(st.rewrites, length(st.rewrites) + n; shrink = false)
+    for i in 1:n
+        store_rewrite!(st.rewrites, elems[i], exprs[i])
+    end
+    return nothing
+end
+
 function handle_let_pair!(dargs::Vector{Assignment}, x::Union{DestructuredArgs, Assignment}, st)
     if x isa DestructuredArgs
         if x.create_bindings
@@ -879,9 +947,7 @@ function handle_let_pair!(dargs::Vector{Assignment}, x::Union{DestructuredArgs, 
                 handle_let_pair!(dargs, a, st)
             end
         else
-            for a in get_assignments(x, st)
-                store_rewrite!(st.rewrites, a.lhs, a.rhs)
-            end
+            store_destructuring_rewrites!(x, st)
         end
     elseif x isa Assignment
         lhs = x.lhs
@@ -893,9 +959,7 @@ function handle_let_pair!(dargs::Vector{Assignment}, x::Union{DestructuredArgs, 
                 end
             else
                 handle_let_pair!(dargs, Assignment(lhs.name, x.rhs), st)
-                for a in get_assignments(lhs, st)
-                    store_rewrite!(st.rewrites, a.lhs, a.rhs)
-                end
+                store_destructuring_rewrites!(lhs, st)
             end
         else
             push!(dargs, x)

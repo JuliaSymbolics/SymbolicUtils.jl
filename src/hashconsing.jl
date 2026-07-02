@@ -549,7 +549,9 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 end
 
 function Base.hash(s::BSImpl.Type, h::UInt)
-    hash_bsimpl(s, h, COMPARE_FULL[])
+    # Always use the metadata-free hash to avoids a task-local lookup on every hash.
+    # This is coarser than `full = true` but is still ok as a hash function in both modes.
+    hash_bsimpl(s, h, false)
 end
 
 const ENABLE_HASHCONSING = Ref(true)

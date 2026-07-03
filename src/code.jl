@@ -886,13 +886,20 @@ used in the cache key cannot be recycled while the entry is alive.
 struct DestructuringRewrites
     elems::Any
     inds::Any
-    exprs::Vector{Any}
+    exprs::Vector{Expr}
 end
 
 const DESTRUCTURING_REWRITES_CACHE = TaskLocalValue{Dict{Tuple{Any, UInt, UInt}, DestructuringRewrites}}(
     () -> Dict{Tuple{Any, UInt, UInt}, DestructuringRewrites}())
 
 const DESTRUCTURING_MARKER = :__destructuring_rewrites_marker
+
+# `sizehint!`'s `shrink` keyword was added in Julia 1.11.
+@static if VERSION >= v"1.11"
+    _sizehint_noshrink!(d, n) = sizehint!(d, n; shrink = false)
+else
+    _sizehint_noshrink!(d, n) = sizehint!(d, n)
+end
 
 """
     $TYPEDSIGNATURES
@@ -923,7 +930,7 @@ function store_destructuring_rewrites!(d::DestructuredArgs, st)
     cache = DESTRUCTURING_REWRITES_CACHE[]
     entry = get(cache, key, nothing)
     if entry === nothing
-        exprs = Vector{Any}(undef, n)
+        exprs = Vector{Expr}(undef, n)
         for i in 1:n
             exprs[i] = destructured_elem_expr(name, d.inds[i])
         end
@@ -933,7 +940,7 @@ function store_destructuring_rewrites!(d::DestructuredArgs, st)
     else
         exprs = entry.exprs
     end
-    sizehint!(st.rewrites, length(st.rewrites) + n; shrink = false)
+    _sizehint_noshrink!(st.rewrites, length(st.rewrites) + n)
     for i in 1:n
         store_rewrite!(st.rewrites, elems[i], exprs[i])
     end

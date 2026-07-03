@@ -212,3 +212,33 @@ end
         @test hash(t1) == hash(t2)
     end
 end
+
+# Mimics a symbolic-scalar backend payload (e.g. `CasADi.MX`) whose comparison operators
+# are themselves symbolic and therefore do NOT return `Bool`. Substituting such an object
+# into a symbolic expression with folding wraps it in a `Const`, whose hashconsing used to
+# throw `TypeError: non-boolean (...) used in boolean context`. See issue MTK#4706.
+struct NonBoolScalar <: Number
+    v::Float64
+end
+Base.isequal(::NonBoolScalar, ::Number) = NonBoolScalar(0.0)
+Base.isequal(::Number, ::NonBoolScalar) = NonBoolScalar(0.0)
+Base.isequal(::NonBoolScalar, ::NonBoolScalar) = NonBoolScalar(0.0)
+Base.:*(a::NonBoolScalar, b::Number) = NonBoolScalar(a.v * b)
+Base.:*(a::Number, b::NonBoolScalar) = NonBoolScalar(a * b.v)
+Base.hash(a::NonBoolScalar, h::UInt) = hash(a.v, h)
+
+@testset "Const payloads with non-`Bool` `isequal` (issue MTK#4706)" begin
+    # The exact comparison hashconsing performs; used to throw.
+    @test SymbolicUtils.isequal_somescalar(NonBoolScalar(2.0), 1.0) === false
+    @test SymbolicUtils.isequal_somescalar(1.0, NonBoolScalar(2.0)) === false
+    @test SymbolicUtils.isequal_somescalar(NonBoolScalar(2.0), NonBoolScalar(1.0)) === false
+
+    # End-to-end: substituting a raw backend object with folding (the MTK optimal-control
+    # path) must not throw during `Const` hashconsing.
+    @syms q::Real
+    r = SymbolicUtils.substitute(2q, Dict(q => NonBoolScalar(3.0)); fold = Val(true))
+    @test SymbolicUtils.unwrap_const(r) === NonBoolScalar(6.0)
+
+    # Common cross-type numeric hashconsing is unaffected.
+    @test isequal(SymbolicUtils.Const{SymReal}(1), SymbolicUtils.Const{SymReal}(1.0))
+end

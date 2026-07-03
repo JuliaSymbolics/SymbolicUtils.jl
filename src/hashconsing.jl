@@ -23,8 +23,27 @@ macro __generate_isequal_somescalar()
         cur_expr = new_expr
     end
 
-    push!(cur_expr.args, :(isequal(a, b)::Bool))
+    push!(cur_expr.args, :(isequal_somescalar_fallback(a, b)))
     return esc(expr)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Fallback comparison for `Const` payloads that are not among the common scalar types.
+
+Some symbolic-scalar payloads (e.g. `CasADi.MX`) break the `isequal` contract: their
+comparison operators are themselves symbolic and return a non-`Bool`, so a plain
+`isequal(a, b)::Bool` throws `TypeError: non-boolean (...) used in boolean context`.
+Two `Const`s can only hashcons-equal when their payloads share a type, so a type mismatch
+is unambiguously unequal — checking it first both preserves correctness and avoids invoking
+a throwing `isequal`. When the payloads share a type but still return a non-`Bool`, we treat
+them as unequal, which is safe for hashconsing (it just stores them as distinct entries).
+"""
+@inline function isequal_somescalar_fallback(@nospecialize(a), @nospecialize(b))
+    typeof(a) === typeof(b) || return false
+    res = isequal(a, b)
+    return res isa Bool ? res : false
 end
 
 """

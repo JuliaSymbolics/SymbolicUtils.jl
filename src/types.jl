@@ -1044,6 +1044,16 @@ end
 
 fntype_X_Y(::Type{<: FnType{X, Y}}) where {X, Y} = (X, Y)
 
+"""
+    $TYPEDSIGNATURES
+
+Get the return type of a `T <: FnType`.
+"""
+function fntype_ret_type(T::TypeT)
+    @assert T <: FnType
+    return T.parameters[2]::TypeT
+end
+
 function promote_shape(f::BasicSymbolic{T}, args::ShapeT...) where {T}
     @nospecialize args
     return shape(f)

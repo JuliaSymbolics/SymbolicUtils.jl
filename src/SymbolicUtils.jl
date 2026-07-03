@@ -189,6 +189,7 @@ end
 @public add_worker, mul_worker
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
+@public fntype_ret_type
 
 PrecompileTools.@setup_workload begin
     fold1 = Val{false}()

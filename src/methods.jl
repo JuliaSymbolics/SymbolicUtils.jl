@@ -1709,6 +1709,12 @@ function promote_symtype(::typeof(complex), T::TypeT, S::TypeT)
     @assert S <: Real
     Complex{promote_type_fast_path(T, S)}
 end
+function promote_shape(::typeof(complex), @nospecialize(shs::ShapeT...))
+    for sh in shs
+        is_array_shape(sh) && _throw_array(complex, shs...)
+    end
+    return ShapeVecT()
+end
 
 function promote_symtype(::typeof(binomial), T::TypeT, S::TypeT)
     @assert T <: Number

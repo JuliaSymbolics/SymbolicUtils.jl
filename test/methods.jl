@@ -143,6 +143,21 @@ end
     @test promote_shape(conj, ShapeVecT()) == ShapeVecT()
 end
 
+@testset "promote_shape for complex" begin
+    # `complex` used to hit the generic `Unknown(-1)` fallback, so terms rebuilt
+    # through `maketerm` (e.g. by `substitute`) looked like arrays and poisoned
+    # downstream shape inference (`^` of an unknown-shape base infers `Unknown(2)`)
+    @test promote_shape(complex, ShapeVecT()) == ShapeVecT()
+    @test promote_shape(complex, ShapeVecT(), ShapeVecT()) == ShapeVecT()
+    @test_throws ArgumentError promote_shape(complex, ShapeVecT((1:2,)), ShapeVecT())
+
+    @syms x::Real
+    ex = real(SymbolicUtils.term(complex, x, x)^0.5) + 1
+    @test SymbolicUtils.shape(ex) == ShapeVecT()
+    res = substitute(ex, Dict(x => 2.0))
+    @test SymbolicUtils.shape(res) == ShapeVecT()
+end
+
 @testset "real on symbolic" begin
     @syms z::Complex{Float64}
     r = real(z)

@@ -521,6 +521,21 @@ function Base.imag(s::BasicSymbolic{T}) where {T}
         _ => Term{T}(imag, ArgsT{T}((s,)); type = Real)
     end
 end
+function Base.complex(a::BasicSymbolic{T}, b::BasicSymbolic{T}) where {T}
+    Ta = symtype(a)
+    Tb = symtype(b)
+    if Ta <: Real && Tb <: Real
+        if isconst(a) && isconst(b)
+            return Const{T}(complex(unwrap_const(a), unwrap_const(b)))
+        end
+        type = promote_symtype(complex, Ta, Tb)
+        return Term{T}(complex, ArgsT{T}((a, b)); type, shape = ShapeVecT())
+    else
+        # `complex(a, b) == a + im*b` even when the arguments are themselves
+        # complex, e.g. after substituting a complex value into a real slot
+        return a + Const{T}(im) * b
+    end
+end
 
 function promote_symtype(::typeof(adjoint), T::TypeT)
     if T <: Number
@@ -1705,9 +1720,14 @@ function promote_symtype(::typeof(complex), T::TypeT)
     end
 end
 function promote_symtype(::typeof(complex), T::TypeT, S::TypeT)
-    @assert T <: Real
-    @assert S <: Real
-    Complex{promote_type_fast_path(T, S)}
+    @assert T <: Number
+    @assert S <: Number
+    # `complex(a, b) == a + im*b`, so complex arguments are also valid
+    rT = T <: Complex ? T.parameters[1]::TypeT : T
+    rS = S <: Complex ? S.parameters[1]::TypeT : S
+    rT <: Real || (rT = Real)
+    rS <: Real || (rS = Real)
+    Complex{promote_type_fast_path(rT, rS)}
 end
 function promote_shape(::typeof(complex), @nospecialize(shs::ShapeT...))
     for sh in shs

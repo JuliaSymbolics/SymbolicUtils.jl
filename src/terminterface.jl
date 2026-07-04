@@ -342,6 +342,12 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
                 @set! res.metadata = metadata
             end
             return res
+        elseif f === complex && length(args) == 2
+            res = complex(args[1], args[2])
+            if metadata !== nothing && iscall(res)
+                @set! res.metadata = metadata
+            end
+            return res
         else
             @goto FALLBACK
         end

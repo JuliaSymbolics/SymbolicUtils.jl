@@ -4,7 +4,6 @@ using SymbolicUtils: Fill, Mapper, Mapreducer, ShapeVecT, SymReal
 import MultivariatePolynomials as MP
 import TermInterface
 
-hash2(a) = SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true hash(a)
 isequal2(a, b) = SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true isequal(a, b)
 
 struct Ctx1 end
@@ -133,13 +132,14 @@ end
     SymbolicUtils.ENABLE_HASHCONSING[] = true
 end
 
-@testset "`hash2` is cached" begin
+@testset "`hash` is cached" begin
     @syms a b f(..)
     for ex in [a + b, a * b, f(a)]
-        h = hash2(ex)
-        @test h == ex.hash2[]
+        h = hash(ex)
+        @test h == ex.hash[]
         ex2 = setmetadata(ex, Int, 3)
-        @test ex2.hash2[] != h
+        # the hash is metadata-free
+        @test hash(ex2) == h
     end
 end
 
@@ -148,12 +148,12 @@ end
     x1 = setmetadata(x, Int, 1)
     x2 = setmetadata(x, Int, 1.0)
     @test x1 !== x2
-    @test hash2(x1) != hash2(x2)
+    @test !isequal2(x1, x2)
 
     x1 = setmetadata(x, Int, [1])
     x2 = setmetadata(x, Int, [1])
     @test x1 === x2
-    @test hash2(x1) == hash2(x2)
+    @test hash(x1) == hash(x2)
 end
 
 @testset "Operations hash by content" begin

@@ -2,6 +2,8 @@ using SymbolicUtils, SymbolicUtils.Code
 using SymbolicUtils: IRStructure, SymReal, ShapeVecT, FnType
 using Test
 
+test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
+
 @testset "`symFunc` construction" begin
     @syms x::Real y::Real
 
@@ -144,6 +146,22 @@ end
     expr = Code.fast_toexpr(f, ir, Dict{Any,Any}())
     fn = eval(expr)
     @test fn(3.0, 4.0) ≈ 7.0
+end
+
+@testset "`symAssignment` with `x(t)` lhs does not generate function" begin
+    @syms t::Real x(t)::Real
+    asgn = Code.symAssignment(x(t), t + 1)
+    ir = IRStructure{SymReal}()
+    expr = Code.fast_toexpr(asgn, ir, Dict{Any, Any}(:readable_variables => true))
+    test_repr(
+        expr, quote
+            var"##cse#0" = (var"x(t)" = begin
+                var"##cse#0" = 1
+                var"##cse#1" = t
+                var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+            end)
+        end
+    )
 end
 
 @testset "`promote_symtype` for `Let`" begin

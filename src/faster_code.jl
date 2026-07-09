@@ -1367,16 +1367,14 @@ function codegen_function!(::Type{Assignment}, cs::CodegenState{T}, expr::BasicS
     lhs_expr = cs.ir[nbors[1]]
     rhs = cs.ir[nbors[2]]
 
-    lhs = manual_dispatch_toexpr(lhs_expr, NameState(cs.rewrites))
-    if Meta.isexpr(lhs, :call)
-        scs, bm = enter_scope(cs)
-        scs(rhs)
-        rhs_result = exit_scope!(scs, bm)
-    else
-        rhs_result = cs(rhs)
-    end
-    declare!(cs, lhs, rhs_result)
-    return codegen!(cs, expr_idx, lhs)
+    # This is intentionally different from normal assignment codegen. That has to be
+    # backward compatible, but this comes from `symAssignment` and doesn't. The old
+    # version turns `Assignment(x(t), rhs)` into `x(t) = rhs` which is an inline
+    # function. `symAssignment` turns it into `var"x(t)" = rhs`, and to declare
+    # a function the user can use `symFunc`.
+    lhs = add_arg_to_rewrites!(cs.rewrites, lhs_expr)
+    rhs_result = cs(rhs)
+    return codegen!(cs, expr_idx, Expr(:(=), lhs, rhs_result))
 end
 
 function codegen_function!(::Type{Func}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}

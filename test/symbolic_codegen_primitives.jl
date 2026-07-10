@@ -232,6 +232,21 @@ end
     @test result ≈ 7.0
 end
 
+@testset "Self-referential assignment inside `symLet`" begin
+    @syms x::Real y::Real
+    l = Code.symLet([Code.symAssignment(x, x + y)], x + y)
+    ir = IRStructure{SymReal}()
+    # `test_repr` won't work without `:readable_variables => true`, but that
+    # also masks the codegen intricacies with self-referential assignments.
+    expr = Code.fast_toexpr(l, ir, Dict{Any,Any}())
+    result = eval(quote
+        let x = 3.0, y = 4.0
+            $expr
+        end
+    end)
+    @test result ≈ 11.0
+end
+
 @testset "`symLet` inside `symFunc`" begin
     @syms x::Real y::Real tmp::Real
     # f(x,y) = let tmp = x+y; tmp*tmp end  →  (x+y)^2

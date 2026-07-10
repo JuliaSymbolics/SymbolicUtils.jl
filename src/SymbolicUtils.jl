@@ -190,6 +190,7 @@ end
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
 @public fntype_ret_type
+@public Mapper, Mapreducer
 
 PrecompileTools.@setup_workload begin
     fold1 = Val{false}()

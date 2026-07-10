@@ -16,14 +16,14 @@ macro __generate_isequal_somescalar()
     N = length(SCALARS)
     for (i, (t1, t2)) in enumerate(Iterators.product(SCALARS, SCALARS))
         push!(cur_expr.args, :(a isa $t1 && b isa $t2))
-        push!(cur_expr.args, :(isequal(a, b)))
+        push!(cur_expr.args, :(_safe_isequal_somescalar(a, b)))
         i == N * N && continue
         new_expr = Expr(:elseif)
         push!(cur_expr.args, new_expr)
         cur_expr = new_expr
     end
 
-    push!(cur_expr.args, :(isequal(a, b)::Bool))
+    push!(cur_expr.args, :(_safe_isequal_somescalar(a, b)))
     return esc(expr)
 end
 
@@ -34,7 +34,16 @@ Generated function which manually dispatches on `isequal` for common scalar type
 avoiding dynamic dispatch in common cases.
 """
 function isequal_somescalar(@nospecialize(a), @nospecialize(b))
-    @__generate_isequal_somescalar
+    return @__generate_isequal_somescalar
+end
+
+function _safe_isequal_somescalar(@nospecialize(a), @nospecialize(b))
+    try
+        return isequal(a, b)::Bool
+    catch err
+        err isa InterruptException && rethrow()
+        return false
+    end
 end
 
 """
@@ -215,7 +224,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
 end
 
 function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
-    isequal_bsimpl(a, b, COMPARE_FULL[])
+    return isequal_bsimpl(a, b, COMPARE_FULL[])
 end
 
 Base.isequal(a::BSImpl.Type, b::WeakRef) = isequal(a, b.value)
@@ -251,7 +260,7 @@ function hash_somescalar(@nospecialize(a), h::UInt)
     # Done this way because the manual dispatch chain is too long to write out
     # by hand, `@eval` causes Revise to error, and `@generated` completely
     # negates the `@nospecialize`.
-    @__generate_hash_somescalar
+    return @__generate_hash_somescalar
 end
 
 const UNITRANGE_SALT = 0x65888b97ed76e7a3 % UInt
@@ -264,10 +273,10 @@ Specialized `hash` for range types used in `BasicSymbolic`, since the one in `Ba
 iterates over the full range and is thus `O(n)` in the length.
 """
 function hash_range(a::UnitRange{Int}, h::UInt)
-    hash(first(a), hash(last(a), h)) ⊻ UNITRANGE_SALT
+    return hash(first(a), hash(last(a), h)) ⊻ UNITRANGE_SALT
 end
 function hash_range(a::StepRange{Int, Int}, h::UInt)
-    hash(first(a), hash(last(a), h)) ⊻ STEPRANGE_SALT
+    return hash(first(a), hash(last(a), h)) ⊻ STEPRANGE_SALT
 end
 
 """
@@ -387,7 +396,7 @@ stable across machines or processes.
 """
 function hash_maybe_fntype(T::TypeT, h::UInt)
     @nospecialize T
-    if T === Number
+    return if T === Number
         hash(Number, h)
     elseif T === Real
         hash(Real, h)
@@ -466,7 +475,7 @@ function hash_metadata(m::MetadataT, h::UInt)
         hv = Base.hasha_seed
         return hash(hash_metadict(m, hv), h)
     end
-    _unreachable()
+    return _unreachable()
 end
 
 """
@@ -551,7 +560,7 @@ end
 function Base.hash(s::BSImpl.Type, h::UInt)
     # Always use the metadata-free hash to avoids a task-local lookup on every hash.
     # This is coarser than `full = true` but is still ok as a hash function in both modes.
-    hash_bsimpl(s, h, false)
+    return hash_bsimpl(s, h, false)
 end
 
 const ENABLE_HASHCONSING = Ref(true)
@@ -565,7 +574,7 @@ const WCS_TREEREAL = WeakCacheSet{BasicSymbolic{TreeReal}}()
 @inline wcs_for_vartype(::Type{TreeReal}) = WCS_TREEREAL
 
 function generate_id()
-    IDType()
+    return IDType()
 end
 
 """
@@ -622,7 +631,7 @@ Get the default zero constant for a given `BasicSymbolic` variant type.
 # Returns
 - A `Const` variant representing zero with the appropriate variant type
 """
-@inline defaultval(::Type{BasicSymbolic{SymReal}}) =  CONST_ZERO_SYMREAL
+@inline defaultval(::Type{BasicSymbolic{SymReal}}) = CONST_ZERO_SYMREAL
 @inline defaultval(::Type{BasicSymbolic{SafeReal}}) = CONST_ZERO_SAFEREAL
 @inline defaultval(::Type{BasicSymbolic{TreeReal}}) = CONST_ZERO_TREEREAL
 

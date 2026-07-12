@@ -1328,6 +1328,16 @@ function Base.vec(x::BasicSymbolic{T}) where {T}
     return BSImpl.Term{T}(vec, ArgsT{T}((x,)); type, shape = sh)
 end
 
+"""
+    Mapper(f)
+
+Callable used as the `operation` of symbolic `map` terms: tracing
+`map(f, xs...)` over symbolic arrays produces a term whose operation is
+`Mapper(f)` and whose arguments are the mapped collections. Calling a `Mapper`
+applies `map(f, xs...)`. Downstream analyses that walk symbolic expressions can
+dispatch on this type (and on [`Mapreducer`](@ref)) to recognize mapped array
+operations.
+"""
 struct Mapper{F}
     f::F
 end
@@ -1494,6 +1504,19 @@ macro map_methods(T, arg_f, result_f)
     end |> esc
 end
 
+"""
+    Mapreducer(f, reduce, dims, init)
+
+Callable used as the `operation` of symbolic `mapreduce`-family terms: tracing
+`sum`, `prod`, or `mapreduce(f, reduce, xs...; dims, init)` over symbolic
+arrays produces a term whose operation is a `Mapreducer`. For example `sum(x)`
+of a symbolic array `x` traces to a term with operation
+`Mapreducer(identity, Base.add_sum, Colon(), nothing)`. `dims` is `Colon()` or
+an `Int`, and `init === nothing` means no initial value was supplied. Calling a
+`Mapreducer` applies the corresponding `mapreduce`. Downstream analyses that
+walk symbolic expressions can dispatch on this type (and on [`Mapper`](@ref))
+to recognize reductions over symbolic arrays.
+"""
 struct Mapreducer{F, R, D <: Union{Int, Colon}, I}
     f::F
     reduce::R

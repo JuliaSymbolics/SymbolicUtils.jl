@@ -20,6 +20,12 @@ SymbolicUtils.setmetadata
 SymbolicUtils.promote_symtype
 ```
 
+### Array Operation Callables
+```@docs
+SymbolicUtils.Mapper
+SymbolicUtils.Mapreducer
+```
+
 ## Rewriting System
 
 ### Rule Creation

@@ -344,8 +344,10 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     test_repr(
         Code.fast_toexpr(Func([DestructuredArgs([a, b], c, inds = [:a, :b])], [], a + b), ir, Dict()),
-        :(
-            function ($c,)
+        Expr(
+            :function,
+            Expr(:tuple, c),
+            quote
                 begin
                     __miscₛᵧₘ0 = c.a
                     a = __miscₛᵧₘ0

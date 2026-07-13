@@ -26,6 +26,11 @@ SymbolicUtils.Mapper
 SymbolicUtils.Mapreducer
 ```
 
+### Intermediate Representation
+```@docs
+SymbolicUtils.IRStructure
+```
+
 ## Rewriting System
 
 ### Rule Creation

@@ -69,10 +69,35 @@ function random_term(len; atoms, funs, fallback_atom=1)
     xs[]
 end
 
+function build_deep_expr(vars, depth)
+    expr = vars[1]
+    for i in 1:depth
+        v = vars[mod1(i, length(vars))]
+        expr = sin(expr * v + v^2 - v)
+    end
+    return expr
+end
+
+function batch_isequal(xs, ys, reps)
+    acc = true
+    n = length(xs)
+    for i in 1:reps
+        acc &= isequal(xs[mod1(i, n)], ys[mod1(i, n)])
+    end
+    return acc
+end
+
 let r = @rule(~x => ~x), rs = RuleSet([r]),
     acr = @rule(~x::is_literal_number + ~y => ~y)
 
     overhead = SUITE["overhead"]  = BenchmarkGroup()
+
+    iseq = overhead["isequal"] = BenchmarkGroup()
+    exprs1 = [build_deep_expr([a, b, c, d], 300) for _ in 1:16]
+    exprs2 = [build_deep_expr([b, c, d, a], 300) for _ in 1:16]
+    iseq["identical"] = @benchmarkable batch_isequal($exprs1, $exprs1, 2000)
+    iseq["different"] = @benchmarkable batch_isequal($exprs1, $exprs2, 2000)
+
     overhead["rule"]  = BenchmarkGroup()
 
     overhead["rule"]["noop:Int"]  = @benchmarkable $r(1)

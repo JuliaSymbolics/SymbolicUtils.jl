@@ -224,6 +224,17 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
 end
 
 function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
+    # Copy the early-exit checks in `isequal_bsimpl` here as a fast-path
+    # that doesn't have to hit the `COMPARE_FULL` lookup.
+    a === b && return true
+    ida = a.id
+    idb = b.id
+    ida === idb && ida !== nothing && return true
+
+    Ta = MData.variant_type(a)
+    Tb = MData.variant_type(b)
+    Ta === Tb || return false
+
     return isequal_bsimpl(a, b, COMPARE_FULL[])
 end
 

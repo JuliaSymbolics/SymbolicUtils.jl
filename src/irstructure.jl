@@ -780,6 +780,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
     # Remove `idx` from the end
     pop!(reachability)
 
+    can_fold = false
     for i in reachability
         # Check the cache, filter, and rules for `i`
         cached = get(sub.cache, i, zero(Int32))
@@ -805,6 +806,12 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
         # We will already have processed the children since we're iterating
         # reachable nodes in topological order (dependencies before dependents)
         children = Graphs.outneighbors(ir.dependency_graph, i)
+        if Fold && !(operation(sym) isa BasicSymbolic{T}) && all(isconst ∘ Base.Fix1(getindex, ir), children)
+            modified[i] = true
+            push!(queue, i)
+            can_fold = true
+            continue
+        end
         # If none of the children are modified, `i` isn't modified and we can skip it
         if !any(Base.Fix1(getindex, modified), children)
             sub.cache[i] = i
@@ -820,7 +827,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
     # be skipped since the children are all filtered out. As a result, this method is
     # very useful for sparse substitutions.
     children = Graphs.outneighbors(ir.dependency_graph, idx)
-    if !any(Base.Fix1(getindex, modified), children)
+    if !any(Base.Fix1(getindex, modified), children) && !(Fold && can_fold)
         return sub.cache[idx] = idx
     end
     push!(queue, idx)

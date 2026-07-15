@@ -711,3 +711,10 @@ end
         @test isempty(ir.non_canonical_idxs)
     end
 end
+
+@testset "`IRSubstituter` does constant folding even if no rules apply" begin
+    expr = SU.Term{SymReal}(+, [SU.Term{SymReal}(sin, [1.0]; type = Real, shape = UnitRange{Int}[]), 2.0]; type = Real, shape = UnitRange{Int}[])
+    ir = IRStructure{SymReal}()
+    subber = IRSubstituter{true}(ir, Dict{typeof(expr), typeof(expr)}())
+    @test unwrap_const(subber(expr))::Float64 ≈ (2.0 + sin(1.0))
+end

@@ -104,10 +104,12 @@ via [`SymbolicUtils.Code.declare!`](@ref) and use them here.
 function codegen!(cs::CodegenState, idx::Integer, @nospecialize(sym))
     lhs = get_cse_name(length(cs.cache))
     lhs_hook = get(cs.rewrites, LHS_HOOK_KEY, nothing)
+    # Declaring as `local` is necessary. Otherwise `symFunc` will
+    # overwrite already-declared CSE variables.
     if lhs_hook !== nothing
-        push!(cs.block.args, Expr(:(=), lhs_hook(cs, idx, lhs), sym))
+        push!(cs.block.args, Expr(:local, Expr(:(=), lhs_hook(cs, idx, lhs), sym)))
     else
-        push!(cs.block.args, Expr(:(=), lhs, sym))
+        push!(cs.block.args, Expr(:local, Expr(:(=), lhs, sym)))
     end
     insert!(cs.cache, idx, lhs)
     return lhs

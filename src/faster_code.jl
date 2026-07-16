@@ -104,10 +104,12 @@ via [`SymbolicUtils.Code.declare!`](@ref) and use them here.
 function codegen!(cs::CodegenState, idx::Integer, @nospecialize(sym))
     lhs = get_cse_name(length(cs.cache))
     lhs_hook = get(cs.rewrites, LHS_HOOK_KEY, nothing)
+    # Declaring as `local` is necessary. Otherwise `symFunc` will
+    # overwrite already-declared CSE variables.
     if lhs_hook !== nothing
-        push!(cs.block.args, Expr(:(=), lhs_hook(cs, idx, lhs), sym))
+        push!(cs.block.args, Expr(:local, Expr(:(=), lhs_hook(cs, idx, lhs), sym)))
     else
-        push!(cs.block.args, Expr(:(=), lhs, sym))
+        push!(cs.block.args, Expr(:local, Expr(:(=), lhs, sym)))
     end
     insert!(cs.cache, idx, lhs)
     return lhs
@@ -1138,13 +1140,13 @@ end
 
 function (cs::CodegenState)(expr::Assignment)
     lhs = manual_dispatch_toexpr(expr.lhs, NameState(cs.rewrites))
-    if Meta.isexpr(lhs, :call)
-        scs, bm = enter_scope(cs)
-        scs(expr.rhs)
-        rhs = exit_scope!(scs, bm)
-    else
-        rhs = cs(expr.rhs)
-    end
+    # Previously this only generated a block if `Meta.isexpr(lhs, :call)` for inline
+    # function declarations. This was changed when CSE variables were made to declare
+    # as `local`, since `let` block's don't allow `local` for assignments in the header.
+    scs, bm = enter_scope(cs)
+    scs(expr.rhs)
+    rhs = exit_scope!(scs, bm)
+    
     return declare!(cs, lhs, rhs)
 end
 
@@ -1392,9 +1394,15 @@ function codegen_function!(::Type{Func}, cs::CodegenState{T}, expr::BasicSymboli
     n_args = length(args_nbors)
     body = cs.ir[body_idx]
 
-    # Walk the args once to: register rewrites and collect DestructuredArgs info.
-    # Each entry is (sym_registered_in_rewrites, old_value) for later restoration.
-    rewrites_to_restore = Pair{BasicSymbolic{T}, Any}[]
+    # We actually want to use a whole now `CodegenState` here. The arguments to this function
+    # can be variables already present in the outer code. An expression already generated in `cs`
+    # involving these arguments would then point to the outer code instead of something
+    # dependent on the argument of this inner closure.
+    #
+    # Since we're copying the current `rewrites`, arguments passed to the outer function
+    # will be available to the closure.
+    new_rewrites = copy(cs.rewrites)
+
     # (name, elems): array param + the element variables to bind inside the body
     dargs_info = Tuple{BasicSymbolic{T}, Vector{BasicSymbolic{T}}}[]
 
@@ -1402,59 +1410,50 @@ function codegen_function!(::Type{Func}, cs::CodegenState{T}, expr::BasicSymboli
         arg = cs.ir[args_nbors[i]]
         @match arg begin
             BSImpl.Sym(;) => begin
-                push!(rewrites_to_restore, arg => get(cs.rewrites, arg, nothing))
-                add_arg_to_rewrites!(cs.rewrites, arg)
+                add_arg_to_rewrites!(new_rewrites, arg)
             end
             BSImpl.Term(; f) && if f === DestructuredArgs end => begin
                 da_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_nbors[i])
                 name = cs.ir[da_nbors[1]]
                 elems = BasicSymbolic{T}[cs.ir[da_nbors[j]] for j in 2:length(da_nbors)]
-                push!(rewrites_to_restore, name => get(cs.rewrites, name, nothing))
-                add_arg_to_rewrites!(cs.rewrites, name)
+                add_arg_to_rewrites!(new_rewrites, name)
                 push!(dargs_info, (name, elems))
             end
             _ => nothing
         end
     end
 
-    scs, bm = enter_scope(cs)
-
-    # Emit destructuring bindings — elem_i = array_param[i] — before the body
-    for (name, elems) in dargs_info
-        name_sym = cs.rewrites[name]::Symbol
-        for (i, elem) in enumerate(elems)
-            elem_name = manual_dispatch_toexpr(elem, NameState(scs.rewrites))
-            declare!(scs, elem_name, Expr(:ref, name_sym, i))
+    fn_body_block = let block = Expr(:block), expr = block, inner_cs = CodegenState(
+            expr, block, cs.ir, new_rewrites
+        )
+        # Emit destructuring bindings — elem_i = array_param[i] — before the body
+        for (name, elems) in dargs_info
+            name_sym = inner_cs.rewrites[name]::Symbol
+            for (i, elem) in enumerate(elems)
+                elem_name = manual_dispatch_toexpr(elem, NameState(inner_cs.rewrites))
+                declare!(inner_cs, elem_name, Expr(:ref, name_sym, i))
+            end
         end
-    end
 
-    scs(body)
-    fn_body_block = exit_scope!(scs, bm)
+        inner_cs(body)
+        inner_cs.expr
+    end
 
     fn_args = Expr(:tuple)
     for i in 1:n_args
         arg = cs.ir[args_nbors[i]]
         @match arg begin
-            BSImpl.Sym(;) => push!(fn_args.args, cs.rewrites[arg]::Symbol)
+            BSImpl.Sym(;) => push!(fn_args.args, new_rewrites[arg]::Symbol)
             BSImpl.Term(; f) && if f === DestructuredArgs end => begin
                 da_nbors = Graphs.outneighbors(cs.ir.dependency_graph, args_nbors[i])
                 name = cs.ir[da_nbors[1]]
-                push!(fn_args.args, cs.rewrites[name]::Symbol)
+                push!(fn_args.args, new_rewrites[name]::Symbol)
             end
             _ => push!(fn_args.args, manual_dispatch_toexpr(arg, NameState(cs.rewrites)))
         end
     end
 
     result = codegen!(cs, expr_idx, Expr(:function, fn_args, Expr(:block, fn_body_block)))
-
-    # Restore rewrites to their state before this call
-    for (sym, old_val) in rewrites_to_restore
-        if old_val === nothing
-            delete!(cs.rewrites, sym)
-        else
-            cs.rewrites[sym] = old_val
-        end
-    end
 
     return result
 end

@@ -320,3 +320,19 @@ end
     end)
     @test result ≈ 7.0
 end
+
+@testset "`symFunc` involving already-generated expression of argument" begin
+    # If `symFunc` took an argument that is already present in the outer function and
+    # contained in its body an expression already generated, it would refer to the
+    # previously generated expression instead of re-computing it in terms of the argument.
+    # See the test case for an example.
+    @syms x y
+    sfn = Code.symFunc([x], 2x + y)
+    # `fn` takes `x` as an argument, same as `sfn`. `atan` ensures `2x` is already generated
+    # before the body of `sfn`. Previously, the body of `sfn` would refer to the outer `2x`.
+    # In other words, calling `fn` would have been equivalent to `atan(2x, 2x + y)` instead
+    # of the correct `atan(2x, 2 * (2x + y) + y)`.
+    fn = Code.Func([x, y], [], atan(2x, sfn(2x + y)))
+    f = eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict()))
+    @test f(1.0, 2.0) ≈ atan(2.0, 2 * (2.0 + 2.0) + 2.0)
+end

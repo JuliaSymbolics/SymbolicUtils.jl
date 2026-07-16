@@ -155,10 +155,10 @@ end
     expr = Code.fast_toexpr(asgn, ir, Dict{Any, Any}(:readable_variables => true))
     test_repr(
         expr, quote
-            var"##cse#0" = (var"x(t)" = begin
-                var"##cse#0" = 1
-                var"##cse#1" = t
-                var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = (var"x(t)" = begin
+                local var"##cse#0" = 1
+                local var"##cse#1" = t
+                local var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
             end)
         end
     )

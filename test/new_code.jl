@@ -21,28 +21,29 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         Code.fast_toexpr(Let([], Assignment(a, b)), ir, Dict()),
         :(
             let
-                var"##cse#0" = b
-                a = var"##cse#0"
+                a = begin
+                    local var"##cse#0" = b
+                end
             end
         )
     )
     test_repr(
         Code.fast_toexpr(a + b, ir, Dict()),
         quote
-            var"##cse#0" = a
-            var"##cse#1" = b
-            var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = a
+            local var"##cse#1" = b
+            local var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(a * b * c * d * e, ir, Dict()),
         quote
-            var"##cse#0" = a
-            var"##cse#1" = b
-            var"##cse#2" = c
-            var"##cse#3" = d
-            var"##cse#4" = e
-            var"##cse#5" = $(*)(var"##cse#0", var"##cse#1", var"##cse#2", var"##cse#3", var"##cse#4")
+            local var"##cse#0" = a
+            local var"##cse#1" = b
+            local var"##cse#2" = c
+            local var"##cse#3" = d
+            local var"##cse#4" = e
+            local var"##cse#5" = $(*)(var"##cse#0", var"##cse#1", var"##cse#2", var"##cse#3", var"##cse#4")
         end
     )
     newsym = eval(
@@ -64,12 +65,16 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     test_repr(
         Code.fast_toexpr(Let([a ← 3, b ← 1 + a], a + b), ir, Dict()),
-        :(
-            let __miscₛᵧₘ0 = 3, a = __miscₛᵧₘ0, var"##cse#0" = 1, var"##cse#1" = a,
-                    var"##cse#2" = $(+)(var"##cse#0", var"##cse#1"), b = var"##cse#2"
-                var"##cse#0" = a
-                var"##cse#1" = b
-                var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+        :(let a = begin
+                    __miscₛᵧₘ0 = 3
+                end, b = begin
+                    local var"##cse#0" = 1
+                    local var"##cse#1" = a
+                    local var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+                end
+                local var"##cse#0" = a
+                local var"##cse#1" = b
+                local var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
             end
         )
     )
@@ -81,9 +86,9 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         :(
             function ()
                 begin
-                    var"##cse#0" = a
-                    var"##cse#1" = b
-                    var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+                    local var"##cse#0" = a
+                    local var"##cse#1" = b
+                    local var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
                 end
             end
         )
@@ -129,23 +134,23 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 
     ex = Code.fast_toexpr(Func([DestructuredArgs([x, x(t)], :state, inbounds = true)], [], x(t + 1) + x(t)), ir, Dict())
     ex = Base.remove_linenums!(ex)
-    for e in ex.args[2].args[1].args[[1, 3]]
-        @test e.args[2].head == :macrocall
+    for e in ex.args[2].args[1].args[[1, 2]]
+        @test occursin("@inbounds", repr(e.args[2]))
     end
 
     test_repr(
         Code.fast_toexpr(Let([], SetArray(false, a, [x(t), AtIndex(9, b), AtIndex(10, d), c])), ir, Dict()),
         :(
             let
-                var"##cse#0" = a
-                var"##cse#1" = x
-                var"##cse#2" = t
-                var"##cse#3" = var"##cse#1"(var"##cse#2")
+                local var"##cse#0" = a
+                local var"##cse#1" = x
+                local var"##cse#2" = t
+                local var"##cse#3" = var"##cse#1"(var"##cse#2")
                 __miscₛᵧₘ0 = 9
-                var"##cse#4" = b
+                local var"##cse#4" = b
                 __miscₛᵧₘ1 = 10
-                var"##cse#5" = d
-                var"##cse#6" = c
+                local var"##cse#5" = d
+                local var"##cse#6" = c
                 __miscₛᵧₘ3 = begin
                     var"##cse#0"[1] = var"##cse#3"
                     var"##cse#0"[__miscₛᵧₘ0] = var"##cse#4"
@@ -162,151 +167,151 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         f = getproperty(Base, fname)
         test_repr(
             Code.fast_toexpr(f(a), ir, Dict()), quote
-                var"##cse#0" = a
-                var"##cse#1" = $(f)(var"##cse#0")
+                local var"##cse#0" = a
+                local var"##cse#1" = $(f)(var"##cse#0")
             end
         )
         test_repr(
             Code.fast_toexpr(f(a), ir, Dict{Any, Any}(:nanmath => true)), quote
-                var"##cse#0" = a
-                var"##cse#1" = $(GlobalRef(NaNMath, fname))(var"##cse#0")
+                local var"##cse#0" = a
+                local var"##cse#1" = $(GlobalRef(NaNMath, fname))(var"##cse#0")
             end
         )
 
         nanmath_f = getproperty(NaNMath, fname)
         test_repr(
             Code.fast_toexpr(nanmath_f(a), ir, Dict()), quote
-                var"##cse#0" = a
-                var"##cse#1" = $nanmath_f(var"##cse#0")
+                local var"##cse#0" = a
+                local var"##cse#1" = $nanmath_f(var"##cse#0")
             end
         )
         test_repr(
             Code.fast_toexpr(nanmath_f(a), ir, Dict{Any, Any}(:nanmath => true)), quote
-                var"##cse#0" = a
-                var"##cse#1" = $nanmath_f(var"##cse#0")
+                local var"##cse#0" = a
+                local var"##cse#1" = $nanmath_f(var"##cse#0")
             end
         )
     end
 
     test_repr(
         Code.fast_toexpr(a^b, ir, Dict()), quote
-            var"##cse#0" = a
-            var"##cse#1" = b
-            var"##cse#2" = $(^)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = a
+            local var"##cse#1" = b
+            local var"##cse#2" = $(^)(var"##cse#0", var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(a^b, ir, Dict{Any, Any}(:nanmath => true)), quote
-            var"##cse#0" = a
-            var"##cse#1" = b
-            var"##cse#2" = $(NaNMath.pow)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = a
+            local var"##cse#1" = b
+            local var"##cse#2" = $(NaNMath.pow)(var"##cse#0", var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, b), ir, Dict()), quote
-            var"##cse#0" = a
-            var"##cse#1" = b
-            var"##cse#2" = $(NaNMath.pow)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = a
+            local var"##cse#1" = b
+            local var"##cse#2" = $(NaNMath.pow)(var"##cse#0", var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, b), ir, Dict{Any, Any}(:nanmath => true)), quote
-            var"##cse#0" = a
-            var"##cse#1" = b
-            var"##cse#2" = $(NaNMath.pow)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = a
+            local var"##cse#1" = b
+            local var"##cse#2" = $(NaNMath.pow)(var"##cse#0", var"##cse#1")
         end
     )
 
     test_repr(
         Code.fast_toexpr(a^2, ir, Dict()), quote
-            var"##cse#0" = a
-            var"##cse#1" = $(^)(var"##cse#0", 2)
+            local var"##cse#0" = a
+            local var"##cse#1" = $(^)(var"##cse#0", 2)
         end
     )
     test_repr(
         Code.fast_toexpr(a^2, ir, Dict{Any, Any}(:nanmath => true)), quote
-            var"##cse#0" = a
-            var"##cse#1" = $(^)(var"##cse#0", 2)
+            local var"##cse#0" = a
+            local var"##cse#1" = $(^)(var"##cse#0", 2)
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, 2), ir, Dict()), quote
-            var"##cse#0" = a
-            var"##cse#1" = $(^)(var"##cse#0", 2)
+            local var"##cse#0" = a
+            local var"##cse#1" = $(^)(var"##cse#0", 2)
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, 2), ir, Dict{Any, Any}(:nanmath => true)), quote
-            var"##cse#0" = a
-            var"##cse#1" = $(^)(var"##cse#0", 2)
+            local var"##cse#0" = a
+            local var"##cse#1" = $(^)(var"##cse#0", 2)
         end
     )
 
     test_repr(
         Code.fast_toexpr(a^-1, ir, Dict()),
         quote
-            var"##cse#0" = 1
-            var"##cse#1" = a
-            var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = 1
+            local var"##cse#1" = a
+            local var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(a^-1, ir, Dict{Any, Any}(:nanmath => true)), quote
-            var"##cse#0" = 1
-            var"##cse#1" = a
-            var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = 1
+            local var"##cse#1" = a
+            local var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, -1), ir, Dict()), quote
-            var"##cse#0" = 1
-            var"##cse#1" = a
-            var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = 1
+            local var"##cse#1" = a
+            local var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, -1), ir, Dict{Any, Any}(:nanmath => true)),
         quote
-            var"##cse#0" = 1
-            var"##cse#1" = a
-            var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
+            local var"##cse#0" = 1
+            local var"##cse#1" = a
+            local var"##cse#2" = $(/)(var"##cse#0", var"##cse#1")
         end
     )
 
     test_repr(
         Code.fast_toexpr(a^-2, ir, Dict()),
         quote
-            var"##cse#0" = 1
-            var"##cse#1" = a
-            var"##cse#2" = $(^)(var"##cse#1", 2)
-            var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
+            local var"##cse#0" = 1
+            local var"##cse#1" = a
+            local var"##cse#2" = $(^)(var"##cse#1", 2)
+            local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
     test_repr(
         Code.fast_toexpr(a^-2, ir, Dict{Any, Any}(:nanmath => true)),
         quote
-            var"##cse#0" = 1
-            var"##cse#1" = a
-            var"##cse#2" = $(^)(var"##cse#1", 2)
-            var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
+            local var"##cse#0" = 1
+            local var"##cse#1" = a
+            local var"##cse#2" = $(^)(var"##cse#1", 2)
+            local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, -2), ir, Dict()),
         quote
-            var"##cse#0" = 1
-            var"##cse#1" = a
-            var"##cse#2" = $(^)(var"##cse#1", 2)
-            var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
+            local var"##cse#0" = 1
+            local var"##cse#1" = a
+            local var"##cse#2" = $(^)(var"##cse#1", 2)
+            local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, -2), ir, Dict{Any, Any}(:nanmath => true)),
         quote
-            var"##cse#0" = 1
-            var"##cse#1" = a
-            var"##cse#2" = $(^)(var"##cse#1", 2)
-            var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
+            local var"##cse#0" = 1
+            local var"##cse#1" = a
+            local var"##cse#2" = $(^)(var"##cse#1", 2)
+            local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
 
@@ -332,12 +337,31 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
             ), ir, Dict{Any, Any}(:readable_variables => true)
         ),
         :(
-            let __miscₛᵧₘ0 = Vector{Any}, __miscₛᵧₘ1 = 3, __miscₛᵧₘ2 = 3, __miscₛᵧₘ3 = Vector{Int64}, __miscₛᵧₘ4 = 1, __miscₛᵧₘ5 = 4, __miscₛᵧₘ6 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ3, nothing, $(Val){1}(), $(Val){(2,)}(), __miscₛᵧₘ4, __miscₛᵧₘ5), __miscₛᵧₘ7 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ0, nothing, $(Val){1}(), $(Val){(3,)}(), __miscₛᵧₘ1, __miscₛᵧₘ2, __miscₛᵧₘ6), foo = __miscₛᵧₘ7, __miscₛᵧₘ8 = foo[1], var"x(t)" = __miscₛᵧₘ8, __miscₛᵧₘ9 = foo[2], b = __miscₛᵧₘ9, __miscₛᵧₘ10 = foo[3], c = __miscₛᵧₘ10, __miscₛᵧₘ11 = c[1], p = __miscₛᵧₘ11, __miscₛᵧₘ12 = c[2], q = __miscₛᵧₘ12
-                var"##cse#0" = a
-                var"##cse#1" = b
-                var"##cse#2" = c
-                var"##cse#3" = var"x(t)"
-                var"##cse#4" = $(+)(var"##cse#0", var"##cse#1", var"##cse#2", var"##cse#3")
+            let foo = begin
+                    __miscₛᵧₘ0 = Vector{Any}
+                    __miscₛᵧₘ1 = 3
+                    __miscₛᵧₘ2 = 3
+                    __miscₛᵧₘ3 = Vector{Int64}
+                    __miscₛᵧₘ4 = 1
+                    __miscₛᵧₘ5 = 4
+                    __miscₛᵧₘ6 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ3, nothing, $(Val){1}(), $(Val){(2,)}(), __miscₛᵧₘ4, __miscₛᵧₘ5)
+                    __miscₛᵧₘ7 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ0, nothing, $(Val){1}(), $(Val){(3,)}(), __miscₛᵧₘ1, __miscₛᵧₘ2, __miscₛᵧₘ6)
+                end, var"x(t)" = begin
+                    __miscₛᵧₘ0 = foo[1]
+                end, b = begin
+                    __miscₛᵧₘ0 = foo[2]
+                end, c = begin
+                    __miscₛᵧₘ0 = foo[3]
+                end, p = begin
+                    __miscₛᵧₘ0 = c[1]
+                end, q = begin
+                    __miscₛᵧₘ0 = c[2]
+                end
+                local var"##cse#0" = a
+                local var"##cse#1" = b
+                local var"##cse#2" = c
+                local var"##cse#3" = var"x(t)"
+                local var"##cse#4" = $(+)(var"##cse#0", var"##cse#1", var"##cse#2", var"##cse#3")
             end
         )
     )
@@ -349,13 +373,15 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
             Expr(:tuple, c),
             quote
                 begin
-                    __miscₛᵧₘ0 = c.a
-                    a = __miscₛᵧₘ0
-                    __miscₛᵧₘ1 = c.b
-                    b = __miscₛᵧₘ1
-                    var"##cse#0" = a
-                    var"##cse#1" = b
-                    var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+                    a = begin
+                        __miscₛᵧₘ0 = c.a
+                    end
+                    b = begin
+                        __miscₛᵧₘ0 = c.b
+                    end
+                    local var"##cse#0" = a
+                    local var"##cse#1" = b
+                    local var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
                 end
             end
         )
@@ -478,14 +504,14 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         Code.fast_toexpr(Let([], mksp), ir, Dict()),
         :(
             let
-                var"##cse#0" = (4,)
-                var"##cse#1" = a
-                var"##cse#2" = e
-                var"##cse#3" = $(+)(var"##cse#1", var"##cse#2")
-                var"##cse#4" = b
-                var"##cse#5" = $(+)(var"##cse#1", var"##cse#4")
-                var"##cse#6" = $(/)(var"##cse#1", var"##cse#4")
-                var"##cse#7" = $(SymbolicUtils.array_literal)(var"##cse#0", var"##cse#1", var"##cse#3", var"##cse#5", var"##cse#6")
+                local var"##cse#0" = (4,)
+                local var"##cse#1" = a
+                local var"##cse#2" = e
+                local var"##cse#3" = $(+)(var"##cse#1", var"##cse#2")
+                local var"##cse#4" = b
+                local var"##cse#5" = $(+)(var"##cse#1", var"##cse#4")
+                local var"##cse#6" = $(/)(var"##cse#1", var"##cse#4")
+                local var"##cse#7" = $(SymbolicUtils.array_literal)(var"##cse#0", var"##cse#1", var"##cse#3", var"##cse#5", var"##cse#6")
                 __miscₛᵧₘ0 = $(sparse)([1, 2, 31, 32], [1, 2, 31, 32], var"##cse#7", 32, 32)
             end
         )
@@ -497,9 +523,9 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         Code.fast_toexpr(Let([], MakeSparseArray(spvec)), ir, Dict()),
         :(
             let
-                var"##cse#0" = (1,)
-                var"##cse#1" = a
-                var"##cse#2" = $(SymbolicUtils.array_literal)(var"##cse#0", var"##cse#1")
+                local var"##cse#0" = (1,)
+                local var"##cse#1" = a
+                local var"##cse#2" = $(SymbolicUtils.array_literal)(var"##cse#0", var"##cse#1")
                 __miscₛᵧₘ0 = $(SparseVector)(10, [5], var"##cse#2")
             end
         )
@@ -509,9 +535,9 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         Code.fast_toexpr(Let([], MakeTuple((a, b, a + b))), ir, Dict()),
         :(
             let
-                var"##cse#0" = a
-                var"##cse#1" = b
-                var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+                local var"##cse#0" = a
+                local var"##cse#1" = b
+                local var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
                 __miscₛᵧₘ0 = (var"##cse#0", var"##cse#1", var"##cse#2")
             end
         )
@@ -660,19 +686,19 @@ end
         test_repr(
             Code.fast_toexpr(wrapped, ir, Dict()),
             quote
-                var"##cse#0" = ones
-                var"##cse#1" = var"##cse#0"((3,))
-                var"##cse#2" = x
-                var"##cse#3" = z
-                var"##cse#4" = $(sin)(var"##cse#3")
-                var"##cse#5" = y
-                var"##cse#6" = 2
-                var"##cse#7" = $(^)(var"##cse#2", 2)
-                var"##cse#8" = $(*)(var"##cse#6", var"##cse#7")
-                var"##cse#9" = $(+)(var"##cse#4", var"##cse#5", var"##cse#8")
-                var"##cse#10" = 1
-                var"##cse#11" = $(*)(var"##cse#6", var"##cse#3")
-                var"##cse#12" = $(+)(var"##cse#10", var"##cse#11")
+                local var"##cse#0" = ones
+                local var"##cse#1" = var"##cse#0"((3,))
+                local var"##cse#2" = x
+                local var"##cse#3" = z
+                local var"##cse#4" = $(sin)(var"##cse#3")
+                local var"##cse#5" = y
+                local var"##cse#6" = 2
+                local var"##cse#7" = $(^)(var"##cse#2", 2)
+                local var"##cse#8" = $(*)(var"##cse#6", var"##cse#7")
+                local var"##cse#9" = $(+)(var"##cse#4", var"##cse#5", var"##cse#8")
+                local var"##cse#10" = 1
+                local var"##cse#11" = $(*)(var"##cse#6", var"##cse#3")
+                local var"##cse#12" = $(+)(var"##cse#10", var"##cse#11")
                 __miscₛᵧₘ0 = $(Code.fill_arr!)(var"##cse#1", $Val($((3,))), var"##cse#2", var"##cse#9", var"##cse#12")
             end
         )
@@ -703,16 +729,16 @@ end
         test_repr(
             Code.fast_toexpr(wrapped, ir, Dict()),
             quote
-                var"##cse#0" = ones
-                var"##cse#1" = var"##cse#0"((3,))
+                local var"##cse#0" = ones
+                local var"##cse#1" = var"##cse#0"((3,))
                 _ = begin
                     for _1 in 1:1:3
                         begin
-                            var"##cse#2" = x
-                            var"##cse#3" = var"##cse#2"[_1]
-                            var"##cse#4" = y
-                            var"##cse#5" = var"##cse#4"[_1]
-                            var"##cse#6" = $(*)(var"##cse#3", var"##cse#5")
+                            local var"##cse#2" = x
+                            local var"##cse#3" = var"##cse#2"[_1]
+                            local var"##cse#4" = y
+                            local var"##cse#5" = var"##cse#4"[_1]
+                            local var"##cse#6" = $(*)(var"##cse#3", var"##cse#5")
                             __accum = $(+)(var"##cse#1"[$(CartesianIndex)(_1)], var"##cse#6")
                             _ = (var"##cse#1"[$(CartesianIndex)(_1)] = __accum)
                         end
@@ -771,11 +797,11 @@ end
         test_repr(
             Code.fast_toexpr(arr, ir, Dict{Any,Any}(Code.ALLOCATOR_REWRITES_KEY => returns_alloc)),
             quote
-                var"##cse#0" = buf
-                var"##cse#1" = var"##cse#0"
-                var"##cse#2" = x
-                var"##cse#3" = y
-                var"##cse#4" = z
+                local var"##cse#0" = buf
+                local var"##cse#1" = var"##cse#0"
+                local var"##cse#2" = x
+                local var"##cse#3" = y
+                local var"##cse#4" = z
                 __miscₛᵧₘ0 = $(Code.fill_arr!)(var"##cse#1", $Val($((3,))), var"##cse#2", var"##cse#3", var"##cse#4")
             end
         )
@@ -1212,8 +1238,8 @@ end
     rw[Code.LHS_HOOK_KEY] = (_, _, lhs) -> :($lhs::Any)
     expr = Code.fast_toexpr(sin(x), ir, rw)
     test_repr(expr, quote
-        var"##cse#0"::Any = x
-        var"##cse#1"::Any = $sin(var"##cse#0")
+        local var"##cse#0"::Any = x
+        local var"##cse#1"::Any = $sin(var"##cse#0")
     end)
 end
 
@@ -1223,13 +1249,13 @@ end
     rw = Dict()
     expr = Code.fast_toexpr((x * y * z) \ (x * y * w), ir, rw)
     test_repr(expr, quote
-        var"##cse#0" = x
-        var"##cse#1" = y
-        var"##cse#2" = $(*)(var"##cse#0", var"##cse#1")
-        var"##cse#3" = z
-        var"##cse#4" = $(*)(var"##cse#2", var"##cse#3")
-        var"##cse#5" = w
-        var"##cse#6" = $(*)(var"##cse#2", var"##cse#5")
-        var"##cse#7" = $(\)(var"##cse#4", var"##cse#6")
+        local var"##cse#0" = x
+        local var"##cse#1" = y
+        local var"##cse#2" = $(*)(var"##cse#0", var"##cse#1")
+        local var"##cse#3" = z
+        local var"##cse#4" = $(*)(var"##cse#2", var"##cse#3")
+        local var"##cse#5" = w
+        local var"##cse#6" = $(*)(var"##cse#2", var"##cse#5")
+        local var"##cse#7" = $(\)(var"##cse#4", var"##cse#6")
     end)
 end

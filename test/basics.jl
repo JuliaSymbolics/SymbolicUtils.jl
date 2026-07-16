@@ -1425,3 +1425,14 @@ end
     @syms x y z o(..)::FnType{Tuple{Number}, Number, Nothing}
     @test_nowarn repr(o(x)(y + z))
 end
+
+@testset "`maketerm` on `map`/`mapreduce` works correctly" begin
+    @syms x[1:3]
+    ex = map(identity, x)
+    ex2 = SymbolicUtils.maketerm(typeof(ex), operation(ex), arguments(ex), nothing)
+    @test isequal(ex2, ex)
+
+    ex = sum(x)
+    ex2 = SymbolicUtils.maketerm(typeof(ex), operation(ex), arguments(ex), nothing)
+    @test isequal(ex2, ex)
+end

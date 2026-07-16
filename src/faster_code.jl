@@ -1140,13 +1140,13 @@ end
 
 function (cs::CodegenState)(expr::Assignment)
     lhs = manual_dispatch_toexpr(expr.lhs, NameState(cs.rewrites))
-    if Meta.isexpr(lhs, :call)
-        scs, bm = enter_scope(cs)
-        scs(expr.rhs)
-        rhs = exit_scope!(scs, bm)
-    else
-        rhs = cs(expr.rhs)
-    end
+    # Previously this only generated a block if `Meta.isexpr(lhs, :call)` for inline
+    # function declarations. This was changed when CSE variables were made to declare
+    # as `local`, since `let` block's don't allow `local` for assignments in the header.
+    scs, bm = enter_scope(cs)
+    scs(expr.rhs)
+    rhs = exit_scope!(scs, bm)
+    
     return declare!(cs, lhs, rhs)
 end
 

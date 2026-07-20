@@ -775,6 +775,14 @@ end
 
 scalarization_function(::typeof(LinearAlgebra.norm)) = _scalarize_norm
 
+# Per-call `scalarize` memo (identity-keyed; `BasicSymbolic` is hash-consed) so a
+# shared sub-expression is expanded once, not once per occurrence. Scoped to one
+# top-level call, so it is released afterwards.
+const SCALARIZE_CACHE =
+    Base.ScopedValues.ScopedValue{Union{Nothing, IdDict{Any, Any}}}(nothing)
+
+scalarize_uncache(v) = v isa AbstractArray ? copy(v) : v
+
 """
     $TYPEDSIGNATURES
 
@@ -796,7 +804,23 @@ values for output indices to generate scalar expressions for each array element.
   expressions. For scalar expressions, returns the expression unchanged or with recursively
   scalarized subexpressions.
 """
-function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T, toplevel}
+function scalarize(x::BasicSymbolic{T}, v::Val{toplevel} = Val{false}()) where {T, toplevel}
+    cache = SCALARIZE_CACHE[]
+    if cache === nothing
+        return Base.ScopedValues.with(SCALARIZE_CACHE => IdDict{Any, Any}()) do
+            scalarize(x, v)
+        end
+    end
+    if !toplevel
+        hit = get(cache, x, nothing)
+        hit === nothing || return scalarize_uncache(hit)
+    end
+    result = scalarize_impl(x, v)
+    toplevel || (cache[x] = result)
+    return scalarize_uncache(result)
+end
+
+function scalarize_impl(x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     sh = shape(x)
     sh isa Unknown && return x
     @match x begin
@@ -820,8 +844,14 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
         end
     end
 end
-function scalarize(arr::AbstractArray, ::Val{toplevel} = Val{false}()) where {toplevel}
-    map(Base.Fix2(scalarize, Val{toplevel}()), arr)
+function scalarize(arr::AbstractArray, v::Val{toplevel} = Val{false}()) where {toplevel}
+    cache = SCALARIZE_CACHE[]
+    if cache === nothing
+        return Base.ScopedValues.with(SCALARIZE_CACHE => IdDict{Any, Any}()) do
+            scalarize(arr, v)
+        end
+    end
+    map(Base.Fix2(scalarize, v), arr)
 end
 scalarize(x, _...) = x
 

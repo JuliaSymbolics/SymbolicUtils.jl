@@ -1883,3 +1883,7 @@ end
 function promote_symtype(::Type{SparseMatrixCSC}, Tm::TypeT, Tn::TypeT, TI::TypeT, TJ::TypeT, TV::TypeT)
     return Matrix{TV.parameters[1]::TypeT}
 end
+
+function promote_symtype(::typeof(reshape), Tarr::TypeT, Tidxs::TypeT...)
+    return Array{safe_eltype(Tarr), length(Tidxs)}
+end

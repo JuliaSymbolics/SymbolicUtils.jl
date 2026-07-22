@@ -488,3 +488,8 @@ end
     f = Fill(ShapeVecT((1:3, 1:3)))
     @test f(1) == fill(1, 3, 3)
 end
+
+@testset "`promote_symtype` for `reshape`" begin
+    @test SymbolicUtils.promote_symtype(reshape, Vector{Int}, Int, Int) === Matrix{Int}
+    @test SymbolicUtils.promote_symtype(reshape, Vector{Real}, Int, Int, Int) === Array{Int, 3}
+end

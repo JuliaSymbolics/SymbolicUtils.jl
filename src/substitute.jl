@@ -779,7 +779,7 @@ scalarization_function(::typeof(LinearAlgebra.norm)) = _scalarize_norm
 # shared sub-expression is expanded once, not once per occurrence. Scoped to one
 # top-level call, so it is released afterwards.
 const SCALARIZE_CACHE =
-    Base.ScopedValues.ScopedValue{Union{Nothing, IdDict{Any, Any}}}(nothing)
+    ScopedValue{Union{Nothing, IdDict{Any, Any}}}(nothing)
 
 scalarize_uncache(v) = v isa AbstractArray ? copy(v) : v
 
@@ -807,7 +807,7 @@ values for output indices to generate scalar expressions for each array element.
 function scalarize(x::BasicSymbolic{T}, v::Val{toplevel} = Val{false}()) where {T, toplevel}
     cache = SCALARIZE_CACHE[]
     if cache === nothing
-        return Base.ScopedValues.with(SCALARIZE_CACHE => IdDict{Any, Any}()) do
+        return with(SCALARIZE_CACHE => IdDict{Any, Any}()) do
             scalarize(x, v)
         end
     end
@@ -847,7 +847,7 @@ end
 function scalarize(arr::AbstractArray, v::Val{toplevel} = Val{false}()) where {toplevel}
     cache = SCALARIZE_CACHE[]
     if cache === nothing
-        return Base.ScopedValues.with(SCALARIZE_CACHE => IdDict{Any, Any}()) do
+        return with(SCALARIZE_CACHE => IdDict{Any, Any}()) do
             scalarize(arr, v)
         end
     end

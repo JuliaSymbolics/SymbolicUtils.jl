@@ -781,7 +781,12 @@ scalarization_function(::typeof(LinearAlgebra.norm)) = _scalarize_norm
 const SCALARIZE_CACHE =
     ScopedValue{Union{Nothing, IdDict{Any, Any}}}(nothing)
 
-scalarize_uncache(v) = v isa AbstractArray ? copy(v) : v
+# `copy` of a lazy `Adjoint`/`Transpose` re-applies `conj`; `collect` avoids that.
+function scalarize_uncache(v)
+    v isa SparseMatrixCSC && return copy(v)
+    v isa AbstractArray && return collect(v)
+    return v
+end
 
 """
     $TYPEDSIGNATURES

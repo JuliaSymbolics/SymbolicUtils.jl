@@ -321,3 +321,37 @@ end
     @test operation(m) === (*) && !ismul(m)
     @test isequal(Mul{SymReal}(1, ACDict{SymReal}(y => 1)), y)  # coeff 1, power 1 -> bare vector
 end
+
+@testset "scalarize shares reused sub-expressions" begin
+    @syms x[1:3]::Real R[1:3, 1:3]::Real
+    xv = scalarize(x); Rm = scalarize(R)
+
+    # Orthonormal frame reused at several nesting levels, as a corotational beam
+    # element does; `BasicSymbolic` hash-consing makes this a shared DAG.
+    frame(d, M) = begin
+        e1 = d ./ sqrt(sum(abs2, d))
+        y = M[:, 2]
+        e2raw = y .- sum(y .* e1) .* e1
+        e2 = e2raw ./ sqrt(sum(abs2, e2raw))
+        e3 = e1 × e2
+        [e1[1] e2[1] e3[1]; e1[2] e2[2] e3[2]; e1[3] e2[3] e3[3]]
+    end
+    nested(E, M, depth) = begin
+        A = E
+        for _ in 1:depth
+            A = (E' * M) * A
+        end
+        A * [A[1, 1], A[2, 2], A[3, 3]]
+    end
+
+    E = frame(xv, Rm)
+    sc = scalarize.(nested(E, Rm, 3))
+
+    xn = [1.1, 0.3, -0.7]
+    Rn = [0.2 -0.9 0.4; 1.3 0.1 -0.5; 0.6 -0.2 0.8]
+    ref = nested(frame(xn, Rn), Rn, 3)
+
+    d = Dict(vcat(vec(xv .=> xn), vec(Rm .=> Rn)))
+    got = [unwrap_const(substitute(e, d; fold = Val(true))) for e in sc]
+    @test got ≈ ref
+end

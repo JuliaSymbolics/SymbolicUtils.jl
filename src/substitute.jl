@@ -775,6 +775,12 @@ end
 
 scalarization_function(::typeof(LinearAlgebra.norm)) = _scalarize_norm
 
+function scalarize_uncache(v)
+    v isa SparseMatrixCSC && return copy(v)
+    v isa AbstractArray && return collect(v)
+    return v
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -796,7 +802,15 @@ values for output indices to generate scalar expressions for each array element.
   expressions. For scalar expressions, returns the expression unchanged or with recursively
   scalarized subexpressions.
 """
-function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T, toplevel}
+function scalarize(x::BasicSymbolic{T}, v::Val{toplevel} = Val{false}()) where {T, toplevel}
+    return scalarize_uncache(scalarize_cached(x, v))
+end
+
+@cache function scalarize_cached(x::BasicSymbolic, v::Val)::Any
+    scalarize_impl(x, v)
+end
+
+function scalarize_impl(x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     sh = shape(x)
     sh isa Unknown && return x
     @match x begin
@@ -820,8 +834,8 @@ function scalarize(x::BasicSymbolic{T}, ::Val{toplevel} = Val{false}()) where {T
         end
     end
 end
-function scalarize(arr::AbstractArray, ::Val{toplevel} = Val{false}()) where {toplevel}
-    map(Base.Fix2(scalarize, Val{toplevel}()), arr)
+function scalarize(arr::AbstractArray, v::Val{toplevel} = Val{false}()) where {toplevel}
+    map(Base.Fix2(scalarize, v), arr)
 end
 scalarize(x, _...) = x
 

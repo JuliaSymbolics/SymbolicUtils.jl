@@ -191,6 +191,7 @@ end
 @public symtype, issym, isterm, isdiv, Sym
 @public isconst
 @public fntype_ret_type
+@public FnType
 @public Mapper, Mapreducer
 
 PrecompileTools.@setup_workload begin

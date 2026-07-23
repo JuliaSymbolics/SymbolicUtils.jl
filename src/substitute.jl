@@ -775,13 +775,6 @@ end
 
 scalarization_function(::typeof(LinearAlgebra.norm)) = _scalarize_norm
 
-# Per-call `scalarize` memo (identity-keyed; `BasicSymbolic` is hash-consed) so a
-# shared sub-expression is expanded once, not once per occurrence. Scoped to one
-# top-level call, so it is released afterwards.
-const SCALARIZE_CACHE =
-    ScopedValue{Union{Nothing, IdDict{Any, Any}}}(nothing)
-
-# `copy` of a lazy `Adjoint`/`Transpose` re-applies `conj`; `collect` avoids that.
 function scalarize_uncache(v)
     v isa SparseMatrixCSC && return copy(v)
     v isa AbstractArray && return collect(v)
@@ -810,19 +803,11 @@ values for output indices to generate scalar expressions for each array element.
   scalarized subexpressions.
 """
 function scalarize(x::BasicSymbolic{T}, v::Val{toplevel} = Val{false}()) where {T, toplevel}
-    cache = SCALARIZE_CACHE[]
-    if cache === nothing
-        return with(SCALARIZE_CACHE => IdDict{Any, Any}()) do
-            scalarize(x, v)
-        end
-    end
-    if !toplevel
-        hit = get(cache, x, nothing)
-        hit === nothing || return scalarize_uncache(hit)
-    end
-    result = scalarize_impl(x, v)
-    toplevel || (cache[x] = result)
-    return scalarize_uncache(result)
+    return scalarize_uncache(scalarize_cached(x, v))
+end
+
+@cache function scalarize_cached(x::BasicSymbolic, v::Val)::Any
+    scalarize_impl(x, v)
 end
 
 function scalarize_impl(x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
@@ -850,12 +835,6 @@ function scalarize_impl(x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel
     end
 end
 function scalarize(arr::AbstractArray, v::Val{toplevel} = Val{false}()) where {toplevel}
-    cache = SCALARIZE_CACHE[]
-    if cache === nothing
-        return with(SCALARIZE_CACHE => IdDict{Any, Any}()) do
-            scalarize(arr, v)
-        end
-    end
     map(Base.Fix2(scalarize, v), arr)
 end
 scalarize(x, _...) = x

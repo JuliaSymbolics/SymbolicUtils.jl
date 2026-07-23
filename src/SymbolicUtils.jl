@@ -27,7 +27,6 @@ import TermInterface: iscall, operation, arguments, metadata, maketerm, sorted_a
 import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
-using ScopedValues: ScopedValue, with
 using WeakCacheSets: WeakCacheSet, getkey!
 using Base: RefValue
 import MacroTools

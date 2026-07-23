@@ -189,6 +189,7 @@ end
 @public add_worker, mul_worker
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
+@public isconst
 @public fntype_ret_type
 @public Mapper, Mapreducer
 

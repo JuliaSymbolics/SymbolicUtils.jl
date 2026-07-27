@@ -2,6 +2,7 @@
 *.jl.cov
 *.jl.mem
 Manifest.toml
+Manifest-v*.toml
 /docs/build/
 benchmark/tune.json
 scratch.jl

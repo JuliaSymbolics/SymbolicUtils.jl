@@ -712,6 +712,8 @@ Base.nameof(s::BasicSymbolic) = issym(s) ? s.name : error("Non-Sym BasicSymbolic
 Base.convert(::Type{B}, x) where {R, B <: BasicSymbolic{R}} = BSImpl.Const{R}(unwrap(x))
 Base.convert(::Type{B}, x::B) where {R, B <: BasicSymbolic{R}} = x
 
+Base.copy(x::BasicSymbolic) = x
+
 ###
 ### Utilities
 ###

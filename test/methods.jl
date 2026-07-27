@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType
+using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
 using Test
 import NaNMath
 import LinearAlgebra
@@ -202,9 +202,63 @@ end
     @test_throws MethodError !x
 end
 
+@testset "Boolean operators short-circuit on constant arguments" begin
+    @syms p::Bool q::Bool
+    ct = Const{SymReal}(true)
+    cf = Const{SymReal}(false)
+
+    # `&`: a literal `true` drops out, a literal `false` short-circuits to `false`
+    @test isequal(p & true, p)
+    @test isequal(true & p, p)
+    @test isequal(p & false, cf)
+    @test isequal(false & p, cf)
+    @test operation(p & q) === (&)
+
+    # `|`: a literal `false` drops out, a literal `true` short-circuits to `true`
+    @test isequal(p | false, p)
+    @test isequal(false | p, p)
+    @test isequal(p | true, ct)
+    @test isequal(true | p, ct)
+    @test operation(p | q) === (|)
+
+    # `xor`: only a literal `false` short-circuits (to the other argument);
+    # a literal `true` does not fold to a negation
+    @test isequal(xor(p, false), p)
+    @test isequal(xor(false, p), p)
+    @test operation(xor(p, true)) === xor
+    @test operation(xor(true, p)) === xor
+    @test operation(xor(p, q)) === xor
+end
+
+@testset "Boolean negation short-circuits on constant arguments" begin
+    ct = Const{SymReal}(true)
+    cf = Const{SymReal}(false)
+    @test isequal(!ct, cf)
+    @test isequal(!cf, ct)
+    @test isequal(~ct, cf)
+    @test isequal(~cf, ct)
+end
+
 @testset "ifelse with error" begin
     @syms x::Real
     @test_throws ArgumentError promote_symtype(ifelse, Real, Int, Float64)
+end
+
+@testset "ifelse short-circuits on constant condition" begin
+    @syms cond::Bool x::Real y::Real
+    ct = Const{SymReal}(true)
+    cf = Const{SymReal}(false)
+    @test isequal(ifelse(ct, x, y), x)
+    @test isequal(ifelse(cf, x, y), y)
+    @test operation(ifelse(cond, x, y)) === ifelse
+end
+
+@testset "ifelse short-circuits on constant boolean branches" begin
+    @syms cond::Bool
+    ct = Const{SymReal}(true)
+    cf = Const{SymReal}(false)
+    @test isequal(ifelse(cond, ct, cf), cond)
+    @test isequal(ifelse(cond, cf, ct), !cond)
 end
 
 @testset "IndexStyle" begin

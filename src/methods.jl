@@ -602,6 +602,72 @@ function promote_shape(::typeof(!=), sha::ShapeT, shb::ShapeT)
     return ShapeVecT()
 end
 
+macro __registered_and_body()
+    return quote
+        if _isone(x)
+            return Const{T}(y)
+        elseif _iszero(x)
+            return Const{T}(x)
+        elseif _isone(y)
+            return Const{T}(x)
+        elseif _iszero(y)
+            return Const{T}(y)
+        end
+        return Term{T}(&, ArgsT{T}((x, y)); type = Bool, shape = ShapeVecT())
+    end |> esc
+end
+macro __registered_or_body()
+    return quote
+        if _isone(x)
+            return Const{T}(x)
+        elseif _iszero(x)
+            return Const{T}(y)
+        elseif _isone(y)
+            return Const{T}(y)
+        elseif _iszero(y)
+            return Const{T}(x)
+        end
+        return Term{T}(|, ArgsT{T}((x, y)); type = Bool, shape = ShapeVecT())
+    end |> esc
+end
+macro __registered_xor_body()
+    return quote
+        if _iszero(x)
+            return Const{T}(y)
+        elseif _iszero(y)
+            return Const{T}(x)
+        end
+        return Term{T}(xor, ArgsT{T}((x, y)); type = Bool, shape = ShapeVecT())
+    end |> esc
+end
+function Base.:(&)(x::BasicSymbolic{T}, y::BasicSymbolic{T}) where {T}
+    @__registered_and_body()
+end
+function Base.:(&)(x::BasicSymbolic{T}, y::Bool) where {T}
+    @__registered_and_body()
+end
+function Base.:(&)(x::Bool, y::BasicSymbolic{T}) where {T}
+    @__registered_and_body()
+end
+function Base.:(|)(x::BasicSymbolic{T}, y::BasicSymbolic{T}) where {T}
+    @__registered_or_body()
+end
+function Base.:(|)(x::BasicSymbolic{T}, y::Bool) where {T}
+    @__registered_or_body()
+end
+function Base.:(|)(x::Bool, y::BasicSymbolic{T}) where {T}
+    @__registered_or_body()
+end
+function Base.xor(x::BasicSymbolic{T}, y::BasicSymbolic{T}) where {T}
+    @__registered_xor_body()
+end
+function Base.xor(x::BasicSymbolic{T}, y::Bool) where {T}
+    @__registered_xor_body()
+end
+function Base.xor(x::Bool, y::BasicSymbolic{T}) where {T}
+    @__registered_xor_body()
+end
+
 # binary ops that return Bool
 for (f, Domain) in [(==) => Number, (!=) => Number,
                     (<=) => Real,   (>=) => Real,
@@ -623,6 +689,9 @@ for (f, Domain) in [(==) => Number, (!=) => Number,
                 return ShapeVecT()
             end
         end
+    end
+    if f === (&) || f === (|) || f === xor
+        continue
     end
     @eval begin
         function (::$(typeof(f)))(a::BasicSymbolic{T}, b::$Domain) where {T}
@@ -658,6 +727,11 @@ for f in [!, ~]
             return ShapeVecT()
         end
         function (::$(typeof(f)))(s::BasicSymbolic{T}) where {T}
+            if _isone(s)
+                return Const{T}(false)
+            elseif _iszero(s)
+                return Const{T}(true)
+            end
             type = symtype(s)
             if type !== Bool
                 throw(MethodError(!, (s,)))
@@ -670,6 +744,15 @@ end
 
 # An ifelse node
 function Base.ifelse(_if::BasicSymbolic{T}, _then, _else) where {T}
+    if _isone(_if)
+        return _then
+    elseif _iszero(_if)
+        return _else
+    elseif isconst(_then) && isconst(_else) && unwrap_const(_then) === true && unwrap_const(_else) === false
+        return _if
+    elseif isconst(_then) && isconst(_else) && unwrap_const(_then) === false && unwrap_const(_else) === true
+        return !_if
+    end
     type = promote_symtype(ifelse, symtype(_if), symtype(_then), symtype(_else))
     sh = promote_shape(ifelse, shape(_if), shape(_then), shape(_else))
     Term{T}(ifelse, ArgsT{T}((_if, _then, _else)); type, shape = sh)

@@ -194,6 +194,11 @@ end
 @public FnType
 @public Mapper, Mapreducer
 
+# `simplify_rules.jl` does `using .Rewriters`, so these already resolve as
+# `SymbolicUtils.X` and callers depend on that spelling. Declare them public here so
+# reaching them through this module is API rather than a side effect of that import.
+@public Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
+
 PrecompileTools.@setup_workload begin
     fold1 = Val{false}()
     fold2 = Val{true}()

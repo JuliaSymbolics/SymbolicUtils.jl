@@ -40,6 +40,11 @@ SymbolicUtils.IRStructure
 ```
 
 ### Rewriters
+
+Every combinator below except `FixpointNoCycle` is also public as `SymbolicUtils.X`, so
+`using SymbolicUtils: Chain, Prewalk` and `using SymbolicUtils.Rewriters: Chain, Prewalk`
+are both supported.
+
 ```@docs
 SymbolicUtils.Rewriters
 SymbolicUtils.Rewriters.Empty

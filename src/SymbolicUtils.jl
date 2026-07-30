@@ -190,6 +190,7 @@ end
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
 @public isconst
+@public ispow
 @public fntype_ret_type
 @public FnType
 @public Mapper, Mapreducer

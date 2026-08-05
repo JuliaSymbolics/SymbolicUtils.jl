@@ -106,6 +106,30 @@ end
 include("cache.jl")
 Base.@deprecate istree iscall
 
+"""
+    istree(x)
+
+Deprecated spelling of [`iscall`](@ref). Returns `true` if `x` is a function call
+expression, i.e. one for which [`operation`](@ref) and [`arguments`](@ref) are defined.
+
+`istree` was the name used by the pre-`TermInterface` symbolic interface. It is retained
+only so that older code keeps running, emits a deprecation warning on every call, and will
+be removed in the next breaking release. New code should call `iscall` instead:
+
+```julia
+iscall(x)      # instead of istree(x)
+```
+
+Note that `iscall` is not merely a rename: the term interface splits the old notion of "is
+this a tree node" into `iscall` (the expression is an `operation` applied to `arguments`)
+and the container-specific predicates such as [`SymbolicUtils.issym`](@ref). Code that used
+`istree` to mean "not a leaf" should check `iscall`; code that used `!istree(x)` to mean "is
+a symbol" should check `SymbolicUtils.issym(x)`, which is the precise question.
+
+See also: [`iscall`](@ref), [`operation`](@ref), [`arguments`](@ref).
+"""
+istree
+
 include("small_array.jl")
 
 export istree, operation, arguments, sorted_arguments, iscall, unwrap_const

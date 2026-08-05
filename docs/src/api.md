@@ -74,3 +74,14 @@ SymbolicUtils.simplify_fractions
 SymbolicUtils.quick_cancel
 SymbolicUtils.flatten_fractions
 ```
+
+## Deprecated
+
+These names are still exported so that existing code keeps working, but each one warns on
+use and will be removed in the next breaking release. Their entries record what to write
+instead.
+
+```@docs
+SymbolicUtils.istree
+SymbolicUtils.RuleSet
+```

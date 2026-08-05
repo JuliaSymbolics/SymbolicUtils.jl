@@ -981,7 +981,10 @@ function get_canonical_expr!(ir::IRStructure{T}, idx::Integer) where {T}
     return __get_canonical_expr(ir, idx)
 end
 
-@deprecate get_canonical_expr(ir, idx) get_canonical_expr!(ir, idx)
+# `get_canonical_expr` was never exported; the default `export_old = true` of `@deprecate`
+# would silently add it to the public API that the (also non-public) `get_canonical_expr!`
+# does not have.
+@deprecate get_canonical_expr(ir, idx) get_canonical_expr!(ir, idx) false
 
 """
     $TYPEDSIGNATURES

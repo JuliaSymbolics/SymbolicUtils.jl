@@ -689,3 +689,27 @@ getdepth(::Any) = typemax(Int)
 end
 
 Base.@deprecate RuleSet(x) Postwalk(Chain(x))
+
+"""
+    RuleSet(rules)
+
+Deprecated. Build the rewriter explicitly instead:
+
+```julia
+using SymbolicUtils.Rewriters
+Postwalk(Chain(rules))
+```
+
+`RuleSet` was the original way to turn a collection of `@rule`s into a callable rewriter.
+It applied every rule in order at every node of the expression, bottom up. That is exactly
+`Postwalk(Chain(rules))`, and `RuleSet(rules)` now constructs and returns that object while
+emitting a deprecation warning; it will be removed in the next breaking release.
+
+Spelling the rewriter out is preferred because the traversal and the combination strategy
+become explicit and independently choosable. `Chain` can be swapped for
+[`SymbolicUtils.Rewriters.RestartedChain`](@ref) to restart the rule list after every
+successful rewrite, [`SymbolicUtils.Rewriters.Fixpoint`](@ref) to iterate to convergence, or
+[`SymbolicUtils.Rewriters.Prewalk`](@ref) to rewrite top down instead of bottom up. See
+[`SymbolicUtils.Rewriters`](@ref) for the full set of combinators.
+"""
+RuleSet

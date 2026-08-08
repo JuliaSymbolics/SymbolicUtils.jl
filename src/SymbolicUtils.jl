@@ -215,7 +215,7 @@ end
 @public symtype, issym, isterm, isdiv, Sym
 @public isconst
 @public ispow
-@public Unknown, ShapeVecT, ShapeT, promote_shape
+@public Unknown, ShapeVecT, ShapeT, shape, promote_shape
 @public fntype_ret_type
 @public FnType
 @public Mapper, Mapreducer

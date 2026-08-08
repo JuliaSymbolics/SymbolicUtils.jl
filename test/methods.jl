@@ -9,6 +9,7 @@ import LinearAlgebra
         @test Base.ispublic(SymbolicUtils, :Unknown)
         @test Base.ispublic(SymbolicUtils, :ShapeVecT)
         @test Base.ispublic(SymbolicUtils, :ShapeT)
+        @test Base.ispublic(SymbolicUtils, :shape)
         @test Base.ispublic(SymbolicUtils, :promote_shape)
     end
 end

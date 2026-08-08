@@ -3,6 +3,15 @@ using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_sy
 using Test
 import NaNMath
 import LinearAlgebra
+
+@testset "public shape promotion interface" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils, :Unknown)
+        @test Base.ispublic(SymbolicUtils, :ShapeVecT)
+        @test Base.ispublic(SymbolicUtils, :ShapeT)
+        @test Base.ispublic(SymbolicUtils, :promote_shape)
+    end
+end
 import SpecialFunctions: besselj, bessely, besseli, besselk, polygamma, beta, logbeta, hankelh1, hankelh2, expint, gamma, erf
 
 @testset "promote_symtype with BigInt" begin

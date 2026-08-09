@@ -18,6 +18,10 @@ SymbolicUtils.setmetadata
 ### Type Promotion
 ```@docs; canonical=false
 SymbolicUtils.promote_symtype
+SymbolicUtils.promote_shape
+SymbolicUtils.Unknown
+SymbolicUtils.ShapeVecT
+SymbolicUtils.ShapeT
 ```
 
 ### Array Operation Callables

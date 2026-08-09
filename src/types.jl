@@ -67,11 +67,43 @@ A custom vector type which does not allocate for small numbers of elements. If t
 known at compile time, it should be passed as a `Tuple` to the constructor.
 """
 const SmallV{T} = SmallVec{T, Vector{T}}
-const ShapeVecT = SmallV{UnitRange{Int}}
-"""
-    $TYPEDEF
 
-Type that represents the [`SymbolicUtils.shape`](@ref) of symbolics.
+"""
+    ShapeVecT(ranges)
+
+Concrete shape representation for a symbolic scalar or array.
+
+# Arguments
+
+- `ranges`: a tuple or iterable of `UnitRange{Int}` axes. An empty collection
+  represents a scalar.
+
+# Returns
+
+- A compact vector of axes suitable for `SymbolicUtils.shape` and
+  [`promote_shape`](@ref).
+
+# Examples
+
+```jldoctest
+julia> using SymbolicUtils
+
+julia> SymbolicUtils.ShapeVecT((1:2, 1:3))
+2-element SymbolicUtils.ShapeVecT:
+ 1:2
+ 1:3
+
+julia> isempty(SymbolicUtils.ShapeVecT())
+true
+```
+"""
+const ShapeVecT = SmallV{UnitRange{Int}}
+
+"""
+    ShapeT
+
+Union of the concrete [`ShapeVecT`](@ref) representation and [`Unknown`](@ref),
+which records a known or unknown number of dimensions when the axes are unavailable.
 """
 const ShapeT = Union{Unknown, ShapeVecT}
 """
@@ -1026,8 +1058,39 @@ promote_symtype(f, Ts...) = Any
 """
     promote_shape(f, shs::ShapeT...)
 
-The shape of the result of applying `f` to arguments of [`shape`](@ref) `shs...`.
-It is recommended that implemented methods `@nospecialize` all the shape arguments.
+Infer the symbolic result shape for applying `f` to operands with shapes `shs`.
+
+Packages that introduce symbolic operations may extend this function. Each method must
+return a [`ShapeT`](@ref), use [`ShapeVecT`](@ref) for known axes, and use
+[`Unknown`](@ref) when only the dimensionality is known. Implementations should
+`@nospecialize` shape arguments unless dispatch requires a concrete shape type.
+
+# Arguments
+
+- `f`: operation or callable whose result shape is being inferred.
+- `shs::ShapeT...`: symbolic operand shapes.
+
+# Returns
+
+- A [`ShapeT`](@ref) describing the result.
+
+# Examples
+
+```jldoctest
+julia> using SymbolicUtils
+
+julia> struct PreserveShape end
+
+julia> SymbolicUtils.promote_shape(
+           ::PreserveShape, sh::SymbolicUtils.ShapeT
+       ) = sh
+
+julia> SymbolicUtils.promote_shape(
+           PreserveShape(), SymbolicUtils.ShapeVecT((1:4,))
+       )
+1-element SymbolicUtils.ShapeVecT:
+ 1:4
+```
 """
 promote_shape(f, szs::ShapeT...) = Unknown(-1)
 

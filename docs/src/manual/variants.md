@@ -414,6 +414,10 @@ Here, `f1(x)` is considered a symbolic function `f1` called with the argument `x
 [`SymbolicUtils.is_called_function_symbolic`](@ref) can be used to differentiate between
 these cases.
 
+```@docs
+SymbolicUtils.FnType
+```
+
 ## API
 
 ### Basics

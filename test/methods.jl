@@ -15,7 +15,7 @@ import LinearAlgebra
 end
 
 @testset "public API docstrings" begin
-    @test Base.Docs.hasdoc(SymbolicUtils, :FnType)
+    @test @doc(SymbolicUtils.FnType) !== nothing
 end
 
 import SpecialFunctions: besselj, bessely, besseli, besselk, polygamma, beta, logbeta, hankelh1, hankelh2, expint, gamma, erf

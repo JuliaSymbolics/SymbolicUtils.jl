@@ -13,6 +13,11 @@ import LinearAlgebra
         @test Base.ispublic(SymbolicUtils, :promote_shape)
     end
 end
+
+@testset "public API docstrings" begin
+    @test @doc(SymbolicUtils.FnType) !== nothing
+end
+
 import SpecialFunctions: besselj, bessely, besseli, besselk, polygamma, beta, logbeta, hankelh1, hankelh2, expint, gamma, erf
 
 @testset "promote_symtype with BigInt" begin

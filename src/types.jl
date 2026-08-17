@@ -1099,6 +1099,36 @@ promote_shape(f, szs::ShapeT...) = Unknown(-1)
 #### Function-like variables
 #---------------------------
 
+"""
+    FnType{A, R, S}
+
+Type-level description of a symbolic function.
+
+# Parameters
+
+- `A <: Tuple`: tuple of symbolic argument types.
+- `R`: symbolic return type.
+- `S`: supertype represented by the symbolic function, or `Nothing` when no
+  supertype was specified.
+
+`FnType` is used as the `symtype` of a callable symbolic variable. The
+[`@syms`](@ref) macro constructs these types from declarations such as
+`@syms f(::Real, ::Int)::Float64`.
+
+# Examples
+
+```julia
+julia> using SymbolicUtils
+
+julia> @syms f(::Real)::Float64;
+
+julia> SymbolicUtils.symtype(f)
+SymbolicUtils.FnType{Tuple{Real}, Float64, Nothing}
+
+julia> SymbolicUtils.fntype_ret_type(SymbolicUtils.FnType{Tuple{Real}, Float64, Nothing})
+Float64
+```
+"""
 struct FnType{X<:Tuple,Y,Z} end
 
 function (f::BasicSymbolic{T})(args...) where {T}

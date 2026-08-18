@@ -59,6 +59,16 @@ end
     @test unwrap_const(simplify(Term{SymReal}(zero, [a]))) == 0
     @test unwrap_const(simplify(Term{SymReal}(zero, [b + 1]))) == 0
     @test unwrap_const(simplify(Term{SymReal}(zero, [x + 2]))) == 0
+
+    # Fold for the symbolic imaginary unit (matches `Symbolics.IM`).
+    let IM = SymbolicUtils.Sym{SymReal}(:im; type = Number)
+        @eqtest conj(IM) == -IM
+        @test unwrap_const(real(IM)) == 0
+        @test unwrap_const(imag(IM)) == 1
+        # Same name, non-Number symtype: untouched.
+        not_im = SymbolicUtils.Sym{SymReal}(:im; type = Real)
+        @eqtest conj(not_im) == not_im
+    end
 end
 
 @testset "LiteralReal" begin

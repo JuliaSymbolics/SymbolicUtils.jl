@@ -499,6 +499,8 @@ function Base.real(s::BasicSymbolic{T}) where {T}
     @match s begin
         BSImpl.Const(; val) => Const{T}(real(val))
         BSImpl.Term(; f, args) && if f === complex && length(args) == 2 end => args[1]
+        # Match `Symbolics.IM = Sym(:im; type = Number)` structurally.
+        BSImpl.Sym(; name) && if name === :im && symtype(s) === Number end => zero_of_vartype(T)
         _ => Term{T}(real, ArgsT{T}((s,)); type = Real)
     end
 end
@@ -510,6 +512,7 @@ function Base.conj(s::BasicSymbolic{T}) where {T}
         BSImpl.Term(; f, args, type, shape) && if f === complex && length(args) == 2 end => begin
             BSImpl.Term{T}(f, ArgsT{T}(args[1], -args[2]); type, shape)
         end
+        BSImpl.Sym(; name) && if name === :im && symtype(s) === Number end => -s
         _ => Term{T}(conj, ArgsT{T}((s,)); type = symtype(s), shape = shape(s))
     end
 end
@@ -518,6 +521,7 @@ function Base.imag(s::BasicSymbolic{T}) where {T}
     @match s begin
         BSImpl.Const(; val) => Const{T}(imag(val))
         BSImpl.Term(; f, args) && if f === complex && length(args) == 2 end => args[2]
+        BSImpl.Sym(; name) && if name === :im && symtype(s) === Number end => one_of_vartype(T)
         _ => Term{T}(imag, ArgsT{T}((s,)); type = Real)
     end
 end

@@ -208,6 +208,11 @@ end
 
 function combine_fold(::Type{T}, op, args::Union{ROArgsT{T}, ArgsT{T}}, meta::MetadataT, can_fold::Bool) where {T}
     @nospecialize op args meta
+    if op === complex
+        # `complex(a, b)` is not defined for non-real `a`/`b`; `maketerm` lowers
+        # such calls to `a + im*b` and folds constants itself
+        return maketerm(BasicSymbolic{T}, op, args, meta)::BasicSymbolic{T}
+    end
     if can_fold
         if length(args) == 1
             Const{T}(op(unwrap_const(args[1])))

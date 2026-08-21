@@ -791,7 +791,7 @@ Conditional that builds the same kind of symbolic expression as `ifelse`, but **
 to an `if`/`else` branch** during code generation, so that only the taken branch is evaluated.
 The untaken branch's code is emitted inside the branch and is never executed when `cond`
 selects the other branch — even under common-subexpression elimination (`ifelse_branching`
-opts out of CSE for the conditional via [`cse_inside_expr`](@ref)).
+opts out of CSE for the conditional via `cse_inside_expr`).
 
 Use it when a branch is only valid to evaluate when its condition holds (it divides by a
 quantity that is zero otherwise, indexes into something that does not exist, errors, or
@@ -802,7 +802,7 @@ produces `NaN`/`Inf`). Contrast with [`ifelse_eager`](@ref), which evaluates bot
 
 While the branch interiors are excluded from common subexpression elimination (hoisting them
 would defeat the laziness), the conditional itself is still bound by CSE (see
-[`cse_bind_expr`](@ref)), so multiple references to one `ifelse_branching` expression share a
+`cse_bind_expr`), so multiple references to one `ifelse_branching` expression share a
 single `if`/`else`.
 """
 ifelse_branching(cond, x, y) = cond ? x : y

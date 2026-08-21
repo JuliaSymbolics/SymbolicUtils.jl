@@ -48,12 +48,29 @@ SymbolicUtils.print_ir
 SymbolicUtils.get_reachability
 ```
 
+### Developer IR and cache interfaces
+
+These interfaces support custom IR traversals and cache integrations. They are
+documented for package developers; ordinary symbolic manipulation should use
+the higher-level APIs above.
+
+```@docs
+SymbolicUtils.get_reachability!
+SymbolicUtils.replace_node!
+SymbolicUtils.search_variables!
+SymbolicUtils.infer_vartype
+SymbolicUtils.CacheStats
+SymbolicUtils.Code.cse_inside_expr
+SymbolicUtils.Code.cse_bind_expr
+```
+
 ## Rewriting System
 
 ### Rule Creation
 ```@docs
 @rule
 @acrule
+SymbolicUtils.@ordered_acrule
 ```
 
 ### Rewriters

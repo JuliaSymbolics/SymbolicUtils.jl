@@ -97,6 +97,14 @@ Get an `AbstractDict` of the substitution rules for the given
 """
 get_substitution_dict(s::DefaultSubstituter) = s.dict
 
+"""
+    infer_vartype(x)
+
+Return the symbolic vartype inferred from `x`. Custom wrapper types used as
+substitution keys or values should define a method on `typeof(x)` that returns
+the corresponding symbolic vartype, or `Nothing` when no inference is
+available.
+"""
 infer_vartype(x) = infer_vartype(typeof(x))
 infer_vartype(::Type{T}) where {T} = Nothing
 function infer_vartype(::Type{D}) where {K, V, D <: AbstractDict{K, V}}

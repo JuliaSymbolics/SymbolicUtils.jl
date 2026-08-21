@@ -1647,7 +1647,7 @@ cse_inside_expr(sym, ::typeof(ifelse_branching)) = false
 """
     $(TYPEDSIGNATURES)
 
-Only consulted when [`cse_inside_expr`](@ref) returns `false` for `sym`, which has operation
+Only consulted when `cse_inside_expr` returns `false` for `sym`, which has operation
 `f`. Return `true` if CSE should still bind `sym` itself to a temporary variable — so that
 multiple references to it share a single computation — while leaving its arguments un-CSEd.
 The default `false` leaves the expression fully inline at each reference site.

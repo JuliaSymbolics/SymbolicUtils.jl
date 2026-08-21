@@ -221,6 +221,7 @@ end
 @public fntype_ret_type
 @public FnType
 @public Mapper, Mapreducer
+@public infer_vartype, search_variables!
 
 # `simplify_rules.jl` does `using .Rewriters`, so these already resolve as
 # `SymbolicUtils.X` and callers depend on that spelling. Declare them public here so

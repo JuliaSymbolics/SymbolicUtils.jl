@@ -599,6 +599,14 @@ macro acrule(expr)
     end
 end
 
+"""
+    @ordered_acrule(lhs => rhs)
+
+Construct an associative-commutative rewrite rule whose matcher visits the
+commutative permutations in a deterministic order. `lhs` is the pattern and
+`rhs` is the replacement expression. This is a developer extension point used
+by the built-in simplification rules.
+"""
 macro ordered_acrule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs = expr.args[2]

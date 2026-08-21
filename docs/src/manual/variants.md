@@ -171,7 +171,7 @@ end
 ```
 
 `AddMul` is a specialized representation for associative-commutative addition and
-multiplication. The two operations are distinguished using the [`AddMulVariant`](@ref)
+multiplication. The two operations are distinguished using the [`SymbolicUtils.AddMulVariant`](@ref)
 EnumX.jl enum. It has two variants: `AddMulVariant.ADD` and `AddMulVariant.MUL`.
 
 For multiplication terms, `coeff` is a constant non-symbolic coefficient multiplied
@@ -451,7 +451,7 @@ SymbolicUtils.BSImpl.ArrayMaker
 
 ### High-level constructors
 
-```@docs
+```@docs; canonical=false
 SymbolicUtils.Const
 SymbolicUtils.Sym
 SymbolicUtils.Term

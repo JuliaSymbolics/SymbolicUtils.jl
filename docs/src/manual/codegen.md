@@ -46,7 +46,7 @@ SymbolicUtils can perform CSE on symbolic expressions, and codegen primitives co
 This ensures that common subexpressions in the expression are only computed once. Note that this assumes that all functions
 called within the expression are pure. SymbolicUtils can and will change the number and order of function calls.
 
-```@docs
+```@docs; canonical=false
 SymbolicUtils.Code.cse
 SymbolicUtils.Code.cse_inside_expr
 SymbolicUtils.Code.cse_bind_expr
@@ -57,8 +57,8 @@ SymbolicUtils.Code.cse_bind_expr
 `ifelse` lowers to an `if`/`else` whose branches are still subject to CSE. Two variants pin
 the evaluation strategy: `ifelse_eager` always evaluates both branches, while
 `ifelse_branching` guarantees the untaken branch is never evaluated — its branch interiors
-are excluded from CSE (the conditional itself is still bound, see
-[`SymbolicUtils.Code.cse_bind_expr`](@ref)).
+are excluded from CSE (the conditional itself is still bound; see the
+`SymbolicUtils.Code.cse_bind_expr` API entry above).
 
 ```@docs
 SymbolicUtils.ifelse_eager

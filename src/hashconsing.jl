@@ -360,7 +360,7 @@ end
 
 Specialized hash for `ArrayOp.output_idx`, whose elements are `Int` or symbolic.
 """
-function hash_outputidx(v::SmallV{Union{Int, BasicSymbolic{T}}}, h::UInt, full::Bool) where {T}
+function hash_outputidx(v::SmallV{<:Union{Int, BasicSymbolic}}, h::UInt, full::Bool)
     @union_split_smallvec v for el in v
         h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
     end

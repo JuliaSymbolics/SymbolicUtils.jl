@@ -7,7 +7,8 @@ if isdefined(Base, :Experimental) && isdefined(Base.Experimental, Symbol("@max_m
     @eval Base.Experimental.@compiler_options max_methods=1
 end
 
-using DocStringExtensions
+import DocStringExtensions
+using DocStringExtensions: METHODLIST, SIGNATURES, TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 
 export @syms, term, hasmetadata, getmetadata, setmetadata
 
@@ -15,20 +16,22 @@ using Moshi.Data: @data
 import Moshi.Data as MData
 using Moshi.Match: @match
 using EnumX: @enumx
-using TermInterface
-using Setfield
-import Setfield: PropertyLens
-using SymbolicIndexingInterface
+import TermInterface
+import Setfield
+using Setfield: @set, @set!
+import SymbolicIndexingInterface
+using SymbolicIndexingInterface: ArraySymbolic, NotSymbolic, ScalarSymbolic, getname, hasname,
+                                 symbolic_type
 import Base: +, -, *, /, //, \, ^, ImmutableDict
-using ConstructionBase
-using TermInterface
-import TermInterface: iscall, operation, arguments, metadata, maketerm, sorted_arguments
+import ConstructionBase
+import TermInterface: children, iscall, operation, arguments, metadata, maketerm, sorted_arguments
+import DataStructures: OrderedDict, OrderedSet
+import OrderedCollections
 # For ReverseDiffExt
 import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 using WeakCacheSets: WeakCacheSet, getkey!
-using Base: RefValue
 import MacroTools
 import PrecompileTools
 PrecompileTools.@recompile_invalidations begin
@@ -36,9 +39,7 @@ PrecompileTools.@recompile_invalidations begin
     import DynamicPolynomials as DP
     import MutableArithmetics as MA
     import SparseArrays: SparseMatrixCSC, findnz, sparse
-    using DataStructures
-    import DataStructures: OrderedCollections
-    using ReadOnlyArrays
+    import ReadOnlyArrays: ReadOnlyVector
     import Graphs
     import StaticArraysCore
 end
@@ -159,7 +160,7 @@ include("arraymaker.jl")
 # Methods on symbolic objects
 export ifelse_eager, ifelse_branching
 PrecompileTools.@recompile_invalidations begin
-using SpecialFunctions, NaNMath
+import SpecialFunctions, NaNMath
 include("methods.jl")
 include("printing.jl")
 end
@@ -213,6 +214,7 @@ end
 @public add_worker, mul_worker
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
+@public Term, Add, Mul, node_count
 @public isconst
 @public ispow
 @public Unknown, ShapeVecT, ShapeT, shape, promote_shape

@@ -963,9 +963,10 @@ function getmetadata(s::BasicSymbolic, @nospecialize(ctx), default)
     return get(md, ctx, default)
 end
 
-# pirated for Setfield purposes:
 using Base: ImmutableDict
-Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
+
+@inline _set_immutable_dict_value(d::ImmutableDict{K,V}, value) where {K,V} =
+    ImmutableDict{K,V}(d.parent, d.key, value)
 
 assocmeta(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
 function assocmeta(d::Base.ImmutableDict{DataType, Any}, @nospecialize(ctx::DataType), @nospecialize(val))::ImmutableDict{DataType,Any}
@@ -973,13 +974,13 @@ function assocmeta(d::Base.ImmutableDict{DataType, Any}, @nospecialize(ctx::Data
     # optimizations
     # If using upto 3 contexts, things stay compact
     if isdefined(d, :parent)
-        d.key === ctx && return @set d.value = val
+        d.key === ctx && return _set_immutable_dict_value(d, val)
         d1 = d.parent
         if isdefined(d1, :parent)
-            d1.key === ctx && return @set d.parent.value = val
+            d1.key === ctx && return _set_immutable_dict_value(d, _set_immutable_dict_value(d1, val))
             d2 = d1.parent
             if isdefined(d2, :parent)
-                d2.key === ctx && return @set d.parent.parent.value = val
+                d2.key === ctx && return _set_immutable_dict_value(d, _set_immutable_dict_value(d1, _set_immutable_dict_value(d2, val)))
             end
         end
     end

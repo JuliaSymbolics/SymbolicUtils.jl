@@ -176,8 +176,8 @@ end
 mutable struct MulWorkerBuffer{T}
     num_dict::ACDict{T}
     den_dict::ACDict{T}
-    const num_coeff::RefValue{PolyCoeffT}
-    const den_coeff::RefValue{PolyCoeffT}
+    const num_coeff::Base.RefValue{PolyCoeffT}
+    const den_coeff::Base.RefValue{PolyCoeffT}
     busy::Bool
 end
 

@@ -1,7 +1,12 @@
 module Code
 
-using StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
-      DocStringExtensions
+import StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
+       DocStringExtensions
+using StaticArraysCore: MArray, SArray, SMatrix, SVector
+using SparseArrays: AbstractSparseArray, SparseMatrixCSC, SparseVector, findnz, issparse, sparse
+using LinearAlgebra: Transpose, UpperTriangular
+using SpecialFunctions: lgamma
+using DocStringExtensions: SIGNATURES, TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -13,17 +18,16 @@ export OptimizationRule, substitute_in_ir, apply_optimization_rules
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
-                      ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
-                      ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
+                      symtype, sorted_arguments, term, maketerm, unwrap_const,
+                      ArgsT, Const, SymVariant, _is_array_of_symbolics,
+                      ArrayOp, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
                       ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
-                      AddMulVariant, _isone, _iszero, Fill, IRStructure, populate_ir!, FnType,
-                      ifelse_eager, ifelse_branching
+                      AddMulVariant, _isone, Fill, IRStructure, populate_ir!, FnType,
+                      ifelse_branching
 using Moshi.Match: @match
 import TaskLocalValues: TaskLocalValue
-import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 import Graphs
 
 ##== state management ==##
@@ -1339,7 +1343,7 @@ end
 end
 
 
-vhcat(sz::Tuple{Int,Int}, xs::T...) where {T} = typed_vhcat(T, sz, xs...)
+vhcat(sz::Tuple{Int,Int}, x::T, xs::T...) where {T} = typed_vhcat(T, sz, x, xs...)
 vhcat(sz::Tuple{Int,Int}, xs::Number...) = typed_vhcat(Base.promote_typeof(xs...), sz, xs...)
 vhcat(sz::Tuple{Int,Int}, xs...) = typed_vhcat(Base.promote_eltypeof(xs...), sz, xs...)
 

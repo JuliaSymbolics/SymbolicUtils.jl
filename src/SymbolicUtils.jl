@@ -223,6 +223,24 @@ end
 @public Mapper, Mapreducer
 @public infer_vartype, search_variables!
 
+# These names form the developer interface consumed by Symbolics.jl and related
+# JuliaSymbolics packages. They are intentionally public without being exported:
+# ordinary users should prefer the higher-level constructors and transformations.
+@public <ₑ, @cache, @map_methods, @mapreduce_methods, @number_methods, number_methods
+@public ACDict, AddMulVariant, ArgsT, BSImpl, BasicSymbolicImpl, Const, Div
+@public MetadataT, MonomialOrder, MonomialT, Mul, Operator, PolyCoeffT, PolyVarOrder
+@public PolyVarT, PolynomialT, ROArgsT, Rule, StableIndex, Substituter, SymBroadcast
+@public TypeT, _indexed_ndims, _isone, _iszero, basicsymbolic_to_polyvar, clear_cache!
+@public default_is_atomic, default_substitute_filter, denominators, evaluate, from_poly
+@public get_substitution_dict, hashcons, is_array_shape, is_called_function_symbolic
+@public is_function_symbolic, isarrayop, isbinop, numerators, one_of_vartype
+@public operator_to_term, parse_variable, promote_symtype, query, scalarize
+@public search_variables, show_call, stable_eachindex, sym_from_parse_result, to_poly!
+@public toggle_caching!, zero_of_vartype, zeropoly
+
+# `Code` is a developer-facing submodule used by downstream code generators.
+@public Code
+
 # `simplify_rules.jl` does `using .Rewriters`, so these already resolve as
 # `SymbolicUtils.X` and callers depend on that spelling. Declare them public here so
 # reaching them through this module is API rather than a side effect of that import.

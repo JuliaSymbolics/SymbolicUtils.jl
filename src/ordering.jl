@@ -229,6 +229,13 @@ end
 
 _arglen(a) = iscall(a) ? length(arguments(a)) : 0
 
+"""
+    a <ₑ b
+
+Compare symbolic expressions and their degree representations using the
+canonical expression ordering. The operator is intended for deterministic
+ordering of terms, not for mathematical less-than comparisons.
+"""
 function <ₑ(a::Tuple, b::Tuple)
     for (x, y) in zip(a, b)
         if x <ₑ y

@@ -113,14 +113,48 @@ Type for the `regions` field of `ArrayMaker`.
 """
 const RegionsT = SmallV{ShapeVecT}
 const IdentT = Union{IDType, Nothing}
+"""
+    MonomialOrder
+
+The canonical monomial ordering used by SymbolicUtils polynomial conversion.
+It is graded reverse lexicographic ordering with the reverse tie-breaker used by
+`DynamicPolynomials`.
+"""
 const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
+"""
+    PolyVarOrder
+
+The `DynamicPolynomials` variable-order type used by `PolyVarT` and `PolynomialT`.
+Variables are ordered by their creation order.
+"""
 const PolyVarOrder = DP.Commutative{DP.CreationOrder}
 const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=MonomialOrder)
+"""
+    PolyVarT
+
+The concrete polynomial-variable type used for symbolic expressions converted to
+polynomial form. Values are created with `DynamicPolynomials.@polyvar`-compatible
+constructors and are not themselves symbolic terms.
+"""
 const PolyVarT = typeof(ExamplePolyVar)
+"""
+    PolyCoeffT
+
+The coefficient type accepted by the developer polynomial interface. SymbolicUtils
+uses `Number` so integer, rational, and floating-point coefficients can share the
+same conversion routines.
+"""
 const PolyCoeffT = Number
 const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
 # we can't actually print a zero polynomial of this type, since it attempts to call
 # `zero(Any)` but that doesn't matter because we shouldn't ever store a zero polynomial
+"""
+    PolynomialT
+
+The concrete sparse polynomial type returned by [`to_poly!`](@ref). Its variables
+use [`PolyVarOrder`](@ref), its monomials use [`MonomialOrder`](@ref), and its
+coefficients are [`PolyCoeffT`](@ref).
+"""
 const PolynomialT = _PolynomialT{PolyCoeffT}
 """
     $TYPEDEF
@@ -128,6 +162,11 @@ const PolynomialT = _PolynomialT{PolyCoeffT}
 Allowed types for the [`SymbolicUtils.symtype`](@ref) of symbolics.
 """
 const TypeT = DataType
+"""
+    MonomialT
+
+The concrete monomial type used inside [`PolynomialT`](@ref) values.
+"""
 const MonomialT = DP.Monomial{PolyVarOrder, MonomialOrder}
 const MonomialVecT = DP.MonomialVector{PolyVarOrder, MonomialOrder}
 

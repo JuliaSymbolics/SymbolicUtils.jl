@@ -104,6 +104,16 @@ function _rational_or_arrrational_symtype(x)
     end
 end
 
+"""
+    Operator
+
+Abstract supertype for symbolic callable operators. An operator is treated as an
+atomic function-like object by expression traversal and supplies its own symbolic
+type and shape promotion through `promote_symtype` and `promote_shape`.
+
+Developer implementations should subtype `Operator` and define those promotion
+methods before constructing operator terms.
+"""
 abstract type Operator end
 promote_shape(::Operator, @nospecialize(shx::ShapeT)) = shx
 promote_symtype(::Operator, ::Type{T}) where {T} = T

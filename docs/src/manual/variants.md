@@ -538,10 +538,6 @@ SymbolicUtils.MetadataT
 SymbolicUtils.SmallV
 SymbolicUtils.ShapeVecT
 SymbolicUtils.ShapeT
-SymbolicUtils.TypeT
-SymbolicUtils.ArgsT
-SymbolicUtils.ROArgsT
-SymbolicUtils.ACDict
 SymbolicUtils.OutIdxT
 SymbolicUtils.RangesT
 ```

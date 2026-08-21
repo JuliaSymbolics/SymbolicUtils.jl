@@ -53,6 +53,18 @@ function subs_poly(poly::PolyVarT, vars::AbstractVector{BasicSymbolic{T}}) where
     return only(vars)
 end
 
+"""
+    to_poly!(poly_to_bs, bs_to_poly, expr, recurse = true)
+
+Convert a `BasicSymbolic` expression into a sparse polynomial representation.
+`poly_to_bs` maps generated polynomial variables back to symbolic expressions,
+while `bs_to_poly` caches the reverse mapping. With `recurse = false`,
+non-polynomial subexpressions become single polynomial variables.
+
+# Returns
+
+A [`PolyVarT`](@ref) or [`PolynomialT`](@ref) representing `expr`.
+"""
 to_poly!(::AbstractDict, ::AbstractDict, expr, ::Bool) = MA.operate!(+, zeropoly(), expr)
 function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::BasicSymbolic{T}, recurse::Bool = true)::Union{PolyVarT, PolynomialT} where {T}
     @match expr begin
@@ -159,6 +171,17 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
     end
 end
 
+"""
+    from_poly(poly_to_bs, poly)
+
+Reconstruct a `BasicSymbolic` expression from a polynomial produced by
+[`to_poly!`](@ref). `poly_to_bs` must contain an entry for every polynomial
+variable in `poly`.
+
+# Returns
+
+A `BasicSymbolic` expression with the same polynomial value.
+"""
 function from_poly(poly_to_bs::AbstractDict{PolyVarT, BasicSymbolic{T}}, poly) where {T}
     partial_pvars = MP.variables(poly)
     vars = SmallV{BasicSymbolic{T}}()
@@ -535,4 +558,3 @@ end
 function has_div(x)
     return isdiv(x) || (iscall(x) && any(has_div, arguments(x)))
 end
-

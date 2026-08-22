@@ -30,11 +30,12 @@ rewriters.
 
 """
 module Rewriters
-using TermInterface
+import TermInterface
+import TermInterface: maketerm
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count,
-                      _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT,
-                      Const, SmallV, BSImpl, unwrap_const, BasicSymbolic, isconst
+import SymbolicUtils: iscall, operation, arguments, metadata, node_count,
+                      @manually_scope, COMPARE_FULL, ROArgsT, ArgsT,
+                      Const, unwrap_const, BasicSymbolic
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 """
@@ -301,7 +302,7 @@ function instrument(x::Walk{ord, C,F, M,threaded}, f) where {ord,C,F, M,threaded
                                                             x.maketerm)
 end
 
-using .Threads
+import .Threads
 
 
 """
@@ -460,5 +461,3 @@ function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M,
 end
 
 end # end module
-
-

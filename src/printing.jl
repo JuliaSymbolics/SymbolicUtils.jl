@@ -87,6 +87,13 @@ function show_term(io::IO, x::BasicSymbolic)
     end
 end
 
+"""
+    show_call(io, f, expr; kwargs...)
+
+Render a symbolic call `expr` to `io` using operation `f`. This is the developer
+printing hook used by the symbolic display machinery. Keyword arguments are
+accepted for specialized printers and are otherwise ignored.
+"""
 function show_call(io::IO, @nospecialize(f), x::BasicSymbolic{T}; @nospecialize(kw...)) where {T}
     args = parent(arguments(x))
     len_args = length(args)
@@ -440,4 +447,3 @@ function show_arraymaker(io::IO, x::BasicSymbolic)
     print(io, "end")
     compact && print(io, ")")
 end
-

@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
+using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
 using Test
 import NaNMath
 import LinearAlgebra
@@ -11,11 +11,19 @@ import LinearAlgebra
         @test Base.ispublic(SymbolicUtils, :ShapeT)
         @test Base.ispublic(SymbolicUtils, :shape)
         @test Base.ispublic(SymbolicUtils, :promote_shape)
+        @test Base.ispublic(SymbolicUtils, :Term)
+        @test Base.ispublic(SymbolicUtils, :Add)
+        @test Base.ispublic(SymbolicUtils, :Mul)
+        @test Base.ispublic(SymbolicUtils, :node_count)
     end
 end
 
 @testset "public API docstrings" begin
     @test @doc(SymbolicUtils.FnType) !== nothing
+    @test @doc(SymbolicUtils.Term) !== nothing
+    @test @doc(SymbolicUtils.Add) !== nothing
+    @test @doc(SymbolicUtils.Mul) !== nothing
+    @test @doc(SymbolicUtils.node_count) !== nothing
 end
 
 import SpecialFunctions: besselj, bessely, besseli, besselk, polygamma, beta, logbeta, hankelh1, hankelh2, expint, gamma, erf

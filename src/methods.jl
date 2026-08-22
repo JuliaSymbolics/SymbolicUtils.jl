@@ -64,6 +64,18 @@ end
 islike(a, T) = symtype(a) <: T
 
 # TODO: keep domains tighter than this
+"""
+    @number_methods T unary_body binary_body [options]
+
+Generate the standard arithmetic methods needed for a symbolic type `T`.
+`unary_body` and `binary_body` are expressions evaluated with the generated
+function and binary-operation variables in scope. `options` may be `nothing`,
+`:skipbasics`, `:onlybasics`, or a vector expression naming operations to skip.
+
+This is a developer macro for symbolic-type implementations. It performs no
+runtime dispatch by itself; it emits methods for the numeric and symbolic
+promotion combinations supported by `T`.
+"""
 function number_methods(T, rhs1, rhs2, options=nothing)
     exprs = []
 
@@ -112,6 +124,13 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     Expr(:block, exprs...)
 end
 
+"""
+    @number_methods T unary_body binary_body [options]
+
+Emit arithmetic methods for `T` using the supplied unary and binary expression
+bodies. See [`number_methods`](@ref) for the generated dispatch combinations
+and supported `options` values.
+"""
 macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
@@ -791,7 +810,7 @@ Conditional that builds the same kind of symbolic expression as `ifelse`, but **
 to an `if`/`else` branch** during code generation, so that only the taken branch is evaluated.
 The untaken branch's code is emitted inside the branch and is never executed when `cond`
 selects the other branch — even under common-subexpression elimination (`ifelse_branching`
-opts out of CSE for the conditional via [`cse_inside_expr`](@ref)).
+opts out of CSE for the conditional via `cse_inside_expr`).
 
 Use it when a branch is only valid to evaluate when its condition holds (it divides by a
 quantity that is zero otherwise, indexes into something that does not exist, errors, or
@@ -802,7 +821,7 @@ produces `NaN`/`Inf`). Contrast with [`ifelse_eager`](@ref), which evaluates bot
 
 While the branch interiors are excluded from common subexpression elimination (hoisting them
 would defeat the laziness), the conditional itself is still bound by CSE (see
-[`cse_bind_expr`](@ref)), so multiple references to one `ifelse_branching` expression share a
+`cse_bind_expr`), so multiple references to one `ifelse_branching` expression share a
 single `if`/`else`.
 """
 ifelse_branching(cond, x, y) = cond ? x : y
@@ -1125,6 +1144,13 @@ for valT in [Number, AbstractVector{<:Number}]
     end
 end
 
+"""
+    SymBroadcast{T}
+
+Broadcast style for `BasicSymbolic{T}` expressions. It keeps symbolic arrays in
+the symbolic broadcast path and rejects broadcasts that combine incompatible
+symbolic variants.
+"""
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
 Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::Broadcast.BroadcastStyle) where {T} = SymBroadcast{T}()
@@ -1570,6 +1596,14 @@ for fT in [Any, :(BasicSymbolic{T})]
     end
 end
 
+"""
+    @map_methods T argument_transform result_transform
+
+Generate `Base.map` methods for a symbolic array-like type. `argument_transform`
+converts the symbolic container to the arguments passed to `map`, and
+`result_transform` wraps the mapped result. This is a developer interface and
+must be used while defining the corresponding symbolic type.
+"""
 macro map_methods(T, arg_f, result_f)
     quote
         function (::$(typeof(Base.map)))(f, x::$T, xs...)
@@ -1706,6 +1740,13 @@ function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
     EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kwargs = [:(kw...)], kw...))
 end
 
+"""
+    @mapreduce_methods T argument_transform result_transform
+
+Generate `Base.mapreduce` methods for a symbolic array-like type. The transform
+expressions receive the mapped input and the result transform reconstructs the
+symbolic representation.
+"""
 macro mapreduce_methods(T, arg_f, result_f)
     result = Expr(:block)
 
@@ -1728,6 +1769,13 @@ macro mapreduce_methods(T, arg_f, result_f)
     return esc(result)
 end
 
+"""
+    operator_to_term(operator::Operator, ex::BasicSymbolic)
+
+Return the symbolic term representing an operator application. The default
+implementation returns `ex`; custom `Operator` subtypes may override it when
+their printed or canonical term differs from the original expression.
+"""
 function operator_to_term(::Operator, ex::BasicSymbolic{T}) where {T}
     return ex
 end

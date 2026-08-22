@@ -360,7 +360,7 @@ end
 
 Specialized hash for `ArrayOp.output_idx`, whose elements are `Int` or symbolic.
 """
-function hash_outputidx(v::SmallV{Union{Int, BasicSymbolic{T}}}, h::UInt, full::Bool) where {T}
+function hash_outputidx(v::SmallV{<:Union{Int, BasicSymbolic}}, h::UInt, full::Bool)
     @union_split_smallvec v for el in v
         h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
     end
@@ -610,6 +610,15 @@ Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.h
 original behavior of those functions.
 """
 
+"""
+    hashcons(expr::BasicSymbolic; reregister = false)
+
+Intern `expr` in the vartype-specific weak hash-cons table and return the
+canonical object. If `reregister` is `false`, an expression with an existing
+identifier is returned unchanged; setting it to `true` permits registration in
+the current table. Hash-consing is a developer optimization and preserves
+`isequal` semantics, including symbolic metadata.
+"""
 function hashcons(s::BSImpl.Type{T}, reregister = false) where {T}
     if !ENABLE_HASHCONSING[]
         return s

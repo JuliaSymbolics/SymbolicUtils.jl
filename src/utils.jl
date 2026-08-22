@@ -419,7 +419,7 @@ end
 # Linked List interface
 @inline function assoc(d::ImmutableDict{Symbol, Any}, k::Symbol, v::Any)
     @nospecialize v
-    ImmutableDict(d, k, unwrap_const(v))
+    Base.ImmutableDict{Symbol,Any}(d, k, unwrap_const(v))
 end
 
 struct LL{V}
@@ -493,4 +493,3 @@ end
 Count the nodes in a symbolic expression tree satisfying `iscall` and `arguments`.
 """
 node_count(t) = iscall(t) ? reduce(+, node_count(x) for x in arguments(t), init = 0) + 1 : 1
-

@@ -1,7 +1,21 @@
+"""
+$(DocStringExtensions.README)
+
+Developer-facing intermediate-representation and code-generation helpers for
+SymbolicUtils. The public names in this module are stable extension points for
+packages that generate code from symbolic expressions; ordinary callers should
+prefer `SymbolicUtils.build_function`-style high-level APIs.
+"""
 module Code
 
-using StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
-      DocStringExtensions
+import StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
+       DocStringExtensions
+using SciMLPublic: @public
+using StaticArraysCore: MArray, SArray, SMatrix, SVector
+using SparseArrays: AbstractSparseArray, SparseMatrixCSC, SparseVector, findnz, issparse, sparse
+using LinearAlgebra: Transpose, UpperTriangular
+using SpecialFunctions: lgamma
+using DocStringExtensions: SIGNATURES, TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
@@ -13,17 +27,16 @@ export OptimizationRule, substitute_in_ir, apply_optimization_rules
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
-                      ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
-                      ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
+                      symtype, sorted_arguments, term, maketerm, unwrap_const,
+                      ArgsT, Const, SymVariant, _is_array_of_symbolics,
+                      ArrayOp, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
                       ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
-                      AddMulVariant, _isone, _iszero, Fill, IRStructure, populate_ir!, FnType,
-                      ifelse_eager, ifelse_branching
+                      AddMulVariant, _isone, Fill, IRStructure, populate_ir!, FnType,
+                      ifelse_branching
 using Moshi.Match: @match
 import TaskLocalValues: TaskLocalValue
-import SymbolicIndexingInterface: symbolic_type, NotSymbolic
 import Graphs
 
 ##== state management ==##
@@ -38,6 +51,13 @@ function union_rewrites!(n, ts)
     end
 end
 
+"""
+    LazyState()
+
+Lazily initialized rewrite state used while generating code from a symbolic
+expression. The state exposes the same rewrite dictionary interface as
+`NameState` after its first access.
+"""
 struct LazyState
     ref::Ref{Any}
 end
@@ -86,6 +106,14 @@ end
     throw(ArgumentError("`with_allocator` can only be used on `array_literal`, `@arrayop` and `@makearray` expressions."))
 end
 
+"""
+    supports_with_allocator(ex::BasicSymbolic)
+
+    Return `true` when `ex` is an allocating symbolic expression accepted by
+    [`with_allocator`](@ref). The supported forms are `array_literal`,
+    `SymbolicUtils.@arrayop`, and `SymbolicUtils.@makearray`, including array
+    operations backed by `Fill`.
+"""
 function supports_with_allocator(ex::BasicSymbolic{T}) where {T}
     return @match ex begin
         BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => true
@@ -105,8 +133,9 @@ end
 """
     $TYPEDSIGNATURES
 
-Associate an allocating expression with an allocator. Expressions such as [`@arrayop`](@ref),
-[`@makearray`](@ref), and [`SymbolicUtils.array_literal`](@ref) need to allocate an array
+Associate an allocating expression with an allocator. Expressions such as
+[`SymbolicUtils.@arrayop`](@ref), [`SymbolicUtils.@makearray`](@ref), and
+[`SymbolicUtils.array_literal`](@ref) need to allocate an array
 for their results. By default, the generated code will allocate an array using any method it
 deems appropriate (such as `zeros`). To use a specific allocation method, or perhaps provide
 a preallocated array of the appropriate size and `eltype`, `with_allocator` can be used.
@@ -312,6 +341,15 @@ function function_to_expr_no_nanmath(@nospecialize(op), O::BasicSymbolic{T}, st)
     return expr
 end
 
+"""
+    function_to_expr(op, expr, state)
+
+    Lower one symbolic operation to a Julia expression during code generation.
+    This is a developer extension point used by `SymbolicUtils.Code.toexpr` and
+    the IR-based code generator. `state` must be the active code-generation
+    state; custom operation handlers should preserve the expression and state
+    invariants expected by the surrounding generator.
+"""
 function function_to_expr(@nospecialize(op), O, st)
     # Avoid using `op in NaNMathFuns` since that is dynamic dispatch.
     # Also avoid using `nameof(op)` for the same reason.
@@ -763,6 +801,13 @@ function search_variables!(buffer, dargs::DestructuredArgs; kw...)
 end
 
 toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
+"""
+    get_rewrites(expr)
+
+    Collect symbolic subexpressions that need rewrite bindings during code
+    generation. This developer hook returns an empty collection for literals
+    and recursively visits arrays, tuples, and destructured arguments.
+"""
 get_rewrites(args::DestructuredArgs) = []
 function get_rewrites(args::Union{AbstractArray, Tuple})
     rws = []
@@ -1339,7 +1384,7 @@ end
 end
 
 
-vhcat(sz::Tuple{Int,Int}, xs::T...) where {T} = typed_vhcat(T, sz, xs...)
+vhcat(sz::Tuple{Int,Int}, x::T, xs::T...) where {T} = typed_vhcat(T, sz, x, xs...)
 vhcat(sz::Tuple{Int,Int}, xs::Number...) = typed_vhcat(Base.promote_typeof(xs...), sz, xs...)
 vhcat(sz::Tuple{Int,Int}, xs...) = typed_vhcat(Base.promote_eltypeof(xs...), sz, xs...)
 
@@ -1643,7 +1688,7 @@ cse_inside_expr(sym, ::typeof(ifelse_branching)) = false
 """
     $(TYPEDSIGNATURES)
 
-Only consulted when [`cse_inside_expr`](@ref) returns `false` for `sym`, which has operation
+Only consulted when `cse_inside_expr` returns `false` for `sym`, which has operation
 `f`. Return `true` if CSE should still bind `sym` itself to a temporary variable — so that
 multiple references to it share a single computation — while leaving its arguments un-CSEd.
 The default `false` leaves the expression fully inline at each reference site.
@@ -2202,5 +2247,8 @@ function apply_optimization_rules(ir::IRStructure, expr, rules)
 
     ir, expr
 end
+
+@public LazyState, cse_inside_expr, fast_toexpr, function_to_expr, get_rewrites
+@public supports_with_allocator, with_allocator
 
 end

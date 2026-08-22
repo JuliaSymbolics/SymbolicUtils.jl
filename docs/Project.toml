@@ -1,7 +1,11 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
+TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 
 [compat]
 Documenter = "1.17.0"
+DocStringExtensions = "0.9"
 SymbolicUtils = "4.20.2"
+TermInterface = "2.0"

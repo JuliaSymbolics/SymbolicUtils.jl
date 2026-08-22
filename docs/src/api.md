@@ -8,6 +8,14 @@ SymbolicUtils.@syms
 SymbolicUtils.term
 ```
 
+### Developer Constructors and Utilities
+```@docs
+SymbolicUtils.Term
+SymbolicUtils.Add
+SymbolicUtils.Mul
+SymbolicUtils.node_count
+```
+
 ### Metadata
 ```@docs
 SymbolicUtils.hasmetadata
@@ -22,6 +30,8 @@ SymbolicUtils.promote_shape
 SymbolicUtils.Unknown
 SymbolicUtils.ShapeVecT
 SymbolicUtils.ShapeT
+SymbolicUtils.fntype_ret_type
+SymbolicUtils.unwrap
 ```
 
 ### Array Operation Callables
@@ -33,6 +43,25 @@ SymbolicUtils.Mapreducer
 ### Intermediate Representation
 ```@docs
 SymbolicUtils.IRStructure
+SymbolicUtils.populate_ir!
+SymbolicUtils.print_ir
+SymbolicUtils.get_reachability
+```
+
+### Developer IR and cache interfaces
+
+These interfaces support custom IR traversals and cache integrations. They are
+documented for package developers; ordinary symbolic manipulation should use
+the higher-level APIs above.
+
+```@docs
+SymbolicUtils.get_reachability!
+SymbolicUtils.replace_node!
+SymbolicUtils.search_variables!
+SymbolicUtils.infer_vartype
+SymbolicUtils.CacheStats
+SymbolicUtils.Code.cse_inside_expr
+SymbolicUtils.Code.cse_bind_expr
 ```
 
 ## Rewriting System
@@ -41,6 +70,7 @@ SymbolicUtils.IRStructure
 ```@docs
 @rule
 @acrule
+SymbolicUtils.@ordered_acrule
 ```
 
 ### Rewriters

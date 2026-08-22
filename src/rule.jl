@@ -229,6 +229,20 @@ abstract type AbstractRule end # Currently doesn't really do anything. Can be re
 #-----------------------------
 #### Regular Rewriting Rules
 
+"""
+    Rule{L, M, R}
+
+Compiled representation of a rewrite rule created by [`@rule`](@ref) or
+[`@acrule`](@ref).
+
+# Fields
+
+- `expr`: the original rule expression used for display.
+- `lhs`: the pattern matched by the rule.
+- `matcher`: the compiled matcher for `lhs`.
+- `rhs`: the replacement expression or function.
+- `depth`: the maximum expression depth inspected by the rule.
+"""
 struct Rule{L, M, R} <: AbstractRule
     expr::Expr               # rule pattern stored for pretty printing
     lhs::L                   # the pattern
@@ -599,6 +613,14 @@ macro acrule(expr)
     end
 end
 
+"""
+    @ordered_acrule(lhs => rhs)
+
+Construct an associative-commutative rewrite rule whose matcher visits the
+commutative permutations in a deterministic order. `lhs` is the pattern and
+`rhs` is the replacement expression. This is a developer extension point used
+by the built-in simplification rules.
+"""
 macro ordered_acrule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs = expr.args[2]

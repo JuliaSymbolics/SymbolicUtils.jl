@@ -13,6 +13,13 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 nanmath_st = Code.NameState()
 nanmath_st.rewrites[:nanmath] = true
 
+@testset "public array-construction extension point" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils.Code, :create_array)
+    end
+    @test @doc(SymbolicUtils.Code.create_array) !== nothing
+end
+
 @testset "Code" begin
     @syms a b c d e p q t x(t) y(t) z(t)
     @test toexpr(Assignment(a, b)) == :(a = b)

@@ -32,6 +32,7 @@ SymbolicUtils.Code.Func
 SymbolicUtils.Code.SpawnFetch
 SymbolicUtils.Code.SetArray
 SymbolicUtils.Code.MakeArray
+SymbolicUtils.Code.create_array
 SymbolicUtils.Code.MakeSparseArray
 SymbolicUtils.Code.MakeTuple
 SymbolicUtils.Code.LiteralExpr

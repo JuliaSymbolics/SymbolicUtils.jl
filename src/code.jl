@@ -1344,6 +1344,15 @@ end
     arr
 end
 
+"""
+    create_array(similarto, output_eltype, ::Val{ndims}, ::Val{dims}, elems...)
+
+Construct an array with dimensions `dims` and elements `elems`, using `similarto` to
+select the array type. `output_eltype` may be `nothing` to infer the element type.
+
+Array packages can support [`MakeArray`](@ref) code generation by defining methods for
+their array type.
+"""
 @inline function create_array(A::Type{<:Array}, T, ::Val, d::Val, elems...)
     _create_array(A, T, d, elems...)
 end
@@ -2248,7 +2257,7 @@ function apply_optimization_rules(ir::IRStructure, expr, rules)
     ir, expr
 end
 
-@public LazyState, cse_inside_expr, fast_toexpr, function_to_expr, get_rewrites
+@public LazyState, create_array, cse_inside_expr, fast_toexpr, function_to_expr, get_rewrites
 @public supports_with_allocator, with_allocator
 
 end

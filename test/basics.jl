@@ -209,9 +209,11 @@ end
     # typed_vcat
     @test BS{SymReal}[1; 2] isa Vector{BasicSymbolic{SymReal}}
     @test BS[1; a] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[1; 2; a] isa Vector{BasicSymbolic{SymReal}}
     # typed_hcat
     @test BS{SymReal}[1 2] isa Matrix{BasicSymbolic{SymReal}}
     @test BS[1 a] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1 2 a] isa Matrix{BasicSymbolic{SymReal}}
     # typed_hvcat
     @test BS{SymReal}[1 2; 3 4] isa Matrix{BasicSymbolic{SymReal}}
     @test BS[1 a; 3 4] isa Matrix{BasicSymbolic{SymReal}}

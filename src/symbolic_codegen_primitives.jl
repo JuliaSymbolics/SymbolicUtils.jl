@@ -67,7 +67,8 @@ end
 Construct a symbolic expression representing `lhs = rhs`. Returns a
 `Term{T}(Code.Assignment, [lhs, rhs])` with `symtype` and `shape` equal to those of `rhs`.
 """
-function symAssignment(lhs::BasicSymbolic{T}, rhs::BasicSymbolic{T}) where {T}
+function symAssignment(lhs::BasicSymbolic{T}, rhs::BasicSymbolic{R}) where {T, R}
+    T === R || throw(ArgumentError("Cannot assign symbolics with different `vartype`s $T and $R."))
     return BSImpl.Term{T}(
         Assignment, ArgsT{T}((lhs, rhs));
         type = symtype(rhs),

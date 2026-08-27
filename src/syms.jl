@@ -362,11 +362,11 @@ end
 @inline function Base.getindex(::Type{BS{T}}, xs...) where {T}
     BasicSymbolic{T}[xs...]
 end
-@inline function Base.typed_vcat(::Type{BS}, xs...)
-    Base.typed_vcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+@inline function Base.typed_vcat(::Type{BS}, xs::Union{BasicSymbolic, Number}...)
+    return Base.typed_vcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
 end
-@inline function Base.typed_vcat(::Type{BS{T}}, xs...) where {T}
-    Base.typed_vcat(BasicSymbolic{T}, xs...)
+@inline function Base.typed_vcat(::Type{BS{T}}, xs::Union{BasicSymbolic, Number}...) where {T}
+    return Base.typed_vcat(BasicSymbolic{T}, xs...)
 end
 @inline function Base.typed_vcat(::Type{BS}, xs::Number...)
     Base.typed_vcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
@@ -374,11 +374,11 @@ end
 @inline function Base.typed_vcat(::Type{BS{T}}, xs::Number...) where {T}
     Base.typed_vcat(BasicSymbolic{T}, xs...)
 end
-@inline function Base.typed_hcat(::Type{BS}, xs...)
-    Base.typed_hcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+@inline function Base.typed_hcat(::Type{BS}, xs::Union{BasicSymbolic, Number}...)
+    return Base.typed_hcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
 end
-@inline function Base.typed_hcat(::Type{BS{T}}, xs...) where {T}
-    Base.typed_hcat(BasicSymbolic{T}, xs...)
+@inline function Base.typed_hcat(::Type{BS{T}}, xs::Union{BasicSymbolic, Number}...) where {T}
+    return Base.typed_hcat(BasicSymbolic{T}, xs...)
 end
 @inline function Base.typed_hcat(::Type{BS}, xs::Number...)
     Base.typed_hcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
@@ -386,11 +386,11 @@ end
 @inline function Base.typed_hcat(::Type{BS{T}}, xs::Number...) where {T}
     Base.typed_hcat(BasicSymbolic{T}, xs...)
 end
-@inline function Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs...)
-    Base.typed_hvcat(BasicSymbolic{vartype_from_literal(xs...)}, dims, xs...)
+@inline function Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs::Union{BasicSymbolic, Number}...)
+    return Base.typed_hvcat(BasicSymbolic{vartype_from_literal(xs...)}, dims, xs...)
 end
-@inline function Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims, xs...) where {T}
-    Base.typed_hvcat(BasicSymbolic{T}, dims, xs...)
+@inline function Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims, xs::Union{BasicSymbolic, Number}...) where {T}
+    return Base.typed_hvcat(BasicSymbolic{T}, dims, xs...)
 end
 @inline function Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs::Number...)
     Base.typed_hvcat(BasicSymbolic{vartype_from_literal(xs...)}, dims, xs::Number...)
@@ -410,4 +410,3 @@ end
 @inline function Base.typed_hvncat(::Type{BS{T}}, dim::Int, xs...) where {T}
     Base.typed_hvncat(BasicSymbolic{T}, dim, xs...)
 end
-

@@ -3,6 +3,7 @@ using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Co
 using Test
 import NaNMath
 import LinearAlgebra
+using StaticArrays: SVector
 
 @testset "public shape promotion interface" begin
     if isdefined(Base, :ispublic)
@@ -415,7 +416,7 @@ end
 end
 
 @testset "Map operations on symbolics" begin
-    @syms a[1:3]::Float64 b[1:3]::Float64
+    @syms a[1:3]::Float64 b[1:3]::Float64 f(..)
 
     result = map(sin, a)
     @test isequal(collect(result), [sin(a[1]), sin(a[2]), sin(a[3])])
@@ -425,6 +426,10 @@ end
 
     result3 = map(+, a, [1.0, 2.0, 3.0])
     @test isequal(collect(result3), [a[1] + 1.0, a[2] + 2.0, a[3] + 3.0])
+
+    diagonal = LinearAlgebra.Diagonal([1, 2])
+    @test isequal(map(f, diagonal), [f(1) f(0); f(0) f(2)])
+    @test isequal(mapreduce(f, +, diagonal), f(1) + f(2) + 2f(0))
 end
 
 @testset "in operator on symbolics" begin
@@ -443,6 +448,9 @@ end
     @test isa(result2, BasicSymbolic)
 
     result3 = in(x, [1.0, 2.0, 3.0])
+    result4 = in(x, SVector(1.0, 2.0, 3.0))
+    @test isa(result4, BasicSymbolic)
+    @test symtype(result4) == Bool
     @test isa(result3, BasicSymbolic)
 end
 

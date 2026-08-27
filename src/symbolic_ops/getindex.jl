@@ -258,7 +258,9 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
             BSImpl.ArrayMaker(; regions, values) => begin
                 length(sh) == length(idxs) || _throw_cartesian_indexing()
                 @union_split_smallvec regions @union_split_smallvec values @union_split_smallvec idxs begin
-                    for (reg, val) in Iterators.reverse(zip(regions, values))
+                    for region_idx in reverse(eachindex(regions, values))
+                        reg = regions[region_idx]
+                        val = values[region_idx]
                         @union_split_smallvec reg begin
                             all(splat(in), zip(idxs, reg)) || continue
                             new_idxs = SmallV{Int}()

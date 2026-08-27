@@ -908,6 +908,9 @@ function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}
         return getindex(scalarize(args[1]), idx)
     end
 
-    idxs = Iterators.map((-), Iterators.map(unwrap_const, Iterators.drop(args, 1)), Iterators.map(Base.Fix2((-), 1) ∘ first, shape(args[1])))
+    idxs = (
+        unwrap_const(idx) - (first(axis) - 1) for
+            (idx, axis) in zip(Iterators.drop(args, 1), shape(args[1]))
+    )
     return getindex(scalarize(args[1]), idxs...)
 end

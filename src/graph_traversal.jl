@@ -38,5 +38,5 @@ struct FilteredNeighbors{F, N} <: Function
 end
 
 function (fn::FilteredNeighbors)(graph::Graphs.AbstractGraph, i::Integer)
-    return Iterators.filter(fn.filter, fn.nbors(graph, i))
+    return (neighbor for neighbor in fn.nbors(graph, i) if fn.filter(neighbor))
 end

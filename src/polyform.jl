@@ -121,7 +121,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 end
                 return poly
             elseif f === (*) || f === (+)
-               arg1, restargs = Iterators.peel(args)
+                arg1, restargs = _peel(args)
                 poly = to_poly!(poly_to_bs, bs_to_poly, arg1)
                 if !(poly isa PolynomialT)
                     _poly = zeropoly()

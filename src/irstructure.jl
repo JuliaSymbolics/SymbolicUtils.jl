@@ -293,7 +293,8 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Integer, Nothing} = 50)
     # Iterate children before parents so dependencies receive lower SSA numbers.
     new_idx = zeros(Int32, n)
     counter = 0
-    for i in Iterators.reverse(topo)
+    for topo_idx in reverse(eachindex(topo))
+        i = topo[topo_idx]
         (to_expand[i] && indeg[i] != 1) || continue
         new_idx[i] = (counter += 1)
     end
@@ -323,7 +324,8 @@ function _show_ir(io::IO, ir::IRStructure; limit::Union{Integer, Nothing} = 50)
     # Print in children-before-parents order so that each SSA variable is defined
     # before it is referenced by a later statement.
     printed = 0
-    for i in Iterators.reverse(topo)
+    for topo_idx in reverse(eachindex(topo))
+        i = topo[topo_idx]
         (to_expand[i] && indeg[i] != 1) || continue
         if limit !== nothing && printed >= limit
             remaining = total_stmts - printed
@@ -616,7 +618,8 @@ function search_variables!(
         mask[arg_i] = true
     end
 
-    for cur_i in Iterators.reverse(reachability)
+    for reachability_idx in reverse(eachindex(reachability))
+        cur_i = reachability[reachability_idx]
         mask[cur_i] || continue
         cur_i in buffer.searched && continue
         push!(buffer.searched, cur_i)
@@ -679,7 +682,8 @@ function query(predicate::F, ir::IRStructure{T}, expr::BasicSymbolic{T}; recurse
 
     empty!(reachability)
     get_reachability!(reachability, ir, idx)
-    for cur_i in Iterators.reverse(reachability)
+    for reachability_idx in reverse(eachindex(reachability))
+        cur_i = reachability[reachability_idx]
         mask[cur_i] || continue
         cur = ir[cur_i]
         predicate(cur) && return false

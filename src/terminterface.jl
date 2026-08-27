@@ -288,7 +288,7 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
             _ => _unreachable()
         end
     elseif f === broadcast
-        _f, _args = Iterators.peel(args)
+        _f, _args = _peel(args)
         res = broadcast(unwrap_const(_f), _args...)
         if metadata !== nothing && iscall(res)
             @set! res.metadata = metadata

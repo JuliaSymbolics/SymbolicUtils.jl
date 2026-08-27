@@ -46,6 +46,13 @@ end
 import LinearAlgebra
 using SciMLPublic: @public
 
+function _peel(itr)
+    next = iterate(itr)
+    next === nothing && return nothing
+    value, state = next
+    return value, Iterators.rest(itr, state)
+end
+
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)
     @assert val.args[1] == :(=>)

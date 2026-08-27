@@ -412,7 +412,7 @@ function get_indexed_axes!(ix::IndexedAxes{T}, expr::BasicSymbolic{T}) where {T}
         return ix
     end
 
-    sym, idxs = Iterators.peel(args)
+    sym, idxs = _peel(args)
     for (dim, idx) in enumerate(idxs)
         # special case `i` and `i + offset` for performance
         @match idx begin
@@ -652,7 +652,7 @@ function ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, uns
 end
 
 function shape_from_regions(regions::RegionsT)::ShapeVecT
-    all_same_ndims = @union_split_smallvec regions allequal(Iterators.map(length, regions))
+    all_same_ndims = @union_split_smallvec regions allequal(length(region) for region in regions)
     @assert all_same_ndims """
     All regions provided to `ArrayMaker` must have the same number of dimensions.
     """

@@ -111,7 +111,7 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
             end
             rest = ArgsT{T}()
             sizehint!(rest, length(args) - 1)
-            coeff, restargs = Iterators.peel(args)
+            coeff, restargs = _peel(args)
             for arg in restargs
                 push!(rest, arg)
             end
@@ -126,7 +126,7 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
                         args[1], args[2]
                     else
                         newargs = ArgsT{T}()
-                        _coeff, rest = Iterators.peel(args)
+                        _coeff, rest = _peel(args)
                         append!(newargs, rest)
                         _coeff, BSImpl.Term{T}(*, newargs; type, shape)
                     end

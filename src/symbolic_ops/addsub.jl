@@ -37,7 +37,7 @@ function +(x::T, args::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T
 end
 
 @noinline Base.@nospecializeinfer function promoted_symtype(op, terms)
-    a, bs = Iterators.peel(terms)
+    a, bs = _peel(terms)
     type::TypeT = symtype(a)
     for b in bs
         type = promote_symtype(op, type, symtype(b))
@@ -85,7 +85,7 @@ end
 function _added_shape(terms)
     isempty(terms) && return Unknown(-1)
     length(terms) == 1 && return shape(first(terms))
-    a, bs = Iterators.peel(terms)
+    a, bs = _peel(terms)
     sh::ShapeT = shape(a)
     for t in bs
         sh = promote_shape(+, sh, shape(t))

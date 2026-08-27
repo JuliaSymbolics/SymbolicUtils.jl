@@ -3,6 +3,9 @@ using SymbolicUtils
 
 run_qa(
     SymbolicUtils;
+    # The untyped three-argument `Base.ImmutableDict` constructor is a deliberate
+    # compatibility method kept for downstream packages; see `src/types.jl`.
+    aqua_kwargs = (; piracies = (; treat_as_own = [Base.ImmutableDict],)),
     ei_kwargs = (;
         no_implicit_imports = (; allow_unanalyzable = (SymbolicUtils.BasicSymbolicImpl,)),
         no_stale_explicit_imports = (; ignore = (:children,), allow_unanalyzable = (SymbolicUtils.BasicSymbolicImpl,)),

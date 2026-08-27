@@ -1004,6 +1004,12 @@ end
 
 using Base: ImmutableDict
 
+# Base defines no untyped three-argument `ImmutableDict` constructor. This method
+# existed here as piracy for years and downstream packages call it directly, so
+# removing it in v4.46.0 broke every already-registered version of them. Keep it
+# until the next breaking release; new code should use `ImmutableDict{K, V}(d, k, v)`.
+Base.ImmutableDict(d::ImmutableDict{K, V}, x, y) where {K, V} = ImmutableDict{K, V}(d, x, y)
+
 @inline _set_immutable_dict_value(d::ImmutableDict{K,V}, value) where {K,V} =
     ImmutableDict{K,V}(d.parent, d.key, value)
 

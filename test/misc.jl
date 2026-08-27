@@ -318,3 +318,13 @@ end
     den = x'x
     @test isequal(quick_cancel(num, den), (num, den))
 end
+
+# Downstream packages call the untyped three-argument constructor, which Base itself
+# does not define; dropping it in v4.46.0 broke their already-registered versions.
+@testset "untyped three-argument `Base.ImmutableDict` constructor" begin
+    d = Base.ImmutableDict{DataType, Any}(Int, 1)
+    d2 = Base.ImmutableDict(d, Float64, 2.0)
+    @test d2 isa Base.ImmutableDict{DataType, Any}
+    @test d2[Int] == 1
+    @test d2[Float64] == 2.0
+end

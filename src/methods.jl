@@ -1152,8 +1152,13 @@ the symbolic broadcast path and rejects broadcasts that combine incompatible
 symbolic variants.
 """
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
+struct _BroadcastProbeA <: Broadcast.BroadcastStyle end
+struct _BroadcastProbeB <: Broadcast.BroadcastStyle end
+const _BroadcastFallbackStyle = typeof(Broadcast.BroadcastStyle(_BroadcastProbeA(), _BroadcastProbeB()))
+
 Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::Broadcast.BroadcastStyle) where {T} = SymBroadcast{T}()
+Broadcast.BroadcastStyle(::SymBroadcast{T}, ::_BroadcastFallbackStyle) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{T}) where {T} = SymBroadcast{T}()
 function Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{R}) where {T, R}
     throw(ArgumentError(LazyString("Cannot broadcast symbolics of different `vartype`s ", T, " and ", R, ".")))
@@ -1578,22 +1583,30 @@ function _map(::Type{T}, f, xs...) where {T}
     return BSImpl.ArrayOp{T}(idxs, exp, +, term, ranges; type = type, shape = sh)
 end
 
-function Base.map(f::BasicSymbolic{T}, xs...) where {T}
-    _map(T, f, xs...)
+function Base.map(f, x::BasicSymbolic{T}, xs...) where {T}
+    return _map(T, f, x, xs...)
 end
-function Base.map(f::BasicSymbolic{T}, x::AbstractArray, xs...) where {T}
-    _map(T, f, x, xs...)
+function Base.map(f, x1, x::BasicSymbolic{T}, xs...) where {T}
+    return _map(T, f, x1, x, xs...)
+end
+function Base.map(f, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...) where {T, R}
+    T === R || throw(ArgumentError("Cannot map over symbolics with different `vartype`s $T and $R."))
+    return _map(T, f, x1, x, xs...)
 end
 
-for fT in [Any, :(BasicSymbolic{T})]
-    @eval function Base.map(f::$fT, x::BasicSymbolic{T}, xs...) where {T}
-        _map(T, f, x, xs...)
-    end
-    for x1T in [Any, :(BasicSymbolic{T})]
-        @eval function Base.map(f::$fT, x1::$x1T, x::BasicSymbolic{T}, xs...) where {T}
-            _map(T, f, x1, x, xs...)
-        end
-    end
+const _StructuredMatrix = Union{
+    LinearAlgebra.Bidiagonal,
+    LinearAlgebra.Diagonal,
+    LinearAlgebra.LowerTriangular,
+    LinearAlgebra.SymTridiagonal,
+    LinearAlgebra.Tridiagonal,
+    LinearAlgebra.UnitLowerTriangular,
+    LinearAlgebra.UnitUpperTriangular,
+    LinearAlgebra.UpperTriangular,
+}
+
+function Base.map(f::BasicSymbolic, x::_StructuredMatrix, xs::_StructuredMatrix...)
+    return map(f, Matrix(x), map(Matrix, xs)...)
 end
 
 """
@@ -1711,23 +1724,15 @@ function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T
     return BSImpl.ArrayOp{T}(idxs, exp, red, term; type = type, shape = sh)
 end
 
-for (Tf, Tr) in Iterators.product([:(BasicSymbolic{T}), Any], [:(BasicSymbolic{T}), Any])
-    if Tf != Any || Tr != Any
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, xs...; kw...) where {T}
-            return _mapreduce(T, f, red, xs...; kw...)
-        end
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, x::AbstractArray, xs...; kw...) where {T}
-            return _mapreduce(T, f, red, x, xs...; kw...)
-        end
-    end
-    @eval function Base.mapreduce(f::$Tf, red::$Tr, x::BasicSymbolic{T}, xs...; kw...) where {T}
-        _mapreduce(T, f, red, x, xs...; kw...)
-    end
-    for x1T in [Any, :(BasicSymbolic{T})]
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, x1::$x1T, x::BasicSymbolic{T}, xs...; kw...) where {T}
-            _mapreduce(T, f, red, x1, x, xs...; kw...)
-        end
-    end
+function Base.mapreduce(f, red, x::BasicSymbolic{T}, xs...; kw...) where {T}
+    return _mapreduce(T, f, red, x, xs...; kw...)
+end
+function Base.mapreduce(f, red, x1, x::BasicSymbolic{T}, xs...; kw...) where {T}
+    return _mapreduce(T, f, red, x1, x, xs...; kw...)
+end
+function Base.mapreduce(f, red, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...; kw...) where {T, R}
+    T === R || throw(ArgumentError("Cannot reduce symbolics with different `vartype`s $T and $R."))
+    return _mapreduce(T, f, red, x1, x, xs...; kw...)
 end
 
 function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
@@ -1804,6 +1809,11 @@ for T1 in [Real, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})
         sh = promote_shape(in, shape(a), shape(b))
         return BSImpl.Term{T}(in, ArgsT{T}((Const{T}(a), Const{T}(b))); type = Bool, shape = sh)
     end
+end
+
+function Base.in(a::BasicSymbolic{T}, b::StaticArraysCore.StaticArray) where {T}
+    sh = promote_shape(in, shape(a), shape(b))
+    return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
 end
 
 function promote_symtype(::typeof(issubset), T::TypeT, S::TypeT)
@@ -2001,6 +2011,9 @@ end
 
 function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T, R}
     SymbolicRound{T, typeof(mode)}(mode)(ex)
+end
+function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T >: Missing, R}
+    return SymbolicRound{T, typeof(mode)}(mode)(ex)
 end
 
 function promote_symtype(::Type{T}, R::TypeT) where {T <: Returns}

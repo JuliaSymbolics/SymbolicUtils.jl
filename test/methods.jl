@@ -3,8 +3,17 @@ using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Co
 using Test
 import NaNMath
 import LinearAlgebra
+import SparseArrays
 using StaticArrays: SVector
 using SparseArrays: sparse
+
+struct NoMatrixVector{T} <: AbstractVector{T}
+    data::Vector{T}
+end
+Base.size(x::NoMatrixVector) = size(x.data)
+Base.getindex(x::NoMatrixVector, i::Int) = x.data[i]
+Base.Matrix(::LinearAlgebra.Diagonal{T, V}) where {T, V <: NoMatrixVector} =
+    error("unexpected dense conversion")
 
 @testset "public shape promotion interface" begin
     if isdefined(Base, :ispublic)
@@ -430,15 +439,33 @@ end
     @test isequal(collect(result3), [a[1] + 1.0, a[2] + 2.0, a[3] + 3.0])
 
     diagonal = LinearAlgebra.Diagonal([1, 2])
-    @test isequal(map(f, diagonal), [f(1) f(0); f(0) f(2)])
+    mapped_diagonal = map(f, diagonal)
+    @test mapped_diagonal isa BasicSymbolic
+    @test isequal(collect(mapped_diagonal), [f(1) f(0); f(0) f(2)])
+    no_matrix = LinearAlgebra.Diagonal(NoMatrixVector([1, 2]))
+    mapped_no_matrix = map(f, no_matrix)
+    @test mapped_no_matrix isa BasicSymbolic
+    @test size(mapped_no_matrix) == (2, 2)
+    sparse_lower = LinearAlgebra.LowerTriangular(SparseArrays.spdiagm([1, 2]))
+    mapped_sparse_lower = map(f, sparse_lower)
+    @test mapped_sparse_lower isa BasicSymbolic
+    @test size(mapped_sparse_lower) == (2, 2)
     @test isequal(mapreduce(f, +, diagonal), f(1) + f(2) + 2f(0))
 
     sparse_diagonal = sparse([1 0; 0 2])
-    @test isequal(map(f, sparse_diagonal), [f(1) f(0); f(0) f(2)])
+    mapped_sparse_diagonal = map(f, sparse_diagonal)
+    @test mapped_sparse_diagonal isa BasicSymbolic
+    @test isequal(collect(mapped_sparse_diagonal), [f(1) f(0); f(0) f(2)])
+    mapped_sparse_diagonals = map(f, sparse_diagonal, sparse_diagonal)
+    @test mapped_sparse_diagonals isa BasicSymbolic
     @test isequal(
-        map(f, sparse_diagonal, sparse_diagonal),
+        collect(mapped_sparse_diagonals),
         [f(1, 1) f(0, 0); f(0, 0) f(2, 2)]
     )
+    sparse_vector = SparseArrays.sparsevec([1, 3], [1, 2], 3)
+    mapped_sparse_vector = map(f, sparse_vector)
+    @test mapped_sparse_vector isa BasicSymbolic
+    @test isequal(collect(mapped_sparse_vector), [f(1), f(0), f(2)])
     @test_throws ArgumentError map(safe_f, a)
     @test_throws ArgumentError map(+, a, a, safe_a)
     @test_throws ArgumentError mapreduce(safe_f, +, a)

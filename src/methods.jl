@@ -1620,20 +1620,14 @@ const _StructuredMatrix = Union{
     LinearAlgebra.UnitUpperTriangular,
     LinearAlgebra.UpperTriangular,
 }
-function Base.map(f::BasicSymbolic, x::_StructuredMatrix, xs::_StructuredMatrix...)
-    return map(f, Array(x), map(Array, xs)...)
+function Base.map(f::BasicSymbolic{T}, x::_StructuredMatrix, xs::_StructuredMatrix...) where {T}
+    return _map(T, f, x, xs...)
 end
-function Base.map(f::BasicSymbolic, x::SparseMatrixCSC)
-    return map(f, Array(x))
+function Base.map(f::BasicSymbolic{T}, x::SparseMatrixCSC, xs::SparseMatrixCSC...) where {T}
+    return _map(T, f, x, xs...)
 end
-function Base.map(f::BasicSymbolic, x::SparseMatrixCSC, xs::SparseMatrixCSC...)
-    return map(f, Array(x), map(Array, xs)...)
-end
-function Base.map(f::BasicSymbolic, x::SparseVector)
-    return map(f, Array(x))
-end
-function Base.map(f::BasicSymbolic, x::SparseVector, xs::SparseVector...)
-    return map(f, Array(x), map(Array, xs)...)
+function Base.map(f::BasicSymbolic{T}, x::SparseVector, xs::SparseVector...) where {T}
+    return _map(T, f, x, xs...)
 end
 
 """

@@ -1681,9 +1681,11 @@ function promote_shape(f::Mapreducer, shs::ShapeT...)
     elseif mapped_shape isa Unknown
         return mapped_shape
     else
-        ax = mapped_shape[f.dims]
-        mapped_shape[f.dims] = first(ax):first(ax)
-        return mapped_shape
+        # `mapped_shape` may alias an argument's own shape vector; never mutate it.
+        reduced_shape = copy(mapped_shape)
+        ax = reduced_shape[f.dims]
+        reduced_shape[f.dims] = first(ax):first(ax)
+        return reduced_shape
     end
 end
 
@@ -1843,7 +1845,7 @@ for f in [union, intersect]
         end
         @eval function (::$(typeof(f)))(a::$T1, b::$T2) where {T}
             sh = promote_shape($f, shape(a), shape(b))
-            type = promote_type($f, symtype(a), symtype(b))
+            type = promote_symtype($f, symtype(a), symtype(b))
             return BSImpl.Term{T}($f, ArgsT{T}((Const{T}(a), Const{T}(b))); type, shape = sh)
         end
     end

@@ -355,3 +355,22 @@ end
     got = [unwrap_const(substitute(e, d; fold = Val(true))) for e in sc]
     @test got ≈ ref
 end
+@testset "symbolic `intersect`/`union` build terms" begin
+    @syms a[1:2] b[1:2]
+    for f in (intersect, union)
+        for term in (f(a, b), f(a, [1, 2]), f([1, 2], b))
+            @test SymbolicUtils.iscall(term)
+            @test SymbolicUtils.operation(term) === f
+            @test symtype(term) <: Vector
+        end
+    end
+end
+
+@testset "`mapreduce` with `dims` does not mutate argument shapes" begin
+    @syms A[1:2, 1:2]
+    before = copy(shape(A))
+    r = mapreduce(abs2, +, A; dims = 1)
+    @test shape(r) == ShapeVecT([1:1, 1:2])
+    @test shape(A) == before
+    @test SymbolicUtils.iscall(A + [1.0 2.0; 3.0 4.0])
+end

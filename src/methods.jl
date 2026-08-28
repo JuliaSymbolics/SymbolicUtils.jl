@@ -30,8 +30,11 @@ const basic_diadic = [+, -, *, /, //, \, ^]
 #######################################################
 
 @inline function safe_eltype(T::TypeT)
-    if T <: AbstractArray
+    return if T <: Array
         T.parameters[1]::TypeT
+    elseif T <: AbstractArray
+        # e.g. `SArray{Tuple{2}, Int, 1, 2}` or `BitArray{1}`: the first parameter is not the eltype
+        eltype(T)::TypeT
     else
         T
     end
@@ -1152,8 +1155,13 @@ the symbolic broadcast path and rejects broadcasts that combine incompatible
 symbolic variants.
 """
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
+struct _BroadcastProbeA <: Broadcast.BroadcastStyle end
+struct _BroadcastProbeB <: Broadcast.BroadcastStyle end
+const _BroadcastFallbackStyle = typeof(Broadcast.BroadcastStyle(_BroadcastProbeA(), _BroadcastProbeB()))
+
 Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::Broadcast.BroadcastStyle) where {T} = SymBroadcast{T}()
+Broadcast.BroadcastStyle(::SymBroadcast{T}, ::_BroadcastFallbackStyle) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{T}) where {T} = SymBroadcast{T}()
 function Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{R}) where {T, R}
     throw(ArgumentError(LazyString("Cannot broadcast symbolics of different `vartype`s ", T, " and ", R, ".")))
@@ -1556,7 +1564,24 @@ function __index_args(::Type{T}, nd::Int, xs...) where {T}
 end
 
 
+function _check_vartypes(::Type{T}, operation, xs...) where {T}
+    for x in xs
+        if x isa BasicSymbolic && vartype(x) !== T
+            throw(
+                ArgumentError(
+                    LazyString(
+                        "Cannot ", operation, " symbolics with different `vartype`s ",
+                        T, " and ", vartype(x), "."
+                    )
+                )
+            )
+        end
+    end
+    return nothing
+end
+
 function _map(::Type{T}, f, xs...) where {T}
+    _check_vartypes(T, "map", f, xs...)
     f = Mapper(f)
     xs = Const{T}.(xs)
     type = promote_symtype(f, symtype.(xs)...)
@@ -1578,23 +1603,75 @@ function _map(::Type{T}, f, xs...) where {T}
     return BSImpl.ArrayOp{T}(idxs, exp, +, term, ranges; type = type, shape = sh)
 end
 
-function Base.map(f::BasicSymbolic{T}, xs...) where {T}
-    _map(T, f, xs...)
+function Base.map(f, x::BasicSymbolic{T}, xs...) where {T}
+    return _map(T, f, x, xs...)
 end
-function Base.map(f::BasicSymbolic{T}, x::AbstractArray, xs...) where {T}
-    _map(T, f, x, xs...)
+function Base.map(f, x1, x::BasicSymbolic{T}, xs...) where {T}
+    return _map(T, f, x1, x, xs...)
+end
+function Base.map(f, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...) where {T, R}
+    return _map(T, f, x1, x, xs...)
 end
 
-for fT in [Any, :(BasicSymbolic{T})]
-    @eval function Base.map(f::$fT, x::BasicSymbolic{T}, xs...) where {T}
-        _map(T, f, x, xs...)
-    end
-    for x1T in [Any, :(BasicSymbolic{T})]
-        @eval function Base.map(f::$fT, x1::$x1T, x::BasicSymbolic{T}, xs...) where {T}
-            _map(T, f, x1, x, xs...)
-        end
+# A symbolic callable mapped over constant arrays traces to a lazy `Mapper` term, exactly
+# like a map over a symbolic array. The narrower signatures only settle dispatch against
+# the `map` methods LinearAlgebra, SparseArrays, and StaticArrays define for their types.
+function Base.map(f::BasicSymbolic{T}, x::AbstractArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, xs...)
+end
+const _StructuredMatrix = Union{
+    LinearAlgebra.Bidiagonal,
+    LinearAlgebra.Diagonal,
+    LinearAlgebra.LowerTriangular,
+    LinearAlgebra.SymTridiagonal,
+    LinearAlgebra.Tridiagonal,
+    LinearAlgebra.UnitLowerTriangular,
+    LinearAlgebra.UnitUpperTriangular,
+    LinearAlgebra.UpperTriangular,
+}
+const _SparseVecOrMat = Union{SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC}
+# SparseArrays' broadcast-backed `map` accepts this union of sparse, structured, and
+# sparse column-block types; mirroring it exactly is what settles the intersection.
+const _SparseColumnBlock = SubArray{
+    Tv, 2, <:SparseArrays.AbstractSparseMatrixCSC{Tv, Ti}, Tuple{Base.Slice{Base.OneTo{Int}}, I},
+} where {Tv, Ti, I <: AbstractUnitRange{<:Integer}}
+const _CSC = Union{SparseArrays.FixedSparseCSC, SparseMatrixCSC}
+# Julia 1.10's SparseArrays uses the union without the column block.
+const _SparseOrStructuredLTS = Union{_StructuredMatrix, _CSC}
+const _SparseOrStructured = Union{_SparseColumnBlock, _SparseOrStructuredLTS}
+const _AdjointVector = LinearAlgebra.Adjoint{<:Any, <:AbstractVector}
+const _TransposeVector = LinearAlgebra.Transpose{<:Any, <:AbstractVector}
+for S in (
+        _StructuredMatrix, SparseMatrixCSC, SparseVector, _SparseVecOrMat, _CSC,
+        _SparseOrStructuredLTS, _SparseOrStructured, _AdjointVector, _TransposeVector,
+        StaticArraysCore.StaticArray,
+    )
+    @eval function Base.map(f::BasicSymbolic{T}, x::$S, xs::$S...) where {T}
+        return _map(T, f, x, xs...)
     end
 end
+for S in (SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC, _CSC, SparseMatrixCSC)
+    @eval Base.map(f::BasicSymbolic{T}, x::$S) where {T} = _map(T, f, x)
+end
+for S in (SparseArrays.AbstractSparseMatrixCSC, _CSC)
+    @eval function Base.map(f::BasicSymbolic{T}, x::$S, xs::SparseMatrixCSC...) where {T}
+        return _map(T, f, x, xs...)
+    end
+end
+function Base.map(f::BasicSymbolic{T}, x::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, xs...)
+end
+function Base.map(f::BasicSymbolic{T}, x::StaticArraysCore.StaticArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, y, xs...)
+end
+function Base.map(f::BasicSymbolic{T}, x::AbstractArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, y, xs...)
+end
+# Internal small vectors keep their own eager `map`.
+function Base.map(f::BasicSymbolic, x::SmallVec{T, Vector{T}}) where {T}
+    return invoke(map, Tuple{Any, SmallVec{T, Vector{T}}}, f, x)
+end
+Base.map(f::BasicSymbolic, x::Backing{T}) where {T} = invoke(map, Tuple{Any, Backing{T}}, f, x)
 
 """
     @map_methods T argument_transform result_transform
@@ -1690,6 +1767,7 @@ function promote_shape(f::Mapreducer, shs::ShapeT...)
 end
 
 function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T}
+    _check_vartypes(T, "reduce", f, red, xs...)
     f = Mapreducer(f, red, dims, init)
     xs = Const{T}.(xs)
     shs = shape.(xs)
@@ -1713,23 +1791,14 @@ function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T
     return BSImpl.ArrayOp{T}(idxs, exp, red, term; type = type, shape = sh)
 end
 
-for (Tf, Tr) in Iterators.product([:(BasicSymbolic{T}), Any], [:(BasicSymbolic{T}), Any])
-    if Tf != Any || Tr != Any
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, xs...; kw...) where {T}
-            return _mapreduce(T, f, red, xs...; kw...)
-        end
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, x::AbstractArray, xs...; kw...) where {T}
-            return _mapreduce(T, f, red, x, xs...; kw...)
-        end
-    end
-    @eval function Base.mapreduce(f::$Tf, red::$Tr, x::BasicSymbolic{T}, xs...; kw...) where {T}
-        _mapreduce(T, f, red, x, xs...; kw...)
-    end
-    for x1T in [Any, :(BasicSymbolic{T})]
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, x1::$x1T, x::BasicSymbolic{T}, xs...; kw...) where {T}
-            _mapreduce(T, f, red, x1, x, xs...; kw...)
-        end
-    end
+function Base.mapreduce(f, red, x::BasicSymbolic{T}, xs...; kw...) where {T}
+    return _mapreduce(T, f, red, x, xs...; kw...)
+end
+function Base.mapreduce(f, red, x1, x::BasicSymbolic{T}, xs...; kw...) where {T}
+    return _mapreduce(T, f, red, x1, x, xs...; kw...)
+end
+function Base.mapreduce(f, red, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...; kw...) where {T, R}
+    return _mapreduce(T, f, red, x1, x, xs...; kw...)
 end
 
 function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
@@ -1806,6 +1875,11 @@ for T1 in [Real, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})
         sh = promote_shape(in, shape(a), shape(b))
         return BSImpl.Term{T}(in, ArgsT{T}((Const{T}(a), Const{T}(b))); type = Bool, shape = sh)
     end
+end
+
+function Base.in(a::BasicSymbolic{T}, b::StaticArraysCore.StaticArray) where {T}
+    sh = promote_shape(in, shape(a), shape(b))
+    return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
 end
 
 function promote_symtype(::typeof(issubset), T::TypeT, S::TypeT)
@@ -2003,6 +2077,9 @@ end
 
 function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T, R}
     SymbolicRound{T, typeof(mode)}(mode)(ex)
+end
+function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T >: Missing, R}
+    return SymbolicRound{T, typeof(mode)}(mode)(ex)
 end
 
 function promote_symtype(::Type{T}, R::TypeT) where {T <: Returns}

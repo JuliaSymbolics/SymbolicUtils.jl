@@ -4,6 +4,7 @@ using Test
 import NaNMath
 import LinearAlgebra
 using StaticArrays: SVector
+using SparseArrays: sparse
 
 @testset "public shape promotion interface" begin
     if isdefined(Base, :ispublic)
@@ -417,6 +418,7 @@ end
 
 @testset "Map operations on symbolics" begin
     @syms a[1:3]::Float64 b[1:3]::Float64 f(..)
+    @syms safe_f(..) safe_a[1:3]::Float64 vartype = SafeReal
 
     result = map(sin, a)
     @test isequal(collect(result), [sin(a[1]), sin(a[2]), sin(a[3])])
@@ -430,6 +432,17 @@ end
     diagonal = LinearAlgebra.Diagonal([1, 2])
     @test isequal(map(f, diagonal), [f(1) f(0); f(0) f(2)])
     @test isequal(mapreduce(f, +, diagonal), f(1) + f(2) + 2f(0))
+
+    sparse_diagonal = sparse([1 0; 0 2])
+    @test isequal(map(f, sparse_diagonal), [f(1) f(0); f(0) f(2)])
+    @test isequal(
+        map(f, sparse_diagonal, sparse_diagonal),
+        [f(1, 1) f(0, 0); f(0, 0) f(2, 2)]
+    )
+    @test_throws ArgumentError map(safe_f, a)
+    @test_throws ArgumentError map(+, a, a, safe_a)
+    @test_throws ArgumentError mapreduce(safe_f, +, a)
+    @test_throws ArgumentError mapreduce(+, +, a, a, safe_a)
 end
 
 @testset "in operator on symbolics" begin

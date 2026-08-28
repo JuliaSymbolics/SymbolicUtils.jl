@@ -1561,7 +1561,24 @@ function __index_args(::Type{T}, nd::Int, xs...) where {T}
 end
 
 
+function _check_vartypes(::Type{T}, operation, xs...) where {T}
+    for x in xs
+        if x isa BasicSymbolic && vartype(x) !== T
+            throw(
+                ArgumentError(
+                    LazyString(
+                        "Cannot ", operation, " symbolics with different `vartype`s ",
+                        T, " and ", vartype(x), "."
+                    )
+                )
+            )
+        end
+    end
+    return nothing
+end
+
 function _map(::Type{T}, f, xs...) where {T}
+    _check_vartypes(T, "map", f, xs...)
     f = Mapper(f)
     xs = Const{T}.(xs)
     type = promote_symtype(f, symtype.(xs)...)
@@ -1590,7 +1607,6 @@ function Base.map(f, x1, x::BasicSymbolic{T}, xs...) where {T}
     return _map(T, f, x1, x, xs...)
 end
 function Base.map(f, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...) where {T, R}
-    T === R || throw(ArgumentError("Cannot map over symbolics with different `vartype`s $T and $R."))
     return _map(T, f, x1, x, xs...)
 end
 
@@ -1604,9 +1620,20 @@ const _StructuredMatrix = Union{
     LinearAlgebra.UnitUpperTriangular,
     LinearAlgebra.UpperTriangular,
 }
-
 function Base.map(f::BasicSymbolic, x::_StructuredMatrix, xs::_StructuredMatrix...)
-    return map(f, Matrix(x), map(Matrix, xs)...)
+    return map(f, Array(x), map(Array, xs)...)
+end
+function Base.map(f::BasicSymbolic, x::SparseMatrixCSC)
+    return map(f, Array(x))
+end
+function Base.map(f::BasicSymbolic, x::SparseMatrixCSC, xs::SparseMatrixCSC...)
+    return map(f, Array(x), map(Array, xs)...)
+end
+function Base.map(f::BasicSymbolic, x::SparseVector)
+    return map(f, Array(x))
+end
+function Base.map(f::BasicSymbolic, x::SparseVector, xs::SparseVector...)
+    return map(f, Array(x), map(Array, xs)...)
 end
 
 """
@@ -1701,6 +1728,7 @@ function promote_shape(f::Mapreducer, shs::ShapeT...)
 end
 
 function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T}
+    _check_vartypes(T, "reduce", f, red, xs...)
     f = Mapreducer(f, red, dims, init)
     xs = Const{T}.(xs)
     shs = shape.(xs)
@@ -1731,7 +1759,6 @@ function Base.mapreduce(f, red, x1, x::BasicSymbolic{T}, xs...; kw...) where {T}
     return _mapreduce(T, f, red, x1, x, xs...; kw...)
 end
 function Base.mapreduce(f, red, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...; kw...) where {T, R}
-    T === R || throw(ArgumentError("Cannot reduce symbolics with different `vartype`s $T and $R."))
     return _mapreduce(T, f, red, x1, x, xs...; kw...)
 end
 

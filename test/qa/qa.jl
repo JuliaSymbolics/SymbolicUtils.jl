@@ -20,6 +20,8 @@ run_qa(
                 :promote_typejoin, :return_type, :show_unquoted, :sin, :sqrt, :tan,
                 :typed_hcat, :typed_hvncat, :typed_hvcat, :typed_vcat, :RefValue, :add_sum,
                 :ReinterpretArray, :ReshapedArray, :promote_eltypeof, :promote_typeof,
+                # Public in Julia 1.12, but not marked public on supported Julia 1.11.
+                :filter, :map, :peel, :reverse,
             ),
         ),
     ),

@@ -1006,6 +1006,8 @@ using Base: ImmutableDict
 
 @inline _set_immutable_dict_value(d::ImmutableDict{K,V}, value) where {K,V} =
     ImmutableDict{K,V}(d.parent, d.key, value)
+@inline _set_immutable_dict_parent(d::ImmutableDict{K,V}, parent) where {K,V} =
+    ImmutableDict{K,V}(parent, d.key, d.value)
 
 assocmeta(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
 function assocmeta(d::Base.ImmutableDict{DataType, Any}, @nospecialize(ctx::DataType), @nospecialize(val))::ImmutableDict{DataType,Any}
@@ -1016,10 +1018,10 @@ function assocmeta(d::Base.ImmutableDict{DataType, Any}, @nospecialize(ctx::Data
         d.key === ctx && return _set_immutable_dict_value(d, val)
         d1 = d.parent
         if isdefined(d1, :parent)
-            d1.key === ctx && return _set_immutable_dict_value(d, _set_immutable_dict_value(d1, val))
+            d1.key === ctx && return _set_immutable_dict_parent(d, _set_immutable_dict_value(d1, val))
             d2 = d1.parent
             if isdefined(d2, :parent)
-                d2.key === ctx && return _set_immutable_dict_value(d, _set_immutable_dict_value(d1, _set_immutable_dict_value(d2, val)))
+                d2.key === ctx && return _set_immutable_dict_parent(d, _set_immutable_dict_parent(d1, _set_immutable_dict_value(d2, val)))
             end
         end
     end

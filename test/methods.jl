@@ -466,6 +466,25 @@ end
     mapped_sparse_vector = map(f, sparse_vector)
     @test mapped_sparse_vector isa BasicSymbolic
     @test isequal(collect(mapped_sparse_vector), [f(1), f(0), f(2)])
+    # A symbolic callable over any constant array traces lazily, whatever the array type.
+    dense = [1 0; 0 2]
+    for arr in (
+            dense, [1, 2], 1:2, view([1, 2], 1:2), transpose(dense), LinearAlgebra.Symmetric(dense),
+            LinearAlgebra.Hermitian(dense), LinearAlgebra.UpperHessenberg(dense),
+            SVector(1, 2), [1, 2]', transpose([1, 2]), SparseArrays.spdiagm([1, 2])[:, 1:2],
+            BitVector([true, false]),
+        )
+        mapped = map(f, arr)
+        @test mapped isa BasicSymbolic
+        @test isequal(collect(mapped), map(v -> f(v), collect(arr)))
+    end
+    @test isequal(collect(map(f, dense)), [f(1) f(0); f(0) f(2)])
+    @test symtype(map(f, dense)) == Matrix{Number}
+    for (x, y) in ((diagonal, dense), (dense, diagonal), (sparse_diagonal, dense), (SVector(1, 2), [1, 2]), ([1, 2], SVector(1, 2)))
+        mapped = map(f, x, y)
+        @test mapped isa BasicSymbolic
+        @test isequal(collect(mapped), map((v, w) -> f(v, w), collect(x), collect(y)))
+    end
     @test_throws ArgumentError map(safe_f, a)
     @test_throws ArgumentError map(+, a, a, safe_a)
     @test_throws ArgumentError mapreduce(safe_f, +, a)

@@ -30,8 +30,11 @@ const basic_diadic = [+, -, *, /, //, \, ^]
 #######################################################
 
 @inline function safe_eltype(T::TypeT)
-    if T <: AbstractArray
+    return if T <: Array
         T.parameters[1]::TypeT
+    elseif T <: AbstractArray
+        # e.g. `SArray{Tuple{2}, Int, 1, 2}` or `BitArray{1}`: the first parameter is not the eltype
+        eltype(T)::TypeT
     else
         T
     end
@@ -1610,6 +1613,12 @@ function Base.map(f, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...) where {T,
     return _map(T, f, x1, x, xs...)
 end
 
+# A symbolic callable mapped over constant arrays traces to a lazy `Mapper` term, exactly
+# like a map over a symbolic array. The narrower signatures only settle dispatch against
+# the `map` methods LinearAlgebra, SparseArrays, and StaticArrays define for their types.
+function Base.map(f::BasicSymbolic{T}, x::AbstractArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, xs...)
+end
 const _StructuredMatrix = Union{
     LinearAlgebra.Bidiagonal,
     LinearAlgebra.Diagonal,
@@ -1620,15 +1629,49 @@ const _StructuredMatrix = Union{
     LinearAlgebra.UnitUpperTriangular,
     LinearAlgebra.UpperTriangular,
 }
-function Base.map(f::BasicSymbolic{T}, x::_StructuredMatrix, xs::_StructuredMatrix...) where {T}
+const _SparseVecOrMat = Union{SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC}
+# SparseArrays' broadcast-backed `map` accepts this union of sparse, structured, and
+# sparse column-block types; mirroring it exactly is what settles the intersection.
+const _SparseColumnBlock = SubArray{
+    Tv, 2, <:SparseArrays.AbstractSparseMatrixCSC{Tv, Ti}, Tuple{Base.Slice{Base.OneTo{Int}}, I},
+} where {Tv, Ti, I <: AbstractUnitRange{<:Integer}}
+const _CSC = Union{SparseArrays.FixedSparseCSC, SparseMatrixCSC}
+# Julia 1.10's SparseArrays uses the union without the column block.
+const _SparseOrStructuredLTS = Union{_StructuredMatrix, _CSC}
+const _SparseOrStructured = Union{_SparseColumnBlock, _SparseOrStructuredLTS}
+const _AdjointVector = LinearAlgebra.Adjoint{<:Any, <:AbstractVector}
+const _TransposeVector = LinearAlgebra.Transpose{<:Any, <:AbstractVector}
+for S in (
+        _StructuredMatrix, SparseMatrixCSC, SparseVector, _SparseVecOrMat, _CSC,
+        _SparseOrStructuredLTS, _SparseOrStructured, _AdjointVector, _TransposeVector,
+        StaticArraysCore.StaticArray,
+    )
+    @eval function Base.map(f::BasicSymbolic{T}, x::$S, xs::$S...) where {T}
+        return _map(T, f, x, xs...)
+    end
+end
+for S in (SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC, _CSC, SparseMatrixCSC)
+    @eval Base.map(f::BasicSymbolic{T}, x::$S) where {T} = _map(T, f, x)
+end
+for S in (SparseArrays.AbstractSparseMatrixCSC, _CSC)
+    @eval function Base.map(f::BasicSymbolic{T}, x::$S, xs::SparseMatrixCSC...) where {T}
+        return _map(T, f, x, xs...)
+    end
+end
+function Base.map(f::BasicSymbolic{T}, x::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
     return _map(T, f, x, xs...)
 end
-function Base.map(f::BasicSymbolic{T}, x::SparseMatrixCSC, xs::SparseMatrixCSC...) where {T}
-    return _map(T, f, x, xs...)
+function Base.map(f::BasicSymbolic{T}, x::StaticArraysCore.StaticArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, y, xs...)
 end
-function Base.map(f::BasicSymbolic{T}, x::SparseVector, xs::SparseVector...) where {T}
-    return _map(T, f, x, xs...)
+function Base.map(f::BasicSymbolic{T}, x::AbstractArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, y, xs...)
 end
+# Internal small vectors keep their own eager `map`.
+function Base.map(f::BasicSymbolic, x::SmallVec{T, Vector{T}}) where {T}
+    return invoke(map, Tuple{Any, SmallVec{T, Vector{T}}}, f, x)
+end
+Base.map(f::BasicSymbolic, x::Backing{T}) where {T} = invoke(map, Tuple{Any, Backing{T}}, f, x)
 
 """
     @map_methods T argument_transform result_transform

@@ -38,6 +38,7 @@ PrecompileTools.@recompile_invalidations begin
     import MultivariatePolynomials as MP
     import DynamicPolynomials as DP
     import MutableArithmetics as MA
+    import SparseArrays
     import SparseArrays: SparseMatrixCSC, SparseVector, findnz, sparse
     import ReadOnlyArrays: ReadOnlyVector
     import Graphs

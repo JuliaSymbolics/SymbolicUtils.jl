@@ -67,6 +67,13 @@ preferred over the `BSImpl.AddMul{T}` constructor.
     BSImpl.AddMul{T}(coeff, dict, AddMulVariant.ADD; kw...)
 end
 
+function _has_array_key(dict)
+    for k in keys(dict)
+        is_array_shape(shape(k)) && return true
+    end
+    return false
+end
+
 """
     Mul{T}(coeff, dict; kw...) where {T}
 
@@ -85,13 +92,6 @@ High-level constructor for multiplication expressions.
 This constructor maintains invariants required by the `AddMul` variant. This should be
 preferred over the `BSImpl.AddMul{T}` constructor.
 """
-function _has_array_key(dict)
-    for k in keys(dict)
-        is_array_shape(shape(k)) && return true
-    end
-    return false
-end
-
 @inline function Mul{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
     coeff = unwrap(coeff)

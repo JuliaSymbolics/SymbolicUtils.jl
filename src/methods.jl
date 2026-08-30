@@ -30,8 +30,11 @@ const basic_diadic = [+, -, *, /, //, \, ^]
 #######################################################
 
 @inline function safe_eltype(T::TypeT)
-    if T <: AbstractArray
+    return if T <: Array
         T.parameters[1]::TypeT
+    elseif T <: AbstractArray
+        # e.g. `SArray{Tuple{2}, Int, 1, 2}` or `BitArray{1}`: the first parameter is not the eltype
+        eltype(T)::TypeT
     else
         T
     end
@@ -64,6 +67,18 @@ end
 islike(a, T) = symtype(a) <: T
 
 # TODO: keep domains tighter than this
+"""
+    @number_methods T unary_body binary_body [options]
+
+Generate the standard arithmetic methods needed for a symbolic type `T`.
+`unary_body` and `binary_body` are expressions evaluated with the generated
+function and binary-operation variables in scope. `options` may be `nothing`,
+`:skipbasics`, `:onlybasics`, or a vector expression naming operations to skip.
+
+This is a developer macro for symbolic-type implementations. It performs no
+runtime dispatch by itself; it emits methods for the numeric and symbolic
+promotion combinations supported by `T`.
+"""
 function number_methods(T, rhs1, rhs2, options=nothing)
     exprs = []
 
@@ -112,6 +127,13 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     Expr(:block, exprs...)
 end
 
+"""
+    @number_methods T unary_body binary_body [options]
+
+Emit arithmetic methods for `T` using the supplied unary and binary expression
+bodies. See [`number_methods`](@ref) for the generated dispatch combinations
+and supported `options` values.
+"""
 macro number_methods(T, rhs1, rhs2, options=nothing)
     number_methods(T, rhs1, rhs2, options) |> esc
 end
@@ -791,7 +813,7 @@ Conditional that builds the same kind of symbolic expression as `ifelse`, but **
 to an `if`/`else` branch** during code generation, so that only the taken branch is evaluated.
 The untaken branch's code is emitted inside the branch and is never executed when `cond`
 selects the other branch — even under common-subexpression elimination (`ifelse_branching`
-opts out of CSE for the conditional via [`cse_inside_expr`](@ref)).
+opts out of CSE for the conditional via `cse_inside_expr`).
 
 Use it when a branch is only valid to evaluate when its condition holds (it divides by a
 quantity that is zero otherwise, indexes into something that does not exist, errors, or
@@ -802,7 +824,7 @@ produces `NaN`/`Inf`). Contrast with [`ifelse_eager`](@ref), which evaluates bot
 
 While the branch interiors are excluded from common subexpression elimination (hoisting them
 would defeat the laziness), the conditional itself is still bound by CSE (see
-[`cse_bind_expr`](@ref)), so multiple references to one `ifelse_branching` expression share a
+`cse_bind_expr`), so multiple references to one `ifelse_branching` expression share a
 single `if`/`else`.
 """
 ifelse_branching(cond, x, y) = cond ? x : y
@@ -1125,9 +1147,21 @@ for valT in [Number, AbstractVector{<:Number}]
     end
 end
 
+"""
+    SymBroadcast{T}
+
+Broadcast style for `BasicSymbolic{T}` expressions. It keeps symbolic arrays in
+the symbolic broadcast path and rejects broadcasts that combine incompatible
+symbolic variants.
+"""
 struct SymBroadcast{T <: SymVariant} <: Broadcast.BroadcastStyle end
+struct _BroadcastProbeA <: Broadcast.BroadcastStyle end
+struct _BroadcastProbeB <: Broadcast.BroadcastStyle end
+const _BroadcastFallbackStyle = typeof(Broadcast.BroadcastStyle(_BroadcastProbeA(), _BroadcastProbeB()))
+
 Broadcast.BroadcastStyle(::Type{BasicSymbolic{T}}) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::Broadcast.BroadcastStyle) where {T} = SymBroadcast{T}()
+Broadcast.BroadcastStyle(::SymBroadcast{T}, ::_BroadcastFallbackStyle) where {T} = SymBroadcast{T}()
 Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{T}) where {T} = SymBroadcast{T}()
 function Broadcast.BroadcastStyle(::SymBroadcast{T}, ::SymBroadcast{R}) where {T, R}
     throw(ArgumentError(LazyString("Cannot broadcast symbolics of different `vartype`s ", T, " and ", R, ".")))
@@ -1530,7 +1564,24 @@ function __index_args(::Type{T}, nd::Int, xs...) where {T}
 end
 
 
+function _check_vartypes(::Type{T}, operation, xs...) where {T}
+    for x in xs
+        if x isa BasicSymbolic && vartype(x) !== T
+            throw(
+                ArgumentError(
+                    LazyString(
+                        "Cannot ", operation, " symbolics with different `vartype`s ",
+                        T, " and ", vartype(x), "."
+                    )
+                )
+            )
+        end
+    end
+    return nothing
+end
+
 function _map(::Type{T}, f, xs...) where {T}
+    _check_vartypes(T, "map", f, xs...)
     f = Mapper(f)
     xs = Const{T}.(xs)
     type = promote_symtype(f, symtype.(xs)...)
@@ -1552,24 +1603,84 @@ function _map(::Type{T}, f, xs...) where {T}
     return BSImpl.ArrayOp{T}(idxs, exp, +, term, ranges; type = type, shape = sh)
 end
 
-function Base.map(f::BasicSymbolic{T}, xs...) where {T}
-    _map(T, f, xs...)
+function Base.map(f, x::BasicSymbolic{T}, xs...) where {T}
+    return _map(T, f, x, xs...)
 end
-function Base.map(f::BasicSymbolic{T}, x::AbstractArray, xs...) where {T}
-    _map(T, f, x, xs...)
+function Base.map(f, x1, x::BasicSymbolic{T}, xs...) where {T}
+    return _map(T, f, x1, x, xs...)
 end
-
-for fT in [Any, :(BasicSymbolic{T})]
-    @eval function Base.map(f::$fT, x::BasicSymbolic{T}, xs...) where {T}
-        _map(T, f, x, xs...)
-    end
-    for x1T in [Any, :(BasicSymbolic{T})]
-        @eval function Base.map(f::$fT, x1::$x1T, x::BasicSymbolic{T}, xs...) where {T}
-            _map(T, f, x1, x, xs...)
-        end
-    end
+function Base.map(f, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...) where {T, R}
+    return _map(T, f, x1, x, xs...)
 end
 
+# A symbolic callable mapped over constant arrays traces to a lazy `Mapper` term, exactly
+# like a map over a symbolic array. The narrower signatures only settle dispatch against
+# the `map` methods LinearAlgebra, SparseArrays, and StaticArrays define for their types.
+function Base.map(f::BasicSymbolic{T}, x::AbstractArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, xs...)
+end
+const _StructuredMatrix = Union{
+    LinearAlgebra.Bidiagonal,
+    LinearAlgebra.Diagonal,
+    LinearAlgebra.LowerTriangular,
+    LinearAlgebra.SymTridiagonal,
+    LinearAlgebra.Tridiagonal,
+    LinearAlgebra.UnitLowerTriangular,
+    LinearAlgebra.UnitUpperTriangular,
+    LinearAlgebra.UpperTriangular,
+}
+const _SparseVecOrMat = Union{SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC}
+# SparseArrays' broadcast-backed `map` accepts this union of sparse, structured, and
+# sparse column-block types; mirroring it exactly is what settles the intersection.
+const _SparseColumnBlock = SubArray{
+    Tv, 2, <:SparseArrays.AbstractSparseMatrixCSC{Tv, Ti}, Tuple{Base.Slice{Base.OneTo{Int}}, I},
+} where {Tv, Ti, I <: AbstractUnitRange{<:Integer}}
+const _CSC = Union{SparseArrays.FixedSparseCSC, SparseMatrixCSC}
+# Julia 1.10's SparseArrays uses the union without the column block.
+const _SparseOrStructuredLTS = Union{_StructuredMatrix, _CSC}
+const _SparseOrStructured = Union{_SparseColumnBlock, _SparseOrStructuredLTS}
+const _AdjointVector = LinearAlgebra.Adjoint{<:Any, <:AbstractVector}
+const _TransposeVector = LinearAlgebra.Transpose{<:Any, <:AbstractVector}
+for S in (
+        _StructuredMatrix, SparseMatrixCSC, SparseVector, _SparseVecOrMat, _CSC,
+        _SparseOrStructuredLTS, _SparseOrStructured, _AdjointVector, _TransposeVector,
+        StaticArraysCore.StaticArray,
+    )
+    @eval function Base.map(f::BasicSymbolic{T}, x::$S, xs::$S...) where {T}
+        return _map(T, f, x, xs...)
+    end
+end
+for S in (SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC, _CSC, SparseMatrixCSC)
+    @eval Base.map(f::BasicSymbolic{T}, x::$S) where {T} = _map(T, f, x)
+end
+for S in (SparseArrays.AbstractSparseMatrixCSC, _CSC)
+    @eval function Base.map(f::BasicSymbolic{T}, x::$S, xs::SparseMatrixCSC...) where {T}
+        return _map(T, f, x, xs...)
+    end
+end
+function Base.map(f::BasicSymbolic{T}, x::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, xs...)
+end
+function Base.map(f::BasicSymbolic{T}, x::StaticArraysCore.StaticArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, y, xs...)
+end
+function Base.map(f::BasicSymbolic{T}, x::AbstractArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
+    return _map(T, f, x, y, xs...)
+end
+# Internal small vectors keep their own eager `map`.
+function Base.map(f::BasicSymbolic, x::SmallVec{T, Vector{T}}) where {T}
+    return invoke(map, Tuple{Any, SmallVec{T, Vector{T}}}, f, x)
+end
+Base.map(f::BasicSymbolic, x::Backing{T}) where {T} = invoke(map, Tuple{Any, Backing{T}}, f, x)
+
+"""
+    @map_methods T argument_transform result_transform
+
+Generate `Base.map` methods for a symbolic array-like type. `argument_transform`
+converts the symbolic container to the arguments passed to `map`, and
+`result_transform` wraps the mapped result. This is a developer interface and
+must be used while defining the corresponding symbolic type.
+"""
 macro map_methods(T, arg_f, result_f)
     quote
         function (::$(typeof(Base.map)))(f, x::$T, xs...)
@@ -1647,13 +1758,16 @@ function promote_shape(f::Mapreducer, shs::ShapeT...)
     elseif mapped_shape isa Unknown
         return mapped_shape
     else
-        ax = mapped_shape[f.dims]
-        mapped_shape[f.dims] = first(ax):first(ax)
-        return mapped_shape
+        # `mapped_shape` may alias an argument's own shape vector; never mutate it.
+        reduced_shape = copy(mapped_shape)
+        ax = reduced_shape[f.dims]
+        reduced_shape[f.dims] = first(ax):first(ax)
+        return reduced_shape
     end
 end
 
 function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T}
+    _check_vartypes(T, "reduce", f, red, xs...)
     f = Mapreducer(f, red, dims, init)
     xs = Const{T}.(xs)
     shs = shape.(xs)
@@ -1677,23 +1791,14 @@ function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T
     return BSImpl.ArrayOp{T}(idxs, exp, red, term; type = type, shape = sh)
 end
 
-for (Tf, Tr) in Iterators.product([:(BasicSymbolic{T}), Any], [:(BasicSymbolic{T}), Any])
-    if Tf != Any || Tr != Any
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, xs...; kw...) where {T}
-            return _mapreduce(T, f, red, xs...; kw...)
-        end
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, x::AbstractArray, xs...; kw...) where {T}
-            return _mapreduce(T, f, red, x, xs...; kw...)
-        end
-    end
-    @eval function Base.mapreduce(f::$Tf, red::$Tr, x::BasicSymbolic{T}, xs...; kw...) where {T}
-        _mapreduce(T, f, red, x, xs...; kw...)
-    end
-    for x1T in [Any, :(BasicSymbolic{T})]
-        @eval function Base.mapreduce(f::$Tf, red::$Tr, x1::$x1T, x::BasicSymbolic{T}, xs...; kw...) where {T}
-            _mapreduce(T, f, red, x1, x, xs...; kw...)
-        end
-    end
+function Base.mapreduce(f, red, x::BasicSymbolic{T}, xs...; kw...) where {T}
+    return _mapreduce(T, f, red, x, xs...; kw...)
+end
+function Base.mapreduce(f, red, x1, x::BasicSymbolic{T}, xs...; kw...) where {T}
+    return _mapreduce(T, f, red, x1, x, xs...; kw...)
+end
+function Base.mapreduce(f, red, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...; kw...) where {T, R}
+    return _mapreduce(T, f, red, x1, x, xs...; kw...)
 end
 
 function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
@@ -1706,6 +1811,13 @@ function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
     EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kwargs = [:(kw...)], kw...))
 end
 
+"""
+    @mapreduce_methods T argument_transform result_transform
+
+Generate `Base.mapreduce` methods for a symbolic array-like type. The transform
+expressions receive the mapped input and the result transform reconstructs the
+symbolic representation.
+"""
 macro mapreduce_methods(T, arg_f, result_f)
     result = Expr(:block)
 
@@ -1728,6 +1840,13 @@ macro mapreduce_methods(T, arg_f, result_f)
     return esc(result)
 end
 
+"""
+    operator_to_term(operator::Operator, ex::BasicSymbolic)
+
+Return the symbolic term representing an operator application. The default
+implementation returns `ex`; custom `Operator` subtypes may override it when
+their printed or canonical term differs from the original expression.
+"""
 function operator_to_term(::Operator, ex::BasicSymbolic{T}) where {T}
     return ex
 end
@@ -1756,6 +1875,11 @@ for T1 in [Real, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})
         sh = promote_shape(in, shape(a), shape(b))
         return BSImpl.Term{T}(in, ArgsT{T}((Const{T}(a), Const{T}(b))); type = Bool, shape = sh)
     end
+end
+
+function Base.in(a::BasicSymbolic{T}, b::StaticArraysCore.StaticArray) where {T}
+    sh = promote_shape(in, shape(a), shape(b))
+    return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
 end
 
 function promote_symtype(::typeof(issubset), T::TypeT, S::TypeT)
@@ -1795,7 +1919,7 @@ for f in [union, intersect]
         end
         @eval function (::$(typeof(f)))(a::$T1, b::$T2) where {T}
             sh = promote_shape($f, shape(a), shape(b))
-            type = promote_type($f, symtype(a), symtype(b))
+            type = promote_symtype($f, symtype(a), symtype(b))
             return BSImpl.Term{T}($f, ArgsT{T}((Const{T}(a), Const{T}(b))); type, shape = sh)
         end
     end
@@ -1953,6 +2077,9 @@ end
 
 function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T, R}
     SymbolicRound{T, typeof(mode)}(mode)(ex)
+end
+function Base.round(::Type{T}, ex::BasicSymbolic{R}, mode::Base.RoundingMode) where {T >: Missing, R}
+    return SymbolicRound{T, typeof(mode)}(mode)(ex)
 end
 
 function promote_symtype(::Type{T}, R::TypeT) where {T <: Returns}

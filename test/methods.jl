@@ -1,8 +1,19 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
+using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
 using Test
 import NaNMath
 import LinearAlgebra
+import SparseArrays
+using StaticArrays: SVector
+using SparseArrays: sparse
+
+struct NoMatrixVector{T} <: AbstractVector{T}
+    data::Vector{T}
+end
+Base.size(x::NoMatrixVector) = size(x.data)
+Base.getindex(x::NoMatrixVector, i::Int) = x.data[i]
+Base.Matrix(::LinearAlgebra.Diagonal{T, V}) where {T, V <: NoMatrixVector} =
+    error("unexpected dense conversion")
 
 @testset "public shape promotion interface" begin
     if isdefined(Base, :ispublic)
@@ -11,8 +22,21 @@ import LinearAlgebra
         @test Base.ispublic(SymbolicUtils, :ShapeT)
         @test Base.ispublic(SymbolicUtils, :shape)
         @test Base.ispublic(SymbolicUtils, :promote_shape)
+        @test Base.ispublic(SymbolicUtils, :Term)
+        @test Base.ispublic(SymbolicUtils, :Add)
+        @test Base.ispublic(SymbolicUtils, :Mul)
+        @test Base.ispublic(SymbolicUtils, :node_count)
     end
 end
+
+@testset "public API docstrings" begin
+    @test @doc(SymbolicUtils.FnType) !== nothing
+    @test @doc(SymbolicUtils.Term) !== nothing
+    @test @doc(SymbolicUtils.Add) !== nothing
+    @test @doc(SymbolicUtils.Mul) !== nothing
+    @test @doc(SymbolicUtils.node_count) !== nothing
+end
+
 import SpecialFunctions: besselj, bessely, besseli, besselk, polygamma, beta, logbeta, hankelh1, hankelh2, expint, gamma, erf
 
 @testset "promote_symtype with BigInt" begin
@@ -402,7 +426,8 @@ end
 end
 
 @testset "Map operations on symbolics" begin
-    @syms a[1:3]::Float64 b[1:3]::Float64
+    @syms a[1:3]::Float64 b[1:3]::Float64 f(..)
+    @syms safe_f(..) safe_a[1:3]::Float64 vartype = SafeReal
 
     result = map(sin, a)
     @test isequal(collect(result), [sin(a[1]), sin(a[2]), sin(a[3])])
@@ -412,6 +437,58 @@ end
 
     result3 = map(+, a, [1.0, 2.0, 3.0])
     @test isequal(collect(result3), [a[1] + 1.0, a[2] + 2.0, a[3] + 3.0])
+
+    diagonal = LinearAlgebra.Diagonal([1, 2])
+    mapped_diagonal = map(f, diagonal)
+    @test mapped_diagonal isa BasicSymbolic
+    @test isequal(collect(mapped_diagonal), [f(1) f(0); f(0) f(2)])
+    no_matrix = LinearAlgebra.Diagonal(NoMatrixVector([1, 2]))
+    mapped_no_matrix = map(f, no_matrix)
+    @test mapped_no_matrix isa BasicSymbolic
+    @test size(mapped_no_matrix) == (2, 2)
+    sparse_lower = LinearAlgebra.LowerTriangular(SparseArrays.spdiagm([1, 2]))
+    mapped_sparse_lower = map(f, sparse_lower)
+    @test mapped_sparse_lower isa BasicSymbolic
+    @test size(mapped_sparse_lower) == (2, 2)
+    @test isequal(mapreduce(f, +, diagonal), f(1) + f(2) + 2f(0))
+
+    sparse_diagonal = sparse([1 0; 0 2])
+    mapped_sparse_diagonal = map(f, sparse_diagonal)
+    @test mapped_sparse_diagonal isa BasicSymbolic
+    @test isequal(collect(mapped_sparse_diagonal), [f(1) f(0); f(0) f(2)])
+    mapped_sparse_diagonals = map(f, sparse_diagonal, sparse_diagonal)
+    @test mapped_sparse_diagonals isa BasicSymbolic
+    @test isequal(
+        collect(mapped_sparse_diagonals),
+        [f(1, 1) f(0, 0); f(0, 0) f(2, 2)]
+    )
+    sparse_vector = SparseArrays.sparsevec([1, 3], [1, 2], 3)
+    mapped_sparse_vector = map(f, sparse_vector)
+    @test mapped_sparse_vector isa BasicSymbolic
+    @test isequal(collect(mapped_sparse_vector), [f(1), f(0), f(2)])
+    # A symbolic callable over any constant array traces lazily, whatever the array type.
+    dense = [1 0; 0 2]
+    for arr in (
+            dense, [1, 2], 1:2, view([1, 2], 1:2), transpose(dense), LinearAlgebra.Symmetric(dense),
+            LinearAlgebra.Hermitian(dense), LinearAlgebra.UpperHessenberg(dense),
+            SVector(1, 2), [1, 2]', transpose([1, 2]), SparseArrays.spdiagm([1, 2])[:, 1:2],
+            BitVector([true, false]),
+        )
+        mapped = map(f, arr)
+        @test mapped isa BasicSymbolic
+        @test isequal(collect(mapped), map(v -> f(v), collect(arr)))
+    end
+    @test isequal(collect(map(f, dense)), [f(1) f(0); f(0) f(2)])
+    @test symtype(map(f, dense)) == Matrix{Number}
+    for (x, y) in ((diagonal, dense), (dense, diagonal), (sparse_diagonal, dense), (SVector(1, 2), [1, 2]), ([1, 2], SVector(1, 2)))
+        mapped = map(f, x, y)
+        @test mapped isa BasicSymbolic
+        @test isequal(collect(mapped), map((v, w) -> f(v, w), collect(x), collect(y)))
+    end
+    @test_throws ArgumentError map(safe_f, a)
+    @test_throws ArgumentError map(+, a, a, safe_a)
+    @test_throws ArgumentError mapreduce(safe_f, +, a)
+    @test_throws ArgumentError mapreduce(+, +, a, a, safe_a)
 end
 
 @testset "in operator on symbolics" begin
@@ -430,6 +507,9 @@ end
     @test isa(result2, BasicSymbolic)
 
     result3 = in(x, [1.0, 2.0, 3.0])
+    result4 = in(x, SVector(1.0, 2.0, 3.0))
+    @test isa(result4, BasicSymbolic)
+    @test symtype(result4) == Bool
     @test isa(result3, BasicSymbolic)
 end
 

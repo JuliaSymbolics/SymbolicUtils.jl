@@ -1,3 +1,13 @@
+"""
+    _indexed_ndims(index_types...)
+
+Return the number of array dimensions selected by a tuple of index types.
+Integer and scalar indices consume no dimensions, while `Colon` and integer
+vectors consume one. Invalid index types throw `ArgumentError`.
+
+This helper is part of the developer indexing interface used by
+`promote_symtype(getindex, ...)`.
+"""
 @inline _indexed_ndims() = 0
 @inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{<:AbstractVector{<:Integer}}, rest...) = 1 + _indexed_ndims(rest...)

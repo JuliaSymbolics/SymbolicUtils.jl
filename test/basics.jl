@@ -109,6 +109,8 @@ end
 
 struct Ctx1 end
 struct Ctx2 end
+struct Ctx3 end
+struct Ctx4 end
 
 # needs to be written like this to avoid a segfault on Julia 1.10
 @info "Metadata test"
@@ -127,6 +129,16 @@ for a = [a, sin(a), a+b, a*b, a^3]
 
     @test getmetadata(a′, Ctx1) == "meta_1"
     @test getmetadata(a′, Ctx2) == "meta_2"
+
+    a′ = setmetadata(a′, Ctx3, "meta_3")
+    a′ = setmetadata(a′, Ctx4, "meta_4")
+    a′ = setmetadata(a′, Ctx3, "updated_3")
+    @test getmetadata.(Ref(a′), (Ctx1, Ctx2, Ctx3, Ctx4)) ==
+        ("meta_1", "meta_2", "updated_3", "meta_4")
+
+    a′ = setmetadata(a′, Ctx2, "updated_2")
+    @test getmetadata.(Ref(a′), (Ctx1, Ctx2, Ctx3, Ctx4)) ==
+        ("meta_1", "updated_2", "updated_3", "meta_4")
 end
 
 # In substitute #283
@@ -197,12 +209,17 @@ end
     # typed_vcat
     @test BS{SymReal}[1; 2] isa Vector{BasicSymbolic{SymReal}}
     @test BS[1; a] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[1; 2; a] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[a; missing] isa Vector{BasicSymbolic{SymReal}}
     # typed_hcat
     @test BS{SymReal}[1 2] isa Matrix{BasicSymbolic{SymReal}}
     @test BS[1 a] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1 2 a] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[a missing] isa Matrix{BasicSymbolic{SymReal}}
     # typed_hvcat
     @test BS{SymReal}[1 2; 3 4] isa Matrix{BasicSymbolic{SymReal}}
     @test BS[1 a; 3 4] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[a missing; nothing :x] isa Matrix{BasicSymbolic{SymReal}}
     # typed_hvncat, ::Int
     @test BS{SymReal}[1;; 2] isa Matrix{BasicSymbolic{SymReal}}
     @test BS[1;; a] isa Matrix{BasicSymbolic{SymReal}}

@@ -113,14 +113,48 @@ Type for the `regions` field of `ArrayMaker`.
 """
 const RegionsT = SmallV{ShapeVecT}
 const IdentT = Union{IDType, Nothing}
+"""
+    MonomialOrder
+
+The canonical monomial ordering used by SymbolicUtils polynomial conversion.
+It is graded reverse lexicographic ordering with the reverse tie-breaker used by
+`DynamicPolynomials`.
+"""
 const MonomialOrder = MP.Graded{MP.Reverse{MP.InverseLexOrder}}
+"""
+    PolyVarOrder
+
+The `DynamicPolynomials` variable-order type used by `PolyVarT` and `PolynomialT`.
+Variables are ordered by their creation order.
+"""
 const PolyVarOrder = DP.Commutative{DP.CreationOrder}
 const ExamplePolyVar = only(DP.@polyvar __DUMMY__ monomial_order=MonomialOrder)
+"""
+    PolyVarT
+
+The concrete polynomial-variable type used for symbolic expressions converted to
+polynomial form. Values are created with `DynamicPolynomials.@polyvar`-compatible
+constructors and are not themselves symbolic terms.
+"""
 const PolyVarT = typeof(ExamplePolyVar)
+"""
+    PolyCoeffT
+
+The coefficient type accepted by the developer polynomial interface. SymbolicUtils
+uses `Number` so integer, rational, and floating-point coefficients can share the
+same conversion routines.
+"""
 const PolyCoeffT = Number
 const _PolynomialT{T} = DP.Polynomial{PolyVarOrder, MonomialOrder, T}
 # we can't actually print a zero polynomial of this type, since it attempts to call
 # `zero(Any)` but that doesn't matter because we shouldn't ever store a zero polynomial
+"""
+    PolynomialT
+
+The concrete sparse polynomial type returned by [`to_poly!`](@ref). Its variables
+use [`PolyVarOrder`](@ref), its monomials use [`MonomialOrder`](@ref), and its
+coefficients are [`PolyCoeffT`](@ref).
+"""
 const PolynomialT = _PolynomialT{PolyCoeffT}
 """
     $TYPEDEF
@@ -128,6 +162,11 @@ const PolynomialT = _PolynomialT{PolyCoeffT}
 Allowed types for the [`SymbolicUtils.symtype`](@ref) of symbolics.
 """
 const TypeT = DataType
+"""
+    MonomialT
+
+The concrete monomial type used inside [`PolynomialT`](@ref) values.
+"""
 const MonomialT = DP.Monomial{PolyVarOrder, MonomialOrder}
 const MonomialVecT = DP.MonomialVector{PolyVarOrder, MonomialOrder}
 
@@ -981,9 +1020,12 @@ function getmetadata(s::BasicSymbolic, @nospecialize(ctx), default)
     return get(md, ctx, default)
 end
 
-# pirated for Setfield purposes:
 using Base: ImmutableDict
-Base.ImmutableDict(d::ImmutableDict{K,V}, x, y)  where {K, V} = ImmutableDict{K,V}(d, x, y)
+
+@inline _set_immutable_dict_value(d::ImmutableDict{K,V}, value) where {K,V} =
+    ImmutableDict{K,V}(d.parent, d.key, value)
+@inline _set_immutable_dict_parent(d::ImmutableDict{K,V}, parent) where {K,V} =
+    ImmutableDict{K,V}(parent, d.key, d.value)
 
 assocmeta(d::Dict, ctx, val) = (d=copy(d); d[ctx] = val; d)
 function assocmeta(d::Base.ImmutableDict{DataType, Any}, @nospecialize(ctx::DataType), @nospecialize(val))::ImmutableDict{DataType,Any}
@@ -991,13 +1033,13 @@ function assocmeta(d::Base.ImmutableDict{DataType, Any}, @nospecialize(ctx::Data
     # optimizations
     # If using upto 3 contexts, things stay compact
     if isdefined(d, :parent)
-        d.key === ctx && return @set d.value = val
+        d.key === ctx && return _set_immutable_dict_value(d, val)
         d1 = d.parent
         if isdefined(d1, :parent)
-            d1.key === ctx && return @set d.parent.value = val
+            d1.key === ctx && return _set_immutable_dict_parent(d, _set_immutable_dict_value(d1, val))
             d2 = d1.parent
             if isdefined(d2, :parent)
-                d2.key === ctx && return @set d.parent.parent.value = val
+                d2.key === ctx && return _set_immutable_dict_parent(d, _set_immutable_dict_parent(d1, _set_immutable_dict_value(d2, val)))
             end
         end
     end
@@ -1117,6 +1159,36 @@ promote_shape(f, szs::ShapeT...) = Unknown(-1)
 #### Function-like variables
 #---------------------------
 
+"""
+    FnType{A, R, S}
+
+Type-level description of a symbolic function.
+
+# Parameters
+
+- `A <: Tuple`: tuple of symbolic argument types.
+- `R`: symbolic return type.
+- `S`: supertype represented by the symbolic function, or `Nothing` when no
+  supertype was specified.
+
+`FnType` is used as the `symtype` of a callable symbolic variable. The
+[`@syms`](@ref) macro constructs these types from declarations such as
+`@syms f(::Real, ::Int)::Float64`.
+
+# Examples
+
+```julia
+julia> using SymbolicUtils
+
+julia> @syms f(::Real)::Float64;
+
+julia> SymbolicUtils.symtype(f)
+SymbolicUtils.FnType{Tuple{Real}, Float64, Nothing}
+
+julia> SymbolicUtils.fntype_ret_type(SymbolicUtils.FnType{Tuple{Real}, Float64, Nothing})
+Float64
+```
+"""
 struct FnType{X<:Tuple,Y,Z} end
 
 function (f::BasicSymbolic{T})(args...) where {T}

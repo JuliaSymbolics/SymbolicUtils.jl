@@ -97,6 +97,14 @@ Get an `AbstractDict` of the substitution rules for the given
 """
 get_substitution_dict(s::DefaultSubstituter) = s.dict
 
+"""
+    infer_vartype(x)
+
+Return the symbolic vartype inferred from `x`. Custom wrapper types used as
+substitution keys or values should define a method on `typeof(x)` that returns
+the corresponding symbolic vartype, or `Nothing` when no inference is
+available.
+"""
 infer_vartype(x) = infer_vartype(typeof(x))
 infer_vartype(::Type{T}) where {T} = Nothing
 function infer_vartype(::Type{D}) where {K, V, D <: AbstractDict{K, V}}
@@ -275,6 +283,14 @@ end
 
 const EMPTY_DICT = Dict{Int, Int}()
 
+"""
+    evaluate(expr; filterer = default_substitute_filter)
+
+Evaluate a symbolic expression using the standard substitution and folding
+machinery without replacing any variables. `filterer` controls which symbolic
+nodes may be folded. The result is the folded expression or value returned by
+`substitute` with `fold = Val(true)`.
+"""
 function evaluate(expr; filterer = default_substitute_filter)
     return substitute(expr, EMPTY_DICT; fold = Val{true}(), filterer)
 end
@@ -453,6 +469,13 @@ end
 _default_buffer(::BasicSymbolic{T}) where {T} = OrderedSet{BasicSymbolic{T}}()
 _default_buffer(x::Any) = unwrap(x) === x ? Set() : _default_buffer(unwrap(x))
 
+"""
+    search_variables(expr; is_atomic = default_is_atomic, recurse = iscall)
+
+Return a set-like collection containing the atomic symbolic variables found in
+`expr`. The keyword arguments are forwarded to [`search_variables!`](@ref), so
+custom wrappers can define both the atomic predicate and recursion policy.
+"""
 function search_variables(expr; kw...)
     buffer = _default_buffer(expr)
     search_variables!(buffer, expr; kw...)

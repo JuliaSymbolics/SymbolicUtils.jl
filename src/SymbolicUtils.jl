@@ -7,7 +7,8 @@ if isdefined(Base, :Experimental) && isdefined(Base.Experimental, Symbol("@max_m
     @eval Base.Experimental.@compiler_options max_methods=1
 end
 
-using DocStringExtensions
+import DocStringExtensions
+using DocStringExtensions: METHODLIST, SIGNATURES, TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 
 export @syms, term, hasmetadata, getmetadata, setmetadata
 
@@ -15,30 +16,31 @@ using Moshi.Data: @data
 import Moshi.Data as MData
 using Moshi.Match: @match
 using EnumX: @enumx
-using TermInterface
-using Setfield
-import Setfield: PropertyLens
-using SymbolicIndexingInterface
+import TermInterface
+import Setfield
+using Setfield: @set, @set!
+import SymbolicIndexingInterface
+using SymbolicIndexingInterface: ArraySymbolic, NotSymbolic, ScalarSymbolic, getname, hasname,
+                                 symbolic_type
 import Base: +, -, *, /, //, \, ^, ImmutableDict
-using ConstructionBase
-using TermInterface
-import TermInterface: iscall, operation, arguments, metadata, maketerm, sorted_arguments
+import ConstructionBase
+import TermInterface: children, iscall, operation, arguments, metadata, maketerm, sorted_arguments
+import DataStructures: OrderedDict, OrderedSet
+import OrderedCollections
 # For ReverseDiffExt
 import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 using WeakCacheSets: WeakCacheSet, getkey!
-using Base: RefValue
 import MacroTools
 import PrecompileTools
 PrecompileTools.@recompile_invalidations begin
     import MultivariatePolynomials as MP
     import DynamicPolynomials as DP
     import MutableArithmetics as MA
-    import SparseArrays: SparseMatrixCSC, findnz, sparse
-    using DataStructures
-    import DataStructures: OrderedCollections
-    using ReadOnlyArrays
+    import SparseArrays
+    import SparseArrays: SparseMatrixCSC, SparseVector, findnz, sparse
+    import ReadOnlyArrays: ReadOnlyVector
     import Graphs
     import StaticArraysCore
 end
@@ -159,7 +161,7 @@ include("arraymaker.jl")
 # Methods on symbolic objects
 export ifelse_eager, ifelse_branching
 PrecompileTools.@recompile_invalidations begin
-using SpecialFunctions, NaNMath
+import SpecialFunctions, NaNMath
 include("methods.jl")
 include("printing.jl")
 end
@@ -213,6 +215,7 @@ end
 @public add_worker, mul_worker
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
+@public Term, Add, Mul, node_count
 @public isconst
 @public operation_hasname, operation_getname
 @public operation_is_atomic
@@ -221,6 +224,25 @@ end
 @public fntype_ret_type
 @public FnType
 @public Mapper, Mapreducer
+@public infer_vartype, search_variables!
+
+# These names form the developer interface consumed by Symbolics.jl and related
+# JuliaSymbolics packages. They are intentionally public without being exported:
+# ordinary users should prefer the higher-level constructors and transformations.
+@public <ₑ, @cache, @map_methods, @mapreduce_methods, @number_methods, number_methods
+@public ACDict, AddMulVariant, ArgsT, BSImpl, BasicSymbolicImpl, Const, Div
+@public MetadataT, MonomialOrder, MonomialT, Mul, Operator, PolyCoeffT, PolyVarOrder
+@public PolyVarT, PolynomialT, ROArgsT, Rule, StableIndex, Substituter, SymBroadcast
+@public TypeT, _indexed_ndims, _isone, _iszero, basicsymbolic_to_polyvar, clear_cache!
+@public default_is_atomic, default_substitute_filter, denominators, evaluate, from_poly
+@public get_substitution_dict, hashcons, is_array_shape, is_called_function_symbolic
+@public is_function_symbolic, isarrayop, isbinop, numerators, one_of_vartype
+@public operator_to_term, parse_variable, promote_symtype, query, scalarize
+@public search_variables, show_call, stable_eachindex, sym_from_parse_result, to_poly!
+@public toggle_caching!, zero_of_vartype, zeropoly
+
+# `Code` is a developer-facing submodule used by downstream code generators.
+@public Code
 
 # `simplify_rules.jl` does `using .Rewriters`, so these already resolve as
 # `SymbolicUtils.X` and callers depend on that spelling. Declare them public here so

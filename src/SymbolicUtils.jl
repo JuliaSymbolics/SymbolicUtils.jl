@@ -214,6 +214,8 @@ end
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
 @public isconst
+@public operation_hasname, operation_getname
+@public operation_is_atomic
 @public ispow
 @public Unknown, ShapeVecT, ShapeT, shape, promote_shape
 @public fntype_ret_type

@@ -452,23 +452,41 @@ end
 SymbolicIndexingInterface.symbolic_type(::Type{BasicSymbolic}) = ScalarSymbolic()
 SymbolicIndexingInterface.symbolic_type(::Type{BasicSymbolic{T}}) where {T} = ScalarSymbolic()
 
+"""
+    $(TYPEDSIGNATURES)
+
+Name of the term `f(args...)`, where the name is not carried by `f` itself but derived
+from one of the arguments. Downstream packages that define operations projecting out of a
+named parent extend this alongside [`operation_hasname`](@ref); `getindex` is the case
+defined here. Only called when [`operation_hasname`](@ref) returns `true`.
+"""
+operation_getname(@nospecialize(f), args) = error(lazy"$f does not have a name.")
+operation_getname(::typeof(getindex), args) = getname(args[1])
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether the term `f(args...)` has a name derived from its arguments. Defaults to `false`.
+See [`operation_getname`](@ref).
+"""
+operation_hasname(@nospecialize(f), args) = false
+operation_hasname(::typeof(getindex), args) = hasname(args[1])
+
 function SymbolicIndexingInterface.getname(x::BasicSymbolic{T}) where {T}
     @match x begin
         BSImpl.Sym(; name) => name
-        BSImpl.Term(; f, args) && if f === getindex end => getname(args[1])
         BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => getname(f)
+        BSImpl.Term(; f, args) => operation_getname(f, args)
     end
 end
 
 function SymbolicIndexingInterface.hasname(x::BasicSymbolic{T}) where {T}
     @match x begin
         BSImpl.Sym(;) => true
-        BSImpl.Term(; f, args) => if f === getindex
-            hasname(args[1])
-        elseif f isa BasicSymbolic{T}
+        BSImpl.Term(; f, args) => if f isa BasicSymbolic{T}
             hasname(f)
         else
-            false
+            operation_hasname(f, args)
         end
         _ => false
     end

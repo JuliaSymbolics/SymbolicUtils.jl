@@ -25,6 +25,23 @@ end
     @eqtest simplify(Term{SymReal}(real, [x]; type = Real)) == x
     @eqtest unwrap_const(simplify(Term{SymReal}(imag, [x]; type = Real))) == 0
     @eqtest simplify(Term{SymReal}(imag, [y]; type = Real)) == imag(y)
+
+    # `complex(re, im)` literal Terms (e.g. produced by
+    # `Symbolics.unwrap(::Complex{Num})`) are opaque to `expand`. The poly
+    # conversion treats them as `re + 1im*im` so identically-zero diffs that
+    # contain them reduce under `simplify(...; expand=true)`. Plain `simplify`
+    # leaves the literal alone so downstream eager dispatches on `real` /
+    # `imag` / `conj` of `Term(complex, ...)` keep working.
+    c_term = Term{SymReal}(complex, [x, x]; type = Complex{Real})
+    @eqtest simplify(c_term) == c_term
+    @eqtest simplify(c_term; expand = true) == (1 + 1im) * x
+    # The classic motivating case: a polynomial difference that contains a
+    # literal `complex(0, c)` should reduce to zero under `expand=true`.
+    @eqtest unwrap_const(
+        simplify(Term{SymReal}(complex, [Term{SymReal}(zero, [x]; type = Real), x];
+                               type = Complex{Real}) - 1im * x;
+                 expand = true),
+    ) == 0
     @eqtest simplify(x - y) == x + -1 * y
     @eqtest simplify(x - sin(y)) == x + -1 * sin(y)
     @eqtest simplify(-sin(x)) == -1 * sin(x)

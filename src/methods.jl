@@ -1459,7 +1459,7 @@ struct Mapper{F}
     f::F
 end
 
-const MAPPER_SALT = 0x9e2a7b4c15d8f063
+const MAPPER_SALT = 0x9e2a7b4c15d8f063 % UInt
 Base.:(==)(a::Mapper, b::Mapper) = a.f == b.f
 Base.isequal(a::Mapper, b::Mapper) = isequal(a.f, b.f)
 Base.hash(m::Mapper, h::UInt) = hash(m.f, hash(MAPPER_SALT, h))
@@ -1718,7 +1718,7 @@ struct Mapreducer{F, R, D <: Union{Int, Colon}, I}
     init::I
 end
 
-const MAPREDUCER_SALT = 0x3f51c0a6e9b27d48
+const MAPREDUCER_SALT = 0x3f51c0a6e9b27d48 % UInt
 Base.:(==)(a::Mapreducer, b::Mapreducer) =
     a.f == b.f && a.reduce == b.reduce && a.dims == b.dims && a.init == b.init
 Base.isequal(a::Mapreducer, b::Mapreducer) =
@@ -2014,7 +2014,7 @@ struct Fill
     sh::ShapeVecT
 end
 
-const FILL_SALT = 0x7c8f3a1d6e2b9054
+const FILL_SALT = 0x7c8f3a1d6e2b9054 % UInt
 Base.:(==)(a::Fill, b::Fill) = a.sh == b.sh
 Base.isequal(a::Fill, b::Fill) = isequal(a.sh, b.sh)
 Base.hash(f::Fill, h::UInt) = hash(f.sh, hash(FILL_SALT, h))

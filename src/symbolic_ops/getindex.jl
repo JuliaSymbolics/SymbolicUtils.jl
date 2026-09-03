@@ -168,7 +168,7 @@ Base.length(x::StableIndex) = length(x.idxs)
 Base.iterate(x::StableIndex, args...) = iterate(x.idxs, args...)
 Base.eltype(::Type{StableIndex}) = Int
 Base.isequal(a::StableIndex{T}, b::StableIndex{T}) where {T} = isequal(a.idxs, b.idxs)
-const STABLE_INDEX_SEED = 0x47da907bc9126ce1
+const STABLE_INDEX_SEED = 0x47da907bc9126ce1 % UInt
 Base.hash(a::StableIndex, h::UInt) = hash(a.idxs, h) ⊻ STABLE_INDEX_SEED
 
 function Base.to_indices(A, inds, I::Tuple{StableIndex{Int}})

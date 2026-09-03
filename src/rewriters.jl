@@ -265,7 +265,7 @@ if the repeated application of `rw` produces results `a, b, c, d, b` in order,
 """
 struct FixpointNoCycle{C}
     rw::C
-    hist::Vector{UInt64} # vector of hashes for history
+    hist::Vector{UInt} # vector of hashes for history
 end
 
 instrument(x::FixpointNoCycle, f) = Fixpoint(instrument(x.rw, f))

@@ -9,6 +9,18 @@ information.
 """
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
+"""
+Task-local memo of `(objectid(a), objectid(b), full) => result` for the comparison
+currently in progress, or `nothing` when none is running.
+
+Expressions are DAGs, so a subterm reachable by several paths would otherwise be
+compared once per path — exponential in the nesting depth on a graph linear in it. The
+entry point in `Base.isequal` opens the memo and closes it again, so a key cannot
+outlive the objects whose identity it records.
+"""
+const EQUALITY_MEMO =
+    TaskLocalValue{Union{Nothing, Dict{Tuple{UInt, UInt, Bool}, Bool}}}(Returns(nothing))
+
 macro __generate_isequal_somescalar()
     expr = Expr(:if)
     cur_expr = expr
@@ -194,6 +206,13 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
         return false
     end
 
+    memo = EQUALITY_MEMO[]
+    memo_key = (objectid(a), objectid(b), full)
+    if memo !== nothing
+        cached = get(memo, memo_key, nothing)
+        cached === nothing || return cached
+    end
+
     partial = @match (a, b) begin
         (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => begin
             isequal_somescalar(v1, v2)::Bool && (!full || (typeof(v1) === typeof(v2))::Bool)
@@ -220,6 +239,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
     if full && partial && !(Ta <: BSImpl.Const)
         partial = metadata_isequal(metadata(a), metadata(b))
     end
+    memo === nothing || (memo[memo_key] = partial)
     return partial
 end
 
@@ -235,7 +255,17 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
     Tb = MData.variant_type(b)
     Ta === Tb || return false
 
-    return isequal_bsimpl(a, b, COMPARE_FULL[])
+    # The outermost comparison owns the memo and nested ones reuse it. Clearing it on
+    # the way out keeps `objectid` keys from outliving the objects they identify.
+    outermost = EQUALITY_MEMO[] === nothing
+    if outermost
+        EQUALITY_MEMO[] = Dict{Tuple{UInt, UInt, Bool}, Bool}()
+    end
+    try
+        return isequal_bsimpl(a, b, COMPARE_FULL[])
+    finally
+        outermost && (EQUALITY_MEMO[] = nothing)
+    end
 end
 
 Base.isequal(a::BSImpl.Type, b::WeakRef) = isequal(a, b.value)

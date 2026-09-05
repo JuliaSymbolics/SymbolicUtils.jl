@@ -373,17 +373,29 @@ atomic if one of the following conditions is true:
 - It is a `Sym` and not an internal index variable for an arrayop
 - It is a `Term`, the operation is a `BasicSymbolic` and the operation represents a
   dependent variable according to [`is_function_symbolic`](@ref).
-- It is a `Term`, the operation is `getindex` and the variable being indexed is atomic.
+- It is a `Term` and [`operation_is_atomic`](@ref) holds for its operation. `getindex` is
+  the case defined here: `x[i]` is atomic if `x` is.
 """
 function default_is_atomic(ex::BasicSymbolic{T}) where {T}
     @match ex begin
         BSImpl.Sym(; name) => name !== IDXS_SYM
         BSImpl.Term(; f) && if f isa Operator end => true
         BSImpl.Term(; f) && if f isa BasicSymbolic{T} end => !is_function_symbolic(f)
-        BSImpl.Term(; f, args) && if f === getindex end => default_is_atomic(args[1])
+        BSImpl.Term(; f, args) => operation_is_atomic(f, args)
         _ => false
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether the term `f(args...)` is a variable in its own right, for
+[`default_is_atomic`](@ref). Defaults to `false`. Downstream packages that define
+operations projecting out of a variable extend this; a projection is atomic exactly when
+the thing it projects out of is, which is what the `getindex` method here does.
+"""
+operation_is_atomic(@nospecialize(f), args) = false
+operation_is_atomic(::typeof(getindex), args) = default_is_atomic(args[1])
 
 """
     $(TYPEDSIGNATURES)

@@ -1364,6 +1364,26 @@ end
     @test !SII.hasname((2x)[1])
 end
 
+struct NamedProjection end
+SymbolicUtils.promote_symtype(::NamedProjection, ::Type) = Real
+SymbolicUtils.operation_hasname(::NamedProjection, args) = SII.hasname(args[1])
+SymbolicUtils.operation_getname(::NamedProjection, args) = SII.getname(args[1])
+
+struct AnonProjection end
+SymbolicUtils.promote_symtype(::AnonProjection, ::Type) = Real
+
+@testset "`operation_hasname`/`operation_getname` are extensible" begin
+    @syms x
+    # An operation that projects out of a named parent opts in and is named through it.
+    named = SymbolicUtils.term(NamedProjection(), x)
+    @test SII.hasname(named)
+    @test SII.getname(named) === :x
+    # Operations that do not opt in stay anonymous, and so does a projection whose
+    # parent is unnamed.
+    @test !SII.hasname(SymbolicUtils.term(AnonProjection(), x))
+    @test !SII.hasname(SymbolicUtils.term(NamedProjection(), 2x))
+end
+
 @testset "Div * Array" begin
     @syms x y z
     ex = (x / y) * BS[z, 1]

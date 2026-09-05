@@ -192,7 +192,8 @@ end
 Core equality comparison for `BasicSymbolic`. `full` is the current value of
 `COMPARE_FULL[]`, but passed explicitly to reduce accessing a `TaskLocalValue`.
 """
-function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where {T}
+# Declared `Bool` because the memo grows the recursion past what inference settles on.
+function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool)::Bool where {T}
     a === b && return true
     ida = a.id
     idb = b.id
@@ -255,16 +256,13 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
     Tb = MData.variant_type(b)
     Ta === Tb || return false
 
-    # The outermost comparison owns the memo and nested ones reuse it. Clearing it on
-    # the way out keeps `objectid` keys from outliving the objects they identify.
-    outermost = EQUALITY_MEMO[] === nothing
-    if outermost
-        EQUALITY_MEMO[] = Dict{Tuple{UInt, UInt, Bool}, Bool}()
-    end
+    # Only the outermost comparison sets the memo up; nested ones reuse it as they are.
+    EQUALITY_MEMO[] === nothing || return isequal_bsimpl(a, b, COMPARE_FULL[])
+    EQUALITY_MEMO[] = Dict{Tuple{UInt, UInt, Bool}, Bool}()
     try
         return isequal_bsimpl(a, b, COMPARE_FULL[])
     finally
-        outermost && (EQUALITY_MEMO[] = nothing)
+        EQUALITY_MEMO[] = nothing
     end
 end
 

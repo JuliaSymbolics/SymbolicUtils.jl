@@ -9,17 +9,59 @@ information.
 """
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
-"""
-Task-local memo of `(objectid(a), objectid(b), full) => result` for the comparison
-currently in progress, or `nothing` when none is running.
+struct EqualityKey
+    a::BasicSymbolic
+    b::BasicSymbolic
+    full::Bool
+    hash::UInt
+end
 
-Expressions are DAGs, so a subterm reachable by several paths would otherwise be
-compared once per path — exponential in the nesting depth on a graph linear in it. The
-entry point in `Base.isequal` opens the memo and closes it again, so a key cannot
-outlive the objects whose identity it records.
+EqualityKey(a, b, full) = EqualityKey(a, b, full, hash((objectid(a), objectid(b), full)))
+
+function Base.isequal(a::EqualityKey, b::EqualityKey)
+    return a.a === b.a && a.b === b.b && a.full === b.full
+end
+
+function Base.hash(key::EqualityKey, h::UInt)
+    return hash(key.hash, h)
+end
+
+mutable struct EqualityMemo
+    const results::Dict{EqualityKey, Bool}
+    const small::Vector{Pair{EqualityKey, Bool}}
+    active::Bool
+end
+
+function equality_memo_get(memo::EqualityMemo, key::EqualityKey)
+    isempty(memo.results) || return get(memo.results, key, nothing)
+    for (cached_key, result) in memo.small
+        isequal(cached_key, key) && return result
+    end
+    return nothing
+end
+
+function equality_memo_set!(memo::EqualityMemo, key::EqualityKey, result::Bool)
+    # Small comparisons must not clear a table sized for a previous large DAG.
+    if isempty(memo.results) && length(memo.small) < 8
+        push!(memo.small, key => result)
+    else
+        for (cached_key, cached_result) in memo.small
+            memo.results[cached_key] = cached_result
+        end
+        empty!(memo.small)
+        memo.results[key] = result
+    end
+    return result
+end
+
 """
-const EQUALITY_MEMO =
-    TaskLocalValue{Union{Nothing, Dict{Tuple{UInt, UInt, Bool}, Bool}}}(Returns(nothing))
+Task-local memo of object pairs and comparison modes for a DAG traversal.
+Keys retain the objects and check identity even when their identity hashes collide.
+The outermost comparison empties the memo on exit, retaining capacity for reuse.
+"""
+const EQUALITY_MEMO = TaskLocalValue(
+    () -> EqualityMemo(Dict{EqualityKey, Bool}(), Pair{EqualityKey, Bool}[], false)
+)
 
 macro __generate_isequal_somescalar()
     expr = Expr(:if)
@@ -208,9 +250,9 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool)::Bool 
     end
 
     memo = EQUALITY_MEMO[]
-    memo_key = (objectid(a), objectid(b), full)
-    if memo !== nothing
-        cached = get(memo, memo_key, nothing)
+    memo_key = EqualityKey(a, b, full)
+    if memo.active
+        cached = equality_memo_get(memo, memo_key)
         cached === nothing || return cached
     end
 
@@ -240,14 +282,16 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool)::Bool 
     if full && partial && !(Ta <: BSImpl.Const)
         partial = metadata_isequal(metadata(a), metadata(b))
     end
-    memo === nothing || (memo[memo_key] = partial)
+    memo.active && equality_memo_set!(memo, memo_key, partial)
     return partial
 end
 
-function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
-    # Copy the early-exit checks in `isequal_bsimpl` here as a fast-path
-    # that doesn't have to hit the `COMPARE_FULL` lookup.
+@inline function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
     a === b && return true
+    return isequal_with_memo(a, b)
+end
+
+@noinline function isequal_with_memo(a::BSImpl.Type, b::BSImpl.Type)
     ida = a.id
     idb = b.id
     ida === idb && ida !== nothing && return true
@@ -256,13 +300,20 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
     Tb = MData.variant_type(b)
     Ta === Tb || return false
 
-    # Only the outermost comparison sets the memo up; nested ones reuse it as they are.
-    EQUALITY_MEMO[] === nothing || return isequal_bsimpl(a, b, COMPARE_FULL[])
-    EQUALITY_MEMO[] = Dict{Tuple{UInt, UInt, Bool}, Bool}()
+    Ta <: BSImpl.Sym && a.name !== b.name && return false
+
+    full = COMPARE_FULL[]
+    full && ida !== nothing && idb !== nothing && return false
+
+    memo = EQUALITY_MEMO[]
+    memo.active && return isequal_bsimpl(a, b, full)
     try
-        return isequal_bsimpl(a, b, COMPARE_FULL[])
+        memo.active = true
+        return isequal_bsimpl(a, b, full)
     finally
-        EQUALITY_MEMO[] = nothing
+        empty!(memo.small)
+        isempty(memo.results) || empty!(memo.results)
+        memo.active = false
     end
 end
 

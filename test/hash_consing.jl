@@ -11,6 +11,27 @@ const BSImpl = SymbolicUtils.BasicSymbolicImpl
 struct Ctx1 end
 struct Ctx2 end
 
+@testset "Deepcopied expressions preserve interning equivalence" begin
+    @syms copied_symbol
+    for expr in (copied_symbol, sin(copied_symbol), sin(cos(copied_symbol) + copied_symbol))
+        reference = sin(expr)
+        retained = [sin(deepcopy(expr)) for _ in 1:1000]
+        @test all(term -> isequal(term, reference), retained)
+        @test all(term -> hash(term) == hash(reference), retained)
+        @test all(term -> term === reference, retained)
+    end
+
+    original = setmetadata(copied_symbol, Ctx1, [1])
+    copied = deepcopy(original)
+    @test getmetadata(copied, Ctx1) == [1]
+    @test getmetadata(copied, Ctx1) !== getmetadata(original, Ctx1)
+    getmetadata(copied, Ctx1)[1] = 2
+    @test getmetadata(original, Ctx1) == [1]
+    changed = setmetadata(copied, Ctx1, [3])
+    @test getmetadata(changed, Ctx1) == [3]
+    @test sin(changed) !== sin(original)
+end
+
 struct ThrowingEqualityScalar
     tag::Symbol
     value::Int

@@ -203,10 +203,6 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool)::Bool 
     Tb = MData.variant_type(b)
     Ta === Tb || return false
 
-    if full && ida !== idb && ida !== nothing && idb !== nothing
-        return false
-    end
-
     memo = EQUALITY_MEMO[]
     memo_key = (objectid(a), objectid(b), full)
     if memo !== nothing

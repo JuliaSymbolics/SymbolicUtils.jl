@@ -11,6 +11,7 @@ SymbolicUtils.get_substitution_dict
 SymbolicUtils.default_substitute_filter
 SymbolicUtils.query
 SymbolicUtils.default_is_atomic
+SymbolicUtils.operation_is_atomic
 SymbolicUtils.scalarize
 SymbolicUtils.scalarization_function
 ```

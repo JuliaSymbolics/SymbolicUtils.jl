@@ -39,6 +39,9 @@ SymbolicUtils.isbinop
 SymbolicUtils.numerators
 SymbolicUtils.denominators
 SymbolicUtils.one_of_vartype
+SymbolicUtils.operation_getname
+SymbolicUtils.operation_hasname
+SymbolicUtils.operation_is_atomic
 SymbolicUtils.operator_to_term
 SymbolicUtils.promote_symtype
 SymbolicUtils.query

@@ -286,10 +286,12 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool)::Bool 
     return partial
 end
 
-function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
-    # Copy the early-exit checks in `isequal_bsimpl` here as a fast-path
-    # that doesn't have to hit the `COMPARE_FULL` lookup.
+@inline function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
     a === b && return true
+    return isequal_with_memo(a, b)
+end
+
+@noinline function isequal_with_memo(a::BSImpl.Type, b::BSImpl.Type)
     ida = a.id
     idb = b.id
     ida === idb && ida !== nothing && return true

@@ -11,6 +11,35 @@ const BSImpl = SymbolicUtils.BasicSymbolicImpl
 struct Ctx1 end
 struct Ctx2 end
 
+struct CountedMetadata
+    value::Int
+    comparisons::Ref{Int}
+end
+
+Base.hash(x::CountedMetadata, h::UInt) = hash(x.value, h)
+function Base.isequal(a::CountedMetadata, b::CountedMetadata)
+    a.comparisons[] += 1
+    return a.value == b.value
+end
+
+@testset "Metadata hashing scales with retained values" begin
+    @syms metadata_symbol
+    comparisons = Ref(0)
+    retained = [
+        setmetadata(metadata_symbol, Ctx1, CountedMetadata(i, comparisons))
+            for i in 1:1000
+    ]
+    @test isequal(first(retained), last(retained))
+    @test isequal(first(retained) == last(retained), metadata_symbol == metadata_symbol)
+    @test hash(first(retained)) == hash(last(retained))
+    for (i, expr) in enumerate(retained)
+        @test getmetadata(expr, Ctx1).value == i
+        @test expr === setmetadata(metadata_symbol, Ctx1, CountedMetadata(i, comparisons))
+    end
+    # Count probes rather than wall time to detect quadratic collision chains.
+    @test comparisons[] <= 25length(retained)
+end
+
 struct ThrowingEqualityScalar
     tag::Symbol
     value::Int

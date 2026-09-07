@@ -95,6 +95,7 @@ function gen_rand_expr(inputs;
         return f(args...)
     catch err
         if err isa DomainError || err isa DivideError || err isa MethodError ||
+            err isa OverflowError ||
             err isa SymbolicUtils.SpecialFunctions.AmosException
             return gen_rand_expr(inputs,
                                  spec=spec,

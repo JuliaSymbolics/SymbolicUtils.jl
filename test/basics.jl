@@ -1005,7 +1005,7 @@ end
     # Promoted symtype is a subtype of referred
     @syms x::Int y::Int
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), (+), [x, y], nothing)
-    @test symtype(new_expr) == Int64
+    @test symtype(new_expr) == Int
 
     # Check that the Array type does not get changed to AbstractArray
     new_expr = SymbolicUtils.maketerm(

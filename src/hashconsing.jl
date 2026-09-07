@@ -413,9 +413,11 @@ end
 Custom hash functions for `vartype(x)`, since hashes of types defined in a module are not
 stable across machines or processes.
 """
-vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a, h)
-vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d, h)
-vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
+# `% UInt` so these seeds fit on 32-bit (`UInt === UInt32`); bare UInt64
+# literals passed to `hash` can InexactError when mixed into a UInt32 seed.
+vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a % UInt, h)
+vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d % UInt, h)
+vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155 % UInt, h)
 
 """
     $TYPEDSIGNATURES
@@ -423,7 +425,7 @@ vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
 Custom hash functions for `AddMul.variant`, since it falls back to the `Base.Enum`
 implementation, which uses `objectid`, which changes across runs.
 """
-hash_addmulvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
+hash_addmulvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 % UInt : 0x5e0a17a14cd8c815 % UInt, h)
 
 const FNTYPE_SEED = 0x8b414291138f6c45 % UInt
 

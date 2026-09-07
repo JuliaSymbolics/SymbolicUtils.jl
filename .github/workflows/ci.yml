@@ -40,3 +40,29 @@ jobs:
       - uses: codecov/codecov-action@v1
         with:
           file: lcov.info
+
+  # 32-bit (i686) Julia on ubuntu — needs i386 libs before setup-julia.
+  test-x86:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - 'Core'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install 32-bit runtime libraries (i386)
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libc6:i386 libstdc++6:i386 libgcc-s1:i386 libatomic1:i386
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+          arch: x86
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        env:
+          GROUP: ${{ matrix.group }}

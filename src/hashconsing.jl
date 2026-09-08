@@ -20,6 +20,8 @@ outlive the objects whose identity it records.
 """
 const EQUALITY_MEMO =
     TaskLocalValue{Union{Nothing, Dict{Tuple{UInt, UInt, Bool}, Bool}}}(Returns(nothing))
+const EQUALITY_MEMO_CACHE =
+    TaskLocalValue{Dict{Tuple{UInt, UInt, Bool}, Bool}}(Dict{Tuple{UInt, UInt, Bool}, Bool})
 
 macro __generate_isequal_somescalar()
     expr = Expr(:if)
@@ -258,11 +260,13 @@ function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
 
     # Only the outermost comparison sets the memo up; nested ones reuse it as they are.
     EQUALITY_MEMO[] === nothing || return isequal_bsimpl(a, b, COMPARE_FULL[])
-    EQUALITY_MEMO[] = Dict{Tuple{UInt, UInt, Bool}, Bool}()
+    memo = EQUALITY_MEMO_CACHE[]
+    EQUALITY_MEMO[] = memo
     try
         return isequal_bsimpl(a, b, COMPARE_FULL[])
     finally
         EQUALITY_MEMO[] = nothing
+        empty!(memo)
     end
 end
 

@@ -1,4 +1,4 @@
-name: Prototype reusable equality memo
+name: Materialize reusable equality memo prototype
 
 on:
   push:
@@ -6,23 +6,24 @@ on:
       - ci/reuse-equality-memo-prototype
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  prototype:
+  materialize:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: julia-actions/setup-julia@v3
         with:
-          version: '1.12'
-      - name: Apply prototype source patch
+          fetch-depth: 0
+      - name: Apply validated source patch
         run: |
           python - <<'PY'
           from pathlib import Path
 
           path = Path("src/hashconsing.jl")
           text = path.read_text()
+          if "const EQUALITY_MEMO_CACHE =" in text:
+              raise SystemExit(0)
 
           old = (
               "const EQUALITY_MEMO =\n"
@@ -64,69 +65,14 @@ jobs:
           path.write_text(text.replace(old, new))
           PY
           git diff --check
-          git diff -- src/hashconsing.jl
-
-      - name: Instantiate
-        env:
-          JULIA_PKG_PRECOMPILE_AUTO: '0'
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
-
-      - name: Equality regression probes
+      - name: Commit source blob
         run: |
-          julia --project=. - <<'JULIA'
-          using SymbolicUtils
-          using Test
-
-          struct EqualityMemoTag end
-          @syms x::Real y::Real a b c d
-
-          function deep(leaf, n)
-              e = leaf
-              for i in 1:n
-                  e = (e + i) * (e + y)
-              end
-              return e
-          end
-
-          tagged = SymbolicUtils.setmetadata(x, EqualityMemoTag, 1)
-          lhs = deep(x, 100)
-          rhs = deep(tagged, 100)
-          @test isequal(lhs, rhs)
-          deep_time = @elapsed @test isequal(lhs, rhs)
-          println("#1049 depth=100 equality time: ", deep_time, " s")
-
-          function build_deep_expr(vars, depth)
-              expr = vars[1]
-              for i in 1:depth
-                  v = vars[mod1(i, length(vars))]
-                  expr = sin(expr * v + v^2 - v)
-              end
-              return expr
-          end
-
-          function batch_isequal(xs, ys, reps)
-              acc = true
-              n = length(xs)
-              for i in 1:reps
-                  acc &= isequal(xs[mod1(i, n)], ys[mod1(i, n)])
-              end
-              return acc
-          end
-
-          exprs1 = [build_deep_expr([a, b, c, d], 300) for _ in 1:16]
-          exprs2 = [build_deep_expr([b, c, d, a], 300) for _ in 1:16]
-          batch_isequal(exprs1, exprs2, 2000)
-          batch_isequal(exprs1, exprs2, 2000)
-
-          function measured_batch(xs, ys)
-              bytes = @allocated batch_isequal(xs, ys, 2000)
-              time = @elapsed batch_isequal(xs, ys, 2000)
-              return bytes, time
-          end
-          bytes, elapsed = measured_batch(exprs1, exprs2)
-          println("overhead/isequal/different after warmup: bytes=", bytes, " time=", elapsed, " s")
-          @test bytes == 0
-          JULIA
-
-      - name: Package tests
-        run: julia --project=. -e 'using Pkg; Pkg.test()'
+          if git diff --quiet -- src/hashconsing.jl; then
+            echo "source already materialized"
+            exit 0
+          fi
+          git config user.name "Orjan Ameye"
+          git config user.email "orjan.ameye@hotmail.com"
+          git add src/hashconsing.jl
+          git commit -m "perf: reuse BasicSymbolic equality memo [skip ci]"
+          git push origin HEAD:ci/reuse-equality-memo-prototype

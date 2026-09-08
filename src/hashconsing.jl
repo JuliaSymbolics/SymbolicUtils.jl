@@ -377,7 +377,7 @@ when currently `full` may be `true`. `full` should be equal to the current value
 `COMPARE_FULL`. Passing `full` prevents repeatedly accessing a `TaskLocalValue`.
 """
 function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
-    hv = Base.hasha_seed
+    hv = Base.hasha_seed % UInt
     for (k, v) in d
         h1 = hash_somescalar(v, zero(UInt))
         h1 = hash_bsimpl(k, h1, full)
@@ -396,7 +396,7 @@ when currently `full` may be `true`. `full` should be equal to the current value
 Compute a hash value for a ranges dictionary used in `ArrayOp` variants.
 """
 function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
-    hv = Base.hasha_seed
+    hv = Base.hasha_seed % UInt
     for (k, v) in d
         h1 = hash_range(v, zero(UInt))
         h1 = hash_bsimpl(k, h1, full)
@@ -564,7 +564,7 @@ function hash_metadata(m::MetadataT, h::UInt)
     if m === nothing
         return hash(nothing, h)
     elseif m isa Base.ImmutableDict{DataType, Any}
-        hv = Base.hasha_seed
+        hv = Base.hasha_seed % UInt
         return hash(hash_metadict(m, hv), h)
     end
     return _unreachable()

@@ -341,7 +341,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
                     __miscₛᵧₘ0 = Vector{Any}
                     __miscₛᵧₘ1 = 3
                     __miscₛᵧₘ2 = 3
-                    __miscₛᵧₘ3 = Vector{Int}
+                    __miscₛᵧₘ3 = Vector{$(Int)}
                     __miscₛᵧₘ4 = 1
                     __miscₛᵧₘ5 = 4
                     __miscₛᵧₘ6 = $(SymbolicUtils.Code.create_array)(__miscₛᵧₘ3, nothing, $(Val){1}(), $(Val){(2,)}(), __miscₛᵧₘ4, __miscₛᵧₘ5)

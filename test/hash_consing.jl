@@ -4,6 +4,8 @@ using SymbolicUtils: Fill, Mapper, Mapreducer, ShapeVecT, SymReal
 import MultivariatePolynomials as MP
 import TermInterface
 
+include("equality_memo.jl")
+
 isequal2(a, b) = SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true isequal(a, b)
 
 const BSImpl = SymbolicUtils.BasicSymbolicImpl

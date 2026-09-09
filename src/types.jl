@@ -68,6 +68,14 @@ known at compile time, it should be passed as a `Tuple` to the constructor.
 """
 const SmallV{T} = SmallVec{T, Vector{T}}
 
+# Lazy derived data on hash-consed symbolic nodes must be published atomically.
+# A cache slot replaces the eagerly allocated empty SmallVec previously stored on
+# every cache-bearing node; the complete SmallVec is allocated only on first use.
+mutable struct ArgumentCache{T}
+    @atomic value::Union{Nothing, T}
+    ArgumentCache{T}() where {T} = new{T}(nothing)
+end
+
 """
     ShapeVecT(ranges)
 
@@ -245,7 +253,7 @@ Core ADT for symbolic expressions.
         const metadata::MetadataT
         const shape::ShapeT
         const type::TypeT
-        const args::SmallV{BasicSymbolicImpl.Type{T}}
+        const args::ArgumentCache{SmallV{BasicSymbolicImpl.Type{T}}}
         hash::UInt
         hash2::UInt
         id::IdentT
@@ -286,7 +294,7 @@ Core ADT for symbolic expressions.
         const metadata::MetadataT
         const shape::ShapeT
         const type::TypeT
-        const args::SmallV{BasicSymbolicImpl.Type{T}}
+        const args::ArgumentCache{SmallV{BasicSymbolicImpl.Type{T}}}
         hash::UInt
         hash2::UInt
         id::IdentT
@@ -302,7 +310,7 @@ Core ADT for symbolic expressions.
         # _has_ to be an array shape.
         const shape::ShapeT
         const type::TypeT
-        const args::SmallV{BasicSymbolicImpl.Type{T}}
+        const args::ArgumentCache{SmallV{BasicSymbolicImpl.Type{T}}}
         hash::UInt
         hash2::UInt
         id::IdentT
@@ -322,6 +330,7 @@ The type of a mutable buffer containing symbolic arguments. Passing this to the
 [`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array.
 """
 const ArgsT{T} = SmallV{BasicSymbolic{T}}
+const ArgsCacheT{T} = ArgumentCache{ArgsT{T}}
 """
 The type of a read-only buffer containing symbolic arguments. Passing this to the
 [`SymbolicUtils.Term`](@ref) constructor will avoid allocating a new array. This is
@@ -562,10 +571,10 @@ end
 ordered_override_properties(::Type{<:BSImpl.Const}) = (0, nothing,)
 ordered_override_properties(::Type{<:BSImpl.Sym}) = (0, 0, nothing)
 ordered_override_properties(::Type{<:BSImpl.Term}) = (0, 0, nothing)
-ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
+ordered_override_properties(::Type{BSImpl.AddMul{T}}) where {T} = (ArgsCacheT{T}(), 0, 0, nothing)
 ordered_override_properties(::Type{<:BSImpl.Div}) = (0, 0, nothing)
-ordered_override_properties(::Type{<:BSImpl.ArrayOp{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
-ordered_override_properties(::Type{<:BSImpl.ArrayMaker{T}}) where {T} = (ArgsT{T}(), 0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.ArrayOp{T}}) where {T} = (ArgsCacheT{T}(), 0, 0, nothing)
+ordered_override_properties(::Type{<:BSImpl.ArrayMaker{T}}) where {T} = (ArgsCacheT{T}(), 0, 0, nothing)
 
 function ConstructionBase.getproperties(obj::BSImpl.Type)
     @match obj begin
@@ -594,7 +603,7 @@ function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple) 
         BSImpl.AddMul(; coeff, dict, variant, metadata, shape, type) =>
             BSImpl.AddMul{T}(get(p, :coeff, coeff), get(p, :dict, dict), get(p, :variant, variant),
                              get(p, :metadata, metadata), get(p, :shape, shape), get(p, :type, type),
-                             ArgsT{T}(), Z, Z, nothing)
+                             ArgsCacheT{T}(), Z, Z, nothing)
         BSImpl.Div(; num, den, simplified, metadata, shape, type) =>
             BSImpl.Div{T}(get(p, :num, num), get(p, :den, den), get(p, :simplified, simplified),
                           get(p, :metadata, metadata), get(p, :shape, shape), get(p, :type, type),
@@ -603,11 +612,11 @@ function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple) 
             BSImpl.ArrayOp{T}(get(p, :output_idx, output_idx), get(p, :expr, expr),
                               get(p, :reduce, reduce), get(p, :term, term), get(p, :ranges, ranges),
                               get(p, :metadata, metadata), get(p, :shape, shape), get(p, :type, type),
-                              ArgsT{T}(), Z, Z, nothing)
+                              ArgsCacheT{T}(), Z, Z, nothing)
         BSImpl.ArrayMaker(; regions, values, metadata, shape, type) =>
             BSImpl.ArrayMaker{T}(get(p, :regions, regions), get(p, :values, values),
                                  get(p, :metadata, metadata), get(p, :shape, shape),
-                                 get(p, :type, type), ArgsT{T}(), Z, Z, nothing)
+                                 get(p, :type, type), ArgsCacheT{T}(), Z, Z, nothing)
     end
     hashcons(newobj::BasicSymbolic{T})
 end

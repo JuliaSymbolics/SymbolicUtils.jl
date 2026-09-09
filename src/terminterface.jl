@@ -135,6 +135,15 @@ function __sorted_args(x::BasicSymbolic{T})::ROArgsT{T} where {T}
     end
 end
 
+@inline function _get_cached_arguments(cache::ArgsCacheT{T}) where {T}
+    return @atomic :acquire cache.value
+end
+
+@inline function _publish_cached_arguments!(cache::ArgsCacheT{T}, candidate::ArgsT{T}) where {T}
+    result = @atomicreplace :acquire_release :acquire cache.value nothing => candidate
+    return result.success ? candidate : result.old::ArgsT{T}
+end
+
 """
     arguments(expr)
 
@@ -175,11 +184,14 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
         BSImpl.Sym(_) => throw(ArgumentError("`Sym` does not have arguments."))
         BSImpl.Term(; args) => ROArgsT{T}(args)
         BSImpl.AddMul(; coeff, dict, variant, args, shape, type) => begin
-            isempty(args) || return ROArgsT{T}(args)
+            cached = _get_cached_arguments(args)
+            cached === nothing || return ROArgsT{T}(cached)
+
+            newargs = ArgsT{T}()
             @match variant begin
                 AddMulVariant.ADD => begin
                     if !iszero(coeff)
-                        push!(args, Const{T}(coeff))
+                        push!(newargs, Const{T}(coeff))
                     end
                     for (k, v) in dict
                         newterm = @match k begin
@@ -188,39 +200,45 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                             end
                             _ => Mul{T}(v, ACDict{T}(k => 1); shape, type)
                         end
-                        push!(args, newterm)
+                        push!(newargs, newterm)
                     end
                 end
                 AddMulVariant.MUL => begin
                     if !_isone(coeff)
-                        push!(args, Const{T}(coeff))
+                        push!(newargs, Const{T}(coeff))
                     end
                     for (k, v) in dict
-                        push!(args, k ^ v)
+                        push!(newargs, k ^ v)
                     end
                 end
             end
-            return ROArgsT{T}(args)
+            return ROArgsT{T}(_publish_cached_arguments!(args, newargs))
         end
         BSImpl.Div(num, den) => ROArgsT{T}(ArgsT{T}((num, den)))
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, args) => begin
             if term === nothing
-                isempty(args) || return ROArgsT{T}(args)
-                push!(args, Const{T}(output_idx))
-                push!(args, Const{T}(expr))
-                push!(args, Const{T}(reduce))
-                push!(args, Const{T}(term))
-                push!(args, Const{T}(ranges))
-                return ROArgsT{T}(args)
+                cached = _get_cached_arguments(args)
+                cached === nothing || return ROArgsT{T}(cached)
+
+                newargs = ArgsT{T}()
+                push!(newargs, Const{T}(output_idx))
+                push!(newargs, Const{T}(expr))
+                push!(newargs, Const{T}(reduce))
+                push!(newargs, Const{T}(term))
+                push!(newargs, Const{T}(ranges))
+                return ROArgsT{T}(_publish_cached_arguments!(args, newargs))
             elseif term isa BasicSymbolic{T}
                 return arguments(term)
             end
         end
         BSImpl.ArrayMaker(; regions, values, args) => begin
-            isempty(args) || return ROArgsT{T}(args)
-            push!(args, BSImpl.Const{T}(regions))
-            push!(args, BSImpl.Const{T}(values))
-            return ROArgsT{T}(args)
+            cached = _get_cached_arguments(args)
+            cached === nothing || return ROArgsT{T}(cached)
+
+            newargs = ArgsT{T}()
+            push!(newargs, BSImpl.Const{T}(regions))
+            push!(newargs, BSImpl.Const{T}(values))
+            return ROArgsT{T}(_publish_cached_arguments!(args, newargs))
         end
     end
 end

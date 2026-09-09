@@ -149,6 +149,17 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             g2 = poly_to_gcd_form(p2)
             @test gcd(g1, g2) isa DP.Polynomial
         end
+
+        @testset "homogeneous Int32 widens to Int64 (32-bit gcd safety)" begin
+            # On 32-bit Julia, integer literals are Int32; homogeneous
+            # `Integer.(::Vector{Int32})` used to keep Int32 and then
+            # `MP.gcd`/`div_multiple` could DivideError (MomentClosure).
+            p = poly_with_coeffs(Number[Int32(1), Int32(-2), Int32(1)],
+                                  (1 - v) * (1 - v))
+            g = poly_to_gcd_form(p)
+            @test eltype(MP.coefficients(g)) === Int64
+            @test gcd(g, g) isa DP.Polynomial
+        end
     end
 end
 

@@ -1627,7 +1627,6 @@ const _StructuredMatrix = Union{
     LinearAlgebra.Tridiagonal,
     LinearAlgebra.UnitLowerTriangular,
     LinearAlgebra.UnitUpperTriangular,
-    LinearAlgebra.UpperHessenberg,
     LinearAlgebra.UpperTriangular,
 }
 const _SparseVecOrMat = Union{SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC}
@@ -1648,6 +1647,18 @@ for S in (
         StaticArraysCore.StaticArray,
     )
     @eval function Base.map(f::BasicSymbolic{T}, x::$S, xs::$S...) where {T}
+        return _map(T, f, x, xs...)
+    end
+end
+# Julia 1.13+ LinearAlgebra.map covers UpperHessenberg; keep it out of
+# `_StructuredMatrix` so Aqua stays clean on older stdlibs, and only add
+# the matching SymbolicUtils method where LinearAlgebra defines it.
+@static if VERSION >= v"1.13.0-0"
+    function Base.map(
+            f::BasicSymbolic{T},
+            x::LinearAlgebra.UpperHessenberg,
+            xs::LinearAlgebra.UpperHessenberg...,
+        ) where {T}
         return _map(T, f, x, xs...)
     end
 end

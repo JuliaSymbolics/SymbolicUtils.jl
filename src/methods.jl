@@ -1627,6 +1627,7 @@ const _StructuredMatrix = Union{
     LinearAlgebra.Tridiagonal,
     LinearAlgebra.UnitLowerTriangular,
     LinearAlgebra.UnitUpperTriangular,
+    LinearAlgebra.UpperHessenberg,
     LinearAlgebra.UpperTriangular,
 }
 const _SparseVecOrMat = Union{SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC}

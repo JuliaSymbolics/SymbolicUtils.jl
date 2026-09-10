@@ -1024,8 +1024,11 @@ end
 
 @testset "hash" begin
     @syms a b
-    @test hash(a + b, UInt(0)) === hash(a + b) === hash(a + b, UInt(0)) # test caching
-    @test hash(a + b, UInt(2)) !== hash(a + b)
+    # Cache is keyed on hash(x, UInt(0)). Julia 1.13+ `hash(x)` mixes a
+    # process-wide seed, so it is intentionally not identical to hash(x, UInt(0)).
+    h0 = hash(a + b, UInt(0))
+    @test h0 === hash(a + b, UInt(0))
+    @test hash(a + b, UInt(2)) !== h0
 end
 
 @testset "methoderror" begin

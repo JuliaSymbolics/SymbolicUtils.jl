@@ -150,11 +150,13 @@ end
 @testset "`hash` is cached" begin
     @syms a b f(..)
     for ex in [a + b, a * b, f(a)]
-        h = hash(ex)
+        # Cached field stores the metadata-free hash at seed UInt(0).
+        # Do not compare to bare `hash(ex)` — Julia 1.13+ mixes a process seed.
+        h = hash(ex, UInt(0))
         @test h == ex.hash[]
         ex2 = setmetadata(ex, Int, 3)
         # the hash is metadata-free
-        @test hash(ex2) == h
+        @test hash(ex2, UInt(0)) == h
     end
 end
 

@@ -1619,7 +1619,7 @@ end
 function Base.map(f::BasicSymbolic{T}, x::AbstractArray, xs::AbstractArray...) where {T}
     return _map(T, f, x, xs...)
 end
-const _StructuredMatrix = Union{
+const _StructuredMatrixNoUH = Union{
     LinearAlgebra.Bidiagonal,
     LinearAlgebra.Diagonal,
     LinearAlgebra.LowerTriangular,
@@ -1629,6 +1629,13 @@ const _StructuredMatrix = Union{
     LinearAlgebra.UnitUpperTriangular,
     LinearAlgebra.UpperTriangular,
 }
+# Julia 1.13+ LinearAlgebra.map includes UpperHessenberg; mirror that in the
+# union so Aqua and runtime dispatch stay unambiguous. Older stdlibs omit it.
+@static if VERSION >= v"1.13.0-0"
+    const _StructuredMatrix = Union{_StructuredMatrixNoUH, LinearAlgebra.UpperHessenberg}
+else
+    const _StructuredMatrix = _StructuredMatrixNoUH
+end
 const _SparseVecOrMat = Union{SparseArrays.AbstractCompressedVector, SparseArrays.AbstractSparseMatrixCSC}
 # SparseArrays' broadcast-backed `map` accepts this union of sparse, structured, and
 # sparse column-block types; mirroring it exactly is what settles the intersection.

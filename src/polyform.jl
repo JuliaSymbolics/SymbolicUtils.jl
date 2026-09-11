@@ -227,7 +227,8 @@ function canonicalize_coeffs!(coeffs::Vector{PolyCoeffT})
     for i in eachindex(coeffs)
         v = coeffs[i]
         safe_isinteger(v) || continue
-        coeffs[i] = Int(v)
+        # Int64: on 32-bit Julia, `Int` is Int32 and overflows in MP.gcd/content.
+        coeffs[i] = Int64(v)
     end
 end
 canonicalize_coeffs!(x) = nothing
@@ -243,26 +244,27 @@ function poly_to_gcd_form(p::PolynomialT)
         any_complex |= c isa Complex
         all_int || all_rat || break
     end
+    # Always widen integer/rational coefficients to Int64 / Rational{Int64}.
+    # On 32-bit Julia, `Int` is Int32; homogeneous `Integer.(::Vector{Int32})`
+    # stays Int32 and then `MP.gcd` / `div_multiple` hits DivideError when
+    # content arithmetic overflows (e.g. MomentClosure derivative matching
+    # closures going through `simplify` → `simplify_fractions`).
     cs = if all_int
-        Integer.(MP.coefficients(p))
+        Int64.(MP.coefficients(p))
     elseif all_rat
-        rationalize.(MP.coefficients(p))
+        map(c -> begin
+                r = c isa Rational ? c : rationalize(c)
+                Rational{Int64}(Int64(numerator(r)), Int64(denominator(r)))
+            end, MP.coefficients(p))
     elseif any_complex
         (complex ∘ float).(MP.coefficients(p))
     else
         float.(MP.coefficients(p))
     end
-    # Broadcast preserves the abstractness of the input vector's eltype:
-    # `Integer.(::Vector{Number})` returns `Vector{Number}` if the values
-    # are heterogeneous concrete subtypes of Integer (e.g. `Int8 + Int64`
-    # broadcasts to `Vector{Signed}`). The resulting `DP.Polynomial` then
-    # carries an abstract type parameter (`Integer`/`Signed`/`AbstractFloat`/
-    # `Real`), which crashes `MP.gcd`'s `isolate_variable` reconstruction.
-    # Narrow to a concrete eltype here when needed; on the homogeneous fast
-    # path (eltype already concrete) this is a single `isconcretetype` check
-    # and no extra allocation.
+    # Broadcast can still leave an abstract eltype for heterogeneous floats;
+    # narrow to a concrete eltype when needed (gcd requires it).
     if !isconcretetype(eltype(cs))
-        T = isempty(cs) ? (all_int ? Int : all_rat ? Rational{Int} :
+        T = isempty(cs) ? (all_int ? Int64 : all_rat ? Rational{Int64} :
                            any_complex ? ComplexF64 : Float64) :
             mapreduce(typeof, promote_type, cs)
         cs = Vector{T}(cs)

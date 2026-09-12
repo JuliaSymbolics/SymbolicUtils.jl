@@ -223,7 +223,7 @@ end
 @public Unknown, ShapeVecT, ShapeT, shape, promote_shape
 @public fntype_ret_type
 @public FnType
-@public Mapper, Mapreducer
+@public Mapper, Mapreducer, array_literal
 @public infer_vartype, search_variables!
 
 # These names form the developer interface consumed by Symbolics.jl and related

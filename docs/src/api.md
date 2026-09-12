@@ -38,6 +38,7 @@ SymbolicUtils.unwrap
 ```@docs
 SymbolicUtils.Mapper
 SymbolicUtils.Mapreducer
+SymbolicUtils.array_literal
 ```
 
 ### Intermediate Representation

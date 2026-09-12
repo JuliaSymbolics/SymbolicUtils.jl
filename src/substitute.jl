@@ -501,31 +501,37 @@ function Base.empty!(x::ArrayOpReduceCache)
     return x
 end
 
-const ARRAYOP_REDUCE_SYMREAL = TaskLocalValue{ArrayOpReduceCache{SymReal}}(ArrayOpReduceCache{SymReal})
-const ARRAYOP_REDUCE_SAFEREAL = TaskLocalValue{ArrayOpReduceCache{SafeReal}}(ArrayOpReduceCache{SafeReal})
+const ARRAYOP_REDUCE_SYMREAL = TaskLocalValue{Vector{ArrayOpReduceCache{SymReal}}}(() -> ArrayOpReduceCache{SymReal}[])
+const ARRAYOP_REDUCE_SAFEREAL = TaskLocalValue{Vector{ArrayOpReduceCache{SafeReal}}}(() -> ArrayOpReduceCache{SafeReal}[])
 
-arrayop_reduce_cache(::Type{SymReal}) = empty!(ARRAYOP_REDUCE_SYMREAL[])
-arrayop_reduce_cache(::Type{SafeReal}) = empty!(ARRAYOP_REDUCE_SAFEREAL[])
+arrayop_reduce_caches(::Type{SymReal}) = ARRAYOP_REDUCE_SYMREAL[]
+arrayop_reduce_caches(::Type{SafeReal}) = ARRAYOP_REDUCE_SAFEREAL[]
 
 function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, @nospecialize(reduce)) where {T}
-    cache = arrayop_reduce_cache(T)
-    new_ranges = cache.new_ranges
-    subrules = cache.subrules
-    new_expr = Code.unidealize_indices(expr, ranges, new_ranges)
-    merge!(new_ranges, ranges)
-    collapsed = cache.collapsed_idxs
-    union!(collapsed, keys(new_ranges))
-    setdiff!(collapsed, output_idx)
-    collapsed_ranges = cache.collapsed_ranges
-    for i in collapsed
-        push!(collapsed_ranges, new_ranges[i])
-    end
-    return mapreduce(reduce, Iterators.product(collapsed_ranges...)) do iidxs
-        for (idx, ii) in zip(iidxs, collapsed)
-            subrules[ii] = idx
+    pool = arrayop_reduce_caches(T)
+    cache = isempty(pool) ? ArrayOpReduceCache{T}() : pop!(pool)
+    # Substitution may recursively reduce another ArrayOp in the same task.
+    try
+        new_ranges = cache.new_ranges
+        subrules = cache.subrules
+        new_expr = Code.unidealize_indices(expr, ranges, new_ranges)
+        merge!(new_ranges, ranges)
+        collapsed = cache.collapsed_idxs
+        union!(collapsed, keys(new_ranges))
+        setdiff!(collapsed, output_idx)
+        collapsed_ranges = cache.collapsed_ranges
+        for i in collapsed
+            push!(collapsed_ranges, new_ranges[i])
         end
-        return substitute(new_expr, subrules)::BasicSymbolic{T}
-    end::BasicSymbolic{T}
+        return mapreduce(reduce, Iterators.product(collapsed_ranges...)) do iidxs
+            for (idx, ii) in zip(iidxs, collapsed)
+                subrules[ii] = idx
+            end
+            return substitute(new_expr, subrules)::BasicSymbolic{T}
+        end::BasicSymbolic{T}
+    finally
+        push!(pool, empty!(cache))
+    end
 end
 
 struct IdHashWrapper{T}

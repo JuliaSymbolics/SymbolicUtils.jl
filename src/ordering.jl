@@ -9,10 +9,27 @@
 <ₑ(a::Number, b::BasicSymbolic) = true
 
 <ₑ(a::Function, b::Function) = nameof(a) <ₑ nameof(b)
+# Function-valued constants (e.g. the operation of a `broadcast` term) sort before terms.
+<ₑ(a::Function, b::BasicSymbolic) = true
+<ₑ(a::BasicSymbolic, b::Function) = false
 
 <ₑ(a::Type, b::Type) = nameof(a) <ₑ nameof(b)
-<ₑ(a::T, b::S) where{T,S} = T<S
+# Values of unrelated types without a dedicated method: order by type name so that
+# sorting arguments never throws.
+<ₑ(a::T, b::S) where{T,S} = string(T) < string(S)
 <ₑ(a::T, b::T) where{T} = a < b
+
+# Array-valued constants (e.g. a numeric matrix multiplying a symbolic array) are ordered
+# by dimensionality, then length, then lexicographically by their entries.
+function <ₑ(a::AbstractArray, b::AbstractArray)
+    ka, kb = (ndims(a), length(a)), (ndims(b), length(b))
+    ka == kb || return ka < kb
+    for (x, y) in zip(a, b)
+        x <ₑ y && return true
+        y <ₑ x && return false
+    end
+    return false
+end
 
 """
 $(SIGNATURES)

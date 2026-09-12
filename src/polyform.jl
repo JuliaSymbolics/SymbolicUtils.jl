@@ -168,6 +168,13 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
             get!(poly_to_bs, pvar, expr)
             return pvar
         end
+        _ => begin
+            # `ArrayOp` and `ArrayMaker` are not polynomial in their scalar entries;
+            # treat them as opaque variables like any other non-algebraic term.
+            pvar = basicsymbolic_to_polyvar(bs_to_poly, expr)
+            get!(poly_to_bs, pvar, expr)
+            return pvar
+        end
     end
 end
 

@@ -798,7 +798,9 @@ function _name_as_operator(x::BasicSymbolic)
         _ => _name_as_operator(operation(x))
     end
 end
-_name_as_operator(x) = nameof(x)
+_name_as_operator(x::Union{Function, Type, Module}) = nameof(x)
+# Callable structs (e.g. `Mapreducer`, `Fill`) have no `nameof`; use their type name.
+_name_as_operator(x) = nameof(typeof(x))
 
 """
     Base.nameof(s::BasicSymbolic)

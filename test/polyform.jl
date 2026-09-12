@@ -193,3 +193,11 @@ end
     @test !SymbolicUtils.fraction_isone(x)
     @test SymbolicUtils.fraction_isone(o)
 end
+
+@testset "expand with array reductions and callable-struct operations" begin
+    @syms a b x[1:3]
+    s = sum(abs2, x .+ 1)
+    @test isequal(expand(s), s)
+    @test isequal(expand(a * (s + b)), a * s + a * b)
+    @test isequal(expand(s / 3), (1 // 3) * s)
+end

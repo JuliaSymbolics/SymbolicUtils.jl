@@ -1,6 +1,6 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
-version = "4.46.5"
+version = "4.46.6"
 authors = ["Shashi Gowda"]
 
 [deps]

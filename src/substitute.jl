@@ -908,7 +908,7 @@ scalarization_function(::typeof(getindex)) = _getindex_scal
 function _getindex_scal(::typeof(getindex), x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     sh = shape(x)
     if length(sh) > 0
-        return [x[idx] for idx in eachindex(x)]
+        return [toplevel ? x[idx] : scalarize(x[idx]) for idx in eachindex(x)]
     end
     args = MData.variant_getfield(x, BSImpl.Term, :args)
     idx = try

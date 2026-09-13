@@ -2104,3 +2104,90 @@ end
 function promote_symtype(::typeof(reshape), Tarr::TypeT, Tidxs::TypeT...)
     return Array{safe_eltype(Tarr), length(Tidxs)}
 end
+
+"""
+    exact_sqrt(x::Union{Integer, Rational})
+
+Square root of the nonnegative `x`, as an exact symbolic expression.
+
+`Base.sqrt` returns a floating point number for an integer or rational
+argument, so an expression built from it can no longer be exact:
+`sqrt(3)` is `1.7320508075688772`, and any value derived from it carries that
+approximation. This builds an unevaluated `sqrt` term instead, with the largest
+perfect square factor pulled out, so that the result denotes the same number
+without rounding it:
+
+```jldoctest
+julia> using SymbolicUtils
+
+julia> exact_sqrt(2)
+sqrt(2)
+
+julia> exact_sqrt(12)
+2sqrt(3)
+
+julia> exact_sqrt(12 // 49)
+(2//7)*sqrt(3)
+
+julia> exact_sqrt(4)
+2
+```
+
+A perfect square gives back an exact number rather than a symbolic expression.
+Negative arguments throw, matching `Base.sqrt` on a real number.
+"""
+function exact_sqrt(x::Union{Integer, Rational})
+    x >= 0 || throw(DomainError(x, "exact_sqrt requires a nonnegative argument"))
+    iszero(x) && return 0
+    # sqrt(num//den) == sqrt(num*den)//den
+    num, den = big(numerator(x)), big(denominator(x))
+    s, r = _split_perfect_square(num * den)
+    c = _narrow(s // den)
+    isone(r) && return c
+    radical = term(sqrt, _narrow(r))
+    isone(c) ? radical : c * radical
+end
+
+"""
+Only prime factors up to this bound are pulled out of a radicand by
+[`_split_perfect_square`](@ref), so that a large radicand cannot make its loop
+run away.
+"""
+const PERFECT_SQUARE_TRIAL_LIMIT = 10000
+
+"""
+    _split_perfect_square(n::Integer)
+
+Write the nonnegative integer `n` as `n == s^2 * r` and return `(s, r)`.
+
+Prime factors are removed by trial division up to
+[`PERFECT_SQUARE_TRIAL_LIMIT`](@ref), then the remaining cofactor is tested for
+being a perfect square itself. Any pair with `n == s^2*r` is a correct answer; a
+larger `s` only yields a tidier radical, so bounding the search costs exactness
+nothing.
+"""
+function _split_perfect_square(n::Integer)
+    s, r = big(1), big(n)
+    p = big(2)
+    while p <= PERFECT_SQUARE_TRIAL_LIMIT && p * p <= r
+        while iszero(mod(r, p * p))
+            r = r ÷ (p * p)
+            s *= p
+        end
+        p += 1
+    end
+    q = isqrt(r)
+    if q * q == r
+        s *= q
+        r = big(1)
+    end
+    return (s, r)
+end
+
+# Keep small results out of `BigInt`, so that they print like any other exact
+# coefficient.
+_narrow(n::Integer) = typemin(Int) <= n <= typemax(Int) ? Int(n) : n
+function _narrow(x::Rational)
+    n, d = _narrow(numerator(x)), _narrow(denominator(x))
+    isone(d) ? n : n // d
+end

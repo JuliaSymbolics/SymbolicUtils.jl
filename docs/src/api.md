@@ -6,6 +6,7 @@
 ```@docs; canonical=false
 SymbolicUtils.@syms
 SymbolicUtils.term
+SymbolicUtils.exact_sqrt
 ```
 
 ### Developer Constructors and Utilities

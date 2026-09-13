@@ -637,3 +637,43 @@ end
     @test SymbolicUtils.promote_symtype(reshape, Vector{Int}, Int, Int) === Matrix{Int}
     @test SymbolicUtils.promote_symtype(reshape, Vector{Real}, Int, Int, Int) === Array{Real, 3}
 end
+
+@testset "`exact_sqrt`" begin
+    # exact results stay exact numbers, not symbolic expressions
+    @test exact_sqrt(0) === 0
+    @test exact_sqrt(1) === 1
+    @test exact_sqrt(4) === 2
+    @test exact_sqrt(49) === 7
+    @test exact_sqrt(1024) === 32
+    @test exact_sqrt(9 // 4) === 3 // 2
+
+    # irrational results are unevaluated `sqrt` terms, never floats
+    @test isequal(exact_sqrt(2), term(sqrt, 2))
+    @test isequal(exact_sqrt(3), term(sqrt, 3))
+
+    # the largest perfect square factor is pulled out of the radicand
+    @test isequal(exact_sqrt(12), 2 * term(sqrt, 3))
+    @test isequal(exact_sqrt(8), 2 * term(sqrt, 2))
+    @test isequal(exact_sqrt(12 // 49), (2 // 7) * term(sqrt, 3))
+    @test isequal(exact_sqrt(1 // 3), (1 // 3) * term(sqrt, 3))
+    @test isequal(exact_sqrt(7 // 2), (1 // 2) * term(sqrt, 14))
+
+    # the value is the square root it claims to be
+    fold(v) = let v = SymbolicUtils.unwrap_const(v)
+        v isa Number ? float(v) :
+        SymbolicUtils.operation(v)(map(fold, SymbolicUtils.arguments(v))...)
+    end
+    for x in (2, 3, 5, 8, 12, 1024, 12 // 49, 1 // 3, 7 // 2, 9 // 4)
+        @test fold(exact_sqrt(x)) ≈ sqrt(float(x))
+    end
+
+    # a radicand whose prime factors all lie beyond the trial division bound is
+    # still correct, and found quickly
+    p = 1_000_003
+    @test isequal(exact_sqrt(big(p)^2), p)
+    s, r = SymbolicUtils._split_perfect_square(big(p)^2 * 3)
+    @test s^2 * r == big(p)^2 * 3
+
+    @test_throws DomainError exact_sqrt(-1)
+    @test_throws DomainError exact_sqrt(-1 // 2)
+end

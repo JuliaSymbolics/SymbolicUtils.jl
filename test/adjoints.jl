@@ -26,3 +26,11 @@ using Zygote
     end
   end
 end
+
+@testset "symbolic call adjoint" begin
+  @syms t::Real x::Real u(::Real, ::Real)::Real
+  # a term built inside a differentiated function carries no derivative
+  y, g = Zygote.withgradient(p -> (u(t, x); 2p), 1.0)
+  @test y == 2.0
+  @test g == (2.0,)
+end

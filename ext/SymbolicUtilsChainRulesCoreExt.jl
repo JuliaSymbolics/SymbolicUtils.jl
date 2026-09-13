@@ -3,6 +3,10 @@ module SymbolicUtilsChainRulesCoreExt
 using ChainRulesCore
 import ChainRulesCore: rrule
 import SymbolicUtils.Code
+using SymbolicUtils: BasicSymbolic
+
+# Calling a symbolic function builds a term: the arguments are stored in it, not evaluated.
+ChainRulesCore.@non_differentiable (f::BasicSymbolic)(args...)
 
 function rrule(::typeof(Code.create_array), A::Type{<:AbstractArray}, T, u::Val{j}, d::Val{dims}, elems...) where {dims, j}
   y = Code.create_array(A, T, u, d, elems...)

@@ -57,6 +57,7 @@ const POW_RULES = (
     @rule(^(~x::_isone, ~z) => 1),
     @rule(ℯ^(~x) => exp(~x)),
     @rule((~x)^(1//2) => sqrt(~x)),
+    @rule(sqrt((~x)^2) => abs(~x)),
 )
 
 const ASSORTED_RULES = (

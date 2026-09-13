@@ -73,6 +73,29 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
     throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
 end
 
+function _getindex_shape(sharr::ShapeT, idxs...)
+    is_array_shape(sharr) || isempty(idxs) || throw_not_array(sharr)
+    result = ShapeVecT()
+    for (i, idx) in enumerate(idxs)
+        shidx = shape(idx)
+        shidx isa ShapeVecT ||
+            throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
+        isempty(shidx) && continue
+        # Colon and an empty range have the same shape, but select different axes.
+        ii = if unwrap_const(idx) isa Colon
+            sharr isa Unknown && throw_no_unknown_colon()
+            sharr[i]
+        else
+            1:length(shidx[1])
+        end
+        if sharr isa ShapeVecT && length(ii) > length(sharr[i])
+            throw_index_larger_than_shape(i, ii, sharr[i])
+        end
+        push!(result, ii)
+    end
+    return result
+end
+
 function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     # Fast path: scalar integer indexing into ArrayOp bypasses @cache (each index is unique).
     # Guarded on VERSION because calling _getindex directly from this Vararg Union method
@@ -295,7 +318,7 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
                 idx = idxs[idxs_i]
                 idxs_i += 1
                 # special case when `oldidx` is `Colon()`
-                if length(oldidx_sh) == 1 && oldidx_sh[1] == 1:0
+                if unwrap_const(oldidx) isa Colon
                     push!(newargs, Const{T}(idx))
                 else
                     push!(newargs, Const{T}(unwrap_const(oldidx)[idx]))
@@ -356,7 +379,7 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
             push!(newargs, args[1])
             sh = shape(arr)
             type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
-            newshape = promote_shape(getindex, sh, shape.(idxs)...)
+            newshape = _getindex_shape(sh, idxs...)
             idxs_i = 1
             for oldidx in Iterators.drop(args, 1)
                 oldidx_sh = shape(oldidx)
@@ -367,7 +390,7 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
                 idx = idxs[idxs_i]
                 idxs_i += 1
                 # special case when `oldidx` is `Colon()`
-                if length(oldidx_sh) == 1 && oldidx_sh[1] == 1:0
+                if unwrap_const(oldidx) isa Colon
                     push!(newargs, Const{T}(idx))
                 elseif idx isa Colon
                     push!(newargs, oldidx)
@@ -405,7 +428,7 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
 
     sh = shape(arr)
     type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
-    newshape = promote_shape(getindex, sh, shape.(idxs)...)
+    newshape = _getindex_shape(sh, idxs...)
     @boundscheck if sh isa ShapeVecT
         for (ax, idx) in zip(sh, idxs)
             idx isa BasicSymbolic{T} && continue

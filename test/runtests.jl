@@ -24,6 +24,12 @@ if GROUP == "Core"
             @safetestset "Basics" begin include("basics.jl") end
             @safetestset "Thread-safe arguments" begin include("threadsafe_arguments.jl") end
             @safetestset "ArrayOp" begin include("arrayop.jl") end
+            @safetestset "Empty stable indices" begin
+                include("empty_stable_indices.jl")
+            end
+            @safetestset "Empty slice shapes" begin
+                include("empty_slice_shapes.jl")
+            end
             @safetestset "ArrayMaker" begin include("arraymaker.jl") end
             @safetestset "Order" begin include("order.jl") end
             @safetestset "PolyForm" begin include("polyform.jl") end

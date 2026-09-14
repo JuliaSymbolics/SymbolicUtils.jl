@@ -1417,7 +1417,7 @@ end
 
     # Test type propagation with different input types
     @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Number) == Number
-    @test SymbolicUtils.promote_symtype(sin ∘ abs ∘ sqrt, Number) == Number
+    @test SymbolicUtils.promote_symtype(sin ∘ abs ∘ sqrt, Number) == Real
     @test SymbolicUtils.promote_symtype(sin ∘ sqrt, Complex) == Number
 
     # Test edge cases

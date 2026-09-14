@@ -22,6 +22,7 @@ if GROUP == "Core"
                 # @safetestset "Precompilation" begin include("precompilation.jl") end
             end
             @safetestset "Basics" begin include("basics.jl") end
+            @safetestset "Complex numeric domains" begin include("atomic_complex_domains.jl") end
             @safetestset "Thread-safe arguments" begin include("threadsafe_arguments.jl") end
             @safetestset "ArrayOp" begin include("arrayop.jl") end
             @safetestset "ArrayMaker" begin include("arraymaker.jl") end

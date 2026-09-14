@@ -160,6 +160,16 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             @test eltype(MP.coefficients(g)) === Int64
             @test gcd(g, g) isa DP.Polynomial
         end
+
+        @testset "wide exact coefficient types are preserved" begin
+            # The 32-bit safety widening must not narrow exact coefficients that
+            # already require a wider backing integer type.
+            p = poly_with_coeffs(
+                Number[big(1) // big(2), big(-3) // big(2)], (1//2 - v)
+            )
+            g = poly_to_gcd_form(p)
+            @test eltype(MP.coefficients(g)) === Rational{BigInt}
+        end
     end
 end
 

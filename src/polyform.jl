@@ -53,6 +53,13 @@ function subs_poly(poly::PolyVarT, vars::AbstractVector{BasicSymbolic{T}}) where
     return only(vars)
 end
 
+@inline _as_polynomial(poly::PolynomialT) = poly
+@inline function _as_polynomial(poly::PolyVarT)
+    result = zeropoly()
+    MA.operate!(+, result, poly)
+    return result
+end
+
 """
     to_poly!(poly_to_bs, bs_to_poly, expr, recurse = true)
 
@@ -106,7 +113,17 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
             end
         end
         BSImpl.Term(; f, args, type, shape) => begin
-            if f === (^) && isconst(args[2]) && (exp = unwrap_const(args[2]); exp isa Real) && safe_isinteger(exp)
+            if f === complex && length(args) == 2 && type <: Complex &&
+                    symtype(args[1]) <: Real && symtype(args[2]) <: Real
+                # Keep `complex(re, im)` as the explicit Cartesian symbolic form, but
+                # interpret it algebraically at the polynomial boundary so equivalent
+                # Cartesian and factored expressions canonicalize together.
+                poly = _as_polynomial(to_poly!(poly_to_bs, bs_to_poly, args[1], recurse))
+                ipoly = _as_polynomial(to_poly!(poly_to_bs, bs_to_poly, args[2], recurse))
+                MA.operate!(*, ipoly, im)
+                MA.operate!(+, poly, ipoly)
+                return poly
+            elseif f === (^) && isconst(args[2]) && (exp = unwrap_const(args[2]); exp isa Real) && safe_isinteger(exp)
                 base = args[1]
                 poly = to_poly!(poly_to_bs, bs_to_poly, base)
                 if poly isa PolyVarT
@@ -122,12 +139,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 return poly
             elseif f === (*) || f === (+)
                arg1, restargs = Iterators.peel(args)
-                poly = to_poly!(poly_to_bs, bs_to_poly, arg1)
-                if !(poly isa PolynomialT)
-                    _poly = zeropoly()
-                    MA.operate!(+, _poly, poly)
-                    poly = _poly
-                end
+                poly = _as_polynomial(to_poly!(poly_to_bs, bs_to_poly, arg1))
                 for arg in restargs
                     MA.operate!(f, poly, to_poly!(poly_to_bs, bs_to_poly, arg))
                 end
@@ -251,27 +263,33 @@ function poly_to_gcd_form(p::PolynomialT)
         any_complex |= c isa Complex
         all_int || all_rat || break
     end
-    # Always widen integer/rational coefficients to Int64 / Rational{Int64}.
-    # On 32-bit Julia, `Int` is Int32; homogeneous `Integer.(::Vector{Int32})`
-    # stays Int32 and then `MP.gcd` / `div_multiple` hits DivideError when
-    # content arithmetic overflows (e.g. MomentClosure derivative matching
-    # closures going through `simplify` → `simplify_fractions`).
+    coeffs = MP.coefficients(p)
+    exact_int_type = Int64
+    if all_int || all_rat
+        for c in coeffs
+            r = c isa Rational ? c : rationalize(c)
+            exact_int_type = promote_type(exact_int_type, typeof(numerator(r)),
+                                          typeof(denominator(r)))
+        end
+    end
+    # Widen machine integers to at least Int64 for 32-bit safety, but preserve
+    # wider exact domains such as BigInt instead of narrowing them.
     cs = if all_int
-        Int64.(MP.coefficients(p))
+        exact_int_type.(coeffs)
     elseif all_rat
         map(c -> begin
                 r = c isa Rational ? c : rationalize(c)
-                Rational{Int64}(Int64(numerator(r)), Int64(denominator(r)))
-            end, MP.coefficients(p))
+                exact_int_type(numerator(r)) // exact_int_type(denominator(r))
+            end, coeffs)
     elseif any_complex
-        (complex ∘ float).(MP.coefficients(p))
+        (complex ∘ float).(coeffs)
     else
-        float.(MP.coefficients(p))
+        float.(coeffs)
     end
     # Broadcast can still leave an abstract eltype for heterogeneous floats;
     # narrow to a concrete eltype when needed (gcd requires it).
     if !isconcretetype(eltype(cs))
-        T = isempty(cs) ? (all_int ? Int64 : all_rat ? Rational{Int64} :
+        T = isempty(cs) ? (all_int ? exact_int_type : all_rat ? Rational{exact_int_type} :
                            any_complex ? ComplexF64 : Float64) :
             mapreduce(typeof, promote_type, cs)
         cs = Vector{T}(cs)

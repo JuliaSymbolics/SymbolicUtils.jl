@@ -59,6 +59,58 @@ const POW_RULES = (
     @rule((~x)^(1//2) => sqrt(~x)),
 )
 
+# Cartesian projection is an explicit simplification operation, not a
+# representation choice. Keep opaque complex leaves atomic, but distribute real/imag
+# through sums and products when the simplifier is asked to expose those parts.
+_is_add_or_mul(x) = iscall(x) && (operation(x) === (+) || operation(x) === (*))
+
+function _cartesian_parts(x)
+    symtype(x) <: Real && return (x, 0)
+    if !iscall(x)
+        return real(x), imag(x)
+    end
+    op = operation(x)
+    if op === (+)
+        re = 0
+        im_part = 0
+        for a in arguments(x)
+            ar, ai = _cartesian_parts(a)
+            re = re + ar
+            im_part = im_part + ai
+        end
+        return re, im_part
+    elseif op === (*)
+        re = 1
+        im_part = 0
+        for a in arguments(x)
+            ar, ai = _cartesian_parts(a)
+            old_re = re
+            old_im = im_part
+            re = old_re * ar - old_im * ai
+            im_part = old_re * ai + old_im * ar
+        end
+        return re, im_part
+    else
+        return real(x), imag(x)
+    end
+end
+
+# `real` and `imag` are also used directly by downstream symbolic algorithms that do
+# not subsequently call `simplify`.  Preserve the generic constructors for opaque
+# leaves, but expose Cartesian sums/products immediately for every symbolic variant.
+# These more-specific methods deliberately delegate all non-Cartesian cases to the
+# generic `BasicSymbolic` methods in methods.jl.
+for T in (SymReal, SafeReal, TreeReal)
+    @eval function Base.real(s::BasicSymbolic{$T})
+        _is_add_or_mul(s) && return first(_cartesian_parts(s))
+        return invoke(real, Tuple{BasicSymbolic}, s)
+    end
+    @eval function Base.imag(s::BasicSymbolic{$T})
+        _is_add_or_mul(s) && return last(_cartesian_parts(s))
+        return invoke(imag, Tuple{BasicSymbolic}, s)
+    end
+end
+
 const ASSORTED_RULES = (
     @rule(identity(~x) => ~x),
     @rule(-(~x) => -1*~x),
@@ -70,6 +122,8 @@ const ASSORTED_RULES = (
     @rule(conj(~x::_isreal) => ~x),
     @rule(real(~x::_isreal) => ~x),
     @rule(imag(~x::_isreal) => zero(symtype(~x))),
+    @rule(real(~x::_is_add_or_mul) => first(_cartesian_parts(~x))),
+    @rule(imag(~x::_is_add_or_mul) => last(_cartesian_parts(~x))),
     @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
     @rule(ifelse(~x, ~y, ~y) => ~y),
     @rule(ifelse_eager(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),

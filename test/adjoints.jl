@@ -29,8 +29,11 @@ end
 
 @testset "symbolic call adjoint" begin
   @syms t::Real x::Real u(::Real, ::Real)::Real
-  # a term built inside a differentiated function carries no derivative
-  y, g = Zygote.withgradient(p -> (u(t, x); 2p), 1.0)
-  @test y == 2.0
-  @test g == (2.0,)
+  # a term built inside a differentiated function carries no derivative, whether its
+  # arguments are symbolic or numbers stored in the term
+  for f in (p -> (u(t, x); 2p), p -> (u(p, x); 2p))
+    y, g = Zygote.withgradient(f, 1.0)
+    @test y == 2.0
+    @test g == (2.0,)
+  end
 end

@@ -497,24 +497,13 @@ end
 
 @generated function fill_sarr(::Val{sz}, args...) where {sz}
     @assert prod(sz) == length(args)
-    if length(sz) == 1
-        return :(SVector{$(sz[1])}(args...))
-    elseif length(sz) == 2
-        return :(SMatrix{$(sz[1]), $(sz[2])}(args...))
-    else
-        error("fill_sarr only supports 1D and 2D arrays, got shape $sz")
-    end
+    return :(SArray{Tuple{$(sz...)}}(args))
 end
 
 """
-Maximum total element count for which `fill_sarr` (returning a StaticArray)
-will be used instead of the mutable `fill_arr!`.
-"""
-const STATIC_ARRAY_LIMIT::Int = 4
-
-"""
-Limit until which the generated code for an `ArrayMaker`/`array_literal` will use `fill_arr!`
-over the standard codegen.
+Limit until which the generated code for an `ArrayMaker`/`array_literal` will use
+`fill_sarr`/`fill_arr!` over the standard codegen. `fill_sarr` is used when the allocator is
+the default one, since the result does not need to be mutable.
 """
 const FILL_ARR_LIMIT = 16
 
@@ -582,7 +571,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         for ax in sh
             push!(sz_expr.args, length(ax))
         end
-        if all(<=(STATIC_ARRAY_LIMIT), sz_expr.args) && length(sz_expr.args) <= 2 && _allocator === zeros
+        if _allocator === zeros
             result = Expr(:call, fill_sarr, Expr(:call, Val, sz_expr))
             for idx in SymbolicUtils.stable_eachindex(expr)
                 push!(result.args, cs(expr[idx]))
@@ -763,8 +752,7 @@ function codegen_function!(
 
     if len <= FILL_ARR_LIMIT
         sz_val = unwrap_const(cs.ir[first(args_idxs)])
-        ndims_arr = length(sz_val)
-        if all(<=(STATIC_ARRAY_LIMIT), sz_val) && ndims_arr <= 2 && _allocator === zeros
+        if _allocator === zeros
             result = Expr(:call, fill_sarr, Expr(:call, Val, sz_val))
             for arg_idx in Iterators.drop(args_idxs, 1)
                 push!(result.args, cs(cs.ir[arg_idx]))

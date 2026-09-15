@@ -820,6 +820,47 @@ end
     end
 end
 
+@testset "`fill_sarr`" begin
+    @test Code.fill_sarr(Val((3,)), 1.0, 2.0, 3.0) === SVector{3}(1.0, 2.0, 3.0)
+    @test Code.fill_sarr(Val((2, 3)), 1, 2, 3, 4, 5, 6) === SMatrix{2, 3}(1, 2, 3, 4, 5, 6)
+    @test Code.fill_sarr(Val((2, 2, 2)), 1:8...) === SArray{Tuple{2, 2, 2}}(1:8...)
+end
+
+@testset "static array codegen for small arrays" begin
+    @syms a::Real b::Real
+    av = 3.0
+    bv = 2.0
+
+    # Any shape with at most `FILL_ARR_LIMIT` elements uses `fill_sarr` with the default
+    # allocator, including ranks above 2 and dimensions longer than 4.
+    w1 = @makearray w[1:8] begin
+        w[1:8] => Const{SymReal}([a, b, a + b, a - b, 2a, 2b, a * b, a / b])
+    end
+    w2 = @makearray w[1:5, 1:3] begin
+        w[1:5, 1:3] => Const{SymReal}([a b a; b a b; a b a; b a b; a b a])
+    end
+    w3 = @makearray w[1:2, 1:2, 1:2] begin
+        w[1:2, 1:2, 1:2] => Const{SymReal}(reshape([a, b, a + b, a - b, 2a, 2b, a * b, a / b], 2, 2, 2))
+    end
+
+    for w in (w1, w2, w3)
+        expr = Code.fast_toexpr(w, Dict{Any, Any}())
+        @test occursin("fill_sarr", string(expr))
+        result = eval(quote
+            let a = $av, b = $bv
+                $expr
+            end
+        end)
+        expected = eval(quote
+            let a = $av, b = $bv
+                $(Code.toexpr(w))
+            end
+        end)
+        @test result isa StaticArray
+        @test result ≈ expected
+    end
+end
+
 @testset "fast_toexpr" begin
     @syms x[1:3] y[1:3] z[1:3]
     w = @makearray w[1:3, 1:3] begin

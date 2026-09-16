@@ -163,7 +163,7 @@ export ifelse_eager, ifelse_branching
 PrecompileTools.@recompile_invalidations begin
 import SpecialFunctions, NaNMath
 include("methods.jl")
-export exact_sqrt
+
 include("printing.jl")
 end
 # LinkedList, simplification utilities

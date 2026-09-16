@@ -2105,46 +2105,20 @@ function promote_symtype(::typeof(reshape), Tarr::TypeT, Tidxs::TypeT...)
     return Array{safe_eltype(Tarr), length(Tidxs)}
 end
 
-"""
-    exact_sqrt(x::Union{Integer, Rational})
-
-Square root of the nonnegative `x`, as an exact symbolic expression.
-
-`Base.sqrt` returns a floating point number for an integer or rational
-argument, so an expression built from it can no longer be exact:
-`sqrt(3)` is `1.7320508075688772`, and any value derived from it carries that
-approximation. This builds an unevaluated `sqrt` term instead, with the largest
-perfect square factor pulled out, so that the result denotes the same number
-without rounding it:
-
-```jldoctest
-julia> using SymbolicUtils
-
-julia> exact_sqrt(2)
-sqrt(2)
-
-julia> exact_sqrt(12)
-2sqrt(3)
-
-julia> exact_sqrt(12 // 49)
-(2//7)*sqrt(3)
-
-julia> exact_sqrt(4)
-2
-```
-
-A perfect square gives back an exact number rather than a symbolic expression.
-Negative arguments throw, matching `Base.sqrt` on a real number.
-"""
-function exact_sqrt(x::Union{Integer, Rational})
-    x >= 0 || throw(DomainError(x, "exact_sqrt requires a nonnegative argument"))
-    iszero(x) && return 0
+function _extract_perfect_square(x)
+    val = unwrap_const(x)
+    (val isa Integer || val isa Rational) || return nothing
+    val < 0 && return nothing
+    iszero(val) && return 0
+    isone(val) && return 1
     # sqrt(num//den) == sqrt(num*den)//den
-    num, den = big(numerator(x)), big(denominator(x))
+    num, den = big(numerator(val)), big(denominator(val))
     s, r = _split_perfect_square(num * den)
     c = _narrow(s // den)
-    isone(r) && return c
-    radical = term(sqrt, _narrow(r))
+    r_narrow = _narrow(r)
+    (isone(c) && r_narrow == val) && return nothing
+    isone(r_narrow) && return c
+    radical = term(sqrt, r_narrow)
     isone(c) ? radical : c * radical
 end
 
@@ -2154,6 +2128,21 @@ Only prime factors up to this bound are pulled out of a radicand by
 run away.
 """
 const PERFECT_SQUARE_TRIAL_LIMIT = 10000
+
+function _primes_up_to(n)
+    sieve = trues(n)
+    sieve[1] = false
+    for i in 2:isqrt(n)
+        if sieve[i]
+            for j in i^2:i:n
+                sieve[j] = false
+            end
+        end
+    end
+    return findall(sieve)
+end
+
+const PRIMES_UP_TO_TRIAL_LIMIT = _primes_up_to(PERFECT_SQUARE_TRIAL_LIMIT)
 
 """
     _split_perfect_square(n::Integer)
@@ -2168,13 +2157,13 @@ nothing.
 """
 function _split_perfect_square(n::Integer)
     s, r = big(1), big(n)
-    p = big(2)
-    while p <= PERFECT_SQUARE_TRIAL_LIMIT && p * p <= r
-        while iszero(mod(r, p * p))
-            r = r ÷ (p * p)
+    for p in PRIMES_UP_TO_TRIAL_LIMIT
+        p_sq = p * p
+        p_sq > r && break
+        while iszero(mod(r, p_sq))
+            r = r ÷ p_sq
             s *= p
         end
-        p += 1
     end
     q = isqrt(r)
     if q * q == r

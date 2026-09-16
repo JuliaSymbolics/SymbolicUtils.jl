@@ -300,6 +300,12 @@ function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: 
     if isone(factor)
         return num, den
     end
+    # `factor` was computed on `poly_to_gcd_form` conversions, so the partial
+    # polynomials must use matching concrete coefficient types; otherwise
+    # `div_multiple` mixes e.g. `Rational{BigInt}` and `Rational{Int64}`
+    # coefficients and hits unimplemented MutableArithmetics buffered paths.
+    partial_poly1 isa PolynomialT && (partial_poly1 = poly_to_gcd_form(partial_poly1))
+    partial_poly2 isa PolynomialT && (partial_poly2 = poly_to_gcd_form(partial_poly2))
     # NOTE: This does not mutate `partial_poly1` to be the result, it just
     # uses it as buffer. The result is the returned value.
     partial_poly1 = MP.div_multiple(partial_poly1, factor, MA.IsMutable())

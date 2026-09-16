@@ -512,6 +512,9 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
     end
 end
 function _getindex(::Type{T}, x::AbstractArray, idxs...) where {T}
-    Const{T}(getindex(x, idxs...))
+    if any(idx -> idx isa BasicSymbolic{T}, idxs)
+        return _getindex(T, Const{T}(x), idxs...)
+    end
+    return Const{T}(getindex(x, idxs...))
 end
 Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]

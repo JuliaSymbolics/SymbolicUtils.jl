@@ -2112,8 +2112,8 @@ function _extract_perfect_square(x)
     iszero(val) && return 0
     isone(val) && return 1
     # sqrt(num//den) == sqrt(num*den)//den
-    num, den = big(numerator(val)), big(denominator(val))
-    s, r = _split_perfect_square(num * den)
+    num, den = numerator(val), denominator(val)
+    s, r = _split_perfect_square(widemul(num, den))
     c = _narrow(s // den)
     r_narrow = _narrow(r)
     (isone(c) && r_narrow == val) && return nothing
@@ -2124,7 +2124,7 @@ end
 
 """
 Only prime factors up to this bound are pulled out of a radicand by
-[`_split_perfect_square`](@ref), so that a large radicand cannot make its loop
+`_split_perfect_square`, so that a large radicand cannot make its loop
 run away.
 """
 const PERFECT_SQUARE_TRIAL_LIMIT = 10000
@@ -2150,13 +2150,13 @@ const PRIMES_UP_TO_TRIAL_LIMIT = _primes_up_to(PERFECT_SQUARE_TRIAL_LIMIT)
 Write the nonnegative integer `n` as `n == s^2 * r` and return `(s, r)`.
 
 Prime factors are removed by trial division up to
-[`PERFECT_SQUARE_TRIAL_LIMIT`](@ref), then the remaining cofactor is tested for
+`PERFECT_SQUARE_TRIAL_LIMIT`, then the remaining cofactor is tested for
 being a perfect square itself. Any pair with `n == s^2*r` is a correct answer; a
 larger `s` only yields a tidier radical, so bounding the search costs exactness
 nothing.
 """
 function _split_perfect_square(n::Integer)
-    s, r = big(1), big(n)
+    s, r = one(n), n
     for p in PRIMES_UP_TO_TRIAL_LIMIT
         p_sq = p * p
         p_sq > r && break
@@ -2168,7 +2168,7 @@ function _split_perfect_square(n::Integer)
     q = isqrt(r)
     if q * q == r
         s *= q
-        r = big(1)
+        r = one(n)
     end
     return (s, r)
 end

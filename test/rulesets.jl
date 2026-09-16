@@ -138,6 +138,14 @@ end
     @eqtest unwrap_const(simplify(one(Int)^a)) == 1
     @eqtest unwrap_const(simplify(one(Complex{Float64})^a)) == 1
     @eqtest simplify(a^b * 1^a) == a^b
+
+    # Fractional and nested powers shouldn't unconditionally fold
+    # See https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/1077
+    @eqtest simplify((a^2)^(1//2)) == abs(a)
+    @eqtest simplify((b^2)^(1/2)) == abs(b)
+    @eqtest simplify((a^2.0)^(1//2)) == abs(a)
+    @eqtest simplify((b^2.0)^(1/2)) == abs(b)
+
 end
 
 @testset "simplify_fractions" begin

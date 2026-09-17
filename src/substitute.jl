@@ -507,6 +507,16 @@ const ARRAYOP_REDUCE_SAFEREAL = TaskLocalValue{ArrayOpReduceCache{SafeReal}}(Arr
 arrayop_reduce_cache(::Type{SymReal}) = empty!(ARRAYOP_REDUCE_SYMREAL[])
 arrayop_reduce_cache(::Type{SafeReal}) = empty!(ARRAYOP_REDUCE_SAFEREAL[])
 
+# Index placeholders must be substituted everywhere they appear (including inside
+# `Operator` terms, which the default filter skips) but not inside nested `ArrayOp`s,
+# whose indices are scoped separately.
+function arrayop_scope_filter(y)
+    @match y begin
+        BSImpl.ArrayOp(; output_idx=_) => false
+        _ => true
+    end
+end
+
 function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T}, ranges::RangesT{T}, @nospecialize(reduce)) where {T}
     cache = arrayop_reduce_cache(T)
     new_ranges = cache.new_ranges
@@ -524,7 +534,7 @@ function _reduce_eliminated_idxs(expr::BasicSymbolic{T}, output_idx::OutIdxT{T},
         for (idx, ii) in zip(iidxs, collapsed)
             subrules[ii] = idx
         end
-        return substitute(new_expr, subrules)::BasicSymbolic{T}
+        return substitute(new_expr, subrules; filterer = arrayop_scope_filter)::BasicSymbolic{T}
     end::BasicSymbolic{T}
 end
 
@@ -732,13 +742,6 @@ function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
             empty!(subrules)
 
-            scope_filter = function (y)
-                @match y begin
-                    BSImpl.ArrayOp(; output_idx=_) => false
-                    _ => true
-                end
-            end
-
             res = map(Iterators.product(sh...)) do idxs
                 for (i, ii) in enumerate(output_idx)
                     ii isa Int && continue
@@ -746,9 +749,9 @@ function _scalarize_arrayop(_, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, t
                 end
 
                 if toplevel
-                    substitute(new_expr, subrules; filterer = scope_filter, fold = Val{true}())
+                    substitute(new_expr, subrules; filterer = arrayop_scope_filter, fold = Val{true}())
                 else
-                    scalarize(substitute(new_expr, subrules; filterer = scope_filter, fold = Val{true}()))
+                    scalarize(substitute(new_expr, subrules; filterer = arrayop_scope_filter, fold = Val{true}()))
                 end
             end
             return isempty(sh) ? res[] : res

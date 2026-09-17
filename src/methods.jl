@@ -460,7 +460,7 @@ end
 
 promote_symtype(::Any, T) = promote_type(T, Real)
 for f in monadic
-    if f in [sign, signbit, ceil, floor, factorial, exp]
+    if f in [sign, signbit, ceil, floor, factorial, exp, abs, abs2]
         continue
     end
     @eval function promote_symtype(::$(typeof(f)), T::TypeT)
@@ -503,13 +503,26 @@ end
 
 for f in [real, imag]
     @eval function promote_symtype(::$(typeof(f)), T::TypeT)
-        if T <: Complex
+        if T === Number
+            return Real
+        elseif T <: Complex
             return T.parameters[1]::TypeT
         else
             return T
         end
     end
 end
+for f in [abs, abs2]
+    @eval promote_symtype(::$(typeof(f)), ::TypeT) = Real
+end
+function promote_shape(::typeof(complex), sha::ShapeT, shb::ShapeT)
+    @nospecialize sha shb
+    if is_array_shape(sha) || is_array_shape(shb)
+        _throw_array(complex, sha, shb)
+    end
+    return ShapeVecT()
+end
+
 for f in [real, imag, conj]
     @eval function promote_shape(::typeof($f), sh::ShapeT)
         @nospecialize sh

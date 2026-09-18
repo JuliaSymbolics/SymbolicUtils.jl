@@ -61,6 +61,7 @@ const POW_RULES = (
 )
 
 const ASSORTED_RULES = (
+    @rule(sqrt(~x::is_literal_number) => _extract_perfect_square(~x)),
     @rule(identity(~x) => ~x),
     @rule(-(~x) => -1*~x),
     @rule(-(~x, ~y) => ~x + -1(~y)),

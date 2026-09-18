@@ -163,6 +163,7 @@ export ifelse_eager, ifelse_branching
 PrecompileTools.@recompile_invalidations begin
 import SpecialFunctions, NaNMath
 include("methods.jl")
+
 include("printing.jl")
 end
 # LinkedList, simplification utilities

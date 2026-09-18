@@ -11,7 +11,7 @@ module Code
 import StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
        DocStringExtensions
 using SciMLPublic: @public
-using StaticArraysCore: MArray, SArray, SMatrix, SVector
+using StaticArraysCore: MArray, SArray
 using SparseArrays: AbstractSparseArray, SparseMatrixCSC, SparseVector, findnz, issparse, sparse
 using LinearAlgebra: Transpose, UpperTriangular
 using SpecialFunctions: lgamma

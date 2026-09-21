@@ -956,7 +956,7 @@ end
     @syms a b c
     t = SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing)
     @test isequal(t.dict, ACDict{SymReal}(a => 1, b => 1, c => 1))
-    @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  1//2],  nothing), b)
+    @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  3],  nothing), b^6)
 
     # test that maketerm doesn't hard-code BasicSymbolic subtype
     # and is consistent with BasicSymbolic arithmetic operations

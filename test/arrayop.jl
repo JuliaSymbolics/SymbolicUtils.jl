@@ -366,6 +366,18 @@ end
     end
 end
 
+struct TestOp <: SymbolicUtils.Operator end
+(::TestOp)(x::BasicSymbolic{T}) where {T} = Term{T}(TestOp(), ArgsT{T}((x,)); type = symtype(x), shape = shape(x))
+
+@testset "scalarize reduces indices inside `Operator` terms" begin
+    @syms x[1:3] y[1:3]
+    op = TestOp()
+    opx = op(x)
+    @test isequal(scalarize(sum(opx)), op(x[1]) + op(x[2]) + op(x[3]))
+    @test isequal(scalarize(opx .* y), [op(x[i]) * y[i] for i in 1:3])
+    @test isequal(scalarize(sum(opx .* y)), sum(op(x[i]) * y[i] for i in 1:3))
+end
+
 @testset "`mapreduce` with `dims` does not mutate argument shapes" begin
     @syms A[1:2, 1:2]
     before = copy(shape(A))

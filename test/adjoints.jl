@@ -26,3 +26,16 @@ using Zygote
     end
   end
 end
+
+@testset "symbolic call adjoint" begin
+  @syms t::Real x::Real u(::Real, ::Real)::Real
+  # A term built from symbolic args carries no numeric dependency, so it can be
+  # constructed inside a differentiated function and discarded (MethodOfLines#309).
+  y, g = Zygote.withgradient(p -> (u(t, x); 2p), 1.0)
+  @test y == 2.0
+  @test g == (2.0,)
+  # Numeric args are intentionally NOT marked non-differentiable: the call stores
+  # them as Const (recoverable via arguments/unwrap_const, which ForwardDiff and
+  # ReverseDiff differentiate through), so NoTangent would silently zero real
+  # gradients. Such calls must stay outside withgradient (hoist).
+end

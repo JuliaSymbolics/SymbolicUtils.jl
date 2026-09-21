@@ -181,6 +181,24 @@ end
     @test simplify_fractions((1.0 + 0.5*x - x^2) / ((1//2)*x^2 - 1)) isa Any
 end
 
+@testset "simplify_div with Rational{BigInt} coefficients (#1082)" begin
+    # `to_poly!` keeps whatever concrete coefficient types the expression
+    # carries; `safe_gcd` widens the gcd computation to `Rational{Int64}` via
+    # `poly_to_gcd_form`. `div_multiple` must divide the *converted* partial
+    # polynomials — otherwise it mixes `Rational{BigInt}` and `Rational{Int64}`
+    # inside MutableArithmetics' buffered `sub_mul`, which is unimplemented.
+    @syms x
+    half = big(1) // big(2)
+    # Expanded numerator so `quick_cancel` cannot cancel textually.
+    num = x^2 + (big(3) // big(2)) * x + half
+    den = x + half
+    # Must not throw, and must give the same result as the equivalent
+    # Rational{Int64} coefficient expression.
+    @test isequal(simplify_fractions(num / den),
+                  simplify_fractions((x^2 + (3 // 2) * x + 1 // 2) / (x + 1 // 2)))
+    @test unwrap_const(simplify_fractions(num / num)) == 1
+end
+
 @testset "isone iszero" begin
     @syms a b c d e f g h i
     x = (f + ((((g*(c^2)*(e^2)) / d - e*h*(c^2)) / b + (-c*e*f*g) / d + c*e*i) /

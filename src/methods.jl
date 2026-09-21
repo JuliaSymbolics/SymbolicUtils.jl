@@ -1339,7 +1339,7 @@ function LinearAlgebra.dot(x::BasicSymbolic{T}, y::AbstractArray) where {T}
     LinearAlgebra.dot(x, Const{T}(y))
 end
 
-SU.promote_symtype(::typeof(LinearAlgebra.mul!), Ts...) = SU.promote_symtype(*, Ts...)
+promote_symtype(::typeof(LinearAlgebra.mul!), Ts...) = SU.promote_symtype(*, Ts...)
 
 function promote_symtype(::typeof(LinearAlgebra.det), T::TypeT)
     if T <: Number

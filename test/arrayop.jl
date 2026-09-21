@@ -138,6 +138,11 @@ end
         @test symtype(var) == Number
         @test isequal(scalarize(var), f(collect(v)))
     end
+
+    @syms w R[1:1, 1:3]
+    array_mse = w * sum(abs2.(R)) / length(R)
+    @test isarrayop(sum(abs2.(R)))
+    @test isequal(expand(array_mse), (1 // 3) * w * sum(abs2.(R)))
 end
 
 @testset "`map` and `mapreduce` on oddly sized arrays" begin

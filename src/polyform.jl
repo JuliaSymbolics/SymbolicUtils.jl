@@ -20,6 +20,14 @@ function basicsymbolic_to_polyvar(bs_to_poly::AbstractDict, x::BasicSymbolic)::P
     end
 end
 
+function opaque_symbolic_to_polyvar(
+        bs_to_poly::AbstractDict, x::BasicSymbolic, inner_name::Symbol)::PolyVarT
+    get!(bs_to_poly, x) do
+        name = Symbol(inner_name, :_, hash(x))
+        MP.similar_variable(ExamplePolyVar, name)
+    end
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -140,6 +148,16 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 get!(poly_to_bs, pvar, expr)
                 return pvar
             end
+        end
+        BSImpl.ArrayOp(;) => begin
+            pvar = opaque_symbolic_to_polyvar(bs_to_poly, expr, :arrayop)
+            get!(poly_to_bs, pvar, expr)
+            return pvar
+        end
+        BSImpl.ArrayMaker(;) => begin
+            pvar = opaque_symbolic_to_polyvar(bs_to_poly, expr, :arraymaker)
+            get!(poly_to_bs, pvar, expr)
+            return pvar
         end
         BSImpl.Div(; num, den, type, shape) => begin
             if isconst(den)

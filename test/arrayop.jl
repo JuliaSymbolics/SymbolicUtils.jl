@@ -445,11 +445,11 @@ end
         fast! = eval(fast_iip_expr)
 
         @testset "dims=$dims" begin
-            @test legacy(values) == expected
-            @test fast(values) == expected
+            @test Base.invokelatest(legacy, values) == expected
+            @test Base.invokelatest(fast, values) == expected
             for generated in (legacy!, fast!)
                 out = similar(expected)
-                @test generated(out, values) == expected
+                @test Base.invokelatest(generated, out, values) == expected
                 @test out == expected
             end
         end

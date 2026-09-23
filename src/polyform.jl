@@ -256,13 +256,13 @@ function poly_to_gcd_form(p::PolynomialT)
     # stays Int32 and then `MP.gcd` / `div_multiple` hits DivideError when
     # content arithmetic overflows (e.g. MomentClosure derivative matching
     # closures going through `simplify` → `simplify_fractions`).
+    # `safe_isinteger` bounds integers by `typemax(Int)`, but a `Rational` can be
+    # arbitrarily large, so `Rational{Int64}` is only a floor for the rational branch.
     cs = if all_int
         Int64.(MP.coefficients(p))
     elseif all_rat
-        map(c -> begin
-                r = c isa Rational ? c : rationalize(c)
-                Rational{Int64}(Int64(numerator(r)), Int64(denominator(r)))
-            end, MP.coefficients(p))
+        rs = map(c -> c isa Rational ? c : rationalize(c), MP.coefficients(p))
+        convert(Vector{mapreduce(typeof, promote_type, rs; init = Rational{Int64})}, rs)
     elseif any_complex
         (complex ∘ float).(MP.coefficients(p))
     else

@@ -120,6 +120,13 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             @test T <: Rational
         end
 
+        @testset "rationals too large for Int64 are not narrowed" begin
+            r = Rational{BigInt}(big(10)^25, 7)
+            g = poly_to_gcd_form(poly_with_coeffs(Number[r, 1], (1 - v)))
+            @test eltype(MP.coefficients(g)) === Rational{BigInt}
+            @test MP.coefficients(g) == [r, 1]
+        end
+
         @testset "heterogeneous float kinds (Float32 + Float64)" begin
             p = poly_with_coeffs(Number[Float32(1.5), Float64(-2.5)], (1.5 - v))
             g = poly_to_gcd_form(p)
@@ -218,4 +225,14 @@ end
     @test isequal(expand(s), s)
     @test isequal(expand(a * (s + b)), a * s + a * b)
     @test isequal(expand(s / 3), (1 // 3) * s)
+end
+
+@testset "simplify survives rational coefficients too large for Int64" begin
+    @syms x
+    ex = ((3 + 2x) * (x - (big(10)^25) // 7)^2) / (x + 3 // 2)
+    s = simplify(ex)
+    for v in (3, -5 // 2, big(10)^30)
+        @test unwrap_const(substitute(s, Dict(x => v))) ==
+            unwrap_const(substitute(ex, Dict(x => v)))
+    end
 end

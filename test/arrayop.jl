@@ -413,3 +413,55 @@ end
     @test isequal([unwrap_const(substitute(x, substitutions; fold = Val(true))) for x in scalarize(expr)], expected)
     @test isequal([unwrap_const(substitute(x, substitutions; fold = Val(true))) for x in collect(expr)], expected)
 end
+
+@testset "codegen reductions over selected dimensions" begin
+    @syms A[1:2, 1:3] B[1:2, 1:3, 1:2]
+    cases = (
+        (A, reshape(Float64.(1:6), 2, 3), 1),
+        (A, reshape(Float64.(1:6), 2, 3), (1, 2)),
+        (B, reshape(Float64.(1:12), 2, 3, 2), (1, 3)),
+    )
+    for (input, values, dims) in cases
+        expr = sum(abs2, input; dims)
+        expected = sum(abs2, values; dims)
+        legacy = eval(toexpr(Func([input], [], expr)))
+        fast = eval(Code.fast_toexpr(Func([input], [], expr), Code.IRStructure{SymReal}(), Dict{Any, Any}()))
+        state = Code.NameState()
+        state.rewrites[input] = :input
+        legacy_iip_expr = Expr(
+            :function, Expr(:tuple, :out, :input),
+            Expr(:block, Expr(:call, copyto!, :out, toexpr(expr, state)), :out)
+        )
+        fast_iip_expr = Expr(
+            :function, Expr(:tuple, :out, :input),
+            Expr(
+                :block, Expr(
+                    :call, copyto!, :out,
+                    Code.fast_toexpr(expr, Code.IRStructure{SymReal}(), Dict{Any, Any}(input => :input))
+                ), :out
+            )
+        )
+        legacy! = eval(legacy_iip_expr)
+        fast! = eval(fast_iip_expr)
+
+        @testset "dims=$dims" begin
+            @test legacy(values) == expected
+            @test fast(values) == expected
+            for generated in (legacy!, fast!)
+                out = similar(expected)
+                @test generated(out, values) == expected
+                @test out == expected
+            end
+        end
+    end
+end
+
+@testset "indexing an adjoint of a symbolic vector" begin
+    @syms x[1:2]
+    @test isequal(adjoint(x)[1, 2], x[2])
+
+    @syms M[1:3, 1:2]
+    reduced = scalarize(sum(abs2, M .* x'; dims = 1))
+    expected = reshape([sum(abs2(M[i, j] * x[j]) for i in 1:3) for j in 1:2], 1, 2)
+    @test isequal(reduced, expected)
+end

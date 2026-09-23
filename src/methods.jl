@@ -1715,8 +1715,8 @@ Callable used as the `operation` of symbolic `mapreduce`-family terms: tracing
 arrays produces a term whose operation is a `Mapreducer`. For example `sum(x)`
 of a symbolic array `x` traces to a term with operation
 `Mapreducer(identity, Base.add_sum, Colon(), nothing)`. `dims` is `Colon()`, an
-`Int`, or a tuple of `Int`s, and `init === nothing` means no initial value was supplied. Calling a
-`Mapreducer` applies the corresponding `mapreduce`. Downstream analyses that
+`Int`, or a tuple of `Int`s, and `init === nothing` means no initial value was
+supplied. Calling a `Mapreducer` applies the corresponding `mapreduce`. Downstream analyses that
 walk symbolic expressions can dispatch on this type (and on [`Mapper`](@ref))
 to recognize reductions over symbolic arrays.
 """

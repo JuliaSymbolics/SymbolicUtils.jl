@@ -987,7 +987,7 @@ end
 function codegen_function!(@nospecialize(op::SymbolicUtils.Mapreducer), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     result = Expr(:call, mapreduce)
     kws = Expr(:parameters)
-    if op.dims isa Int
+    if !(op.dims isa Colon)
         dims = op.dims
         if dims isa BasicSymbolic{T}
             push!(kws.args, Expr(:kw, :dims, cs(dims)))

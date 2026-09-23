@@ -2119,13 +2119,14 @@ function cse!(x::ForLoop, state::CSEState)
 end
 
 """
-    OptimizationRule(name, detector, transformer, priority)
+    OptimizationRule(name, detector, transformer, priority[, options])
 
 Defines an optimization rule with:
 - `name`: A string identifier for the optimization.
 - `detector`: A function that detects patterns in the IR.
 - `transformer`: A function that transforms the IR based on detected patterns, and returns updated IR
 - `priority`: Integer priority (higher = applied first)
+- `options`: User specified configuration for the rule, `nothing` by default
 
 The detector function should implement the signature
 
@@ -2138,13 +2139,36 @@ Likewise, the transformer function should implement the signature
 ```julia
 transformer(expr::Code.Let, match_data::Union{Nothing, Vector{<:AbstractMatched}}, state::Code.CSEState) -> Code.Let
 ```
+
+If `options !== nothing` it is passed as a trailing argument to both, so the
+corresponding methods need to accept it.
 """
-struct OptimizationRule{D, T}
+struct OptimizationRule{D, T, O}
     name::String
     detector::D
     transformer::T
     priority::Int
+    options::O
 end
+
+function OptimizationRule(name, detector, transformer, priority)
+    OptimizationRule(name, detector, transformer, priority, nothing)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return `rule` with its options replaced by `options`.
+"""
+function with_options(rule::OptimizationRule, options)
+    OptimizationRule(rule.name, rule.detector, rule.transformer, rule.priority, options)
+end
+
+run_detector(rule::OptimizationRule{D, T, Nothing}, args...) where {D, T} = rule.detector(args...)
+run_detector(rule::OptimizationRule, args...) = rule.detector(args..., rule.options)
+
+run_transformer(rule::OptimizationRule{D, T, Nothing}, args...) where {D, T} = rule.transformer(args...)
+run_transformer(rule::OptimizationRule, args...) = rule.transformer(args..., rule.options)
 
 abstract type AbstractMatched end
 
@@ -2207,9 +2231,9 @@ Base.isempty(l::Code.Let) = isempty(l.pairs)
 
 # Apply optimization rules during CSE
 function apply_optimization_rule(expr::Code.Let, state::Union{Code.CSEState, Code.LazyState}, rules::OptimizationRule)
-    match_data = rules.detector(expr, state)
+    match_data = run_detector(rules, expr, state)
     if match_data !== nothing
-        return rules.transformer(expr, match_data, state)
+        return run_transformer(rules, expr, match_data, state)
     end
 
     return expr
@@ -2236,9 +2260,9 @@ end
 
 apply_optimization_rules(ir::IRStructure, expr::Any, ::Nothing) = ir, expr
 function apply_optimization_rule(ir::IRStructure, expr, rules)
-    match_data = rules.detector(ir, expr)
+    match_data = run_detector(rules, ir, expr)
     if match_data !== nothing
-        new_ir, new_expr = rules.transformer(ir, expr, match_data)
+        new_ir, new_expr = run_transformer(rules, ir, expr, match_data)
         return new_ir, new_expr
     end
 
@@ -2258,6 +2282,6 @@ function apply_optimization_rules(ir::IRStructure, expr, rules)
 end
 
 @public LazyState, create_array, cse_inside_expr, fast_toexpr, function_to_expr, get_rewrites
-@public supports_with_allocator, with_allocator
+@public supports_with_allocator, with_allocator, with_options
 
 end

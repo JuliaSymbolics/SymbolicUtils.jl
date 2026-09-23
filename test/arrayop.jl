@@ -9,6 +9,7 @@ limit2(a::BasicSymbolic{T}, N) where {T} = Term{T}(limit2, ArgsT{T}((a, Const{T}
 brusselator_f(x, y, t) = (((x - 0.3)^2 + (y - 0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.0
 
 SymbolicUtils.promote_symtype(::typeof(brusselator_f), args...) = Real
+custom_mapreduce_square(x) = x^2
 
 @testset "Brusselator stencil" begin
     n = 8
@@ -385,4 +386,30 @@ end
     @test shape(r) == ShapeVecT([1:1, 1:2])
     @test shape(A) == before
     @test SymbolicUtils.iscall(A + [1.0 2.0; 3.0 4.0])
+end
+
+@testset "scalarize reductions over selected dimensions" begin
+    @syms M[1:2, 1:3]
+    values = [1.0 2 3; 4 5 6]
+    substitutions = Dict(M[i, j] => values[i, j] for i in 1:2, j in 1:3)
+    checks = [
+        () -> (sum(M; dims = 1), reshape([M[1, j] + M[2, j] for j in 1:3], 1, 3)),
+        () -> (sum(M; dims = 2), reshape([M[i, 1] + M[i, 2] + M[i, 3] for i in 1:2], 2, 1)),
+        () -> (sum(M; dims = (1, 2)), fill(sum(M[i, j] for i in 1:2, j in 1:3), 1, 1)),
+        () -> (sum(abs2, M; dims = 1), reshape([abs2(M[1, j]) + abs2(M[2, j]) for j in 1:3], 1, 3)),
+        () -> (prod(M; dims = 1), reshape([M[1, j] * M[2, j] for j in 1:3], 1, 3)),
+    ]
+
+    for (i, check) in enumerate(checks)
+        @testset "case $i" begin
+            expr, expected = check()
+            @test isequal(scalarize(expr), expected)
+            @test isequal(collect(expr), expected)
+        end
+    end
+
+    expr = mapreduce(custom_mapreduce_square, +, M; dims = 1)
+    expected = reshape([mapreduce(custom_mapreduce_square, +, values[:, j]) for j in 1:3], 1, 3)
+    @test isequal([unwrap_const(substitute(x, substitutions; fold = Val(true))) for x in scalarize(expr)], expected)
+    @test isequal([unwrap_const(substitute(x, substitutions; fold = Val(true))) for x in collect(expr)], expected)
 end

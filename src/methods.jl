@@ -1714,13 +1714,13 @@ Callable used as the `operation` of symbolic `mapreduce`-family terms: tracing
 `sum`, `prod`, or `mapreduce(f, reduce, xs...; dims, init)` over symbolic
 arrays produces a term whose operation is a `Mapreducer`. For example `sum(x)`
 of a symbolic array `x` traces to a term with operation
-`Mapreducer(identity, Base.add_sum, Colon(), nothing)`. `dims` is `Colon()` or
-an `Int`, and `init === nothing` means no initial value was supplied. Calling a
+`Mapreducer(identity, Base.add_sum, Colon(), nothing)`. `dims` is `Colon()`, an
+`Int`, or a tuple of `Int`s, and `init === nothing` means no initial value was supplied. Calling a
 `Mapreducer` applies the corresponding `mapreduce`. Downstream analyses that
 walk symbolic expressions can dispatch on this type (and on [`Mapper`](@ref))
 to recognize reductions over symbolic arrays.
 """
-struct Mapreducer{F, R, D <: Union{Int, Colon}, I}
+struct Mapreducer{F, R, D <: Union{Int, Colon, Tuple{Vararg{Int}}}, I}
     f::F
     reduce::R
     dims::D
@@ -1769,8 +1769,11 @@ function promote_shape(f::Mapreducer, shs::ShapeT...)
     else
         # `mapped_shape` may alias an argument's own shape vector; never mutate it.
         reduced_shape = copy(mapped_shape)
-        ax = reduced_shape[f.dims]
-        reduced_shape[f.dims] = first(ax):first(ax)
+        dims = f.dims isa Int ? (f.dims,) : f.dims
+        for d in dims
+            ax = reduced_shape[d]
+            reduced_shape[d] = first(ax):first(ax)
+        end
         return reduced_shape
     end
 end
@@ -1792,6 +1795,13 @@ function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T
         exp = indexed[1]
     else
         exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type)::TypeT, shape = ShapeVecT())
+    end
+    if !(dims isa Colon)
+        dims = dims isa Int ? (dims,) : dims
+        idxsym = idxs_for_arrayop(T)
+        for d in 1:nd
+            push!(idxs, d in dims ? 1 : idxsym[d])
+        end
     end
     ranges = RangesT{T}()
     if nd == 1 && _map_sh isa ShapeVecT

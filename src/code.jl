@@ -921,21 +921,12 @@ end
     return nothing
 end
 
-"""
-    $TYPEDEF
+const DESTRUCTURING_REWRITES_CACHE = TaskLocalValue{Dict{Tuple{Any, AbstractRange}, Vector{Expr}}}(
+    () -> Dict{Tuple{Any, AbstractRange}, Vector{Expr}}())
 
-Cache entry for [`store_destructuring_rewrites!`](@ref). Holds strong references to the
-`elems` and `inds` of the `DestructuredArgs` it was created from so that the `objectid`s
-used in the cache key cannot be recycled while the entry is alive.
-"""
-struct DestructuringRewrites
-    elems::Any
-    inds::Any
-    exprs::Vector{Expr}
-end
-
-const DESTRUCTURING_REWRITES_CACHE = TaskLocalValue{Dict{Tuple{Any, UInt, UInt}, DestructuringRewrites}}(
-    () -> Dict{Tuple{Any, UInt, UInt}, DestructuringRewrites}())
+# Upper bound on the total number of `Expr`s held by `DESTRUCTURING_REWRITES_CACHE`.
+const DESTRUCTURING_REWRITES_CACHE_MAX_EXPRS = 2^20
+const DESTRUCTURING_REWRITES_CACHE_NEXPRS = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
 
 const DESTRUCTURING_MARKER = :__destructuring_rewrites_marker
 
@@ -946,6 +937,32 @@ else
     _sizehint_noshrink!(d, n) = sizehint!(d, n)
 end
 
+function build_destructured_elem_exprs(@nospecialize(name), @nospecialize(inds))
+    n = length(inds)::Int
+    exprs = Vector{Expr}(undef, n)
+    for i in 1:n
+        exprs[i] = destructured_elem_expr(name, inds[i])
+    end
+    return exprs
+end
+
+function destructured_elem_exprs(@nospecialize(name), @nospecialize(inds))
+    inds isa AbstractRange || return build_destructured_elem_exprs(name, inds)
+    cache = DESTRUCTURING_REWRITES_CACHE[]
+    key = (name, inds)
+    exprs = get(cache, key, nothing)
+    exprs === nothing || return exprs
+    exprs = build_destructured_elem_exprs(name, inds)
+    nexprs = DESTRUCTURING_REWRITES_CACHE_NEXPRS[]
+    if nexprs[] + length(exprs) > DESTRUCTURING_REWRITES_CACHE_MAX_EXPRS
+        empty!(cache)
+        nexprs[] = 0
+    end
+    cache[key] = exprs
+    nexprs[] += length(exprs)
+    return exprs
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -953,11 +970,12 @@ Store the rewrites for a `create_bindings = false` `DestructuredArgs` directly i
 `st.rewrites` without materializing the `Vector{Assignment}` that
 [`get_assignments`](@ref) would allocate.
 
-The generated right-hand-side `Expr`s depend only on the destructured name, `elems` and
-`inds`, so they are memoized in a task-local cache. Codegen for a system with many
-functions destructures the same (shared, `===`) parameter buffers once per generated
-function; the cache turns every repeat into a lookup instead of `length(inds)` fresh
-`Expr` allocations.
+The generated right-hand-side `Expr`s depend only on the destructured name and `inds`, so
+when `inds` is a range they are memoized in a task-local cache keyed on `(name, inds)` by
+value. Codegen for a system with many functions destructures the same arguments once per
+generated function; the cache turns every repeat into a lookup instead of `length(inds)`
+fresh `Expr` allocations. The cache holds no reference to `elems` and is bounded by the
+total number of cached `Expr`s.
 """
 function store_destructuring_rewrites!(d::DestructuredArgs, st)
     name = manual_dispatch_toexpr(d, st)
@@ -967,24 +985,14 @@ function store_destructuring_rewrites!(d::DestructuredArgs, st)
     # `Symbolics.codegen_function` generates the out-of-place and in-place variants with
     # the same `rewrites` dict. The rewrites this function stores depend only on `key`,
     # so mark the dict and skip the (identical) re-population on the second call.
+    # The marker's value keeps `elems` and `inds` alive so their `objectid`s cannot be
+    # recycled while `st.rewrites` is.
     marker = (DESTRUCTURING_MARKER, key)
     len_before = length(st.rewrites)
-    get!(st.rewrites, marker, true)
+    get!(st.rewrites, marker, (elems, d.inds))
     length(st.rewrites) == len_before && return nothing
 
-    cache = DESTRUCTURING_REWRITES_CACHE[]
-    entry = get(cache, key, nothing)
-    if entry === nothing
-        exprs = Vector{Expr}(undef, n)
-        for i in 1:n
-            exprs[i] = destructured_elem_expr(name, d.inds[i])
-        end
-        # crude bound to avoid unbounded growth over a long session
-        length(cache) > 10_000 && empty!(cache)
-        cache[key] = DestructuringRewrites(elems, d.inds, exprs)
-    else
-        exprs = entry.exprs
-    end
+    exprs = destructured_elem_exprs(name, d.inds)
     _sizehint_noshrink!(st.rewrites, length(st.rewrites) + n)
     for i in 1:n
         store_rewrite!(st.rewrites, elems[i], exprs[i])

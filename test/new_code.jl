@@ -1300,3 +1300,68 @@ end
         local var"##cse#7" = $(\)(var"##cse#4", var"##cse#6")
     end)
 end
+
+struct SinMatch <: Code.AbstractMatched
+    idx::Int
+end
+
+function detect_sin(ir::IRStructure, expr)
+    idxs = findall(s -> iscall(s) && operation(s) === sin, ir.symbols)
+    isempty(idxs) ? nothing : map(SinMatch, idxs)
+end
+detect_sin(ir::IRStructure, expr, options) = detect_sin(ir, expr)
+
+replace_sin(ir::IRStructure, expr, matches) = replace_sin(ir, expr, matches, (; f = cos))
+function replace_sin(ir::IRStructure, expr, matches, options)
+    new_ir = copy(ir)
+    for m in matches
+        node = new_ir[m.idx]
+        replace_node!(new_ir, node, term(options.f, only(arguments(node))))
+    end
+    new_ir, expr
+end
+
+@testset "`OptimizationRule` options" begin
+    @syms a::Real
+
+    function evaluate(rule)
+        ir = IRStructure{SymReal}()
+        root = populate_ir!(ir, sin(a))
+        new_ir, _ = Code.apply_optimization_rule(ir, sin(a), rule)
+        expr = Code.fast_toexpr(new_ir[root], new_ir, Dict())
+        eval(quote let a = 0.5; $expr end end)
+    end
+
+    rule = OptimizationRule("ReplaceSin", detect_sin, replace_sin, 1)
+    @test rule.options === nothing
+    @test evaluate(rule) ≈ cos(0.5)
+
+    configured = Code.with_options(rule, (; f = tan))
+    @test configured.options == (; f = tan)
+    @test evaluate(configured) ≈ tan(0.5)
+    @test evaluate(OptimizationRule("ReplaceSin", detect_sin, replace_sin, 1, (; f = exp))) ≈ exp(0.5)
+end
+
+detect_let(expr::Code.Let, state) = map(SinMatch, eachindex(expr.pairs))
+detect_let(expr::Code.Let, state, options) = detect_let(expr, state)
+
+rewrite_let(expr::Code.Let, matches, state) = rewrite_let(expr, matches, state, (; f = cos))
+function rewrite_let(expr::Code.Let, matches, state, options)
+    pairs = map(expr.pairs) do p
+        Code.Assignment(Code.lhs(p), term(options.f, only(arguments(Code.rhs(p)))))
+    end
+    Code.Let(pairs, expr.body, expr.let_block)
+end
+
+@testset "`OptimizationRule` options on the `Code.Let` path" begin
+    @syms a::Real b::Real
+
+    function rewritten(rule)
+        expr = Code.Let([Code.Assignment(b, sin(a))], b, false)
+        operation(Code.rhs(only(Code.apply_optimization_rule(expr, Code.LazyState(), rule).pairs)))
+    end
+
+    rule = OptimizationRule("ReplaceSinInLet", detect_let, rewrite_let, 1)
+    @test rewritten(rule) === cos
+    @test rewritten(Code.with_options(rule, (; f = tan))) === tan
+end

@@ -276,10 +276,10 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
         end
     end
     @match arr begin
-        BSImpl.Term(; f, args) && if f === adjoint && length(args) == 1 &&
+        BSImpl.Term(; f, args) && if (f === adjoint || f === transpose) && length(args) == 1 &&
                 length(shape(args[1])) == 1 && length(idxs) == 2 && idxs[1] == 1 end => begin
             element = args[1][idxs[2]]
-            return symtype(element) <: Complex ? adjoint(element) : element
+            return f(element)
         end
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
             inner = args[1][sidxs]
@@ -352,11 +352,11 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
             return Const{T}(reshape(arguments(arr), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
-        BSImpl.Term(; f, args) && if f === adjoint && length(args) == 1 &&
+        BSImpl.Term(; f, args) && if (f === adjoint || f === transpose) && length(args) == 1 &&
                 length(shape(args[1])) == 1 && length(idxs) == 2 &&
                 idxs[1] isa Int && idxs[1] == 1 end => begin
             element = args[1][idxs[2]]
-            return symtype(element) <: Complex ? adjoint(element) : element
+            return f(element)
         end
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
             inner = args[1][idxs...]

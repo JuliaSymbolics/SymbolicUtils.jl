@@ -456,12 +456,29 @@ end
     end
 end
 
-@testset "indexing an adjoint of a symbolic vector" begin
-    @syms x[1:2]
-    @test isequal(adjoint(x)[1, 2], x[2])
+@testset "indexing an adjoint or transpose of a symbolic vector" begin
+    @syms x[1:2] z[1:2]::Complex{Float64} w[1:2]::Real
+    xv = ComplexF64[1 + 2im, 3im]
+    zv = ComplexF64[2 - im, -4 + 5im]
+    wv = [2.0, 3.0]
+
+    for (sym, values) in ((x, xv), (z, zv), (w, wv))
+        expr = adjoint(sym)[1, 2]
+        generated = eval(toexpr(Func([sym], [], expr)))
+        @test Base.invokelatest(generated, values) == adjoint(values)[1, 2]
+    end
+
+    transpose_expr = transpose(z)[1, 2]
+    transpose_generated = eval(toexpr(Func([z], [], transpose_expr)))
+    @test Base.invokelatest(transpose_generated, zv) == transpose(zv)[1, 2]
 
     @syms M[1:3, 1:2]
+    Mv = [1.0 2; 3 4; 5 6]
+    broadcast_expr = (M .* x')[1, 2]
+    broadcast_generated = eval(toexpr(Func([M, x], [], broadcast_expr)))
+    @test Base.invokelatest(broadcast_generated, Mv, xv) == (Mv .* xv')[1, 2]
+
     reduced = scalarize(sum(abs2, M .* x'; dims = 1))
-    expected = reshape([sum(abs2(M[i, j] * x[j]) for i in 1:3) for j in 1:2], 1, 2)
+    expected = reshape([sum(abs2(M[i, j] * adjoint(x[j])) for i in 1:3) for j in 1:2], 1, 2)
     @test isequal(reduced, expected)
 end

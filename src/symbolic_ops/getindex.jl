@@ -58,8 +58,9 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
     result = ShapeVecT()
     for (i, idx) in enumerate(shidxs)
         isempty(idx) && continue
-        idx[1] == 1:0 && sharr isa Unknown && throw_no_unknown_colon()
-        ii = idx[1] == 1:0 ? sharr[i] : 1:length(idx[1])
+        iscolon = idx[1] === COLON_AXIS
+        iscolon && sharr isa Unknown && throw_no_unknown_colon()
+        ii = iscolon ? sharr[i] : 1:length(idx[1])
         push!(result, ii)
         if sharr isa ShapeVecT && length(ii) > length(sharr[i])
             throw_index_larger_than_shape(i, ii, sharr[i])
@@ -71,29 +72,6 @@ end
 
 function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
     throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
-end
-
-function _getindex_shape(sharr::ShapeT, idxs...)
-    is_array_shape(sharr) || isempty(idxs) || throw_not_array(sharr)
-    result = ShapeVecT()
-    for (i, idx) in enumerate(idxs)
-        shidx = shape(idx)
-        shidx isa ShapeVecT ||
-            throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
-        isempty(shidx) && continue
-        # Colon and an empty range have the same shape, but select different axes.
-        ii = if unwrap_const(idx) isa Colon
-            sharr isa Unknown && throw_no_unknown_colon()
-            sharr[i]
-        else
-            1:length(shidx[1])
-        end
-        if sharr isa ShapeVecT && length(ii) > length(sharr[i])
-            throw_index_larger_than_shape(i, ii, sharr[i])
-        end
-        push!(result, ii)
-    end
-    return result
 end
 
 function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
@@ -390,7 +368,7 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
             push!(newargs, args[1])
             sh = shape(arr)
             type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
-            newshape = _getindex_shape(sh, idxs...)
+            newshape = promote_shape(getindex, sh, shape.(idxs)...)
             idxs_i = 1
             for oldidx in Iterators.drop(args, 1)
                 oldidx_sh = shape(oldidx)
@@ -439,7 +417,7 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
 
     sh = shape(arr)
     type = promote_symtype(getindex, symtype(arr), symtype.(idxs)...)
-    newshape = _getindex_shape(sh, idxs...)
+    newshape = promote_shape(getindex, sh, shape.(idxs)...)
     @boundscheck if sh isa ShapeVecT
         for (ax, idx) in zip(sh, idxs)
             idx isa BasicSymbolic{T} && continue

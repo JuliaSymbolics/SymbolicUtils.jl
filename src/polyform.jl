@@ -65,10 +65,39 @@ non-polynomial subexpressions become single polynomial variables.
 
 A [`PolyVarT`](@ref) or [`PolynomialT`](@ref) representing `expr`.
 """
-to_poly!(::AbstractDict, ::AbstractDict, expr, ::Bool) = MA.operate!(+, zeropoly(), expr)
-function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::BasicSymbolic{T}, recurse::Bool = true)::Union{PolyVarT, PolynomialT} where {T}
+function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr, recurse::Bool = true)
+    return _to_poly!(poly_to_bs, bs_to_poly, expr, recurse, false)
+end
+
+# `Rational{Int}` arithmetic inside polynomial operations is checked and throws
+# `OverflowError`, e.g. when squaring a coefficient with a large denominator.
+# With `widen = true` every exact coefficient enters the polynomial as a
+# `BigInt`-based number so the same computation can be retried without overflow.
+_widen_coeff(x::Integer) = big(x)
+_widen_coeff(x::Rational) = Rational{BigInt}(x)
+_widen_coeff(x::Complex{<:Union{Integer, Rational}}) = complex(_widen_coeff(real(x)), _widen_coeff(imag(x)))
+_widen_coeff(x) = x
+_maybe_widen(x, widen::Bool) = widen ? _widen_coeff(x) : x
+
+_narrow_coeff(x::Union{Integer, Rational}) = _narrow(x)
+_narrow_coeff(x::Complex{<:Union{Integer, Rational}}) = complex(_narrow(real(x)), _narrow(imag(x)))
+_narrow_coeff(x) = x
+_narrow_coeffs(p::DP.Polynomial) = PolynomialT(PolyCoeffT[_narrow_coeff(c) for c in MP.coefficients(p)], MP.monomials(p))
+_narrow_coeffs(p) = p
+
+function _retry_widened(f)
+    try
+        return f(false)
+    catch e
+        e isa OverflowError || rethrow()
+        return f(true)
+    end
+end
+
+_to_poly!(::AbstractDict, ::AbstractDict, expr, ::Bool, widen::Bool) = MA.operate!(+, zeropoly(), _maybe_widen(expr, widen))
+function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::BasicSymbolic{T}, recurse::Bool, widen::Bool)::Union{PolyVarT, PolynomialT} where {T}
     @match expr begin
-        BSImpl.Const(; val) => to_poly!(poly_to_bs, bs_to_poly, val, recurse)
+        BSImpl.Const(; val) => _to_poly!(poly_to_bs, bs_to_poly, val, recurse, widen)
         BSImpl.Sym(;) => begin
             pvar = basicsymbolic_to_polyvar(bs_to_poly, expr)
             get!(poly_to_bs, pvar, expr)
@@ -78,13 +107,14 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
             @match variant begin
                 AddMulVariant.ADD => begin
                     poly = zeropoly()
-                    MA.operate!(+, poly, MA.copy_if_mutable(coeff))
+                    MA.operate!(+, poly, _maybe_widen(MA.copy_if_mutable(coeff), widen))
                     for (k, v) in dict
-                        tpoly = to_poly!(poly_to_bs, bs_to_poly, k, recurse)
+                        tpoly = _to_poly!(poly_to_bs, bs_to_poly, k, recurse, widen)
+                        cv = _maybe_widen(v, widen)
                         if tpoly isa PolyVarT
-                            tpoly = tpoly * v
+                            tpoly = tpoly * cv
                         else
-                            MA.operate!(*, tpoly, v)
+                            MA.operate!(*, tpoly, cv)
                         end
                         MA.operate!(+, poly, tpoly)
                     end
@@ -92,12 +122,12 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 end
                 AddMulVariant.MUL => begin
                     poly = onepoly()
-                    MA.operate!(*, poly, MA.copy_if_mutable(coeff))
+                    MA.operate!(*, poly, _maybe_widen(MA.copy_if_mutable(coeff), widen))
                     for (k, v) in dict
                         if safe_isinteger(v)
-                            tpoly = to_poly!(poly_to_bs, bs_to_poly, k, recurse) ^ Int(v)
+                            tpoly = _to_poly!(poly_to_bs, bs_to_poly, k, recurse, widen) ^ Int(v)
                         else
-                            tpoly = to_poly!(poly_to_bs, bs_to_poly, k ^ v, recurse)
+                            tpoly = _to_poly!(poly_to_bs, bs_to_poly, k ^ v, recurse, widen)
                         end
                         MA.operate!(*, poly, tpoly)
                     end
@@ -108,7 +138,7 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
         BSImpl.Term(; f, args, type, shape) => begin
             if f === (^) && isconst(args[2]) && (exp = unwrap_const(args[2]); exp isa Real) && safe_isinteger(exp)
                 base = args[1]
-                poly = to_poly!(poly_to_bs, bs_to_poly, base)
+                poly = _to_poly!(poly_to_bs, bs_to_poly, base, true, widen)
                 if poly isa PolyVarT
                     _isone(exp) && return poly
                     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}([poly], [Int[exp]])
@@ -117,19 +147,19 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
                 poly = poly ^ Int(exp)
                 new_expr = from_poly(poly_to_bs, poly)
                 if !isequal(expr, new_expr)
-                    poly = to_poly!(poly_to_bs, bs_to_poly, from_poly(poly_to_bs, poly), recurse)
+                    poly = _to_poly!(poly_to_bs, bs_to_poly, from_poly(poly_to_bs, poly), recurse, widen)
                 end
                 return poly
             elseif f === (*) || f === (+)
                arg1, restargs = Iterators.peel(args)
-                poly = to_poly!(poly_to_bs, bs_to_poly, arg1)
+                poly = _to_poly!(poly_to_bs, bs_to_poly, arg1, true, widen)
                 if !(poly isa PolynomialT)
                     _poly = zeropoly()
                     MA.operate!(+, _poly, poly)
                     poly = _poly
                 end
                 for arg in restargs
-                    MA.operate!(f, poly, to_poly!(poly_to_bs, bs_to_poly, arg))
+                    MA.operate!(f, poly, _to_poly!(poly_to_bs, bs_to_poly, arg, true, widen))
                 end
                 return poly
             else
@@ -143,8 +173,8 @@ function to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Basi
         end
         BSImpl.Div(; num, den, type, shape) => begin
             if isconst(den)
-                npoly = to_poly!(poly_to_bs, bs_to_poly, num, recurse)
-                den = unwrap_const(den)
+                npoly = _to_poly!(poly_to_bs, bs_to_poly, num, recurse, widen)
+                den = _maybe_widen(unwrap_const(den), widen)
                 if npoly isa PolyVarT
                     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}([npoly], [Int[1]])
                     coeff = den isa Union{Integer, Rational} ? (1 // den) : (1 / den)
@@ -213,10 +243,12 @@ multivariate polynomials implementation.
 """
 function expand(expr::BasicSymbolic{T}, recurse = true)::BasicSymbolic{T} where {T}
     iscall(expr) || return expr
-    poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
-    bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
-    partial_poly = to_poly!(poly_to_bs, bs_to_poly, expr, recurse)
-    return from_poly(poly_to_bs, partial_poly)
+    return _retry_widened() do widen
+        poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
+        bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
+        partial_poly = _to_poly!(poly_to_bs, bs_to_poly, expr, recurse, widen)
+        from_poly(poly_to_bs, widen ? _narrow_coeffs(partial_poly) : partial_poly)
+    end
 end
 expand(x, _...) = x
 
@@ -292,10 +324,14 @@ function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, Polynomi
 end
 
 function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: SymVariant}
+    return _retry_widened(widen -> _simplify_div(num, den, widen))
+end
+
+function _simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}, widen::Bool) where {T <: SymVariant}
     poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
     bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
-    partial_poly1 = to_poly!(poly_to_bs, bs_to_poly, num, false)
-    partial_poly2 = to_poly!(poly_to_bs, bs_to_poly, den, false)
+    partial_poly1 = _to_poly!(poly_to_bs, bs_to_poly, num, false, widen)
+    partial_poly2 = _to_poly!(poly_to_bs, bs_to_poly, den, false, widen)
     factor = safe_gcd(partial_poly1, partial_poly2)
     if isone(factor)
         return num, den
@@ -312,6 +348,10 @@ function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: 
     partial_poly2 = MP.div_multiple(partial_poly2, factor, MA.IsMutable())
     canonicalize_coeffs!(MP.coefficients(partial_poly1))
     canonicalize_coeffs!(MP.coefficients(partial_poly2))
+    if widen
+        partial_poly1 = _narrow_coeffs(partial_poly1)
+        partial_poly2 = _narrow_coeffs(partial_poly2)
+    end
     return from_poly(poly_to_bs, partial_poly1), from_poly(poly_to_bs, partial_poly2)
 end
 

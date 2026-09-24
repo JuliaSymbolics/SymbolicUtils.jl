@@ -236,3 +236,22 @@ end
             unwrap_const(substitute(ex, Dict(x => v)))
     end
 end
+
+@testset "Rational{Int64} coefficient products that overflow Int64" begin
+    @syms a b
+    big_den = 1_000_000_000_000
+    ex = ((1 // 3) * a + (1 // big_den) * b)^2 / (a + b)
+    @test isequal(simplify(ex), ex)
+    @test isequal(simplify_fractions(ex), ex)
+
+    e = expand(((1 // 3) * a + (1 // big_den) * b)^2)
+    @test isequal(e, (1 // 9) * a^2 + (2 // (3big_den)) * a * b + (1 // big(big_den)^2) * b^2)
+
+    num = expand((a + (1 // big_den) * b)^2 * (a - b))
+    s = simplify_fractions(num / (a + (1 // big_den) * b))
+    @test !occursin("a + (1//1000000000000)*b", repr(s))
+    for (va, vb) in ((2, 3), (-1 // 5, 7), (big(10)^13, 1))
+        @test unwrap_const(substitute(s, Dict(a => va, b => vb))) ==
+            (va + vb // big(big_den)) * (va - vb)
+    end
+end

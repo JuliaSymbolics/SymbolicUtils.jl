@@ -439,7 +439,6 @@ unwrap_const
 ### Inner constructors
 
 ```@docs
-SymbolicUtils.array_literal
 SymbolicUtils.BSImpl.Const
 SymbolicUtils.BSImpl.Sym
 SymbolicUtils.BSImpl.Term

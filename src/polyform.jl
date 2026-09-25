@@ -79,11 +79,23 @@ _widen_coeff(x::Complex{<:Union{Integer, Rational}}) = complex(_widen_coeff(real
 _widen_coeff(x) = x
 _maybe_widen(x, widen::Bool) = widen ? _widen_coeff(x) : x
 
-_narrow_coeff(x::Union{Integer, Rational}) = _narrow(x)
-_narrow_coeff(x::Complex{<:Union{Integer, Rational}}) = complex(_narrow(real(x)), _narrow(imag(x)))
-_narrow_coeff(x) = x
-_narrow_coeffs(p::DP.Polynomial) = PolynomialT(PolyCoeffT[_narrow_coeff(c) for c in MP.coefficients(p)], MP.monomials(p))
-_narrow_coeffs(p) = p
+# Mixing a `Float64` with a widened `Rational{BigInt}` promotes to `BigFloat`, so
+# floats are narrowed back too, unless the input itself carried `BigFloat`s.
+_narrow_coeff(x::Union{Integer, Rational}, ::Bool) = _narrow(x)
+_narrow_coeff(x::Complex{<:Union{Integer, Rational}}, ::Bool) = complex(_narrow(real(x)), _narrow(imag(x)))
+_narrow_coeff(x::BigFloat, keep_big::Bool) = keep_big ? x : Float64(x)
+_narrow_coeff(x::Complex{BigFloat}, keep_big::Bool) = keep_big ? x : ComplexF64(x)
+_narrow_coeff(x, ::Bool) = x
+function _narrow_coeffs(p::DP.Polynomial, keep_big::Bool)
+    return PolynomialT(PolyCoeffT[_narrow_coeff(c, keep_big) for c in MP.coefficients(p)], MP.monomials(p))
+end
+_narrow_coeffs(p, ::Bool) = p
+
+_has_bigfloat(x) = x isa Union{BigFloat, Complex{BigFloat}}
+function _has_bigfloat(x::BasicSymbolic)
+    isconst(x) && return _has_bigfloat(unwrap_const(x))
+    return iscall(x) && any(_has_bigfloat, arguments(x))
+end
 
 function _retry_widened(f)
     try
@@ -247,7 +259,7 @@ function expand(expr::BasicSymbolic{T}, recurse = true)::BasicSymbolic{T} where 
         poly_to_bs = Dict{PolyVarT, BasicSymbolic{T}}()
         bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
         partial_poly = _to_poly!(poly_to_bs, bs_to_poly, expr, recurse, widen)
-        from_poly(poly_to_bs, widen ? _narrow_coeffs(partial_poly) : partial_poly)
+        from_poly(poly_to_bs, widen ? _narrow_coeffs(partial_poly, _has_bigfloat(expr)) : partial_poly)
     end
 end
 expand(x, _...) = x
@@ -349,8 +361,9 @@ function _simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}, widen::Bool
     canonicalize_coeffs!(MP.coefficients(partial_poly1))
     canonicalize_coeffs!(MP.coefficients(partial_poly2))
     if widen
-        partial_poly1 = _narrow_coeffs(partial_poly1)
-        partial_poly2 = _narrow_coeffs(partial_poly2)
+        keep_big = _has_bigfloat(num) || _has_bigfloat(den)
+        partial_poly1 = _narrow_coeffs(partial_poly1, keep_big)
+        partial_poly2 = _narrow_coeffs(partial_poly2, keep_big)
     end
     return from_poly(poly_to_bs, partial_poly1), from_poly(poly_to_bs, partial_poly2)
 end

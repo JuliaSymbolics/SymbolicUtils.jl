@@ -247,6 +247,17 @@ end
     e = expand(((1 // 3) * a + (1 // big_den) * b)^2)
     @test isequal(e, (1 // 9) * a^2 + (2 // (3big_den)) * a * b + (1 // big(big_den)^2) * b^2)
 
+    @syms c
+    const_types(ex) = Set(
+        typeof(unwrap_const(x)) for t in arguments(ex)
+            for x in (iscall(t) ? arguments(t) : (t,)) if SymbolicUtils.isconst(x)
+    )
+    mixed = expand((0.5c + (1 // 3) * a + (1 // big_den) * b)^2)
+    @test !any(T -> T <: Union{BigFloat, Complex{BigFloat}}, const_types(mixed))
+    @test Float64 in const_types(mixed)
+    user_big = expand((big(1) / 3 * c + (1 // 3) * a + (1 // big_den) * b)^2)
+    @test BigFloat in const_types(user_big)
+
     num = expand((a + (1 // big_den) * b)^2 * (a - b))
     s = simplify_fractions(num / (a + (1 // big_den) * b))
     @test !occursin("a + (1//1000000000000)*b", repr(s))

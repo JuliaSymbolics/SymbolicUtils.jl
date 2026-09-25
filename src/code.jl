@@ -404,7 +404,7 @@ function function_to_expr(@nospecialize(op::SymbolicUtils.Mapreducer), O, st)
     out === nothing || return out
     expr = Expr(:call, mapreduce)
     kws = Expr(:parameters)
-    if op.dims isa Int
+    if !(op.dims isa Colon)
         push!(kws.args, Expr(:kw, :dims, op.dims))
     end
     if op.init !== nothing

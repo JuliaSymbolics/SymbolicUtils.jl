@@ -466,3 +466,26 @@ end
     a = Code.create_array(typeof(r), nothing, Val(2), Val((2, 2)), r...)
     @test a isa Matrix{Float64}
 end
+
+@testset "destructuring rewrites do not retain `elems` (#1098)" begin
+    @syms y1 y2 y3
+    function gen_weak()
+        elems = [y1, y2, y3]
+        toexpr(Func([DestructuredArgs(elems, :u; create_bindings = false)], [], y1 + y2))
+        return WeakRef(elems)
+    end
+    refs = [gen_weak() for _ in 1:20]
+    GC.gc(true)
+    @test all(r -> r.value === nothing, refs)
+
+    function rhs_exprs(elems)
+        st = Code.NameState()
+        toexpr(Func([DestructuredArgs(elems, :u; create_bindings = false)], [], y1), st)
+        return [st.rewrites[e] for e in elems]
+    end
+    ex1 = rhs_exprs([y1, y2, y3])
+    ex2 = rhs_exprs([y3, y2, y1])
+    @test ex1 == [:(u[1]), :(u[2]), :(u[3])]
+    @test ex2 == ex1
+    @test all(ex1 .=== ex2)
+end

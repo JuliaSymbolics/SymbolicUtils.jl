@@ -352,6 +352,26 @@ end
     @test_throws ArgumentError promote_shape(LinearAlgebra.det, ShapeVecT((1:3,)))
 end
 
+@testset "LinearAlgebra.mul! promote" begin
+    shC = ShapeVecT((1:2, 1:3))
+    shA = ShapeVecT((1:2, 1:4))
+    shB = ShapeVecT((1:4, 1:3))
+    @test promote_symtype(LinearAlgebra.mul!, Matrix{Real}, Matrix{Real}, Matrix{Real}) == Matrix{Real}
+    @test promote_shape(LinearAlgebra.mul!, shC, shA, shB) == shC
+    @test promote_shape(LinearAlgebra.mul!, shC, shA, shB, ShapeVecT(), ShapeVecT()) == shC
+    @test promote_shape(LinearAlgebra.mul!, ShapeVecT((1:2,)), shA, ShapeVecT((1:4,))) == ShapeVecT((1:2,))
+    @test promote_shape(LinearAlgebra.mul!, Unknown(2), shA, shB) == Unknown(2)
+
+    # Rebuilding a `mul!` term from its operation and arguments keeps the output's shape
+    @syms c[1:2, 1:3] a[1:2, 1:4] b[1:4, 1:3] α β
+    for args in ([c, a, b], [c, a, b, α, β])
+        t = Term{SymReal}(LinearAlgebra.mul!, args; type = symtype(c), shape = SymbolicUtils.shape(c))
+        rebuilt = SymbolicUtils.maketerm(typeof(t), operation(t), arguments(t), nothing)
+        @test SymbolicUtils.shape(rebuilt) == SymbolicUtils.shape(c)
+        @test symtype(rebuilt) == symtype(c)
+    end
+end
+
 @testset "Array symbolic operations" begin
     @syms a[1:3]::Float64 b[1:3]::Float64
 

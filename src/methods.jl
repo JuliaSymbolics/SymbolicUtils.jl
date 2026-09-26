@@ -1341,6 +1341,10 @@ function LinearAlgebra.dot(x::BasicSymbolic{T}, y::AbstractArray) where {T}
 end
 
 promote_symtype(::typeof(LinearAlgebra.mul!), Ts...) = Ts[1]
+# `mul!(C, A, B[, α, β])` writes into and returns `C`.
+function promote_shape(::typeof(LinearAlgebra.mul!), @nospecialize(sh::ShapeT), @nospecialize(shs::ShapeT...))
+    return sh
+end
 
 function promote_symtype(::typeof(LinearAlgebra.det), T::TypeT)
     if T <: Number

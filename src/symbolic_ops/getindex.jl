@@ -301,7 +301,7 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
                 idx = idxs[idxs_i]
                 idxs_i += 1
                 # special case when `oldidx` is `Colon()`
-                if unwrap_const(oldidx) isa Colon
+                if length(oldidx_sh) == 1 && oldidx_sh[1] == 1:0
                     push!(newargs, Const{T}(idx))
                 else
                     push!(newargs, Const{T}(unwrap_const(oldidx)[idx]))

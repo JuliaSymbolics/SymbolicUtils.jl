@@ -1676,6 +1676,8 @@ end
 function Base.map(f::BasicSymbolic{T}, x::AbstractArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
     return _map(T, f, x, y, xs...)
 end
+# Resolves the intersection with Base's `map(f, ::ReshapedArray)`.
+Base.map(f::BasicSymbolic{T}, x::Base.ReshapedArray) where {T} = _map(T, f, x)
 # Internal small vectors keep their own eager `map`.
 function Base.map(f::BasicSymbolic, x::SmallVec{T, Vector{T}}) where {T}
     return invoke(map, Tuple{Any, SmallVec{T, Vector{T}}}, f, x)
@@ -1896,9 +1898,12 @@ for T1 in [Real, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})
     end
 end
 
-function Base.in(a::BasicSymbolic{T}, b::StaticArraysCore.StaticArray) where {T}
-    sh = promote_shape(in, shape(a), shape(b))
-    return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
+# Resolves the intersection with Base's `in(x, ::ReshapedArray)`.
+for S in (StaticArraysCore.StaticArray, Base.ReshapedArray)
+    @eval function Base.in(a::BasicSymbolic{T}, b::$S) where {T}
+        sh = promote_shape(in, shape(a), shape(b))
+        return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
+    end
 end
 
 function promote_symtype(::typeof(issubset), T::TypeT, S::TypeT)

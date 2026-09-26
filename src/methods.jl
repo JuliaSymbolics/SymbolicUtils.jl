@@ -947,6 +947,7 @@ Base.eltype(::Type{StableIndices}) = StableIndex{Int}
 Base.keys(x::StableIndices) = Base.OneTo(length(x))
 
 function Base.iterate(x::StableIndices)
+    any(isempty, x.sh) && return nothing
     idx = SmallV{Int}()
     resize!(idx, length(x.sh))
     for i in eachindex(x.sh)

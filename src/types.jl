@@ -487,7 +487,10 @@ function shape(x)
         return shape(ux)::ShapeT
     end
 end
-shape(::Colon) = ShapeVecT((1:0,))
+# Empty, so `Colon()` behaves like an index vector, but `===`-distinct from the axis `1:0`
+# of an empty index range: `promote_shape(getindex, ...)` sees only shapes.
+const COLON_AXIS = typemax(Int):(typemax(Int) - 1)
+shape(::Colon) = ShapeVecT((COLON_AXIS,))
 
 function SymbolicIndexingInterface.symbolic_type(x::BasicSymbolic)
     if isconst(x)

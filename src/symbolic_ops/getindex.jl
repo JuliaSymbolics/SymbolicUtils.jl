@@ -58,8 +58,9 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
     result = ShapeVecT()
     for (i, idx) in enumerate(shidxs)
         isempty(idx) && continue
-        idx[1] == 1:0 && sharr isa Unknown && throw_no_unknown_colon()
-        ii = idx[1] == 1:0 ? sharr[i] : 1:length(idx[1])
+        iscolon = idx[1] === COLON_AXIS
+        iscolon && sharr isa Unknown && throw_no_unknown_colon()
+        ii = iscolon ? sharr[i] : 1:length(idx[1])
         push!(result, ii)
         if sharr isa ShapeVecT && length(ii) > length(sharr[i])
             throw_index_larger_than_shape(i, ii, sharr[i])
@@ -378,7 +379,7 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
                 idx = idxs[idxs_i]
                 idxs_i += 1
                 # special case when `oldidx` is `Colon()`
-                if length(oldidx_sh) == 1 && oldidx_sh[1] == 1:0
+                if unwrap_const(oldidx) isa Colon
                     push!(newargs, Const{T}(idx))
                 elseif idx isa Colon
                     push!(newargs, oldidx)

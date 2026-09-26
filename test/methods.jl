@@ -478,6 +478,12 @@ end
         @test mapped isa BasicSymbolic
         @test isequal(collect(mapped), map(v -> f(v), collect(arr)))
     end
+    # Exercise map on a reshape(view(...)) ReshapedArray (Julia 1.13+ disambiguation).
+    reshaped = reshape(view([1, 2, 3, 4], 1:4), 2, 2)
+    @test reshaped isa Base.ReshapedArray
+    mapped_reshaped = map(f, reshaped)
+    @test mapped_reshaped isa BasicSymbolic
+    @test isequal(collect(mapped_reshaped), map(v -> f(v), collect(reshaped)))
     @test isequal(collect(map(f, dense)), [f(1) f(0); f(0) f(2)])
     @test symtype(map(f, dense)) == Matrix{Number}
     for (x, y) in ((diagonal, dense), (dense, diagonal), (sparse_diagonal, dense), (SVector(1, 2), [1, 2]), ([1, 2], SVector(1, 2)))
@@ -511,6 +517,13 @@ end
     @test isa(result4, BasicSymbolic)
     @test symtype(result4) == Bool
     @test isa(result3, BasicSymbolic)
+    # Exercise in on a reshape(view(...)) ReshapedArray (Julia 1.13+ disambiguation).
+    reshaped = reshape(view([1.0, 2.0, 3.0, 4.0], 1:4), 2, 2)
+    @test reshaped isa Base.ReshapedArray
+    result5 = in(x, reshaped)
+    @test isa(result5, BasicSymbolic)
+    @test symtype(result5) == Bool
+    @test isequal(result5, in(x, collect(reshaped)))
 end
 
 @testset "Symbol conversion" begin

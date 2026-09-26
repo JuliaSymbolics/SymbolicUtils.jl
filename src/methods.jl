@@ -1676,6 +1676,12 @@ end
 function Base.map(f::BasicSymbolic{T}, x::AbstractArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
     return _map(T, f, x, y, xs...)
 end
+# Disambiguate Julia 1.13+ Base.map(::Any, ::ReshapedArray).
+@static if VERSION >= v"1.13.0-0"
+    function Base.map(f::BasicSymbolic{T}, x::Base.ReshapedArray) where {T}
+        return _map(T, f, x)
+    end
+end
 # Internal small vectors keep their own eager `map`.
 function Base.map(f::BasicSymbolic, x::SmallVec{T, Vector{T}}) where {T}
     return invoke(map, Tuple{Any, SmallVec{T, Vector{T}}}, f, x)
@@ -1899,6 +1905,12 @@ end
 function Base.in(a::BasicSymbolic{T}, b::StaticArraysCore.StaticArray) where {T}
     sh = promote_shape(in, shape(a), shape(b))
     return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
+end
+# Disambiguate Julia 1.13+ Base.in(::Any, ::ReshapedArray).
+@static if VERSION >= v"1.13.0-0"
+    function Base.in(a::BasicSymbolic{T}, b::Base.ReshapedArray) where {T}
+        return invoke(in, Tuple{BasicSymbolic{T}, AbstractArray}, a, b)
+    end
 end
 
 function promote_symtype(::typeof(issubset), T::TypeT, S::TypeT)

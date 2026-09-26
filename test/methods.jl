@@ -472,7 +472,7 @@ end
             dense, [1, 2], 1:2, view([1, 2], 1:2), transpose(dense), LinearAlgebra.Symmetric(dense),
             LinearAlgebra.Hermitian(dense), LinearAlgebra.UpperHessenberg(dense),
             SVector(1, 2), [1, 2]', transpose([1, 2]), SparseArrays.spdiagm([1, 2])[:, 1:2],
-            BitVector([true, false]),
+            BitVector([true, false]), reshape(1:4, 2, 2),
         )
         mapped = map(f, arr)
         @test mapped isa BasicSymbolic
@@ -511,6 +511,9 @@ end
     @test isa(result4, BasicSymbolic)
     @test symtype(result4) == Bool
     @test isa(result3, BasicSymbolic)
+    result5 = in(x, reshape(1.0:4.0, 2, 2))
+    @test isa(result5, BasicSymbolic)
+    @test symtype(result5) == Bool
 end
 
 @testset "Symbol conversion" begin

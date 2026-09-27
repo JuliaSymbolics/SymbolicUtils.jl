@@ -500,6 +500,22 @@ end
     end
     @test isequal(collect(map(f, dense)), [f(1) f(0); f(0) f(2)])
     @test symtype(map(f, dense)) == Matrix{Number}
+    for zerodim in (fill(1), reshape(1:1, ()))
+        mapped_zerodim = map(f, zerodim)
+        @test mapped_zerodim isa BasicSymbolic
+        @test symtype(mapped_zerodim) == Array{Number, 0}
+        @test isempty(SymbolicUtils.shape(mapped_zerodim))
+        @test isequal(collect(mapped_zerodim), f(1))
+    end
+    sym_zerodim = Sym{SymReal}(:sym_zerodim; type = Array{Real, 0}, shape = SymbolicUtils.ShapeVecT())
+    mapped_sym_zerodim = map(sin, sym_zerodim)
+    @test symtype(mapped_sym_zerodim) == Array{Real, 0}
+    @test symtype(only(SymbolicUtils.arguments(mapped_sym_zerodim[]))) == Real
+    @test symtype(only(SymbolicUtils.arguments(collect(mapped_sym_zerodim)))) == Real
+    @test isequal(
+        substitute(mapped_sym_zerodim[], Dict(sym_zerodim => fill(1)); fold = Val(true)),
+        Const{SymReal}(sin(1))
+    )
     for (x, y) in ((diagonal, dense), (dense, diagonal), (sparse_diagonal, dense), (SVector(1, 2), [1, 2]), ([1, 2], SVector(1, 2)))
         mapped = map(f, x, y)
         @test mapped isa BasicSymbolic
@@ -534,6 +550,20 @@ end
     result5 = in(x, reshape(1.0:4.0, 2, 2))
     @test isa(result5, BasicSymbolic)
     @test symtype(result5) == Bool
+
+    @syms y::Float64
+    for zerodim in (fill(1), reshape(1:1, ()))
+        result_zerodim = in(x, zerodim)
+        @test isa(result_zerodim, BasicSymbolic)
+        @test symtype(result_zerodim) == Bool
+        @test SymbolicUtils.operation(result_zerodim) === in
+        @test isequal(substitute(result_zerodim, Dict(x => y)), in(y, zerodim))
+        @test isequal(
+            substitute(result_zerodim, Dict(x => 1.0); fold = Val(true)),
+            Const{SymReal}(1.0 in zerodim)
+        )
+    end
+    @test_throws ArgumentError Base.in(x, y)
 end
 
 @testset "Symbol conversion" begin

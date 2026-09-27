@@ -277,7 +277,9 @@ function TermInterface.iscall(s::BSImpl.Type)
 end
 
 function TermInterface.maketerm(::Type{BasicSymbolic{TreeReal}}, f, args, metadata; @nospecialize(type = _promote_symtype(f, args)))
-    sh = promote_shape(f, shape.(args)...)::ShapeT
+    # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+    sh = f === in && length(args) > 1 && symtype(args[2]) <: AbstractArray ? ShapeVecT() :
+        promote_shape(f, shape.(args)...)::ShapeT
     Term{TreeReal}(f, args; type, shape=sh, metadata=metadata)
 end
 
@@ -369,7 +371,9 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
         end
     else
         @label FALLBACK
-        sh = promote_shape(f, shape.(args)...)
+        # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+        sh = f === in && length(args) > 1 && symtype(args[2]) <: AbstractArray ? ShapeVecT() :
+            promote_shape(f, shape.(args)...)
         Term{T}(f, args; type, shape=sh, metadata=metadata)
     end
 end

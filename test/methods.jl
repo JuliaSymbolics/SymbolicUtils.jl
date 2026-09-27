@@ -544,6 +544,8 @@ end
         )
     end
     @test_throws ArgumentError Base.in(x, y)
+    scalar_shaped_arr = Sym{SymReal}(:scalar_shaped_arr; type = Vector{Real}, shape = ShapeVecT())
+    @test_throws ArgumentError Base.in(x, scalar_shaped_arr)
 end
 
 @testset "Symbol conversion" begin

@@ -1240,6 +1240,18 @@ end
         truth = v[idxs[1:ndims(v)]...]
         @test isequal(el, truth)
     end
+    # An empty `StableIndex` on a non-0-dim array-typed symbolic returns the
+    # symbolic itself; element extraction only applies to 0-dim arrays.
+    for (name, T, sh) in (
+            (:vec_sym, Vector{Real}, SymbolicUtils.Unknown(1)),
+            (:mat_sym, Matrix{Real}, SymbolicUtils.Unknown(2)),
+            (:scalar_shaped_vec, Vector{Real}, ShapeVecT()),
+        )
+        arr = Sym{SymbolicUtils.SymReal}(name; type = T, shape = sh)
+        @test isequal(arr[SymbolicUtils.StableIndex(Int[])], arr)
+    end
+    zerodim_sym = Sym{SymbolicUtils.SymReal}(:zerodim_sym; type = Array{Real, 0}, shape = ShapeVecT())
+    @test symtype(zerodim_sym[SymbolicUtils.StableIndex(Int[])]) == Real
 end
 
 @testset "`StableIndex{Int}(::BasicSymbolic)`" begin

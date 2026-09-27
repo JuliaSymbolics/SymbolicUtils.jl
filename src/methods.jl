@@ -1896,7 +1896,7 @@ for T1 in [Real, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})
     end
     @eval function Base.in(a::$T1, b::$T2) where {T}
         # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
-        sh = symtype(b) <: AbstractArray ? ShapeVecT() : promote_shape(in, shape(a), shape(b))
+        sh = symtype(b) <: AbstractArray{<:Any, 0} ? ShapeVecT() : promote_shape(in, shape(a), shape(b))
         return BSImpl.Term{T}(in, ArgsT{T}((Const{T}(a), Const{T}(b))); type = Bool, shape = sh)
     end
 end
@@ -1905,7 +1905,7 @@ end
 for S in (StaticArraysCore.StaticArray, Base.ReshapedArray)
     @eval function Base.in(a::BasicSymbolic{T}, b::$S) where {T}
         # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
-        sh = symtype(b) <: AbstractArray ? ShapeVecT() : promote_shape(in, shape(a), shape(b))
+        sh = symtype(b) <: AbstractArray{<:Any, 0} ? ShapeVecT() : promote_shape(in, shape(a), shape(b))
         return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
     end
 end

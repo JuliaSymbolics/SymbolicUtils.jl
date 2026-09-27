@@ -1053,6 +1053,50 @@ end
     end
 end
 
+# Helpers for the Issue#1079 regression test below.
+has_float64(x) = begin
+    x isa AbstractFloat && return true
+    x isa SymbolicUtils.BasicSymbolic || return false
+    if SymbolicUtils.iscall(x)
+        return any(has_float64, SymbolicUtils.arguments(x))
+    end
+    return SymbolicUtils.unwrap_const(x) isa AbstractFloat
+end
+
+eval_num(x) = begin
+    x isa SymbolicUtils.BasicSymbolic || return Float64(x)
+    if !SymbolicUtils.iscall(x)
+        return Float64(SymbolicUtils.unwrap_const(x))
+    end
+    op = SymbolicUtils.operation(x)
+    args = SymbolicUtils.arguments(x)
+    op === (+) && return sum(eval_num, args)
+    op === (*) && return prod(eval_num, args)
+    op === (^) && return eval_num(args[1]) ^ eval_num(args[2])
+    op === (sqrt) && return sqrt(eval_num(args[1]))
+    return Float64(SymbolicUtils.unwrap_const(x))
+end
+
+@testset "Issue#1079: simplify preserves exact sqrt terms" begin
+    s = term(sqrt, 2)
+    SR = SymbolicUtils.SymReal
+    # `simplify` must not fold exact `sqrt` terms into `Float64`.
+    @test isequal(simplify(s^2), SymbolicUtils.Const{SR}(2))
+    @test isequal(simplify(s^4), SymbolicUtils.Const{SR}(4))
+    @test isequal(simplify(s * s), SymbolicUtils.Const{SR}(2))
+    @test isequal(simplify(2s), 2s)
+    @test !has_float64(simplify((s * term(sqrt, 3))^2))
+    # Odd powers already stayed symbolic; keep them exact.
+    @test isequal(simplify(s^3), s^3)
+    # Cases that already worked must remain exact.
+    @test iszero(unwrap_const(simplify(s - s)))
+    @test isone(unwrap_const(simplify(s / s)))
+    # The results are mathematically equal to the inputs (checked numerically).
+    for e in (2s, s^2, s^4, s * s, (s * term(sqrt, 3))^2)
+        @test isapprox(eval_num(simplify(e)), eval_num(e))
+    end
+end
+
 @testset "isequal" begin
     @syms a b c
     @test isequal(a + b, a + b + 0.01 - 0.01)

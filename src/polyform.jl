@@ -157,9 +157,6 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
         BSImpl.Term(; f, args, type, shape) => begin
             if f === complex && length(args) == 2 && type <: Complex &&
                     symtype(args[1]) <: Real && symtype(args[2]) <: Real
-                # Keep `complex(re, im)` as the explicit Cartesian symbolic form, but
-                # interpret it algebraically at the polynomial boundary so equivalent
-                # Cartesian and factored expressions canonicalize together.
                 poly = _as_polynomial(_to_poly!(poly_to_bs, bs_to_poly, args[1], recurse, widen))
                 ipoly = _as_polynomial(_to_poly!(poly_to_bs, bs_to_poly, args[2], recurse, widen))
                 MA.operate!(*, ipoly, im)

@@ -30,18 +30,12 @@ using SymbolicUtils
     @test operation(phase) === exp
     @test Set(SymbolicUtils.search_variables(phase)) == Set([x])
 
-    # Establish what the scalar eltype test in `conj` actually means. Numeric scalar
-    # types are their own `eltype`; `Complex{Real}` is not misclassified as Real.
-    @test eltype(Complex{Real}) == Complex{Real}
-
     @testset "real-valued projections are stable under rebuild" begin
         rn = real(n)
         in_ = imag(n)
         @test SymbolicUtils.symtype(rn) <: Real
         @test SymbolicUtils.symtype(in_) <: Real
 
-        # Substitution rebuilds the Term through TermInterface/maketerm. Its inferred
-        # symtype must agree with the direct constructor rather than widening back to Number.
         rn2 = substitute(rn, Dict(n => m))
         in2 = substitute(in_, Dict(n => m))
         @test SymbolicUtils.symtype(rn2) <: Real
@@ -66,8 +60,6 @@ using SymbolicUtils
         @test SymbolicUtils.shape(c) == SymbolicUtils.ShapeVecT()
         @test isequal(simplify(c), c)
 
-        # Symbolically the explicit Cartesian node stays intact, while polynomial
-        # expansion interprets the same node as `re + im*im_part`.
         diff = simplify(c - (x + im * y); expand = true)
         @test SymbolicUtils._iszero(diff)
 
@@ -80,15 +72,10 @@ using SymbolicUtils
         x1 = r1 + i1 * im
         x2 = r2 + i2 * im
 
-        # Downstream algorithms such as Symbolics' ODE solver call `real`/`imag`
-        # directly and do not necessarily run a later `simplify` pass. Cartesian
-        # sums/products therefore have to expose their components at construction.
         direct_im = imag((1 - im) * r1 + (1 + im) * r2)
-        direct_re = real((1//5 - (3//5) * im) * r1 + ((3//5) + (1//5) * im) * r2)
-        @test !(iscall(direct_im) && operation(direct_im) === imag)
-        @test !(iscall(direct_re) && operation(direct_re) === real)
-        @test SymbolicUtils._iszero(simplify(direct_im - (-r1 + r2); expand = true))
-        @test SymbolicUtils._iszero(simplify(direct_re - ((1//5) * r1 + (3//5) * r2); expand = true))
+        direct_re = real((1 // 5 - (3 // 5) * im) * r1 + ((3 // 5) + (1 // 5) * im) * r2)
+        @test isequal(direct_im, -r1 + r2)
+        @test isequal(direct_re, (1 // 5) * r1 + (3 // 5) * r2)
 
         @test SymbolicUtils._iszero(simplify(real(x1 * x2) - (r1 * r2 - i1 * i2); expand = true))
         @test SymbolicUtils._iszero(simplify(imag(x1 * x2) - (r1 * i2 + i1 * r2); expand = true))
@@ -101,5 +88,15 @@ using SymbolicUtils
         opaque = simplify(real(exp(z1)))
         @test iscall(opaque)
         @test operation(opaque) === real
+    end
+
+    @testset "projections of real sums and products stay symbolic ($V)" for V in (SymbolicUtils.SymReal, SymbolicUtils.SafeReal, SymbolicUtils.TreeReal)
+        a = SymbolicUtils.Sym{V}(:a; type = Real)
+        b = SymbolicUtils.Sym{V}(:b; type = Real)
+        for e in (a + b, a * b)
+            @test real(e) === e
+            @test imag(e) isa SymbolicUtils.BasicSymbolic{V}
+            @test SymbolicUtils._iszero(imag(e))
+        end
     end
 end

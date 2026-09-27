@@ -65,6 +65,10 @@ end
 
     # https://github.com/JuliaSymbolics/Symbolics.jl/issues/968
     @eqtest simplify_fractions((x * y + (1//2) * x) / (2 * x)) == (1//2 + y) / 2
+
+    r = simplify_fractions(x / ((1 + 0im) * x^2 - (2 + 0im) * x + (1 + 0im)))
+    @test unwrap_const(substitute(r, Dict(x => 3))) ≈ 3 // 4
+    @eqtest simplify_fractions(((1 + 0im) * x^2 - (1 + 0im)) / ((1 + 0im) * x - (1 + 0im))) == 1 + x
 end
 
 import DynamicPolynomials as DP

@@ -60,9 +60,6 @@ const POW_RULES = (
     @rule(sqrt((~x)^2) => abs(~x)),
 )
 
-# Cartesian projection is an explicit simplification operation, not a
-# representation choice. Keep opaque complex leaves atomic, but distribute real/imag
-# through sums and products when the simplifier is asked to expose those parts.
 _is_add_or_mul(x) = iscall(x) && (operation(x) === (+) || operation(x) === (*))
 
 function _cartesian_parts(x)
@@ -96,18 +93,13 @@ function _cartesian_parts(x)
     end
 end
 
-# `real` and `imag` are also used directly by downstream symbolic algorithms that do
-# not subsequently call `simplify`.  Preserve the generic constructors for opaque
-# leaves, but expose Cartesian sums/products immediately for every symbolic variant.
-# These more-specific methods deliberately delegate all non-Cartesian cases to the
-# generic `BasicSymbolic` methods in methods.jl.
 for T in (SymReal, SafeReal, TreeReal)
     @eval function Base.real(s::BasicSymbolic{$T})
-        _is_add_or_mul(s) && return first(_cartesian_parts(s))
+        !islike(s, Real) && _is_add_or_mul(s) && return first(_cartesian_parts(s))
         return invoke(real, Tuple{BasicSymbolic}, s)
     end
     @eval function Base.imag(s::BasicSymbolic{$T})
-        _is_add_or_mul(s) && return last(_cartesian_parts(s))
+        !islike(s, Real) && _is_add_or_mul(s) && return last(_cartesian_parts(s))
         return invoke(imag, Tuple{BasicSymbolic}, s)
     end
 end

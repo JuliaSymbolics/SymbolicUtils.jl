@@ -30,6 +30,11 @@ end
     @eqtest simplify(-sin(x)) == -1 * sin(x)
     @eqtest simplify(1 * x * 2) == 2 * x
     @eqtest simplify(1 + x + 2) == 3 + x
+    integral_rational_sum = simplify((1 // 1) + x)
+    @test any(arg -> unwrap_const(arg) === 1, arguments(integral_rational_sum))
+    @test unwrap_const(last(arguments(simplify(x^(2 // 1))))) === 2
+    fractional_rational_sum = simplify((1 // 2) + x)
+    @test any(arg -> unwrap_const(arg) === 1 // 2, arguments(fractional_rational_sum))
     @eqtest simplify(b * b) == b^2 # tests merge_repeats
     @eqtest simplify((a * b)^2) == a^2 * b^2
     @eqtest simplify((a * b)^c) == (a * b)^c

@@ -13,6 +13,23 @@ Simplify an expression (`x`) by applying `rewriter` until there are no changes.
 By default, simplify will assume denominators are not zero and allow cancellation in fractions.
 Pass `simplify_fractions=false` to prevent this.
 """
+_normalize_integral_rationals(x::Rational) = denominator(x) == 1 ? numerator(x) : x
+_normalize_integral_rationals(x) = x
+
+function _normalize_integral_rationals(x::BasicSymbolic{T}) where {T}
+    if !iscall(x)
+        value = unwrap_const(x)
+        if value isa Rational && denominator(value) == 1
+            return Const{T}(numerator(value))
+        end
+        return x
+    end
+    args = arguments(x)
+    normalized_args = map(_normalize_integral_rationals, args)
+    any(i -> normalized_args[i] !== args[i], eachindex(args)) || return x
+    return maketerm(typeof(x), operation(x), normalized_args, metadata(x))::BasicSymbolic{T}
+end
+
 @inline function simplify(x;
                   expand=false,
                   polynorm=nothing,
@@ -38,6 +55,7 @@ Pass `simplify_fractions=false` to prevent this.
         Fixpoint(rewriter)
     end
 
+    x = _normalize_integral_rationals(x)
     x = PassThrough(f)(x)
     simplify_fractions && query(isdiv, x) ?
         SymbolicUtils.simplify_fractions(x) : x

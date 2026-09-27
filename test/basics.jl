@@ -1078,6 +1078,7 @@ eval_num(x) = begin
 end
 
 @testset "Issue#1079: simplify preserves exact sqrt terms" begin
+    @syms x y
     s = term(sqrt, 2)
     # `simplify` must not fold exact `sqrt` terms into `Float64`.
     @test unwrap_const(simplify(s^2)) === 2
@@ -1090,6 +1091,12 @@ end
     # Cases that already worked must remain exact.
     @test iszero(unwrap_const(simplify(s - s)))
     @test isone(unwrap_const(simplify(s / s)))
+    # Fractional powers of symbolic radicands preserve their exact identities.
+    @test isequal(sqrt(x)^(2 // 3), x^(1 // 3))
+    @test unwrap_const(simplify(cbrt(x)^(3 // 2) - sqrt(x))) === 0
+    @test unwrap_const(simplify(sqrt(x)^(2 // 3) - x^(1 // 3))) === 0
+    @test unwrap_const(simplify(sqrt(x)^(4 // 3) - x^(2 // 3))) === 0
+    @test unwrap_const(simplify(sqrt(x + y)^(2 // 3) - (x + y)^(1 // 3))) === 0
     # The results are mathematically equal to the inputs (checked numerically).
     for e in (2s, s^2, s^4, s * s, (s * term(sqrt, 3))^2)
         @test isapprox(eval_num(simplify(e)), eval_num(e))

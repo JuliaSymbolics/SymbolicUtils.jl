@@ -96,14 +96,14 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
             BSImpl.Term(; f, args) && if f === sqrt && (safe_isinteger(b) && Int(b) % 2 == 0 || b isa Rational && numerator(b) % 2 == 0) end => begin
                 exp = safe_isinteger(b) ? (Int(b) // 2) : (b::Rational // 2)
                 radicand = unwrap_const(args[1])
-                if radicand isa AbstractFloat || denominator(exp) == 1
+                if !isconst(args[1]) || radicand isa AbstractFloat || denominator(exp) == 1
                     return Const{T}(radicand^(denominator(exp) == 1 ? Int(exp) : exp))
                 end
             end
             BSImpl.Term(; f, args) && if f === cbrt && (safe_isinteger(b) && Int(b) % 3 == 0 || b isa Rational && numerator(b) % 3 == 0) end => begin
                 exp = safe_isinteger(b) ? (Int(b) // 3) : (b::Rational // 3)
                 radicand = unwrap_const(args[1])
-                if radicand isa AbstractFloat || denominator(exp) == 1
+                if !isconst(args[1]) || radicand isa AbstractFloat || denominator(exp) == 1
                     return Const{T}(radicand^(denominator(exp) == 1 ? Int(exp) : exp))
                 end
             end

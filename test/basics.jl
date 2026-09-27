@@ -1079,11 +1079,10 @@ end
 
 @testset "Issue#1079: simplify preserves exact sqrt terms" begin
     s = term(sqrt, 2)
-    SR = SymbolicUtils.SymReal
     # `simplify` must not fold exact `sqrt` terms into `Float64`.
-    @test isequal(simplify(s^2), SymbolicUtils.Const{SR}(2))
-    @test isequal(simplify(s^4), SymbolicUtils.Const{SR}(4))
-    @test isequal(simplify(s * s), SymbolicUtils.Const{SR}(2))
+    @test unwrap_const(simplify(s^2)) === 2
+    @test unwrap_const(simplify(s^4)) === 4
+    @test unwrap_const(simplify(s * s)) === 2
     @test isequal(simplify(2s), 2s)
     @test !has_float64(simplify((s * term(sqrt, 3))^2))
     # Odd powers already stayed symbolic; keep them exact.

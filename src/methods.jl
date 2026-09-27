@@ -1499,9 +1499,10 @@ function promote_symtype(f::Mapper, T::TypeT, Ts::TypeT...)
     end
     Ts = ntuple(safe_eltype ∘ Base.Fix1(getindex, Ts), Val{length(Ts)}())::NTuple{length(Ts), TypeT}
     mappedT = promote_symtype(f.f, safe_eltype(T)::TypeT, Ts...)::TypeT
-    # all scalars
     if all_same_ndims
-        return ndims_1 == 0 ? mappedT : Array{mappedT, ndims_1}
+        # `ndims` cannot distinguish a 0-dim array from a scalar; the argument
+        # type can. `map` over a 0-dim array produces a 0-dim array.
+        return ndims_1 == 0 && !(T <: AbstractArray) ? mappedT : Array{mappedT, ndims_1}
     else
         return Vector{mappedT}
     end
@@ -1894,7 +1895,8 @@ for T1 in [Real, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})
         continue
     end
     @eval function Base.in(a::$T1, b::$T2) where {T}
-        sh = promote_shape(in, shape(a), shape(b))
+        # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+        sh = symtype(b) <: AbstractArray ? ShapeVecT() : promote_shape(in, shape(a), shape(b))
         return BSImpl.Term{T}(in, ArgsT{T}((Const{T}(a), Const{T}(b))); type = Bool, shape = sh)
     end
 end
@@ -1902,7 +1904,8 @@ end
 # Resolves the intersection with Base's `in(x, ::ReshapedArray)`.
 for S in (StaticArraysCore.StaticArray, Base.ReshapedArray)
     @eval function Base.in(a::BasicSymbolic{T}, b::$S) where {T}
-        sh = promote_shape(in, shape(a), shape(b))
+        # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+        sh = symtype(b) <: AbstractArray ? ShapeVecT() : promote_shape(in, shape(a), shape(b))
         return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
     end
 end

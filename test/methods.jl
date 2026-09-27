@@ -480,6 +480,13 @@ end
     end
     @test isequal(collect(map(f, dense)), [f(1) f(0); f(0) f(2)])
     @test symtype(map(f, dense)) == Matrix{Number}
+    for zerodim in (fill(1), reshape(1:1, ()))
+        mapped_zerodim = map(f, zerodim)
+        @test mapped_zerodim isa BasicSymbolic
+        @test symtype(mapped_zerodim) == Array{Number, 0}
+        @test isempty(SymbolicUtils.shape(mapped_zerodim))
+        @test isequal(collect(mapped_zerodim), f(1))
+    end
     for (x, y) in ((diagonal, dense), (dense, diagonal), (sparse_diagonal, dense), (SVector(1, 2), [1, 2]), ([1, 2], SVector(1, 2)))
         mapped = map(f, x, y)
         @test mapped isa BasicSymbolic
@@ -514,6 +521,13 @@ end
     result5 = in(x, reshape(1.0:4.0, 2, 2))
     @test isa(result5, BasicSymbolic)
     @test symtype(result5) == Bool
+
+    for zerodim in (fill(1), reshape(1:1, ()))
+        result_zerodim = in(x, zerodim)
+        @test isa(result_zerodim, BasicSymbolic)
+        @test symtype(result_zerodim) == Bool
+        @test SymbolicUtils.operation(result_zerodim) === in
+    end
 end
 
 @testset "Symbol conversion" begin

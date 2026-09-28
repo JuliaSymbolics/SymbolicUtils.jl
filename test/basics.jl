@@ -1100,6 +1100,39 @@ end
     @test isequal(x / -1, -x)
 end
 
+# https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1101
+@testset "Integer-valued float divisor gives a float coefficient" begin
+    @syms x y c
+    ex = (x * y) / 30555.0
+    @test get_mul_coefficient(ex) === 1 / 30555.0
+    @test !occursin("//", repr(ex))
+    @test get_mul_coefficient(ex^7) === (1 / 30555.0)^7
+    @test get_mul_coefficient(substitute((x * y / c)^7, Dict(c => 30555.0))) === (1 / 30555.0)^7
+    @test isequal(substitute((x * y / c)^7, Dict(c => 30555.0)), ex^7)
+    @test get_mul_coefficient((x * y) / 2.0f0) === 0.5f0
+    @test get_mul_coefficient((x * y) / big(2.0)) isa BigFloat
+    @test get_mul_coefficient((x * y) / (2.0 + 0im)) === 1 / (2.0 + 0im)
+    @test get_mul_coefficient((2.0 * x * y) / 30555) === 2.0 / 30555
+
+    @syms p q vartype = SafeReal
+    @test get_mul_coefficient((p * q) / 30555.0) === 1 / 30555.0
+end
+
+@testset "Exact divisor gives an exact coefficient" begin
+    @syms x y c
+    @test get_mul_coefficient((x * y) / 30555) === 1 // 30555
+    @test get_mul_coefficient((3x * y) / 6) === 1 // 2
+    @test get_mul_coefficient(((1 // 3) * x * y) / 2) === 1 // 6
+    @test get_mul_coefficient((x * y) / (3 // 2)) === 2 // 3
+    @test get_mul_coefficient((x * y) / (2 + 0im)) === 1 // 2
+    @test get_mul_coefficient(substitute(x * y / c, Dict(c => 30555))) === 1 // 30555
+    k = get_mul_coefficient((x * y) / big(3))
+    @test k isa Rational{BigInt} && k == 1 // 3
+
+    @syms p q vartype = SafeReal
+    @test get_mul_coefficient((p * q) / 30555) === 1 // 30555
+end
+
 @testset "mul worker buffer is reentrancy-safe" begin
     @syms x y w
     p = Mul{SymReal}(2, Dict((x / y) => -1); type = Real)

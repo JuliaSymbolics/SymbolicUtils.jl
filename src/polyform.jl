@@ -53,6 +53,13 @@ function subs_poly(poly::PolyVarT, vars::AbstractVector{BasicSymbolic{T}}) where
     return only(vars)
 end
 
+@inline _as_polynomial(poly::PolynomialT) = poly
+@inline function _as_polynomial(poly::PolyVarT)
+    result = zeropoly()
+    MA.operate!(+, result, poly)
+    return result
+end
+
 """
     to_poly!(poly_to_bs, bs_to_poly, expr, recurse = true)
 
@@ -148,7 +155,14 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
             end
         end
         BSImpl.Term(; f, args, type, shape) => begin
-            if f === (^) && isconst(args[2]) && (exp = unwrap_const(args[2]); exp isa Real) && safe_isinteger(exp)
+            if f === complex && length(args) == 2 && type <: Complex &&
+                    symtype(args[1]) <: Real && symtype(args[2]) <: Real
+                poly = _as_polynomial(_to_poly!(poly_to_bs, bs_to_poly, args[1], recurse, widen))
+                ipoly = _as_polynomial(_to_poly!(poly_to_bs, bs_to_poly, args[2], recurse, widen))
+                MA.operate!(*, ipoly, im)
+                MA.operate!(+, poly, ipoly)
+                return poly
+            elseif f === (^) && isconst(args[2]) && (exp = unwrap_const(args[2]); exp isa Real) && safe_isinteger(exp)
                 base = args[1]
                 poly = _to_poly!(poly_to_bs, bs_to_poly, base, true, widen)
                 if poly isa PolyVarT
@@ -164,12 +178,7 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
                 return poly
             elseif f === (*) || f === (+)
                arg1, restargs = Iterators.peel(args)
-                poly = _to_poly!(poly_to_bs, bs_to_poly, arg1, true, widen)
-                if !(poly isa PolynomialT)
-                    _poly = zeropoly()
-                    MA.operate!(+, _poly, poly)
-                    poly = _poly
-                end
+                poly = _as_polynomial(_to_poly!(poly_to_bs, bs_to_poly, arg1, true, widen))
                 for arg in restargs
                     MA.operate!(f, poly, _to_poly!(poly_to_bs, bs_to_poly, arg, true, widen))
                 end

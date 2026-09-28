@@ -60,6 +60,50 @@ const POW_RULES = (
     @rule(sqrt((~x)^2) => abs(~x)),
 )
 
+_is_add_or_mul(x) = iscall(x) && (operation(x) === (+) || operation(x) === (*))
+
+function _cartesian_parts(x)
+    symtype(x) <: Real && return (x, 0)
+    if !iscall(x)
+        return real(x), imag(x)
+    end
+    op = operation(x)
+    if op === (+)
+        re = 0
+        im_part = 0
+        for a in arguments(x)
+            ar, ai = _cartesian_parts(a)
+            re = re + ar
+            im_part = im_part + ai
+        end
+        return re, im_part
+    elseif op === (*)
+        re = 1
+        im_part = 0
+        for a in arguments(x)
+            ar, ai = _cartesian_parts(a)
+            old_re = re
+            old_im = im_part
+            re = old_re * ar - old_im * ai
+            im_part = old_re * ai + old_im * ar
+        end
+        return re, im_part
+    else
+        return real(x), imag(x)
+    end
+end
+
+for T in (SymReal, SafeReal, TreeReal)
+    @eval function Base.real(s::BasicSymbolic{$T})
+        !islike(s, Real) && _is_add_or_mul(s) && return first(_cartesian_parts(s))
+        return invoke(real, Tuple{BasicSymbolic}, s)
+    end
+    @eval function Base.imag(s::BasicSymbolic{$T})
+        !islike(s, Real) && _is_add_or_mul(s) && return last(_cartesian_parts(s))
+        return invoke(imag, Tuple{BasicSymbolic}, s)
+    end
+end
+
 const ASSORTED_RULES = (
     @rule(sqrt(~x::is_literal_number) => _extract_perfect_square(~x)),
     @rule(identity(~x) => ~x),
@@ -72,6 +116,8 @@ const ASSORTED_RULES = (
     @rule(conj(~x::_isreal) => ~x),
     @rule(real(~x::_isreal) => ~x),
     @rule(imag(~x::_isreal) => zero(symtype(~x))),
+    @rule(real(~x::_is_add_or_mul) => first(_cartesian_parts(~x))),
+    @rule(imag(~x::_is_add_or_mul) => last(_cartesian_parts(~x))),
     @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
     @rule(ifelse(~x, ~y, ~y) => ~y),
     @rule(ifelse_eager(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),

@@ -35,20 +35,16 @@ Integral rational constants are normalized to integers before rewriting.
 By default, simplify will assume denominators are not zero and allow cancellation in fractions.
 Pass `simplify_fractions=false` to prevent this.
 """
-@inline function simplify(
-        x;
-        expand = false,
-        polynorm = nothing,
-        threaded = false,
-        simplify_fractions = true,
-        thread_subtree_cutoff = 100,
-        rewriter = nothing
-    )
+@inline function simplify(x;
+                  expand=false,
+                  polynorm=nothing,
+                  threaded=false,
+                  simplify_fractions=true,
+                  thread_subtree_cutoff=100,
+                  rewriter=nothing)
     if polynorm !== nothing
-        Base.depwarn(
-            "simplify(..; polynorm=$polynorm) is deprecated, use simplify(..; expand=$polynorm) instead",
-            :simplify
-        )
+        Base.depwarn("simplify(..; polynorm=$polynorm) is deprecated, use simplify(..; expand=$polynorm) instead",
+                        :simplify)
         expand = polynorm  # Use polynorm value as expand for backward compatibility
     end
 
@@ -66,8 +62,8 @@ Pass `simplify_fractions=false` to prevent this.
 
     x = _normalize_integral_rationals(x)
     x = PassThrough(f)(x)
-    return simplify_fractions && query(isdiv, x) ?
+    simplify_fractions && query(isdiv, x) ?
         SymbolicUtils.simplify_fractions(x) : x
 end
 
-Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter = ctx, kwargs...)
+Base.@deprecate simplify(x, ctx; kwargs...)  simplify(x; rewriter=ctx, kwargs...)

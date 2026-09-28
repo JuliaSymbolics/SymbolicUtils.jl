@@ -20,7 +20,32 @@ include("utils.jl")
 end
 
 @testset "Numeric" begin
-    @syms a::Integer b c d x::Real y::Number
+    @syms a::Integer b c d x::Real y::Number z
+    # Integral-rational normalization must work when rational forms are interned
+    # first (no prior Int coeff/exponent for these shapes in the hash-cons cache).
+    has_integral_rational(ex) = !SymbolicUtils.iscall(ex) ?
+        (unwrap_const(ex) isa Rational && denominator(unwrap_const(ex)) == 1) :
+        any(has_integral_rational, arguments(ex))
+    @test unwrap_const(simplify(1 // 1)) === 1
+    integral_rational_sum = simplify((1 // 1) + x)
+    @test any(arg -> unwrap_const(arg) === 1, arguments(integral_rational_sum))
+    @test unwrap_const(last(arguments(simplify(x^(2 // 1))))) === 2
+    fractional_rational_sum = simplify((1 // 2) + x)
+    @test any(arg -> unwrap_const(arg) === 1 // 2, arguments(fractional_rational_sum))
+    rational_coefficients = simplify((2 // 1) * x + (3 // 1) * y)
+    @test !has_integral_rational(rational_coefficients)
+    @test isequal(2 * x, (2 // 1) * x) # non-full isequal still ignores coeff type
+    @test !has_integral_rational(simplify(x^(2 // 1) * y))
+    @test isequal(simplify(x^(2 // 1) * y), x^2 * y)
+    @test !has_integral_rational(simplify(sin((2 // 1) * x + (3 // 1) * y)))
+    @test !has_integral_rational(simplify(((2 // 1) * x + y) / z))
+    @test !has_integral_rational(simplify(x^(1 // 2) * x^(3 // 2) * y + z))
+    @syms A[1:2]
+    @test !has_integral_rational(simplify((2 // 1) * A[1] + A[2]))
+    @test !has_integral_rational(simplify((1 // 1) + x; rewriter = Rewriters.Empty()))
+    typed_term = Term{SymReal}(identity, [x, 2 // 1]; type = Complex{Float64})
+    @test SymbolicUtils.symtype(simplify(typed_term)) === Complex{Float64}
+
     @eqtest simplify(Term{SymReal}(conj, [x]; type = Real)) == x
     @eqtest simplify(Term{SymReal}(real, [x]; type = Real)) == x
     @eqtest unwrap_const(simplify(Term{SymReal}(imag, [x]; type = Real))) == 0
@@ -30,11 +55,6 @@ end
     @eqtest simplify(-sin(x)) == -1 * sin(x)
     @eqtest simplify(1 * x * 2) == 2 * x
     @eqtest simplify(1 + x + 2) == 3 + x
-    integral_rational_sum = simplify((1 // 1) + x)
-    @test any(arg -> unwrap_const(arg) === 1, arguments(integral_rational_sum))
-    @test unwrap_const(last(arguments(simplify(x^(2 // 1))))) === 2
-    fractional_rational_sum = simplify((1 // 2) + x)
-    @test any(arg -> unwrap_const(arg) === 1 // 2, arguments(fractional_rational_sum))
     @eqtest simplify(b * b) == b^2 # tests merge_repeats
     @eqtest simplify((a * b)^2) == a^2 * b^2
     @eqtest simplify((a * b)^c) == (a * b)^c

@@ -73,6 +73,15 @@ end
 
     dm1 = setmetadata(d1, Ctx1, "meta_1")
     @test d1.id !== dm1.id
+
+    # Dict value types must distinguish Int from Rational under full compare/hash,
+    # so simplify can replace n//1 coefficients without colliding on the stale object.
+    @syms p q
+    add_rat = (2 // 1) * p + (3 // 1) * q
+    add_int = 2 * p + 3 * q
+    @test isequal(add_int, add_rat)
+    @test !isequal2(add_int, add_rat)
+    @test add_int.id !== add_rat.id
 end
 
 @testset "Mul" begin
@@ -87,6 +96,13 @@ end
 
     mm1 = setmetadata(m1, Ctx1, "meta_1")
     @test m1.id !== mm1.id
+
+    @syms r s
+    mul_rat = r^(2 // 1) * s
+    mul_int = r^2 * s
+    @test isequal(mul_int, mul_rat)
+    @test !isequal2(mul_int, mul_rat)
+    @test mul_int.id !== mul_rat.id
 end
 
 @testset "Div" begin

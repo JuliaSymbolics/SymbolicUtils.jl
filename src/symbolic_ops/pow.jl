@@ -55,10 +55,16 @@ _fits_in(::Type{T}, x::Integer) where {T <: Integer} = typemin(T) <= x <= typema
 _fits_in(::Type{Rational{T}}, x::Rational) where {T} = _fits_in(T, numerator(x)) && _fits_in(T, denominator(x))
 _fits_in(::Type{Complex{T}}, x::Complex) where {T} = _fits_in(T, real(x)) && _fits_in(T, imag(x))
 
-# `Int` powers wrap and `Rational{Int}` powers throw on overflow, so exact coefficients are
-# raised in `BigInt` arithmetic. The result has the type `coeff ^ b` would have when it fits.
+_int_pow_fits(c::Base.BitInteger, b::Integer) = (nb = 8 * sizeof(c) - 2; b <= nb && b * ndigits(c; base = 2) <= nb)
+_int_pow_fits(c, b) = false
+
+# `Int` powers wrap and `Rational{Int}` powers throw on overflow, so an exact coefficient whose
+# power may not fit its type is raised in `BigInt` arithmetic. The result has the type
+# `coeff ^ b` would have when it fits.
 function _exact_coeff_pow(coeff::Union{Integer, Rational, Complex{<:Union{Integer, Rational}}}, b::Integer)
-    coeff isa Real && isone(abs(coeff)) && return coeff ^ b
+    fits = coeff isa Real && isone(abs(coeff)) || _int_pow_fits(coeff, b) ||
+        coeff isa Rational && _int_pow_fits(numerator(coeff), b) && _int_pow_fits(denominator(coeff), b)
+    fits && return coeff ^ b
     R = typeof(one(coeff) ^ b)
     r = _widen_coeff(coeff) ^ b
     return _fits_in(R, r) ? convert(R, r) : r

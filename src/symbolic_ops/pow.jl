@@ -50,6 +50,21 @@ function promote_shape(::typeof(^), sh1::ShapeT, sh2::ShapeT)
     end
 end
 
+_fits_in(::Type{BigInt}, ::Integer) = true
+_fits_in(::Type{T}, x::Integer) where {T <: Integer} = typemin(T) <= x <= typemax(T)
+_fits_in(::Type{Rational{T}}, x::Rational) where {T} = _fits_in(T, numerator(x)) && _fits_in(T, denominator(x))
+_fits_in(::Type{Complex{T}}, x::Complex) where {T} = _fits_in(T, real(x)) && _fits_in(T, imag(x))
+
+# `Int` powers wrap and `Rational{Int}` powers throw on overflow, so exact coefficients are
+# raised in `BigInt` arithmetic. The result has the type `coeff ^ b` would have when it fits.
+function _exact_coeff_pow(coeff::Union{Integer, Rational, Complex{<:Union{Integer, Rational}}}, b::Integer)
+    coeff isa Real && isone(abs(coeff)) && return coeff ^ b
+    R = typeof(one(coeff) ^ b)
+    r = _widen_coeff(coeff) ^ b
+    return _fits_in(R, r) ? convert(R, r) : r
+end
+_exact_coeff_pow(coeff, b) = coeff ^ b
+
 function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicSymbolic{T}}) where {T <: Union{SymReal, SafeReal}}
     if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(^, (a, b)))
@@ -118,7 +133,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                     end
                     # return mul_worker(T, (coeff, newpow))
                 else
-                    coeff = coeff ^ b
+                    coeff = _exact_coeff_pow(coeff, b)
                     dict = copy(dict)
                     map!(Base.Fix1(*, b), values(dict))
                     return BSImpl.AddMul{T}(coeff, dict, variant; shape, type)

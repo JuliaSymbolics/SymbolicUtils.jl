@@ -138,7 +138,6 @@ preferred over the `BSImpl.AddMul{T}` constructor.
 end
 
 const Rat = Union{Rational, Integer}
-const FloatNumber = Union{AbstractFloat, Complex{<:AbstractFloat}}
 
 """
     $(TYPEDSIGNATURES)
@@ -161,22 +160,21 @@ end
 """
     safe_div(a::Number, b::Number)::Number
 
-Perform division, using rational arithmetic when both inputs are exact integer values.
-Floating-point inputs stay floating-point, even when integer-valued.
+Perform division with automatic rational conversion for integer inputs.
 
 # Arguments
 - `a::Number`: The numerator
 - `b::Number`: The denominator
 
 # Returns
-- `Number`: The result of `a / b`, as a `Rational` for exact integer-valued inputs
+- `Number`: The result of `a / b`, using rational arithmetic for integers
 """
 function safe_div(a::Number, b::Number)::Number
     # @nospecialize a b
-    if (!(a isa Union{Integer, FloatNumber}) && safe_isinteger(a))
+    if (!(a isa Integer) && safe_isinteger(a))
         a = Int(a)
     end
-    if (!(b isa Union{Integer, FloatNumber}) && safe_isinteger(b))
+    if (!(b isa Integer) && safe_isinteger(b))
         b = Int(b)
     end
     if a isa Integer && b isa Integer

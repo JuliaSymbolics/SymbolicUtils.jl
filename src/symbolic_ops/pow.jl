@@ -55,7 +55,7 @@ _fits_in(::Type{T}, x::Integer) where {T <: Integer} = typemin(T) <= x <= typema
 _fits_in(::Type{Rational{T}}, x::Rational) where {T} = _fits_in(T, numerator(x)) && _fits_in(T, denominator(x))
 _fits_in(::Type{Complex{T}}, x::Complex) where {T} = _fits_in(T, real(x)) && _fits_in(T, imag(x))
 
-_int_pow_fits(c::Base.BitInteger, b::Integer) = (nb = 8 * sizeof(c) - 2; b <= nb && b * ndigits(c; base = 2) <= nb)
+_int_pow_fits(c::Int, b::Integer) = (nb = 8 * sizeof(c) - 2; b <= nb && b * ndigits(c; base = 2) <= nb)
 _int_pow_fits(c, b) = false
 
 # `Int` powers wrap and `Rational{Int}` powers throw on overflow, so an exact coefficient whose

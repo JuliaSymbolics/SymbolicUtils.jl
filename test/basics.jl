@@ -1309,6 +1309,18 @@ end
     @test isequal(collect(var), v1')
 end
 
+@testset "`sqrt`/`cbrt` raised to an integer or rational power" begin
+    @syms x
+    @test isequal(sqrt(x)^4, x^(2 // 1))
+    @test isequal(sqrt(x)^(4 // 1), x^(2 // 1))
+    @test isequal(sqrt(x)^(2 // 3), x^(1 // 3))
+    @test operation(sqrt(x)^(3 // 1)) === (^)
+    @test isequal(arguments(sqrt(x)^(3 // 1))[1], sqrt(x))
+    @test isequal(cbrt(x)^6, x^(2 // 1))
+    @test isequal(cbrt(x)^(6 // 1), x^(2 // 1))
+    @test isequal(cbrt(x)^(3 // 2), x^(1 // 2))
+end
+
 @testset "`^` doesn't distribute into `/`" begin
     @syms a b c
     ex = (a / b) ^ c

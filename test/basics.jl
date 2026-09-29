@@ -1125,10 +1125,12 @@ end
     @syms x y
     typed_coeff(ex) = (k = get_mul_coefficient(ex); (typeof(k), k))
     @test get_mul_coefficient((x * y) / 30555.0) === 1 // 30555
-    @test get_mul_coefficient(((x * y) / 30555)^4) === 1 // 30555^4
+    @test get_mul_coefficient(((x * y) / 30555)^2) === 1 // 30555^2
     @test get_mul_coefficient((3x * y)^5) === 243
-    @test get_mul_coefficient((3x * y)^39) === 3^39
-    @test get_mul_coefficient(((1 // 3) * x * y)^39) === 1 // 3^39
+    # the largest power of 3 that fits `Int`, past the fast-path bound
+    k = Sys.WORD_SIZE == 64 ? 39 : 19
+    @test get_mul_coefficient((3x * y)^k) === 3^k
+    @test get_mul_coefficient(((1 // 3) * x * y)^k) === 1 // 3^k
     @test get_mul_coefficient(((2 // 3) * x * y)^3) === 8 // 27
     @test get_mul_coefficient(((2 + 1im) * x * y)^2) === 3 + 4im
     @test get_mul_coefficient((im * x * y)^2) === -1 + 0im

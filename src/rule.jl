@@ -128,6 +128,17 @@ function pattern_expr_has_slot(expr)
     return false
 end
 
+# Replace `$v` interpolations with `v` so the result can be `esc`'d as a value.
+function unquote_dollar(expr)
+    if expr isa Expr
+        if expr.head === :$
+            return unquote_dollar(expr.args[1])
+        end
+        return Expr(expr.head, map(unquote_dollar, expr.args)...)
+    end
+    return expr
+end
+
 # parent call is needed to know which default value to give if any default slots are present
 """
     $TYPEDSIGNATURES
@@ -175,11 +186,9 @@ function makepattern(expr, keys, parentCall=nothing)
                 return esc(expr.args[2] // expr.args[3])
             else
                 head = expr.args[1]
-                # Callable / computed heads with no slots are values, not nested patterns.
-                # Otherwise `d(1)(~x)` becomes `term(term(d, 1), ~x)` and never matches `d(1)`.
-                if head isa Expr && head.head === :call && head.args[1] !== :(~) &&
-                        !pattern_expr_has_slot(head)
-                    return :(term($(esc(head)), $(map(x -> makepattern(x, keys, operation(expr)), expr.args[2:end])...); type=Any, shape=$ShapeVecT()))
+                # Slot-free call heads (e.g. d(1)(~x)) evaluate to a value matched by equality.
+                if head isa Expr && head.head === :call && !pattern_expr_has_slot(head)
+                    return :(term($(esc(unquote_dollar(head))), $(map(x -> makepattern(x, keys, operation(expr)), expr.args[2:end])...); type=Any, shape=$ShapeVecT()))
                 end
                 # make a pattern for every argument of the expr.
                 :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any, shape=$ShapeVecT()))

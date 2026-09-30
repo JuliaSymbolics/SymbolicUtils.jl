@@ -1255,6 +1255,170 @@ end
     end
 end
 
+@testset "batched ArrayMaker/array_literal uses convert for eltype" begin
+    # Batched writes used to emit `eltype(buffer)(value)`. For abstract eltypes that has
+    # no constructors; for one-field parametric wrappers `T(v)` converts into the field
+    # type. `convert(T, v)` is the identity when `v isa T` and still converts numerics,
+    # matching `setindex!` / the `fill_arr!` path (size ≤ FILL_ARR_LIMIT).
+    struct Wrap{T}
+        x::T
+    end
+    abstract type AbstractWrap end
+    struct ConcreteWrap <: AbstractWrap
+        x::Float64
+    end
+
+    function maker17(sym)
+        return @makearray m[1:17] begin
+            m[1:1] => Const{SymReal}([sym[1]])
+            m[2:2] => Const{SymReal}([sym[2]])
+            m[3:3] => Const{SymReal}([sym[3]])
+            m[4:4] => Const{SymReal}([sym[4]])
+            m[5:5] => Const{SymReal}([sym[5]])
+            m[6:6] => Const{SymReal}([sym[6]])
+            m[7:7] => Const{SymReal}([sym[7]])
+            m[8:8] => Const{SymReal}([sym[8]])
+            m[9:9] => Const{SymReal}([sym[9]])
+            m[10:10] => Const{SymReal}([sym[10]])
+            m[11:11] => Const{SymReal}([sym[11]])
+            m[12:12] => Const{SymReal}([sym[12]])
+            m[13:13] => Const{SymReal}([sym[13]])
+            m[14:14] => Const{SymReal}([sym[14]])
+            m[15:15] => Const{SymReal}([sym[15]])
+            m[16:16] => Const{SymReal}([sym[16]])
+            m[17:17] => Const{SymReal}([sym[17]])
+        end
+    end
+
+    @testset "parametric wrapper eltype via ArrayMaker" begin
+        @syms (w::Wrap{Float64})[1:17]
+        @syms buf[1:17]::Wrap{Float64}
+        expr = Code.fast_toexpr(
+            maker17(w),
+            Dict{Any, Any}(
+                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
+                    Returns{SymReal}, (buf,)
+                )
+            )
+        )
+        @test occursin("convert", string(expr))
+        ws = [Wrap(Float64(i)) for i in 1:17]
+        bufv = Vector{Wrap{Float64}}(undef, 17)
+        result = eval(quote
+            let w = $ws, buf = $bufv
+                $expr
+            end
+        end)
+        @test result == ws
+    end
+
+    @testset "abstract eltype via ArrayMaker" begin
+        @syms (a::AbstractWrap)[1:17]
+        @syms bufa[1:17]::AbstractWrap
+        expr = Code.fast_toexpr(
+            maker17(a),
+            Dict{Any, Any}(
+                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
+                    Returns{SymReal}, (bufa,)
+                )
+            )
+        )
+        as = AbstractWrap[ConcreteWrap(Float64(i)) for i in 1:17]
+        bufav = Vector{AbstractWrap}(undef, 17)
+        result = eval(quote
+            let a = $as, bufa = $bufav
+                $expr
+            end
+        end)
+        @test result == as
+    end
+
+    @testset "Int values still convert into Float64 buffer" begin
+        @syms xi[1:17]::Int
+        @syms bufi[1:17]::Float64
+        expr = Code.fast_toexpr(
+            maker17(xi),
+            Dict{Any, Any}(
+                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
+                    Returns{SymReal}, (bufi,)
+                )
+            )
+        )
+        xis = collect(1:17)
+        bufiv = Vector{Float64}(undef, 17)
+        result = eval(quote
+            let xi = $xis, bufi = $bufiv
+                $expr
+            end
+        end)
+        @test result == Float64.(xis)
+        @test eltype(result) === Float64
+    end
+
+    @testset "array_literal batched path also uses convert" begin
+        @syms (w::Wrap{Float64})[1:17]
+        @syms buf[1:17]::Wrap{Float64}
+        arr = Const{SymReal}([w[i] for i in 1:17])
+        expr = Code.fast_toexpr(
+            arr,
+            Dict{Any, Any}(
+                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
+                    Returns{SymReal}, (buf,)
+                )
+            )
+        )
+        @test occursin("convert", string(expr))
+        ws = [Wrap(Float64(i)) for i in 1:17]
+        bufv = Vector{Wrap{Float64}}(undef, 17)
+        eval(quote
+            let w = $ws, buf = $bufv
+                $expr
+            end
+        end)
+        @test bufv == ws
+    end
+
+    @testset "fill_arr! path (N ≤ FILL_ARR_LIMIT) still agrees" begin
+        @syms (w::Wrap{Float64})[1:16]
+        @syms buf[1:16]::Wrap{Float64}
+        maker = @makearray m[1:16] begin
+            m[1:1] => Const{SymReal}([w[1]])
+            m[2:2] => Const{SymReal}([w[2]])
+            m[3:3] => Const{SymReal}([w[3]])
+            m[4:4] => Const{SymReal}([w[4]])
+            m[5:5] => Const{SymReal}([w[5]])
+            m[6:6] => Const{SymReal}([w[6]])
+            m[7:7] => Const{SymReal}([w[7]])
+            m[8:8] => Const{SymReal}([w[8]])
+            m[9:9] => Const{SymReal}([w[9]])
+            m[10:10] => Const{SymReal}([w[10]])
+            m[11:11] => Const{SymReal}([w[11]])
+            m[12:12] => Const{SymReal}([w[12]])
+            m[13:13] => Const{SymReal}([w[13]])
+            m[14:14] => Const{SymReal}([w[14]])
+            m[15:15] => Const{SymReal}([w[15]])
+            m[16:16] => Const{SymReal}([w[16]])
+        end
+        expr = Code.fast_toexpr(
+            maker,
+            Dict{Any, Any}(
+                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
+                    Returns{SymReal}, (buf,)
+                )
+            )
+        )
+        @test occursin("fill_arr!", string(expr))
+        ws = [Wrap(Float64(i)) for i in 1:16]
+        bufv = Vector{Wrap{Float64}}(undef, 16)
+        result = eval(quote
+            let w = $ws, buf = $bufv
+                $expr
+            end
+        end)
+        @test result == ws
+    end
+end
+
 @testset "`replace_node!` on an argument of `ArrayOp` with a `term` codegens correctly" begin
     @syms x[1:3]
     ir = IRStructure{SymReal}()

@@ -39,15 +39,9 @@ end
     @test @rule((~x)^(~x) => ~x)(b^a) === nothing
     @test @rule((~x)^(~x) => ~x)(a+a) === nothing
     @eqtest @rule((~x)^(~x) => ~x)(sin(a)^sin(a)) == sin(a)
-    # NOTE: This rule fails intermittently despite AC matching on * and +, due to lack of
-    # "nested retries". Essentially, the first term will match `~x => b, ~y => a`, which
-    # will go back to the matcher for `+`, which will try it on the second term and fail.
-    # The matcher for `+` then reverses the order of the addition, the second term then
-    # matches `~x => c, ~z => a` and the matcher for `+` tries it on the first term and
-    # fails. There needs to be proper AC nesting so that a failure for `+` tries the next
-    # matching of `*`.
-    # For now, just reorder the slots in the rule to make it pass.
-    # @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
+    # Nested AC backtracking: a local * match may bind slots that later fail at +,
+    # so commutative_term_matcher must try remaining permutations (#586).
+    @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
 
     @test issetequal(@rule(+(~~x) => ~~x)(a + b), [a,b])
     @eqtest @rule(+(~~x) => ~~x)(term(+, a, b, c)) == [a,b,c]
@@ -81,6 +75,29 @@ end
     @test res3 === (d, c, a, b) || res3 === (d, c, b, a)
     res4 = r6(c*(a+b)+d)
     @test res4 === (d, c, a, b) || res4 === (d, c, b, a)
+end
+
+# Issue #586: nested AC matching must backtrack when a continuation fails
+@testset "Nested AC factoring backtracking (#586)" begin
+    f1 = @acrule +(~x*~y, ~x*~z) => *(~x, ~y+~z)
+    f2 = @acrule +(~y*~x, ~z*~x) => *(~x, ~y+~z)
+    f3 = @acrule +(~x*~y, ~z*~x) => *(~x, ~y+~z)
+    r = @rule ~y*~x + ~z*~x => ~x*(~y+~z)
+
+    # Original Discourse/issue examples: shared factor in mixed positions
+    @eqtest f1(a*b + b*c) == (a + c)*b
+    @eqtest f2(a*b + b*c) == (a + c)*b
+    @eqtest f3(a*b + b*c) == (a + c)*b
+
+    # Factor on the left of both products
+    @eqtest f1(a*b + a*c) == a*(b + c)
+    @eqtest f2(a*b + a*c) == a*(b + c)
+    @eqtest r(a*b + a*c) == a*(b + c)
+
+    # Factor on the right of both products
+    @eqtest f1(a*c + b*c) == (a + b)*c
+    @eqtest f2(a*c + b*c) == (a + b)*c
+    @eqtest r(a*c + b*c) == (a + b)*c
 end
 
 @testset "Slot matcher with default value" begin

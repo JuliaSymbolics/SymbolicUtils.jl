@@ -39,8 +39,8 @@ end
     @test @rule((~x)^(~x) => ~x)(b^a) === nothing
     @test @rule((~x)^(~x) => ~x)(a+a) === nothing
     @eqtest @rule((~x)^(~x) => ~x)(sin(a)^sin(a)) == sin(a)
-    # Nested AC backtracking: a local * match may bind slots that later fail at +,
-    # so commutative_term_matcher must try remaining permutations (#586).
+    # Nested AC: a local * match may bind slots that later fail at +, so
+    # commutative_term_matcher retries remaining permutations.
     @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
 
     @test issetequal(@rule(+(~~x) => ~~x)(a + b), [a,b])
@@ -77,8 +77,8 @@ end
     @test res4 === (d, c, a, b) || res4 === (d, c, b, a)
 end
 
-# Issue #586: nested AC matching must backtrack when a continuation fails
-@testset "Nested AC factoring backtracking (#586)" begin
+# Nested AC matching must backtrack when a continuation fails (depth-2).
+@testset "Nested AC factoring backtracking" begin
     f1 = @acrule +(~x*~y, ~x*~z) => *(~x, ~y+~z)
     f2 = @acrule +(~y*~x, ~z*~x) => *(~x, ~y+~z)
     f3 = @acrule +(~x*~y, ~z*~x) => *(~x, ~y+~z)
@@ -98,6 +98,18 @@ end
     @eqtest f1(a*c + b*c) == (a + b)*c
     @eqtest f2(a*c + b*c) == (a + b)*c
     @eqtest r(a*c + b*c) == (a + b)*c
+end
+
+# Failing AC segment match on large products must stay cheap (no (n!)^2 search).
+@testset "AC failing match stays bounded" begin
+    @syms a b c d e f g h i j k l m n o
+    ex = a*b*c*d*e*f*g + i*j*k*l*m*n*o
+    # Warmup / compile
+    simplify(a + b)
+    t = @elapsed r = simplify(ex)
+    @test isequal(r, ex)
+    # Generous bound: on a quiet machine this is ~2s; 60s absorbs CI load noise.
+    @test t < 60
 end
 
 @testset "Slot matcher with default value" begin

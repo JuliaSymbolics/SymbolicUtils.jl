@@ -6,6 +6,32 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 
+# Canonicalize a bound value for AC backtracking deduplication.
+# Segment captures are sequences; under +/* their order is immaterial, so treat
+# them as multisets via <ₑ-sorted tuples. Single-slot values are left as-is.
+function canonicalize_ac_bind(v)
+    if v isa AbstractVector || v isa Tuple
+        isempty(v) && return ()
+        return Tuple(sort!(Any[v...], lt = <ₑ))
+    else
+        return v
+    end
+end
+
+# Fingerprint of a bindings dict so equivalent AC matches (esp. segment
+# reorderings) share one continuation attempt.
+function ac_bindings_key(binds::ImmutableDict{Symbol, Any})
+    ks = Symbol[]
+    vs = Any[]
+    for (k, v) in binds
+        k === :____ && continue
+        push!(ks, k)
+        push!(vs, canonicalize_ac_bind(v))
+    end
+    p = sortperm(ks)
+    return (ntuple(i -> ks[p[i]], length(ks)), ntuple(i -> vs[p[i]], length(vs)))
+end
+
 function matcher(val::Any, acSets)
     val = unwrap_const(val)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
@@ -187,15 +213,34 @@ function term_matcher_constructor(term, acSets)
             T = vartype(data)
             ST = symtype(data)
             if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
-                for inds in acSets(eachindex(data_args), length(data_args))
-                    candidate = Term{T}(f, @views data_args[inds]; type = ST)
-
-                    result = loop(candidate, bindings, matchers)
-                    # Backtrack: a local match may still fail in the continuation
-                    # (e.g. a later slot already bound to a different factor).
-                    if result !== nothing
-                        r = success(result, 1)
-                        r !== nothing && return r
+                if has_segment
+                    # Keep master semantics for segment patterns: first local match
+                    # wins. Backtracking over segment reorderings makes failing
+                    # matches ~ (n!)^2 (e.g. default simplify on large products).
+                    for inds in acSets(eachindex(data_args), length(data_args))
+                        candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                        result = loop(candidate, bindings, matchers)
+                        result !== nothing && return success(result, 1)
+                    end
+                else
+                    # Fixed-arity depth-2 backtracking: a local match may bind slots
+                    # that later fail in the continuation; try other permutations.
+                    # Deduplicate by canonical bindings (slots equal; no segments here).
+                    tried = nothing
+                    for inds in acSets(eachindex(data_args), length(data_args))
+                        candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                        result = loop(candidate, bindings, matchers)
+                        if result !== nothing
+                            key = ac_bindings_key(result)
+                            if tried === nothing
+                                tried = Set{Any}()
+                            elseif key in tried
+                                continue
+                            end
+                            push!(tried, key)
+                            r = success(result, 1)
+                            r !== nothing && return r
+                        end
                     end
                 end
             # if data does not subtype to number, it might not be commutative

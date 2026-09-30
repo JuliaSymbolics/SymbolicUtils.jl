@@ -660,6 +660,7 @@ function (acr::ACRule)(term)
 
         T = vartype(term)
         args = arguments(term)
+        length(args) < acr.arity && return nothing
         is_full_perm = acr.arity == length(args)
         if is_full_perm
             args_buf = copy(parent(args))

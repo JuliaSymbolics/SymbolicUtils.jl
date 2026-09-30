@@ -650,7 +650,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
             )
             vals_expr = Expr(:tuple)
             for val in vals
-                push!(vals_expr.args, Expr(:call, eltype_expr, val))
+                push!(vals_expr.args, Expr(:call, convert, eltype_expr, val))
             end
             idxs_expr = Expr(:tuple)
             for reg in regs
@@ -779,7 +779,7 @@ function codegen_function!(
         vals_expr = Expr(:tuple)
         idxs_expr = Expr(:tuple)
         for (idx, arg_idx) in iter
-            push!(vals_expr.args, Expr(:call, eltype_expr, cs(cs.ir[arg_idx])))
+            push!(vals_expr.args, Expr(:call, convert, eltype_expr, cs(cs.ir[arg_idx])))
             push!(idxs_expr.args, cart_idxs[idx])
         end
         declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, vals_expr, idxs_expr))

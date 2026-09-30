@@ -72,6 +72,10 @@ const ASSORTED_RULES = (
     @rule(conj(~x::_isreal) => ~x),
     @rule(real(~x::_isreal) => ~x),
     @rule(imag(~x::_isreal) => zero(symtype(~x))),
+    # log∘exp is identity on reals; complex branch cuts differ by 2πi
+    @rule(log(exp(~x::_isreal)) => ~x),
+    # exp∘log is identity wherever log is defined
+    @rule(exp(log(~x)) => ~x),
     @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
     @rule(ifelse(~x, ~y, ~y) => ~y),
     @rule(ifelse_eager(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),

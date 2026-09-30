@@ -191,7 +191,12 @@ function term_matcher_constructor(term, acSets)
                     candidate = Term{T}(f, @views data_args[inds]; type = ST)
 
                     result = loop(candidate, bindings, matchers)
-                    result !== nothing && return success(result,1)
+                    # Backtrack: a local match may still fail in the continuation
+                    # (e.g. a later slot already bound to a different factor).
+                    if result !== nothing
+                        r = success(result, 1)
+                        r !== nothing && return r
+                    end
                 end
             # if data does not subtype to number, it might not be commutative
             else

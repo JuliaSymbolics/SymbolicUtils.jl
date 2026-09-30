@@ -181,13 +181,177 @@ const NUMBER_SIMPLIFIER = RestartedChain((
 
 const TRIG_EXP_SIMPLIFIER = Chain(TRIG_EXP_RULES)
 
+# --- Trig reduce: product-to-sum and power reduction (opt-in) ---
+
+"""
+    _trig_power_reduce(f, x, n)
+
+Reduce `f(x)^n` (where `f` is `sin`, `cos`, `sinh`, or `cosh` and `n ≥ 2`) by
+one step using the half-angle / double-argument identities:
+
+    cos(x)^2  = (1 + cos(2x)) / 2
+    sin(x)^2  = (1 - cos(2x)) / 2
+    cosh(x)^2 = (1 + cosh(2x)) / 2
+    sinh(x)^2 = (cosh(2x) - 1) / 2
+
+For `n ≥ 3` the result `f(x)^r * half_angle^k` still contains powers and will
+be reduced further by subsequent Fixpoint iterations.
+"""
+function _trig_power_reduce(f, x, n)
+    k = div(n, 2)   # number of squared pairs
+    r = rem(n, 2)   # leftover power (0 or 1)
+    if f === cos
+        sq = (1 + cos(2 * x)) / 2
+    elseif f === sin
+        sq = (1 - cos(2 * x)) / 2
+    elseif f === cosh
+        sq = (1 + cosh(2 * x)) / 2
+    elseif f === sinh
+        sq = (cosh(2 * x) - 1) / 2
+    else
+        return nothing
+    end
+    return f(x)^r * sq^k
+end
+
+_isinteger_ge2(n) = n isa Integer && n >= 2
+
+"""
+    _has_neg_leading(x)
+
+Return `true` if `x` "looks negative": a negative number, a Mul with a negative
+numeric first argument, or an Add whose first sorted term looks negative.
+Used to canonicalise `cos(-expr) → cos(expr)` and `sin(-expr) → -sin(expr)`.
+"""
+function _has_neg_leading(x)
+    x = unwrap_const(x)
+    x isa Number && return x < 0
+    !iscall(x) && return false
+    if ismul(x)
+        a = unwrap_const(first(arguments(x)))
+        return a isa Number && a < 0
+    end
+    if isadd(x)
+        a = first(sorted_arguments(x))
+        return _has_neg_leading(a)
+    end
+    return false
+end
+
+const TRIG_REDUCE_RULES = (
+    # ── Cleanup: fold literal values, normalize negative arguments ──
+    @rule(sin(~x::_iszero) => 0),
+    @rule(cos(~x::_iszero) => 1),
+    @rule(sinh(~x::_iszero) => 0),
+    @rule(cosh(~x::_iszero) => 1),
+    @rule(cos(~x::_has_neg_leading) => cos(-1 * ~x)),      # cos is even
+    @rule(sin(~x::_has_neg_leading) => -1 * sin(-1 * ~x)), # sin is odd
+    @rule(cosh(~x::_has_neg_leading) => cosh(-1 * ~x)),    # cosh is even
+    @rule(sinh(~x::_has_neg_leading) => -1 * sinh(-1 * ~x)), # sinh is odd
+
+    # ── Power reduction: f(x)^n for n ≥ 2 ──
+    # Circular
+    @rule(cos(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(cos, ~x, ~n)),
+    @rule(sin(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(sin, ~x, ~n)),
+    # Hyperbolic
+    @rule(cosh(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(cosh, ~x, ~n)),
+    @rule(sinh(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(sinh, ~x, ~n)),
+    # tan/sec: tan(x)^2 → sec(x)^2 - 1
+    @rule(tan(~x)^2 => sec(~x)^2 - 1),
+    @rule(cot(~x)^2 => csc(~x)^2 - 1),
+
+    # ── Product-to-sum (linearization): circular ──
+    @acrule(cos(~x) * cos(~y) => (cos(~x - ~y) + cos(~x + ~y)) / 2),
+    @acrule(sin(~x) * sin(~y) => (cos(~x - ~y) - cos(~x + ~y)) / 2),
+    @acrule(sin(~x) * cos(~y) => (sin(~x + ~y) + sin(~x - ~y)) / 2),
+
+    # ── Product-to-sum (linearization): hyperbolic ──
+    @acrule(cosh(~x) * cosh(~y) => (cosh(~x - ~y) + cosh(~x + ~y)) / 2),
+    @acrule(sinh(~x) * sinh(~y) => (cosh(~x + ~y) - cosh(~x - ~y)) / 2),
+    @acrule(sinh(~x) * cosh(~y) => (sinh(~x + ~y) + sinh(~x - ~y)) / 2),
+
+    # ── Exponential product/power rules (kept from TRIG_EXP_RULES) ──
+    @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y)),
+    @rule(exp(~x)^(~y) => exp(~x * ~y)),
+)
+
+const TRIG_REDUCE_SIMPLIFIER = Chain(TRIG_REDUCE_RULES)
+
+"""
+    _involves_vars(x, target_vars)
+
+Return `true` if the symbolic expression `x` contains any of the variables in
+`target_vars`.  Used by `trig_reduce(; vars=...)` to selectively reduce only
+trig functions whose arguments involve the specified variables.
+"""
+function _involves_vars(x, target_vars)
+    buf = BasicSymbolic{SymReal}[]
+    search_variables!(buf, unwrap(x))
+    for v in buf, tv in target_vars
+        isequal(v, unwrap(tv)) && return true
+    end
+    return false
+end
+
+"""
+    _build_filtered_trig_reduce(target_vars)
+
+Build a `Chain` of trig-reduce rules that only fire when the trig argument
+involves at least one of `target_vars`.
+"""
+function _build_filtered_trig_reduce(target_vars)
+    sp(x) = _involves_vars(x, target_vars)
+
+    rules = (
+        # ── Cleanup (always applies) ──
+        @rule(sin(~x::_iszero) => 0),
+        @rule(cos(~x::_iszero) => 1),
+        @rule(sinh(~x::_iszero) => 0),
+        @rule(cosh(~x::_iszero) => 1),
+        @rule(cos(~x::_has_neg_leading) => cos(-1 * ~x)),
+        @rule(sin(~x::_has_neg_leading) => -1 * sin(-1 * ~x)),
+        @rule(cosh(~x::_has_neg_leading) => cosh(-1 * ~x)),
+        @rule(sinh(~x::_has_neg_leading) => -1 * sinh(-1 * ~x)),
+
+        # ── Power reduction (guarded by vars) ──
+        @rule(cos(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(cos, ~x, ~n) : nothing),
+        @rule(sin(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(sin, ~x, ~n) : nothing),
+        @rule(cosh(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(cosh, ~x, ~n) : nothing),
+        @rule(sinh(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(sinh, ~x, ~n) : nothing),
+        @rule(tan(~x)^2 => sp(~x) ? sec(~x)^2 - 1 : nothing),
+        @rule(cot(~x)^2 => sp(~x) ? csc(~x)^2 - 1 : nothing),
+
+        # ── Product-to-sum: circular (guarded) ──
+        @acrule(cos(~x) * cos(~y) => (sp(~x) || sp(~y)) ? (cos(~x - ~y) + cos(~x + ~y)) / 2 : nothing),
+        @acrule(sin(~x) * sin(~y) => (sp(~x) || sp(~y)) ? (cos(~x - ~y) - cos(~x + ~y)) / 2 : nothing),
+        @acrule(sin(~x) * cos(~y) => (sp(~x) || sp(~y)) ? (sin(~x + ~y) + sin(~x - ~y)) / 2 : nothing),
+
+        # ── Product-to-sum: hyperbolic (guarded) ──
+        @acrule(cosh(~x) * cosh(~y) => (sp(~x) || sp(~y)) ? (cosh(~x - ~y) + cosh(~x + ~y)) / 2 : nothing),
+        @acrule(sinh(~x) * sinh(~y) => (sp(~x) || sp(~y)) ? (cosh(~x + ~y) - cosh(~x - ~y)) / 2 : nothing),
+        @acrule(sinh(~x) * cosh(~y) => (sp(~x) || sp(~y)) ? (sinh(~x + ~y) + sinh(~x - ~y)) / 2 : nothing),
+
+        # ── Exponential (always applies) ──
+        @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y)),
+        @rule(exp(~x)^(~y) => exp(~x * ~y)),
+    )
+    return Chain(rules)
+end
+
 const BOOLEAN_SIMPLIFIER = Chain(BOOLEAN_RULES)
 
 
-function get_default_simplifier(; kw...)
+function get_default_simplifier(; trig_reduce=false, trig_reduce_vars=nothing, kw...)
+    trig_chain = if trig_reduce && trig_reduce_vars !== nothing
+        Chain((NUMBER_SIMPLIFIER, _build_filtered_trig_reduce(trig_reduce_vars)))
+    elseif trig_reduce
+        Chain((NUMBER_SIMPLIFIER, TRIG_REDUCE_SIMPLIFIER))
+    else
+        Chain((NUMBER_SIMPLIFIER, TRIG_EXP_SIMPLIFIER))
+    end
     IfElse(has_trig_exp,
            Postwalk(IfElse(x->symtype(x) <: Number,
-                           Chain((NUMBER_SIMPLIFIER, TRIG_EXP_SIMPLIFIER)),
+                           trig_chain,
                            If(x->symtype(x) <: Bool, BOOLEAN_SIMPLIFIER))
                     ; kw...),
            Postwalk(Chain((If(x->symtype(x) <: Number,
@@ -200,9 +364,19 @@ end
 # reduce overhead of simplify by defining these as constant
 const serial_simplifier = If(iscall, Fixpoint(get_default_simplifier()))
 
-threaded_simplifier(cutoff) = Fixpoint(get_default_simplifier(threaded=true,
-                                                          thread_cutoff=cutoff))
+threaded_simplifier(cutoff; trig_reduce=false) =
+    Fixpoint(get_default_simplifier(trig_reduce=trig_reduce,
+                                    threaded=true, thread_cutoff=cutoff))
 
 const serial_expand_simplifier = If(iscall,
                                   Fixpoint(Chain((expand,
                                                   Fixpoint(get_default_simplifier())))))
+
+# Pre-compiled trig_reduce simplifiers (opt-in path)
+const serial_trig_reduce_simplifier =
+    If(iscall, Fixpoint(Chain((expand,
+                               Fixpoint(get_default_simplifier(trig_reduce=true))))))
+
+const serial_expand_trig_reduce_simplifier =
+    If(iscall, Fixpoint(Chain((expand,
+                               Fixpoint(get_default_simplifier(trig_reduce=true))))))

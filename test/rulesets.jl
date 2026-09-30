@@ -108,12 +108,26 @@ end
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 
+    # 1 - cos² / sin² and scaled a - a*trig² (#655)
+    @eqtest simplify(1 - cos(x)^2) == sin(x)^2
+    @eqtest simplify(1 - sin(x)^2) == cos(x)^2
+    @eqtest simplify(2 - 2cos(x)^2) == 2sin(x)^2
+    @eqtest simplify(2 - 2sin(x)^2) == 2cos(x)^2
+    @eqtest simplify(a - a*sin(x)^2) == a*cos(x)^2
+    @eqtest simplify(a - a*cos(x)^2) == a*sin(x)^2
+    @eqtest simplify(3 - 2cos(x)^2) == 3 - 2cos(x)^2
+
     @eqtest unwrap_const(simplify(cosh(x)^2 + 1 - sinh(x)^2)) == 2
     @eqtest unwrap_const(simplify(cosh(y)^2 + 1 - sinh(y)^2)) == 2
     @eqtest unwrap_const(simplify(-sinh(y)^2 + cosh(y)^2 + 1)) == 2
 
     @eqtest simplify(cosh(x)^2 - 1) == sinh(x)^2
     @eqtest simplify(sinh(x)^2 + 1) == cosh(x)^2
+    @eqtest simplify(1 - cosh(x)^2) == -sinh(x)^2
+    @eqtest simplify(2 - 2cosh(x)^2) == -2sinh(x)^2
+    @eqtest simplify(2 + 2sinh(x)^2) == 2cosh(x)^2
+    @eqtest simplify(a - a*cosh(x)^2) == -a*sinh(x)^2
+    @eqtest simplify(a + a*sinh(x)^2) == a*cosh(x)^2
 end
 
 @testset "Double angle formulas" begin

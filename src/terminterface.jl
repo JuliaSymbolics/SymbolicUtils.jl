@@ -276,6 +276,15 @@ function TermInterface.iscall(s::BSImpl.Type)
     !MData.isa_variant(s, BSImpl.Sym) && !MData.isa_variant(s, BSImpl.Const)
 end
 
+# TermInterface requires that `iscall(x) ⇒ isexpr(x)`, with `head`/`children` defined.
+# SymbolicUtils is a functional expression language: every call node is an expression
+# whose head is the operation and whose children are the arguments (see TermInterface.jl
+# docs and `maketerm(::Type{BasicSymbolic}, f, args, metadata)`).
+TermInterface.isexpr(s::BSImpl.Type) = TermInterface.iscall(s)
+TermInterface.head(s::BSImpl.Type) = TermInterface.operation(s)
+TermInterface.children(s::BSImpl.Type) = TermInterface.arguments(s)
+TermInterface.sorted_children(s::BSImpl.Type) = TermInterface.sorted_arguments(s)
+
 function TermInterface.maketerm(::Type{BasicSymbolic{TreeReal}}, f, args, metadata; @nospecialize(type = _promote_symtype(f, args)))
     # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
     sh = f === in && length(args) > 1 && symtype(args[2]) <: AbstractArray ? ShapeVecT() :

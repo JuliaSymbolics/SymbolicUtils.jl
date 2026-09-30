@@ -244,3 +244,15 @@ end
     # vars=nothing (default) reduces everything
     @eqtest trig_reduce(cos(x)^2; vars=nothing) == (1//2) + (1//2)*cos(2x)
 end
+
+@testset "trig_reduce: interaction with simplify_fractions" begin
+    @syms x
+
+    # trig in a fraction: sin(x)^2 / cos(x) — should reduce numerator
+    result = trig_reduce(sin(x)^2 / cos(x))
+    @test abs(Float64(unwrap_const(substitute(result, Dict(x => 0.7); fold=Val(true)))) - sin(0.7)^2/cos(0.7)) < 1e-12
+
+    # simplify with both trig_reduce and simplify_fractions
+    result2 = simplify(sin(x)^2 / cos(x); trig_reduce=true, simplify_fractions=true)
+    @test abs(Float64(unwrap_const(substitute(result2, Dict(x => 0.7); fold=Val(true)))) - sin(0.7)^2/cos(0.7)) < 1e-12
+end

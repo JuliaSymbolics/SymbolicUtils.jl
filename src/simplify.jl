@@ -59,12 +59,7 @@ Pass `simplify_fractions=false` to prevent this.
         if threaded
             threaded_simplifier(thread_subtree_cutoff; trig_reduce)
         elseif trig_reduce
-            # trig_reduce always includes an expand pass (needed to expose products)
-            if expand
-                serial_expand_trig_reduce_simplifier
-            else
-                serial_trig_reduce_simplifier
-            end
+            serial_trig_reduce_simplifier
         elseif expand
             serial_expand_simplifier
         else

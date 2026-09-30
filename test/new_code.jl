@@ -1304,11 +1304,13 @@ end
         @test occursin("convert", string(expr))
         ws = [Wrap(Float64(i)) for i in 1:17]
         bufv = Vector{Wrap{Float64}}(undef, 17)
-        result = eval(quote
-            let w = $ws, buf = $bufv
-                $expr
+        result = eval(
+            quote
+                let w = $ws, buf = $bufv
+                    $expr
+                end
             end
-        end)
+        )
         @test result == ws
     end
 
@@ -1325,11 +1327,13 @@ end
         )
         as = AbstractWrap[ConcreteWrap(Float64(i)) for i in 1:17]
         bufav = Vector{AbstractWrap}(undef, 17)
-        result = eval(quote
-            let a = $as, bufa = $bufav
-                $expr
+        result = eval(
+            quote
+                let a = $as, bufa = $bufav
+                    $expr
+                end
             end
-        end)
+        )
         @test result == as
     end
 
@@ -1346,11 +1350,13 @@ end
         )
         xis = collect(1:17)
         bufiv = Vector{Float64}(undef, 17)
-        result = eval(quote
-            let xi = $xis, bufi = $bufiv
-                $expr
+        result = eval(
+            quote
+                let xi = $xis, bufi = $bufiv
+                    $expr
+                end
             end
-        end)
+        )
         @test result == Float64.(xis)
         @test eltype(result) === Float64
     end
@@ -1370,11 +1376,13 @@ end
         @test occursin("convert", string(expr))
         ws = [Wrap(Float64(i)) for i in 1:17]
         bufv = Vector{Wrap{Float64}}(undef, 17)
-        eval(quote
-            let w = $ws, buf = $bufv
-                $expr
+        eval(
+            quote
+                let w = $ws, buf = $bufv
+                    $expr
+                end
             end
-        end)
+        )
         @test bufv == ws
     end
 
@@ -1410,11 +1418,13 @@ end
         @test occursin("fill_arr!", string(expr))
         ws = [Wrap(Float64(i)) for i in 1:16]
         bufv = Vector{Wrap{Float64}}(undef, 16)
-        result = eval(quote
-            let w = $ws, buf = $bufv
-                $expr
+        result = eval(
+            quote
+                let w = $ws, buf = $bufv
+                    $expr
+                end
             end
-        end)
+        )
         @test result == ws
     end
 end

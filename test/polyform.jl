@@ -167,6 +167,14 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             @test eltype(MP.coefficients(g)) === Int64
             @test gcd(g, g) isa DP.Polynomial
         end
+
+        @testset "BigInt coefficients beyond typemax(Int) stay exact (#1111)" begin
+            a = big(10)^19
+            p = poly_with_coeffs(Number[a, a], (a + a * v))
+            g = poly_to_gcd_form(p)
+            @test eltype(MP.coefficients(g)) === BigInt
+            @test MP.coefficients(g) == [a, a]
+        end
     end
 end
 
@@ -225,6 +233,16 @@ end
     @test isequal(expand(s), s)
     @test isequal(expand(a * (s + b)), a * s + a * b)
     @test isequal(expand(s / 3), (1 // 3) * s)
+end
+
+@testset "simplify cancels BigInt coefficients beyond typemax(Int) (#1111)" begin
+    @syms x
+    a = big(10)^19
+    b = big(10)^18
+    @test !SymbolicUtils.safe_isinteger(a)
+    @test SymbolicUtils.safe_isinteger(b)
+    @eqtest simplify((a * x + a) / (a * x)) == (1 + x) / x
+    @eqtest simplify((b * x + b) / (b * x)) == (1 + x) / x
 end
 
 @testset "simplify survives rational coefficients too large for Int64" begin

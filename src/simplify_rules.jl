@@ -86,6 +86,15 @@ const TRIG_EXP_RULES = (
     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x)),
     @acrule(sin(~x)^2 + -1        => -1*cos(~x)^2),
     @acrule(cos(~x)^2 + -1        => -1*sin(~x)^2),
+    # 1 - cos²(x) = sin²(x) and scaled a - a*cos²(x) = a*sin²(x) (and sin↔cos).
+    # Literal ±1 forms; numeric a,-a via guard (flattened coeffs like 2+(-2)*…);
+    # shared ~a for symbolic coefficients (a + (-1)*a*cos²).
+    @acrule(1 + -1*cos(~x)^2 => sin(~x)^2),
+    @acrule(1 + -1*sin(~x)^2 => cos(~x)^2),
+    @acrule(~a::is_literal_number + ~b::is_literal_number*cos(~x)^2 => unwrap_const(~a) == -unwrap_const(~b) ? ~a*sin(~x)^2 : nothing),
+    @acrule(~a::is_literal_number + ~b::is_literal_number*sin(~x)^2 => unwrap_const(~a) == -unwrap_const(~b) ? ~a*cos(~x)^2 : nothing),
+    @acrule(~a + -1*~a*cos(~x)^2 => ~a*sin(~x)^2),
+    @acrule(~a + -1*~a*sin(~x)^2 => ~a*cos(~x)^2),
 
     @acrule(cos(~x)^2 + -1*sin(~x)^2 => cos(2 * ~x)),
     @acrule(sin(~x)^2 + -1*cos(~x)^2 => -cos(2 * ~x)),
@@ -103,6 +112,12 @@ const TRIG_EXP_RULES = (
     @acrule(cosh(~x)^2 + -1*sinh(~x)^2 => one(~x)),
     @acrule(cosh(~x)^2 + -1            => sinh(~x)^2),
     @acrule(sinh(~x)^2 +  1            => cosh(~x)^2),
+    # 1 - cosh²(x) = -sinh²(x); a + a*sinh²(x) = a*cosh²(x)
+    @acrule(1 + -1*cosh(~x)^2 => -1*sinh(~x)^2),
+    @acrule(~a::is_literal_number + ~b::is_literal_number*cosh(~x)^2 => unwrap_const(~a) == -unwrap_const(~b) ? -(~a)*sinh(~x)^2 : nothing),
+    @acrule(~a::is_literal_number + ~b::is_literal_number*sinh(~x)^2 => unwrap_const(~a) == unwrap_const(~b) ? ~a*cosh(~x)^2 : nothing),
+    @acrule(~a + -1*~a*cosh(~x)^2 => -(~a)*sinh(~x)^2),
+    @acrule(~a + ~a*sinh(~x)^2 => ~a*cosh(~x)^2),
 
     @acrule(cosh(~x)^2 + sinh(~x)^2 => cosh(2 * ~x)),
     @acrule(cosh(~x) * sinh(~x) => sinh(2 * ~x)/2),

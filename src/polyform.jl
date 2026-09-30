@@ -285,25 +285,34 @@ end
 canonicalize_coeffs!(x) = nothing
 
 function poly_to_gcd_form(p::PolynomialT)
-    all_int = true
+    all_safe_int = true
+    all_integer = true
     all_rat = true
     any_complex = false
     for c in MP.coefficients(p)
-        isint = safe_isinteger(c)
-        all_int &= isint
-        all_rat &= isint || c isa Rational
+        is_safe = safe_isinteger(c)
+        # Exact `Integer`s (including BigInt ≥ typemax(Int)) stay on the integer
+        # path; `safe_isinteger` alone would demote them to Float64 and lose gcd.
+        is_int = is_safe || c isa Integer
+        all_safe_int &= is_safe
+        all_integer &= is_int
+        all_rat &= is_int || c isa Rational
         any_complex |= c isa Complex
-        all_int || all_rat || break
+        all_integer || all_rat || break
     end
     # Always widen integer/rational coefficients to Int64 / Rational{Int64}.
     # On 32-bit Julia, `Int` is Int32; homogeneous `Integer.(::Vector{Int32})`
     # stays Int32 and then `MP.gcd` / `div_multiple` hits DivideError when
     # content arithmetic overflows (e.g. MomentClosure derivative matching
     # closures going through `simplify` → `simplify_fractions`).
-    # `safe_isinteger` bounds integers by `typemax(Int)`, but a `Rational` can be
-    # arbitrarily large, so `Rational{Int64}` is only a floor for the rational branch.
-    cs = if all_int
+    # `safe_isinteger` bounds the Int64 path by `typemax(Int)`; larger exact
+    # integers (and arbitrarily large `Rational`s) use promote_type with an
+    # Int64 / Rational{Int64} floor instead of demoting to Float64.
+    cs = if all_safe_int
         Int64.(MP.coefficients(p))
+    elseif all_integer
+        is = map(c -> c isa Integer ? c : Int64(c), MP.coefficients(p))
+        convert(Vector{mapreduce(typeof, promote_type, is; init = Int64)}, is)
     elseif all_rat
         rs = map(c -> c isa Rational ? c : rationalize(c), MP.coefficients(p))
         convert(Vector{mapreduce(typeof, promote_type, rs; init = Rational{Int64})}, rs)
@@ -315,7 +324,8 @@ function poly_to_gcd_form(p::PolynomialT)
     # Broadcast can still leave an abstract eltype for heterogeneous floats;
     # narrow to a concrete eltype when needed (gcd requires it).
     if !isconcretetype(eltype(cs))
-        T = isempty(cs) ? (all_int ? Int64 : all_rat ? Rational{Int64} :
+        T = isempty(cs) ? (all_safe_int ? Int64 : all_integer ? BigInt :
+                           all_rat ? Rational{Int64} :
                            any_complex ? ComplexF64 : Float64) :
             mapreduce(typeof, promote_type, cs)
         cs = Vector{T}(cs)

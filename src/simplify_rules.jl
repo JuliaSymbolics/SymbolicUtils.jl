@@ -372,11 +372,8 @@ const serial_expand_simplifier = If(iscall,
                                   Fixpoint(Chain((expand,
                                                   Fixpoint(get_default_simplifier())))))
 
-# Pre-compiled trig_reduce simplifiers (opt-in path)
+# Pre-compiled trig_reduce simplifier (opt-in path).
+# Always includes an expand pass since trig reduction needs expanded inputs.
 const serial_trig_reduce_simplifier =
-    If(iscall, Fixpoint(Chain((expand,
-                               Fixpoint(get_default_simplifier(trig_reduce=true))))))
-
-const serial_expand_trig_reduce_simplifier =
     If(iscall, Fixpoint(Chain((expand,
                                Fixpoint(get_default_simplifier(trig_reduce=true))))))

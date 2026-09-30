@@ -146,6 +146,13 @@ end
     @eqtest simplify((a^2.0)^(1//2)) == abs(a)
     @eqtest simplify((b^2.0)^(1/2)) == abs(b)
 
+    # log/exp inverses — https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1047
+    @eqtest simplify(log(exp(a))) == a
+    @eqtest simplify(exp(log(a))) == a
+    @syms z  # unrestricted (Number), not Real
+    @eqtest simplify(log(exp(z))) == log(exp(z))  # branch cuts: do not cancel
+    @eqtest simplify(exp(log(z))) == z
+
 end
 
 @testset "simplify_fractions" begin

@@ -13,7 +13,7 @@ import StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
 using SciMLPublic: @public
 using StaticArraysCore: MArray, SArray
 using SparseArrays: AbstractSparseArray, SparseMatrixCSC, SparseVector, findnz, issparse, sparse
-using LinearAlgebra: Transpose, UpperTriangular
+using LinearAlgebra: Adjoint, Transpose, UpperTriangular
 using SpecialFunctions: lgamma
 using DocStringExtensions: SIGNATURES, TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 
@@ -1338,7 +1338,7 @@ function toexpr(a::MakeArray, st)
                      $elT,
                      Val{$ndim}(),
                      Val{$(size(a.elems))}(),
-                     $(map(x->toexpr(x, st), a.elems)...),)
+                     $([toexpr(x, st) for x in a.elems]...),)
     end
 end
 
@@ -1429,6 +1429,10 @@ end
 
 
 @inline function create_array(A::Type{<:Transpose{T,P}}, S, nd::Val, d::Val, elems...) where {T,P}
+    create_array(P, S, nd, d, elems...)
+end
+
+@inline function create_array(A::Type{<:Adjoint{T,P}}, S, nd::Val, d::Val, elems...) where {T,P}
     create_array(P, S, nd, d, elems...)
 end
 

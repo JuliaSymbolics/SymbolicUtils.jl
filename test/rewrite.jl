@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: unwrap_const
+using SymbolicUtils: unwrap_const, BasicSymbolic, vartype
 using Test
 include("utils.jl")
 
@@ -247,4 +247,22 @@ end
     ex1 = ex * b
 
     @test getmetadata(sorted_arguments(ex1)[1], MetaData) == :metadata
+end
+
+@testset "callable struct heads in @rule #672" begin
+    abstract type Form672 <: Number end
+    struct ZeroForm672 <: Form672 end
+    struct D672
+        dim::Int
+    end
+    (op::D672)(x::BasicSymbolic) = SymbolicUtils.Term{vartype(x)}(op, Any[x]; type = Form672)
+    Base.nameof(op::D672) = Symbol("d$(op.dim)")
+
+    @syms z::Form672
+    d₀rule = @rule D672(1)(D672(0)(~x)) => ZeroForm672()
+    @test d₀rule(D672(1)(D672(0)(z))) == ZeroForm672()
+    @test d₀rule(D672(2)(D672(1)(z))) === nothing
+    # Heads with pattern slots are still unsupported for struct-field matching.
+    drule = @rule D672(~i + 1)(D672(~i)(~x)) => ZeroForm672()
+    @test drule(D672(1)(D672(0)(z))) === nothing
 end

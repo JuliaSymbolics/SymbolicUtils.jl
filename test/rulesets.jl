@@ -103,6 +103,13 @@ end
     @test unwrap_const(simplify(cos(y)^2 + 1 + sin(y)^2)) == 2
     @test unwrap_const(simplify(sin(y)^2 + cos(y)^2 + 1)) == 2
 
+    # Coefficient -1 distributes into Add, so factoring through r*(sin^2+cos^2)
+    # never sees the unscaled sum; the direct scaled Pythagorean rule covers it.
+    @test unwrap_const(simplify(-sin(x)^2 - cos(x)^2)) == -1
+    @test unwrap_const(simplify(-(sin(x)^2 + cos(x)^2))) == -1
+    @eqtest simplify(y - sin(x)^2 - cos(x)^2) == y - 1
+    @test unwrap_const(simplify(-2sin(x)^2 - 2cos(x)^2)) == -2
+
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2

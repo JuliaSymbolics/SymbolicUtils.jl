@@ -117,6 +117,17 @@ function makesegment(s::Expr, keys)
     :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
 end
 
+# True if `expr` contains a pattern slot (`~x`, `~~x`, or `~!x`).
+function pattern_expr_has_slot(expr)
+    if expr isa Expr
+        if expr.head === :call && !isempty(expr.args) && expr.args[1] === :(~)
+            return true
+        end
+        return any(pattern_expr_has_slot, expr.args)
+    end
+    return false
+end
+
 # parent call is needed to know which default value to give if any default slots are present
 """
     $TYPEDSIGNATURES
@@ -139,6 +150,8 @@ by the rule system. It handles several special syntaxes:
 - `~!x`: Matches a term with a default value (creates a `DefSlot`)
 - `~x::predicate`: Adds a predicate constraint to the slot
 - `\$expr`: Interpolates a value directly
+- A call in operator position with no slots (e.g. `d(1)(~x)` for a callable
+  struct) is evaluated to a value and matched by equality, like `\$`-interpolation.
 
 The function tracks pattern variable names in `keys` and uses `parentCall` to determine
 appropriate default values for default slots in operations like `+`, `*`, and `^`.
@@ -161,6 +174,13 @@ function makepattern(expr, keys, parentCall=nothing)
                 # bc when the expression is not quoted, 3//2 is a Rational{Int64}, not a call
                 return esc(expr.args[2] // expr.args[3])
             else
+                head = expr.args[1]
+                # Callable / computed heads with no slots are values, not nested patterns.
+                # Otherwise `d(1)(~x)` becomes `term(term(d, 1), ~x)` and never matches `d(1)`.
+                if head isa Expr && head.head === :call && head.args[1] !== :(~) &&
+                        !pattern_expr_has_slot(head)
+                    return :(term($(esc(head)), $(map(x -> makepattern(x, keys, operation(expr)), expr.args[2:end])...); type=Any, shape=$ShapeVecT()))
+                end
                 # make a pattern for every argument of the expr.
                 :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any, shape=$ShapeVecT()))
             end

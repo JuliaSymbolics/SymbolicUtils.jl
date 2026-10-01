@@ -243,7 +243,7 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
     idxs = sidxs.idxs
     # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
     # Indexing a 0-dim array with no indices extracts its single element.
-    isempty(idxs) && return symtype(arr) <: AbstractArray ? _getindex(T, arr) : arr
+    isempty(idxs) && return symtype(arr) <: AbstractArray{<:Any, 0} ? _getindex(T, arr) : arr
     sh = shape(arr)
     if I === Int
         sh = sh::ShapeVecT
@@ -518,7 +518,7 @@ function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T
                 new_term = BSImpl.Term{T}(getindex, term_args; type, shape = newshape)
                 return BSImpl.ArrayOp{T}(new_output_idx, new_expr, +, new_term, ranges; type, shape = newshape)
             # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
-            elseif is_array_shape(sh) || symtype(arr) <: AbstractArray
+            elseif is_array_shape(sh) || symtype(arr) <: AbstractArray{<:Any, 0}
                 return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
             else
                 return arr

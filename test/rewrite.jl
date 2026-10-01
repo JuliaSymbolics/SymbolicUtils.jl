@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: unwrap_const
+using SymbolicUtils: unwrap_const, BasicSymbolic, vartype, Term, SymReal
 using Test
 include("utils.jl")
 
@@ -247,4 +247,34 @@ end
     ex1 = ex * b
 
     @test getmetadata(sorted_arguments(ex1)[1], MetaData) == :metadata
+end
+
+@testset "callable struct heads in @rule #672" begin
+    abstract type Form672 <: Number end
+    struct ZeroForm672 <: Form672 end
+    struct D672
+        dim::Int
+    end
+    (op::D672)(x::BasicSymbolic) = SymbolicUtils.Term{vartype(x)}(op, Any[x]; type = Form672)
+    Base.nameof(op::D672) = Symbol("d$(op.dim)")
+
+    @syms z::Form672
+    d₀rule = @rule D672(1)(D672(0)(~x)) => ZeroForm672()
+    @test d₀rule(D672(1)(D672(0)(z))) == ZeroForm672()
+    @test d₀rule(D672(2)(D672(1)(z))) === nothing
+
+    k = 1
+    dollar_rule = @rule D672($k)(D672(0)(~x)) => ZeroForm672()
+    @test dollar_rule(D672(1)(D672(0)(z))) == ZeroForm672()
+    @test dollar_rule(D672(2)(D672(0)(z))) === nothing
+end
+
+@testset "\$-interpolation in symbolic function call heads" begin
+    @syms g(x)::Any a
+    k = 1
+    r = @rule g($k)(~y) => ~y
+    ex1 = Term{SymReal}(g(1), Any[a]; type = Number)
+    ex2 = Term{SymReal}(g(2), Any[a]; type = Number)
+    @test r(ex1) === a
+    @test r(ex2) === nothing
 end

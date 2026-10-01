@@ -72,6 +72,10 @@ const ASSORTED_RULES = (
     @rule(conj(~x::_isreal) => ~x),
     @rule(real(~x::_isreal) => ~x),
     @rule(imag(~x::_isreal) => zero(symtype(~x))),
+    # log∘exp is identity on reals; complex branch cuts differ by 2πi
+    @rule(log(exp(~x::_isreal)) => ~x),
+    # exp∘log is identity wherever log is defined
+    @rule(exp(log(~x)) => ~x),
     @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
     @rule(ifelse(~x, ~y, ~y) => ~y),
     @rule(ifelse_eager(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
@@ -84,6 +88,9 @@ const TRIG_EXP_RULES = (
     @acrule(~r*~x::has_trig_exp + ~r*~y => ~r*(~x + ~y)),
     @acrule(~r*~x::has_trig_exp + -1*~r*~y => ~r*(~x - ~y)),
     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x)),
+    # Direct scaled form: Mul(-1, Add(...)) distributes -1 into the Add, so the
+    # factoring rule above cannot reduce -sin^2 - cos^2 via r*(sin^2+cos^2).
+    @acrule(~r*sin(~x)^2 + ~r*cos(~x)^2 => ~r),
     @acrule(sin(~x)^2 + -1        => -1*cos(~x)^2),
     @acrule(cos(~x)^2 + -1        => -1*sin(~x)^2),
 

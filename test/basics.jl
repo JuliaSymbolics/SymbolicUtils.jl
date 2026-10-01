@@ -1053,6 +1053,56 @@ end
     end
 end
 
+# Helpers for the Issue#1079 regression test below.
+has_float64(x) = begin
+    x isa AbstractFloat && return true
+    x isa SymbolicUtils.BasicSymbolic || return false
+    if SymbolicUtils.iscall(x)
+        return any(has_float64, SymbolicUtils.arguments(x))
+    end
+    return SymbolicUtils.unwrap_const(x) isa AbstractFloat
+end
+
+eval_num(x) = begin
+    x isa SymbolicUtils.BasicSymbolic || return Float64(x)
+    if !SymbolicUtils.iscall(x)
+        return Float64(SymbolicUtils.unwrap_const(x))
+    end
+    op = SymbolicUtils.operation(x)
+    args = SymbolicUtils.arguments(x)
+    op === (+) && return sum(eval_num, args)
+    op === (*) && return prod(eval_num, args)
+    op === (^) && return eval_num(args[1]) ^ eval_num(args[2])
+    op === (sqrt) && return sqrt(eval_num(args[1]))
+    return Float64(SymbolicUtils.unwrap_const(x))
+end
+
+@testset "Issue#1079: simplify preserves exact sqrt terms" begin
+    @syms x y
+    s = term(sqrt, 2)
+    # `simplify` must not fold exact `sqrt` terms into `Float64`.
+    @test unwrap_const(simplify(s^2)) === 2
+    @test unwrap_const(simplify(s^4)) === 4
+    @test unwrap_const(simplify(s * s)) === 2
+    @test isequal(simplify(2s), 2s)
+    @test !has_float64(simplify((s * term(sqrt, 3))^2))
+    # Odd powers already stayed symbolic; keep them exact.
+    @test isequal(simplify(s^3), s^3)
+    # Cases that already worked must remain exact.
+    @test iszero(unwrap_const(simplify(s - s)))
+    @test isone(unwrap_const(simplify(s / s)))
+    # Fractional powers of symbolic radicands preserve their exact identities.
+    @test isequal(sqrt(x)^(2 // 3), x^(1 // 3))
+    @test unwrap_const(simplify(cbrt(x)^(3 // 2) - sqrt(x))) === 0
+    @test unwrap_const(simplify(sqrt(x)^(2 // 3) - x^(1 // 3))) === 0
+    @test unwrap_const(simplify(sqrt(x)^(4 // 3) - x^(2 // 3))) === 0
+    @test unwrap_const(simplify(sqrt(x + y)^(2 // 3) - (x + y)^(1 // 3))) === 0
+    # The results are mathematically equal to the inputs (checked numerically).
+    for e in (2s, s^2, s^4, s * s, (s * term(sqrt, 3))^2)
+        @test isapprox(eval_num(simplify(e)), eval_num(e))
+    end
+end
+
 @testset "isequal" begin
     @syms a b c
     @test isequal(a + b, a + b + 0.01 - 0.01)
@@ -1098,6 +1148,47 @@ end
     @test unwrap_const(x/3x) == 1//3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)
+end
+
+# https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1101
+@testset "Exact coefficient powers don't overflow" begin
+    @syms x y c
+    typed_coeff(ex) = (k = get_mul_coefficient(ex); (typeof(k), k))
+    big_rat = (Rational{BigInt}, 1 // big(30555)^7)
+    @test typed_coeff(((x * y) / 30555.0)^7) == big_rat
+    @test typed_coeff(substitute((x * y / c)^7, Dict(c => 30555.0))) == big_rat
+    @test isequal(substitute((x * y / c)^7, Dict(c => 30555.0)), ((x * y) / 30555.0)^7)
+    @test typed_coeff(((x * y) / 30555)^7) == big_rat
+    @test isequal(((x * y) / 30555)^7, (1 // big(30555)^7) * x^7 * y^7)
+    @test typed_coeff((30555 * x * y)^7) == (BigInt, big(30555)^7)
+    @test typed_coeff((-30555 * x * y)^7) == (BigInt, -big(30555)^7)
+    @test typed_coeff((3x * y)^40) == (BigInt, big(3)^40)
+    @test typed_coeff(((2 + 3im) * x * y)^40) == (Complex{BigInt}, big(2 + 3im)^40)
+    @test typed_coeff(((1 // 3 + (1 // 5)im) * x * y)^20) ==
+        (Complex{Rational{BigInt}}, (big(1) // 3 + (big(1) // 5)im)^20)
+
+    @syms p q vartype = SafeReal
+    @test typed_coeff(((p * q) / 30555.0)^7) == big_rat
+end
+
+@testset "Exact coefficient powers that fit keep their type" begin
+    @syms x y
+    typed_coeff(ex) = (k = get_mul_coefficient(ex); (typeof(k), k))
+    @test get_mul_coefficient((x * y) / 30555.0) === 1 // 30555
+    @test get_mul_coefficient(((x * y) / 30555)^2) === 1 // 30555^2
+    @test get_mul_coefficient((3x * y)^5) === 243
+    # the largest power of 3 that fits `Int`, past the fast-path bound
+    k = Sys.WORD_SIZE == 64 ? 39 : 19
+    @test get_mul_coefficient((3x * y)^k) === 3^k
+    @test get_mul_coefficient(((1 // 3) * x * y)^k) === 1 // 3^k
+    @test get_mul_coefficient(((2 // 3) * x * y)^3) === 8 // 27
+    @test get_mul_coefficient(((2 + 1im) * x * y)^2) === 3 + 4im
+    @test get_mul_coefficient((im * x * y)^2) === -1 + 0im
+    @test get_mul_coefficient((-x * y)^3) === -1
+    @test get_mul_coefficient((2.0 * x * y)^7) === 128.0
+    @test typed_coeff((3x * y)^big(2)) == (BigInt, 9)
+    @test typed_coeff((big(3) * x * y)^2) == (BigInt, 9)
+    @test typed_coeff(((big(1) // 3) * x * y)^2) == (Rational{BigInt}, 1 // 9)
 end
 
 @testset "mul worker buffer is reentrancy-safe" begin
@@ -1240,6 +1331,18 @@ end
         truth = v[idxs[1:ndims(v)]...]
         @test isequal(el, truth)
     end
+    # An empty `StableIndex` on a non-0-dim array-typed symbolic returns the
+    # symbolic itself; element extraction only applies to 0-dim arrays.
+    for (name, T, sh) in (
+            (:vec_sym, Vector{Real}, SymbolicUtils.Unknown(1)),
+            (:mat_sym, Matrix{Real}, SymbolicUtils.Unknown(2)),
+            (:scalar_shaped_vec, Vector{Real}, ShapeVecT()),
+        )
+        arr = Sym{SymbolicUtils.SymReal}(name; type = T, shape = sh)
+        @test isequal(arr[SymbolicUtils.StableIndex(Int[])], arr)
+    end
+    zerodim_sym = Sym{SymbolicUtils.SymReal}(:zerodim_sym; type = Array{Real, 0}, shape = ShapeVecT())
+    @test symtype(zerodim_sym[SymbolicUtils.StableIndex(Int[])]) == Real
 end
 
 @testset "`StableIndex{Int}(::BasicSymbolic)`" begin

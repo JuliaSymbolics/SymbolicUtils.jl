@@ -1,6 +1,6 @@
 name = "SymbolicUtils"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
-version = "4.48.0"
+version = "4.49.0"
 authors = ["Shashi Gowda"]
 
 [deps]
@@ -64,7 +64,7 @@ Graphs = "1.13.4"
 LabelledArrays = "1.5"
 LinearAlgebra = "1"
 MacroTools = "0.5.16"
-Moshi = "0.3.6 - 0.3.9"
+Moshi = "0.3.6 - 0.3.9, 0.3.13"
 MultivariatePolynomials = "0.5.12"
 MutableArithmetics = "1.6.5"
 NaNMath = "0.3, 1.1.2"
@@ -95,6 +95,7 @@ julia = "1.10"
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
@@ -110,4 +111,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["BenchmarkTools", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "SafeTestsets", "Test", "Zygote", "OhMyThreads", "RuntimeGeneratedFunctions", "StaticArrays"]
+test = ["BenchmarkTools", "ChainRulesCore", "Documenter", "LabelledArrays", "Pkg", "PkgBenchmark", "Random", "ReferenceTests", "ReverseDiff", "SafeTestsets", "Test", "Zygote", "OhMyThreads", "RuntimeGeneratedFunctions", "StaticArrays"]

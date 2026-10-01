@@ -20,7 +20,32 @@ include("utils.jl")
 end
 
 @testset "Numeric" begin
-    @syms a::Integer b c d x::Real y::Number
+    @syms a::Integer b c d x::Real y::Number z
+    # Integral-rational normalization must work when rational forms are interned
+    # first (no prior Int coeff/exponent for these shapes in the hash-cons cache).
+    has_integral_rational(ex) = !SymbolicUtils.iscall(ex) ?
+        (unwrap_const(ex) isa Rational && denominator(unwrap_const(ex)) == 1) :
+        any(has_integral_rational, arguments(ex))
+    @test unwrap_const(simplify(1 // 1)) === 1
+    integral_rational_sum = simplify((1 // 1) + x)
+    @test any(arg -> unwrap_const(arg) === 1, arguments(integral_rational_sum))
+    @test unwrap_const(last(arguments(simplify(x^(2 // 1))))) === 2
+    fractional_rational_sum = simplify((1 // 2) + x)
+    @test any(arg -> unwrap_const(arg) === 1 // 2, arguments(fractional_rational_sum))
+    rational_coefficients = simplify((2 // 1) * x + (3 // 1) * y)
+    @test !has_integral_rational(rational_coefficients)
+    @test isequal(2 * x, (2 // 1) * x) # non-full isequal still ignores coeff type
+    @test !has_integral_rational(simplify(x^(2 // 1) * y))
+    @test isequal(simplify(x^(2 // 1) * y), x^2 * y)
+    @test !has_integral_rational(simplify(sin((2 // 1) * x + (3 // 1) * y)))
+    @test !has_integral_rational(simplify(((2 // 1) * x + y) / z))
+    @test !has_integral_rational(simplify(x^(1 // 2) * x^(3 // 2) * y + z))
+    @syms A[1:2]
+    @test !has_integral_rational(simplify((2 // 1) * A[1] + A[2]))
+    @test !has_integral_rational(simplify((1 // 1) + x; rewriter = Rewriters.Empty()))
+    typed_term = Term{SymReal}(identity, [x, 2 // 1]; type = Complex{Float64})
+    @test SymbolicUtils.symtype(simplify(typed_term)) === Complex{Float64}
+
     @eqtest simplify(Term{SymReal}(conj, [x]; type = Real)) == x
     @eqtest simplify(Term{SymReal}(real, [x]; type = Real)) == x
     @eqtest unwrap_const(simplify(Term{SymReal}(imag, [x]; type = Real))) == 0
@@ -103,6 +128,13 @@ end
     @test unwrap_const(simplify(cos(y)^2 + 1 + sin(y)^2)) == 2
     @test unwrap_const(simplify(sin(y)^2 + cos(y)^2 + 1)) == 2
 
+    # Coefficient -1 distributes into Add, so factoring through r*(sin^2+cos^2)
+    # never sees the unscaled sum; the direct scaled Pythagorean rule covers it.
+    @test unwrap_const(simplify(-sin(x)^2 - cos(x)^2)) == -1
+    @test unwrap_const(simplify(-(sin(x)^2 + cos(x)^2))) == -1
+    @eqtest simplify(y - sin(x)^2 - cos(x)^2) == y - 1
+    @test unwrap_const(simplify(-2sin(x)^2 - 2cos(x)^2)) == -2
+
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
@@ -146,6 +178,13 @@ end
     @eqtest simplify((a^2.0)^(1//2)) == abs(a)
     @eqtest simplify((b^2.0)^(1/2)) == abs(b)
 
+    # log/exp inverses — https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1047
+    @eqtest simplify(log(exp(a))) == a
+    @eqtest simplify(exp(log(a))) == a
+    @syms z  # unrestricted (Number), not Real
+    @eqtest simplify(log(exp(z))) == log(exp(z))  # branch cuts: do not cancel
+    @eqtest simplify(exp(log(z))) == z
+
 end
 
 @testset "simplify_fractions" begin
@@ -175,21 +214,29 @@ pred(x) = error("Fail")
     @test sprint(io -> Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
 end
 
-# @testset "Threading" begin
-#     @syms a b c d
-#     ex = (((0.6666666666666666 / (c / 1)) + ((1 * a) / (c / 1))) +
-#           (1.0 / (((1 * d) / (1 + b)) * (1 / b)))) +
-#          ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
-#           ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
-#     @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
-#     @test SymbolicUtils.node_count(a + b * c / d) == 7
-# end
+@testset "Threaded simplify with getindex (#856)" begin
+    # Regression: threaded Walk must keep the original node when the rewriter
+    # returns `nothing`, matching the serial Walk. Otherwise Const{nothing} is
+    # spliced into parent args and rebuilding a getindex term MethodErrors.
+    # Reduced from issue #856 (Symbolics `@variables` / `~` equation form).
+    @syms T[1:2] Ca[1:2] CO3[1:2] Ω[1:2]
+    @syms atmtoPa aspₐ bsp csp dsp rsp sal_val pressure
+    eq = Ω[2] - (Ca[2] * CO3[2] * exp((-atmtoPa * (aspₐ - bsp * (T[2])) * pressure +
+                                        (atmtoPa^2) * (csp - dsp * (T[2])) * (pressure^2)) /
+                                       (rsp * (T[2])))) /
+                (1.5 * exp(316.9463 + sqrt(sal_val) * (1.6233 + -118.64 / (T[2])) -
+                           0.06999 * sal_val - 48.7537 * log((T[2])) + -13348.09 / (T[2])))
+    serial = simplify(eq; expand=false, threaded=false)
+    threaded = simplify(eq; expand=false, threaded=true)
+    @eqtest serial == threaded
+end
 
 _g(y) = sin
 @testset "interpolation" begin
     @syms a
 
-    @test isnothing(@rule(_g(1)(a) => 2)(sin(a)))
+    # Computed heads with no slots are evaluated (same as `$`-interpolation).
+    @test @rule(_g(1)(a) => 2)(sin(a)) == 2
     @test @rule($(_g(1))(a) => 2)(sin(a)) == 2
 end
 

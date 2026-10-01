@@ -140,6 +140,21 @@ end
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 
+    # tan²−sec² = −1 and cot²−csc² = −1 (not +1)
+    @test unwrap_const(simplify(tan(x)^2 - sec(x)^2)) == -1
+    @test unwrap_const(simplify(sec(x)^2 - tan(x)^2)) == 1
+    @test unwrap_const(simplify(cot(x)^2 - csc(x)^2)) == -1
+    seed!(1131)
+    for _ in 1:20
+        t = 2π * rand()
+        abs(cos(t)) < 0.2 && continue
+        abs(sin(t)) < 0.2 && continue
+        @test Float64(unwrap_const(substitute(simplify(tan(x)^2 - sec(x)^2), Dict(x => t)))) ≈
+              (tan(t)^2 - sec(t)^2) atol=1e-10
+        @test Float64(unwrap_const(substitute(simplify(cot(x)^2 - csc(x)^2), Dict(x => t)))) ≈
+              (cot(t)^2 - csc(t)^2) atol=1e-10
+    end
+
     @eqtest unwrap_const(simplify(cosh(x)^2 + 1 - sinh(x)^2)) == 2
     @eqtest unwrap_const(simplify(cosh(y)^2 + 1 - sinh(y)^2)) == 2
     @eqtest unwrap_const(simplify(-sinh(y)^2 + cosh(y)^2 + 1)) == 2

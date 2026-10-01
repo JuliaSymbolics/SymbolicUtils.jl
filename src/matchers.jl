@@ -25,6 +25,7 @@ function ac_bindings_key(binds::ImmutableDict{Symbol, Any})
     vs = Any[]
     for (k, v) in binds
         k === :____ && continue
+        k === COMM_BT_COUNTER && continue
         push!(ks, k)
         push!(vs, canonicalize_ac_bind(v))
     end
@@ -225,8 +226,10 @@ function term_matcher_constructor(term, acSets)
                     # Fixed-arity depth-2 backtracking (arity ≤ COMM_BACKTRACK_LIMIT):
                     # a local match may bind slots that later fail in the
                     # continuation; try other permutations. Deduplicate by raw
-                    # binding values (segment order preserved).
+                    # binding values (segment order preserved). Cap total
+                    # continuation attempts per top-level match via COMM_BACKTRACK_BUDGET.
                     tried = nothing
+                    bt = get(bindings, COMM_BT_COUNTER, nothing)
                     for inds in acSets(eachindex(data_args), length(data_args))
                         candidate = Term{T}(f, @views data_args[inds]; type = ST)
                         result = loop(candidate, bindings, matchers)
@@ -238,6 +241,13 @@ function term_matcher_constructor(term, acSets)
                                 continue
                             end
                             push!(tried, key)
+                            if bt isa Ref{Int}
+                                bt[] += 1
+                                if bt[] > COMM_BACKTRACK_BUDGET[]
+                                    # Budget exhausted: first-match for this attempt, stop.
+                                    return success(result, 1)
+                                end
+                            end
                             r = success(result, 1)
                             r !== nothing && return r
                         end

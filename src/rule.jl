@@ -1,9 +1,15 @@
 
 @inline alwaystrue(x) = true
 const COMM_CHECKS_LIMIT = Ref(10)
-# Max arity for fixed-arity commutative backtracking. Above this, use first-match
-# only (as for larger terms). 5! = 120, so at most ~5!·5! continuation attempts.
+# Max arity for fixed-arity commutative backtracking. Above this, use first-match.
 const COMM_BACKTRACK_LIMIT = Ref(5)
+# Max backtracking continuation attempts per top-level rule application.
+# Shared across all nested commutative nodes in that match; once exhausted,
+# further nodes use first-match. Caps cost for rules with many sibling products
+# (otherwise ~(a!)^k for k products of arity a).
+const COMM_BACKTRACK_BUDGET = Ref(50000)
+# Internal bindings key holding a Ref{Int} attempt counter for the budget above.
+const COMM_BT_COUNTER = Symbol("##comm_bt_counter##")
 
 # Matcher patterns with Slot, DefSlot and Segment
 
@@ -271,13 +277,18 @@ end
 
 const EMPTY_IMMUTABLE_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 
+@inline function fresh_match_bindings()
+    # Mutable counter shared across nested commutative matchers for one rule call.
+    ImmutableDict{Symbol, Any}(EMPTY_IMMUTABLE_DICT, COMM_BT_COUNTER, Ref(0))
+end
+
 function (r::Rule)(term)
     rhs = r.rhs
 
     try
         # n == 1 means that exactly one term of the input (term,) was matched
         success(bindings, n) = n == 1 ? (rhs(assoc(bindings, :MATCH, term))) : nothing
-        return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
+        return r.matcher(success, (term,), fresh_match_bindings())
     catch err
         throw(RuleRewriteError(r, term))
     end

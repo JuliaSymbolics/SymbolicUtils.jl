@@ -122,6 +122,21 @@ end
     @test t < 60
 end
 
+# Several sibling fixed-arity products: backtracking budget must keep failure cheap.
+@testset "AC multi-product failing match stays bounded" begin
+    @syms G(..)::Real z
+    xs = ntuple(i -> SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol(:p1_, i); type = Number), 5)
+    ys = ntuple(i -> SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol(:p2_, i); type = Number), 5)
+    zs = ntuple(i -> SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol(:p3_, i); type = Number), 5)
+    rule = @rule ~a*~b*~c*~d*~e + ~f*~g*~h*~i*~j + ~k*~l*~m*~n*~o + G(~a) => ~a
+    ex = *(xs...) + *(ys...) + *(zs...) + G(z)
+    rule(ex) # warmup
+    t = @elapsed r = rule(ex)
+    @test r === nothing
+    # Generous bound: with COMM_BACKTRACK_BUDGET this is well under 1s when quiet.
+    @test t < 30
+end
+
 @testset "Slot matcher with default value" begin
     r_sum = @rule (~x + ~!y)^2 => ~y
     @test r_sum((a + b)^2) in Set([a, b])

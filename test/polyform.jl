@@ -237,8 +237,12 @@ end
 
 @testset "simplify cancels BigInt coefficients beyond typemax(Int) (#1111)" begin
     @syms x
+    # Issue MWE: 10^19 exceeds typemax(Int) on both 32- and 64-bit.
     a = big(10)^19
-    b = big(10)^18
+    # Safe side of the gate must be derived from typemax(Int): on x86
+    # (Int32) big(10)^18 is already past the bound, so hard-coding 10^18
+    # made `@test safe_isinteger(b)` fail in CI's 32-bit job.
+    b = big(typemax(Int)) ÷ 2
     @test !SymbolicUtils.safe_isinteger(a)
     @test SymbolicUtils.safe_isinteger(b)
     @eqtest simplify((a * x + a) / (a * x)) == (1 + x) / x

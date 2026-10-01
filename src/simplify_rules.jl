@@ -86,10 +86,13 @@ const TRIG_EXP_RULES = (
     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x)),
     @acrule(sin(~x)^2 + -1        => -1*cos(~x)^2),
     @acrule(cos(~x)^2 + -1        => -1*sin(~x)^2),
-    # a - a*trig²(x): one rule each. Same-slot (~a + -1*~a*…) misses flattened
-    # numeric coeffs (2+(-2)*cos²); ~~b absorbs both that and symbolic factors.
-    @acrule(~a + *(~~b, cos(~x)^2) => (!isempty(~~b) && _iszero(~a + *(~~b...))) ? ~a*sin(~x)^2 : nothing),
-    @acrule(~a + *(~~b, sin(~x)^2) => (!isempty(~~b) && _iszero(~a + *(~~b...))) ? ~a*cos(~x)^2 : nothing),
+    # a - a*trig²(x). Same-slot alone misses flattened 2+(-2)*cos²; unconstrained
+    # segment ~~b is too slow on large sums. Literal two-slot + same-slot only.
+    # ~a::(!has_trig_exp) cuts AC attempts that bind ~a to a trig term.
+    @acrule(~a::is_literal_number + ~b::is_literal_number*cos(~x)^2 => _literal_negates(~a, ~b) ? ~a*sin(~x)^2 : nothing),
+    @acrule(~a::(!has_trig_exp) + -1*~a*cos(~x)^2 => ~a*sin(~x)^2),
+    @acrule(~a::is_literal_number + ~b::is_literal_number*sin(~x)^2 => _literal_negates(~a, ~b) ? ~a*cos(~x)^2 : nothing),
+    @acrule(~a::(!has_trig_exp) + -1*~a*sin(~x)^2 => ~a*cos(~x)^2),
 
     @acrule(cos(~x)^2 + -1*sin(~x)^2 => cos(2 * ~x)),
     @acrule(sin(~x)^2 + -1*cos(~x)^2 => -cos(2 * ~x)),
@@ -107,8 +110,6 @@ const TRIG_EXP_RULES = (
     @acrule(cosh(~x)^2 + -1*sinh(~x)^2 => one(~x)),
     @acrule(cosh(~x)^2 + -1            => sinh(~x)^2),
     @acrule(sinh(~x)^2 +  1            => cosh(~x)^2),
-    @acrule(~a + *(~~b, cosh(~x)^2) => (!isempty(~~b) && _iszero(~a + *(~~b...))) ? -(~a)*sinh(~x)^2 : nothing),
-    @acrule(~a + *(~~b, sinh(~x)^2) => (!isempty(~~b) && _iszero(~a - *(~~b...))) ? ~a*cosh(~x)^2 : nothing),
 
     @acrule(cosh(~x)^2 + sinh(~x)^2 => cosh(2 * ~x)),
     @acrule(cosh(~x) * sinh(~x) => sinh(2 * ~x)/2),

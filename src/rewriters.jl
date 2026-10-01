@@ -425,7 +425,7 @@ function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M,
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
-            x = p.rw(x)
+            x = Const{T}(@something(p.rw(x), x))
         end
         if iscall(x) && p.filter(x)
             args = arguments(x)::ROArgsT{T}
@@ -454,9 +454,9 @@ function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M,
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))
             end
         end
-        return ord === :post ? Const{T}(p.rw(x)) : x
+        return ord === :post ? Const{T}(@something(p.rw(x), x)) : x
     else
-        return Const{T}(p.rw(x))
+        return Const{T}(@something(p.rw(x), x))
     end
 end
 

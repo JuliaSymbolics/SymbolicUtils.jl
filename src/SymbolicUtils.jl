@@ -24,7 +24,7 @@ using SymbolicIndexingInterface: ArraySymbolic, NotSymbolic, ScalarSymbolic, get
                                  symbolic_type
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 import ConstructionBase
-import TermInterface: iscall, operation, arguments, metadata, maketerm, sorted_arguments
+import TermInterface: children, iscall, isexpr, head, operation, arguments, metadata, maketerm, sorted_arguments, sorted_children
 import DataStructures: OrderedDict, OrderedSet
 import OrderedCollections
 # For ReverseDiffExt

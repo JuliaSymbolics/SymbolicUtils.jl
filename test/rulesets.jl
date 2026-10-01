@@ -203,7 +203,8 @@ _g(y) = sin
 @testset "interpolation" begin
     @syms a
 
-    @test isnothing(@rule(_g(1)(a) => 2)(sin(a)))
+    # Computed heads with no slots are evaluated (same as `$`-interpolation).
+    @test @rule(_g(1)(a) => 2)(sin(a)) == 2
     @test @rule($(_g(1))(a) => 2)(sin(a)) == 2
 end
 

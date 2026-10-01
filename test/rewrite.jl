@@ -278,3 +278,17 @@ end
     @test r(ex1) === a
     @test r(ex2) === nothing
 end
+
+@testset "nested symbolic function call heads" begin
+    @syms g(x)::Any a
+    gg = Term{SymReal}(Term{SymReal}(g(1), Any[2]; type = Any), Any[a]; type = Number)
+    r = @rule g(1)(2)(~y) => ~y
+    @test r(gg) === a
+    @test r(Term{SymReal}(Term{SymReal}(g(1), Any[3]; type = Any), Any[a]; type = Number)) === nothing
+
+    k = 1
+    k2 = 2
+    r2 = @rule g($k)($k2)(~y) => ~y
+    @test r2(gg) === a
+    @test r2(Term{SymReal}(Term{SymReal}(g(1), Any[3]; type = Any), Any[a]; type = Number)) === nothing
+end

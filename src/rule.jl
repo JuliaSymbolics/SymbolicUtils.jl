@@ -3,13 +3,17 @@
 const COMM_CHECKS_LIMIT = Ref(10)
 # Max arity for fixed-arity commutative backtracking. Above this, use first-match.
 const COMM_BACKTRACK_LIMIT = Ref(5)
-# Max backtracking continuation attempts per top-level rule application.
-# Shared across all nested commutative nodes in that match; once exhausted,
-# further nodes use first-match. Caps cost for rules with many sibling products
-# (otherwise ~(a!)^k for k products of arity a).
-const COMM_BACKTRACK_BUDGET = Ref(50000)
-# Internal bindings key holding a Ref{Int} attempt counter for the budget above.
-const COMM_BT_COUNTER = Symbol("##comm_bt_counter##")
+# Shared per-top-level-rule work meter: each candidate `loop` call in
+# commutative_term_matcher increments this (segment/first-match and backtracking
+# branches). Backtracking stops once the count exceeds the budget; the
+# segment/first-match branch only counts and never stops. This bounds how many
+# local-match attempts (including ticks inside continuations such as n! segment
+# searches) may be spent on backtracking before falling back to first-match; it
+# does not abort an in-flight first-match/segment enumeration. Value tuned so
+# fixed+segment failing matches stay within ~3× of master on the segcont probes
+# while depth-2 #586 cases still succeed.
+const COMM_BACKTRACK_BUDGET = Ref(2000)
+const COMM_BT_USED = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
 
 # Matcher patterns with Slot, DefSlot and Segment
 
@@ -277,18 +281,15 @@ end
 
 const EMPTY_IMMUTABLE_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 
-@inline function fresh_match_bindings()
-    # Mutable counter shared across nested commutative matchers for one rule call.
-    ImmutableDict{Symbol, Any}(EMPTY_IMMUTABLE_DICT, COMM_BT_COUNTER, Ref(0))
-end
-
 function (r::Rule)(term)
     rhs = r.rhs
 
     try
+        # Reset work meter for this top-level match (TaskLocal, not in bindings).
+        COMM_BT_USED[][] = 0
         # n == 1 means that exactly one term of the input (term,) was matched
         success(bindings, n) = n == 1 ? (rhs(assoc(bindings, :MATCH, term))) : nothing
-        return r.matcher(success, (term,), fresh_match_bindings())
+        return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
     catch err
         throw(RuleRewriteError(r, term))
     end

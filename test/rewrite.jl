@@ -137,6 +137,23 @@ end
     @test t < 30
 end
 
+# Fixed-arity product + failing segment siblings: work meter must bound cost.
+@testset "AC fixed+segment failing match stays bounded" begin
+    @syms G(..)::Real z
+    S(s) = SymbolicUtils.Sym{SymbolicUtils.SymReal}(s; type = Number)
+    us = [S(Symbol(:u, i)) for i in 1:5]
+    ps = [S(Symbol(:p, i)) for i in 1:5]
+    vs = [S(Symbol(:v, i)) for i in 1:7]
+    ws = [S(Symbol(:w, i)) for i in 1:7]
+    rule = @rule ~s1_1*~s1_2*~s1_3*~s1_4*~s1_5 + ~s2_1*~s2_2*~s2_3*~s2_4*~s2_5 + *(~α, ~~x) + *(~β, ~~x) + G(~s1_1) => ~s1_1
+    ex = prod(us) + prod(ps) + prod(vs) + prod(ws) + G(z)
+    rule(ex) # warmup
+    t = @elapsed r = rule(ex)
+    @test r === nothing
+    # Generous bound for CI load; quiet-machine time should be near master (~0.2s).
+    @test t < 30
+end
+
 @testset "Slot matcher with default value" begin
     r_sum = @rule (~x + ~!y)^2 => ~y
     @test r_sum((a + b)^2) in Set([a, b])

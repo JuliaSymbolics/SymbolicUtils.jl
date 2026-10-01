@@ -25,12 +25,20 @@ function ac_bindings_key(binds::ImmutableDict{Symbol, Any})
     vs = Any[]
     for (k, v) in binds
         k === :____ && continue
-        k === COMM_BT_COUNTER && continue
         push!(ks, k)
         push!(vs, canonicalize_ac_bind(v))
     end
     p = sortperm(ks)
     return (ntuple(i -> ks[p[i]], length(ks)), ntuple(i -> vs[p[i]], length(vs)))
+end
+
+@inline function _comm_bt_tick!()
+    COMM_BT_USED[][] += 1
+    nothing
+end
+
+@inline function _comm_bt_over_budget()
+    COMM_BT_USED[][] > COMM_BACKTRACK_BUDGET[]
 end
 
 function matcher(val::Any, acSets)
@@ -215,23 +223,22 @@ function term_matcher_constructor(term, acSets)
             ST = symtype(data)
             if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
                 if has_segment || length(data_args) > COMM_BACKTRACK_LIMIT[]
-                    # First local match wins. Segment patterns and high-arity
-                    # fixed-arity patterns otherwise cost ~(n!)^2 on failure.
+                    # First local match wins. Meter every candidate loop toward
+                    # COMM_BACKTRACK_BUDGET (never stop here — only count).
                     for inds in acSets(eachindex(data_args), length(data_args))
                         candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                        _comm_bt_tick!()
                         result = loop(candidate, bindings, matchers)
                         result !== nothing && return success(result, 1)
                     end
                 else
-                    # Fixed-arity depth-2 backtracking (arity ≤ COMM_BACKTRACK_LIMIT):
-                    # a local match may bind slots that later fail in the
-                    # continuation; try other permutations. Deduplicate by raw
-                    # binding values (segment order preserved). Cap total
-                    # continuation attempts per top-level match via COMM_BACKTRACK_BUDGET.
+                    # Fixed-arity depth-2 backtracking (arity ≤ COMM_BACKTRACK_LIMIT).
+                    # Meter every candidate loop; once over COMM_BACKTRACK_BUDGET,
+                    # fall back to first-match for this node.
                     tried = nothing
-                    bt = get(bindings, COMM_BT_COUNTER, nothing)
                     for inds in acSets(eachindex(data_args), length(data_args))
                         candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                        _comm_bt_tick!()
                         result = loop(candidate, bindings, matchers)
                         if result !== nothing
                             key = ac_bindings_key(result)
@@ -241,12 +248,8 @@ function term_matcher_constructor(term, acSets)
                                 continue
                             end
                             push!(tried, key)
-                            if bt isa Ref{Int}
-                                bt[] += 1
-                                if bt[] > COMM_BACKTRACK_BUDGET[]
-                                    # Budget exhausted: first-match for this attempt, stop.
-                                    return success(result, 1)
-                                end
+                            if _comm_bt_over_budget()
+                                return success(result, 1)
                             end
                             r = success(result, 1)
                             r !== nothing && return r

@@ -1256,10 +1256,9 @@ end
 end
 
 @testset "batched ArrayMaker/array_literal uses convert for eltype" begin
-    # Batched writes used to emit `eltype(buffer)(value)`. For abstract eltypes that has
-    # no constructors; for one-field parametric wrappers `T(v)` converts into the field
-    # type. `convert(T, v)` is the identity when `v isa T` and still converts numerics,
-    # matching `setindex!` / the `fill_arr!` path (size ≤ FILL_ARR_LIMIT).
+    # Batched writes must use `convert(eltype(buffer), v)` (as `setindex!`/`fill_arr!`
+    # do); `T(v)` fails for abstract eltypes and converts one-field wrappers into their
+    # field type.
     struct Wrap{T}
         x::T
     end
@@ -1268,95 +1267,71 @@ end
         x::Float64
     end
 
-    function maker17(sym)
-        return @makearray m[1:17] begin
-            m[1:1] => Const{SymReal}([sym[1]])
-            m[2:2] => Const{SymReal}([sym[2]])
-            m[3:3] => Const{SymReal}([sym[3]])
-            m[4:4] => Const{SymReal}([sym[4]])
-            m[5:5] => Const{SymReal}([sym[5]])
-            m[6:6] => Const{SymReal}([sym[6]])
-            m[7:7] => Const{SymReal}([sym[7]])
-            m[8:8] => Const{SymReal}([sym[8]])
-            m[9:9] => Const{SymReal}([sym[9]])
-            m[10:10] => Const{SymReal}([sym[10]])
-            m[11:11] => Const{SymReal}([sym[11]])
-            m[12:12] => Const{SymReal}([sym[12]])
-            m[13:13] => Const{SymReal}([sym[13]])
-            m[14:14] => Const{SymReal}([sym[14]])
-            m[15:15] => Const{SymReal}([sym[15]])
-            m[16:16] => Const{SymReal}([sym[16]])
-            m[17:17] => Const{SymReal}([sym[17]])
+    function scalar_region_arraymaker(sym, N::Int)
+        regions = SymbolicUtils.RegionsT([SymbolicUtils.ShapeVecT((i:i,)) for i in 1:N])
+        values = [Const{SymReal}([sym[i]]) for i in 1:N]
+        return SymbolicUtils.ArrayMaker{SymReal}(
+            regions, values; shape = SymbolicUtils.ShapeVecT((1:N,))
+        )
+    end
+
+    function codegen_into!(expr, buf)
+        returns_alloc = SymbolicUtils.Term{SymReal}(Returns{SymReal}, (buf,))
+        return Code.fast_toexpr(
+            expr, Dict{Any, Any}(Code.ALLOCATOR_REWRITES_KEY => returns_alloc)
+        )
+    end
+
+    function expr_calls(ex, target)
+        tname = target isa Symbol ? target : nameof(target)
+        if ex isa Expr
+            if ex.head === :call
+                f = ex.args[1]
+                f === target && return true
+                f isa GlobalRef && f.name === tname && return true
+                f isa Symbol && f === tname && return true
+            end
+            return any(a -> expr_calls(a, target), ex.args)
         end
+        return false
+    end
+
+    function eval_codegen(code, bindings::NamedTuple)
+        assigns = Expr(:block)
+        for (k, v) in pairs(bindings)
+            push!(assigns.args, Expr(:(=), k, v))
+        end
+        return eval(Expr(:let, assigns, code))
     end
 
     @testset "parametric wrapper eltype via ArrayMaker" begin
         @syms (w::Wrap{Float64})[1:17]
         @syms buf[1:17]::Wrap{Float64}
-        expr = Code.fast_toexpr(
-            maker17(w),
-            Dict{Any, Any}(
-                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
-                    Returns{SymReal}, (buf,)
-                )
-            )
-        )
-        @test occursin("convert", string(expr))
+        code = codegen_into!(scalar_region_arraymaker(w, 17), buf)
+        @test expr_calls(code, convert)
         ws = [Wrap(Float64(i)) for i in 1:17]
         bufv = Vector{Wrap{Float64}}(undef, 17)
-        result = eval(
-            quote
-                let w = $ws, buf = $bufv
-                    $expr
-                end
-            end
-        )
-        @test result == ws
+        @test eval_codegen(code, (; w = ws, buf = bufv)) == ws
     end
 
     @testset "abstract eltype via ArrayMaker" begin
         @syms (a::AbstractWrap)[1:17]
         @syms bufa[1:17]::AbstractWrap
-        expr = Code.fast_toexpr(
-            maker17(a),
-            Dict{Any, Any}(
-                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
-                    Returns{SymReal}, (bufa,)
-                )
-            )
-        )
+        code = codegen_into!(scalar_region_arraymaker(a, 17), bufa)
+        @test expr_calls(code, convert)
         as = AbstractWrap[ConcreteWrap(Float64(i)) for i in 1:17]
         bufav = Vector{AbstractWrap}(undef, 17)
-        result = eval(
-            quote
-                let a = $as, bufa = $bufav
-                    $expr
-                end
-            end
-        )
-        @test result == as
+        @test eval_codegen(code, (; a = as, bufa = bufav)) == as
     end
 
     @testset "Int values still convert into Float64 buffer" begin
         @syms xi[1:17]::Int
         @syms bufi[1:17]::Float64
-        expr = Code.fast_toexpr(
-            maker17(xi),
-            Dict{Any, Any}(
-                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
-                    Returns{SymReal}, (bufi,)
-                )
-            )
-        )
+        code = codegen_into!(scalar_region_arraymaker(xi, 17), bufi)
+        @test expr_calls(code, convert)
         xis = collect(1:17)
         bufiv = Vector{Float64}(undef, 17)
-        result = eval(
-            quote
-                let xi = $xis, bufi = $bufiv
-                    $expr
-                end
-            end
-        )
+        result = eval_codegen(code, (; xi = xis, bufi = bufiv))
         @test result == Float64.(xis)
         @test eltype(result) === Float64
     end
@@ -1365,67 +1340,23 @@ end
         @syms (w::Wrap{Float64})[1:17]
         @syms buf[1:17]::Wrap{Float64}
         arr = Const{SymReal}([w[i] for i in 1:17])
-        expr = Code.fast_toexpr(
-            arr,
-            Dict{Any, Any}(
-                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
-                    Returns{SymReal}, (buf,)
-                )
-            )
-        )
-        @test occursin("convert", string(expr))
+        code = codegen_into!(arr, buf)
+        @test expr_calls(code, convert)
         ws = [Wrap(Float64(i)) for i in 1:17]
         bufv = Vector{Wrap{Float64}}(undef, 17)
-        eval(
-            quote
-                let w = $ws, buf = $bufv
-                    $expr
-                end
-            end
-        )
+        eval_codegen(code, (; w = ws, buf = bufv))
         @test bufv == ws
     end
 
     @testset "fill_arr! path (N ≤ FILL_ARR_LIMIT) still agrees" begin
         @syms (w::Wrap{Float64})[1:16]
         @syms buf[1:16]::Wrap{Float64}
-        maker = @makearray m[1:16] begin
-            m[1:1] => Const{SymReal}([w[1]])
-            m[2:2] => Const{SymReal}([w[2]])
-            m[3:3] => Const{SymReal}([w[3]])
-            m[4:4] => Const{SymReal}([w[4]])
-            m[5:5] => Const{SymReal}([w[5]])
-            m[6:6] => Const{SymReal}([w[6]])
-            m[7:7] => Const{SymReal}([w[7]])
-            m[8:8] => Const{SymReal}([w[8]])
-            m[9:9] => Const{SymReal}([w[9]])
-            m[10:10] => Const{SymReal}([w[10]])
-            m[11:11] => Const{SymReal}([w[11]])
-            m[12:12] => Const{SymReal}([w[12]])
-            m[13:13] => Const{SymReal}([w[13]])
-            m[14:14] => Const{SymReal}([w[14]])
-            m[15:15] => Const{SymReal}([w[15]])
-            m[16:16] => Const{SymReal}([w[16]])
-        end
-        expr = Code.fast_toexpr(
-            maker,
-            Dict{Any, Any}(
-                Code.ALLOCATOR_REWRITES_KEY => SymbolicUtils.Term{SymReal}(
-                    Returns{SymReal}, (buf,)
-                )
-            )
-        )
-        @test occursin("fill_arr!", string(expr))
+        code = codegen_into!(scalar_region_arraymaker(w, 16), buf)
+        @test expr_calls(code, Code.fill_arr!)
+        @test !expr_calls(code, convert)
         ws = [Wrap(Float64(i)) for i in 1:16]
         bufv = Vector{Wrap{Float64}}(undef, 16)
-        result = eval(
-            quote
-                let w = $ws, buf = $bufv
-                    $expr
-                end
-            end
-        )
-        @test result == ws
+        @test eval_codegen(code, (; w = ws, buf = bufv)) == ws
     end
 end
 

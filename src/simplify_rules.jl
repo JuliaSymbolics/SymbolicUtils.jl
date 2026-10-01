@@ -57,7 +57,8 @@ const POW_RULES = (
     @rule(^(~x::_isone, ~z) => 1),
     @rule(ℯ^(~x) => exp(~x)),
     @rule((~x)^(1//2) => sqrt(~x)),
-    @rule(sqrt((~x)^2) => abs(~x)),
+    # sqrt(x^2) = |x| on reals; for complex, sqrt(z^2) = ±z ≠ |z|
+    @rule(sqrt((~x::_isreal)^2) => abs(~x)),
     # |x|^2 = x^2 for reals; for complex, |z|^2 = z*conj(z) ≠ z^2
     @rule((abs(~x::_isreal))^2 => (~x)^2),
 )
@@ -81,11 +82,10 @@ const ASSORTED_RULES = (
     @rule(log(exp(~x::_isreal)) => ~x),
     # exp∘log is identity wherever log is defined
     @rule(exp(log(~x)) => ~x),
-    # abs identities — https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1046
     @rule(abs(abs(~x)) => abs(~x)),
     @rule(abs(*(~c::_is_neg_literal, ~~xs)) => abs(*(-unwrap_const(~c), (~~xs)...))),
-    # literal sqrt(...) never reaches POW_RULES (gated on ^)
-    @rule(sqrt((~x)^2) => abs(~x)),
+    # literal sqrt(...) never reaches POW_RULES (gated on ^); Real only
+    @rule(sqrt((~x::_isreal)^2) => abs(~x)),
     @rule(abs(~x::is_literal_number) => abs(~x)),
     @rule(ifelse(~x::is_literal_number, ~y, ~z) => ~x ? ~y : ~z),
     @rule(ifelse(~x, ~y, ~y) => ~y),

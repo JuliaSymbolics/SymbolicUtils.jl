@@ -6,20 +6,20 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 
-# Canonicalize a bound value for AC backtracking deduplication.
-# Segment captures are sequences; under +/* their order is immaterial, so treat
-# them as multisets via <ₑ-sorted tuples. Single-slot values are left as-is.
+# Normalize a bound value for AC backtracking deduplication.
+# Segment captures are sequences; keep their order (they may sit under a
+# non-commutative call where order matters). Single-slot values are left as-is.
 function canonicalize_ac_bind(v)
     if v isa AbstractVector || v isa Tuple
         isempty(v) && return ()
-        return Tuple(sort!(Any[v...], lt = <ₑ))
+        return Tuple(v)
     else
         return v
     end
 end
 
-# Fingerprint of a bindings dict so equivalent AC matches (esp. segment
-# reorderings) share one continuation attempt.
+# Fingerprint of a bindings dict so identical AC local matches share one
+# continuation attempt (same slot/segment values, including segment order).
 function ac_bindings_key(binds::ImmutableDict{Symbol, Any})
     ks = Symbol[]
     vs = Any[]
@@ -213,19 +213,19 @@ function term_matcher_constructor(term, acSets)
             T = vartype(data)
             ST = symtype(data)
             if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
-                if has_segment
-                    # Keep master semantics for segment patterns: first local match
-                    # wins. Backtracking over segment reorderings makes failing
-                    # matches ~ (n!)^2 (e.g. default simplify on large products).
+                if has_segment || length(data_args) > COMM_BACKTRACK_LIMIT[]
+                    # First local match wins. Segment patterns and high-arity
+                    # fixed-arity patterns otherwise cost ~(n!)^2 on failure.
                     for inds in acSets(eachindex(data_args), length(data_args))
                         candidate = Term{T}(f, @views data_args[inds]; type = ST)
                         result = loop(candidate, bindings, matchers)
                         result !== nothing && return success(result, 1)
                     end
                 else
-                    # Fixed-arity depth-2 backtracking: a local match may bind slots
-                    # that later fail in the continuation; try other permutations.
-                    # Deduplicate by canonical bindings (slots equal; no segments here).
+                    # Fixed-arity depth-2 backtracking (arity ≤ COMM_BACKTRACK_LIMIT):
+                    # a local match may bind slots that later fail in the
+                    # continuation; try other permutations. Deduplicate by raw
+                    # binding values (segment order preserved).
                     tried = nothing
                     for inds in acSets(eachindex(data_args), length(data_args))
                         candidate = Term{T}(f, @views data_args[inds]; type = ST)

@@ -100,6 +100,16 @@ end
     @eqtest r(a*c + b*c) == (a + b)*c
 end
 
+# Nested segments under non-commutative calls: order matters for dedup keys.
+@testset "AC backtrack preserves nested segment order" begin
+    @syms F(..)::Real G(..)::Real
+    r1 = @rule F(~~y)*F(~~w) + G(~~y) => (~~y, ~~w)
+    res = r1(F(a, b)*F(b, a) + G(a, b))
+    @test res !== nothing
+    @test isequal(collect(res[1]), [a, b])
+    @test isequal(collect(res[2]), [b, a])
+end
+
 # Failing AC segment match on large products must stay cheap (no (n!)^2 search).
 @testset "AC failing match stays bounded" begin
     @syms a b c d e f g h i j k l m n o

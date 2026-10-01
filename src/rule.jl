@@ -1,6 +1,9 @@
 
 @inline alwaystrue(x) = true
 const COMM_CHECKS_LIMIT = Ref(10)
+# Max arity for fixed-arity commutative backtracking. Above this, use first-match
+# only (as for larger terms). 5! = 120, so at most ~5!·5! continuation attempts.
+const COMM_BACKTRACK_LIMIT = Ref(5)
 
 # Matcher patterns with Slot, DefSlot and Segment
 

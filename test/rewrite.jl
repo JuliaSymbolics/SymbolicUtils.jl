@@ -292,3 +292,26 @@ end
     @test r2(gg) === a
     @test r2(Term{SymReal}(Term{SymReal}(g(1), Any[3]; type = Any), Any[a]; type = Number)) === nothing
 end
+
+@testset "nested callable-struct factory heads" begin
+    abstract type FormFac <: Number end
+    struct DFac
+        dim::Int
+    end
+    (op::DFac)(x::BasicSymbolic) = SymbolicUtils.Term{vartype(x)}(op, Any[x]; type = FormFac)
+    Base.nameof(op::DFac) = Symbol("d$(op.dim)")
+    struct Fac end
+    (::Fac)(i::Int) = DFac(i)
+    struct Fac2
+        n::Int
+    end
+    (f::Fac2)(i::Int) = DFac(f.n + i)
+
+    @syms z::FormFac
+    k = 1
+    @test (@rule Fac()(1)(~x) => ~x)(DFac(1)(z)) === z
+    @test (@rule Fac()(1)(~x) => ~x)(DFac(2)(z)) === nothing
+    @test (@rule Fac()($k)(~x) => ~x)(DFac(1)(z)) === z
+    @test (@rule Fac2(0)(1)(~x) => ~x)(DFac(1)(z)) === z
+    @test (@rule $(Fac())(1)(~x) => ~x)(DFac(1)(z)) === z
+end

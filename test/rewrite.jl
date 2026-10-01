@@ -137,6 +137,29 @@ end
     @test t < 30
 end
 
+# Nested Rule calls from a slot predicate must not zero the outer work meter.
+@testset "AC re-entrant predicate keeps work meter scoped" begin
+    @syms G(..)::Real z q
+    inner = @rule sin(~x) => ~x
+    pred_reent(x) = (inner(q); true)
+    S(s) = SymbolicUtils.Sym{SymbolicUtils.SymReal}(s; type = Number)
+    # a=4, k=4 multi-product fail with predicate on ~s1_2 (reent1.jl shape).
+    # Without save/restore this took ~16–18 s; with scoping it stays near the
+    # plain-predicate budgeted path (~tens of ms when quiet).
+    rule = @rule ~s1_1*~s1_2::pred_reent*~s1_3*~s1_4 +
+                 ~s2_1*~s2_2*~s2_3*~s2_4 +
+                 ~s3_1*~s3_2*~s3_3*~s3_4 +
+                 ~s4_1*~s4_2*~s4_3*~s4_4 + G(~s1_1) => ~s1_1
+    ex = prod(S(Symbol(:u, 1, :_, t)) for t in 1:4) +
+         prod(S(Symbol(:u, 2, :_, t)) for t in 1:4) +
+         prod(S(Symbol(:u, 3, :_, t)) for t in 1:4) +
+         prod(S(Symbol(:u, 4, :_, t)) for t in 1:4) + G(z)
+    rule(ex) # warmup
+    t = @elapsed r = rule(ex)
+    @test r === nothing
+    @test t < 30
+end
+
 # Fixed-arity product + failing segment siblings: work meter must bound cost.
 @testset "AC fixed+segment failing match stays bounded" begin
     @syms G(..)::Real z

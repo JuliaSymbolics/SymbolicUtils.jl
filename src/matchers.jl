@@ -156,10 +156,13 @@ function term_matcher_constructor(term, acSets)
                 # if data is a exp call, it might match with base e
                 T = vartype(arguments(data)[1])
                 frankestein = Term{T}(^,[ℯ, arguments(data)[1]])
-            elseif operation(data)===sqrt
+            elseif operation(data) === sqrt
                 # if data is a sqrt call, it might match with exponent 1//2
-                T = vartype(arguments(data)[1])
-                frankestein = Term{T}(^,[arguments(data)[1], 1//2])
+                radicand = arguments(data)[1]
+                if !isconst(radicand) || unwrap_const(radicand) isa AbstractFloat
+                    T = vartype(radicand)
+                    frankestein = Term{T}(^, [radicand, 1 // 2])
+                end
             end
 
             if frankestein !==nothing

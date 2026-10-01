@@ -186,8 +186,12 @@ function makepattern(expr, keys, parentCall=nothing)
                 return esc(expr.args[2] // expr.args[3])
             else
                 head = expr.args[1]
-                # Slot-free call heads (e.g. d(1)(~x)) evaluate to a value matched by equality.
-                if head isa Expr && head.head === :call && !pattern_expr_has_slot(head)
+                # Slot-free call heads whose operator is not itself a call (e.g. d(1)(~x))
+                # evaluate to a value matched by equality. Nested heads like g(1)(2)(~y)
+                # keep structural pattern construction around an evaluated g(1).
+                if head isa Expr && head.head === :call &&
+                        !(head.args[1] isa Expr && head.args[1].head === :call) &&
+                        !pattern_expr_has_slot(head)
                     return :(term($(esc(unquote_dollar(head))), $(map(x -> makepattern(x, keys, operation(expr)), expr.args[2:end])...); type=Any, shape=$ShapeVecT()))
                 end
                 # make a pattern for every argument of the expr.

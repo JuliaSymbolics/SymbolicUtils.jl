@@ -1100,6 +1100,47 @@ end
     @test isequal(x / -1, -x)
 end
 
+# https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1101
+@testset "Exact coefficient powers don't overflow" begin
+    @syms x y c
+    typed_coeff(ex) = (k = get_mul_coefficient(ex); (typeof(k), k))
+    big_rat = (Rational{BigInt}, 1 // big(30555)^7)
+    @test typed_coeff(((x * y) / 30555.0)^7) == big_rat
+    @test typed_coeff(substitute((x * y / c)^7, Dict(c => 30555.0))) == big_rat
+    @test isequal(substitute((x * y / c)^7, Dict(c => 30555.0)), ((x * y) / 30555.0)^7)
+    @test typed_coeff(((x * y) / 30555)^7) == big_rat
+    @test isequal(((x * y) / 30555)^7, (1 // big(30555)^7) * x^7 * y^7)
+    @test typed_coeff((30555 * x * y)^7) == (BigInt, big(30555)^7)
+    @test typed_coeff((-30555 * x * y)^7) == (BigInt, -big(30555)^7)
+    @test typed_coeff((3x * y)^40) == (BigInt, big(3)^40)
+    @test typed_coeff(((2 + 3im) * x * y)^40) == (Complex{BigInt}, big(2 + 3im)^40)
+    @test typed_coeff(((1 // 3 + (1 // 5)im) * x * y)^20) ==
+        (Complex{Rational{BigInt}}, (big(1) // 3 + (big(1) // 5)im)^20)
+
+    @syms p q vartype = SafeReal
+    @test typed_coeff(((p * q) / 30555.0)^7) == big_rat
+end
+
+@testset "Exact coefficient powers that fit keep their type" begin
+    @syms x y
+    typed_coeff(ex) = (k = get_mul_coefficient(ex); (typeof(k), k))
+    @test get_mul_coefficient((x * y) / 30555.0) === 1 // 30555
+    @test get_mul_coefficient(((x * y) / 30555)^2) === 1 // 30555^2
+    @test get_mul_coefficient((3x * y)^5) === 243
+    # the largest power of 3 that fits `Int`, past the fast-path bound
+    k = Sys.WORD_SIZE == 64 ? 39 : 19
+    @test get_mul_coefficient((3x * y)^k) === 3^k
+    @test get_mul_coefficient(((1 // 3) * x * y)^k) === 1 // 3^k
+    @test get_mul_coefficient(((2 // 3) * x * y)^3) === 8 // 27
+    @test get_mul_coefficient(((2 + 1im) * x * y)^2) === 3 + 4im
+    @test get_mul_coefficient((im * x * y)^2) === -1 + 0im
+    @test get_mul_coefficient((-x * y)^3) === -1
+    @test get_mul_coefficient((2.0 * x * y)^7) === 128.0
+    @test typed_coeff((3x * y)^big(2)) == (BigInt, 9)
+    @test typed_coeff((big(3) * x * y)^2) == (BigInt, 9)
+    @test typed_coeff(((big(1) // 3) * x * y)^2) == (Rational{BigInt}, 1 // 9)
+end
+
 @testset "mul worker buffer is reentrancy-safe" begin
     @syms x y w
     p = Mul{SymReal}(2, Dict((x / y) => -1); type = Real)

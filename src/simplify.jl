@@ -33,10 +33,14 @@ Simplify an expression (`x`) by applying `rewriter` until there are no changes.
 Integral rational constants are normalized to integers before rewriting.
 `expand=true` applies [`expand`](@ref) in the beginning of each fixpoint iteration.
 
-`trig_reduce=true` converts trigonometric powers and products to sums of linear
-harmonics (product-to-sum identities and power reduction).  This replaces the default
-contractive trig identities with expansive rules, analogous to Mathematica's
-`TrigReduce`.  See also [`trig_reduce`](@ref) for a standalone convenience function.
+`trig_reduce` converts trigonometric powers and products to sums of linear
+harmonics (product-to-sum identities and power reduction), analogous to
+Mathematica's `TrigReduce`. Accepts:
+- `false` (default): no trig reduction
+- `true`: reduce all trig functions
+- a variable or vector of variables: only reduce trig functions involving those variables
+
+See also [`trig_reduce`](@ref) for a standalone convenience function.
 
 By default, simplify will assume denominators are not zero and allow cancellation in fractions.
 Pass `simplify_fractions=false` to prevent this.
@@ -55,10 +59,28 @@ Pass `simplify_fractions=false` to prevent this.
         expand = polynorm  # Use polynorm value as expand for backward compatibility
     end
 
+    # trig_reduce accepts: false, true, or a vector of target variables
+    _trig_reduce_active = trig_reduce !== false
+    _trig_reduce_vars = if trig_reduce isa AbstractVector
+        trig_reduce
+    elseif trig_reduce isa BasicSymbolic
+        [trig_reduce]
+    else
+        nothing
+    end
+
+    # If vars are specified, delegate to the standalone trig_reduce function
+    # which handles variable targeting with bounded iteration
+    if _trig_reduce_active && _trig_reduce_vars !== nothing
+        x = SymbolicUtils.trig_reduce(x; vars=_trig_reduce_vars)
+        return simplify_fractions && query(isdiv, x) ?
+            SymbolicUtils.simplify_fractions(x) : x
+    end
+
     f = if rewriter === nothing
         if threaded
-            threaded_simplifier(thread_subtree_cutoff; trig_reduce)
-        elseif trig_reduce
+            threaded_simplifier(thread_subtree_cutoff; trig_reduce=_trig_reduce_active)
+        elseif _trig_reduce_active
             serial_trig_reduce_simplifier
         elseif expand
             serial_expand_simplifier

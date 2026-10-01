@@ -80,10 +80,32 @@ end
 end
 
 @testset "trig_reduce via simplify kwarg" begin
-    @syms x
+    @syms x θ φ
 
+    # trig_reduce=true reduces all
     @eqtest simplify(cos(x)^2; trig_reduce=true) == trig_reduce(cos(x)^2)
     @eqtest simplify(sin(x) * cos(x); trig_reduce=true) == trig_reduce(sin(x) * cos(x))
+
+    # trig_reduce=[θ] reduces only trig in θ
+    @eqtest simplify(cos(θ)^2; trig_reduce=[θ]) == (1//2) + (1//2)*cos(2θ)
+    @eqtest simplify(cos(x)^2; trig_reduce=[θ]) == cos(x)^2
+
+    # trig_reduce=θ (single symbol, not vector)
+    @eqtest simplify(cos(θ)^2; trig_reduce=θ) == (1//2) + (1//2)*cos(2θ)
+
+    # multi-variable expression: cos(θ)^2 * cos(φ)^2, reduce only in θ
+    result = simplify(cos(θ)^2 * cos(φ)^2; trig_reduce=[θ])
+    # cos(θ)^2 should reduce, cos(φ)^2 should stay
+    @test abs(Float64(unwrap_const(substitute(result, Dict(θ => 0.5, φ => 1.0); fold=Val(true)))) - cos(0.5)^2*cos(1.0)^2) < 1e-12
+    # verify cos(φ)^2 survived
+    @test occursin("cos(φ)^2", string(result))
+
+    # multi-variable expression: reduce in both θ and φ
+    result2 = simplify(cos(θ)^2 * cos(φ)^2; trig_reduce=[θ, φ])
+    # both should reduce
+    @test !occursin("cos(θ)^2", string(result2))
+    @test !occursin("cos(φ)^2", string(result2))
+    @test abs(Float64(unwrap_const(substitute(result2, Dict(θ => 0.5, φ => 1.0); fold=Val(true)))) - cos(0.5)^2*cos(1.0)^2) < 1e-12
 end
 
 @testset "trig_reduce: non-trig passthrough" begin

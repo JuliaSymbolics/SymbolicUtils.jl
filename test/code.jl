@@ -181,6 +181,21 @@ end
                           MakeArray(transpose([a b;a+b a/b]), arr)))) == [1 3;2 1/2]
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(([a b;a+b a/b])', arr)))) == [1 3;2 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(transpose([a, b]), arr)))) == [1 2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray([a, b]', arr)))) == [1 2]
+
+    let M = [a b; a+b a/b]
+        @test eval(toexpr(Let([a ← 1, b ← 2], MakeArray(M', typeof(M'))))) == [1 3; 2 1/2]
+        f = eval(toexpr(Func([a, b], [], M')))
+        @test Base.invokelatest(f, 1, 2) == [1 3; 2 1/2]
+    end
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray(UpperTriangular([a b;a+b a/b]), arr)))) == [1 2;0 1/2]
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],

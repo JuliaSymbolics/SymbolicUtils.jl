@@ -148,7 +148,8 @@ function trig_reduce(x; vars=nothing, maxiters::Int=50)
     end
     current = x
     for _ in 1:maxiters
-        expanded = PassThrough(If(iscall, expand))(current)
+        !iscall(current) && break
+        expanded = expand(current)
         reduced = PassThrough(If(iscall, rw))(expanded)
         if isequal(reduced, current)
             return reduced

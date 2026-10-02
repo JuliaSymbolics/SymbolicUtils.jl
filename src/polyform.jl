@@ -310,13 +310,25 @@ function poly_to_gcd_form(p::PolynomialT)
     elseif any_complex
         (complex ∘ float).(MP.coefficients(p))
     else
-        float.(MP.coefficients(p))
+        # Float `MP.gcd` consults `isapproxzero` with an absolute
+        # `ztol = Base.rtoldefault(Float64, Float64, 0) ≈ 1.5e-8`.
+        # Remainders smaller than that (e.g. `-2e-9` when dividing
+        # `1e-9*(3+5x)` by `1+x`) are treated as zero, so
+        # `simplify_fractions` silently drops terms (#1050). Exact
+        # rationals skip that tolerance. Non-finite values cannot be
+        # rationalized; keep them as floats.
+        raw = MP.coefficients(p)
+        if any(c -> !isfinite(float(c)), raw)
+            float.(raw)
+        else
+            map(c -> rationalize(BigInt, float(c)), raw)
+        end
     end
     # Broadcast can still leave an abstract eltype for heterogeneous floats;
     # narrow to a concrete eltype when needed (gcd requires it).
     if !isconcretetype(eltype(cs))
         T = isempty(cs) ? (all_int ? Int64 : all_rat ? Rational{Int64} :
-                           any_complex ? ComplexF64 : Float64) :
+                           any_complex ? ComplexF64 : Rational{BigInt}) :
             mapreduce(typeof, promote_type, cs)
         cs = Vector{T}(cs)
     end

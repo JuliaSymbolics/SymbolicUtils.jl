@@ -217,34 +217,31 @@ end
 
 @testset "small float coefficients are not cancelled against sqrt (#1050)" begin
     @syms x
+    numeval(ex, v) = Core.eval(Main, SymbolicUtils.Code.toexpr(substitute(ex, Dict(x => v))))
     e = 1e-9 * (3.0 + 5.0x) / sqrt(1 + x)
     s = simplify(e)
     @test isequal(s, e)
     @test isequal(simplify_fractions(e), e)
     @test !isequal(s, 5.0e-9 * sqrt(1 + x))
     for v in (2.0, 0.0, -0.5)
-        ev = unwrap_const(substitute(e, Dict(x => v)))
-        sv = unwrap_const(substitute(s, Dict(x => v)))
-        @test sv isa AbstractFloat
-        @test sv ≈ ev rtol = 1e-12
+        @test numeval(s, v) ≈ numeval(e, v) rtol = 1e-12
+        @test abs(numeval(s, v) - 5.0e-9 * sqrt(1 + v)) / abs(numeval(e, v)) > 0.05
     end
     e2 = 9.44e-8 * (3.945e-5 + 4.72e-8 * x) / (2 * sqrt(1.0 + x))
     s2 = simplify(e2)
     @test isequal(s2, e2)
     @test !isequal(s2, 2.22784e-15 * sqrt(1.0 + x))
-    @test unwrap_const(substitute(s2, Dict(x => 2.0))) ≈
-        unwrap_const(substitute(e2, Dict(x => 2.0))) rtol = 1e-12
+    @test numeval(s2, 2.0) ≈ numeval(e2, 2.0) rtol = 1e-12
     e3 = 1e-8 * (3.0 + 5.0x) / sqrt(1 + x)
     @test isequal(simplify(e3), e3)
 end
 
 @testset "exact float gcd does not invent common factors" begin
-    # `rationalize(BigInt, c)` rounds; `Rational{BigInt}(c)` is exact.
     @syms x::Real
     a = 2.0^30 + 0.5
     e = (a * x + nextfloat(a)) / (x + 1)
     s = simplify(e)
-    @test !isequal(s, a / 2) && !isequal(s, Rational{BigInt}(a))
+    @test isequal(s, e)
     v = BigFloat(-1) + BigFloat(2)^(-40)
     ev = unwrap_const(substitute(e, Dict(x => v)))
     sv = unwrap_const(substitute(s, Dict(x => v)))
@@ -255,7 +252,7 @@ end
     @syms x::Real
     e = (0.5x^2 + 0.75x + 0.25) / (x + 1)
     s = simplify(e)
-    @test isequal(s, 0.25 + 0.5x) || isequal(s, 0.5x + 0.25)
+    @test isequal(s, 0.25 + 0.5x)
     c0 = unwrap_const(substitute(s, Dict(x => 0)))
     @test c0 isa Float64
     @test c0 == 0.25

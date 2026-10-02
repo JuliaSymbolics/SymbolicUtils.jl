@@ -1828,13 +1828,13 @@ function Base.mapreduce(f, red, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...
     return _mapreduce(T, f, red, x1, x, xs...; kw...)
 end
 
-function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
+function _mapreduce_method(fT, redT, xTs...; varargT = Any, splat = true, kw...)
     args = [:(f::$fT), :(red::$redT)]
     for (i, xT) in enumerate(xTs)
         name = Symbol(:x, i)
         push!(args, :($name::$xT))
     end
-    splat && push!(args, :(xs::Vararg))
+    splat && push!(args, :(xs::Vararg{$varargT}))
     EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kwargs = [:(kw...)], kw...))
 end
 
@@ -1848,21 +1848,28 @@ symbolic representation.
 macro mapreduce_methods(T, arg_f, result_f)
     result = Expr(:block)
 
-    Ts = [:($BasicSymbolic{T}), Any]
+    # Non-public, but the generated methods have to match the input union of
+    # Base's own variadic `mapreduce` method to close their intersections.
+    AoB = Base.AbstractArrayOrBroadcasted
+    Ts = [BasicSymbolic, Any]
     for (Tf, Tred) in Iterators.product(Ts, Ts)
-        whereparams = if Tf != Any || Tred != Any
-            [:T]
-        else
-            nothing
-        end
-
         body = :($result_f($mapreduce(f, red, $arg_f(x1); kw...)))
-        push!(result.args, _mapreduce_method(Tf, Tred, T; splat = false, body, whereparams))
+        push!(result.args, _mapreduce_method(Tf, Tred, T; splat = false, body))
         body = :($result_f($mapreduce(f, red, $arg_f(x1), xs...; kw...)))
-        push!(result.args, _mapreduce_method(Tf, Tred, T; body, whereparams))
+        push!(result.args, _mapreduce_method(Tf, Tred, T; body))
+        push!(result.args, _mapreduce_method(Tf, Tred, T; varargT = AoB, body))
         body = :($result_f($mapreduce(f, red, x1, $arg_f(x2), xs...; kw...)))
-        push!(result.args, _mapreduce_method(Tf, Tred, Any, T; body, whereparams))
-        push!(result.args, _mapreduce_method(Tf, Tred, BasicSymbolic, T; body, whereparams))
+        push!(result.args, _mapreduce_method(Tf, Tred, Any, T; body))
+        push!(
+            result.args,
+            _mapreduce_method(Tf, Tred, AoB, T; varargT = AoB, body)
+        )
+        push!(result.args, _mapreduce_method(Tf, Tred, BasicSymbolic, T; body))
+        body = :($result_f($mapreduce(f, red, $arg_f(x1), $arg_f(x2), xs...; kw...)))
+        push!(result.args, _mapreduce_method(Tf, Tred, T, T; body))
+        push!(result.args, _mapreduce_method(Tf, Tred, T, T; varargT = AoB, body))
+        body = :($result_f($mapreduce(f, red, $arg_f(x1), x2, xs...; kw...)))
+        push!(result.args, _mapreduce_method(Tf, Tred, T, BasicSymbolic; body))
     end
     return esc(result)
 end

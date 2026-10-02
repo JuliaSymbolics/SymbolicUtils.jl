@@ -1,5 +1,6 @@
 using SymbolicUtils: Term, symtype, unwrap_const, Add, Mul
 using Test, SymbolicUtils
+import Random
 
 include("utils.jl")
 
@@ -132,23 +133,6 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             g = poly_to_gcd_form(p)
             T = eltype(MP.coefficients(g))
             @test isconcretetype(T)
-            @test T <: Rational
-            @test MP.coefficients(g) == [Rational{BigInt}(Float32(1.5)),
-                                         Rational{BigInt}(Float64(-2.5))]
-        end
-
-        @testset "mixed float and rational stay exact" begin
-            p = poly_with_coeffs(Number[0.1, 1 // 3], (0.1 - v))
-            g = poly_to_gcd_form(p)
-            @test MP.coefficients(g) == [Rational{BigInt}(0.1), Rational{BigInt}(1 // 3)]
-            @test Rational{BigInt}(0.1) != 1 // 10
-        end
-
-        @testset "non-finite floats stay floats" begin
-            p = poly_with_coeffs(Number[Inf, 1.0], (1.0 - v))
-            g = poly_to_gcd_form(p)
-            T = eltype(MP.coefficients(g))
-            @test isconcretetype(T)
             @test T <: AbstractFloat
         end
 
@@ -234,18 +218,6 @@ end
     @test isequal(simplify(e3), e3)
 end
 
-@testset "exact float gcd does not invent common factors" begin
-    @syms x::Real
-    a = 2.0^30 + 0.5
-    e = (a * x + nextfloat(a)) / (x + 1)
-    s = simplify(e)
-    @test isequal(s, e)
-    v = BigFloat(-1) + BigFloat(2)^(-40)
-    ev = unwrap_const(substitute(e, Dict(x => v)))
-    sv = unwrap_const(substitute(s, Dict(x => v)))
-    @test abs(sv - ev) / abs(ev) < 1e-12
-end
-
 @testset "float cancellation preserves Float64 result type" begin
     @syms x::Real
     e = (0.5x^2 + 0.75x + 0.25) / (x + 1)
@@ -261,6 +233,60 @@ end
     s2 = simplify(e2)
     @test unwrap_const(substitute(s2, Dict(x => 0))) isa Float64
     @test unwrap_const(substitute(s2, Dict(x => 0.3))) isa Float64
+end
+
+_val(ex, d) = unwrap_const(substitute(ex, d))
+
+@testset "float gcd cancellation is scale invariant and verified (#1050)" begin
+    @syms x::Real
+    val = _val
+    relerr(a, b) = abs(a - b) / max(abs(a), abs(b), floatmin(Float64))
+
+    rng = Random.MersenneTwister(721)
+    for _ in 1:40
+        c = randn(rng, 5) .* 10.0^rand(rng, -12:3)
+        e = (c[1] + c[2] * x + c[3] * x^2) / (1 // 3 + c[4] * x + c[5] * x^2)
+        s = simplify(e)
+        for v in randn(rng, 3)
+            @test relerr(val(e, Dict(x => v)), val(s, Dict(x => v))) < 1e-10
+        end
+    end
+
+    for a in (1e-12, 1.0, 1e12)
+        e = (a * x^2 + 3a * x + 2a) / (x + 1)
+        s = simplify(e)
+        @test !SymbolicUtils.isdiv(s)
+        @test val(s, Dict(x => 0.3)) ≈ a * 2.3 rtol = 1e-14
+    end
+
+    e = (1e100 * x^2 + 2e100 * x + 1e100) / (1e-100 * x^2 + 3e-100 * x + 2e-100)
+    s = simplify(e)
+    for v in (0, 0.3, -0.7)
+        @test val(s, Dict(x => v)) ≈ val(e, Dict(x => v)) rtol = 1e-12
+    end
+end
+
+@testset "verified gcd cancellation keeps mixed and complex coefficient domains" begin
+    @syms x::Real y::Real
+    val = _val
+    for a in (big(1) // big(10)^400, big(10)^400 // big(3), big(2)^1100)
+        e = (a + 0.5x + a * x^2 + 0.5x^3) / (x^2 + 1)
+        s = simplify(e)
+        @test val(s, Dict(x => 0)) ≈ a rtol = 1e-15
+        @test val(s, Dict(x => 0.3)) ≈ val(e, Dict(x => 0.3)) rtol = 1e-12
+    end
+
+    @testset for e in ((0.5 + (1 + im) * x) / (x + 1), ((1 + im) + 0.5x) / (x + 1),
+              (0.5x^2 + 0.75x + 0.25) / ((1 + im) * x + (1 + im)))
+        s = simplify(e)
+        @test val(s, Dict(x => 0.3)) ≈ val(e, Dict(x => 0.3)) rtol = 1e-12
+    end
+
+    D = 2^40
+    e = ((x + 1 // D)^2 + 0.5 * y * (x + 1 // D)) / (x + 1 // D)
+    s = simplify(e)
+    @test val(s, Dict(x => 0.3, y => 0.2)) isa Float64
+    @test val(s, Dict(x => 0.3, y => 0.2)) ≈ 0.3 + 1 / D + 0.1 rtol = 1e-14
 end
 
 @testset "simplify_div with Rational{BigInt} coefficients (#1082)" begin

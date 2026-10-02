@@ -107,6 +107,8 @@ function _factor_common_trig_term(ex)
 end
 
 const TRIG_EXP_RULES = (
+    @acrule(~r*~x::has_trig_exp + ~r*~y => ~r*(~x + ~y)),
+    @acrule(~r*~x::has_trig_exp + -1*~r*~y => ~r*(~x - ~y)),
     @rule(~x::_has_trig_sum => _factor_common_trig_term(~x)),
     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x)),
     # Direct scaled form: Mul(-1, Add(...)) distributes -1 into the Add, so the

@@ -103,6 +103,28 @@ end
     end
 end
 
+@testset "Trig factoring applies inside larger sums" begin
+    @syms a::Real c::Real r::Real x::Real
+    expressions = (
+        c + r*cos(x)^2 - r*sin(x)^2,
+        a + r*sin(x)^2 - r*cos(x)^2,
+        c + r*tan(x)^2 - r*sec(x)^2,
+        c + r*cot(x)^2 - r*csc(x)^2,
+        a + r*cosh(x)^2 - r*sinh(x)^2,
+    )
+    expected = (
+        c + r*cos(2x),
+        a - r*cos(2x),
+        c - r,
+        c - r,
+        a + r,
+    )
+
+    for (expression, result) in zip(expressions, expected)
+        @test isequal(simplify(expression), result)
+    end
+end
+
 @testset "LiteralReal" begin
     @syms x1 x2 vartype=TreeReal
     s = cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2

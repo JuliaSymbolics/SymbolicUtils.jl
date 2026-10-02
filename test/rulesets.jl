@@ -86,6 +86,23 @@ end
     @test unwrap_const(simplify(Term{SymReal}(zero, [x + 2]))) == 0
 end
 
+@testset "Issue #633: trig simplification is independent of symbol names" begin
+    for names in ((:r, :th, :phi), (Symbol("#1#"), Symbol("#2#"), Symbol("#3#")))
+        r, th, phi = (SymbolicUtils.Sym{SymbolicUtils.SymReal}(name; type = Real) for name in names)
+        expressions = (
+            cos(th)^2 + cos(phi)^2 * sin(th)^2 + sin(th)^2 * sin(phi)^2,
+            -r*cos(th)*sin(th) + r*cos(th)*cos(phi)^2*sin(th) + r*cos(th)*sin(th)*sin(phi)^2,
+            r^2*sin(th)^2 + r^2*cos(th)^2*cos(phi)^2 + r^2*cos(th)^2*sin(phi)^2,
+            r^2*cos(phi)^2*sin(th)^2 + r^2*sin(th)^2*sin(phi)^2,
+        )
+
+        @test unwrap_const(simplify(expressions[1])) == 1
+        @test isequal(unwrap_const(simplify(expressions[2])), 0)
+        @test isequal(simplify(expressions[3]), r^2)
+        @test isequal(simplify(expressions[4]), r^2 * sin(th)^2)
+    end
+end
+
 @testset "LiteralReal" begin
     @syms x1 x2 vartype=TreeReal
     s = cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2

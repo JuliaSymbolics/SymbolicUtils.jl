@@ -84,9 +84,30 @@ const ASSORTED_RULES = (
     @rule(ifelse_branching(~x, ~y, ~y) => ~y),
 )
 
+_has_trig_sum(ex) = isadd(ex) && has_trig_exp(ex)
+
+function _factor_common_trig_term(ex)
+    _has_trig_sum(ex) || return nothing
+    factors = [ismul(term) ? collect(arguments(term)) : [term] for term in arguments(ex)]
+    common = []
+    for candidate in copy(first(factors))
+        indices = [findfirst(factor -> isequal(factor, candidate), term_factors) for term_factors in factors]
+        all(index -> !isnothing(index), indices) || continue
+        push!(common, candidate)
+        for (term_factors, index) in zip(factors, indices)
+            deleteat!(term_factors, index)
+        end
+    end
+    isempty(common) && return nothing
+    remainder = map(factors) do term_factors
+        isempty(term_factors) ? 1 : *(term_factors...)
+    end
+    any(has_trig_exp, remainder) || return nothing
+    return *(common..., +(remainder...))
+end
+
 const TRIG_EXP_RULES = (
-    @acrule(~r*~x::has_trig_exp + ~r*~y => ~r*(~x + ~y)),
-    @acrule(~r*~x::has_trig_exp + -1*~r*~y => ~r*(~x - ~y)),
+    @rule(~x::_has_trig_sum => _factor_common_trig_term(~x)),
     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x)),
     # Direct scaled form: Mul(-1, Add(...)) distributes -1 into the Add, so the
     # factoring rule above cannot reduce -sin^2 - cos^2 via r*(sin^2+cos^2).

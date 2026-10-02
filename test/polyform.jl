@@ -132,6 +132,17 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             g = poly_to_gcd_form(p)
             T = eltype(MP.coefficients(g))
             @test isconcretetype(T)
+            # Float coefficients are lifted to exact rationals so `MP.gcd`
+            # does not apply an absolute `isapproxzero` tolerance (#1050).
+            @test T <: Rational
+            @test MP.coefficients(g) == [3 // 2, -5 // 2]
+        end
+
+        @testset "non-finite floats stay floats" begin
+            p = poly_with_coeffs(Number[Inf, 1.0], (1.0 - v))
+            g = poly_to_gcd_form(p)
+            T = eltype(MP.coefficients(g))
+            @test isconcretetype(T)
             @test T <: AbstractFloat
         end
 
@@ -186,6 +197,31 @@ end
 
     # Float ↔ rational mix.
     @test simplify_fractions((1.0 + 0.5*x - x^2) / ((1//2)*x^2 - 1)) isa Any
+end
+
+@testset "small float coefficients are not cancelled against sqrt (#1050)" begin
+    # `MP.gcd` on Float64 uses an absolute zero tolerance of about 1.5e-8.
+    # At overall scale 1e-9 the remainder of dividing `3+5x` by `1+x` is
+    # treated as zero and the constant term is rewritten. After lifting
+    # float coefficients to exact rationals for gcd, these expressions
+    # must be left alone (the issue's printed wrong answers below).
+    @syms x
+    e = 1e-9 * (3.0 + 5.0x) / sqrt(1 + x)
+    s = simplify(e)
+    @test isequal(s, e)
+    @test isequal(simplify_fractions(e), e)
+    @test !isequal(s, 5.0e-9 * sqrt(1 + x))
+    # Issue table at x=2: input 7.5056e-9 (printed), not the old simplify 8.6603e-9.
+    expected_at_2 = 1e-9 * (3.0 + 5.0 * 2) / sqrt(1 + 2)
+    @test expected_at_2 ≈ 7.5056e-9 rtol = 1e-5
+    @test expected_at_2 ≉ 8.6603e-9 rtol = 1e-4
+    e2 = 9.44e-8 * (3.945e-5 + 4.72e-8 * x) / (2 * sqrt(1.0 + x))
+    s2 = simplify(e2)
+    @test isequal(s2, e2)
+    @test !isequal(s2, 2.22784e-15 * sqrt(1.0 + x))
+    # Scale just above the old absolute tolerance must stay correct too.
+    e3 = 1e-8 * (3.0 + 5.0x) / sqrt(1 + x)
+    @test isequal(simplify(e3), e3)
 end
 
 @testset "simplify_div with Rational{BigInt} coefficients (#1082)" begin

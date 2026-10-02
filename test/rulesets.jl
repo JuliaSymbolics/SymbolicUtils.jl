@@ -239,11 +239,19 @@ pred(x) = error("Fail")
     @test sprint(io -> Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
 end
 
+@testset "Threading" begin
+    @syms a b c d
+    ex = (((0.6666666666666666 / (c / 1)) + ((1 * a) / (c / 1))) +
+          (1.0 / (((1 * d) / (1 + b)) * (1 / b)))) +
+         ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
+          ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
+    @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
+    @test SymbolicUtils.node_count(a + b * c / d) == 7
+end
+
 @testset "Threaded simplify with getindex (#856)" begin
-    # Regression: threaded Walk must keep the original node when the rewriter
-    # returns `nothing`, matching the serial Walk. Otherwise Const{nothing} is
-    # spliced into parent args and rebuilding a getindex term MethodErrors.
-    # Reduced from issue #856 (Symbolics `@variables` / `~` equation form).
+    # Threaded Walk must keep the original node when the rewriter returns
+    # `nothing` (same as serial); otherwise Const{nothing} breaks getindex rebuilds.
     @syms T[1:2] Ca[1:2] CO3[1:2] Ω[1:2]
     @syms atmtoPa aspₐ bsp csp dsp rsp sal_val pressure
     eq = Ω[2] - (Ca[2] * CO3[2] * exp((-atmtoPa * (aspₐ - bsp * (T[2])) * pressure +
@@ -252,8 +260,20 @@ end
                 (1.5 * exp(316.9463 + sqrt(sal_val) * (1.6233 + -118.64 / (T[2])) -
                            0.06999 * sal_val - 48.7537 * log((T[2])) + -13348.09 / (T[2])))
     serial = simplify(eq; expand=false, threaded=false)
-    threaded = simplify(eq; expand=false, threaded=true)
+    threaded = simplify(eq; expand=false, threaded=true, thread_subtree_cutoff=3)
     @eqtest serial == threaded
+end
+
+@testset "Threaded Prewalk/Postwalk (#856)" begin
+    @syms a b Ω[1:1]
+    r = @rule(sin(~x) => cos(~x))
+    ex = sin(a) + b * sin(Ω[1])
+    for Walk in (Rewriters.Prewalk, Rewriters.Postwalk)
+        serial = Walk(r; threaded=false)(ex)
+        threaded = Walk(r; threaded=true, thread_cutoff=1)(ex)
+        @eqtest serial == threaded
+        @eqtest serial == cos(a) + b * cos(Ω[1])
+    end
 end
 
 _g(y) = sin

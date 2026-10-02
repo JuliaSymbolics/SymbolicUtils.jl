@@ -15,10 +15,7 @@ using SymbolicUtils: BasicSymbolic
 # `withgradient` and error if traced, rather than returning wrong gradients.
 ChainRulesCore.@non_differentiable (f::BasicSymbolic)(args::BasicSymbolic...)
 
-# Pullback must return exactly 1 + 4 + N tangents with N known at compile time.
-# Splatting a runtime-length cotangent Vector (and padding with `+ j` NoTangents)
-# made the return type a Vararg union and returned one-too-many tangents, which
-# Zygote silently tolerated at a large allocation cost (JuliaSymbolics/SymbolicUtils.jl#684).
+# One tangent per primal argument (f, A, T, Val{nd}, Val{dims}, elems...); N static so the pullback infers.
 function rrule(::typeof(Code.create_array), A::Type{<:AbstractArray}, T, u::Val{j}, d::Val{dims},
                elems::Vararg{Any,N}) where {dims, j, N}
   y = Code.create_array(A, T, u, d, elems...)

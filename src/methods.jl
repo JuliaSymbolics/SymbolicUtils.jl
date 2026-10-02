@@ -1220,11 +1220,32 @@ function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{
     _copy_broadcast!(buffer, Broadcast.Broadcasted{SymBroadcast{T}}(^, (bc.args[2], N), bc.axes))
 end
 
+@noinline function _throw_nonsymbolic_nested_broadcast(bc)
+    throw(ArgumentError(LazyString(
+        "Cannot nest a non-symbolic broadcast inside a symbolic array broadcast. ",
+        "Symbolic array broadcasts cannot represent Julia's fused per-element evaluation ",
+        "of nested non-symbolic broadcasts (e.g. `y .+ randn.()`). ",
+        "Workaround: materialize the symbolic array first, e.g. `collect(x) .=> f.()` ",
+        "or `collect(x) .+ f.()`. Got nested broadcast: ", typeof(bc), "."
+    )))
+end
+
+# Catch nested DefaultArrayStyle (etc.) broadcasts that would otherwise MethodError.
+function _copy_broadcast!(::BroadcastBuffer{T}, bc::Broadcast.Broadcasted) where {T}
+    _throw_nonsymbolic_nested_broadcast(bc)
+end
+
 function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{SymBroadcast{T}}) where {T}
     offset = length(buffer.canonical_args)
     for arg in bc.args
         if arg isa Broadcast.Broadcasted
-            push!(buffer.canonical_args, _copy_broadcast!(buffer, Broadcast.instantiate(arg)))
+            # Only recurse into symbolic nested broadcasts; non-symbolic ones
+            # (e.g. `randn.()`) cannot be fused into a lazy ArrayOp (#562).
+            if arg isa Broadcast.Broadcasted{SymBroadcast{T}}
+                push!(buffer.canonical_args, _copy_broadcast!(buffer, Broadcast.instantiate(arg)))
+            else
+                _throw_nonsymbolic_nested_broadcast(arg)
+            end
         elseif arg isa Base.RefValue
             push!(buffer.canonical_args, Const{T}(arg[]))
         else

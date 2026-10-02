@@ -26,6 +26,41 @@ end
     @test_throws ArgumentError SymbolicUtils.TermInterface.arguments(x)
 end
 
+@testset "TermInterface isexpr/head/children (#1023)" begin
+    using TermInterface: iscall, isexpr, head, children, operation, arguments, sorted_children, sorted_arguments
+
+    @syms a::Real b::Real
+    call = a^2 + 1
+    lit = arguments(call)[1]
+    pow = a^2
+    mul = a * b
+    div = a / b
+
+    # Leaves: not calls/exprs; head/children error like operation/arguments.
+    for leaf in (a, lit)
+        @test !iscall(leaf)
+        @test !isexpr(leaf)
+        @test_throws ArgumentError head(leaf)
+        @test_throws ArgumentError children(leaf)
+    end
+
+    # Call nodes must satisfy iscall ⇒ isexpr, with head/children defined.
+    # In SymbolicUtils, head ≡ operation and children ≡ arguments (not Expr-style :call).
+    for expr in (call, pow, mul, div)
+        @test iscall(expr)
+        @test isexpr(expr)
+        @test head(expr) === operation(expr)
+        @test isequal(collect(children(expr)), collect(arguments(expr)))
+        @test isequal(collect(sorted_children(expr)), collect(sorted_arguments(expr)))
+    end
+
+    @test head(call) === (+)
+    @test isequal(collect(children(call)), collect(arguments(call)))
+    @test head(pow) === (^)
+    @test head(mul) === (*)
+    @test head(div) === (/)
+end
+
 @testset "SymbolicIndexingInterface functions" begin
     @syms x::Real y::Real
 

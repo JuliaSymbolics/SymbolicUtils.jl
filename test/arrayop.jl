@@ -130,6 +130,26 @@ end
     @test isequal(scalarize(inv(A)), [inv(A)[i] for i in eachindex(A)])
 end
 
+@testset "nested non-symbolic broadcast (#562)" begin
+    @syms y[1:3]
+    # Nested non-symbolic broadcasts used to MethodError in `_copy_broadcast!`.
+    # Symbolic array ops cannot fuse per-element impure calls; throw clearly.
+    err = try
+        y .+ randn.()
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("non-symbolic broadcast", sprint(showerror, err))
+    @test occursin("collect(x)", sprint(showerror, err))
+    @test_throws ArgumentError y .* rand.()
+    # Workaround: materialize the symbolic array first.
+    result = collect(y) .+ randn.()
+    @test length(result) == 3
+    @test all(r -> operation(r) === +, result)
+end
+
 @testset "map/mapreduce" begin
     @syms a[1:2] b[1:2, 1:2] c[1:2, 1:2, 1:2]
     @testset "$f($v)" for v in [a, b, c], f in [sum, prod]

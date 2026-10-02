@@ -140,6 +140,31 @@ end
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 
+    # tan²−sec² = −1 and cot²−csc² = −1 (not +1)
+    @test unwrap_const(simplify(tan(x)^2 - sec(x)^2)) == -1
+    @test unwrap_const(simplify(sec(x)^2 - tan(x)^2)) == 1
+    @test unwrap_const(simplify(cot(x)^2 - csc(x)^2)) == -1
+    seed!(1131)
+    for _ in 1:20
+        t = 2π * rand()
+        abs(cos(t)) < 0.2 && continue
+        abs(sin(t)) < 0.2 && continue
+        @test Float64(unwrap_const(substitute(simplify(tan(x)^2 - sec(x)^2), Dict(x => t)))) ≈
+              (tan(t)^2 - sec(t)^2) atol=1e-10
+        @test Float64(unwrap_const(substitute(simplify(cot(x)^2 - csc(x)^2), Dict(x => t)))) ≈
+              (cot(t)^2 - csc(t)^2) atol=1e-10
+    end
+
+    # 1 - cos² / sin² and scaled a - a*trig²
+    @eqtest simplify(1 - cos(x)^2) == sin(x)^2
+    @eqtest simplify(1 - sin(x)^2) == cos(x)^2
+    @eqtest simplify(2 - 2cos(x)^2) == 2sin(x)^2
+    @eqtest simplify(2 - 2sin(x)^2) == 2cos(x)^2
+    @eqtest simplify(a - a*sin(x)^2) == a*cos(x)^2
+    @eqtest simplify(a - a*cos(x)^2) == a*sin(x)^2
+    @eqtest simplify(3 - 2cos(x)^2) == 3 - 2cos(x)^2
+    # 2a - 2a*cos² needs a scaled-coeff rule; omitted (perf vs coverage trade-off)
+
     @eqtest unwrap_const(simplify(cosh(x)^2 + 1 - sinh(x)^2)) == 2
     @eqtest unwrap_const(simplify(cosh(y)^2 + 1 - sinh(y)^2)) == 2
     @eqtest unwrap_const(simplify(-sinh(y)^2 + cosh(y)^2 + 1)) == 2
@@ -214,11 +239,19 @@ pred(x) = error("Fail")
     @test sprint(io -> Base.showerror(io, err)) == "Failed to apply rule ~x + ~(y::pred) => ~x on expression a + b"
 end
 
+@testset "Threading" begin
+    @syms a b c d
+    ex = (((0.6666666666666666 / (c / 1)) + ((1 * a) / (c / 1))) +
+          (1.0 / (((1 * d) / (1 + b)) * (1 / b)))) +
+         ((((1 * a) + (1 * a)) / ((2.0 * (d + 1)) / 1.0)) +
+          ((((d * 1) / (1 + c)) * 2.0) / ((1 / d) + (1 / c))))
+    @eqtest simplify(ex) == simplify(ex, threaded=true, thread_subtree_cutoff=3)
+    @test SymbolicUtils.node_count(a + b * c / d) == 7
+end
+
 @testset "Threaded simplify with getindex (#856)" begin
-    # Regression: threaded Walk must keep the original node when the rewriter
-    # returns `nothing`, matching the serial Walk. Otherwise Const{nothing} is
-    # spliced into parent args and rebuilding a getindex term MethodErrors.
-    # Reduced from issue #856 (Symbolics `@variables` / `~` equation form).
+    # Threaded Walk must keep the original node when the rewriter returns
+    # `nothing` (same as serial); otherwise Const{nothing} breaks getindex rebuilds.
     @syms T[1:2] Ca[1:2] CO3[1:2] Ω[1:2]
     @syms atmtoPa aspₐ bsp csp dsp rsp sal_val pressure
     eq = Ω[2] - (Ca[2] * CO3[2] * exp((-atmtoPa * (aspₐ - bsp * (T[2])) * pressure +
@@ -227,8 +260,20 @@ end
                 (1.5 * exp(316.9463 + sqrt(sal_val) * (1.6233 + -118.64 / (T[2])) -
                            0.06999 * sal_val - 48.7537 * log((T[2])) + -13348.09 / (T[2])))
     serial = simplify(eq; expand=false, threaded=false)
-    threaded = simplify(eq; expand=false, threaded=true)
+    threaded = simplify(eq; expand=false, threaded=true, thread_subtree_cutoff=3)
     @eqtest serial == threaded
+end
+
+@testset "Threaded Prewalk/Postwalk (#856)" begin
+    @syms a b Ω[1:1]
+    r = @rule(sin(~x) => cos(~x))
+    ex = sin(a) + b * sin(Ω[1])
+    for Walk in (Rewriters.Prewalk, Rewriters.Postwalk)
+        serial = Walk(r; threaded=false)(ex)
+        threaded = Walk(r; threaded=true, thread_cutoff=1)(ex)
+        @eqtest serial == threaded
+        @eqtest serial == cos(a) + b * cos(Ω[1])
+    end
 end
 
 _g(y) = sin
@@ -251,4 +296,18 @@ end
     r = @acrule ~x => ~x where {_f(~x)}
     @eqtest r(a) == a
     @test r(b) === nothing
+end
+
+@testset "ACRule with fewer args than rule arity" begin
+    @syms U A B
+    # (-U)^2 builds a single-argument Mul; an arity-2 rule must simply not match it
+    single = (-U)^2
+    @test length(arguments(single)) == 1
+    r = @acrule ~x * ~y => ~x
+    @test r(single) === nothing
+    # the returned factor follows the term's argument order, which varies
+    # across sessions, so only require that it is one of the two factors
+    @test any(s -> isequal(r(A * B), s), (A, B))
+    # end to end: simplify must not throw, and the value must be preserved
+    @test isequal(expand(simplify(single)), U^2)
 end

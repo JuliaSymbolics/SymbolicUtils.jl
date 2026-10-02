@@ -43,10 +43,10 @@ end
   y2, pb2 = ChainRulesCore.rrule(Code.create_array, Array, Float64, Val{2}(), Val{(2, 2)}(),
                                  1.0, 2.0, 3.0, 4.0)
   @test y2 == Float64[1.0 3.0; 2.0 4.0]
-  Δ2 = ones(2, 2)
+  Δ2 = [10.0 30.0; 20.0 40.0]
   tangents2 = @inferred pb2(Δ2)
   @test length(tangents2) == 5 + 4
-  @test tangents2[6:9] == (1.0, 1.0, 1.0, 1.0)
+  @test tangents2[6:9] == (10.0, 20.0, 30.0, 40.0)
   @test all(t -> t isa ChainRulesCore.NoTangent, tangents2[1:5])
 end
 

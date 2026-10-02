@@ -132,10 +132,18 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             g = poly_to_gcd_form(p)
             T = eltype(MP.coefficients(g))
             @test isconcretetype(T)
-            # Float coefficients are lifted to exact rationals so `MP.gcd`
-            # does not apply an absolute `isapproxzero` tolerance (#1050).
+            # Exact binary rationals (not `rationalize`) so `MP.gcd` skips
+            # absolute `isapproxzero` (#1050) without inventing factors.
             @test T <: Rational
-            @test MP.coefficients(g) == [3 // 2, -5 // 2]
+            @test MP.coefficients(g) == [Rational{BigInt}(Float32(1.5)),
+                                         Rational{BigInt}(Float64(-2.5))]
+        end
+
+        @testset "mixed float and rational stay exact" begin
+            p = poly_with_coeffs(Number[0.1, 1 // 3], (0.1 - v))
+            g = poly_to_gcd_form(p)
+            @test MP.coefficients(g) == [Rational{BigInt}(0.1), Rational{BigInt}(1 // 3)]
+            @test Rational{BigInt}(0.1) != 1 // 10  # not rounded by rationalize
         end
 
         @testset "non-finite floats stay floats" begin
@@ -178,6 +186,14 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             @test eltype(MP.coefficients(g)) === Int64
             @test gcd(g, g) isa DP.Polynomial
         end
+
+        @testset "BigInt coefficients beyond typemax(Int) stay exact (#1111)" begin
+            a = big(10)^19
+            p = poly_with_coeffs(Number[a, a], (a + a * v))
+            g = poly_to_gcd_form(p)
+            @test eltype(MP.coefficients(g)) === BigInt
+            @test MP.coefficients(g) == [a, a]
+        end
     end
 end
 
@@ -200,28 +216,56 @@ end
 end
 
 @testset "small float coefficients are not cancelled against sqrt (#1050)" begin
-    # `MP.gcd` on Float64 uses an absolute zero tolerance of about 1.5e-8.
-    # At overall scale 1e-9 the remainder of dividing `3+5x` by `1+x` is
-    # treated as zero and the constant term is rewritten. After lifting
-    # float coefficients to exact rationals for gcd, these expressions
-    # must be left alone (the issue's printed wrong answers below).
     @syms x
     e = 1e-9 * (3.0 + 5.0x) / sqrt(1 + x)
     s = simplify(e)
     @test isequal(s, e)
     @test isequal(simplify_fractions(e), e)
     @test !isequal(s, 5.0e-9 * sqrt(1 + x))
-    # Issue table at x=2: input 7.5056e-9 (printed), not the old simplify 8.6603e-9.
-    expected_at_2 = 1e-9 * (3.0 + 5.0 * 2) / sqrt(1 + 2)
-    @test expected_at_2 ≈ 7.5056e-9 rtol = 1e-5
-    @test expected_at_2 ≉ 8.6603e-9 rtol = 1e-4
+    for v in (2.0, 0.0, -0.5)
+        ev = unwrap_const(substitute(e, Dict(x => v)))
+        sv = unwrap_const(substitute(s, Dict(x => v)))
+        @test sv isa AbstractFloat
+        @test sv ≈ ev rtol = 1e-12
+    end
     e2 = 9.44e-8 * (3.945e-5 + 4.72e-8 * x) / (2 * sqrt(1.0 + x))
     s2 = simplify(e2)
     @test isequal(s2, e2)
     @test !isequal(s2, 2.22784e-15 * sqrt(1.0 + x))
-    # Scale just above the old absolute tolerance must stay correct too.
+    @test unwrap_const(substitute(s2, Dict(x => 2.0))) ≈
+        unwrap_const(substitute(e2, Dict(x => 2.0))) rtol = 1e-12
     e3 = 1e-8 * (3.0 + 5.0x) / sqrt(1 + x)
     @test isequal(simplify(e3), e3)
+end
+
+@testset "exact float gcd does not invent common factors" begin
+    # `rationalize(BigInt, c)` rounds; `Rational{BigInt}(c)` is exact.
+    @syms x::Real
+    a = 2.0^30 + 0.5
+    e = (a * x + nextfloat(a)) / (x + 1)
+    s = simplify(e)
+    @test !isequal(s, a / 2) && !isequal(s, Rational{BigInt}(a))
+    v = BigFloat(-1) + BigFloat(2)^(-40)
+    ev = unwrap_const(substitute(e, Dict(x => v)))
+    sv = unwrap_const(substitute(s, Dict(x => v)))
+    @test abs(sv - ev) / abs(ev) < 1e-12
+end
+
+@testset "float cancellation preserves Float64 result type" begin
+    @syms x::Real
+    e = (0.5x^2 + 0.75x + 0.25) / (x + 1)
+    s = simplify(e)
+    @test isequal(s, 0.25 + 0.5x) || isequal(s, 0.5x + 0.25)
+    c0 = unwrap_const(substitute(s, Dict(x => 0)))
+    @test c0 isa Float64
+    @test c0 == 0.25
+    c03 = unwrap_const(substitute(s, Dict(x => 0.3)))
+    @test c03 isa Float64
+    @test c03 ≈ 0.25 + 0.5 * 0.3
+    e2 = (0.5x^2 + 0.75x + 0.25) / ((1 // 2) * x + 1 // 2)
+    s2 = simplify(e2)
+    @test unwrap_const(substitute(s2, Dict(x => 0))) isa Float64
+    @test unwrap_const(substitute(s2, Dict(x => 0.3))) isa Float64
 end
 
 @testset "simplify_div with Rational{BigInt} coefficients (#1082)" begin
@@ -261,6 +305,20 @@ end
     @test isequal(expand(s), s)
     @test isequal(expand(a * (s + b)), a * s + a * b)
     @test isequal(expand(s / 3), (1 // 3) * s)
+end
+
+@testset "simplify cancels BigInt coefficients beyond typemax(Int) (#1111)" begin
+    @syms x
+    # Issue MWE: 10^19 exceeds typemax(Int) on both 32- and 64-bit.
+    a = big(10)^19
+    # Safe side of the gate must be derived from typemax(Int): on x86
+    # (Int32) big(10)^18 is already past the bound, so hard-coding 10^18
+    # made `@test safe_isinteger(b)` fail in CI's 32-bit job.
+    b = big(typemax(Int)) ÷ 2
+    @test !SymbolicUtils.safe_isinteger(a)
+    @test SymbolicUtils.safe_isinteger(b)
+    @eqtest simplify((a * x + a) / (a * x)) == (1 + x) / x
+    @eqtest simplify((b * x + b) / (b * x)) == (1 + x) / x
 end
 
 @testset "simplify survives rational coefficients too large for Int64" begin

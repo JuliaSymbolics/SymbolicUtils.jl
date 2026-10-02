@@ -140,6 +140,16 @@ end
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 
+    # 1 - cos² / sin² and scaled a - a*trig²
+    @eqtest simplify(1 - cos(x)^2) == sin(x)^2
+    @eqtest simplify(1 - sin(x)^2) == cos(x)^2
+    @eqtest simplify(2 - 2cos(x)^2) == 2sin(x)^2
+    @eqtest simplify(2 - 2sin(x)^2) == 2cos(x)^2
+    @eqtest simplify(a - a*sin(x)^2) == a*cos(x)^2
+    @eqtest simplify(a - a*cos(x)^2) == a*sin(x)^2
+    @eqtest simplify(3 - 2cos(x)^2) == 3 - 2cos(x)^2
+    # 2a - 2a*cos² needs a scaled-coeff rule; omitted (perf vs coverage trade-off)
+
     @eqtest unwrap_const(simplify(cosh(x)^2 + 1 - sinh(x)^2)) == 2
     @eqtest unwrap_const(simplify(cosh(y)^2 + 1 - sinh(y)^2)) == 2
     @eqtest unwrap_const(simplify(-sinh(y)^2 + cosh(y)^2 + 1)) == 2

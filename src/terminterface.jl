@@ -276,12 +276,7 @@ function TermInterface.iscall(s::BSImpl.Type)
     !MData.isa_variant(s, BSImpl.Sym) && !MData.isa_variant(s, BSImpl.Const)
 end
 
-# TermInterface requires that `iscall(x) ⇒ isexpr(x)`, with `head`/`children` defined.
-# SymbolicUtils is a functional expression language: every call node is an expression
-# whose head is the operation and whose children are the arguments (see TermInterface.jl
-# docs and `maketerm(::Type{BasicSymbolic}, f, args, metadata)`).
-# Use bare names (not TermInterface.f) so ExplicitImports counts the imports as used,
-# and so `@matchable` can extend `children` via `SymbolicUtils.children`.
+# Remaining TermInterface API functions
 isexpr(s::BSImpl.Type) = iscall(s)
 head(s::BSImpl.Type) = operation(s)
 children(s::BSImpl.Type) = arguments(s)

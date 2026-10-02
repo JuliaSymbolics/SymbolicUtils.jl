@@ -197,7 +197,7 @@ one step using the half-angle / double-argument identities:
 For `n ≥ 3` the result `f(x)^r * half_angle^k` still contains powers and will
 be reduced further by subsequent Fixpoint iterations.
 """
-function _trig_power_reduce(f, x, n)
+function _trig_power_reduce(@nospecialize(f), x, n)
     k = div(n, 2)   # number of squared pairs
     r = rem(n, 2)   # leftover power (0 or 1)
     if f === cos
@@ -214,7 +214,7 @@ function _trig_power_reduce(f, x, n)
     return f(x)^r * sq^k
 end
 
-_isinteger_ge2(n) = n isa Integer && n >= 2
+_isinteger_ge2(@nospecialize(n)) = n isa Integer && (n >= 2)::Bool
 
 """
     _has_neg_leading(x)
@@ -225,17 +225,22 @@ Used to canonicalise `cos(-expr) → cos(expr)` and `sin(-expr) → -sin(expr)`.
 """
 function _has_neg_leading(x)
     x = unwrap_const(x)
-    x isa Number && return x < 0
-    !iscall(x) && return false
-    if ismul(x)
-        a = unwrap_const(first(arguments(x)))
-        return a isa Number && a < 0
+    x isa Real && return (x < 0)::Bool
+    x isa BasicSymbolic || return false
+    @match x begin
+        BSImpl.Const(; val) => return val isa Real && (val < 0)::Bool
+        BSImpl.AddMul(; coeff, dict, variant) => begin
+            if variant === AddMulVariant.MUL
+                return coeff isa Real && (coeff < 0)::Bool
+            else
+                # ADD: dict is unordered (ACDict = Dict), so sorted_arguments
+                # is needed for a deterministic "leading term" check.
+                a = first(sorted_arguments(x))
+                return _has_neg_leading(a)
+            end
+        end
+        _ => return false
     end
-    if isadd(x)
-        a = first(sorted_arguments(x))
-        return _has_neg_leading(a)
-    end
-    return false
 end
 
 const TRIG_REDUCE_RULES = (
@@ -278,20 +283,12 @@ const TRIG_REDUCE_RULES = (
 const TRIG_REDUCE_SIMPLIFIER = Chain(TRIG_REDUCE_RULES)
 
 """
-    _involves_vars(x, target_vars)
+    _involves_vars(x, target_vars_set)
 
 Return `true` if the symbolic expression `x` contains any of the variables in
-`target_vars`.  Used by `trig_reduce(; vars=...)` to selectively reduce only
-trig functions whose arguments involve the specified variables.
+`target_vars_set`.  Uses `query` for efficient short-circuiting tree traversal.
 """
-function _involves_vars(x, target_vars)
-    buf = BasicSymbolic{SymReal}[]
-    search_variables!(buf, unwrap(x))
-    for v in buf, tv in target_vars
-        isequal(v, unwrap(tv)) && return true
-    end
-    return false
-end
+_involves_vars(x, target_vars_set) = query(in(target_vars_set), unwrap(x); default=false)
 
 """
     _build_filtered_trig_reduce(target_vars)
@@ -300,7 +297,8 @@ Build a `Chain` of trig-reduce rules that only fire when the trig argument
 involves at least one of `target_vars`.
 """
 function _build_filtered_trig_reduce(target_vars)
-    sp(x) = _involves_vars(x, target_vars)
+    target_set = Set(unwrap.(target_vars))
+    sp(x) = _involves_vars(x, target_set)
 
     rules = (
         # ── Cleanup (always applies) ──

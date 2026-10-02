@@ -39,15 +39,9 @@ end
     @test @rule((~x)^(~x) => ~x)(b^a) === nothing
     @test @rule((~x)^(~x) => ~x)(a+a) === nothing
     @eqtest @rule((~x)^(~x) => ~x)(sin(a)^sin(a)) == sin(a)
-    # NOTE: This rule fails intermittently despite AC matching on * and +, due to lack of
-    # "nested retries". Essentially, the first term will match `~x => b, ~y => a`, which
-    # will go back to the matcher for `+`, which will try it on the second term and fail.
-    # The matcher for `+` then reverses the order of the addition, the second term then
-    # matches `~x => c, ~z => a` and the matcher for `+` tries it on the first term and
-    # fails. There needs to be proper AC nesting so that a failure for `+` tries the next
-    # matching of `*`.
-    # For now, just reorder the slots in the rule to make it pass.
-    # @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
+    # Nested AC: a local * match may bind slots that later fail at +, so
+    # commutative_term_matcher retries remaining permutations.
+    @eqtest @rule((~x*~y + ~z*~x)  => ~x * (~y+~z))(a*b + a*c) == a*(b+c)
 
     @test issetequal(@rule(+(~~x) => ~~x)(a + b), [a,b])
     @eqtest @rule(+(~~x) => ~~x)(term(+, a, b, c)) == [a,b,c]
@@ -81,6 +75,113 @@ end
     @test res3 === (d, c, a, b) || res3 === (d, c, b, a)
     res4 = r6(c*(a+b)+d)
     @test res4 === (d, c, a, b) || res4 === (d, c, b, a)
+end
+
+# Nested AC matching must backtrack when a continuation fails (depth-2).
+@testset "Nested AC factoring backtracking" begin
+    f1 = @acrule +(~x*~y, ~x*~z) => *(~x, ~y+~z)
+    f2 = @acrule +(~y*~x, ~z*~x) => *(~x, ~y+~z)
+    f3 = @acrule +(~x*~y, ~z*~x) => *(~x, ~y+~z)
+    r = @rule ~y*~x + ~z*~x => ~x*(~y+~z)
+
+    # Original Discourse/issue examples: shared factor in mixed positions
+    @eqtest f1(a*b + b*c) == (a + c)*b
+    @eqtest f2(a*b + b*c) == (a + c)*b
+    @eqtest f3(a*b + b*c) == (a + c)*b
+
+    # Factor on the left of both products
+    @eqtest f1(a*b + a*c) == a*(b + c)
+    @eqtest f2(a*b + a*c) == a*(b + c)
+    @eqtest r(a*b + a*c) == a*(b + c)
+
+    # Factor on the right of both products
+    @eqtest f1(a*c + b*c) == (a + b)*c
+    @eqtest f2(a*c + b*c) == (a + b)*c
+    @eqtest r(a*c + b*c) == (a + b)*c
+end
+
+# Nested segments under non-commutative calls: order matters for dedup keys.
+@testset "AC backtrack preserves nested segment order" begin
+    @syms F(..)::Real G(..)::Real
+    r1 = @rule F(~~y)*F(~~w) + G(~~y) => (~~y, ~~w)
+    res = r1(F(a, b)*F(b, a) + G(a, b))
+    @test res !== nothing
+    @test isequal(collect(res[1]), [a, b])
+    @test isequal(collect(res[2]), [b, a])
+end
+
+# Failing AC segment match on large products must stay cheap (no (n!)^2 search).
+@testset "AC failing match stays bounded" begin
+    @syms a b c d e f g h i j k l m n o
+    ex = a*b*c*d*e*f*g + i*j*k*l*m*n*o
+    # Warmup / compile
+    simplify(a + b)
+    t = @elapsed r = simplify(ex)
+    @test isequal(r, ex)
+    # Generous bound: on a quiet machine this is ~2s; 60s absorbs CI load noise.
+    @test t < 60
+end
+
+# Several sibling fixed-arity products: backtracking budget must keep failure cheap.
+@testset "AC multi-product failing match stays bounded" begin
+    @syms G(..)::Real z
+    xs = ntuple(i -> SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol(:p1_, i); type = Number), 5)
+    ys = ntuple(i -> SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol(:p2_, i); type = Number), 5)
+    zs = ntuple(i -> SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol(:p3_, i); type = Number), 5)
+    rule = @rule ~a*~b*~c*~d*~e + ~f*~g*~h*~i*~j + ~k*~l*~m*~n*~o + G(~a) => ~a
+    ex = *(xs...) + *(ys...) + *(zs...) + G(z)
+    rule(ex) # warmup
+    t = @elapsed r = rule(ex)
+    @test r === nothing
+    # Generous bound: with COMM_BACKTRACK_BUDGET this is well under 1s when quiet.
+    @test t < 30
+end
+
+# Nested Rule calls from a slot predicate must not change the outer work meter.
+@testset "AC re-entrant predicate keeps work meter scoped" begin
+    @syms G(..)::Real z q
+    inner = @rule sin(~x) => ~x
+    deltas = Int[]
+    function pred_reent(x)
+        before = SymbolicUtils.COMM_BT_USED[][]
+        inner(q)
+        push!(deltas, SymbolicUtils.COMM_BT_USED[][] - before)
+        return true
+    end
+    S(s) = SymbolicUtils.Sym{SymbolicUtils.SymReal}(s; type = Number)
+    # a=4, k=4 multi-product fail with predicate on ~s1_2 (reent1.jl shape).
+    rule = @rule ~s1_1*~s1_2::pred_reent*~s1_3*~s1_4 +
+                 ~s2_1*~s2_2*~s2_3*~s2_4 +
+                 ~s3_1*~s3_2*~s3_3*~s3_4 +
+                 ~s4_1*~s4_2*~s4_3*~s4_4 + G(~s1_1) => ~s1_1
+    ex = prod(S(Symbol(:u, 1, :_, t)) for t in 1:4) +
+         prod(S(Symbol(:u, 2, :_, t)) for t in 1:4) +
+         prod(S(Symbol(:u, 3, :_, t)) for t in 1:4) +
+         prod(S(Symbol(:u, 4, :_, t)) for t in 1:4) + G(z)
+    rule(ex) # warmup
+    empty!(deltas)
+    t = @elapsed r = rule(ex)
+    @test r === nothing
+    @test !isempty(deltas)
+    @test all(iszero, deltas)
+    @test t < 30
+end
+
+# Fixed-arity product + failing segment siblings: work meter must bound cost.
+@testset "AC fixed+segment failing match stays bounded" begin
+    @syms G(..)::Real z
+    S(s) = SymbolicUtils.Sym{SymbolicUtils.SymReal}(s; type = Number)
+    us = [S(Symbol(:u, i)) for i in 1:5]
+    ps = [S(Symbol(:p, i)) for i in 1:5]
+    vs = [S(Symbol(:v, i)) for i in 1:7]
+    ws = [S(Symbol(:w, i)) for i in 1:7]
+    rule = @rule ~s1_1*~s1_2*~s1_3*~s1_4*~s1_5 + ~s2_1*~s2_2*~s2_3*~s2_4*~s2_5 + *(~α, ~~x) + *(~β, ~~x) + G(~s1_1) => ~s1_1
+    ex = prod(us) + prod(ps) + prod(vs) + prod(ws) + G(z)
+    rule(ex) # warmup
+    t = @elapsed r = rule(ex)
+    @test r === nothing
+    # Generous bound for CI load; quiet-machine time should be near master (~0.2s).
+    @test t < 30
 end
 
 @testset "Slot matcher with default value" begin

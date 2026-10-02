@@ -155,6 +155,16 @@ end
               (cot(t)^2 - csc(t)^2) atol=1e-10
     end
 
+    # 1 - cos² / sin² and scaled a - a*trig²
+    @eqtest simplify(1 - cos(x)^2) == sin(x)^2
+    @eqtest simplify(1 - sin(x)^2) == cos(x)^2
+    @eqtest simplify(2 - 2cos(x)^2) == 2sin(x)^2
+    @eqtest simplify(2 - 2sin(x)^2) == 2cos(x)^2
+    @eqtest simplify(a - a*sin(x)^2) == a*cos(x)^2
+    @eqtest simplify(a - a*cos(x)^2) == a*sin(x)^2
+    @eqtest simplify(3 - 2cos(x)^2) == 3 - 2cos(x)^2
+    # 2a - 2a*cos² needs a scaled-coeff rule; omitted (perf vs coverage trade-off)
+
     @eqtest unwrap_const(simplify(cosh(x)^2 + 1 - sinh(x)^2)) == 2
     @eqtest unwrap_const(simplify(cosh(y)^2 + 1 - sinh(y)^2)) == 2
     @eqtest unwrap_const(simplify(-sinh(y)^2 + cosh(y)^2 + 1)) == 2
@@ -266,4 +276,18 @@ end
     r = @acrule ~x => ~x where {_f(~x)}
     @eqtest r(a) == a
     @test r(b) === nothing
+end
+
+@testset "ACRule with fewer args than rule arity" begin
+    @syms U A B
+    # (-U)^2 builds a single-argument Mul; an arity-2 rule must simply not match it
+    single = (-U)^2
+    @test length(arguments(single)) == 1
+    r = @acrule ~x * ~y => ~x
+    @test r(single) === nothing
+    # the returned factor follows the term's argument order, which varies
+    # across sessions, so only require that it is one of the two factors
+    @test any(s -> isequal(r(A * B), s), (A, B))
+    # end to end: simplify must not throw, and the value must be preserved
+    @test isequal(expand(simplify(single)), U^2)
 end

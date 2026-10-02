@@ -93,6 +93,13 @@ const TRIG_EXP_RULES = (
     @acrule(~r*sin(~x)^2 + ~r*cos(~x)^2 => ~r),
     @acrule(sin(~x)^2 + -1        => -1*cos(~x)^2),
     @acrule(cos(~x)^2 + -1        => -1*sin(~x)^2),
+    # a - a*trig²(x). Same-slot alone misses flattened 2+(-2)*cos²; unconstrained
+    # segment ~~b is too slow on large sums. Literal two-slot + same-slot only.
+    # ~a::(!has_trig_exp) cuts AC attempts that bind ~a to a trig term.
+    @acrule(~a::is_literal_number + ~b::is_literal_number*cos(~x)^2 => _literal_negates(~a, ~b) ? ~a*sin(~x)^2 : nothing),
+    @acrule(~a::(!has_trig_exp) + -1*~a*cos(~x)^2 => ~a*sin(~x)^2),
+    @acrule(~a::is_literal_number + ~b::is_literal_number*sin(~x)^2 => _literal_negates(~a, ~b) ? ~a*cos(~x)^2 : nothing),
+    @acrule(~a::(!has_trig_exp) + -1*~a*sin(~x)^2 => ~a*cos(~x)^2),
 
     @acrule(cos(~x)^2 + -1*sin(~x)^2 => cos(2 * ~x)),
     @acrule(sin(~x)^2 + -1*cos(~x)^2 => -cos(2 * ~x)),

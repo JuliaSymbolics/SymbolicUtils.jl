@@ -276,6 +276,12 @@ function TermInterface.iscall(s::BSImpl.Type)
     !MData.isa_variant(s, BSImpl.Sym) && !MData.isa_variant(s, BSImpl.Const)
 end
 
+# Remaining TermInterface API functions
+isexpr(s::BSImpl.Type) = iscall(s)
+head(s::BSImpl.Type) = operation(s)
+children(s::BSImpl.Type) = arguments(s)
+sorted_children(s::BSImpl.Type) = sorted_arguments(s)
+
 function TermInterface.maketerm(::Type{BasicSymbolic{TreeReal}}, f, args, metadata; @nospecialize(type = _promote_symtype(f, args)))
     # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
     sh = f === in && length(args) > 1 && symtype(args[2]) <: AbstractArray{<:Any, 0} ? ShapeVecT() :

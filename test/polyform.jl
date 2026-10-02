@@ -132,8 +132,6 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             g = poly_to_gcd_form(p)
             T = eltype(MP.coefficients(g))
             @test isconcretetype(T)
-            # Exact binary rationals (not `rationalize`) so `MP.gcd` skips
-            # absolute `isapproxzero` (#1050) without inventing factors.
             @test T <: Rational
             @test MP.coefficients(g) == [Rational{BigInt}(Float32(1.5)),
                                          Rational{BigInt}(Float64(-2.5))]
@@ -143,7 +141,7 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             p = poly_with_coeffs(Number[0.1, 1 // 3], (0.1 - v))
             g = poly_to_gcd_form(p)
             @test MP.coefficients(g) == [Rational{BigInt}(0.1), Rational{BigInt}(1 // 3)]
-            @test Rational{BigInt}(0.1) != 1 // 10  # not rounded by rationalize
+            @test Rational{BigInt}(0.1) != 1 // 10
         end
 
         @testset "non-finite floats stay floats" begin

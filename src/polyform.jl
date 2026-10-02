@@ -320,9 +320,9 @@ function poly_to_gcd_form(p::PolynomialT)
         (complex ∘ float).(MP.coefficients(p))
     else
         # Float `MP.gcd` uses absolute `isapproxzero` (~1.5e-8) and can
-        # cancel wrongly (#1050). Lift finite floats to their exact
-        # `Rational{BigInt}` binary value (not `rationalize`, which rounds).
-        # Keep existing rationals/integers exact. Non-finite → stay float.
+        # cancel wrongly (#1050). Use exact binary `Rational{BigInt}(c)`
+        # (not `rationalize`, which rounds and invents factors). Keep
+        # existing rationals exact. Non-finite → stay float.
         raw = MP.coefficients(p)
         if any(c -> c isa AbstractFloat && !isfinite(c), raw)
             float.(raw)
@@ -342,7 +342,6 @@ function poly_to_gcd_form(p::PolynomialT)
     return DP.Polynomial(cs, MP.monomials(p))
 end
 
-# Exact float→rational; leave rationals/integers unrounded.
 _exact_gcd_coeff(c::Rational) = Rational{BigInt}(c)
 _exact_gcd_coeff(c::Integer) = Rational{BigInt}(c)
 _exact_gcd_coeff(c::AbstractFloat) = Rational{BigInt}(c)

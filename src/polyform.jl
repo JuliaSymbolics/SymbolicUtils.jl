@@ -323,15 +323,24 @@ function poly_to_gcd_form(p::PolynomialT)
     return DP.Polynomial(cs, MP.monomials(p))
 end
 
+# MultivariatePolynomials defaults to `SubresultantAlgorithm`, which on
+# integer-coefficient univariates can return a polynomial that does not
+# divide either argument (issue #1139: gcd of coprime
+# `x^7 + x^6 - 4x^5 + 6x^4 + 4x^3 + 12x^2 + 8` and
+# `x^8 - 2x^6 - 4x^4 + 8x^2` is reported as `-4 - x`). The generalized
+# Euclidean algorithm is exact on that input and still returns content
+# (e.g. `gcd(2x^2 + 4x, 2x) == 2x`).
+const POLY_GCD_ALGO = MP.GeneralizedEuclideanAlgorithm()
+
 function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, PolynomialT})
     if p1 isa PolyVarT && p2 isa PolyVarT
-        return gcd(p1, p2)
+        return gcd(p1, p2, POLY_GCD_ALGO)
     elseif p1 isa PolyVarT && p2 isa PolynomialT
-        return gcd(p1, poly_to_gcd_form(p2))
+        return gcd(p1, poly_to_gcd_form(p2), POLY_GCD_ALGO)
     elseif p1 isa PolynomialT && p2 isa PolyVarT
-        return gcd(poly_to_gcd_form(p1), p2)
+        return gcd(poly_to_gcd_form(p1), p2, POLY_GCD_ALGO)
     elseif p1 isa PolynomialT && p2 isa PolynomialT
-        return gcd(poly_to_gcd_form(p1), poly_to_gcd_form(p2))
+        return gcd(poly_to_gcd_form(p1), poly_to_gcd_form(p2), POLY_GCD_ALGO)
     end
 end
 

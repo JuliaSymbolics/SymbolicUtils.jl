@@ -262,3 +262,17 @@ end
     @eqtest r(a) == a
     @test r(b) === nothing
 end
+
+@testset "ACRule with fewer args than rule arity" begin
+    @syms U A B
+    # (-U)^2 builds a single-argument Mul; an arity-2 rule must simply not match it
+    single = (-U)^2
+    @test length(arguments(single)) == 1
+    r = @acrule ~x * ~y => ~x
+    @test r(single) === nothing
+    # the returned factor follows the term's argument order, which varies
+    # across sessions, so only require that it is one of the two factors
+    @test any(s -> isequal(r(A * B), s), (A, B))
+    # end to end: simplify must not throw, and the value must be preserved
+    @test isequal(expand(simplify(single)), U^2)
+end

@@ -105,12 +105,12 @@ const TRIG_EXP_RULES = (
     @acrule(sin(~x)^2 + -1*cos(~x)^2 => -cos(2 * ~x)),
     @acrule(cos(~x) * sin(~x) => sin(2 * ~x)/2),
 
-    @acrule(tan(~x)^2 + -1*sec(~x)^2 => one(~x)),
+    @acrule(tan(~x)^2 + -1*sec(~x)^2 => -one(~x)),
     @acrule(-1*tan(~x)^2 + sec(~x)^2 => one(~x)),
     @acrule(tan(~x)^2 +  1 => sec(~x)^2),
     @acrule(sec(~x)^2 + -1 => tan(~x)^2),
 
-    @acrule(cot(~x)^2 + -1*csc(~x)^2 => one(~x)),
+    @acrule(cot(~x)^2 + -1*csc(~x)^2 => -one(~x)),
     @acrule(cot(~x)^2 +  1 => csc(~x)^2),
     @acrule(csc(~x)^2 + -1 => cot(~x)^2),
 

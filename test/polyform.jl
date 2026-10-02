@@ -206,6 +206,32 @@ end
     @test unwrap_const(simplify_fractions(num / num)) == 1
 end
 
+@testset "simplify does not cancel coprime rationals (#1139)" begin
+    # `add_with_div` is numerically faithful; the wrong rational came from
+    # `safe_gcd` using MultivariatePolynomials' default subresultant gcd,
+    # which returned a non-divisor `-4 - x` on the integer-coefficient
+    # numerator/denominator of this combined fraction.
+    @syms x::Real
+    e = x / (x^2 + 2) + (x^2 + 2)^2 / (x^2 * (x^2 - 2)^2)
+    s = simplify(e)
+    s_expand = simplify(e; expand = true)
+    evalf(ex, v) = Float64(unwrap_const(substitute(ex, Dict(x => v))))
+    # Printed values from https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1139
+    expected = (
+        0.3 => 13.447574124105094,
+        1.9 => 3.701989920009555,
+        -0.7 => 5.26830987160693,
+    )
+    for (v, ev) in expected
+        @test evalf(e, v) ≈ ev rtol = 1e-14
+        @test evalf(s, v) ≈ ev rtol = 1e-12
+        @test evalf(s_expand, v) ≈ ev rtol = 1e-12
+    end
+    for v in (0.1, 0.5, 1.1, -1.3, 2.5)
+        @test evalf(s, v) ≈ evalf(e, v) rtol = 1e-12
+    end
+end
+
 @testset "isone iszero" begin
     @syms a b c d e f g h i
     x = (f + ((((g*(c^2)*(e^2)) / d - e*h*(c^2)) / b + (-c*e*f*g) / d + c*e*i) /

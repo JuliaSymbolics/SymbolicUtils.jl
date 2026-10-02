@@ -12,6 +12,17 @@ struct NoMatrixVector{T} <: AbstractVector{T}
 end
 Base.size(x::NoMatrixVector) = size(x.data)
 Base.getindex(x::NoMatrixVector, i::Int) = x.data[i]
+
+module MapreduceMethodsFixture
+    using SymbolicUtils
+
+    struct WrappedArray{T, N} <: AbstractArray{T, N}
+        value::Array{T, N}
+    end
+    Base.size(x::WrappedArray) = size(x.value)
+    unwrap(x::WrappedArray) = x.value
+    SymbolicUtils.@mapreduce_methods WrappedArray unwrap identity
+end
 Base.Matrix(::LinearAlgebra.Diagonal{T, V}) where {T, V <: NoMatrixVector} =
     error("unexpected dense conversion")
 
@@ -525,6 +536,39 @@ end
     @test_throws ArgumentError map(+, a, a, safe_a)
     @test_throws ArgumentError mapreduce(safe_f, +, a)
     @test_throws ArgumentError mapreduce(+, +, a, a, safe_a)
+end
+
+@testset "@mapreduce_methods" begin
+    using .MapreduceMethodsFixture: MapreduceMethodsFixture, WrappedArray
+
+    ambiguities = Test.detect_ambiguities(
+        SymbolicUtils, MapreduceMethodsFixture; recursive = true
+    )
+    # The macro can only close intersections with methods in modules
+    # SymbolicUtils controls; third-party `mapreduce` overloads (e.g.
+    # FillArrays', loaded transitively by other test files) intersect the
+    # generated methods by construction and are out of scope here.
+    fixture_ambiguities = filter(ambiguities) do (first_method, second_method)
+        mod1 = first_method.module
+        mod2 = second_method.module
+        (mod1 === MapreduceMethodsFixture || mod2 === MapreduceMethodsFixture) &&
+            mod1 in (Base, SymbolicUtils, MapreduceMethodsFixture) &&
+            mod2 in (Base, SymbolicUtils, MapreduceMethodsFixture)
+    end
+    @test isempty(fixture_ambiguities)
+
+    w1 = WrappedArray([1, 2])
+    w2 = WrappedArray([3, 4])
+    @test mapreduce(identity, +, w1) == 3
+    @test mapreduce(+, +, w1, w2) == mapreduce(+, +, [1, 2], [3, 4])
+    @test mapreduce(+, +, [10, 20], w2) == mapreduce(+, +, [10, 20], [3, 4])
+    @test mapreduce(+, +, w1, [10, 20]) == mapreduce(+, +, [1, 2], [10, 20])
+    @test mapreduce(+, +, w1, Broadcast.broadcasted(+, [3, 4])) ==
+        mapreduce(+, +, [1, 2], [3, 4])
+    @syms f(..) c[1:2]
+    @test isequal(mapreduce(f, +, w1), f(1) + f(2))
+    @test mapreduce(+, +, w1, c) isa BasicSymbolic
+    @test mapreduce(+, +, c, w1) isa BasicSymbolic
 end
 
 @testset "in operator on symbolics" begin

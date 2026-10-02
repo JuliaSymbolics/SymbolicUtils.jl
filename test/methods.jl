@@ -14,14 +14,14 @@ Base.size(x::NoMatrixVector) = size(x.data)
 Base.getindex(x::NoMatrixVector, i::Int) = x.data[i]
 
 module MapreduceMethodsFixture
-using SymbolicUtils
+    using SymbolicUtils
 
-struct WrappedArray{T, N} <: AbstractArray{T, N}
-    value::Array{T, N}
-end
-Base.size(x::WrappedArray) = size(x.value)
-unwrap(x::WrappedArray) = x.value
-SymbolicUtils.@mapreduce_methods WrappedArray unwrap identity
+    struct WrappedArray{T, N} <: AbstractArray{T, N}
+        value::Array{T, N}
+    end
+    Base.size(x::WrappedArray) = size(x.value)
+    unwrap(x::WrappedArray) = x.value
+    SymbolicUtils.@mapreduce_methods WrappedArray unwrap identity
 end
 Base.Matrix(::LinearAlgebra.Diagonal{T, V}) where {T, V <: NoMatrixVector} =
     error("unexpected dense conversion")

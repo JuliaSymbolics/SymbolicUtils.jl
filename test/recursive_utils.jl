@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, substitute, query, Operator, scalarize, term
+using SymbolicUtils: Sym, Term, symtype, shape, BasicSymbolic, Const, substitute, query, Operator, scalarize, term
 import SymbolicUtils: search_variables!, default_substitute_filter, evaluate, default_is_atomic, search_variables, Code
 using Test
 using SparseArrays
@@ -274,10 +274,39 @@ end
     Y = substitute.(X, w => -w)
     Ys = scalarize(Y)
     @test all(y -> iscall(y) && operation(y) === substitute, Ys)
+    @test all(y -> symtype(y) === Real, Ys)
     result = map(y -> substitute(y, Dict(X[1] => 2w, X[2] => 3w)), Ys)
     @test isequal(result, [-2w, -3w])
 
-    # Deferred substitute terms re-apply after their arguments are rewritten
-    lazy = term(substitute, X[1], w => -w)
+    lazy = term(substitute, X[1], w => -w; type = symtype(X[1]), shape = shape(X[1]))
     @test isequal(substitute(lazy, Dict(X[1] => 2w); fold = Val(true)), -2w)
+end
+
+@testset "Preserve already-applicable substitutions" begin
+    @syms X[1:2]::Real w::Real z::Real
+    @test isequal(scalarize(substitute.(X, X[1] => w)), [w, X[2]])
+    for fold in (Val(false), Val(true))
+        got = substitute(scalarize(substitute.(X .+ w, w => z)), Dict(w => 1); fold)
+        @test isequal(got, [X[1] + z, X[2] + z])
+    end
+    got = scalarize(substitute(substitute.(X, w => -w), Dict(X => [2w, 3w])))
+    @test isequal(got, [-2w, -3w])
+end
+
+@testset "Identity substitution keeps numeric scalar type" begin
+    @syms X[1:2]::Real w::Real
+    ys = scalarize(substitute.(X, w => w))
+    @test symtype(ys[1]) === Real
+    @test isequal(ys[1] + 1, X[1] + 1)
+    @test isequal(2ys[1], 2X[1])
+    @test isequal(sin(ys[1]), sin(X[1]))
+end
+
+@testset "Deferred sign-changing substitute keeps numeric type" begin
+    @syms X[1:2]::Real w::Real
+    ys = scalarize(substitute.(X, w => -w))
+    @test all(y -> symtype(y) === Real, ys)
+    @test isequal(substitute(ys[1] + 1, Dict(X[1] => 2w)), -2w + 1)
+    @test isequal(substitute(2ys[1], Dict(X[1] => 2w)), -4w)
+    @test isequal(substitute(sin(ys[1]), Dict(X[1] => 2w)), sin(-2w))
 end

@@ -199,7 +199,12 @@ function (s::DefaultSubstituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
         newargs[i] = newarg
     end
     dirty |= op !== _op
-    result = if dirty || can_fold
+    # Re-apply deferred `substitute` terms after their arguments are rewritten
+    # (e.g. `substitute(X[1], w => -w)` becoming `substitute(2w, w => -w)`).
+    # Only when `dirty` so unresolved lazy terms are not eagerly collapsed (#494).
+    result = if dirty && _op === substitute && length(newargs) >= 2
+        substitute(newargs[1], unwrap_const(newargs[2]); fold = Val{Fold}())::BasicSymbolic{T}
+    elseif dirty || can_fold
         if Fold
             combine_fold(T, _op, newargs, metadata(ex), can_fold)::BasicSymbolic{T}
         else
@@ -643,6 +648,12 @@ function _scalarize_broadcast(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T,
             @assert !is_array_shape(shape(val))
             scal_args[i] = Ref(val)
         end
+    end
+    # Do not eagerly apply `substitute` to scalarized elements: `substitute(X[i], w => -w)`
+    # is a no-op while `X[i]` is still an opaque getindex, so the scheduled rule would be
+    # dropped. Emit lazy `substitute` terms so the rule survives until elements are resolved (#494).
+    if !isempty(scal_args) && scal_args[1] === substitute
+        return broadcast((xs...) -> term(substitute, xs...; vartype = T), scal_args[2:end]...)
     end
     return broadcast(scal_args...)
 end

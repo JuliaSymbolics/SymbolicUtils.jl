@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, substitute, query, Operator, scalarize
+using SymbolicUtils: Sym, Term, symtype, shape, BasicSymbolic, Const, substitute, query, Operator, scalarize, term
 import SymbolicUtils: search_variables!, default_substitute_filter, evaluate, default_is_atomic, search_variables, Code
 using Test
 using SparseArrays
@@ -267,4 +267,67 @@ end
     arr[5, 5] = a
     arr = Const{SymReal}(arr)
     @test_nowarn substitute(arr, [a => b])
+end
+
+@testset "scalarize preserves deferred broadcast substitute (#494)" begin
+    @syms X[1:2]::Real w::Real
+    Y = substitute.(X, w => -w)
+    Ys = scalarize(Y)
+    @test all(y -> iscall(y) && operation(y) === substitute, Ys)
+    @test all(y -> symtype(y) === Real, Ys)
+    result = map(y -> substitute(y, Dict(X[1] => 2w, X[2] => 3w)), Ys)
+    @test isequal(result, [-2w, -3w])
+
+    lazy = term(substitute, X[1], w => -w; type = symtype(X[1]), shape = shape(X[1]))
+    @test isequal(substitute(lazy, Dict(X[1] => 2w); fold = Val(true)), -2w)
+end
+
+@testset "Preserve already-applicable substitutions" begin
+    @syms X[1:2]::Real w::Real z::Real
+    @test isequal(scalarize(substitute.(X, X[1] => w)), [w, X[2]])
+    for fold in (Val(false), Val(true))
+        got = substitute(scalarize(substitute.(X .+ w, w => z)), Dict(w => 1); fold)
+        @test isequal(got, [X[1] + z, X[2] + z])
+    end
+    got = scalarize(substitute(substitute.(X, w => -w), Dict(X => [2w, 3w])))
+    @test isequal(got, [-2w, -3w])
+end
+
+@testset "Identity substitution keeps numeric scalar type" begin
+    @syms X[1:2]::Real w::Real
+    ys = scalarize(substitute.(X, w => w))
+    @test symtype(ys[1]) === Real
+    @test isequal(ys[1] + 1, X[1] + 1)
+    @test isequal(2ys[1], 2X[1])
+    @test isequal(sin(ys[1]), sin(X[1]))
+end
+
+@testset "Deferred sign-changing substitute keeps numeric type" begin
+    @syms X[1:2]::Real w::Real
+    ys = scalarize(substitute.(X, w => -w))
+    @test all(y -> symtype(y) === Real, ys)
+    @test isequal(substitute(ys[1] + 1, Dict(X[1] => 2w)), -2w + 1)
+    @test isequal(substitute(2ys[1], Dict(X[1] => 2w)), -4w)
+    @test isequal(substitute(sin(ys[1]), Dict(X[1] => 2w)), sin(-2w))
+end
+
+@testset "Pending substitute survives repeated scalarization" begin
+    @syms X[1:2]::Real A[1:2]::Real w::Real z::Real
+    ys = scalarize(substitute.(X, w => -w))
+    rules = Dict(X[1] => 2w, X[2] => 3w)
+    for (ex, expected) in (
+            (scalarize(ys), [-2w, -3w]),
+            (scalarize(scalarize(ys)), [-2w, -3w]),
+            (scalarize(2ys), [-4w, -6w]),
+            (scalarize(1 .+ ys), [1 - 2w, 1 - 3w]),
+            (scalarize(sin.(ys)), [sin(-2w), sin(-3w)]),
+            (scalarize(substitute.(substitute.(X, w => -w), w => 2w)), [-4w, -6w]),
+        )
+        @test isequal(substitute(ex, rules), expected)
+    end
+    aliased = substitute(ys, Dict(X => A))
+    @test isequal(substitute(aliased, Dict(A[1] => 2w, A[2] => 3w)), [-2w, -3w])
+    @test isequal(substitute(substitute(ys, Dict(z => 1)), rules), [-2w, -3w])
+    @test isequal(scalarize(term(substitute, 2w, w => -w; type = Real, shape = shape(w))), -2w)
+    @test_throws MethodError scalarize(substitute.(X, w => -w, 1))
 end

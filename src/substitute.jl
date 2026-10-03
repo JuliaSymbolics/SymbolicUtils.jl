@@ -199,7 +199,11 @@ function (s::DefaultSubstituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
         newargs[i] = newarg
     end
     dirty |= op !== _op
-    result = if dirty || can_fold
+    result = if dirty && _op === substitute && length(newargs) == 2
+        # `invokelatest` acts as an inference barrier: inferring this rare recursive path
+        # inline makes every `s(x)` call box the substituter.
+        invokelatest(_substitute_or_defer, T, newargs[1], unwrap_const(newargs[2]), Val{Fold}())::BasicSymbolic{T}
+    elseif dirty || can_fold
         if Fold
             combine_fold(T, _op, newargs, metadata(ex), can_fold)::BasicSymbolic{T}
         else
@@ -644,7 +648,64 @@ function _scalarize_broadcast(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T,
             scal_args[i] = Ref(val)
         end
     end
+    if length(scal_args) == 3 && scal_args[1] === substitute
+        return broadcast((ex, rules) -> _substitute_or_defer(T, ex, rules), scal_args[2], scal_args[3])
+    end
     return broadcast(scal_args...)
+end
+
+@inline function _is_array_element(ex)
+    return ex isa BasicSymbolic && iscall(ex) && operation(ex) === getindex &&
+        is_array_shape(shape(arguments(ex)[1]))
+end
+
+function _substitution_rule_pairs(rules)
+    if rules isa Pair
+        return (rules,)
+    elseif rules isa AbstractDict
+        return collect(pairs(rules))
+    elseif rules isa AbstractArray
+        return [p for p in rules if p isa Pair]
+    end
+    return Pair[]
+end
+
+function _should_defer_substitute(expr, rules)
+    nontrivial = false
+    has_content_key = false
+    for (k, v) in _substitution_rule_pairs(rules)
+        nontrivial |= !(@manually_scope COMPARE_FULL => true isequal(k, v)::Bool)
+        has_content_key |= !_is_array_element(k)
+        nontrivial && has_content_key && break
+    end
+    nontrivial && has_content_key || return false
+    return query(_is_array_element, expr; default = false)
+end
+
+# A substitution that is a no-op only because `expr` still contains unresolved array
+# elements is kept as a lazy `substitute(expr, rules)` term, so it applies once those
+# elements are substituted. Substitutions that change `expr` apply immediately.
+function _substitute_or_defer(::Type{T}, expr, rules, fold = Val{false}()) where {T}
+    @nospecialize expr rules
+    applied = substitute(expr, rules; fold)
+    if !(@manually_scope COMPARE_FULL => true isequal(applied, expr)::Bool)
+        return applied
+    elseif _should_defer_substitute(expr, rules)
+        return term(substitute, expr, rules; vartype = T, type = symtype(expr), shape = shape(expr))
+    else
+        return expr
+    end
+end
+
+scalarization_function(::typeof(substitute)) = _scalarize_substitute
+
+function _scalarize_substitute(f, x::BasicSymbolic{T}, v::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = arguments(x)
+    if length(args) != 2 || is_array_shape(shape(x))
+        return _default_scalarize(f, x, v)
+    end
+    return _substitute_or_defer(T, scalarize(args[1], v), unwrap_const(args[2]))
 end
 
 scalarization_function(::Union{typeof(adjoint), typeof(transpose)}) = _scalarize_adjoint_transpose

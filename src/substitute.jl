@@ -199,9 +199,8 @@ function (s::DefaultSubstituter{Fold})(ex::BasicSymbolic{T}) where {T, Fold}
         newargs[i] = newarg
     end
     dirty |= op !== _op
-    # Re-apply deferred `substitute` terms after their arguments are rewritten
-    # (e.g. `substitute(X[1], w => -w)` becoming `substitute(2w, w => -w)`).
-    # Only when `dirty` so unresolved lazy terms are not eagerly collapsed (#494).
+    # Re-apply deferred substitute terms only after arguments change, so unresolved
+    # lazy terms are not collapsed before their subjects are resolved (#494).
     result = if dirty && _op === substitute && length(newargs) >= 2
         substitute(newargs[1], unwrap_const(newargs[2]); fold = Val{Fold}())::BasicSymbolic{T}
     elseif dirty || can_fold
@@ -649,13 +648,65 @@ function _scalarize_broadcast(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T,
             scal_args[i] = Ref(val)
         end
     end
-    # Do not eagerly apply `substitute` to scalarized elements: `substitute(X[i], w => -w)`
-    # is a no-op while `X[i]` is still an opaque getindex, so the scheduled rule would be
-    # dropped. Emit lazy `substitute` terms so the rule survives until elements are resolved (#494).
+    # Applicable substitute rules must still run immediately. Only defer a no-op when the
+    # subject may later resolve to something the rule can match (#494).
     if !isempty(scal_args) && scal_args[1] === substitute
-        return broadcast((xs...) -> term(substitute, xs...; vartype = T), scal_args[2:end]...)
+        return broadcast((xs...) -> _scalarize_substitute_element(T, xs...), scal_args[2:end]...)
     end
     return broadcast(scal_args...)
+end
+
+@inline function _is_array_element_key(k)
+    return k isa BasicSymbolic && iscall(k) && operation(k) === getindex &&
+        is_array_shape(shape(arguments(k)[1]))
+end
+
+@inline function _is_unresolved_array_element(ex)
+    return ex isa BasicSymbolic && iscall(ex) && operation(ex) === getindex &&
+        is_array_shape(shape(arguments(ex)[1]))
+end
+
+function _substitution_rule_pairs(rules)
+    if rules isa Pair
+        return (rules,)
+    elseif rules isa AbstractDict
+        return collect(pairs(rules))
+    elseif rules isa AbstractArray
+        return [p for p in rules if p isa Pair]
+    end
+    return Pair[]
+end
+
+function _should_defer_substitute(expr, rules)
+    rule_pairs = _substitution_rule_pairs(rules)
+    isempty(rule_pairs) && return false
+    nontrivial = false
+    has_content_key = false
+    for (k, v) in rule_pairs
+        nontrivial |= !(@manually_scope COMPARE_FULL => true isequal(k, v)::Bool)
+        has_content_key |= !_is_array_element_key(k)
+        nontrivial && has_content_key && break
+    end
+    nontrivial || return false
+    has_content_key || return false
+    return query(_is_unresolved_array_element, expr; default = false)
+end
+
+function _scalarize_substitute_element(::Type{T}, expr, rules) where {T}
+    @nospecialize expr rules
+    applied = substitute(expr, rules)
+    if !(@manually_scope COMPARE_FULL => true isequal(applied, expr)::Bool)
+        return applied
+    elseif _should_defer_substitute(expr, rules)
+        return term(substitute, expr, rules; vartype = T, type = symtype(expr), shape = shape(expr))
+    else
+        return expr
+    end
+end
+
+function _scalarize_substitute_element(::Type{T}, expr, rules, args...) where {T}
+    @nospecialize expr rules args
+    return _scalarize_substitute_element(T, expr, rules)
 end
 
 scalarization_function(::Union{typeof(adjoint), typeof(transpose)}) = _scalarize_adjoint_transpose

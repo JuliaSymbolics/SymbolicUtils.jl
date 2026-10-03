@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, substitute, query, Operator, scalarize
+using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, substitute, query, Operator, scalarize, term
 import SymbolicUtils: search_variables!, default_substitute_filter, evaluate, default_is_atomic, search_variables, Code
 using Test
 using SparseArrays
@@ -267,4 +267,17 @@ end
     arr[5, 5] = a
     arr = Const{SymReal}(arr)
     @test_nowarn substitute(arr, [a => b])
+end
+
+@testset "scalarize preserves deferred broadcast substitute (#494)" begin
+    @syms X[1:2]::Real w::Real
+    Y = substitute.(X, w => -w)
+    Ys = scalarize(Y)
+    @test all(y -> iscall(y) && operation(y) === substitute, Ys)
+    result = map(y -> substitute(y, Dict(X[1] => 2w, X[2] => 3w)), Ys)
+    @test isequal(result, [-2w, -3w])
+
+    # Deferred substitute terms re-apply after their arguments are rewritten
+    lazy = term(substitute, X[1], w => -w)
+    @test isequal(substitute(lazy, Dict(X[1] => 2w); fold = Val(true)), -2w)
 end

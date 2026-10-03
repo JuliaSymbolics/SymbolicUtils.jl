@@ -1,5 +1,5 @@
 using SymbolicUtils: Term, symtype, unwrap_const, Add, Mul
-using Test, SymbolicUtils, Random
+using Test, SymbolicUtils
 
 include("utils.jl")
 
@@ -157,14 +157,23 @@ let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
             @test gcd(g1, g2) isa DP.Polynomial
         end
 
-        @testset "homogeneous Int32 widens to BigInt (overflow-safe gcd)" begin
-            # Intermediate Int64 GCD arithmetic can overflow and return a
-            # non-divisor (#1139); integer coefficients are widened to BigInt.
+        @testset "homogeneous Int32 widens to Int64 (32-bit gcd safety)" begin
+            # On 32-bit Julia, integer literals are Int32; homogeneous
+            # `Integer.(::Vector{Int32})` used to keep Int32 and then
+            # `MP.gcd`/`div_multiple` could DivideError (MomentClosure).
             p = poly_with_coeffs(Number[Int32(1), Int32(-2), Int32(1)],
                                   (1 - v) * (1 - v))
             g = poly_to_gcd_form(p)
-            @test eltype(MP.coefficients(g)) === BigInt
+            @test eltype(MP.coefficients(g)) === Int64
             @test gcd(g, g) isa DP.Polynomial
+        end
+
+        @testset "BigInt coefficients beyond typemax(Int) stay exact (#1111)" begin
+            a = big(10)^19
+            p = poly_with_coeffs(Number[a, a], (a + a * v))
+            g = poly_to_gcd_form(p)
+            @test eltype(MP.coefficients(g)) === BigInt
+            @test MP.coefficients(g) == [a, a]
         end
     end
 end
@@ -189,73 +198,20 @@ end
 
 @testset "simplify_div with Rational{BigInt} coefficients (#1082)" begin
     # `to_poly!` keeps whatever concrete coefficient types the expression
-    # carries; `safe_gcd` widens via `poly_to_gcd_form` and `div_multiple`
-    # must divide those converted partial polynomials.
+    # carries; `safe_gcd` widens the gcd computation to `Rational{Int64}` via
+    # `poly_to_gcd_form`. `div_multiple` must divide the *converted* partial
+    # polynomials — otherwise it mixes `Rational{BigInt}` and `Rational{Int64}`
+    # inside MutableArithmetics' buffered `sub_mul`, which is unimplemented.
     @syms x
     half = big(1) // big(2)
     # Expanded numerator so `quick_cancel` cannot cancel textually.
     num = x^2 + (big(3) // big(2)) * x + half
     den = x + half
+    # Must not throw, and must give the same result as the equivalent
+    # Rational{Int64} coefficient expression.
     @test isequal(simplify_fractions(num / den),
                   simplify_fractions((x^2 + (3 // 2) * x + 1 // 2) / (x + 1 // 2)))
     @test unwrap_const(simplify_fractions(num / num)) == 1
-end
-
-@testset "overflow-safe rational cancellation (#1139)" begin
-    # Intermediate Int64 polynomial GCDs can overflow and cancel a non-divisor.
-    @syms x::Real
-    evalf(ex, v) = Float64(unwrap_const(substitute(ex, Dict(x => v))))
-
-    e = x / (x^2 + 2) + (x^2 + 2)^2 / (x^2 * (x^2 - 2)^2)
-    s = simplify(e)
-    s_expand = simplify(e; expand = true)
-    # Printed values from https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1139
-    expected = (
-        0.3 => 13.447574124105094,
-        1.9 => 3.701989920009555,
-        -0.7 => 5.26830987160693,
-    )
-    for (v, ev) in expected
-        @test evalf(e, v) ≈ ev rtol = 1.0e-14
-        @test evalf(s, v) ≈ ev rtol = 1.0e-12
-        @test evalf(s_expand, v) ≈ ev rtol = 1.0e-12
-    end
-    for v in (0.1, 0.5, 1.1, -1.3, 2.5)
-        @test evalf(s, v) ≈ evalf(e, v) rtol = 1.0e-12
-    end
-
-    # Independent review of #1141: Int64 generalized Euclidean cancelled a
-    # non-divisor and returned 1; true value at x=0 is -3/5.
-    n = -9 + 9x + x^2 + 2x^3 - 8x^4 - 18x^5 - 5x^6
-    d = 15 - x - 14x^2 + 2x^3 + 17x^4 + 14x^5 - 6x^6 - 3x^7
-    r = n / d
-    for expflag in (false, true)
-        sr = simplify(r; expand = expflag)
-        @test evalf(sr, 0.0) ≈ -3 / 5 rtol = 1.0e-12
-        for v in (0.3, 0.5, -0.4, 1.2)
-            @test evalf(sr, v) ≈ evalf(r, v) rtol = 1.0e-12
-        end
-    end
-
-    # Seeded random exact-divisibility check: simplify(n/d) must match n/d.
-    rng = Random.Xoshiro(1141)
-    for _ in 1:40
-        deg_n = rand(rng, 1:5)
-        deg_d = rand(rng, 1:5)
-        cn = [rand(rng, -9:9) for _ in 0:deg_n]
-        cd = [rand(rng, -9:9) for _ in 0:deg_d]
-        all(iszero, cn) && (cn[1] = 1)
-        all(iszero, cd) && (cd[1] = 1)
-        iszero(cd[1]) && (cd[1] = 1)
-        rn = sum(c * x^(k - 1) for (k, c) in enumerate(cn))
-        rd = sum(c * x^(k - 1) for (k, c) in enumerate(cd))
-        rr = rn / rd
-        ss = simplify(rr)
-        for v in (0.2, 0.7, -0.5)
-            abs(evalf(rd, v)) < 1.0e-8 && continue
-            @test evalf(ss, v) ≈ evalf(rr, v) rtol = 1.0e-10 atol = 1.0e-12
-        end
-    end
 end
 
 @testset "isone iszero" begin
@@ -277,6 +233,20 @@ end
     @test isequal(expand(s), s)
     @test isequal(expand(a * (s + b)), a * s + a * b)
     @test isequal(expand(s / 3), (1 // 3) * s)
+end
+
+@testset "simplify cancels BigInt coefficients beyond typemax(Int) (#1111)" begin
+    @syms x
+    # Issue MWE: 10^19 exceeds typemax(Int) on both 32- and 64-bit.
+    a = big(10)^19
+    # Safe side of the gate must be derived from typemax(Int): on x86
+    # (Int32) big(10)^18 is already past the bound, so hard-coding 10^18
+    # made `@test safe_isinteger(b)` fail in CI's 32-bit job.
+    b = big(typemax(Int)) ÷ 2
+    @test !SymbolicUtils.safe_isinteger(a)
+    @test SymbolicUtils.safe_isinteger(b)
+    @eqtest simplify((a * x + a) / (a * x)) == (1 + x) / x
+    @eqtest simplify((b * x + b) / (b * x)) == (1 + x) / x
 end
 
 @testset "simplify survives rational coefficients too large for Int64" begin

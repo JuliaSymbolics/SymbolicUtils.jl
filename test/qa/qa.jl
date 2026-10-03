@@ -5,7 +5,7 @@ run_qa(
     SymbolicUtils;
     ei_kwargs = (;
         no_implicit_imports = (; allow_unanalyzable = (SymbolicUtils.BasicSymbolicImpl,)),
-        no_stale_explicit_imports = (; ignore = (:children,), allow_unanalyzable = (SymbolicUtils.BasicSymbolicImpl,)),
+        no_stale_explicit_imports = (; allow_unanalyzable = (SymbolicUtils.BasicSymbolicImpl,)),
         all_qualified_accesses_via_owners = (; ignore = (:copy,)),
         all_qualified_accesses_are_public = (;
             ignore = (

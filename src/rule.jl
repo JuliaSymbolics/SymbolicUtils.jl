@@ -139,6 +139,16 @@ function unquote_dollar(expr)
     return expr
 end
 
+# Nested slot-free heads: call value callees, build terms for symbolic callees.
+_apply_head(f, args...) = f isa BasicSymbolic ? term(f, args...; type=Any, shape=ShapeVecT()) : f(args...)
+
+function build_head(h)
+    if h isa Expr && h.head === :call && h.args[1] isa Expr && h.args[1].head === :call
+        return :($_apply_head($(build_head(h.args[1])), $(map(a -> esc(unquote_dollar(a)), h.args[2:end])...)))
+    end
+    return esc(unquote_dollar(h))
+end
+
 # parent call is needed to know which default value to give if any default slots are present
 """
     $TYPEDSIGNATURES
@@ -161,8 +171,9 @@ by the rule system. It handles several special syntaxes:
 - `~!x`: Matches a term with a default value (creates a `DefSlot`)
 - `~x::predicate`: Adds a predicate constraint to the slot
 - `\$expr`: Interpolates a value directly
-- A call in operator position with no slots (e.g. `d(1)(~x)` for a callable
-  struct) is evaluated to a value and matched by equality, like `\$`-interpolation.
+- A slot-free call in operator position is turned into a head value: nested calls
+  invoke value callees and build terms around `BasicSymbolic` callees, then the
+  result is matched by equality (like `\$`-interpolation).
 
 The function tracks pattern variable names in `keys` and uses `parentCall` to determine
 appropriate default values for default slots in operations like `+`, `*`, and `^`.
@@ -186,9 +197,9 @@ function makepattern(expr, keys, parentCall=nothing)
                 return esc(expr.args[2] // expr.args[3])
             else
                 head = expr.args[1]
-                # Slot-free call heads (e.g. d(1)(~x)) evaluate to a value matched by equality.
+                # Slot-free call heads: evaluate value callees, build terms for symbolic ones.
                 if head isa Expr && head.head === :call && !pattern_expr_has_slot(head)
-                    return :(term($(esc(unquote_dollar(head))), $(map(x -> makepattern(x, keys, operation(expr)), expr.args[2:end])...); type=Any, shape=$ShapeVecT()))
+                    return :(term($(build_head(head)), $(map(x -> makepattern(x, keys, operation(expr)), expr.args[2:end])...); type=Any, shape=$ShapeVecT()))
                 end
                 # make a pattern for every argument of the expr.
                 :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any, shape=$ShapeVecT()))
@@ -689,6 +700,7 @@ function (acr::ACRule)(term)
 
         T = vartype(term)
         args = arguments(term)
+        length(args) < acr.arity && return nothing
         is_full_perm = acr.arity == length(args)
         if is_full_perm
             args_buf = copy(parent(args))

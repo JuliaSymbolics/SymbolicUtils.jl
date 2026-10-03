@@ -284,29 +284,38 @@ function canonicalize_coeffs!(coeffs::Vector{PolyCoeffT})
 end
 canonicalize_coeffs!(x) = nothing
 
-_to_gcd_rational(c::Rational) = Rational{BigInt}(c)
-_to_gcd_rational(c::Integer) = Rational{BigInt}(c)
-_to_gcd_rational(c) = Rational{BigInt}(rationalize(c))
-
 function poly_to_gcd_form(p::PolynomialT)
-    all_int = true
+    all_safe_int = true
+    all_integer = true
     all_rat = true
     any_complex = false
     for c in MP.coefficients(p)
-        isint = safe_isinteger(c)
-        all_int &= isint
-        all_rat &= isint || c isa Rational
+        is_safe = safe_isinteger(c)
+        # Exact `Integer`s (including BigInt ≥ typemax(Int)) stay on the integer
+        # path; `safe_isinteger` alone would demote them to Float64 and lose gcd.
+        is_int = is_safe || c isa Integer
+        all_safe_int &= is_safe
+        all_integer &= is_int
+        all_rat &= is_int || c isa Rational
         any_complex |= c isa Complex
-        all_int || all_rat || break
+        all_integer || all_rat || break
     end
-    # Integer/rational GCDs run in BigInt / Rational{BigInt}. Intermediate
-    # Int64 content/subresultant arithmetic can overflow and return a
-    # non-divisor (#1139); both default and generalized Euclidean algorithms
-    # are affected with Int64 coefficients.
-    cs = if all_int
-        BigInt.(MP.coefficients(p))
+    # Always widen integer/rational coefficients to Int64 / Rational{Int64}.
+    # On 32-bit Julia, `Int` is Int32; homogeneous `Integer.(::Vector{Int32})`
+    # stays Int32 and then `MP.gcd` / `div_multiple` hits DivideError when
+    # content arithmetic overflows (e.g. MomentClosure derivative matching
+    # closures going through `simplify` → `simplify_fractions`).
+    # `safe_isinteger` bounds the Int64 path by `typemax(Int)`; larger exact
+    # integers (and arbitrarily large `Rational`s) use promote_type with an
+    # Int64 / Rational{Int64} floor instead of demoting to Float64.
+    cs = if all_safe_int
+        Int64.(MP.coefficients(p))
+    elseif all_integer
+        is = map(c -> c isa Integer ? c : Int64(c), MP.coefficients(p))
+        convert(Vector{mapreduce(typeof, promote_type, is; init = Int64)}, is)
     elseif all_rat
-        Vector{Rational{BigInt}}(map(_to_gcd_rational, MP.coefficients(p)))
+        rs = map(c -> c isa Rational ? c : rationalize(c), MP.coefficients(p))
+        convert(Vector{mapreduce(typeof, promote_type, rs; init = Rational{Int64})}, rs)
     elseif any_complex
         (complex ∘ float).(MP.coefficients(p))
     else
@@ -315,7 +324,8 @@ function poly_to_gcd_form(p::PolynomialT)
     # Broadcast can still leave an abstract eltype for heterogeneous floats;
     # narrow to a concrete eltype when needed (gcd requires it).
     if !isconcretetype(eltype(cs))
-        T = isempty(cs) ? (all_int ? BigInt : all_rat ? Rational{BigInt} :
+        T = isempty(cs) ? (all_safe_int ? Int64 : all_integer ? BigInt :
+                           all_rat ? Rational{Int64} :
                            any_complex ? ComplexF64 : Float64) :
             mapreduce(typeof, promote_type, cs)
         cs = Vector{T}(cs)
@@ -323,45 +333,16 @@ function poly_to_gcd_form(p::PolynomialT)
     return DP.Polynomial(cs, MP.monomials(p))
 end
 
-# Exact-arithmetic divisibility check used before cancelling a gcd factor.
-# Float/complex coefficients cannot be checked this way; those paths keep the
-# previous behaviour. `poly_to_gcd_form` returns concrete BigInt /
-# Rational{BigInt} polynomials, not `PolynomialT` (`Number` coeffs).
-_exact_gcd_coeff(c::Integer) = big(c)
-_exact_gcd_coeff(c::Rational) = Rational{BigInt}(c)
-_exact_gcd_coeff(::Any) = nothing
-
-_as_exact_gcd_poly(p::PolyVarT) = p
-_as_exact_gcd_poly(::Any) = nothing
-function _as_exact_gcd_poly(p::MP.AbstractPolynomialLike)
-    cs = MP.coefficients(p)
-    isempty(cs) && return DP.Polynomial(BigInt[], MP.monomials(p))
-    exact = Vector{Any}(undef, length(cs))
-    for i in eachindex(cs)
-        e = _exact_gcd_coeff(cs[i])
-        e === nothing && return nothing
-        exact[i] = e
-    end
-    T = mapreduce(typeof, promote_type, exact)
-    return DP.Polynomial(Vector{T}(exact), MP.monomials(p))
-end
-
-function _exact_poly_divides(p, g)
-    pe = _as_exact_gcd_poly(p)
-    ge = _as_exact_gcd_poly(g)
-    (pe === nothing || ge === nothing) && return true
-    return iszero(rem(pe, ge))
-end
-
 function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, PolynomialT})
-    a = p1 isa PolynomialT ? poly_to_gcd_form(p1) : p1
-    b = p2 isa PolynomialT ? poly_to_gcd_form(p2) : p2
-    g = gcd(a, b)
-    if isone(g) || (_exact_poly_divides(a, g) && _exact_poly_divides(b, g))
-        return g
+    if p1 isa PolyVarT && p2 isa PolyVarT
+        return gcd(p1, p2)
+    elseif p1 isa PolyVarT && p2 isa PolynomialT
+        return gcd(p1, poly_to_gcd_form(p2))
+    elseif p1 isa PolynomialT && p2 isa PolyVarT
+        return gcd(poly_to_gcd_form(p1), p2)
+    elseif p1 isa PolynomialT && p2 isa PolynomialT
+        return gcd(poly_to_gcd_form(p1), poly_to_gcd_form(p2))
     end
-    # Overflowed / invalid gcd: refuse cancellation rather than invent a quotient.
-    return one(g)
 end
 
 function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: SymVariant}
@@ -377,7 +358,10 @@ function _simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}, widen::Bool
     if isone(factor)
         return num, den
     end
-    # Match the concrete coefficient types used to compute `factor`.
+    # `factor` was computed on `poly_to_gcd_form` conversions, so the partial
+    # polynomials must use matching concrete coefficient types; otherwise
+    # `div_multiple` mixes e.g. `Rational{BigInt}` and `Rational{Int64}`
+    # coefficients and hits unimplemented MutableArithmetics buffered paths.
     partial_poly1 isa PolynomialT && (partial_poly1 = poly_to_gcd_form(partial_poly1))
     partial_poly2 isa PolynomialT && (partial_poly2 = poly_to_gcd_form(partial_poly2))
     # NOTE: This does not mutate `partial_poly1` to be the result, it just
@@ -386,11 +370,11 @@ function _simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}, widen::Bool
     partial_poly2 = MP.div_multiple(partial_poly2, factor, MA.IsMutable())
     canonicalize_coeffs!(MP.coefficients(partial_poly1))
     canonicalize_coeffs!(MP.coefficients(partial_poly2))
-    # Narrow BigInt / Rational{BigInt} from gcd form back to Int / Rational{Int}
-    # when they fit; preserve user BigFloats when present.
-    keep_big = _has_bigfloat(num) || _has_bigfloat(den)
-    partial_poly1 = _narrow_coeffs(partial_poly1, keep_big)
-    partial_poly2 = _narrow_coeffs(partial_poly2, keep_big)
+    if widen
+        keep_big = _has_bigfloat(num) || _has_bigfloat(den)
+        partial_poly1 = _narrow_coeffs(partial_poly1, keep_big)
+        partial_poly2 = _narrow_coeffs(partial_poly2, keep_big)
+    end
     return from_poly(poly_to_bs, partial_poly1), from_poly(poly_to_bs, partial_poly2)
 end
 

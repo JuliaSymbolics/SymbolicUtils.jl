@@ -310,3 +310,24 @@ end
     @test isequal(substitute(2ys[1], Dict(X[1] => 2w)), -4w)
     @test isequal(substitute(sin(ys[1]), Dict(X[1] => 2w)), sin(-2w))
 end
+
+@testset "Pending substitute survives repeated scalarization" begin
+    @syms X[1:2]::Real A[1:2]::Real w::Real z::Real
+    ys = scalarize(substitute.(X, w => -w))
+    rules = Dict(X[1] => 2w, X[2] => 3w)
+    for (ex, expected) in (
+            (scalarize(ys), [-2w, -3w]),
+            (scalarize(scalarize(ys)), [-2w, -3w]),
+            (scalarize(2ys), [-4w, -6w]),
+            (scalarize(1 .+ ys), [1 - 2w, 1 - 3w]),
+            (scalarize(sin.(ys)), [sin(-2w), sin(-3w)]),
+            (scalarize(substitute.(substitute.(X, w => -w), w => 2w)), [-4w, -6w]),
+        )
+        @test isequal(substitute(ex, rules), expected)
+    end
+    aliased = substitute(ys, Dict(X => A))
+    @test isequal(substitute(aliased, Dict(A[1] => 2w, A[2] => 3w)), [-2w, -3w])
+    @test isequal(substitute(substitute(ys, Dict(z => 1)), rules), [-2w, -3w])
+    @test isequal(scalarize(term(substitute, 2w, w => -w; type = Real, shape = shape(w))), -2w)
+    @test_throws MethodError scalarize(substitute.(X, w => -w, 1))
+end

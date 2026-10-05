@@ -333,16 +333,57 @@ function poly_to_gcd_form(p::PolynomialT)
     return DP.Polynomial(cs, MP.monomials(p))
 end
 
+# `MP.gcd` decides "approximately zero" with an absolute tolerance, so float
+# polynomials are rescaled by a power of two (exact) to unit magnitude first.
+function _scale_for_gcd(p)
+    cs = MP.coefficients(p)
+    T = eltype(cs)
+    T <: Union{AbstractFloat, Complex{<:AbstractFloat}} || return p
+    m = maximum(abs, cs; init = zero(real(T)))
+    (iszero(m) || !isfinite(m)) && return p
+    s = ldexp(one(real(T)), -exponent(m))
+    (iszero(s) || !isfinite(s)) && return p
+    return DP.Polynomial(cs .* s, MP.monomials(p))
+end
+
+_gcd_operand(p::PolynomialT) = _scale_for_gcd(poly_to_gcd_form(p))
+
 function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, PolynomialT})
     if p1 isa PolyVarT && p2 isa PolyVarT
         return gcd(p1, p2)
     elseif p1 isa PolyVarT && p2 isa PolynomialT
-        return gcd(p1, poly_to_gcd_form(p2))
+        return gcd(p1, _gcd_operand(p2))
     elseif p1 isa PolynomialT && p2 isa PolyVarT
-        return gcd(poly_to_gcd_form(p1), p2)
+        return gcd(_gcd_operand(p1), p2)
     elseif p1 isa PolynomialT && p2 isa PolynomialT
-        return gcd(poly_to_gcd_form(p1), poly_to_gcd_form(p2))
+        return gcd(_gcd_operand(p1), _gcd_operand(p2))
     end
+end
+
+_exact_widen(c::Integer) = big(c)
+_exact_widen(c::Rational) = big(c)
+_exact_widen(c::Complex) = complex(_exact_widen(real(c)), _exact_widen(imag(c)))
+
+"""
+    _is_multiple(p, g, q)
+
+Whether `p == q * g`, so that cancelling the candidate gcd `g` is valid.
+Exact coefficients must give a zero residual, computed without overflow.
+Float coefficients may leave a residual of at most `eps^(3/4)` (about `2e-12`
+for `Float64`) relative to the largest coefficient of `p`: the cancellation is
+then exact for coefficients perturbed by that relative amount, at any scale.
+"""
+function _is_multiple(p, g, q)
+    p, g, q = MP.polynomial(p), MP.polynomial(g), MP.polynomial(q)
+    T = promote_type(eltype(MP.coefficients(p)), eltype(MP.coefficients(g)), eltype(MP.coefficients(q)))
+    if T <: Union{AbstractFloat, Complex{<:AbstractFloat}}
+        tol = eps(real(T))^(3 // 4) * maximum(abs, MP.coefficients(p); init = zero(real(T)))
+        return all(c -> abs(c) <= tol, MP.coefficients(p - q * g))
+    elseif T <: Union{Integer, Rational, Complex{<:Union{Integer, Rational}}}
+        w(x) = MP.map_coefficients(_exact_widen, x)
+        return iszero(w(p) - w(q) * w(g))
+    end
+    return false
 end
 
 function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: SymVariant}
@@ -364,10 +405,14 @@ function _simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}, widen::Bool
     # coefficients and hits unimplemented MutableArithmetics buffered paths.
     partial_poly1 isa PolynomialT && (partial_poly1 = poly_to_gcd_form(partial_poly1))
     partial_poly2 isa PolynomialT && (partial_poly2 = poly_to_gcd_form(partial_poly2))
-    # NOTE: This does not mutate `partial_poly1` to be the result, it just
-    # uses it as buffer. The result is the returned value.
-    partial_poly1 = MP.div_multiple(partial_poly1, factor, MA.IsMutable())
-    partial_poly2 = MP.div_multiple(partial_poly2, factor, MA.IsMutable())
+    # `div_multiple` silently drops any remainder, and float or overflowing
+    # gcds can return a non-divisor, so the cancellation is verified.
+    q1 = MP.div_multiple(partial_poly1, factor)
+    q2 = MP.div_multiple(partial_poly2, factor)
+    if !(_is_multiple(partial_poly1, factor, q1) && _is_multiple(partial_poly2, factor, q2))
+        return num, den
+    end
+    partial_poly1, partial_poly2 = q1, q2
     canonicalize_coeffs!(MP.coefficients(partial_poly1))
     canonicalize_coeffs!(MP.coefficients(partial_poly2))
     if widen

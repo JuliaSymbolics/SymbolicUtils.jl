@@ -362,7 +362,7 @@ value.
 
 This function is allowed to non-destructively mutate `cs.ir`. All information present in
 `cs.ir` upon entry to this function should be present when it returns. The function may
-add expressions to `cs.ir` and choose to use [`SymbolicUtils.rollback!`](@ref) to restore
+add expressions to `cs.ir` and choose to use [`SymbolicUtils.Code.rollback!`](@ref) to restore
 to an earlier state, but this earlier state should not erase information that was not
 added by this function.
 

@@ -2297,5 +2297,7 @@ end
 @public supports_with_allocator, with_allocator, with_options
 # Extension points for the IR/`CodegenState` codegen path (parallel to `function_to_expr`).
 @public CodegenState, codegen!, codegen_function!
+# Helpers that the `codegen_function!` implementer contract documents and requires.
+@public declare!, enter_scope, exit_scope!, rollback!
 
 end

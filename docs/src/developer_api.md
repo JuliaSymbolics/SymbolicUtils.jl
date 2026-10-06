@@ -87,9 +87,12 @@ SymbolicUtils.SymBroadcast
 ```@docs; canonical=false
 SymbolicUtils.Code
 SymbolicUtils.Code.LazyState
+SymbolicUtils.Code.CodegenState
 SymbolicUtils.Code.cse_inside_expr
 SymbolicUtils.Code.fast_toexpr
 SymbolicUtils.Code.function_to_expr
+SymbolicUtils.Code.codegen_function!
+SymbolicUtils.Code.codegen!
 SymbolicUtils.Code.get_rewrites
 SymbolicUtils.Code.supports_with_allocator
 SymbolicUtils.Code.with_allocator

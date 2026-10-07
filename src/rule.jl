@@ -5,18 +5,18 @@ const COMM_CHECKS_LIMIT = Ref(10)
 const COMM_BACKTRACK_LIMIT = Ref(5)
 # Per-Rule-call work meter (TaskLocal, nested-safe via save/restore in
 # `(r::Rule)(term)`): each candidate `loop` call in commutative_term_matcher
-# increments this (segment/first-match and backtracking branches). Backtracking
-# stops once the count exceeds the budget; the segment/first-match branch only
-# counts and never stops. This bounds how many local-match attempts (including
-# ticks inside continuations such as n! segment searches) may be spent on
-# backtracking before falling back to first-match; it does not abort an
-# in-flight first-match/segment enumeration. Nested Rule calls (e.g. predicates
+# increments this (first-match and backtracking branches). Backtracking, and the
+# first-match branch's retries after an RHS/`where` rejection, stop once the
+# count exceeds the budget; a first-match enumeration in flight only counts and
+# never stops. Nested Rule calls (e.g. predicates
 # or RHS that apply another rule) get their own zeroed meter and restore the
 # outer count in `finally`. Value tuned so fixed+segment failing matches stay
 # within ~3× of master on the segcont probes while depth-2 #586 cases still
 # succeed.
 const COMM_BACKTRACK_BUDGET = Ref(2000)
 const COMM_BT_USED = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
+# Number of RHS evaluations in the current Rule call, scoped like COMM_BT_USED.
+const RULE_RHS_CALLS = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
 
 # Matcher patterns with Slot, DefSlot and Segment
 
@@ -331,14 +331,21 @@ function (r::Rule)(term)
     ref = COMM_BT_USED[]
     saved = ref[]
     ref[] = 0
+    rhs_calls = RULE_RHS_CALLS[]
+    saved_rhs_calls = rhs_calls[]
     try
         # n == 1 means that exactly one term of the input (term,) was matched
-        success(bindings, n) = n == 1 ? (rhs(assoc(bindings, :MATCH, term))) : nothing
+        function success(bindings, n)
+            n == 1 || return nothing
+            rhs_calls[] += 1
+            return rhs(assoc(bindings, :MATCH, term))
+        end
         return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
     catch err
         throw(RuleRewriteError(r, term))
     finally
         ref[] = saved
+        rhs_calls[] = saved_rhs_calls
     end
 end
 

@@ -134,28 +134,24 @@ end
 function _factor_common_trig_term(ex::BasicSymbolic{T}) where {T}
     args = collect(arguments(ex))
     _has_pairwise_trig_rewrite(args) && return nothing
-    factors = Vector{Dict{BasicSymbolic{T}, Int}}(undef, length(args))
+    factors = Vector{Accumulator{BasicSymbolic{T}, Int}}(undef, length(args))
     smallest = firstindex(factors)
     for (i, term) in enumerate(args)
-        term_factors = Dict{BasicSymbolic{T}, Int}()
-        for factor in (ismul(term) ? arguments(term) : (term,))
-            term_factors[factor] = get(term_factors, factor, 0) + 1
+        term_factors = counter(BasicSymbolic{T})
+        for factor in (ismul(term) ? parent(arguments(term)) : ArgsT{T}((term,)))
+            push!(term_factors, factor)
         end
         factors[i] = term_factors
-        if i == firstindex(factors) || length(term_factors) < length(factors[smallest])
+        if length(term_factors) < length(factors[smallest])
             smallest = i
         end
     end
 
-    common_counts = Dict{BasicSymbolic{T}, Int}()
-    for (candidate, multiplicity) in factors[smallest]
-        for term_factors in factors
-            multiplicity = min(multiplicity, get(term_factors, candidate, 0))
-            iszero(multiplicity) && break
-        end
-        iszero(multiplicity) || (common_counts[candidate] = multiplicity)
+    common_counts = copy(factors[smallest])
+    for term_factors in factors
+        intersect!(common_counts, term_factors)
+        isempty(common_counts) && return nothing
     end
-    isempty(common_counts) && return nothing
 
     common = BasicSymbolic{T}[]
     for (candidate, multiplicity) in common_counts
@@ -163,21 +159,10 @@ function _factor_common_trig_term(ex::BasicSymbolic{T}) where {T}
             push!(common, candidate)
         end
     end
-    for (candidate, multiplicity) in common_counts
-        for term_factors in factors
-            remaining = term_factors[candidate] - multiplicity
-            if iszero(remaining)
-                delete!(term_factors, candidate)
-            else
-                term_factors[candidate] = remaining
-            end
-        end
-    end
-
     remainder_factors = BasicSymbolic{T}[]
     map!(args, factors) do term_factors
         empty!(remainder_factors)
-        for (factor, multiplicity) in term_factors
+        for (factor, multiplicity) in setdiff(term_factors, common_counts)
             for _ in 1:multiplicity
                 push!(remainder_factors, factor)
             end
@@ -185,7 +170,8 @@ function _factor_common_trig_term(ex::BasicSymbolic{T}) where {T}
         isempty(remainder_factors) ? one_of_vartype(T) : mul_worker(T, remainder_factors)
     end
     any(has_trig_exp, args) || return nothing
-    return mul_worker(T, (common..., add_worker(T, args)))
+    push!(common, add_worker(T, args))
+    return mul_worker(T, common)
 end
 
 const TRIG_EXP_RULES = (

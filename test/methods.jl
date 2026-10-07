@@ -565,10 +565,13 @@ end
     @test mapreduce(+, +, w1, [10, 20]) == mapreduce(+, +, [1, 2], [10, 20])
     @test mapreduce(+, +, w1, Broadcast.broadcasted(+, [3, 4])) ==
         mapreduce(+, +, [1, 2], [3, 4])
-    @syms f(..) c[1:2]
+    @syms f(..) g(..) c[1:2]
     @test isequal(mapreduce(f, +, w1), f(1) + f(2))
+    @test isequal(mapreduce(f, g, w1), g(f(1), f(2)))
     @test mapreduce(+, +, w1, c) isa BasicSymbolic
     @test mapreduce(+, +, c, w1) isa BasicSymbolic
+    @syms sf(..) vartype = SafeReal
+    @test_throws ErrorException mapreduce(f, sf, w1)
 end
 
 @testset "in operator on symbolics" begin

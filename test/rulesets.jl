@@ -251,6 +251,25 @@ end
 
 end
 
+@testset "abs rules" begin
+    @syms r::Real z  # z unrestricted (Number)
+
+    @eqtest simplify(abs(-r)) == abs(r)
+    @eqtest simplify(abs(r)^2) == r^2
+    @eqtest simplify(abs(abs(r))) == abs(r)
+    @eqtest simplify(sqrt(r^2)) == abs(r)
+    @eqtest simplify((r^2)^(1//2)) == abs(r)
+    @eqtest simplify(abs(-2 * r)) == abs(2 * r)
+    @test unwrap_const(simplify(term(abs, -2))) == 2
+    @test unwrap_const(simplify(substitute(abs(z), Dict(z => -2)))) == 2
+
+    # |z|^2 ≠ z^2 for non-real z — do not fold
+    @eqtest simplify(abs(z)^2) == abs(z)^2
+    # sqrt(z^2) = ±z ≠ |z| for complex z — do not fold either spelling
+    @eqtest simplify(sqrt(z^2)) == sqrt(z^2)
+    @eqtest simplify((z^2)^(1//2)) == sqrt(z^2)
+end
+
 @testset "simplify_fractions" begin
     @syms x y z
     @eqtest unwrap_const(simplify(2 * ((y + z) / x) - 2 * y / x - z / x * 2)) == 0

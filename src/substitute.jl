@@ -936,7 +936,7 @@ end
 # `substitute.(arr, rules)` applies elementwise immediately and must not build a symbolic
 # `broadcast(substitute, ...)` ArrayOp. Unknown shapes cannot be materialized eagerly.
 function _copy_broadcast!(::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{SymBroadcast{T}, A, typeof(substitute)}) where {T, A}
-    return _eager_substitute_broadcast(T, bc)
+    return _eager_substitute_broadcast_args(T, bc.args)
 end
 
 @noinline function _throw_unknown_shape_substitute_broadcast(arg)
@@ -947,35 +947,50 @@ end
     )))
 end
 
-function _materialize_substitute_broadcast_arg(::Type{T}, arg) where {T}
-    @nospecialize arg
-    if arg isa Broadcast.Broadcasted
-        if arg isa Broadcast.Broadcasted{SymBroadcast{T}}
-            return _materialize_substitute_broadcast_arg(T, _copy_broadcast!(broadcast_buffer(T), Broadcast.instantiate(arg)))
-        else
-            _throw_nonsymbolic_nested_broadcast(arg)
-        end
-    elseif arg isa Base.RefValue
-        return arg
-    elseif arg isa BasicSymbolic
-        sh = shape(arg)
-        if sh isa Unknown
-            _throw_unknown_shape_substitute_broadcast(arg)
-        elseif is_array_shape(sh)
-            return scalarize(arg)
-        else
-            return Ref(arg)
-        end
-    elseif arg isa AbstractArray
-        return arg
+function _materialize_substitute_broadcast_arg(::Type{T}, arg::Broadcast.Broadcasted{SymBroadcast{T}}) where {T}
+    return _materialize_substitute_broadcast_arg(T, _copy_broadcast!(broadcast_buffer(T), Broadcast.instantiate(arg)))
+end
+function _materialize_substitute_broadcast_arg(::Type{T}, arg::Broadcast.Broadcasted) where {T}
+    _throw_nonsymbolic_nested_broadcast(arg)
+end
+function _materialize_substitute_broadcast_arg(::Type{T}, arg::Base.RefValue) where {T}
+    return arg
+end
+function _materialize_substitute_broadcast_arg(::Type{T}, arg::BasicSymbolic{T}) where {T}
+    sh = shape(arg)
+    if sh isa Unknown
+        _throw_unknown_shape_substitute_broadcast(arg)
+    elseif is_array_shape(sh)
+        # `scalarize`'s cache is typed `Any`; narrow for the array path used by substitute.
+        return scalarize(arg)::AbstractArray
     else
         return Ref(arg)
     end
 end
+function _materialize_substitute_broadcast_arg(::Type{T}, arg::AbstractArray) where {T}
+    return arg
+end
+function _materialize_substitute_broadcast_arg(::Type{T}, arg) where {T}
+    return Ref(arg)
+end
 
-function _eager_substitute_broadcast(::Type{T}, bc::Broadcast.Broadcasted) where {T}
-    @nospecialize bc
-    isempty(bc.args) && return broadcast(substitute)
-    mat_args = Any[_materialize_substitute_broadcast_arg(T, arg) for arg in bc.args]
-    return broadcast(substitute, mat_args...)
+@inline function _eager_substitute_broadcast_args(::Type{T}, args::Tuple{}) where {T}
+    return broadcast(substitute)
+end
+@inline function _eager_substitute_broadcast_args(::Type{T}, args::Tuple{A1}) where {T, A1}
+    return broadcast(substitute, _materialize_substitute_broadcast_arg(T, args[1]))
+end
+@inline function _eager_substitute_broadcast_args(::Type{T}, args::Tuple{A1, A2}) where {T, A1, A2}
+    return broadcast(substitute,
+        _materialize_substitute_broadcast_arg(T, args[1]),
+        _materialize_substitute_broadcast_arg(T, args[2]))
+end
+@inline function _eager_substitute_broadcast_args(::Type{T}, args::Tuple{A1, A2, A3}) where {T, A1, A2, A3}
+    return broadcast(substitute,
+        _materialize_substitute_broadcast_arg(T, args[1]),
+        _materialize_substitute_broadcast_arg(T, args[2]),
+        _materialize_substitute_broadcast_arg(T, args[3]))
+end
+function _eager_substitute_broadcast_args(::Type{T}, args::Tuple) where {T}
+    return broadcast(substitute, map(Base.Fix1(_materialize_substitute_broadcast_arg, T), args)...)
 end

@@ -97,8 +97,43 @@ const ASSORTED_RULES = (
 
 _has_trig_sum(ex) = isadd(ex) && has_trig_exp(ex)
 
+function _square_of(f, factor)
+    ispow(factor) || return nothing
+    base, power = arguments(factor)
+    iscall(base) && operation(base) === f && isequal(unwrap_const(power), 2) || return nothing
+    return only(arguments(base))
+end
+
+# Whether a pairwise rule below (`~r*~x::has_trig_exp + ~r*~y` or `sin(~x)^2 + cos(~x)^2`)
+# applies. Those rewrites are cheaper than re-simplifying the whole sum after
+# `_factor_common_trig_term` pulls out a common factor, so they go first.
+function _has_pairwise_trig_rewrite(args)
+    scaled = Dict{eltype(args), Bool}()
+    sin_squares = Set{eltype(args)}()
+    cos_squares = eltype(args)[]
+    for term in args
+        if ismul(term)
+            factors = arguments(term)
+            length(factors) == 2 || continue
+            for (factor, other) in ((factors[1], factors[2]), (factors[2], factors[1]))
+                trig = has_trig_exp(other)
+                seen = get(scaled, factor, nothing)
+                seen !== nothing && (seen || trig) && return true
+                scaled[factor] = trig
+            end
+        else
+            x = _square_of(sin, term)
+            x === nothing || push!(sin_squares, x)
+            x = _square_of(cos, term)
+            x === nothing || push!(cos_squares, x)
+        end
+    end
+    return any(in(sin_squares), cos_squares)
+end
+
 function _factor_common_trig_term(ex::BasicSymbolic{T}) where {T}
     args = collect(arguments(ex))
+    _has_pairwise_trig_rewrite(args) && return nothing
     factors = Vector{Dict{BasicSymbolic{T}, Int}}(undef, length(args))
     smallest = firstindex(factors)
     for (i, term) in enumerate(args)

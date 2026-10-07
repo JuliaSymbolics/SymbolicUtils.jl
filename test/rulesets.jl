@@ -123,6 +123,7 @@ end
     for (expression, result) in zip(expressions, expected)
         @test isequal(simplify(expression), result)
     end
+    @test isequal(simplify(sum(r*sin(i*x)^2 + r*cos(i*x)^2 for i in 1:5)), 5r)
 end
 
 @testset "LiteralReal" begin

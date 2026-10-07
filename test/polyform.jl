@@ -1,5 +1,6 @@
 using SymbolicUtils: Term, symtype, unwrap_const, Add, Mul
 using Test, SymbolicUtils
+import Random
 
 include("utils.jl")
 
@@ -194,6 +195,59 @@ end
 
     # Float ↔ rational mix.
     @test simplify_fractions((1.0 + 0.5*x - x^2) / ((1//2)*x^2 - 1)) isa Any
+end
+
+@testset "exact gcd cancellation survives Int64 overflow (#1139)" begin
+    @syms x::Real
+    val(ex, d) = unwrap_const(substitute(ex, d))
+    q(v) = Dict(x => big(v) // 1)
+
+    e = x / (x^2 + 2) + (x^2 + 2)^2 / (x^2 * (x^2 - 2)^2)
+    @testset for expand in (false, true)
+        s = simplify(e; expand)
+        for v in (3 // 10, 19 // 10, -7 // 10, 5 // 2)
+            @test val(s, q(v)) == val(e, q(v))
+        end
+    end
+
+    # Int64 gcd arithmetic overflows here; the true gcd is -3 - x.
+    n = -9 + 9x + x^2 + 2x^3 - 8x^4 - 18x^5 - 5x^6
+    d = 15 - x - 14x^2 + 2x^3 + 17x^4 + 14x^5 - 6x^6 - 3x^7
+    @testset for expand in (false, true)
+        s = simplify(n / d; expand)
+        @test val(s, q(0)) == -3 // 5
+        for v in (3 // 10, 1 // 2, -2 // 5)
+            @test val(s, q(v)) == val(n / d, q(v))
+        end
+        @test val(s, q(-3)) == -921 // 2590
+    end
+
+    B1, B2 = big(2)^70 + 1, big(2)^1100
+    for (e, at1) in (
+            ((B1 * x^2 + (B1 + 1) * x + 1) / (x + 1), B1 + 1),
+            ((B2 * x^2 + 2B2 * x + B2) / (x + 1), 2B2),
+        )
+        @testset for expand in (false, true)
+            s = simplify(e; expand)
+            @test !SymbolicUtils.isdiv(s)
+            @test val(s, Dict(x => 1)) isa Integer
+            @test val(s, Dict(x => 1)) == at1
+            @test val(s, q(3 // 7)) == val(e, q(3 // 7))
+        end
+    end
+
+    rng = Random.MersenneTwister(1139)
+    rpoly(n) = sum(rand(rng, -20:20) * x^i for i in 0:n) + x^(n + 1)
+    for _ in 1:30
+        k = rand(rng, -4:4)
+        a, b = rpoly(rand(rng, 1:6)), rpoly(rand(rng, 1:6))
+        e = expand(a * (x - k)) / expand(b * (x - k))
+        s = simplify(e)
+        for v in (1 // 3, -2 // 7, 5 // 2)
+            iszero(val(b, q(v))) || @test val(s, q(v)) == val(e, q(v))
+        end
+        iszero(val(b, q(k))) || @test val(s, q(k)) == val(a, q(k)) / val(b, q(k))
+    end
 end
 
 @testset "simplify_div with Rational{BigInt} coefficients (#1082)" begin

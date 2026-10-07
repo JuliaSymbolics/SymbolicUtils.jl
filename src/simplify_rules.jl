@@ -97,34 +97,69 @@ const ASSORTED_RULES = (
 
 _has_trig_sum(ex) = isadd(ex) && has_trig_exp(ex)
 
-function _factor_common_trig_term(ex)
-    _has_trig_sum(ex) || return nothing
-    factors = [ismul(term) ? collect(arguments(term)) : [term] for term in arguments(ex)]
-    common = []
-    for candidate in copy(first(factors))
-        indices = [findfirst(factor -> isequal(factor, candidate), term_factors) for term_factors in factors]
-        all(index -> !isnothing(index), indices) || continue
-        push!(common, candidate)
-        for (term_factors, index) in zip(factors, indices)
-            deleteat!(term_factors, index)
+function _factor_common_trig_term(ex::BasicSymbolic{T}) where {T}
+    args = collect(arguments(ex))
+    factors = Vector{Dict{BasicSymbolic{T}, Int}}(undef, length(args))
+    smallest = firstindex(factors)
+    for (i, term) in enumerate(args)
+        term_factors = Dict{BasicSymbolic{T}, Int}()
+        for factor in (ismul(term) ? arguments(term) : (term,))
+            term_factors[factor] = get(term_factors, factor, 0) + 1
+        end
+        factors[i] = term_factors
+        if i == firstindex(factors) || length(term_factors) < length(factors[smallest])
+            smallest = i
         end
     end
-    isempty(common) && return nothing
-    remainder = map(factors) do term_factors
-        isempty(term_factors) ? 1 : *(term_factors...)
+
+    common_counts = Dict{BasicSymbolic{T}, Int}()
+    for (candidate, multiplicity) in factors[smallest]
+        for term_factors in factors
+            multiplicity = min(multiplicity, get(term_factors, candidate, 0))
+            iszero(multiplicity) && break
+        end
+        iszero(multiplicity) || (common_counts[candidate] = multiplicity)
     end
-    any(has_trig_exp, remainder) || return nothing
-    return *(common..., +(remainder...))
+    isempty(common_counts) && return nothing
+
+    common = BasicSymbolic{T}[]
+    for (candidate, multiplicity) in common_counts
+        for _ in 1:multiplicity
+            push!(common, candidate)
+        end
+    end
+    for (candidate, multiplicity) in common_counts
+        for term_factors in factors
+            remaining = term_factors[candidate] - multiplicity
+            if iszero(remaining)
+                delete!(term_factors, candidate)
+            else
+                term_factors[candidate] = remaining
+            end
+        end
+    end
+
+    remainder_factors = BasicSymbolic{T}[]
+    map!(args, factors) do term_factors
+        empty!(remainder_factors)
+        for (factor, multiplicity) in term_factors
+            for _ in 1:multiplicity
+                push!(remainder_factors, factor)
+            end
+        end
+        isempty(remainder_factors) ? one_of_vartype(T) : mul_worker(T, remainder_factors)
+    end
+    any(has_trig_exp, args) || return nothing
+    return mul_worker(T, (common..., add_worker(T, args)))
 end
 
 const TRIG_EXP_RULES = (
     @acrule(~r*~x::has_trig_exp + ~r*~y => ~r*(~x + ~y)),
     @acrule(~r*~x::has_trig_exp + -1*~r*~y => ~r*(~x - ~y)),
-    @rule(~x::_has_trig_sum => _factor_common_trig_term(~x)),
     @acrule(sin(~x)^2 + cos(~x)^2 => one(~x)),
-    # Direct scaled form: Mul(-1, Add(...)) distributes -1 into the Add, so the
-    # factoring rule above cannot reduce -sin^2 - cos^2 via r*(sin^2+cos^2).
+    # Mul(-1, Add(...)) distributes -1 into the Add, so a direct scaled rule is needed.
     @acrule(~r*sin(~x)^2 + ~r*cos(~x)^2 => ~r),
+    @rule(~x::_has_trig_sum => _factor_common_trig_term(~x)),
     @acrule(sin(~x)^2 + -1        => -1*cos(~x)^2),
     @acrule(cos(~x)^2 + -1        => -1*sin(~x)^2),
     # a - a*trig²(x). Same-slot alone misses flattened 2+(-2)*cos²; unconstrained

@@ -183,8 +183,14 @@ end
 """
     $TYPEDSIGNATURES
 
-Rollback `cs` to the state identified by `bm`. This has similar semantics to `rollback!` for
-[`SymbolicUtils.IRStructure`](@ref). It is typically used for scoping in `cs`.
+Discard codegen-cache bindings in `cs` that were inserted after bookmark `bm`, so later
+codegen will not reuse identifiers produced after that point.
+
+This only mutates `cs.cache`. It does **not** modify `cs.ir`, remove statements already
+written to `cs.block` / `cs.expr`, or otherwise restore an earlier IR or emitted-code state.
+The supported way to obtain `bm` is as the bookmark returned by
+[`SymbolicUtils.Code.enter_scope`](@ref); [`SymbolicUtils.Code.exit_scope!`](@ref) calls
+this function so scoped identifiers are no longer visible from the enclosing `CodegenState`.
 """
 function rollback!(cs::CodegenState, bm::CodegenBookmarkT)
     last_cache_key = bm
@@ -361,10 +367,11 @@ a `Symbol` indicating the identifier in the generated code which is assigned the
 value.
 
 This function is allowed to non-destructively mutate `cs.ir`. All information present in
-`cs.ir` upon entry to this function should be present when it returns. The function may
-add expressions to `cs.ir` and choose to use [`SymbolicUtils.rollback!`](@ref) to restore
-to an earlier state, but this earlier state should not erase information that was not
-added by this function.
+`cs.ir` upon entry to this function should be present when it returns; the implementer must
+undo any temporary IR additions before returning.
+[`SymbolicUtils.Code.rollback!`](@ref) does **not** restore IR or emitted statements — it
+only drops codegen-cache bindings after a bookmark from
+[`SymbolicUtils.Code.enter_scope`](@ref) (as used by [`SymbolicUtils.Code.exit_scope!`](@ref)).
 
 In case the code generation process requires creating a new scope such as a `for` loop or
 `let` block, it should use [`SymbolicUtils.Code.enter_scope`](@ref) and

@@ -86,6 +86,46 @@ end
     @test unwrap_const(simplify(Term{SymReal}(zero, [x + 2]))) == 0
 end
 
+@testset "Issue #633: trig simplification is independent of symbol names" begin
+    for names in ((:r, :th, :phi), (Symbol("#1#"), Symbol("#2#"), Symbol("#3#")))
+        r, th, phi = (SymbolicUtils.Sym{SymbolicUtils.SymReal}(name; type = Real) for name in names)
+        expressions = (
+            cos(th)^2 + cos(phi)^2 * sin(th)^2 + sin(th)^2 * sin(phi)^2,
+            -r*cos(th)*sin(th) + r*cos(th)*cos(phi)^2*sin(th) + r*cos(th)*sin(th)*sin(phi)^2,
+            r^2*sin(th)^2 + r^2*cos(th)^2*cos(phi)^2 + r^2*cos(th)^2*sin(phi)^2,
+            r^2*cos(phi)^2*sin(th)^2 + r^2*sin(th)^2*sin(phi)^2,
+        )
+
+        @test unwrap_const(simplify(expressions[1])) == 1
+        @test isequal(unwrap_const(simplify(expressions[2])), 0)
+        @test isequal(simplify(expressions[3]), r^2)
+        @test isequal(simplify(expressions[4]), r^2 * sin(th)^2)
+    end
+end
+
+@testset "Trig factoring applies inside larger sums" begin
+    @syms a::Real c::Real r::Real x::Real
+    expressions = (
+        c + r*cos(x)^2 - r*sin(x)^2,
+        a + r*sin(x)^2 - r*cos(x)^2,
+        c + r*tan(x)^2 - r*sec(x)^2,
+        c + r*cot(x)^2 - r*csc(x)^2,
+        a + r*cosh(x)^2 - r*sinh(x)^2,
+    )
+    expected = (
+        c + r*cos(2x),
+        a - r*cos(2x),
+        c - r,
+        c - r,
+        a + r,
+    )
+
+    for (expression, result) in zip(expressions, expected)
+        @test isequal(simplify(expression), result)
+    end
+    @test isequal(simplify(sum(r*sin(i*x)^2 + r*cos(i*x)^2 for i in 1:5)), 5r)
+end
+
 @testset "LiteralReal" begin
     @syms x1 x2 vartype=TreeReal
     s = cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2

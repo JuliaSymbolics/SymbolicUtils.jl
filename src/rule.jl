@@ -5,10 +5,10 @@ const COMM_CHECKS_LIMIT = Ref(10)
 const COMM_BACKTRACK_LIMIT = Ref(5)
 # Per-Rule-call work meter (TaskLocal, nested-safe via save/restore in
 # `(r::Rule)(term)`): each candidate `loop` call in commutative_term_matcher
-# increments this (first-match and backtracking branches). Backtracking, and the
-# first-match branch's retries after an RHS/`where` rejection, stop once the
-# count exceeds the budget; a first-match enumeration in flight only counts and
-# never stops. Nested Rule calls (e.g. predicates
+# increments this (first-match and backtracking branches), as does every retry
+# a term makes after the rule's RHS/`where` rejected a match. Backtracking and
+# those retries stop once the count exceeds the budget; a first-match
+# enumeration in flight only counts and never stops. Nested Rule calls (e.g. predicates
 # or RHS that apply another rule) get their own zeroed meter and restore the
 # outer count in `finally`. Value tuned so fixed+segment failing matches stay
 # within ~3× of master on the segcont probes while depth-2 #586 cases still

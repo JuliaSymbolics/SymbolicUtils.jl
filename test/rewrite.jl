@@ -233,6 +233,22 @@ end
     @test all(iszero, deltas)
 end
 
+@testset "Nested segment retries stay bounded" begin
+    @syms F(..)::Real G(..)::Real
+    n = 16
+    calls = Ref(0)
+    reject(x) = (calls[] += 1; false)
+    pats = [:($G(~~$(Symbol(:a, i)), ~~$(Symbol(:b, i)))) for i in 1:n]
+    ex = F(fill(G(a), n)..., a)
+    r = @eval @rule $F($(pats...), ~z::$reject) => 1
+    @test Base.invokelatest(r, ex) === nothing
+    @test calls[] <= 2n
+    calls[] = 0
+    rw = @eval @rule $F($(pats...), ~z) => 1 where $reject(~z)
+    @test Base.invokelatest(rw, ex) === nothing
+    @test calls[] <= SymbolicUtils.COMM_BACKTRACK_BUDGET[] + 1
+end
+
 @testset "Slot matcher with default value" begin
     r_sum = @rule (~x + ~!y)^2 => ~y
     @test r_sum((a + b)^2) in Set([a, b])

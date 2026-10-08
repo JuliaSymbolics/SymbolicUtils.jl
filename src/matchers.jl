@@ -41,6 +41,22 @@ end
     COMM_BT_USED[][] > COMM_BACKTRACK_BUDGET[]
 end
 
+# Continuation for a term-level matcher. If the rest of the match fails without
+# reaching the rule's RHS, return `token` so the term commits to its first local
+# match. If the RHS (e.g. a `where` condition) rejected the bindings, return
+# `nothing` so the term tries its next local match, until the work budget is spent.
+function guard_continuation(success, token)
+    function guarded(b, n)
+        rhs_calls = RULE_RHS_CALLS[]
+        before = rhs_calls[]
+        result = success(b, n)
+        result === nothing || return result
+        (rhs_calls[] == before || _comm_bt_over_budget()) && return token
+        _comm_bt_tick!()
+        return nothing
+    end
+end
+
 function matcher(val::Any, acSets)
     val = unwrap_const(val)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
@@ -142,8 +158,8 @@ end
 function term_matcher_constructor(term, acSets)
     matchers = vcat([matcher(operation(term), acSets)], map(x -> matcher(unwrap_const(x), acSets), parent(arguments(term))))
 
-    # `success` is the continuation of the whole match, so a failure anywhere
-    # later (including the rule's `where` condition) backtracks into this term.
+    # `success` continues the match past this term; see `guard_continuation`
+    # for when a later failure makes this term try its next local match.
     function loop(term, bindings′, matchers′, success) # Get it to compile faster
         if !islist(matchers′)
             if  !islist(term)
@@ -170,7 +186,10 @@ function term_matcher_constructor(term, acSets)
             data = car(data) # from (..., ) to ...
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
-            result = loop(data, bindings, matchers, success)
+            token = Ref{Nothing}(nothing)
+            k = guard_continuation(success, token)
+            result = loop(data, bindings, matchers, k)
+            result === token && return nothing
             result !== nothing && return result
 
             frankestein = nothing
@@ -203,7 +222,8 @@ function term_matcher_constructor(term, acSets)
             end
 
             if frankestein !==nothing
-                result = loop(frankestein, bindings, matchers, success)
+                result = loop(frankestein, bindings, matchers, k)
+                result === token && return nothing
                 result !== nothing && return result
             end
 
@@ -226,46 +246,41 @@ function term_matcher_constructor(term, acSets)
 
             T = vartype(data)
             ST = symtype(data)
+            token = Ref{Nothing}(nothing)
             if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
                 # Fixed arity ≤ COMM_BACKTRACK_LIMIT backtracks over distinct local
-                # matches until COMM_BACKTRACK_BUDGET is spent. Otherwise only a
-                # rejection by the rule's RHS (e.g. its `where` condition) makes
-                # this node try the next permutation; a structural failure later
-                # in the pattern commits to the first local match.
+                # matches until COMM_BACKTRACK_BUDGET is spent. Otherwise the node
+                # behaves like any other term (see `guard_continuation`).
                 backtrack = !has_segment && length(data_args) <= COMM_BACKTRACK_LIMIT[]
                 tried = Ref{Union{Nothing, Set{Any}}}(nothing)
-                committed = Ref(false)
+                guarded = guard_continuation(success, token)
                 function ac_next(b, n)
-                    committed[] && return nothing
-                    if backtrack
-                        key = ac_bindings_key(b)
-                        if tried[] === nothing
-                            tried[] = Set{Any}()
-                        elseif key in tried[]
-                            return nothing
-                        end
-                        push!(tried[], key)
-                        committed[] = _comm_bt_over_budget()
-                        return success(b, n)
+                    backtrack || return guarded(b, n)
+                    key = ac_bindings_key(b)
+                    if tried[] === nothing
+                        tried[] = Set{Any}()
+                    elseif key in tried[]
+                        return nothing
                     end
-                    rhs_calls = RULE_RHS_CALLS[]
-                    before = rhs_calls[]
-                    result = success(b, n)
-                    if result === nothing && (rhs_calls[] == before || _comm_bt_over_budget())
-                        committed[] = true
+                    push!(tried[], key)
+                    if _comm_bt_over_budget()
+                        result = success(b, n)
+                        return result === nothing ? token : result
                     end
-                    return result
+                    return success(b, n)
                 end
                 for inds in acSets(eachindex(data_args), length(data_args))
                     candidate = Term{T}(f, @views data_args[inds]; type = ST)
                     _comm_bt_tick!()
                     result = loop(candidate, bindings, matchers, ac_next)
-                    (result !== nothing || committed[]) && return result
+                    result === token && return nothing
+                    result !== nothing && return result
                 end
             # if data does not subtype to number, it might not be commutative
             else
                 # call the normal matcher
-                result = loop(data, bindings, matchers, success)
+                result = loop(data, bindings, matchers, guard_continuation(success, token))
+                result === token && return nothing
                 result !== nothing && return result
             end
             return nothing
@@ -279,13 +294,17 @@ function term_matcher_constructor(term, acSets)
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
             # do the normal matcher
-            result = loop(data, bindings, matchers, success)
+            token = Ref{Nothing}(nothing)
+            k = guard_continuation(success, token)
+            result = loop(data, bindings, matchers, k)
+            result === token && return nothing
             result !== nothing && return result
 
             if (operation(data) === ^) && (unwrap_const(arguments(data)[2]) === 1//2)
                 T = vartype(arguments(data)[1])
                 frankestein = Term{T}(sqrt,[arguments(data)[1]])
-                result = loop(frankestein, bindings, matchers, success)
+                result = loop(frankestein, bindings, matchers, k)
+                result === token && return nothing
                 result !== nothing && return result
             end
             return nothing
@@ -299,13 +318,17 @@ function term_matcher_constructor(term, acSets)
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
             # do the normal matcher
-            result = loop(data, bindings, matchers, success)
+            token = Ref{Nothing}(nothing)
+            k = guard_continuation(success, token)
+            result = loop(data, bindings, matchers, k)
+            result === token && return nothing
             result !== nothing && return result
 
             if (operation(data) === ^) && (unwrap_const(arguments(data)[1]) === ℯ)
                 T = vartype(arguments(data)[2])
                 frankestein = Term{T}(exp,[arguments(data)[2]])
-                result = loop(frankestein, bindings, matchers, success)
+                result = loop(frankestein, bindings, matchers, k)
+                result === token && return nothing
                 result !== nothing && return result
             end
             return nothing
@@ -316,7 +339,10 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
 
-            result = loop(car(data), bindings, matchers, success)
+            token = Ref{Nothing}(nothing)
+            k = guard_continuation(success, token)
+            result = loop(car(data), bindings, matchers, k)
+            result === token && return nothing
             result !== nothing && return result
             return nothing
         end
@@ -351,9 +377,13 @@ function defslot_term_matcher_constructor(term, acSets)
 
     function defslot_term_matcher(success, data, bindings)
         !islist(data) && return nothing # if data is not a list, return nothing
-        result = normal_matcher(success, data, bindings)
+        token = Ref{Nothing}(nothing)
+        k = guard_continuation(success, token)
+        result = normal_matcher(k, data, bindings)
+        result === token && return nothing
         result !== nothing && return result
         # if no match, match the normal part and bind the defslot to its default value
-        other_part_matcher((b,n)->defslot_matcher(success, (defslot.defaultValue,), b), data, bindings)
+        result = other_part_matcher((b,n)->defslot_matcher(k, (defslot.defaultValue,), b), data, bindings)
+        return result === token ? nothing : result
     end
 end

@@ -177,6 +177,12 @@ end
 
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
+
+    # Both orientations of tan^2 - sec^2 = -1 and cot^2 - csc^2 = -1.
+    @test unwrap_const(simplify(tan(x)^2 - sec(x)^2)) == -1
+    @test unwrap_const(simplify(sec(x)^2 - tan(x)^2)) == 1
+    @test unwrap_const(simplify(cot(x)^2 - csc(x)^2)) == -1
+    @test unwrap_const(simplify(csc(x)^2 - cot(x)^2)) == 1
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 

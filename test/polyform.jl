@@ -281,6 +281,14 @@ end
     @test SymbolicUtils.fraction_isone(o)
 end
 
+@testset "iszero and isone return Bool for symbolic values" begin
+    @syms x
+    @test iszero(x) === false
+    @test iszero(simplify(x - x)) === true
+    @test isone(x) === false
+    @test isone(simplify(x / x)) === true
+end
+
 @testset "expand with array reductions and callable-struct operations" begin
     @syms a b x[1:3]
     s = sum(abs2, x .+ 1)

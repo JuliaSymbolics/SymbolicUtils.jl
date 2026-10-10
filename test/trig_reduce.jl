@@ -463,35 +463,37 @@ end
     @test !occursin("cos(a)*cos", string(r4cos))
 end
 
-@testset "trig_reduce: fallback conversions (structural)" begin
+
+@testset "trig_reduce: conversions and cancellations (structural)" begin
     import SymbolicUtils: _iszero
-    @syms x::Real
+    @syms x::Real y::Real
 
-    # Bare function conversions to sin/cos
-    @eqtest trig_reduce(tan(x)) == sin(x) / cos(x)
-    @eqtest trig_reduce(cot(x)) == cos(x) / sin(x)
-    @eqtest trig_reduce(sec(x)) == 1 / cos(x)
-    @eqtest trig_reduce(csc(x)) == 1 / sin(x)
+    # Bare functions stay as-is (matching Mathematica's TrigReduce behavior)
+    @eqtest trig_reduce(tan(x)) == tan(x)
+    @eqtest trig_reduce(cot(x)) == cot(x)
+    @eqtest trig_reduce(sec(x)) == sec(x)
+    @eqtest trig_reduce(csc(x)) == csc(x)
+    @eqtest trig_reduce(tanh(x)) == tanh(x)
+    @eqtest trig_reduce(coth(x)) == coth(x)
+    @eqtest trig_reduce(sech(x)) == sech(x)
+    @eqtest trig_reduce(csch(x)) == csch(x)
 
-    # Negative argument normalization for tan
-    @eqtest trig_reduce(tan(-x)) == -sin(x) / cos(x)
+    # Negative argument normalization preserves function type
+    @eqtest trig_reduce(tan(-x)) == -tan(x)
+    @eqtest trig_reduce(sec(-x)) == sec(x)
+    @eqtest trig_reduce(csc(-x)) == -csc(x)
+    @eqtest trig_reduce(cot(-x)) == -cot(x)
+    @eqtest trig_reduce(tanh(-x)) == -tanh(x)
 
-    # tan/cot/sec/csc power reduction to cos multi-angle ratios
+    # Power reduction to cos/cosh multi-angle ratios
     @eqtest trig_reduce(tan(x)^2) == (1 - cos(2x)) / (1 + cos(2x))
     @eqtest trig_reduce(cot(x)^2) == (1 + cos(2x)) / (1 - cos(2x))
     @eqtest trig_reduce(sec(x)^2) == 2 / (1 + cos(2x))
     @eqtest trig_reduce(csc(x)^2) == 2 / (1 - cos(2x))
+    @eqtest trig_reduce(tanh(x)^2) == (-1 + cosh(2x)) / (1 + cosh(2x))
 
     # Zero folding
     @test _iszero(trig_reduce(tan(0 * x)))
-
-    # Hyperbolic fallback conversions
-    @eqtest trig_reduce(tanh(x)) == sinh(x) / cosh(x)
-    @eqtest trig_reduce(coth(x)) == cosh(x) / sinh(x)
-    @eqtest trig_reduce(sech(x)) == 1 / cosh(x)
-    @eqtest trig_reduce(csch(x)) == 1 / sinh(x)
-    @eqtest trig_reduce(tanh(-x)) == -sinh(x) / cosh(x)
-    @eqtest trig_reduce(tanh(x)^2) == (-1 + cosh(2x)) / (1 + cosh(2x))
     @test _iszero(trig_reduce(tanh(0 * x)))
 
     # Period / half-period reduction
@@ -501,6 +503,38 @@ end
     @eqtest trig_reduce(cos(x + π)) == -cos(x)
     @eqtest trig_reduce(sin(x + 4π)) == sin(x)
     @eqtest trig_reduce(sin(x + 3π)) == -sin(x)
+    @eqtest trig_reduce(tan(x + π)) == tan(x)
+    @eqtest trig_reduce(tan(x + 2π)) == tan(x)
+    @eqtest trig_reduce(sec(x + π)) == -sec(x)
+
+    # Same-argument cancellation in products
+    @eqtest trig_reduce(tan(x) * cos(x)) == sin(x)
+    @eqtest trig_reduce(cot(x) * sin(x)) == cos(x)
+    @test unwrap_const(trig_reduce(sec(x) * cos(x))) == 1
+    @test unwrap_const(trig_reduce(csc(x) * sin(x))) == 1
+    @test unwrap_const(trig_reduce(tan(x) * cot(x))) == 1
+    @eqtest trig_reduce(sec(x) * sin(x)) == tan(x)
+    @eqtest trig_reduce(csc(x) * cos(x)) == cot(x)
+    @eqtest trig_reduce(tan(x) * csc(x)) == sec(x)
+
+    # Scalar * bare function stays as-is
+    @eqtest trig_reduce(3 * tan(x)) == 3tan(x)
+
+    # Nested: bare function of trig stays
+    @eqtest trig_reduce(tan(sin(x))) == tan(sin(x))
+
+    # Dual-conversion: products of two non-sin/cos functions
+    r_ts = trig_reduce(tan(x) * sec(x))
+    @test abs(Float64(unwrap_const(substitute(r_ts, Dict(x => 0.7); fold=Val(true)))) - tan(0.7)*sec(0.7)) < 1e-12
+    @test !occursin("tan", string(r_ts)) && !occursin("sec", string(r_ts))
+
+    r_sc = trig_reduce(sec(x) * csc(x))
+    @test abs(Float64(unwrap_const(substitute(r_sc, Dict(x => 0.7); fold=Val(true)))) - sec(0.7)*csc(0.7)) < 1e-12
+
+    # Two-variable: sec(x)*sec(y) fully reduces
+    r_ss = trig_reduce(sec(x) * sec(y))
+    @test abs(Float64(unwrap_const(substitute(r_ss, Dict(x => 0.3, y => 0.7); fold=Val(true)))) - sec(0.3)*sec(0.7)) < 1e-12
+    @test !occursin("sec", string(r_ss))
 end
 
 @testset "trig_reduce: compound operations" begin
@@ -527,7 +561,7 @@ end
     # sin(x+2π)*cos(x) = sin(x)*cos(x) → sin(2x)/2
     @eqtest trig_reduce(sin(x + 2π) * cos(x)) == trig_reduce(sin(x) * cos(x))
 
-    # tan(x+π) = tan(x) → sin(x)/cos(x)
+    # tan(x+π) = tan(x) (period π)
     @eqtest trig_reduce(tan(x + π)) == trig_reduce(tan(x))
 
     # -- expand then trig_reduce --

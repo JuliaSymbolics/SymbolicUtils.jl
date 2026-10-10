@@ -37,6 +37,7 @@ if GROUP == "Core"
             @safetestset "PolyForm" begin include("polyform.jl") end
             @safetestset "Rewrite" begin include("rewrite.jl") end
             @safetestset "Rulesets" begin include("rulesets.jl") end
+            @safetestset "Trig Reduce" begin include("trig_reduce.jl") end
             @safetestset "Inference" begin include("inference.jl") end
             @safetestset "Code" begin include("code.jl") end
             @safetestset "New codegen" begin include("new_code.jl") end

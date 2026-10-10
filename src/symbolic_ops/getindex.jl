@@ -280,7 +280,8 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
     end
     @match arr begin
         BSImpl.Term(; f, args) && if (f === adjoint || f === transpose) && length(args) == 1 &&
-                length(shape(args[1])) == 1 && length(idxs) == 2 && idxs[1] == 1 end => begin
+                length(shape(args[1])) == 1 && length(idxs) == 2 &&
+                idxs[1] isa Int && idxs[1] == 1 end => begin
             element = args[1][idxs[2]]
             return f(element)
         end

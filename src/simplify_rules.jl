@@ -196,31 +196,122 @@ one step using the half-angle / double-argument identities:
 
 For `n ≥ 3` the result `f(x)^r * half_angle^k` still contains powers and will
 be reduced further by subsequent Fixpoint iterations.
+
+For `tan`, `cot`, `tanh`, `coth` the half-angle identities produce ratios of
+`cos`/`cosh` terms, which the subsequent linearization and `simplify_fractions`
+steps will simplify:
+
+    tan(x)^2  = (1 - cos(2x)) / (1 + cos(2x))
+    cot(x)^2  = (1 + cos(2x)) / (1 - cos(2x))
+    tanh(x)^2 = (cosh(2x) - 1) / (cosh(2x) + 1)
+    coth(x)^2 = (cosh(2x) + 1) / (cosh(2x) - 1)
 """
-function _trig_power_reduce(@nospecialize(f), x, n)
+function _trig_power_reduce(@nospecialize(f), x::BasicSymbolic{T}, n) where {T}
     k = div(n, 2)   # number of squared pairs
     r = rem(n, 2)   # leftover power (0 or 1)
     if f === cos
         sq = (1 + cos(2 * x)) / 2
     elseif f === sin
         sq = (1 - cos(2 * x)) / 2
+    elseif f === tan
+        sq = (1 - cos(2 * x)) / (1 + cos(2 * x))
+    elseif f === cot
+        sq = (1 + cos(2 * x)) / (1 - cos(2 * x))
     elseif f === cosh
         sq = (1 + cosh(2 * x)) / 2
     elseif f === sinh
         sq = (cosh(2 * x) - 1) / 2
+    elseif f === tanh
+        sq = (cosh(2 * x) - 1) / (cosh(2 * x) + 1)
+    elseif f === coth
+        sq = (cosh(2 * x) + 1) / (cosh(2 * x) - 1)
     else
         return nothing
     end
-    return f(x)^r * sq^k
+    return (f(x)::BasicSymbolic{T})^r * sq^k
 end
 
 _isinteger_ge2(@nospecialize(n)) = n isa Integer && (n >= 2)::Bool
 
 """
+    _to_number(x)
+
+Extract the numeric value from a symbolic constant wrapper. Handles both
+`Const(val)` and the `identity(Const(val))` wrapping that SymbolicUtils uses
+for irrational constants like `π`.  Returns `nothing` for non-constant terms.
+"""
+function _to_number(x)
+    v = unwrap_const(x)
+    v isa Number && return v
+    if x isa BasicSymbolic && iscall(x) && operation(x) === identity
+        arg = arguments(x)[1]
+        isconst(arg) && return unwrap_const(arg)
+    end
+    return nothing
+end
+
+"""
+    _is_odd_multiple_of_pi(x)
+
+Return `true` if `x` is an odd multiple of π (±π, ±3π, …).
+Used by the period-reduction cleanup rules.
+"""
+function _is_odd_multiple_of_pi(x)
+    v = _to_number(x)
+    v === nothing && return false
+    n = v / π
+    return (abs(round(n) - n) < 1e-9 && isodd(Int(round(n))))::Bool
+end
+
+"""
+    _is_nonzero_even_multiple_of_pi(x)
+
+Return `true` if `x` is a nonzero even multiple of π (±2π, ±4π, …).
+Used by the period-reduction cleanup rules.
+"""
+function _is_nonzero_even_multiple_of_pi(x)
+    v = _to_number(x)
+    v === nothing && return false
+    n = v / π
+    nn = round(n)
+    return (abs(nn - n) < 1e-9 && iseven(Int(nn)) && !iszero(Int(nn)))::Bool
+end
+
+"""
+    _is_neg_term(v)
+
+Return `true` if the numeric coefficient `v` counts as "negative" for the
+majority vote in `_has_neg_leading`. Real numbers use the usual sign check.
+Complex numbers have no total order, so we fall back to the sign of the real
+part, and the sign of the imaginary part if the real part is zero (matching
+how e.g. `-im` is considered negative). Zero (in either sense) doesn't count
+as negative.
+"""
+function _is_neg_term(v)
+    v isa Real && return (v < 0)::Bool
+    if v isa Complex
+        rv = real(v)
+        !_iszero(rv) && return (rv < 0)::Bool
+        return (imag(v) < 0)::Bool
+    end
+    return false
+end
+
+"""
     _has_neg_leading(x)
 
-Return `true` if `x` "looks negative": a negative number, a Mul with a negative
-numeric first argument, or an Add whose first sorted term looks negative.
+Return `true` if `x` "looks negative": a negative number, a Mul with a
+negative numeric coefficient, or an Add with more negative terms than
+positive ones.
+
+For `ADD`, `dict` (an `ACDict`, i.e. a plain `Dict`) has no deterministic
+iteration order, so instead of picking out a single "leading term" we take a
+majority vote over the sign of every term (including the constant `coeff`,
+if nonzero): `x` is treated as negative if strictly more terms are negative
+than positive. Complex terms are handled via `_is_neg_term` (sign of the real
+part, falling back to the imaginary part). Ties (equal counts, or no terms at
+all) are treated as non-negative.
+
 Used to canonicalise `cos(-expr) → cos(expr)` and `sin(-expr) → -sin(expr)`.
 """
 function _has_neg_leading(x)
@@ -233,10 +324,16 @@ function _has_neg_leading(x)
             if variant === AddMulVariant.MUL
                 return coeff isa Real && (coeff < 0)::Bool
             else
-                # ADD: dict is unordered (ACDict = Dict), so sorted_arguments
-                # is needed for a deterministic "leading term" check.
-                a = first(sorted_arguments(x))
-                return _has_neg_leading(a)
+                neg = 0
+                pos = 0
+                if !_iszero(coeff)
+                    _is_neg_term(coeff) ? (neg += 1) : (pos += 1)
+                end
+                for v in values(dict)
+                    _iszero(v) && continue
+                    _is_neg_term(v) ? (neg += 1) : (pos += 1)
+                end
+                return neg > pos
             end
         end
         _ => return false
@@ -247,23 +344,34 @@ const TRIG_REDUCE_RULES = (
     # ── Cleanup: fold literal values, normalize negative arguments ──
     @rule(sin(~x::_iszero) => 0),
     @rule(cos(~x::_iszero) => 1),
+    @rule(tan(~x::_iszero) => 0),
     @rule(sinh(~x::_iszero) => 0),
     @rule(cosh(~x::_iszero) => 1),
-    @rule(cos(~x::_has_neg_leading) => cos(-1 * ~x)),      # cos is even
-    @rule(sin(~x::_has_neg_leading) => -1 * sin(-1 * ~x)), # sin is odd
-    @rule(cosh(~x::_has_neg_leading) => cosh(-1 * ~x)),    # cosh is even
+    @rule(tanh(~x::_iszero) => 0),
+    @rule(cos(~x::_has_neg_leading) => cos(-1 * ~x)),        # cos is even
+    @rule(sin(~x::_has_neg_leading) => -1 * sin(-1 * ~x)),   # sin is odd
+    @rule(tan(~x::_has_neg_leading) => -1 * tan(-1 * ~x)),   # tan is odd
+    @rule(cosh(~x::_has_neg_leading) => cosh(-1 * ~x)),      # cosh is even
     @rule(sinh(~x::_has_neg_leading) => -1 * sinh(-1 * ~x)), # sinh is odd
+    @rule(tanh(~x::_has_neg_leading) => -1 * tanh(-1 * ~x)), # tanh is odd
+
+    # ── Period reduction: remove multiples of π from trig arguments ──
+    @rule(sin(~~a + ~y::_is_nonzero_even_multiple_of_pi + ~~b) => sin(+(~~a..., ~~b...))),
+    @rule(sin(~~a + ~y::_is_odd_multiple_of_pi + ~~b) => -sin(+(~~a..., ~~b...))),
+    @rule(cos(~~a + ~y::_is_nonzero_even_multiple_of_pi + ~~b) => cos(+(~~a..., ~~b...))),
+    @rule(cos(~~a + ~y::_is_odd_multiple_of_pi + ~~b) => -cos(+(~~a..., ~~b...))),
 
     # ── Power reduction: f(x)^n for n ≥ 2 ──
     # Circular
     @rule(cos(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(cos, ~x, ~n)),
     @rule(sin(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(sin, ~x, ~n)),
+    @rule(tan(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(tan, ~x, ~n)),
+    @rule(cot(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(cot, ~x, ~n)),
     # Hyperbolic
     @rule(cosh(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(cosh, ~x, ~n)),
     @rule(sinh(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(sinh, ~x, ~n)),
-    # tan/sec: tan(x)^2 → sec(x)^2 - 1
-    @rule(tan(~x)^2 => sec(~x)^2 - 1),
-    @rule(cot(~x)^2 => csc(~x)^2 - 1),
+    @rule(tanh(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(tanh, ~x, ~n)),
+    @rule(coth(~x)^(~n::_isinteger_ge2) => _trig_power_reduce(coth, ~x, ~n)),
 
     # ── Product-to-sum (linearization): circular ──
     @acrule(cos(~x) * cos(~y) => (cos(~x - ~y) + cos(~x + ~y)) / 2),
@@ -278,17 +386,31 @@ const TRIG_REDUCE_RULES = (
     # ── Exponential product/power rules (kept from TRIG_EXP_RULES) ──
     @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y)),
     @rule(exp(~x)^(~y) => exp(~x * ~y)),
+
+    # ── Fallback: convert remaining tan/cot/sec/csc to sin/cos ──
+    # These fire on bare tan(x) etc., converting them to sin/cos ratios.
+    # For powers like tan(x)^n, the Postwalk visits tan(x) first and
+    # converts it, leaving (sin(x)/cos(x))^n which subsequent iterations
+    # (expand + power reduction + simplify_fractions) will handle.
+    @rule(tan(~x) => sin(~x) / cos(~x)),
+    @rule(cot(~x) => cos(~x) / sin(~x)),
+    @rule(sec(~x) => 1 / cos(~x)),
+    @rule(csc(~x) => 1 / sin(~x)),
+    @rule(tanh(~x) => sinh(~x) / cosh(~x)),
+    @rule(coth(~x) => cosh(~x) / sinh(~x)),
+    @rule(sech(~x) => 1 / cosh(~x)),
+    @rule(csch(~x) => 1 / sinh(~x)),
 )
 
 const TRIG_REDUCE_SIMPLIFIER = Chain(TRIG_REDUCE_RULES)
 
 """
-    _involves_vars(x, target_vars_set)
+    _involves_vars(x, target_vars::AbstractSet)
 
 Return `true` if the symbolic expression `x` contains any of the variables in
-`target_vars_set`.  Uses `query` for efficient short-circuiting tree traversal.
+`target_vars`.  Uses `query` for efficient short-circuiting tree traversal.
 """
-_involves_vars(x, target_vars_set) = query(in(target_vars_set), unwrap(x); default=false)
+_involves_vars(x, target_vars::AbstractSet) = query(in(target_vars), unwrap(x))
 
 """
     _build_filtered_trig_reduce(target_vars)
@@ -304,20 +426,32 @@ function _build_filtered_trig_reduce(target_vars)
         # ── Cleanup (always applies) ──
         @rule(sin(~x::_iszero) => 0),
         @rule(cos(~x::_iszero) => 1),
+        @rule(tan(~x::_iszero) => 0),
         @rule(sinh(~x::_iszero) => 0),
         @rule(cosh(~x::_iszero) => 1),
+        @rule(tanh(~x::_iszero) => 0),
         @rule(cos(~x::_has_neg_leading) => cos(-1 * ~x)),
         @rule(sin(~x::_has_neg_leading) => -1 * sin(-1 * ~x)),
+        @rule(tan(~x::_has_neg_leading) => -1 * tan(-1 * ~x)),
         @rule(cosh(~x::_has_neg_leading) => cosh(-1 * ~x)),
         @rule(sinh(~x::_has_neg_leading) => -1 * sinh(-1 * ~x)),
+        @rule(tanh(~x::_has_neg_leading) => -1 * tanh(-1 * ~x)),
+
+        # ── Period reduction ──
+        @rule(sin(~~a + ~y::_is_nonzero_even_multiple_of_pi + ~~b) => sin(+(~~a..., ~~b...))),
+        @rule(sin(~~a + ~y::_is_odd_multiple_of_pi + ~~b) => -sin(+(~~a..., ~~b...))),
+        @rule(cos(~~a + ~y::_is_nonzero_even_multiple_of_pi + ~~b) => cos(+(~~a..., ~~b...))),
+        @rule(cos(~~a + ~y::_is_odd_multiple_of_pi + ~~b) => -cos(+(~~a..., ~~b...))),
 
         # ── Power reduction (guarded by vars) ──
         @rule(cos(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(cos, ~x, ~n) : nothing),
         @rule(sin(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(sin, ~x, ~n) : nothing),
+        @rule(tan(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(tan, ~x, ~n) : nothing),
+        @rule(cot(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(cot, ~x, ~n) : nothing),
         @rule(cosh(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(cosh, ~x, ~n) : nothing),
         @rule(sinh(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(sinh, ~x, ~n) : nothing),
-        @rule(tan(~x)^2 => sp(~x) ? sec(~x)^2 - 1 : nothing),
-        @rule(cot(~x)^2 => sp(~x) ? csc(~x)^2 - 1 : nothing),
+        @rule(tanh(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(tanh, ~x, ~n) : nothing),
+        @rule(coth(~x)^(~n::_isinteger_ge2) => sp(~x) ? _trig_power_reduce(coth, ~x, ~n) : nothing),
 
         # ── Product-to-sum: circular (guarded) ──
         @acrule(cos(~x) * cos(~y) => (sp(~x) || sp(~y)) ? (cos(~x - ~y) + cos(~x + ~y)) / 2 : nothing),
@@ -332,6 +466,16 @@ function _build_filtered_trig_reduce(target_vars)
         # ── Exponential (always applies) ──
         @acrule(exp(~x) * exp(~y) => _iszero(~x + ~y) ? 1 : exp(~x + ~y)),
         @rule(exp(~x)^(~y) => exp(~x * ~y)),
+
+        # ── Fallback: convert remaining tan/cot/sec/csc to sin/cos (guarded) ──
+        @rule(tan(~x) => sp(~x) ? sin(~x) / cos(~x) : nothing),
+        @rule(cot(~x) => sp(~x) ? cos(~x) / sin(~x) : nothing),
+        @rule(sec(~x) => sp(~x) ? 1 / cos(~x) : nothing),
+        @rule(csc(~x) => sp(~x) ? 1 / sin(~x) : nothing),
+        @rule(tanh(~x) => sp(~x) ? sinh(~x) / cosh(~x) : nothing),
+        @rule(coth(~x) => sp(~x) ? cosh(~x) / sinh(~x) : nothing),
+        @rule(sech(~x) => sp(~x) ? 1 / cosh(~x) : nothing),
+        @rule(csch(~x) => sp(~x) ? 1 / sinh(~x) : nothing),
     )
     return Chain(rules)
 end

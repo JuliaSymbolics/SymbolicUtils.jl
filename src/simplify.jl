@@ -75,6 +75,10 @@ Pass `simplify_fractions=false` to prevent this.
         x = SymbolicUtils.trig_reduce(x; vars=_trig_reduce_vars)
         return simplify_fractions && query(isdiv, x) ?
             SymbolicUtils.simplify_fractions(x) : x
+    elseif _trig_reduce_active
+        x = SymbolicUtils.trig_reduce(x)
+        return simplify_fractions && query(isdiv, x) ?
+            SymbolicUtils.simplify_fractions(x) : x
     end
 
     f = if rewriter === nothing
@@ -151,9 +155,8 @@ function trig_reduce(x; vars=nothing, maxiters::Int=50)
         !iscall(current) && break
         expanded = expand(current)
         reduced = PassThrough(If(iscall, rw))(expanded)
-        if isequal(reduced, current)
-            return reduced
-        end
+        reduced = simplify_fractions(reduced)
+        isequal(reduced, current) && return reduced
         current = reduced
     end
     return current

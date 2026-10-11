@@ -870,6 +870,14 @@ end
     end
 end
 
+@testset "sum(transpose(broadcast(exp, x))) with symbolic indices (#1149)" begin
+    @syms nv[1:3]
+    # sum/mapreduce indexes transpose(broadcast(...)) with a symbolic first index;
+    # __stable_getindex must not treat `idxs[1] == 1` as a boolean when idxs[1] is symbolic.
+    result = sum(transpose(broadcast(exp, nv)))
+    @test result isa BasicSymbolic
+end
+
 @testset "err test" begin
     @syms t()
     @test_throws ErrorException t(2)

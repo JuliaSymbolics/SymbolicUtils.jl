@@ -8,4 +8,3 @@ benchmark/tune.json
 scratch.jl
 profile.*
 statprof/
-TRIG_REDUCE_PR_NOTES.md

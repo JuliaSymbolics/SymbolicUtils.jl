@@ -676,7 +676,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
             # The goal is to batch scalar writes, so we defer them. Storing them in a
             # `Dict` allows later writes to overwrite earlier ones without additional
             # codegen.
-            @match val begin
+            deferred = @match val begin
                 BSImpl.Const(; val = _val) => begin
                     _inner = first(_val)
                     if _isone(_inner)
@@ -686,22 +686,24 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                     else
                         scalar_idxs[region] = _inner
                     end
+                    true
                 end
                 BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    true
                 end
                 BSImpl.Term(; f) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[1]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    true
                 end
-                _ => begin
-                    # Unfortunately, scalarizing `val` requires getting the canonical expr.
-                    canon_ex = SymbolicUtils.get_canonical_expr!(cs.ir, val_idx)
-                    scalar_idxs[region] = cs(canon_ex[SymbolicUtils.stable_eachindex(canon_ex)[1]])
-                end
+                # Any other value is an array expression. Scalarizing it would index its
+                # inputs and the output elementwise, which arrays that disallow scalar
+                # indexing (such as GPU arrays) reject, so it is written as a block below.
+                _ => false
             end
-            continue
+            deferred && continue
         end
 
         # We are writing to a block. First, materialize all scalar writes that happened until now.

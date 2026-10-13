@@ -613,6 +613,9 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
 
     # Indices and values of regions that write to a scalar
     scalar_idxs = Dict{ShapeVecT, Any}()
+    # `false` writes single-element regions holding an array expression through a view
+    # of the output, like other regions, instead of scalarizing them.
+    scalarize_single_element_regions = get(cs.rewrites, :scalarize_single_element_regions, true)::Bool
     D = length(sh)::Int
     # Utility buffers
     one_regions = ShapeVecT[]
@@ -698,10 +701,18 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
                     true
                 end
-                # Any other value is an array expression. Scalarizing it would index its
-                # inputs and the output elementwise, which arrays that disallow scalar
-                # indexing (such as GPU arrays) reject, so it is written as a block below.
-                _ => false
+                # Any other value is an array expression. Scalarizing it indexes its inputs
+                # and the output elementwise, which arrays that disallow scalar indexing
+                # (such as GPU arrays) reject, so callers can opt into writing it as a
+                # block below instead.
+                _ => if scalarize_single_element_regions
+                    # Unfortunately, scalarizing `val` requires getting the canonical expr.
+                    canon_ex = SymbolicUtils.get_canonical_expr!(cs.ir, val_idx)
+                    scalar_idxs[region] = cs(canon_ex[SymbolicUtils.stable_eachindex(canon_ex)[1]])
+                    true
+                else
+                    false
+                end
             end
             deferred && continue
         end

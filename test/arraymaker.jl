@@ -113,7 +113,7 @@ Base.setindex!(::NoScalarVector, _, ::Int) = error("scalar setindex! on NoScalar
 Base.view(x::NoScalarVector, r::AbstractUnitRange) = NoScalarVector(view(x.data, r))
 Base.copyto!(dst::NoScalarVector, src::AbstractArray) = (copyto!(dst.data, src); dst)
 
-@testset "array-valued single-element regions are written as blocks" begin
+@testset "`:scalarize_single_element_regions` rewrite" begin
     # Longer than `Code.FILL_ARR_LIMIT`, so the output is not scalarized as a whole.
     @syms out[1:20]::Real p[1:20]::Real q[1:20]::Real a::Real
     # The in-place form `Symbolics.build_function` generates.
@@ -121,13 +121,15 @@ Base.copyto!(dst::NoScalarVector, src::AbstractArray) = (copyto!(dst.data, src);
         Returns, SU.ArgsT{SymReal}((out,));
         type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
     )
-    function build_iip(regions, values)
+    function build_iip(regions, values, rewrites)
         maker = SU.ArrayMaker{SymReal}([[r] for r in regions], values)
         fn = Func([out, p, q, a], [], Code.with_allocator(iip_allocator, maker))
-        return Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict())
+        return Code.fast_toexpr(fn, IRStructure{SymReal}(), rewrites)
     end
+    as_blocks = Dict{Any, Any}(:scalarize_single_element_regions => false)
     pv, qv, av = collect(1.0:20), collect(10.0:10:200), 5.0
 
+    # Single-element regions holding an array expression.
     cases = [
         "non-constant" => (
             [1:19, 20:20], [p[1:19] .+ q[1:19], p[20:20] .- q[1:1]],
@@ -143,17 +145,24 @@ Base.copyto!(dst::NoScalarVector, src::AbstractArray) = (copyto!(dst.data, src);
             [pv[1] - qv[2]; pv[2:10] .+ qv[2:10]; 3pv[11]; qv[12:20] .- pv[12:20]],
         ),
     ]
-    @testset "$name" for (name, (regions, values, expected)) in cases
-        ex = build_iip(regions, values)
+    @testset "scalarized by default: $name" for (name, (regions, values, expected)) in cases
+        ex = build_iip(regions, values, Dict{Any, Any}())
+        @test occursin("batched_setindex!", string(ex))
+        f = eval(ex)
+        @test Base.invokelatest(f, zeros(20), pv, qv, av) ≈ expected
+        @test_throws ErrorException Base.invokelatest(f, NoScalarVector(zeros(20)), pv, qv, av)
+    end
+    @testset "written as blocks when disabled: $name" for (name, (regions, values, expected)) in cases
+        ex = build_iip(regions, values, as_blocks)
         @test !occursin("batched_setindex!", string(ex))
         f = eval(ex)
         @test Base.invokelatest(f, zeros(20), pv, qv, av) ≈ expected
         @test Base.invokelatest(f, NoScalarVector(zeros(20)), pv, qv, av).data ≈ expected
     end
 
-    # Scalar values, such as a scalar equation's residual, keep the batched scalar write.
-    @testset "scalar values stay scalar" begin
-        ex = build_iip([1:18, 19:19, 20:20], [p[1:18], SU.Const{SymReal}([a]), SU.Const{SymReal}([2.0])])
+    # Scalar values, such as a scalar equation's residual, are always written as scalars.
+    @testset "scalar values stay scalar" for rewrites in (Dict{Any, Any}(), as_blocks)
+        ex = build_iip([1:18, 19:19, 20:20], [p[1:18], SU.Const{SymReal}([a]), SU.Const{SymReal}([2.0])], rewrites)
         @test occursin("batched_setindex!", string(ex))
         @test Base.invokelatest(eval(ex), zeros(20), pv, qv, av) ≈ [pv[1:18]; av; 2.0]
     end

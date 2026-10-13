@@ -1470,3 +1470,16 @@ end
     @test rewritten(rule) === cos
     @test rewritten(Code.with_options(rule, (; f = tan))) === tan
 end
+
+@testset "`ifelse` converts a float literal branch to the other branch's type" begin
+    @syms x::Real
+    expr = ifelse(x > 0, 1.0, 2x)
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, expr)
+    f = eval(Code.fast_toexpr(Func([x], [], expr), ir, Dict{Any, Any}()))
+    @test only(Base.return_types(f, (BigFloat,))) == BigFloat
+    @test f(big(1.0)) isa BigFloat
+    @test f(1f0) === 1.0
+    @test f(-1f0) === -2.0f0
+    @test f(-1) === -2
+end

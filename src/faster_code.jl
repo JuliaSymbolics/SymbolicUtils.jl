@@ -884,9 +884,25 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
     end
 end
 
+float_literal(x) = SymbolicUtils.isconst(x) && unwrap_const(x) isa AbstractFloat
+
+function convert_literal(lit::AbstractFloat, other::Real)
+    T = typeof(other)
+    return promote_type(typeof(lit), T) === T ? convert(T, lit) : lit
+end
+convert_literal(lit, other) = lit
+
 function codegen_function!(::typeof(ifelse), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     cond_idx, true_idx, false_idx = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
-    return codegen!(cs, expr_idx, Expr(:if, cs(cs.ir[cond_idx]), cs(cs.ir[true_idx]), cs(cs.ir[false_idx])))
+    cond = cs(cs.ir[cond_idx])
+    a, b = cs(cs.ir[true_idx]), cs(cs.ir[false_idx])
+    lit_a, lit_b = float_literal(cs.ir[true_idx]), float_literal(cs.ir[false_idx])
+    if lit_a && !lit_b
+        a = Expr(:call, convert_literal, a, b)
+    elseif lit_b && !lit_a
+        b = Expr(:call, convert_literal, b, a)
+    end
+    return codegen!(cs, expr_idx, Expr(:if, cond, a, b))
 end
 
 # `ifelse_branching` emits each branch body into its own codegen scope so it lands inside the

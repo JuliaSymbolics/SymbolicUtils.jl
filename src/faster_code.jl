@@ -613,6 +613,9 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
 
     # Indices and values of regions that write to a scalar
     scalar_idxs = Dict{ShapeVecT, Any}()
+    # `false` writes single-element regions holding an array expression through a view
+    # of the output, like other regions, instead of scalarizing them.
+    scalarize_single_element_regions = get(cs.rewrites, :scalarize_single_element_regions, true)::Bool
     D = length(sh)::Int
     # Utility buffers
     one_regions = ShapeVecT[]
@@ -676,7 +679,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
             # The goal is to batch scalar writes, so we defer them. Storing them in a
             # `Dict` allows later writes to overwrite earlier ones without additional
             # codegen.
-            @match val begin
+            deferred = @match val begin
                 BSImpl.Const(; val = _val) => begin
                     _inner = first(_val)
                     if _isone(_inner)
@@ -686,22 +689,32 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                     else
                         scalar_idxs[region] = _inner
                     end
+                    true
                 end
                 BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    true
                 end
                 BSImpl.Term(; f) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[1]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    true
                 end
-                _ => begin
+                # Any other value is an array expression. Scalarizing it indexes its inputs
+                # and the output elementwise, which arrays that disallow scalar indexing
+                # (such as GPU arrays) reject, so callers can opt into writing it as a
+                # block below instead.
+                _ => if scalarize_single_element_regions
                     # Unfortunately, scalarizing `val` requires getting the canonical expr.
                     canon_ex = SymbolicUtils.get_canonical_expr!(cs.ir, val_idx)
                     scalar_idxs[region] = cs(canon_ex[SymbolicUtils.stable_eachindex(canon_ex)[1]])
+                    true
+                else
+                    false
                 end
             end
-            continue
+            deferred && continue
         end
 
         # We are writing to a block. First, materialize all scalar writes that happened until now.

@@ -98,7 +98,11 @@ function add_allocator!(state::Union{NameState, LazyState}, @nospecialize(alloc)
 end
 
 function reset_allocator!(state::Union{NameState, LazyState}, @nospecialize(old_alloc))
-    state.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    if old_alloc === nothing
+        delete!(state.rewrites, ALLOCATOR_REWRITES_KEY)
+    else
+        state.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    end
     return nothing
 end
 

@@ -1039,7 +1039,11 @@ function add_allocator!(cs::CodegenState, @nospecialize(alloc))
 end
 
 function reset_allocator!(cs::CodegenState, @nospecialize(old_alloc))
-    cs.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    if old_alloc === nothing
+        delete!(cs.rewrites, ALLOCATOR_REWRITES_KEY)
+    else
+        cs.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    end
     return nothing
 end
 

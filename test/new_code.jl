@@ -1471,21 +1471,26 @@ end
     @test rewritten(Code.with_options(rule, (; f = tan))) === tan
 end
 
-@testset "`ifelse` converts a float literal branch to the other branch's type" begin
-    @syms x::Real
-    expr = ifelse(x > 0, 1.0, 2x)
-    ir = IRStructure{SymReal}()
-    populate_ir!(ir, expr)
-    f = eval(Code.fast_toexpr(Func([x], [], expr), ir, Dict{Any, Any}()))
+@testset "`ifelse` widens a float branch to the other branch's type" begin
+    @syms x::Real y::Real
+    build(e, args = [x]) = (ir = IRStructure{SymReal}(); populate_ir!(ir, e); eval(Code.fast_toexpr(Func(args, [], e), ir, Dict{Any, Any}())))
+    f = build(ifelse(x > 0, 1.0, 2x))
     @test only(Base.return_types(f, (BigFloat,))) == BigFloat
-    @test f(big(1.0)) isa BigFloat
-    @test f(1f0) === 1.0
-    @test f(-1f0) === -2.0f0
-    @test f(-1) === -2
+    @test @invokelatest(f(big(1.0))) isa BigFloat
+    @test @invokelatest(f(1f0)) === 1.0
+    @test @invokelatest(f(-1f0)) === -2.0f0
+    @test @invokelatest(f(-1)) === -2
+    eager = build(ifelse_eager(x > 0, 1.0, 2x))
+    @test only(Base.return_types(eager, (BigFloat,))) == BigFloat
+    @test @invokelatest(eager(-1f0)) === -2.0f0
+    g = build(ifelse(x > 0, 2y, 3x), [x, y])
+    @test only(Base.return_types(g, (Float64, BigFloat))) == BigFloat
+    @test @invokelatest(build(ifelse(x > 0, y, -1), [x, y])(1.0, UInt(3))) === UInt(3)
+    @test @invokelatest(build(ifelse(x > 0, y, 0.5), [x, y])(1.0, 2)) === 2
+    @test @invokelatest(build(ifelse(x > 0, 1.0, y), [x, y])(-1.0, 2^53 + 1)) === 2^53 + 1
     ncalls = Ref(0)
-    heavy = y -> (ncalls[] += 1; 3y)
+    heavy = z -> (ncalls[] += 1; 3z)
     h = SymbolicUtils.term(heavy, x; type = Real, shape = SymbolicUtils.ShapeVecT())
-    build(e) = (ir = IRStructure{SymReal}(); populate_ir!(ir, e); eval(Code.fast_toexpr(Func([x], [], e), ir, Dict{Any, Any}())))
     calls(g, v) = (ncalls[] = 0; Base.invokelatest(g, v); ncalls[])
     lit, ref = build(ifelse(x > 0, 1.0, h)), build(ifelse(x > 0, x, h))
     @test calls(lit, 1.0) == calls(ref, 1.0)

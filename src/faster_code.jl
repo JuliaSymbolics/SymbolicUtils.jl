@@ -460,7 +460,7 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
 
     declare!(cs, :_, outer_expr)
 
-    return output_buffer
+    return declare!(cs, get_misc_identifier(cs), output_buffer)
 end
 
 function codegen_function!(f::SymbolicUtils.Fill, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}

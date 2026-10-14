@@ -744,6 +744,7 @@ end
                         end
                     end
                 end
+                __miscₛᵧₘ0 = var"##cse#1"
             end
         )
     end
@@ -765,6 +766,17 @@ end
         rewrites = Dict{Any, Any}()
         Code.fast_toexpr(sum(wrapped), IRStructure{SymReal}(), rewrites)
         @test !haskey(rewrites, Code.ALLOCATOR_REWRITES_KEY)
+    end
+
+    @testset "`Func` and `Assignment` return an `@arrayop` result" begin
+        @syms x[1:3] y[1:3] z
+        arr = @arrayop (i,) x[i] * y[i]
+        xv, yv = [1.0, 2.0, 3.0], [4.0, 5.0, 6.0]
+        for fn in (Func([x, y], [], arr), Func([x, y], [], Let([Assignment(z, arr)], z, true)),
+                   Func([x, y, Assignment(z, arr)], [], z), Func([x, y], [Assignment(z, arr)], z))
+            f = eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict()))
+            @test @invokelatest(f(xv, yv)) == xv .* yv
+        end
     end
 
     @testset "`Fill`" begin

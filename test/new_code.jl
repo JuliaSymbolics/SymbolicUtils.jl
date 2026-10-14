@@ -1482,4 +1482,12 @@ end
     @test f(1f0) === 1.0
     @test f(-1f0) === -2.0f0
     @test f(-1) === -2
+    ncalls = Ref(0)
+    heavy = y -> (ncalls[] += 1; 3y)
+    h = SymbolicUtils.term(heavy, x; type = Real, shape = SymbolicUtils.ShapeVecT())
+    build(e) = (ir = IRStructure{SymReal}(); populate_ir!(ir, e); eval(Code.fast_toexpr(Func([x], [], e), ir, Dict{Any, Any}())))
+    calls(g, v) = (ncalls[] = 0; Base.invokelatest(g, v); ncalls[])
+    lit, ref = build(ifelse(x > 0, 1.0, h)), build(ifelse(x > 0, x, h))
+    @test calls(lit, 1.0) == calls(ref, 1.0)
+    @test calls(lit, -1.0) == calls(ref, -1.0)
 end

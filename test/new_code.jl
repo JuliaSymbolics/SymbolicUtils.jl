@@ -748,6 +748,17 @@ end
         )
     end
 
+    @testset "`@arrayop` computes loop-invariant arrays once" begin
+        @syms x[1:3] y[1:3]
+        ncalls = Ref(0)
+        double = v -> (ncalls[] += 1; 2 .* v)
+        dx = SymbolicUtils.term(double, x; type = Vector{Real}, shape = SymbolicUtils.ShapeVecT((1:3,)))
+        expr = sum(@arrayop (i,) dx[i] + y[i])
+        f = eval(Code.fast_toexpr(Func([x, y], [], expr), IRStructure{SymReal}(), Dict()))
+        @test @invokelatest(f([1.0, 2.0, 3.0], [4.0, 5.0, 6.0])) == 27.0
+        @test ncalls[] == 1
+    end
+
     @testset "bare `@arrayop` after `with_allocator` (issue #1151)" begin
         @syms x[1:3] y[1:3]
         wrapped = Code.with_allocator(zeros, @arrayop (i,) x[i] * y[i])

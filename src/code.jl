@@ -2282,7 +2282,8 @@ function remap_root(ir::IRStructure, new_ir::IRStructure, expr::BasicSymbolic)
     haskey(new_ir, expr) && return expr
     if haskey(ir, expr)
         idx = ir[expr]
-        return idx <= length(new_ir) ? new_ir[idx] : expr
+        same_prefix = length(new_ir) >= length(ir) && all(j -> j == idx || new_ir[j] === ir[j], 1:length(ir))
+        return same_prefix ? new_ir[idx] : expr
     end
     iscall(expr) || return expr
     args = arguments(expr)

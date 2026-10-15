@@ -394,6 +394,7 @@ function hoist_invariant_arrays!(cs::CodegenState{T}, ex) where {T}
         end
         return nothing
     end
+    operation(ex) === ifelse_branching && return hoist_invariant_arrays!(cs, args[1])
     for a in args
         hoist_invariant_arrays!(cs, a)
     end

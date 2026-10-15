@@ -892,7 +892,7 @@ widen_float(x, other) = x
 
 function widen_literal(x::Integer, other::Real)
     T = typeof(other)
-    return !(T <: Integer) && promote_type(typeof(x), T) === T ? convert(T, x) : x
+    return !(T <: Integer) && abs(x) <= maxintfloat(Float16) && promote_type(typeof(x), T) === T ? convert(T, x) : x
 end
 widen_literal(x, other) = widen_float(x, other)
 

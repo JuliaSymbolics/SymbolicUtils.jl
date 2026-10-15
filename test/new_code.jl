@@ -1483,6 +1483,11 @@ end
     eager = build(ifelse_eager(x > 0, 1.0, 2x))
     @test only(Base.return_types(eager, (BigFloat,))) == BigFloat
     @test @invokelatest(eager(-1f0)) === -2.0f0
+    @test operation(@invokelatest(eager(y))) === ifelse_eager
+    zero_lit = build(ifelse(x > 0, 0, 2x))
+    @test only(Base.return_types(zero_lit, (BigFloat,))) == BigFloat
+    @test @invokelatest(zero_lit(1f0)) === 0.0f0
+    @test @invokelatest(zero_lit(3)) === 0
     g = build(ifelse(x > 0, 2y, 3x), [x, y])
     @test only(Base.return_types(g, (Float64, BigFloat))) == BigFloat
     @test @invokelatest(build(ifelse(x > 0, y, -1), [x, y])(1.0, UInt(3))) === UInt(3)

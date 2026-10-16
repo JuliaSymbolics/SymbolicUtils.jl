@@ -897,16 +897,43 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
     end
 end
 
+function widen_float(x::AbstractFloat, other::Real)
+    T = typeof(other)
+    return promote_type(typeof(x), T) === T ? convert(T, x) : x
+end
+widen_float(x, other) = x
+
+function widen_literal(x::Integer, other::Real)
+    T = typeof(other)
+    return !(T <: Integer) && -maxintfloat(Float16) <= x <= maxintfloat(Float16) && promote_type(typeof(x), T) === T ? convert(T, x) : x
+end
+widen_literal(x, other) = widen_float(x, other)
+
+function widened_branches(cs::CodegenState{T}, true_idx, false_idx) where {T}
+    a, b = cs(cs.ir[true_idx]), cs(cs.ir[false_idx])
+    lit_a, lit_b = SymbolicUtils.isconst(cs.ir[true_idx]), SymbolicUtils.isconst(cs.ir[false_idx])
+    return (lit_b ? a : Expr(:call, lit_a ? widen_literal : widen_float, a, b)),
+        (lit_a ? b : Expr(:call, lit_b ? widen_literal : widen_float, b, a))
+end
+
 function codegen_function!(::typeof(ifelse), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     cond_idx, true_idx, false_idx = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
-    return codegen!(cs, expr_idx, Expr(:if, cs(cs.ir[cond_idx]), cs(cs.ir[true_idx]), cs(cs.ir[false_idx])))
+    cond = cs(cs.ir[cond_idx])
+    a, b = widened_branches(cs, true_idx, false_idx)
+    return codegen!(cs, expr_idx, Expr(:if, cond, a, b))
+end
+
+function codegen_function!(::typeof(SymbolicUtils.ifelse_eager), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    cond_idx, true_idx, false_idx = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    cond = cs(cs.ir[cond_idx])
+    a, b = widened_branches(cs, true_idx, false_idx)
+    return codegen!(cs, expr_idx, Expr(:call, SymbolicUtils.ifelse_eager, cond, a, b))
 end
 
 # `ifelse_branching` emits each branch body into its own codegen scope so it lands inside the
 # corresponding `if`/`else` arm rather than being hoisted ahead of the conditional. Together
 # with `cse_inside_expr(_, ::typeof(ifelse_branching)) = false`, this guarantees the untaken
-# branch is never evaluated, even when CSE is enabled. (`ifelse_eager` needs no method here:
-# it lowers via the generic `codegen_function!` fallback to an eager call.)
+# branch is never evaluated, even when CSE is enabled.
 function codegen_function!(::typeof(ifelse_branching), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     cond_idx, true_idx, false_idx = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
     cond = cs(cs.ir[cond_idx])

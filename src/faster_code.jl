@@ -609,26 +609,36 @@ broadcast loop into its own body.
 @noinline fused_materialize!(dest, bc) = Base.Broadcast.materialize!(dest, bc)
 
 """
+    NoUnalias(f)
+
+Calls `f`. As the function of a `Broadcasted`, it makes `Broadcast.preprocess` skip
+unaliasing the broadcast's inputs from its destination. CPU broadcasts and GPUArrays both
+preprocess through it.
+"""
+struct NoUnalias{F}
+    f::F
+end
+@inline (n::NoUnalias)(args...) = n.f(args...)
+
+@inline function Base.Broadcast.preprocess(
+        _, bc::Base.Broadcast.Broadcasted{S, A, <:NoUnalias}
+    ) where {S <: Union{Nothing, Base.Broadcast.BroadcastStyle}, A}
+    return Base.Broadcast.Broadcasted{S}(
+        bc.f, Base.Broadcast.preprocess_args(nothing, bc.args), bc.axes
+    )
+end
+
+"""
     fused_materialize_noalias!(dest, bc)
 
 [`fused_materialize!`](@ref) without unaliasing the inputs of `bc` from `dest` (see
-[`FUSE_UNALIAS_KEY`](@ref)). Base copies every input that might share memory with `dest`,
-which for views into one state vector is all of them. Other destinations and broadcast
-styles, such as GPU arrays, which unalias only inputs that actually overlap `dest`, use
-`fused_materialize!`.
+[`FUSE_UNALIAS_KEY`](@ref)). Broadcast copies every input that might share memory with
+`dest`, which for views into one state vector is all of them, on the CPU and on GPU arrays.
 """
-@noinline function fused_materialize_noalias!(dest, bc)
-    style = Base.Broadcast.combine_styles(dest, bc)
-    dest isa StridedArray && style isa Base.Broadcast.DefaultArrayStyle ||
-        return Base.Broadcast.materialize!(dest, bc)
-    bc′ = Base.Broadcast.preprocess(
-        nothing, Base.Broadcast.instantiate(Base.Broadcast.Broadcasted(style, identity, (bc,), axes(dest)))
-    )
-    @inbounds @simd for I in eachindex(bc′)
-        dest[I] = bc′[I]
-    end
-    return dest
+@noinline function fused_materialize_noalias!(dest, bc::Base.Broadcast.Broadcasted{S}) where {S}
+    return Base.Broadcast.materialize!(dest, Base.Broadcast.Broadcasted{S}(NoUnalias(bc.f), bc.args, bc.axes))
 end
+@noinline fused_materialize_noalias!(dest, bc) = Base.Broadcast.materialize!(dest, bc)
 
 """
     is_elementwise_call(f)

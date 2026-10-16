@@ -250,4 +250,15 @@ end
     @test a == b == expected
     update_in_place!(b, yv, dtv, b)
     @test (@allocated update_in_place!(b, yv, dtv, b)) < (@allocated update_unaliased!(a, yv, dtv, a))
+
+    # GPUArrays preprocesses broadcasts the same way, so inputs sharing the destination's
+    # memory reach the kernel as they are, rather than as copies. Base cannot tell slices of
+    # different variables of one state vector apart, nor can CUDA.jl's `dataids`.
+    u = collect(1.0:40.0)
+    block(r) = reshape(view(u, r), 4, 4)
+    dest, src = view(block(1:16), 2:3, 2:3), view(block(17:32), 2:3, 2:3)
+    plain = Broadcast.Broadcasted(+, (dest, Broadcast.Broadcasted(*, (2.0, src))))
+    @test Broadcast.preprocess(dest, plain).args[2].args[2].x !== src
+    marked = Broadcast.Broadcasted(Code.NoUnalias(+), plain.args)
+    @test Broadcast.preprocess(dest, marked).args[2].args[2].x === src
 end

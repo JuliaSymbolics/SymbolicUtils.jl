@@ -78,65 +78,73 @@ symbolic expressions with numeric or array of numeric symtype.
 add_worker(::Type{SymReal}, terms) = _run_addbuffer(SYMREAL_ADDBUFFER[], terms)
 add_worker(::Type{SafeReal}, terms) = _run_addbuffer(SAFEREAL_ADDBUFFER[], terms)
 
-function _added_shape(terms::Tuple)
-    promote_shape(+, ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms)))...)
-end
-
-function _added_shape(terms)
-    isempty(terms) && return Unknown(-1)
-    length(terms) == 1 && return shape(first(terms))
-    a, bs = Iterators.peel(terms)
-    sh::ShapeT = shape(a)
-    for t in bs
-        sh = promote_shape(+, sh, shape(t))
-    end
-    return sh
-end
 
 function (awb::AddWorkerBuffer{T})(terms) where {T}
-    if !all(_numeric_or_arrnumeric_symtype, terms)
-        throw(MethodError(+, Tuple(terms)))
-    end
     isempty(terms) && return zero_of_vartype(T)
     if isone(length(terms))
         return Const{T}(only(terms))
     end
     empty!(awb)
-    shape = _added_shape(terms)
+    # Compute shape and type from the first term; both are updated incrementally in the
+    # main loop. This replaces the separate `_added_shape` pre-pass and the
+    # `all(_numeric_or_arrnumeric_symtype, terms)` validity pre-pass.
+    sh::ShapeT = shape(first(terms))
     type::TypeT = symtype(Const{T}(first(terms)))
-    # type = promoted_symtype(+, terms)
     newcoeff = 0
     result = awb.dict
+    # If every term cancels we still need to preserve the array shape (a scalar `0` cannot
+    # stand in for a zero vector). Track an array-shaped key as we accumulate so the
+    # all-cancel case can be rebuilt as `coeff * arr` (e.g. `y - y` => `0y`).
+    arr_witness = nothing
     for term in terms
         term = unwrap(term)
         if _is_array_of_symbolics(term)
             term = Const{T}(term)
         end
+        # Shape check before type check: promote_shape throws ArgumentError for
+        # incompatible shapes, while promote_symtype would hit an @assert instead.
+        sh = promote_shape(+, sh, shape(term))
         type = promote_symtype(+, type, symtype(term))
         if term isa BasicSymbolic{T}
             @match term begin
                 BSImpl.Const(; val) => (newcoeff = newcoeff .+ val)
-                BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
+                BSImpl.AddMul(; coeff, dict, variant, shape = termshape, type = termtype, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
                             newcoeff = newcoeff .+ coeff
                             for (k, v) in dict
                                 _accumulate!(result, k, v)
                             end
+                            if arr_witness === nothing && is_array_shape(sh)
+                                for k in keys(dict)
+                                    if is_array_shape(SymbolicUtils.shape(k))
+                                        arr_witness = k
+                                        break
+                                    end
+                                end
+                            end
                         end
                         AddMulVariant.MUL => begin
-                            newterm = Mul{T}(1, dict; shape, type, metadata)
+                            newterm = Mul{T}(1, dict; shape = termshape, type = termtype, metadata)
                             _accumulate!(result, newterm, coeff)
+                            if arr_witness === nothing && is_array_shape(SymbolicUtils.shape(newterm))
+                                arr_witness = newterm
+                            end
                         end
                     end
                 end
                 _ => begin
+                    # Validate that the symtype is numeric; non-numeric symbolics (e.g.
+                    # `a::Any`) must be rejected the same way the old pre-check did.
+                    _numeric_or_arrnumeric_symtype(term) || throw(MethodError(+, Tuple(terms)))
                     if is_array_shape(SymbolicUtils.shape(term))
                         coeff, arrterm = _split_arrterm_scalar_coeff(T, term)
                         if isconst(coeff)
                             _accumulate!(result, arrterm, unwrap_const(coeff))
+                            arr_witness === nothing && (arr_witness = arrterm)
                         else
                             _accumulate!(result, term, 1)
+                            arr_witness === nothing && (arr_witness = term)
                         end
                     else
                         _accumulate!(result, term, 1)
@@ -152,18 +160,6 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
             newcoeff = newcoeff .+ term
         end
     end
-    # If every term cancels we still need to preserve the array shape (a scalar `0` cannot
-    # stand in for a zero vector). Grab a surviving array-shaped key before filtering so the
-    # all-cancel case can be rebuilt as `coeff * arr` (e.g. `y - y` => `0y`).
-    arr_witness = nothing
-    if is_array_shape(shape)
-        for k in keys(result)
-            if is_array_shape(SymbolicUtils.shape(k))
-                arr_witness = k
-                break
-            end
-        end
-    end
     filter!(!(iszero ∘ last), result)
     if isempty(result)
         if arr_witness !== nothing && !(newcoeff isa AbstractArray)
@@ -171,7 +167,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
         end
         return Const{T}(newcoeff)
     end
-    var = Add{T}(newcoeff, result; type, shape)::BasicSymbolic{T}
+    var = Add{T}(newcoeff, result; type, shape = sh)::BasicSymbolic{T}
     @match var begin
         BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
         _ => nothing

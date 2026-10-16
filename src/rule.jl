@@ -1,6 +1,22 @@
 
 @inline alwaystrue(x) = true
 const COMM_CHECKS_LIMIT = Ref(10)
+# Max arity for fixed-arity commutative backtracking. Above this, use first-match.
+const COMM_BACKTRACK_LIMIT = Ref(5)
+# Per-Rule-call work meter (TaskLocal, nested-safe via save/restore in
+# `(r::Rule)(term)`): each candidate `loop` call in commutative_term_matcher
+# increments this (segment/first-match and backtracking branches). Backtracking
+# stops once the count exceeds the budget; the segment/first-match branch only
+# counts and never stops. This bounds how many local-match attempts (including
+# ticks inside continuations such as n! segment searches) may be spent on
+# backtracking before falling back to first-match; it does not abort an
+# in-flight first-match/segment enumeration. Nested Rule calls (e.g. predicates
+# or RHS that apply another rule) get their own zeroed meter and restore the
+# outer count in `finally`. Value tuned so fixed+segment failing matches stay
+# within ~3× of master on the segcont probes while depth-2 #586 cases still
+# succeed.
+const COMM_BACKTRACK_BUDGET = Ref(2000)
+const COMM_BT_USED = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
 
 # Matcher patterns with Slot, DefSlot and Segment
 
@@ -310,13 +326,19 @@ const EMPTY_IMMUTABLE_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 
 function (r::Rule)(term)
     rhs = r.rhs
-
+    # Scope the work meter to this call so nested Rule applications (predicates /
+    # RHS) cannot zero the outer count or leak their ticks into the caller.
+    ref = COMM_BT_USED[]
+    saved = ref[]
+    ref[] = 0
     try
         # n == 1 means that exactly one term of the input (term,) was matched
         success(bindings, n) = n == 1 ? (rhs(assoc(bindings, :MATCH, term))) : nothing
         return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
     catch err
         throw(RuleRewriteError(r, term))
+    finally
+        ref[] = saved
     end
 end
 

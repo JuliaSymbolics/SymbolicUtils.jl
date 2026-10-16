@@ -62,4 +62,5 @@ if GROUP == "QA"
     activate_qa_env()
     @safetestset "SciMLTesting QA" begin include("qa/qa.jl") end
     @safetestset "AdjView JET" begin include("qa/adjview_jet.jl") end
+    @safetestset "Substitute broadcast JET" begin include("qa/substitute_broadcast_jet.jl") end
 end

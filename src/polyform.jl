@@ -360,30 +360,57 @@ function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, Polynomi
     end
 end
 
-_exact_widen(c::Integer) = big(c)
-_exact_widen(c::Rational) = big(c)
-_exact_widen(c::Complex) = complex(_exact_widen(real(c)), _exact_widen(imag(c)))
+const _ExactCoeff = Union{Integer, Rational, Complex{<:Union{Integer, Rational}}}
+
+function _big_exact_poly(p)
+    p = MP.polynomial(p)
+    return DP.Polynomial(_widen_coeff.(MP.coefficients(p)), MP.monomials(p))
+end
 
 """
     _is_multiple(p, g, q)
 
 Whether `p == q * g`, so that cancelling the candidate gcd `g` is valid.
-Exact coefficients must give a zero residual, computed without overflow.
-Float coefficients may leave a residual of at most `eps^(3/4)` (about `2e-12`
-for `Float64`) relative to the largest coefficient of `p`: the cancellation is
-then exact for coefficients perturbed by that relative amount, at any scale.
+Exact coefficients must give a zero residual, checked in `BigInt` arithmetic so
+that Int64 wrap-around cannot hide a remainder. Float coefficients may leave a
+residual of at most `eps^(3/4)` (about `2e-12` for `Float64`) relative to the
+largest coefficient of `p`: the cancellation is then exact for coefficients
+perturbed by that relative amount, at any scale. Other coefficient types are not
+checked and always return `true`.
 """
 function _is_multiple(p, g, q)
-    p, g, q = MP.polynomial(p), MP.polynomial(g), MP.polynomial(q)
-    T = promote_type(eltype(MP.coefficients(p)), eltype(MP.coefficients(g)), eltype(MP.coefficients(q)))
+    T = promote_type(map(x -> eltype(MP.coefficients(MP.polynomial(x))), (p, g, q))...)
     if T <: Union{AbstractFloat, Complex{<:AbstractFloat}}
+        p = MP.polynomial(p)
         tol = eps(real(T))^(3 // 4) * maximum(abs, MP.coefficients(p); init = zero(real(T)))
         return all(c -> abs(c) <= tol, MP.coefficients(p - q * g))
-    elseif T <: Union{Integer, Rational, Complex{<:Union{Integer, Rational}}}
-        w(x) = MP.map_coefficients(_exact_widen, x)
-        return iszero(w(p) - w(q) * w(g))
     end
-    return false
+    T <: _ExactCoeff || return true
+    return iszero(_big_exact_poly(p) - _big_exact_poly(q) * _big_exact_poly(g))
+end
+
+function _checked_cancel(p1, p2, g)
+    q1 = MP.div_multiple(p1, g)
+    q2 = MP.div_multiple(p2, g)
+    return _is_multiple(p1, g, q1) && _is_multiple(p2, g, q2) ? (q1, q2) : nothing
+end
+
+function _big_checked_cancel(p1, p2)
+    b1, b2 = _big_exact_poly(p1), _big_exact_poly(p2)
+    g = gcd(b1, b2)
+    isone(g) && return nothing
+    qs = _checked_cancel(b1, b2, g)
+    qs === nothing && return nothing
+    return _narrow_coeffs(qs[1], false), _narrow_coeffs(qs[2], false)
+end
+
+_overflow_prone(p) = eltype(MP.coefficients(MP.polynomial(p))) <: Union{Int64, Rational{Int64}}
+
+# Heuristic from the Hadamard bound `‖p1‖^deg(p2) * ‖p2‖^deg(p1)` on subresultant
+# coefficients; products of two such values must stay below `typemax(Int64)`.
+function _int_gcd_may_overflow(p1, p2)
+    lognorm(p) = log2(sum(c -> float(abs(c))^2, MP.coefficients(MP.polynomial(p)); init = 1.0)) / 2
+    return MP.maxdegree(p2) * lognorm(p1) + MP.maxdegree(p1) * lognorm(p2) > 31
 end
 
 function simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}) where {T <: SymVariant}
@@ -395,24 +422,26 @@ function _simplify_div(num::BasicSymbolic{T}, den::BasicSymbolic{T}, widen::Bool
     bs_to_poly = Dict{BasicSymbolic{T}, PolyVarT}()
     partial_poly1 = _to_poly!(poly_to_bs, bs_to_poly, num, false, widen)
     partial_poly2 = _to_poly!(poly_to_bs, bs_to_poly, den, false, widen)
-    factor = safe_gcd(partial_poly1, partial_poly2)
-    if isone(factor)
-        return num, den
-    end
-    # `factor` was computed on `poly_to_gcd_form` conversions, so the partial
+    # `factor` is computed on `poly_to_gcd_form` conversions, so the partial
     # polynomials must use matching concrete coefficient types; otherwise
     # `div_multiple` mixes e.g. `Rational{BigInt}` and `Rational{Int64}`
     # coefficients and hits unimplemented MutableArithmetics buffered paths.
-    partial_poly1 isa PolynomialT && (partial_poly1 = poly_to_gcd_form(partial_poly1))
-    partial_poly2 isa PolynomialT && (partial_poly2 = poly_to_gcd_form(partial_poly2))
-    # `div_multiple` silently drops any remainder, and float or overflowing
-    # gcds can return a non-divisor, so the cancellation is verified.
-    q1 = MP.div_multiple(partial_poly1, factor)
-    q2 = MP.div_multiple(partial_poly2, factor)
-    if !(_is_multiple(partial_poly1, factor, q1) && _is_multiple(partial_poly2, factor, q2))
-        return num, den
+    g1 = partial_poly1 isa PolynomialT ? poly_to_gcd_form(partial_poly1) : partial_poly1
+    g2 = partial_poly2 isa PolynomialT ? poly_to_gcd_form(partial_poly2) : partial_poly2
+    # Int64 gcd arithmetic wraps on overflow and returns a non-divisor, a
+    # spurious 1, or throws, so such cases use BigInt coefficients instead.
+    if _overflow_prone(g1) && _overflow_prone(g2) && _int_gcd_may_overflow(g1, g2)
+        qs = _big_checked_cancel(g1, g2)
+    else
+        factor = safe_gcd(partial_poly1, partial_poly2)
+        isone(factor) && return num, den
+        qs = _checked_cancel(g1, g2, factor)
+        if qs === nothing && _overflow_prone(factor)
+            qs = _big_checked_cancel(g1, g2)
+        end
     end
-    partial_poly1, partial_poly2 = q1, q2
+    qs === nothing && return num, den
+    partial_poly1, partial_poly2 = qs
     canonicalize_coeffs!(MP.coefficients(partial_poly1))
     canonicalize_coeffs!(MP.coefficients(partial_poly2))
     if widen

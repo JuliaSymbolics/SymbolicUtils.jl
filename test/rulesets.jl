@@ -86,6 +86,46 @@ end
     @test unwrap_const(simplify(Term{SymReal}(zero, [x + 2]))) == 0
 end
 
+@testset "Issue #633: trig simplification is independent of symbol names" begin
+    for names in ((:r, :th, :phi), (Symbol("#1#"), Symbol("#2#"), Symbol("#3#")))
+        r, th, phi = (SymbolicUtils.Sym{SymbolicUtils.SymReal}(name; type = Real) for name in names)
+        expressions = (
+            cos(th)^2 + cos(phi)^2 * sin(th)^2 + sin(th)^2 * sin(phi)^2,
+            -r*cos(th)*sin(th) + r*cos(th)*cos(phi)^2*sin(th) + r*cos(th)*sin(th)*sin(phi)^2,
+            r^2*sin(th)^2 + r^2*cos(th)^2*cos(phi)^2 + r^2*cos(th)^2*sin(phi)^2,
+            r^2*cos(phi)^2*sin(th)^2 + r^2*sin(th)^2*sin(phi)^2,
+        )
+
+        @test unwrap_const(simplify(expressions[1])) == 1
+        @test isequal(unwrap_const(simplify(expressions[2])), 0)
+        @test isequal(simplify(expressions[3]), r^2)
+        @test isequal(simplify(expressions[4]), r^2 * sin(th)^2)
+    end
+end
+
+@testset "Trig factoring applies inside larger sums" begin
+    @syms a::Real c::Real r::Real x::Real
+    expressions = (
+        c + r*cos(x)^2 - r*sin(x)^2,
+        a + r*sin(x)^2 - r*cos(x)^2,
+        c + r*tan(x)^2 - r*sec(x)^2,
+        c + r*cot(x)^2 - r*csc(x)^2,
+        a + r*cosh(x)^2 - r*sinh(x)^2,
+    )
+    expected = (
+        c + r*cos(2x),
+        a - r*cos(2x),
+        c - r,
+        c - r,
+        a + r,
+    )
+
+    for (expression, result) in zip(expressions, expected)
+        @test isequal(simplify(expression), result)
+    end
+    @test isequal(simplify(sum(r*sin(i*x)^2 + r*cos(i*x)^2 for i in 1:5)), 5r)
+end
+
 @testset "LiteralReal" begin
     @syms x1 x2 vartype=TreeReal
     s = cos(x1 * 3.2) - x2 * 5.8 + x2 * 1.2
@@ -137,6 +177,12 @@ end
 
     @eqtest simplify(1 + y + tan(x)^2) == sec(x)^2 + y
     @eqtest simplify(1 + y + cot(x)^2) == csc(x)^2 + y
+
+    # Both orientations of tan^2 - sec^2 = -1 and cot^2 - csc^2 = -1.
+    @test unwrap_const(simplify(tan(x)^2 - sec(x)^2)) == -1
+    @test unwrap_const(simplify(sec(x)^2 - tan(x)^2)) == 1
+    @test unwrap_const(simplify(cot(x)^2 - csc(x)^2)) == -1
+    @test unwrap_const(simplify(csc(x)^2 - cot(x)^2)) == 1
     @eqtest simplify(cos(x)^2 - 1) == -sin(x)^2
     @eqtest simplify(sin(x)^2 - 1) == -cos(x)^2
 
@@ -210,6 +256,25 @@ end
     @eqtest simplify(log(exp(z))) == log(exp(z))  # branch cuts: do not cancel
     @eqtest simplify(exp(log(z))) == z
 
+end
+
+@testset "abs rules" begin
+    @syms r::Real z  # z unrestricted (Number)
+
+    @eqtest simplify(abs(-r)) == abs(r)
+    @eqtest simplify(abs(r)^2) == r^2
+    @eqtest simplify(abs(abs(r))) == abs(r)
+    @eqtest simplify(sqrt(r^2)) == abs(r)
+    @eqtest simplify((r^2)^(1//2)) == abs(r)
+    @eqtest simplify(abs(-2 * r)) == abs(2 * r)
+    @test unwrap_const(simplify(term(abs, -2))) == 2
+    @test unwrap_const(simplify(substitute(abs(z), Dict(z => -2)))) == 2
+
+    # |z|^2 ≠ z^2 for non-real z — do not fold
+    @eqtest simplify(abs(z)^2) == abs(z)^2
+    # sqrt(z^2) = ±z ≠ |z| for complex z — do not fold either spelling
+    @eqtest simplify(sqrt(z^2)) == sqrt(z^2)
+    @eqtest simplify((z^2)^(1//2)) == sqrt(z^2)
 end
 
 @testset "simplify_fractions" begin

@@ -183,8 +183,14 @@ end
 """
     $TYPEDSIGNATURES
 
-Rollback `cs` to the state identified by `bm`. This has similar semantics to `rollback!` for
-[`SymbolicUtils.IRStructure`](@ref). It is typically used for scoping in `cs`.
+Discard codegen-cache bindings in `cs` that were inserted after bookmark `bm`, so later
+codegen will not reuse identifiers produced after that point.
+
+This only mutates `cs.cache`. It does **not** modify `cs.ir`, remove statements already
+written to `cs.block` / `cs.expr`, or otherwise restore an earlier IR or emitted-code state.
+The supported way to obtain `bm` is as the bookmark returned by
+[`SymbolicUtils.Code.enter_scope`](@ref); [`SymbolicUtils.Code.exit_scope!`](@ref) calls
+this function so scoped identifiers are no longer visible from the enclosing `CodegenState`.
 """
 function rollback!(cs::CodegenState, bm::CodegenBookmarkT)
     last_cache_key = bm
@@ -361,10 +367,11 @@ a `Symbol` indicating the identifier in the generated code which is assigned the
 value.
 
 This function is allowed to non-destructively mutate `cs.ir`. All information present in
-`cs.ir` upon entry to this function should be present when it returns. The function may
-add expressions to `cs.ir` and choose to use [`SymbolicUtils.rollback!`](@ref) to restore
-to an earlier state, but this earlier state should not erase information that was not
-added by this function.
+`cs.ir` upon entry to this function should be present when it returns; the implementer must
+undo any temporary IR additions before returning.
+[`SymbolicUtils.Code.rollback!`](@ref) does **not** restore IR or emitted statements — it
+only drops codegen-cache bindings after a bookmark from
+[`SymbolicUtils.Code.enter_scope`](@ref) (as used by [`SymbolicUtils.Code.exit_scope!`](@ref)).
 
 In case the code generation process requires creating a new scope such as a `for` loop or
 `let` block, it should use [`SymbolicUtils.Code.enter_scope`](@ref) and
@@ -453,7 +460,7 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
 
     declare!(cs, :_, outer_expr)
 
-    return output_buffer
+    return declare!(cs, get_misc_identifier(cs), output_buffer)
 end
 
 function codegen_function!(f::SymbolicUtils.Fill, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
@@ -606,6 +613,9 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
 
     # Indices and values of regions that write to a scalar
     scalar_idxs = Dict{ShapeVecT, Any}()
+    # `false` writes single-element regions holding an array expression through a view
+    # of the output, like other regions, instead of scalarizing them.
+    scalarize_single_element_regions = get(cs.rewrites, :scalarize_single_element_regions, true)::Bool
     D = length(sh)::Int
     # Utility buffers
     one_regions = ShapeVecT[]
@@ -669,7 +679,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
             # The goal is to batch scalar writes, so we defer them. Storing them in a
             # `Dict` allows later writes to overwrite earlier ones without additional
             # codegen.
-            @match val begin
+            deferred = @match val begin
                 BSImpl.Const(; val = _val) => begin
                     _inner = first(_val)
                     if _isone(_inner)
@@ -679,22 +689,32 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                     else
                         scalar_idxs[region] = _inner
                     end
+                    true
                 end
                 BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    true
                 end
                 BSImpl.Term(; f) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[1]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    true
                 end
-                _ => begin
+                # Any other value is an array expression. Scalarizing it indexes its inputs
+                # and the output elementwise, which arrays that disallow scalar indexing
+                # (such as GPU arrays) reject, so callers can opt into writing it as a
+                # block below instead.
+                _ => if scalarize_single_element_regions
                     # Unfortunately, scalarizing `val` requires getting the canonical expr.
                     canon_ex = SymbolicUtils.get_canonical_expr!(cs.ir, val_idx)
                     scalar_idxs[region] = cs(canon_ex[SymbolicUtils.stable_eachindex(canon_ex)[1]])
+                    true
+                else
+                    false
                 end
             end
-            continue
+            deferred && continue
         end
 
         # We are writing to a block. First, materialize all scalar writes that happened until now.
@@ -1032,7 +1052,11 @@ function add_allocator!(cs::CodegenState, @nospecialize(alloc))
 end
 
 function reset_allocator!(cs::CodegenState, @nospecialize(old_alloc))
-    cs.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    if old_alloc === nothing
+        delete!(cs.rewrites, ALLOCATOR_REWRITES_KEY)
+    else
+        cs.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    end
     return nothing
 end
 

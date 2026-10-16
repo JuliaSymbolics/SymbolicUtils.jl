@@ -251,13 +251,17 @@ end
               :((a,b,$(+)(a,b))))
 
     @test SpawnFetch{Multithreaded}([()->1,()->2],vcat)|>toexpr|>eval == [1,2]
-    @test @elapsed(SpawnFetch{Multithreaded}([:(()->sleep(2)),
+    # Warm first so the timed check measures parallelism, not compile time (#1107).
+    let spawn_ex = SpawnFetch{Multithreaded}([:(()->sleep(2)),
                                               Func([:x],
                                                    [],
                                                    :(sleep(x)))],
                                              [(),
                                               (2,)],
-                                             vcat)|>toexpr|>eval) < 3
+                                             vcat) |> toexpr
+        eval(spawn_ex)
+        @test @elapsed(eval(spawn_ex)) < 3
+    end
 
     let
         @syms a b

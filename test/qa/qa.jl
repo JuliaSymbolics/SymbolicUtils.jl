@@ -16,6 +16,9 @@ run_qa(
                 # SparseArrays dispatches `map` on these non-public types; the symbolic
                 # `map` intersections have to name them to resolve.
                 :AbstractCompressedVector, :AbstractSparseMatrixCSC, :FixedSparseCSC, :Slice,
+                # The generated `@mapreduce_methods` intersections with Base's variadic
+                # `mapreduce` method have to name its input union to resolve.
+                :AbstractArrayOrBroadcasted,
                 :_setindex!, :acos, :acosh, :asin, :atanh, :copy, :cos, :eval,
                 :hash_abstractarray_seed, :hasha_seed, :ht_keyindex2,
                 :ht_keyindex2_shorthash!, :instantiate, :kwcall, :lgamma, :literal_pow,

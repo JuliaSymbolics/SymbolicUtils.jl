@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, substitute, query, Operator, scalarize
+using SymbolicUtils: Sym, Term, symtype, shape, BasicSymbolic, Const, substitute, query, Operator, scalarize, term, isarrayop, Unknown
 import SymbolicUtils: search_variables!, default_substitute_filter, evaluate, default_is_atomic, search_variables, Code
 using Test
 using SparseArrays
@@ -267,4 +267,62 @@ end
     arr[5, 5] = a
     arr = Const{SymReal}(arr)
     @test_nowarn substitute(arr, [a => b])
+end
+
+@testset "eager broadcast substitute does not build symbolic substitute (#494)" begin
+    @syms X[1:2]::Real w::Real
+    Y = substitute.(X, w => -w)
+    # Maintainer design: apply elementwise immediately; no broadcast(substitute, ...) ArrayOp.
+    @test Y isa AbstractArray
+    @test !isarrayop(Y)
+    @test isequal(Y, [X[1], X[2]])
+    @test all(y -> symtype(y) === Real, Y)
+    # Issue #494's deferred [-2w, -3w] outcome is not provided by this design: the
+    # w => -w rule is a no-op on unresolved X[i] and is not kept pending.
+    result = map(y -> substitute(y, Dict(X[1] => 2w, X[2] => 3w)), Y)
+    @test isequal(result, [2w, 3w])
+end
+
+@testset "Preserve already-applicable substitutions" begin
+    @syms X[1:2]::Real w::Real z::Real
+    @test isequal(substitute.(X, X[1] => w), [w, X[2]])
+    for fold in (Val(false), Val(true))
+        got = substitute(substitute.(X .+ w, w => z), Dict(w => 1); fold)
+        @test isequal(got, [X[1] + z, X[2] + z])
+    end
+    # Resolve-then-apply needs a surviving scheduled rule; with eager broadcast the
+    # inner w => -w is already applied (no-op) before X is resolved.
+    got = substitute(substitute.(X, w => -w), Dict(X => [2w, 3w]))
+    @test isequal(got, [2w, 3w])
+end
+
+@testset "Identity substitution keeps numeric scalar type" begin
+    @syms X[1:2]::Real w::Real
+    ys = substitute.(X, w => w)
+    @test symtype(ys[1]) === Real
+    @test isequal(ys[1] + 1, X[1] + 1)
+    @test isequal(2ys[1], 2X[1])
+    @test isequal(sin(ys[1]), sin(X[1]))
+end
+
+@testset "Applicable rules with unchanged canonical result" begin
+    @syms X[1:2]::Real w::Real z::Real
+    swap = Dict(w => z, z => w)
+    ys = substitute.(X .+ w .+ z, (swap,))
+    for fold in (Val(false), Val(true))
+        got = substitute(ys, Dict(X[1] => w, X[2] => 2w); fold)
+        @test isequal(got, [2w + z, 3w + z])
+    end
+    ys = substitute.(X .+ w^2, w => -w)
+    got = substitute(ys, Dict(X[1] => w, X[2] => 2w))
+    @test isequal(got, [w + w^2, 2w + w^2])
+end
+
+@testset "eager substitute broadcast rejects unknown shapes" begin
+    @syms w::Real
+    Xarr = Sym{SymReal}(:X; type = Vector{Real}, shape = Unknown(1))
+    # Broadcast cannot form axes over Unknown shapes (`length(::Unknown)`); if a
+    # symbolic array with unknown shape does reach the substitute broadcast rule,
+    # it throws ArgumentError instead of building broadcast(substitute, ...).
+    @test_throws Union{MethodError, ArgumentError} substitute.(Xarr, w => -w)
 end

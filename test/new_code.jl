@@ -744,8 +744,39 @@ end
                         end
                     end
                 end
+                __miscₛᵧₘ0 = var"##cse#1"
             end
         )
+    end
+
+    @testset "bare `@arrayop` after `with_allocator` (issue #1151)" begin
+        @syms x[1:3] y[1:3]
+        wrapped = Code.with_allocator(zeros, @arrayop (i,) x[i] * y[i])
+        bare = @arrayop (i,) x[i] + y[i]
+        # The order of the two must not matter.
+        for expr in (sum(wrapped) + sum(bare), sum(bare) + sum(wrapped))
+            result = eval(quote
+                let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]
+                    $(Code.fast_toexpr(expr, IRStructure{SymReal}(), Dict()))
+                end
+            end)
+            @test result ≈ 53.0
+        end
+        # `reset_allocator!` must restore the absence of an allocator, not store `nothing`.
+        rewrites = Dict{Any, Any}()
+        Code.fast_toexpr(sum(wrapped), IRStructure{SymReal}(), rewrites)
+        @test !haskey(rewrites, Code.ALLOCATOR_REWRITES_KEY)
+    end
+
+    @testset "`Func` and `Assignment` return an `@arrayop` result" begin
+        @syms x[1:3] y[1:3] z
+        arr = @arrayop (i,) x[i] * y[i]
+        xv, yv = [1.0, 2.0, 3.0], [4.0, 5.0, 6.0]
+        for fn in (Func([x, y], [], arr), Func([x, y], [], Let([Assignment(z, arr)], z, true)),
+                   Func([x, y, Assignment(z, arr)], [], z), Func([x, y], [Assignment(z, arr)], z))
+            f = eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict()))
+            @test @invokelatest(f(xv, yv)) == xv .* yv
+        end
     end
 
     @testset "`Fill`" begin

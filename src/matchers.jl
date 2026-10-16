@@ -6,6 +6,41 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 
+# Normalize a bound value for AC backtracking deduplication.
+# Segment captures are sequences; keep their order (they may sit under a
+# non-commutative call where order matters). Single-slot values are left as-is.
+function canonicalize_ac_bind(v)
+    if v isa AbstractVector || v isa Tuple
+        isempty(v) && return ()
+        return Tuple(v)
+    else
+        return v
+    end
+end
+
+# Fingerprint of a bindings dict so identical AC local matches share one
+# continuation attempt (same slot/segment values, including segment order).
+function ac_bindings_key(binds::ImmutableDict{Symbol, Any})
+    ks = Symbol[]
+    vs = Any[]
+    for (k, v) in binds
+        k === :____ && continue
+        push!(ks, k)
+        push!(vs, canonicalize_ac_bind(v))
+    end
+    p = sortperm(ks)
+    return (ntuple(i -> ks[p[i]], length(ks)), ntuple(i -> vs[p[i]], length(vs)))
+end
+
+@inline function _comm_bt_tick!()
+    COMM_BT_USED[][] += 1
+    nothing
+end
+
+@inline function _comm_bt_over_budget()
+    COMM_BT_USED[][] > COMM_BACKTRACK_BUDGET[]
+end
+
 function matcher(val::Any, acSets)
     val = unwrap_const(val)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
@@ -190,11 +225,39 @@ function term_matcher_constructor(term, acSets)
             T = vartype(data)
             ST = symtype(data)
             if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
-                for inds in acSets(eachindex(data_args), length(data_args))
-                    candidate = Term{T}(f, @views data_args[inds]; type = ST)
-
-                    result = loop(candidate, bindings, matchers)
-                    result !== nothing && return success(result,1)
+                if has_segment || length(data_args) > COMM_BACKTRACK_LIMIT[]
+                    # First local match wins. Meter every candidate loop toward
+                    # COMM_BACKTRACK_BUDGET (never stop here — only count).
+                    for inds in acSets(eachindex(data_args), length(data_args))
+                        candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                        _comm_bt_tick!()
+                        result = loop(candidate, bindings, matchers)
+                        result !== nothing && return success(result, 1)
+                    end
+                else
+                    # Fixed-arity depth-2 backtracking (arity ≤ COMM_BACKTRACK_LIMIT).
+                    # Meter every candidate loop; once over COMM_BACKTRACK_BUDGET,
+                    # fall back to first-match for this node.
+                    tried = nothing
+                    for inds in acSets(eachindex(data_args), length(data_args))
+                        candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                        _comm_bt_tick!()
+                        result = loop(candidate, bindings, matchers)
+                        if result !== nothing
+                            key = ac_bindings_key(result)
+                            if tried === nothing
+                                tried = Set{Any}()
+                            elseif key in tried
+                                continue
+                            end
+                            push!(tried, key)
+                            if _comm_bt_over_budget()
+                                return success(result, 1)
+                            end
+                            r = success(result, 1)
+                            r !== nothing && return r
+                        end
+                    end
                 end
             # if data does not subtype to number, it might not be commutative
             else

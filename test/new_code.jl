@@ -1490,6 +1490,7 @@ end
     @test @invokelatest(zero_lit(3)) === 0
     @test @invokelatest(build(ifelse(x > 0, x, 100000))(Float16(-1))) === 100000
     @test @invokelatest(build(ifelse(x > 0, x, 2^53 + 1))(-1.0)) === 2^53 + 1
+    @test @invokelatest(build(ifelse(x > 0, x, typemin(Int)))(Float16(-1))) === typemin(Int)
     g = build(ifelse(x > 0, 2y, 3x), [x, y])
     @test only(Base.return_types(g, (Float64, BigFloat))) == BigFloat
     @test @invokelatest(build(ifelse(x > 0, y, -1), [x, y])(1.0, UInt(3))) === UInt(3)

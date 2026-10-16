@@ -570,6 +570,11 @@ tree per expression, slices of read-only arrays are read through `view`s, and `A
 regions are written in place with `Broadcast.materialize!`: one kernel per region on GPU
 arrays instead of one per operation and slice, and no temporaries. Each fused expression is
 its own broadcast specialization to compile, so it is opt-in.
+
+On the CPU, fused and eager results are bitwise identical. On GPU arrays they can differ by
+floating-point contraction: within one fused kernel the GPU compiler turns a multiply and a
+following add into an FMA, which eager evaluation, storing to memory between kernels, cannot.
+Differences are typically 1 ulp, and larger in ulp on entries that cancel to near zero.
 """
 const FUSE_BROADCASTS_KEY = :fuse_broadcasts
 

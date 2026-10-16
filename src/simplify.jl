@@ -119,8 +119,8 @@ Power-reduction identities for arbitrary integer powers n ≥ 2:
 
     cos(x)^n, sin(x)^n   → multi-angle expansion
     cosh(x)^n, sinh(x)^n → multi-angle expansion
-    tan(x)^2  → sec(x)^2 - 1
-    cot(x)^2  → csc(x)^2 - 1
+    tan(x)^2  → (1 - cos(2x)) / (1 + cos(2x))
+    cot(x)^2  → (1 + cos(2x)) / (1 - cos(2x))
 
 Exponential rules (exp(x)*exp(y) → exp(x+y)) are also included.
 

@@ -282,7 +282,7 @@ end
         @test val(s, Dict(x => 0.3)) ≈ val(e, Dict(x => 0.3)) rtol = 1e-12
     end
 
-    D = 2^40
+    D = Int64(2)^40
     e = ((x + 1 // D)^2 + 0.5 * y * (x + 1 // D)) / (x + 1 // D)
     s = simplify(e)
     @test val(s, Dict(x => 0.3, y => 0.2)) isa Float64

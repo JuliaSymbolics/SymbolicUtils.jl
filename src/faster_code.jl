@@ -562,6 +562,233 @@ end
 
 BATCHED_SETINDEX_BATCH_SIZE::Int = 64
 
+"""
+Key in `CodegenState.rewrites` that enables fused broadcast codegen when set to `true`
+(default `false`). Elementwise array expressions (symbolic `broadcast`s, sums of arrays and
+products of an array with scalars) are then evaluated as one lazy `Broadcast.broadcasted`
+tree per expression, slices of read-only arrays are read through `view`s, and `ArrayMaker`
+regions are written in place with `Broadcast.materialize!`: one kernel per region on GPU
+arrays instead of one per operation and slice, and no temporaries. Each fused expression is
+its own broadcast specialization to compile, so it is opt-in.
+"""
+const FUSE_BROADCASTS_KEY = :fuse_broadcasts
+
+"""
+Key in `CodegenState.rewrites` that, while an `ArrayMaker` is generated, maps the IR index
+of each array its fused regions read through a `view` to the identifier holding that array
+unaliased from the output buffer.
+"""
+const FUSION_SOURCES_KEY = :__fusion_sourcesₛᵧₘ
+
+"""
+    fused_materialize(bc)
+    fused_materialize!(dest, bc)
+
+`Broadcast.materialize` and `Broadcast.materialize!` behind a call that is never inlined, so
+a function with many fused broadcasts makes one call per broadcast instead of inlining every
+broadcast loop into its own body.
+"""
+@noinline fused_materialize(bc) = Base.Broadcast.materialize(bc)
+@noinline fused_materialize!(dest, bc) = Base.Broadcast.materialize!(dest, bc)
+
+"""
+    $TYPEDSIGNATURES
+
+The parts of the elementwise array expression at `idx`, as `(; f, args)` where `f` is the IR
+index of the broadcast function (or `+` / `*` themselves) and `args` the IR indices of its
+arguments. Elementwise expressions are symbolic `broadcast`s, sums of arrays of one shape and
+products of one array with scalars. Returns `nothing` for anything else, including matrix
+products.
+"""
+function fusable_parts(cs::CodegenState{T}, idx::Integer) where {T}
+    get(cs.rewrites, FUSE_BROADCASTS_KEY, false)::Bool || return nothing
+    sym = cs.ir[idx]
+    return @match sym begin
+        BSImpl.ArrayOp(; term) => if term isa BasicSymbolic{T} && operation(term) === broadcast
+            nbors = collect(Int32, Graphs.outneighbors(cs.ir.dependency_graph, idx))
+            (; f = Int32(first(nbors)), args = nbors[2:end])
+        else
+            nothing
+        end
+        BSImpl.AddMul(;) => elementwise_addmul_parts(cs, sym, idx)
+        BSImpl.Term(; f) && if f === (+) || f === (*) end => elementwise_addmul_parts(cs, sym, idx)
+        _ => nothing
+    end
+end
+
+# `+` of arrays of one shape, or `*` of one array and scalars, at `idx`.
+function elementwise_addmul_parts(cs::CodegenState{T}, sym::BasicSymbolic{T}, idx::Integer) where {T}
+    sh = shape(sym)
+    (sh isa ShapeVecT && !isempty(sh)) || return nothing
+    args = collect(Int32, addmul_arg_idxs(cs, sym, idx))
+    if operation(sym) === (+)
+        all(a -> isequal(shape(cs.ir[a]), sh), args) || return nothing
+        return (; f = +, args)
+    end
+    arrays = filter(a -> !(symtype(cs.ir[a]) <: Number), args)
+    length(arrays) == 1 && isequal(shape(cs.ir[only(arrays)]), sh) || return nothing
+    return (; f = *, args)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Whether the array at `idx` is read-only for the duration of the generated function: a named
+variable (a function argument or a bound name) or a `reshape` / `view` of one with constant
+arguments. Computed arrays are excluded, since an output buffer is computed and written in
+place.
+"""
+function is_readonly_source(cs::CodegenState{T}, idx::Integer) where {T}
+    sym = cs.ir[idx]
+    get(cs.rewrites, sym, nothing) isa Symbol && return true
+    issym(sym) && return true
+    iscall(sym) && (operation(sym) === reshape || operation(sym) === view) || return false
+    nbors = collect(Int32, Graphs.outneighbors(cs.ir.dependency_graph, idx))
+    return all(i -> SymbolicUtils.isconst(cs.ir[i]), nbors[2:end]) &&
+        is_readonly_source(cs, first(nbors))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+For a slice `A[r...]` at `idx` with constant ranges `r` of a read-only array `A` (see
+[`is_readonly_source`](@ref)), the IR indices of `A` and the ranges, so a fused broadcast can
+read it through a `view` instead of a copy. `nothing` otherwise.
+"""
+function view_slice_parts(cs::CodegenState{T}, idx::Integer) where {T}
+    sym = cs.ir[idx]
+    iscall(sym) && operation(sym) === getindex || return nothing
+    nbors = collect(Int32, Graphs.outneighbors(cs.ir.dependency_graph, idx))
+    length(nbors) >= 2 || return nothing
+    for i in nbors[2:end]
+        r = cs.ir[i]
+        SymbolicUtils.isconst(r) && unwrap_const(r) isa AbstractRange{<:Integer} || return nothing
+    end
+    is_readonly_source(cs, first(nbors)) || return nothing
+    return nbors
+end
+
+# Number of uses of each elementwise node and slice within the fused tree rooted at `idx`.
+# Nodes used more than once are materialized once rather than recomputed per use.
+function count_fused_uses!(uses::Dict{Int32, Int}, cs::CodegenState, idx::Integer)
+    parts = fusable_parts(cs, idx)
+    parts === nothing && return uses
+    for a in parts.args
+        n = get(uses, a, 0)
+        uses[a] = n + 1
+        n == 0 && count_fused_uses!(uses, cs, a)
+    end
+    return uses
+end
+
+function lazy_broadcast_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
+    parts = fusable_parts(cs, idx)
+    f = parts.f isa Integer ? cs(cs.ir[parts.f]) : parts.f
+    ex = Expr(:call, Base.Broadcast.broadcasted, f)
+    for a in parts.args
+        push!(ex.args, fused_arg_expr(cs, a, uses, sources))
+    end
+    return ex
+end
+
+function fused_arg_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
+    if uses[idx] == 1 && fusable_parts(cs, idx) !== nothing
+        return lazy_broadcast_expr(cs, idx, uses, sources)
+    end
+    nbors = view_slice_parts(cs, idx)
+    nbors === nothing && return cs(cs.ir[idx])
+    src = sources === nothing ? nothing : get(sources, first(nbors), nothing)
+    src === nothing && (src = cs(cs.ir[first(nbors)]))
+    ex = Expr(:call, view, src)
+    for i in nbors[2:end]
+        push!(ex.args, cs(cs.ir[i]))
+    end
+    return ex
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The elementwise expression at `idx` as one lazy `Broadcast.broadcasted` tree: elementwise
+arguments used once are nested lazily, slices of read-only arrays become `view`s, and every
+other argument is generated as usual.
+"""
+function fused_broadcast_expr(cs::CodegenState{T}, idx::Integer) where {T}
+    uses = count_fused_uses!(Dict{Int32, Int}(), cs, idx)
+    return lazy_broadcast_expr(cs, idx, uses, get(cs.rewrites, FUSION_SOURCES_KEY, nothing))
+end
+
+function codegen_fused_root!(cs::CodegenState{T}, idx::Integer) where {T}
+    return codegen!(cs, idx, Expr(:call, fused_materialize, fused_broadcast_expr(cs, idx)))
+end
+
+function codegen_function!(::typeof(broadcast), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    fusable_parts(cs, expr_idx) === nothing &&
+        return codegen_function_no_nanmath!(broadcast, cs, expr, expr_idx)
+    return codegen_fused_root!(cs, expr_idx)
+end
+
+# The elementwise expression an `ArrayMaker` region value at `idx` evaluates: the value
+# itself, or the argument of `vec(value)`. `nothing` if it is not elementwise.
+function fused_region_root(cs::CodegenState{T}, idx::Integer) where {T}
+    fusable_parts(cs, idx) === nothing || return idx
+    sym = cs.ir[idx]
+    iscall(sym) && operation(sym) === vec || return nothing
+    nbors = collect(Int32, Graphs.outneighbors(cs.ir.dependency_graph, idx))
+    length(nbors) == 1 && fusable_parts(cs, only(nbors)) !== nothing || return nothing
+    return only(nbors)
+end
+
+# Evaluate the region value rooted at `root_idx` in one broadcast straight into the view `vw`
+# of the output, reshaped when the value's shape differs from the region's (`copyto!` order).
+function write_fused_region!(cs::CodegenState{T}, vw::Symbol, region, root_idx::Integer) where {T}
+    sh = shape(cs.ir[root_idx])::ShapeVecT
+    dims = Expr(:tuple)
+    for ax in sh
+        push!(dims.args, length(ax))
+    end
+    dest = vw
+    if length(region) != length(sh) || any(i -> length(region[i]) != length(sh[i]), eachindex(sh))
+        dest = declare!(cs, get_misc_identifier(cs), Expr(:call, reshape, vw, dims))
+    end
+    return declare!(cs, :_, Expr(:call, fused_materialize!, dest, fused_broadcast_expr(cs, root_idx)))
+end
+
+# Declare each read-only array the fused regions among `value_idxs` read through a view as
+# `Base.unalias(output_buffer, A)`, so the regions read the inputs as they were on entry even
+# if an input shares memory with the output being written.
+function unaliased_fusion_sources!(cs::CodegenState{T}, output_buffer, value_idxs) where {T}
+    srcs = Int32[]
+    seen = Set{Int32}()
+    for val_idx in value_idxs
+        root = fused_region_root(cs, val_idx)
+        root === nothing || collect_fusion_sources!(srcs, seen, cs, root)
+    end
+    sources = Dict{Int32, Symbol}()
+    for s in srcs
+        sources[s] = declare!(
+            cs, get_misc_identifier(cs),
+            Expr(:call, Base.unalias, output_buffer, cs(cs.ir[s]))
+        )
+    end
+    return sources
+end
+
+function collect_fusion_sources!(srcs, seen, cs::CodegenState, idx::Integer)
+    idx in seen && return
+    push!(seen, idx)
+    parts = fusable_parts(cs, idx)
+    if parts === nothing
+        nbors = view_slice_parts(cs, idx)
+        nbors === nothing || first(nbors) in srcs || push!(srcs, first(nbors))
+        return
+    end
+    for a in parts.args
+        collect_fusion_sources!(srcs, seen, cs, a)
+    end
+    return
+end
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     len = length(expr)::Int
@@ -610,6 +837,10 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
         ndrop = 0
     end
+    old_fusion_sources = get(cs.rewrites, FUSION_SOURCES_KEY, nothing)
+    cs.rewrites[FUSION_SOURCES_KEY] = unaliased_fusion_sources!(
+        cs, output_buffer, Iterators.drop(values_exprs_idxs, ndrop)
+    )
 
     # Indices and values of regions that write to a scalar
     scalar_idxs = Dict{ShapeVecT, Any}()
@@ -747,6 +978,11 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
             end
             # Constant arrays can special-case
             BSImpl.Const(; val) => write_constant_array!(cs, vw, val)
+            # An elementwise value is evaluated in one fused broadcast into the output.
+            _ && if fused_region_root(cs, val_idx) !== nothing end => begin
+                root_idx = fused_region_root(cs, val_idx)
+                write_fused_region!(cs, vw, region, root_idx)
+            end
             # We don't have a fallback, so materialize the array corresponding to `val`
             # and `copyto!` it into the output buffer.
             _ => begin
@@ -757,6 +993,11 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     end
     if !isempty(scalar_idxs)
         materialize_scalar_writes()
+    end
+    if old_fusion_sources === nothing
+        delete!(cs.rewrites, FUSION_SOURCES_KEY)
+    else
+        cs.rewrites[FUSION_SOURCES_KEY] = old_fusion_sources
     end
     return declare!(cs, get_misc_identifier(cs), output_buffer)
 end
@@ -814,7 +1055,7 @@ functions such as `+` or `*`.
 """
 const NARY_CALL_LIMIT = 12
 
-function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+function addmul_arg_idxs(cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     if get(cs.rewrites, :sort_addmul, true)::Bool
         @assert isempty(cs.ir.non_canonical_idxs) "Sorted add/mul requires canonical IRStructure"
         args_idxs = Int32[]
@@ -823,10 +1064,17 @@ function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::C
             push!(args_idxs, cs.ir[arg])
         end
         # For type-stability, so it matches with the other branch
-        args_idxs = SymbolicUtils.AdjView{Int32}(args_idxs)
+        return SymbolicUtils.AdjView{Int32}(args_idxs)
     else
-        args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+        return Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
     end
+end
+
+function codegen_function!(@nospecialize(op::Union{typeof(*), typeof(+)}), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    if !(symtype(expr) <: Number) && fusable_parts(cs, expr_idx) !== nothing
+        return codegen_fused_root!(cs, expr_idx)
+    end
+    args_idxs = addmul_arg_idxs(cs, expr, expr_idx)
 
     if length(args_idxs) == 1
         return codegen!(cs, expr_idx, Expr(:call, op, cs(cs.ir[first(args_idxs)])))

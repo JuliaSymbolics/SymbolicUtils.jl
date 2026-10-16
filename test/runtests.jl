@@ -40,6 +40,7 @@ if GROUP == "Core"
             @safetestset "Inference" begin include("inference.jl") end
             @safetestset "Code" begin include("code.jl") end
             @safetestset "New codegen" begin include("new_code.jl") end
+            @safetestset "Fused broadcast codegen" begin include("fused_broadcast.jl") end
             @safetestset "Symbolic codegen primitives" begin include("symbolic_codegen_primitives.jl") end
             @safetestset "CSE" begin include("cse.jl") end
             @safetestset "Conditionals" begin include("conditionals.jl") end

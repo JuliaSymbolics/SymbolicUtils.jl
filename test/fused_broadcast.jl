@@ -216,3 +216,38 @@ Base.copyto!(dst::NoScalarVector, bc::Broadcast.Broadcasted) = (copyto!(dst.data
     evalwith(ex, (:x => xv, :out => buf))
     @test buf.data == [diff(xv); 2 * xv[20]]
 end
+
+@testset "in-place updates read the written region through the destination" begin
+    # `out` is `x`'s memory, and each region reads `x` only where it writes it.
+    @syms x[1:20] y[1:20] dt out[1:20]
+    w = @makearray w[1:20] begin
+        w[1:10] => x[1:10] .+ dt .* y[1:10]
+        w[11:20] => x[11:20] .- dt .* y[11:20]
+    end
+    xv, yv, dtv = collect(1.0:20.0), collect(0.5:0.5:10.0), 0.1
+    expected = [xv[1:10] .+ dtv .* yv[1:10]; xv[11:20] .- dtv .* yv[11:20]]
+    in_place = fused(
+        Code.ALLOCATOR_REWRITES_KEY => returns_buffer(out),
+        Code.FUSE_UNALIAS_KEY => false, Code.FUSE_OUTPUT_ARRAY_KEY => x
+    )
+    ex = Code.fast_toexpr(w, in_place)
+    @test count_calls(ex, Base.unalias) == 0
+    @test count_calls(ex, Code.fused_materialize_noalias!) == 2
+    # One view of `out` per region and one of `y`; `x` is read through `out`'s views.
+    @test count_calls(ex, view) == 4
+
+    shared = copy(xv)
+    evalwith(ex, (:x => shared, :y => yv, :dt => dtv, :out => shared))
+    @test shared == expected
+
+    # Same values as the unaliasing codegen, without its copies of `x`.
+    unaliased = fused(Code.ALLOCATOR_REWRITES_KEY => returns_buffer(out))
+    @eval update_unaliased!(x, y, dt, out) = $(Code.fast_toexpr(w, unaliased))
+    @eval update_in_place!(x, y, dt, out) = $ex
+    a, b = copy(xv), copy(xv)
+    update_unaliased!(a, yv, dtv, a)
+    update_in_place!(b, yv, dtv, b)
+    @test a == b == expected
+    update_in_place!(b, yv, dtv, b)
+    @test (@allocated update_in_place!(b, yv, dtv, b)) < (@allocated update_unaliased!(a, yv, dtv, a))
+end

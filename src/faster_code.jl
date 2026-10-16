@@ -581,6 +581,23 @@ unaliased from the output buffer.
 const FUSION_SOURCES_KEY = :__fusion_sourcesₛᵧₘ
 
 """
+Key in `CodegenState.rewrites` that, when `false` (default `true`), generates fused
+`ArrayMaker` regions without unaliasing their inputs from the output buffer: no input is
+copied on entry, and CPU arrays are written without Base's per-input `unalias` copies. Set it
+only when no region reads memory that a region of the same `ArrayMaker` writes, except the
+elements a region reads at the same index it writes them, as in `u[r] .= u[r] .+ dt .* f`.
+"""
+const FUSE_UNALIAS_KEY = :fuse_unalias
+
+"""
+Key in `CodegenState.rewrites` holding the symbolic array whose memory the `ArrayMaker`'s
+output buffer is (default `nothing`). A fused region that reads exactly the slice of this
+array it writes then reads it through the region's own view of the output, which broadcast
+recognizes as its destination and does not copy.
+"""
+const FUSE_OUTPUT_ARRAY_KEY = :fuse_output_array
+
+"""
     fused_materialize(bc)
     fused_materialize!(dest, bc)
 
@@ -590,6 +607,28 @@ broadcast loop into its own body.
 """
 @noinline fused_materialize(bc) = Base.Broadcast.materialize(bc)
 @noinline fused_materialize!(dest, bc) = Base.Broadcast.materialize!(dest, bc)
+
+"""
+    fused_materialize_noalias!(dest, bc)
+
+[`fused_materialize!`](@ref) without unaliasing the inputs of `bc` from `dest` (see
+[`FUSE_UNALIAS_KEY`](@ref)). Base copies every input that might share memory with `dest`,
+which for views into one state vector is all of them. Other destinations and broadcast
+styles, such as GPU arrays, which unalias only inputs that actually overlap `dest`, use
+`fused_materialize!`.
+"""
+@noinline function fused_materialize_noalias!(dest, bc)
+    style = Base.Broadcast.combine_styles(dest, bc)
+    dest isa StridedArray && style isa Base.Broadcast.DefaultArrayStyle ||
+        return Base.Broadcast.materialize!(dest, bc)
+    bc′ = Base.Broadcast.preprocess(
+        nothing, Base.Broadcast.instantiate(Base.Broadcast.Broadcasted(style, identity, (bc,), axes(dest)))
+    )
+    @inbounds @simd for I in eachindex(bc′)
+        dest[I] = bc′[I]
+    end
+    return dest
+end
 
 """
     is_elementwise_call(f)
@@ -697,22 +736,33 @@ function count_fused_uses!(uses::Dict{Int32, Int}, cs::CodegenState, idx::Intege
     return uses
 end
 
-function lazy_broadcast_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
+function lazy_broadcast_expr(cs::CodegenState{T}, idx::Integer, uses, sources, dest) where {T}
     parts = fusable_parts(cs, idx)
     f = parts.f isa Integer ? cs(cs.ir[parts.f]) : parts.f
     ex = Expr(:call, Base.Broadcast.broadcasted, f)
     for a in parts.args
-        push!(ex.args, fused_arg_expr(cs, a, uses, sources))
+        push!(ex.args, fused_arg_expr(cs, a, uses, sources, dest))
     end
     return ex
 end
 
-function fused_arg_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
+# Whether the slice with IR indices `nbors` (see `view_slice_parts`) is the region
+# `dest.region` of the array the output buffer holds (see `FUSE_OUTPUT_ARRAY_KEY`).
+function reads_written_region(cs::CodegenState, nbors, dest)
+    dest === nothing && return false
+    out = get(cs.rewrites, FUSE_OUTPUT_ARRAY_KEY, nothing)
+    out !== nothing && isequal(cs.ir[first(nbors)], out) || return false
+    length(nbors) == length(dest.region) + 1 || return false
+    return all(i -> unwrap_const(cs.ir[nbors[i + 1]]) == dest.region[i], eachindex(dest.region))
+end
+
+function fused_arg_expr(cs::CodegenState{T}, idx::Integer, uses, sources, dest) where {T}
     if uses[idx] == 1 && fusable_parts(cs, idx) !== nothing
-        return lazy_broadcast_expr(cs, idx, uses, sources)
+        return lazy_broadcast_expr(cs, idx, uses, sources, dest)
     end
     nbors = view_slice_parts(cs, idx)
     nbors === nothing && return cs(cs.ir[idx])
+    reads_written_region(cs, nbors, dest) && return dest.vw
     src = sources === nothing ? nothing : get(sources, first(nbors), nothing)
     src === nothing && (src = cs(cs.ir[first(nbors)]))
     ex = Expr(:call, view, src)
@@ -727,11 +777,12 @@ end
 
 The elementwise expression at `idx` as one lazy `Broadcast.broadcasted` tree: elementwise
 arguments used once are nested lazily, slices of read-only arrays become `view`s, and every
-other argument is generated as usual.
+other argument is generated as usual. When the tree is written to the view `dest.vw` of the
+output at `dest.region`, reads of that region of the output array are `dest.vw` itself.
 """
-function fused_broadcast_expr(cs::CodegenState{T}, idx::Integer) where {T}
+function fused_broadcast_expr(cs::CodegenState{T}, idx::Integer, dest = nothing) where {T}
     uses = count_fused_uses!(Dict{Int32, Int}(), cs, idx)
-    return lazy_broadcast_expr(cs, idx, uses, get(cs.rewrites, FUSION_SOURCES_KEY, nothing))
+    return lazy_broadcast_expr(cs, idx, uses, get(cs.rewrites, FUSION_SOURCES_KEY, nothing), dest)
 end
 
 function codegen_fused_root!(cs::CodegenState{T}, idx::Integer) where {T}
@@ -767,7 +818,10 @@ function write_fused_region!(cs::CodegenState{T}, vw::Symbol, region, root_idx::
     if length(region) != length(sh) || any(i -> length(region[i]) != length(sh[i]), eachindex(sh))
         dest = declare!(cs, get_misc_identifier(cs), Expr(:call, reshape, vw, dims))
     end
-    return declare!(cs, :_, Expr(:call, fused_materialize!, dest, fused_broadcast_expr(cs, root_idx)))
+    bc = fused_broadcast_expr(cs, root_idx, dest === vw ? (; vw, region) : nothing)
+    materialize = get(cs.rewrites, FUSE_UNALIAS_KEY, true)::Bool ? fused_materialize! :
+        fused_materialize_noalias!
+    return declare!(cs, :_, Expr(:call, materialize, dest, bc))
 end
 
 # Declare each read-only array the fused regions among `value_idxs` read through a view as
@@ -854,9 +908,11 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         ndrop = 0
     end
     old_fusion_sources = get(cs.rewrites, FUSION_SOURCES_KEY, nothing)
-    cs.rewrites[FUSION_SOURCES_KEY] = unaliased_fusion_sources!(
-        cs, output_buffer, Iterators.drop(values_exprs_idxs, ndrop)
-    )
+    cs.rewrites[FUSION_SOURCES_KEY] = if get(cs.rewrites, FUSE_UNALIAS_KEY, true)::Bool
+        unaliased_fusion_sources!(cs, output_buffer, Iterators.drop(values_exprs_idxs, ndrop))
+    else
+        Dict{Int32, Symbol}()
+    end
 
     # Indices and values of regions that write to a scalar
     scalar_idxs = Dict{ShapeVecT, Any}()

@@ -200,21 +200,21 @@ end
 @testset "small float coefficients are not cancelled against sqrt (#1050)" begin
     @syms x
     numeval(ex, v) = Core.eval(Main, SymbolicUtils.Code.toexpr(substitute(ex, Dict(x => v))))
-    e = 1e-9 * (3.0 + 5.0x) / sqrt(1 + x)
+    e = 1.0e-9 * (3.0 + 5.0x) / sqrt(1 + x)
     s = simplify(e)
     @test isequal(s, e)
     @test isequal(simplify_fractions(e), e)
     @test !isequal(s, 5.0e-9 * sqrt(1 + x))
     for v in (2.0, 0.0, -0.5)
-        @test numeval(s, v) ≈ numeval(e, v) rtol = 1e-12
+        @test numeval(s, v) ≈ numeval(e, v) rtol = 1.0e-12
         @test abs(numeval(s, v) - 5.0e-9 * sqrt(1 + v)) / abs(numeval(e, v)) > 0.05
     end
     e2 = 9.44e-8 * (3.945e-5 + 4.72e-8 * x) / (2 * sqrt(1.0 + x))
     s2 = simplify(e2)
     @test isequal(s2, e2)
     @test !isequal(s2, 2.22784e-15 * sqrt(1.0 + x))
-    @test numeval(s2, 2.0) ≈ numeval(e2, 2.0) rtol = 1e-12
-    e3 = 1e-8 * (3.0 + 5.0x) / sqrt(1 + x)
+    @test numeval(s2, 2.0) ≈ numeval(e2, 2.0) rtol = 1.0e-12
+    e3 = 1.0e-8 * (3.0 + 5.0x) / sqrt(1 + x)
     @test isequal(simplify(e3), e3)
 end
 
@@ -248,21 +248,21 @@ _val(ex, d) = unwrap_const(substitute(ex, d))
         e = (c[1] + c[2] * x + c[3] * x^2) / (1 // 3 + c[4] * x + c[5] * x^2)
         s = simplify(e)
         for v in randn(rng, 3)
-            @test relerr(val(e, Dict(x => v)), val(s, Dict(x => v))) < 1e-10
+            @test relerr(val(e, Dict(x => v)), val(s, Dict(x => v))) < 1.0e-10
         end
     end
 
-    for a in (1e-12, 1.0, 1e12)
+    for a in (1.0e-12, 1.0, 1.0e12)
         e = (a * x^2 + 3a * x + 2a) / (x + 1)
         s = simplify(e)
         @test !SymbolicUtils.isdiv(s)
-        @test val(s, Dict(x => 0.3)) ≈ a * 2.3 rtol = 1e-14
+        @test val(s, Dict(x => 0.3)) ≈ a * 2.3 rtol = 1.0e-14
     end
 
-    e = (1e100 * x^2 + 2e100 * x + 1e100) / (1e-100 * x^2 + 3e-100 * x + 2e-100)
+    e = (1.0e100 * x^2 + 2.0e100 * x + 1.0e100) / (1.0e-100 * x^2 + 3.0e-100 * x + 2.0e-100)
     s = simplify(e)
     for v in (0, 0.3, -0.7)
-        @test val(s, Dict(x => v)) ≈ val(e, Dict(x => v)) rtol = 1e-12
+        @test val(s, Dict(x => v)) ≈ val(e, Dict(x => v)) rtol = 1.0e-12
     end
 end
 
@@ -272,21 +272,23 @@ end
     for a in (big(1) // big(10)^400, big(10)^400 // big(3), big(2)^1100)
         e = (a + 0.5x + a * x^2 + 0.5x^3) / (x^2 + 1)
         s = simplify(e)
-        @test val(s, Dict(x => 0)) ≈ a rtol = 1e-15
-        @test val(s, Dict(x => 0.3)) ≈ val(e, Dict(x => 0.3)) rtol = 1e-12
+        @test val(s, Dict(x => 0)) ≈ a rtol = 1.0e-15
+        @test val(s, Dict(x => 0.3)) ≈ val(e, Dict(x => 0.3)) rtol = 1.0e-12
     end
 
-    @testset for e in ((0.5 + (1 + im) * x) / (x + 1), ((1 + im) + 0.5x) / (x + 1),
-              (0.5x^2 + 0.75x + 0.25) / ((1 + im) * x + (1 + im)))
+    @testset for e in (
+            (0.5 + (1 + im) * x) / (x + 1), ((1 + im) + 0.5x) / (x + 1),
+            (0.5x^2 + 0.75x + 0.25) / ((1 + im) * x + (1 + im)),
+        )
         s = simplify(e)
-        @test val(s, Dict(x => 0.3)) ≈ val(e, Dict(x => 0.3)) rtol = 1e-12
+        @test val(s, Dict(x => 0.3)) ≈ val(e, Dict(x => 0.3)) rtol = 1.0e-12
     end
 
     D = Int64(2)^40
     e = ((x + 1 // D)^2 + 0.5 * y * (x + 1 // D)) / (x + 1 // D)
     s = simplify(e)
     @test val(s, Dict(x => 0.3, y => 0.2)) isa Float64
-    @test val(s, Dict(x => 0.3, y => 0.2)) ≈ 0.3 + 1 / D + 0.1 rtol = 1e-14
+    @test val(s, Dict(x => 0.3, y => 0.2)) ≈ 0.3 + 1 / D + 0.1 rtol = 1.0e-14
 end
 
 @testset "exact gcd cancellation survives Int64 overflow (#1139)" begin

@@ -382,21 +382,21 @@ The code generation in this function does not need to handle checking if `expr` 
 """
 function codegen_function! end
 
-function hoist_invariant_arrays!(cs::CodegenState{T}, ex) where {T}
-    ex isa BasicSymbolic{T} || return nothing
-    iscall(ex) || return nothing
-    args = arguments(ex)
-    if operation(ex) === getindex
-        arr = args[1]
-        if arr isa BasicSymbolic{T} && iscall(arr) && is_array_shape(shape(arr)) &&
-                !SymbolicUtils.query(SymbolicUtils._is_index_variable, arr; recurse = x -> iscall(x) && !SymbolicUtils.isarrayop(x))
-            cs(arr)
+function hoist_invariant_arrays!(cs::CodegenState{T}, ex::BasicSymbolic{T}) where {T}
+    invariant(x) = !SymbolicUtils.query(SymbolicUtils._is_index_variable, x; recurse = x -> iscall(x) && !SymbolicUtils.isarrayop(x))
+    @match ex begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            arr = args[1]
+            iscall(arr) && is_array_shape(shape(arr)) && invariant(arr) && cs(arr)
         end
-        return nothing
-    end
-    operation(ex) === ifelse_branching && return hoist_invariant_arrays!(cs, args[1])
-    for a in args
-        hoist_invariant_arrays!(cs, a)
+        BSImpl.Term(; f, args) && if f === ifelse_branching end => begin
+            invariant(ex) ? cs(ex) : hoist_invariant_arrays!(cs, args[1])
+        end
+        _ => if iscall(ex)
+            for a in arguments(ex)
+                hoist_invariant_arrays!(cs, a)
+            end
+        end
     end
     return nothing
 end

@@ -819,6 +819,12 @@ end
         ncalls[] = 0
         @test @invokelatest(g(-1.0, [-1.0, -2.0, -3.0])) == -6.0
         @test ncalls[] == 0
+        h = eval(Code.fast_toexpr(Func([c, x], [], sum(@arrayop (i,) x[i] + ifelse_branching(c > 0, sx[1], c))), IRStructure{SymReal}(), Dict()))
+        @test @invokelatest(h(1.0, [4.0, 9.0, 16.0])) == 35.0
+        @test ncalls[] == 1
+        ncalls[] = 0
+        @test @invokelatest(h(-1.0, [4.0, 9.0, 16.0])) == 26.0
+        @test ncalls[] == 0
     end
 
     @testset "bare `@arrayop` after `with_allocator` (issue #1151)" begin

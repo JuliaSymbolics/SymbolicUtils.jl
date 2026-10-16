@@ -1,3 +1,24 @@
+_normalize_integral_rationals(x::Rational) = denominator(x) == 1 ? numerator(x) : x
+_normalize_integral_rationals(x) = x
+
+function _normalize_integral_rationals(x::BasicSymbolic{T}) where {T}
+    if !iscall(x)
+        value = unwrap_const(x)
+        if value isa Rational && denominator(value) == 1
+            return Const{T}(numerator(value))
+        end
+        return x
+    end
+    args = arguments(x)
+    normalized_args = map(_normalize_integral_rationals, args)
+    any(i -> normalized_args[i] !== args[i], eachindex(args)) || return x
+    rebuilt = if isterm(x)
+        ConstructionBase.setproperties(x, (; args = ArgsT{T}(normalized_args)))
+    else
+        maketerm(typeof(x), operation(x), normalized_args, metadata(x); type = symtype(x))
+    end
+    return rebuilt::BasicSymbolic{T}
+end
 
 """
 ```julia
@@ -8,6 +29,7 @@ simplify(x; expand=false,
 ```
 
 Simplify an expression (`x`) by applying `rewriter` until there are no changes.
+Integral rational constants are normalized to integers before rewriting.
 `expand=true` applies [`expand`](@ref) in the beginning of each fixpoint iteration.
 
 By default, simplify will assume denominators are not zero and allow cancellation in fractions.
@@ -38,6 +60,7 @@ Pass `simplify_fractions=false` to prevent this.
         Fixpoint(rewriter)
     end
 
+    x = _normalize_integral_rationals(x)
     x = PassThrough(f)(x)
     simplify_fractions && query(isdiv, x) ?
         SymbolicUtils.simplify_fractions(x) : x

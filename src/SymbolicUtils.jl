@@ -24,8 +24,8 @@ using SymbolicIndexingInterface: ArraySymbolic, NotSymbolic, ScalarSymbolic, get
                                  symbolic_type
 import Base: +, -, *, /, //, \, ^, ImmutableDict
 import ConstructionBase
-import TermInterface: children, iscall, operation, arguments, metadata, maketerm, sorted_arguments
-import DataStructures: OrderedDict, OrderedSet
+import TermInterface: children, iscall, isexpr, head, operation, arguments, metadata, maketerm, sorted_arguments, sorted_children
+import DataStructures: OrderedDict, OrderedSet, Accumulator, counter
 import OrderedCollections
 # For ReverseDiffExt
 import ArrayInterface
@@ -163,6 +163,7 @@ export ifelse_eager, ifelse_branching
 PrecompileTools.@recompile_invalidations begin
 import SpecialFunctions, NaNMath
 include("methods.jl")
+
 include("printing.jl")
 end
 # LinkedList, simplification utilities

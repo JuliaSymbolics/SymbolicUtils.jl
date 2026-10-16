@@ -744,8 +744,39 @@ end
                         end
                     end
                 end
+                __miscₛᵧₘ0 = var"##cse#1"
             end
         )
+    end
+
+    @testset "bare `@arrayop` after `with_allocator` (issue #1151)" begin
+        @syms x[1:3] y[1:3]
+        wrapped = Code.with_allocator(zeros, @arrayop (i,) x[i] * y[i])
+        bare = @arrayop (i,) x[i] + y[i]
+        # The order of the two must not matter.
+        for expr in (sum(wrapped) + sum(bare), sum(bare) + sum(wrapped))
+            result = eval(quote
+                let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]
+                    $(Code.fast_toexpr(expr, IRStructure{SymReal}(), Dict()))
+                end
+            end)
+            @test result ≈ 53.0
+        end
+        # `reset_allocator!` must restore the absence of an allocator, not store `nothing`.
+        rewrites = Dict{Any, Any}()
+        Code.fast_toexpr(sum(wrapped), IRStructure{SymReal}(), rewrites)
+        @test !haskey(rewrites, Code.ALLOCATOR_REWRITES_KEY)
+    end
+
+    @testset "`Func` and `Assignment` return an `@arrayop` result" begin
+        @syms x[1:3] y[1:3] z
+        arr = @arrayop (i,) x[i] * y[i]
+        xv, yv = [1.0, 2.0, 3.0], [4.0, 5.0, 6.0]
+        for fn in (Func([x, y], [], arr), Func([x, y], [], Let([Assignment(z, arr)], z, true)),
+                   Func([x, y, Assignment(z, arr)], [], z), Func([x, y], [Assignment(z, arr)], z))
+            f = eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict()))
+            @test @invokelatest(f(xv, yv)) == xv .* yv
+        end
     end
 
     @testset "`Fill`" begin
@@ -817,6 +848,47 @@ end
             end
         end)
         @test isequal(reference, result)
+    end
+end
+
+@testset "`fill_sarr`" begin
+    @test Code.fill_sarr(Val((3,)), 1.0, 2.0, 3.0) === SVector{3}(1.0, 2.0, 3.0)
+    @test Code.fill_sarr(Val((2, 3)), 1, 2, 3, 4, 5, 6) === SMatrix{2, 3}(1, 2, 3, 4, 5, 6)
+    @test Code.fill_sarr(Val((2, 2, 2)), 1:8...) === SArray{Tuple{2, 2, 2}}(1:8...)
+end
+
+@testset "static array codegen for small arrays" begin
+    @syms a::Real b::Real
+    av = 3.0
+    bv = 2.0
+
+    # Any shape with at most `FILL_ARR_LIMIT` elements uses `fill_sarr` with the default
+    # allocator, including ranks above 2 and dimensions longer than 4.
+    w1 = @makearray w[1:8] begin
+        w[1:8] => Const{SymReal}([a, b, a + b, a - b, 2a, 2b, a * b, a / b])
+    end
+    w2 = @makearray w[1:5, 1:3] begin
+        w[1:5, 1:3] => Const{SymReal}([a b a; b a b; a b a; b a b; a b a])
+    end
+    w3 = @makearray w[1:2, 1:2, 1:2] begin
+        w[1:2, 1:2, 1:2] => Const{SymReal}(reshape([a, b, a + b, a - b, 2a, 2b, a * b, a / b], 2, 2, 2))
+    end
+
+    for w in (w1, w2, w3)
+        expr = Code.fast_toexpr(w, Dict{Any, Any}())
+        @test occursin("fill_sarr", string(expr))
+        result = eval(quote
+            let a = $av, b = $bv
+                $expr
+            end
+        end)
+        expected = eval(quote
+            let a = $av, b = $bv
+                $(Code.toexpr(w))
+            end
+        end)
+        @test result isa StaticArray
+        @test result ≈ expected
     end
 end
 
@@ -1214,6 +1286,111 @@ end
     end
 end
 
+@testset "batched ArrayMaker/array_literal uses convert for eltype" begin
+    # Batched writes must use `convert(eltype(buffer), v)` (as `setindex!`/`fill_arr!`
+    # do); `T(v)` fails for abstract eltypes and converts one-field wrappers into their
+    # field type.
+    struct Wrap{T}
+        x::T
+    end
+    abstract type AbstractWrap end
+    struct ConcreteWrap <: AbstractWrap
+        x::Float64
+    end
+
+    function scalar_region_arraymaker(sym, N::Int)
+        regions = SymbolicUtils.RegionsT([SymbolicUtils.ShapeVecT((i:i,)) for i in 1:N])
+        values = [Const{SymReal}([sym[i]]) for i in 1:N]
+        return SymbolicUtils.ArrayMaker{SymReal}(
+            regions, values; shape = SymbolicUtils.ShapeVecT((1:N,))
+        )
+    end
+
+    function codegen_into!(expr, buf)
+        returns_alloc = SymbolicUtils.Term{SymReal}(Returns{SymReal}, (buf,))
+        return Code.fast_toexpr(
+            expr, Dict{Any, Any}(Code.ALLOCATOR_REWRITES_KEY => returns_alloc)
+        )
+    end
+
+    function expr_calls(ex, target)
+        tname = target isa Symbol ? target : nameof(target)
+        if ex isa Expr
+            if ex.head === :call
+                f = ex.args[1]
+                f === target && return true
+                f isa GlobalRef && f.name === tname && return true
+                f isa Symbol && f === tname && return true
+            end
+            return any(a -> expr_calls(a, target), ex.args)
+        end
+        return false
+    end
+
+    function eval_codegen(code, bindings::NamedTuple)
+        assigns = Expr(:block)
+        for (k, v) in pairs(bindings)
+            push!(assigns.args, Expr(:(=), k, v))
+        end
+        return eval(Expr(:let, assigns, code))
+    end
+
+    @testset "parametric wrapper eltype via ArrayMaker" begin
+        @syms (w::Wrap{Float64})[1:17]
+        @syms buf[1:17]::Wrap{Float64}
+        code = codegen_into!(scalar_region_arraymaker(w, 17), buf)
+        @test expr_calls(code, convert)
+        ws = [Wrap(Float64(i)) for i in 1:17]
+        bufv = Vector{Wrap{Float64}}(undef, 17)
+        @test eval_codegen(code, (; w = ws, buf = bufv)) == ws
+    end
+
+    @testset "abstract eltype via ArrayMaker" begin
+        @syms (a::AbstractWrap)[1:17]
+        @syms bufa[1:17]::AbstractWrap
+        code = codegen_into!(scalar_region_arraymaker(a, 17), bufa)
+        @test expr_calls(code, convert)
+        as = AbstractWrap[ConcreteWrap(Float64(i)) for i in 1:17]
+        bufav = Vector{AbstractWrap}(undef, 17)
+        @test eval_codegen(code, (; a = as, bufa = bufav)) == as
+    end
+
+    @testset "Int values still convert into Float64 buffer" begin
+        @syms xi[1:17]::Int
+        @syms bufi[1:17]::Float64
+        code = codegen_into!(scalar_region_arraymaker(xi, 17), bufi)
+        @test expr_calls(code, convert)
+        xis = collect(1:17)
+        bufiv = Vector{Float64}(undef, 17)
+        result = eval_codegen(code, (; xi = xis, bufi = bufiv))
+        @test result == Float64.(xis)
+        @test eltype(result) === Float64
+    end
+
+    @testset "array_literal batched path also uses convert" begin
+        @syms (w::Wrap{Float64})[1:17]
+        @syms buf[1:17]::Wrap{Float64}
+        arr = Const{SymReal}([w[i] for i in 1:17])
+        code = codegen_into!(arr, buf)
+        @test expr_calls(code, convert)
+        ws = [Wrap(Float64(i)) for i in 1:17]
+        bufv = Vector{Wrap{Float64}}(undef, 17)
+        eval_codegen(code, (; w = ws, buf = bufv))
+        @test bufv == ws
+    end
+
+    @testset "fill_arr! path (N ≤ FILL_ARR_LIMIT) still agrees" begin
+        @syms (w::Wrap{Float64})[1:16]
+        @syms buf[1:16]::Wrap{Float64}
+        code = codegen_into!(scalar_region_arraymaker(w, 16), buf)
+        @test expr_calls(code, Code.fill_arr!)
+        @test !expr_calls(code, convert)
+        ws = [Wrap(Float64(i)) for i in 1:16]
+        bufv = Vector{Wrap{Float64}}(undef, 16)
+        @test eval_codegen(code, (; w = ws, buf = bufv)) == ws
+    end
+end
+
 @testset "`replace_node!` on an argument of `ArrayOp` with a `term` codegens correctly" begin
     @syms x[1:3]
     ir = IRStructure{SymReal}()
@@ -1258,4 +1435,69 @@ end
         local var"##cse#6" = $(*)(var"##cse#2", var"##cse#5")
         local var"##cse#7" = $(\)(var"##cse#4", var"##cse#6")
     end)
+end
+
+struct SinMatch <: Code.AbstractMatched
+    idx::Int
+end
+
+function detect_sin(ir::IRStructure, expr)
+    idxs = findall(s -> iscall(s) && operation(s) === sin, ir.symbols)
+    isempty(idxs) ? nothing : map(SinMatch, idxs)
+end
+detect_sin(ir::IRStructure, expr, options) = detect_sin(ir, expr)
+
+replace_sin(ir::IRStructure, expr, matches) = replace_sin(ir, expr, matches, (; f = cos))
+function replace_sin(ir::IRStructure, expr, matches, options)
+    new_ir = copy(ir)
+    for m in matches
+        node = new_ir[m.idx]
+        replace_node!(new_ir, node, term(options.f, only(arguments(node))))
+    end
+    new_ir, expr
+end
+
+@testset "`OptimizationRule` options" begin
+    @syms a::Real
+
+    function evaluate(rule)
+        ir = IRStructure{SymReal}()
+        root = populate_ir!(ir, sin(a))
+        new_ir, _ = Code.apply_optimization_rule(ir, sin(a), rule)
+        expr = Code.fast_toexpr(new_ir[root], new_ir, Dict())
+        eval(quote let a = 0.5; $expr end end)
+    end
+
+    rule = OptimizationRule("ReplaceSin", detect_sin, replace_sin, 1)
+    @test rule.options === nothing
+    @test evaluate(rule) ≈ cos(0.5)
+
+    configured = Code.with_options(rule, (; f = tan))
+    @test configured.options == (; f = tan)
+    @test evaluate(configured) ≈ tan(0.5)
+    @test evaluate(OptimizationRule("ReplaceSin", detect_sin, replace_sin, 1, (; f = exp))) ≈ exp(0.5)
+end
+
+detect_let(expr::Code.Let, state) = map(SinMatch, eachindex(expr.pairs))
+detect_let(expr::Code.Let, state, options) = detect_let(expr, state)
+
+rewrite_let(expr::Code.Let, matches, state) = rewrite_let(expr, matches, state, (; f = cos))
+function rewrite_let(expr::Code.Let, matches, state, options)
+    pairs = map(expr.pairs) do p
+        Code.Assignment(Code.lhs(p), term(options.f, only(arguments(Code.rhs(p)))))
+    end
+    Code.Let(pairs, expr.body, expr.let_block)
+end
+
+@testset "`OptimizationRule` options on the `Code.Let` path" begin
+    @syms a::Real b::Real
+
+    function rewritten(rule)
+        expr = Code.Let([Code.Assignment(b, sin(a))], b, false)
+        operation(Code.rhs(only(Code.apply_optimization_rule(expr, Code.LazyState(), rule).pairs)))
+    end
+
+    rule = OptimizationRule("ReplaceSinInLet", detect_let, rewrite_let, 1)
+    @test rewritten(rule) === cos
+    @test rewritten(Code.with_options(rule, (; f = tan))) === tan
 end

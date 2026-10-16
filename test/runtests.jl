@@ -24,6 +24,14 @@ if GROUP == "Core"
             @safetestset "Basics" begin include("basics.jl") end
             @safetestset "Thread-safe arguments" begin include("threadsafe_arguments.jl") end
             @safetestset "ArrayOp" begin include("arrayop.jl") end
+            @safetestset "Constant array indices" begin include("constant_array_indices.jl") end
+            @safetestset "Array reduction cache" begin include("array_reduction_cache.jl") end
+            @safetestset "Empty stable indices" begin
+                include("empty_stable_indices.jl")
+            end
+            @safetestset "Empty slice shapes" begin
+                include("empty_slice_shapes.jl")
+            end
             @safetestset "Array slice scalarization" begin
                 include("array_slice_scalarization.jl")
             end
@@ -57,4 +65,5 @@ if GROUP == "QA"
     activate_qa_env()
     @safetestset "SciMLTesting QA" begin include("qa/qa.jl") end
     @safetestset "AdjView JET" begin include("qa/adjview_jet.jl") end
+    @safetestset "Substitute broadcast JET" begin include("qa/substitute_broadcast_jet.jl") end
 end

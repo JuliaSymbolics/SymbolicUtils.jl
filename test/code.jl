@@ -181,6 +181,21 @@ end
                           MakeArray(transpose([a b;a+b a/b]), arr)))) == [1 3;2 1/2]
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(([a b;a+b a/b])', arr)))) == [1 3;2 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(transpose([a, b]), arr)))) == [1 2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray([a, b]', arr)))) == [1 2]
+
+    let M = [a b; a+b a/b]
+        @test eval(toexpr(Let([a ← 1, b ← 2], MakeArray(M', typeof(M'))))) == [1 3; 2 1/2]
+        f = eval(toexpr(Func([a, b], [], M')))
+        @test Base.invokelatest(f, 1, 2) == [1 3; 2 1/2]
+    end
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray(UpperTriangular([a b;a+b a/b]), arr)))) == [1 2;0 1/2]
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
@@ -236,13 +251,17 @@ end
               :((a,b,$(+)(a,b))))
 
     @test SpawnFetch{Multithreaded}([()->1,()->2],vcat)|>toexpr|>eval == [1,2]
-    @test @elapsed(SpawnFetch{Multithreaded}([:(()->sleep(2)),
+    # Warm first so the timed check measures parallelism, not compile time (#1107).
+    let spawn_ex = SpawnFetch{Multithreaded}([:(()->sleep(2)),
                                               Func([:x],
                                                    [],
                                                    :(sleep(x)))],
                                              [(),
                                               (2,)],
-                                             vcat)|>toexpr|>eval) < 3
+                                             vcat) |> toexpr
+        eval(spawn_ex)
+        @test @elapsed(eval(spawn_ex)) < 3
+    end
 
     let
         @syms a b
@@ -465,4 +484,27 @@ end
     @test r isa Base.ReshapedArray
     a = Code.create_array(typeof(r), nothing, Val(2), Val((2, 2)), r...)
     @test a isa Matrix{Float64}
+end
+
+@testset "destructuring rewrites do not retain `elems` (#1098)" begin
+    @syms y1 y2 y3
+    function gen_weak()
+        elems = [y1, y2, y3]
+        toexpr(Func([DestructuredArgs(elems, :u; create_bindings = false)], [], y1 + y2))
+        return WeakRef(elems)
+    end
+    refs = [gen_weak() for _ in 1:20]
+    GC.gc(true)
+    @test all(r -> r.value === nothing, refs)
+
+    function rhs_exprs(elems)
+        st = Code.NameState()
+        toexpr(Func([DestructuredArgs(elems, :u; create_bindings = false)], [], y1), st)
+        return [st.rewrites[e] for e in elems]
+    end
+    ex1 = rhs_exprs([y1, y2, y3])
+    ex2 = rhs_exprs([y3, y2, y1])
+    @test ex1 == [:(u[1]), :(u[2]), :(u[3])]
+    @test ex2 == ex1
+    @test all(ex1 .=== ex2)
 end

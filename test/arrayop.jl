@@ -9,6 +9,7 @@ limit2(a::BasicSymbolic{T}, N) where {T} = Term{T}(limit2, ArgsT{T}((a, Const{T}
 brusselator_f(x, y, t) = (((x - 0.3)^2 + (y - 0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.0
 
 SymbolicUtils.promote_symtype(::typeof(brusselator_f), args...) = Real
+custom_mapreduce_square(x) = x^2
 
 @testset "Brusselator stencil" begin
     n = 8
@@ -127,6 +128,26 @@ end
     end
 
     @test isequal(scalarize(inv(A)), [inv(A)[i] for i in eachindex(A)])
+end
+
+@testset "nested non-symbolic broadcast (#562)" begin
+    @syms y[1:3]
+    # Nested non-symbolic broadcasts used to MethodError in `_copy_broadcast!`.
+    # Symbolic array ops cannot fuse per-element impure calls; throw clearly.
+    err = try
+        y .+ randn.()
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("non-symbolic broadcast", sprint(showerror, err))
+    @test occursin("collect(x)", sprint(showerror, err))
+    @test_throws ArgumentError y .* rand.()
+    # Workaround: materialize the symbolic array first.
+    result = collect(y) .+ randn.()
+    @test length(result) == 3
+    @test all(r -> operation(r) === +, result)
 end
 
 @testset "map/mapreduce" begin
@@ -366,6 +387,18 @@ end
     end
 end
 
+struct TestOp <: SymbolicUtils.Operator end
+(::TestOp)(x::BasicSymbolic{T}) where {T} = Term{T}(TestOp(), ArgsT{T}((x,)); type = symtype(x), shape = shape(x))
+
+@testset "scalarize reduces indices inside `Operator` terms" begin
+    @syms x[1:3] y[1:3]
+    op = TestOp()
+    opx = op(x)
+    @test isequal(scalarize(sum(opx)), op(x[1]) + op(x[2]) + op(x[3]))
+    @test isequal(scalarize(opx .* y), [op(x[i]) * y[i] for i in 1:3])
+    @test isequal(scalarize(sum(opx .* y)), sum(op(x[i]) * y[i] for i in 1:3))
+end
+
 @testset "`mapreduce` with `dims` does not mutate argument shapes" begin
     @syms A[1:2, 1:2]
     before = copy(shape(A))
@@ -373,4 +406,99 @@ end
     @test shape(r) == ShapeVecT([1:1, 1:2])
     @test shape(A) == before
     @test SymbolicUtils.iscall(A + [1.0 2.0; 3.0 4.0])
+end
+
+@testset "scalarize reductions over selected dimensions" begin
+    @syms M[1:2, 1:3]
+    values = [1.0 2 3; 4 5 6]
+    substitutions = Dict(M[i, j] => values[i, j] for i in 1:2, j in 1:3)
+    checks = [
+        () -> (sum(M; dims = 1), reshape([M[1, j] + M[2, j] for j in 1:3], 1, 3)),
+        () -> (sum(M; dims = 2), reshape([M[i, 1] + M[i, 2] + M[i, 3] for i in 1:2], 2, 1)),
+        () -> (sum(M; dims = (1, 2)), fill(sum(M[i, j] for i in 1:2, j in 1:3), 1, 1)),
+        () -> (sum(abs2, M; dims = 1), reshape([abs2(M[1, j]) + abs2(M[2, j]) for j in 1:3], 1, 3)),
+        () -> (prod(M; dims = 1), reshape([M[1, j] * M[2, j] for j in 1:3], 1, 3)),
+    ]
+
+    for (i, check) in enumerate(checks)
+        @testset "case $i" begin
+            expr, expected = check()
+            @test isequal(scalarize(expr), expected)
+            @test isequal(collect(expr), expected)
+        end
+    end
+
+    expr = mapreduce(custom_mapreduce_square, +, M; dims = 1)
+    expected = reshape([mapreduce(custom_mapreduce_square, +, values[:, j]) for j in 1:3], 1, 3)
+    @test isequal([unwrap_const(substitute(x, substitutions; fold = Val(true))) for x in scalarize(expr)], expected)
+    @test isequal([unwrap_const(substitute(x, substitutions; fold = Val(true))) for x in collect(expr)], expected)
+end
+
+@testset "codegen reductions over selected dimensions" begin
+    @syms A[1:2, 1:3] B[1:2, 1:3, 1:2]
+    cases = (
+        (A, reshape(Float64.(1:6), 2, 3), 1),
+        (A, reshape(Float64.(1:6), 2, 3), (1, 2)),
+        (B, reshape(Float64.(1:12), 2, 3, 2), (1, 3)),
+    )
+    for (input, values, dims) in cases
+        expr = sum(abs2, input; dims)
+        expected = sum(abs2, values; dims)
+        legacy = eval(toexpr(Func([input], [], expr)))
+        fast = eval(Code.fast_toexpr(Func([input], [], expr), Code.IRStructure{SymReal}(), Dict{Any, Any}()))
+        state = Code.NameState()
+        state.rewrites[input] = :input
+        legacy_iip_expr = Expr(
+            :function, Expr(:tuple, :out, :input),
+            Expr(:block, Expr(:call, copyto!, :out, toexpr(expr, state)), :out)
+        )
+        fast_iip_expr = Expr(
+            :function, Expr(:tuple, :out, :input),
+            Expr(
+                :block, Expr(
+                    :call, copyto!, :out,
+                    Code.fast_toexpr(expr, Code.IRStructure{SymReal}(), Dict{Any, Any}(input => :input))
+                ), :out
+            )
+        )
+        legacy! = eval(legacy_iip_expr)
+        fast! = eval(fast_iip_expr)
+
+        @testset "dims=$dims" begin
+            @test Base.invokelatest(legacy, values) == expected
+            @test Base.invokelatest(fast, values) == expected
+            for generated in (legacy!, fast!)
+                out = similar(expected)
+                @test Base.invokelatest(generated, out, values) == expected
+                @test out == expected
+            end
+        end
+    end
+end
+
+@testset "indexing an adjoint or transpose of a symbolic vector" begin
+    @syms x[1:2] z[1:2]::Complex{Float64} w[1:2]::Real
+    xv = ComplexF64[1 + 2im, 3im]
+    zv = ComplexF64[2 - im, -4 + 5im]
+    wv = [2.0, 3.0]
+
+    for (sym, values) in ((x, xv), (z, zv), (w, wv))
+        expr = adjoint(sym)[1, 2]
+        generated = eval(toexpr(Func([sym], [], expr)))
+        @test Base.invokelatest(generated, values) == adjoint(values)[1, 2]
+    end
+
+    transpose_expr = transpose(z)[1, 2]
+    transpose_generated = eval(toexpr(Func([z], [], transpose_expr)))
+    @test Base.invokelatest(transpose_generated, zv) == transpose(zv)[1, 2]
+
+    @syms M[1:3, 1:2]
+    Mv = [1.0 2; 3 4; 5 6]
+    broadcast_expr = (M .* x')[1, 2]
+    broadcast_generated = eval(toexpr(Func([M, x], [], broadcast_expr)))
+    @test Base.invokelatest(broadcast_generated, Mv, xv) == (Mv .* xv')[1, 2]
+
+    reduced = scalarize(sum(abs2, M .* x'; dims = 1))
+    expected = reshape([sum(abs2(M[i, j] * adjoint(x[j])) for i in 1:3) for j in 1:2], 1, 2)
+    @test isequal(reduced, expected)
 end

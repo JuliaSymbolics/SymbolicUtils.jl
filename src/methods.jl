@@ -947,6 +947,7 @@ Base.eltype(::Type{StableIndices}) = StableIndex{Int}
 Base.keys(x::StableIndices) = Base.OneTo(length(x))
 
 function Base.iterate(x::StableIndices)
+    any(isempty, x.sh) && return nothing
     idx = SmallV{Int}()
     resize!(idx, length(x.sh))
     for i in eachindex(x.sh)
@@ -1219,11 +1220,32 @@ function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{
     _copy_broadcast!(buffer, Broadcast.Broadcasted{SymBroadcast{T}}(^, (bc.args[2], N), bc.axes))
 end
 
+@noinline function _throw_nonsymbolic_nested_broadcast(bc)
+    throw(ArgumentError(LazyString(
+        "Cannot nest a non-symbolic broadcast inside a symbolic array broadcast. ",
+        "Symbolic array broadcasts cannot represent Julia's fused per-element evaluation ",
+        "of nested non-symbolic broadcasts (e.g. `y .+ randn.()`). ",
+        "Workaround: materialize the symbolic array first, e.g. `collect(x) .=> f.()` ",
+        "or `collect(x) .+ f.()`. Got nested broadcast: ", typeof(bc), "."
+    )))
+end
+
+# Catch nested DefaultArrayStyle (etc.) broadcasts that would otherwise MethodError.
+function _copy_broadcast!(::BroadcastBuffer{T}, bc::Broadcast.Broadcasted) where {T}
+    _throw_nonsymbolic_nested_broadcast(bc)
+end
+
 function _copy_broadcast!(buffer::BroadcastBuffer{T}, bc::Broadcast.Broadcasted{SymBroadcast{T}}) where {T}
     offset = length(buffer.canonical_args)
     for arg in bc.args
         if arg isa Broadcast.Broadcasted
-            push!(buffer.canonical_args, _copy_broadcast!(buffer, Broadcast.instantiate(arg)))
+            # Only recurse into symbolic nested broadcasts; non-symbolic ones
+            # (e.g. `randn.()`) cannot be fused into a lazy ArrayOp (#562).
+            if arg isa Broadcast.Broadcasted{SymBroadcast{T}}
+                push!(buffer.canonical_args, _copy_broadcast!(buffer, Broadcast.instantiate(arg)))
+            else
+                _throw_nonsymbolic_nested_broadcast(arg)
+            end
         elseif arg isa Base.RefValue
             push!(buffer.canonical_args, Const{T}(arg[]))
         else
@@ -1337,6 +1359,12 @@ function LinearAlgebra.dot(x::AbstractArray, y::BasicSymbolic{T}) where {T}
 end
 function LinearAlgebra.dot(x::BasicSymbolic{T}, y::AbstractArray) where {T}
     LinearAlgebra.dot(x, Const{T}(y))
+end
+
+promote_symtype(::typeof(LinearAlgebra.mul!), Ts...) = Ts[1]
+# `mul!(C, A, B[, α, β])` writes into and returns `C`.
+function promote_shape(::typeof(LinearAlgebra.mul!), @nospecialize(sh::ShapeT), @nospecialize(shs::ShapeT...))
+    return sh
 end
 
 function promote_symtype(::typeof(LinearAlgebra.det), T::TypeT)
@@ -1496,9 +1524,10 @@ function promote_symtype(f::Mapper, T::TypeT, Ts::TypeT...)
     end
     Ts = ntuple(safe_eltype ∘ Base.Fix1(getindex, Ts), Val{length(Ts)}())::NTuple{length(Ts), TypeT}
     mappedT = promote_symtype(f.f, safe_eltype(T)::TypeT, Ts...)::TypeT
-    # all scalars
     if all_same_ndims
-        return ndims_1 == 0 ? mappedT : Array{mappedT, ndims_1}
+        # `ndims` cannot distinguish a 0-dim array from a scalar; the argument
+        # type can. `map` over a 0-dim array produces a 0-dim array.
+        return ndims_1 == 0 && !(T <: AbstractArray) ? mappedT : Array{mappedT, ndims_1}
     else
         return Vector{mappedT}
     end
@@ -1674,6 +1703,8 @@ end
 function Base.map(f::BasicSymbolic{T}, x::AbstractArray, y::StaticArraysCore.StaticArray, xs::AbstractArray...) where {T}
     return _map(T, f, x, y, xs...)
 end
+# Resolves the intersection with Base's `map(f, ::ReshapedArray)`.
+Base.map(f::BasicSymbolic{T}, x::Base.ReshapedArray) where {T} = _map(T, f, x)
 # Internal small vectors keep their own eager `map`.
 function Base.map(f::BasicSymbolic, x::SmallVec{T, Vector{T}}) where {T}
     return invoke(map, Tuple{Any, SmallVec{T, Vector{T}}}, f, x)
@@ -1712,13 +1743,13 @@ Callable used as the `operation` of symbolic `mapreduce`-family terms: tracing
 `sum`, `prod`, or `mapreduce(f, reduce, xs...; dims, init)` over symbolic
 arrays produces a term whose operation is a `Mapreducer`. For example `sum(x)`
 of a symbolic array `x` traces to a term with operation
-`Mapreducer(identity, Base.add_sum, Colon(), nothing)`. `dims` is `Colon()` or
-an `Int`, and `init === nothing` means no initial value was supplied. Calling a
-`Mapreducer` applies the corresponding `mapreduce`. Downstream analyses that
+`Mapreducer(identity, Base.add_sum, Colon(), nothing)`. `dims` is `Colon()`, an
+`Int`, or a tuple of `Int`s, and `init === nothing` means no initial value was
+supplied. Calling a `Mapreducer` applies the corresponding `mapreduce`. Downstream analyses that
 walk symbolic expressions can dispatch on this type (and on [`Mapper`](@ref))
 to recognize reductions over symbolic arrays.
 """
-struct Mapreducer{F, R, D <: Union{Int, Colon}, I}
+struct Mapreducer{F, R, D <: Union{Int, Colon, Tuple{Vararg{Int}}}, I}
     f::F
     reduce::R
     dims::D
@@ -1767,8 +1798,11 @@ function promote_shape(f::Mapreducer, shs::ShapeT...)
     else
         # `mapped_shape` may alias an argument's own shape vector; never mutate it.
         reduced_shape = copy(mapped_shape)
-        ax = reduced_shape[f.dims]
-        reduced_shape[f.dims] = first(ax):first(ax)
+        dims = f.dims isa Int ? (f.dims,) : f.dims
+        for d in dims
+            ax = reduced_shape[d]
+            reduced_shape[d] = first(ax):first(ax)
+        end
         return reduced_shape
     end
 end
@@ -1791,6 +1825,13 @@ function _mapreduce(::Type{T}, f, red, xs...; dims = :, init = nothing) where {T
     else
         exp = BSImpl.Term{T}(f.f, ArgsT{T}(indexed); type = eltype(type)::TypeT, shape = ShapeVecT())
     end
+    if !(dims isa Colon)
+        dims = dims isa Int ? (dims,) : dims
+        idxsym = idxs_for_arrayop(T)
+        for d in 1:nd
+            push!(idxs, d in dims ? 1 : idxsym[d])
+        end
+    end
     ranges = RangesT{T}()
     if nd == 1 && _map_sh isa ShapeVecT
         ranges[idxs_for_arrayop(T)[1]] = 1:1:(_length_from_shape(_map_sh)::Int)
@@ -1808,13 +1849,13 @@ function Base.mapreduce(f, red, x1::BasicSymbolic{T}, x::BasicSymbolic{R}, xs...
     return _mapreduce(T, f, red, x1, x, xs...; kw...)
 end
 
-function _mapreduce_method(fT, redT, xTs...; splat = true, kw...)
+function _mapreduce_method(fT, redT, xTs...; varargT = Any, splat = true, kw...)
     args = [:(f::$fT), :(red::$redT)]
     for (i, xT) in enumerate(xTs)
         name = Symbol(:x, i)
         push!(args, :($name::$xT))
     end
-    splat && push!(args, :(xs::Vararg))
+    splat && push!(args, :(xs::Vararg{$varargT}))
     EL.codegen_ast(EL.JLFunction(; name = :(::$(typeof(mapreduce))), args, kwargs = [:(kw...)], kw...))
 end
 
@@ -1828,21 +1869,28 @@ symbolic representation.
 macro mapreduce_methods(T, arg_f, result_f)
     result = Expr(:block)
 
-    Ts = [:($BasicSymbolic{T}), Any]
+    # Non-public, but the generated methods have to match the input union of
+    # Base's own variadic `mapreduce` method to close their intersections.
+    AoB = Base.AbstractArrayOrBroadcasted
+    Ts = [BasicSymbolic, Any]
     for (Tf, Tred) in Iterators.product(Ts, Ts)
-        whereparams = if Tf != Any || Tred != Any
-            [:T]
-        else
-            nothing
-        end
-
         body = :($result_f($mapreduce(f, red, $arg_f(x1); kw...)))
-        push!(result.args, _mapreduce_method(Tf, Tred, T; splat = false, body, whereparams))
+        push!(result.args, _mapreduce_method(Tf, Tred, T; splat = false, body))
         body = :($result_f($mapreduce(f, red, $arg_f(x1), xs...; kw...)))
-        push!(result.args, _mapreduce_method(Tf, Tred, T; body, whereparams))
+        push!(result.args, _mapreduce_method(Tf, Tred, T; body))
+        push!(result.args, _mapreduce_method(Tf, Tred, T; varargT = AoB, body))
         body = :($result_f($mapreduce(f, red, x1, $arg_f(x2), xs...; kw...)))
-        push!(result.args, _mapreduce_method(Tf, Tred, Any, T; body, whereparams))
-        push!(result.args, _mapreduce_method(Tf, Tred, BasicSymbolic, T; body, whereparams))
+        push!(result.args, _mapreduce_method(Tf, Tred, Any, T; body))
+        push!(
+            result.args,
+            _mapreduce_method(Tf, Tred, AoB, T; varargT = AoB, body)
+        )
+        push!(result.args, _mapreduce_method(Tf, Tred, BasicSymbolic, T; body))
+        body = :($result_f($mapreduce(f, red, $arg_f(x1), $arg_f(x2), xs...; kw...)))
+        push!(result.args, _mapreduce_method(Tf, Tred, T, T; body))
+        push!(result.args, _mapreduce_method(Tf, Tred, T, T; varargT = AoB, body))
+        body = :($result_f($mapreduce(f, red, $arg_f(x1), x2, xs...; kw...)))
+        push!(result.args, _mapreduce_method(Tf, Tred, T, BasicSymbolic; body))
     end
     return esc(result)
 end
@@ -1879,14 +1927,19 @@ for T1 in [Real, :(BasicSymbolic{T})], T2 in [AbstractArray, :(BasicSymbolic{T})
         continue
     end
     @eval function Base.in(a::$T1, b::$T2) where {T}
-        sh = promote_shape(in, shape(a), shape(b))
+        # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+        sh = symtype(b) <: AbstractArray{<:Any, 0} ? ShapeVecT() : promote_shape(in, shape(a), shape(b))
         return BSImpl.Term{T}(in, ArgsT{T}((Const{T}(a), Const{T}(b))); type = Bool, shape = sh)
     end
 end
 
-function Base.in(a::BasicSymbolic{T}, b::StaticArraysCore.StaticArray) where {T}
-    sh = promote_shape(in, shape(a), shape(b))
-    return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
+# Resolves the intersection with Base's `in(x, ::ReshapedArray)`.
+for S in (StaticArraysCore.StaticArray, Base.ReshapedArray)
+    @eval function Base.in(a::BasicSymbolic{T}, b::$S) where {T}
+        # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+        sh = symtype(b) <: AbstractArray{<:Any, 0} ? ShapeVecT() : promote_shape(in, shape(a), shape(b))
+        return BSImpl.Term{T}(in, ArgsT{T}((a, Const{T}(b))); type = Bool, shape = sh)
+    end
 end
 
 function promote_symtype(::typeof(issubset), T::TypeT, S::TypeT)
@@ -2103,4 +2156,80 @@ end
 
 function promote_symtype(::typeof(reshape), Tarr::TypeT, Tidxs::TypeT...)
     return Array{safe_eltype(Tarr), length(Tidxs)}
+end
+
+function _extract_perfect_square(x)
+    val = unwrap_const(x)
+    (val isa Integer || val isa Rational) || return nothing
+    val < 0 && return nothing
+    iszero(val) && return 0
+    isone(val) && return 1
+    # sqrt(num//den) == sqrt(num*den)//den
+    num, den = numerator(val), denominator(val)
+    s, r = _split_perfect_square(widemul(num, den))
+    c = _narrow(s // den)
+    r_narrow = _narrow(r)
+    (isone(c) && r_narrow == val) && return nothing
+    isone(r_narrow) && return c
+    radical = term(sqrt, r_narrow)
+    isone(c) ? radical : c * radical
+end
+
+"""
+Only prime factors up to this bound are pulled out of a radicand by
+`_split_perfect_square`, so that a large radicand cannot make its loop
+run away.
+"""
+const PERFECT_SQUARE_TRIAL_LIMIT = 10000
+
+function _primes_up_to(n)
+    sieve = trues(n)
+    sieve[1] = false
+    for i in 2:isqrt(n)
+        if sieve[i]
+            for j in i^2:i:n
+                sieve[j] = false
+            end
+        end
+    end
+    return findall(sieve)
+end
+
+const PRIMES_UP_TO_TRIAL_LIMIT = _primes_up_to(PERFECT_SQUARE_TRIAL_LIMIT)
+
+"""
+    _split_perfect_square(n::Integer)
+
+Write the nonnegative integer `n` as `n == s^2 * r` and return `(s, r)`.
+
+Prime factors are removed by trial division up to
+`PERFECT_SQUARE_TRIAL_LIMIT`, then the remaining cofactor is tested for
+being a perfect square itself. Any pair with `n == s^2*r` is a correct answer; a
+larger `s` only yields a tidier radical, so bounding the search costs exactness
+nothing.
+"""
+function _split_perfect_square(n::Integer)
+    s, r = one(n), n
+    for p in PRIMES_UP_TO_TRIAL_LIMIT
+        p_sq = p * p
+        p_sq > r && break
+        while iszero(mod(r, p_sq))
+            r = r ÷ p_sq
+            s *= p
+        end
+    end
+    q = isqrt(r)
+    if q * q == r
+        s *= q
+        r = one(n)
+    end
+    return (s, r)
+end
+
+# Keep small results out of `BigInt`, so that they print like any other exact
+# coefficient.
+_narrow(n::Integer) = typemin(Int) <= n <= typemax(Int) ? Int(n) : n
+function _narrow(x::Rational)
+    n, d = _narrow(numerator(x)), _narrow(denominator(x))
+    isone(d) ? n : n // d
 end

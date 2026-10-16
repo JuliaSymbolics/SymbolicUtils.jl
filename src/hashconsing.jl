@@ -119,7 +119,7 @@ function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full::Bool) where {T}
             k2 === nothing && return false
             v2 = d2[k2]
         end true
-        isequal_somescalar(v, v2) && isequal_bsimpl(k, k2, true) || return false
+        isequal_somescalar(v, v2) && typeof(v) === typeof(v2) && isequal_bsimpl(k, k2, true) || return false
     end
     return true
 end
@@ -380,6 +380,7 @@ function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
     hv = Base.hasha_seed % UInt
     for (k, v) in d
         h1 = hash_somescalar(v, zero(UInt))
+        full && (h1 = hash_maybe_fntype(typeof(v), h1))
         h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
     end

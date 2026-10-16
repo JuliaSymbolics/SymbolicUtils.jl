@@ -592,6 +592,16 @@ broadcast loop into its own body.
 @noinline fused_materialize!(dest, bc) = Base.Broadcast.materialize!(dest, bc)
 
 """
+    is_elementwise_call(f)
+
+Whether a call `f(g, As...)` computes `broadcast(g, As...)`, so that fused broadcast codegen
+(see [`FUSE_BROADCASTS_KEY`](@ref)) treats a term `f(g, As...)` as an elementwise node with
+function `g`. `true` only for `broadcast`; a package that spells its broadcasts through a
+wrapper of `broadcast`, for example one that is never inlined, adds a method for it.
+"""
+is_elementwise_call(f) = f === broadcast
+
+"""
     $TYPEDSIGNATURES
 
 The parts of the elementwise array expression at `idx`, as `(; f, args)` where `f` is the IR
@@ -604,16 +614,22 @@ function fusable_parts(cs::CodegenState{T}, idx::Integer) where {T}
     get(cs.rewrites, FUSE_BROADCASTS_KEY, false)::Bool || return nothing
     sym = cs.ir[idx]
     return @match sym begin
-        BSImpl.ArrayOp(; term) => if term isa BasicSymbolic{T} && operation(term) === broadcast
-            nbors = collect(Int32, Graphs.outneighbors(cs.ir.dependency_graph, idx))
-            (; f = Int32(first(nbors)), args = nbors[2:end])
+        BSImpl.ArrayOp(; term) => if term isa BasicSymbolic{T} && is_elementwise_call(operation(term))
+            elementwise_call_parts(cs, idx)
         else
             nothing
         end
+        BSImpl.Term(; f) && if is_elementwise_call(f) end => elementwise_call_parts(cs, idx)
         BSImpl.AddMul(;) => elementwise_addmul_parts(cs, sym, idx)
         BSImpl.Term(; f) && if f === (+) || f === (*) end => elementwise_addmul_parts(cs, sym, idx)
         _ => nothing
     end
+end
+
+# `f(g, As...)` at `idx`, with `is_elementwise_call(f)`: the function `g` and arrays `As`.
+function elementwise_call_parts(cs::CodegenState, idx::Integer)
+    nbors = collect(Int32, Graphs.outneighbors(cs.ir.dependency_graph, idx))
+    return (; f = Int32(first(nbors)), args = nbors[2:end])
 end
 
 # `+` of arrays of one shape, or `*` of one array and scalars, at `idx`.
@@ -1187,6 +1203,11 @@ function codegen_function_no_nanmath!(@nospecialize(op), cs::CodegenState{T}, ex
 end
 
 function codegen_function!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    # A wrapper of `broadcast` (see `is_elementwise_call`) fuses like `broadcast` itself.
+    if get(cs.rewrites, FUSE_BROADCASTS_KEY, false)::Bool && is_elementwise_call(op) &&
+            fusable_parts(cs, expr_idx) !== nothing
+        return codegen_fused_root!(cs, expr_idx)
+    end
     # Avoid using `op in NaNMathFuns` since that is dynamic dispatch.
     # Also avoid using `nameof(op)` for the same reason.
     if !get(cs.rewrites, :nanmath, false)::Bool

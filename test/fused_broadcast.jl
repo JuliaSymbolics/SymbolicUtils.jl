@@ -40,6 +40,42 @@ end
         broadcast(-, broadcast(*, broadcast(+, xv, yv), av), broadcast(sin, xv))
 end
 
+# A `broadcast` behind a call that is never inlined, as a package might spell one.
+@noinline wrapped_broadcast(f, As...) = broadcast(f, As...)
+Code.is_elementwise_call(::typeof(wrapped_broadcast)) = true
+wrap_broadcasts(x) = SymbolicUtils.Term{SymReal}(
+    wrapped_broadcast, collect(Any, SymbolicUtils.arguments(x));
+    type = SymbolicUtils.symtype(x), shape = SymbolicUtils.shape(x)
+)
+
+@testset "wrappers of broadcast fuse like broadcast" begin
+    @syms x[1:4] y[1:4] a
+    expr = wrap_broadcasts(broadcast(-, wrap_broadcasts(broadcast(*, x, a)), y))
+    xv, yv, av = [0.1, 0.2, 0.3, 0.4], [1.5, -2.0, 3.25, 4.0], 0.7
+    expected = broadcast(-, broadcast(*, xv, av), yv)
+
+    eager = Code.fast_toexpr(expr, Dict{Any, Any}())
+    @test count_calls(eager, wrapped_broadcast) == 2
+    @test evalwith(eager, (:x => xv, :y => yv, :a => av)) == expected
+
+    ex = Code.fast_toexpr(expr, fused())
+    @test count_calls(ex, wrapped_broadcast) == 0
+    @test count_calls(ex, Code.fused_materialize) == 1
+    @test evalwith(ex, (:x => xv, :y => yv, :a => av)) == expected
+
+    # Larger than `Code.FILL_ARR_LIMIT`, so the `ArrayMaker` is not scalarized whole.
+    @syms u[1:10] v[1:10]
+    w = @makearray w[1:20] begin
+        w[1:10] => wrap_broadcasts(broadcast(+, u, v))
+        w[11:20] => wrap_broadcasts(broadcast(*, a, u))
+    end
+    ex = Code.fast_toexpr(w, fused())
+    @test count_calls(ex, wrapped_broadcast) == 0
+    @test count_calls(ex, Code.fused_materialize!) == 2
+    uv, vv = collect(1.0:10.0), collect(0.5:0.5:5.0)
+    @test evalwith(ex, (:u => uv, :v => vv, :a => av)) == [uv .+ vv; av .* uv]
+end
+
 @testset "a node used twice is materialized once" begin
     @syms x[1:3] y[1:3]
     s = x .* y

@@ -1489,13 +1489,13 @@ end
     @test @invokelatest(zero_lit(1f0)) === 0.0f0
     @test @invokelatest(zero_lit(3)) === 0
     @test @invokelatest(build(ifelse(x > 0, x, 100000))(Float16(-1))) === 100000
-    @test @invokelatest(build(ifelse(x > 0, x, 2^53 + 1))(-1.0)) === 2^53 + 1
+    @test @invokelatest(build(ifelse(x > 0, x, Int64(2)^53 + 1))(-1.0)) === Int64(2)^53 + 1
     @test @invokelatest(build(ifelse(x > 0, x, typemin(Int)))(Float16(-1))) === typemin(Int)
     g = build(ifelse(x > 0, 2y, 3x), [x, y])
     @test only(Base.return_types(g, (Float64, BigFloat))) == BigFloat
     @test @invokelatest(build(ifelse(x > 0, y, -1), [x, y])(1.0, UInt(3))) === UInt(3)
     @test @invokelatest(build(ifelse(x > 0, y, 0.5), [x, y])(1.0, 2)) === 2
-    @test @invokelatest(build(ifelse(x > 0, 1.0, y), [x, y])(-1.0, 2^53 + 1)) === 2^53 + 1
+    @test @invokelatest(build(ifelse(x > 0, 1.0, y), [x, y])(-1.0, Int64(2)^53 + 1)) === Int64(2)^53 + 1
     ncalls = Ref(0)
     heavy = z -> (ncalls[] += 1; 3z)
     h = SymbolicUtils.term(heavy, x; type = Real, shape = SymbolicUtils.ShapeVecT())

@@ -454,6 +454,7 @@ function subset_ir(
     for expr in exprs
         expr_i = get(ir.definition, expr, 0)
         iszero(expr_i) && _throw_expr_not_in_ir(expr)
+        visited[expr_i] && continue
         get_reachability!(reachables, ir, expr_i; visited)
         visited[expr_i] = true
         push!(reachables, expr_i)

@@ -91,6 +91,17 @@ end
     @test isequal(ir2.definition, ir_reference.definition)
 end
 
+@testset "`subset_ir` doesn't duplicate a root reachable from an earlier root" begin
+    expr = x + sin(x) * y
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, expr)
+    for roots in ([expr, x], [x, expr])
+        ir2 = subset_ir(ir, roots)
+        @test length(ir2) == length(ir)
+        sanity_check(ir2, expr)
+    end
+end
+
 @testset "`search_variables!`" begin
     expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
     ir = IRStructure{SymReal}()

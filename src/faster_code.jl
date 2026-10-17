@@ -595,6 +595,26 @@ elements a region reads at the same index it writes them, as in `u[r] .= u[r] .+
 const FUSE_UNALIAS_KEY = :fuse_unalias
 
 """
+Key in `CodegenState.rewrites` that, when `true` (default `false`), converts each
+floating-point scalar argument of a fused `ArrayMaker` region, such as a literal `4.0` or a
+scalar parameter, to the element type of the output buffer, once per call outside the
+broadcast. A `Float32` output is then computed in `Float32` arithmetic rather than promoted to
+`Float64` by its constants, at the cost of rounding them to `Float32`. Array arguments are not
+converted.
+"""
+const FUSE_OUTPUT_ELTYPE_KEY = :fuse_output_eltype
+
+"""
+Key in `CodegenState.rewrites` that, while an `ArrayMaker` is generated with
+[`FUSE_OUTPUT_ELTYPE_KEY`](@ref), holds the identifier bound to the output's element type.
+"""
+const FUSION_ELTYPE_KEY = :__fusion_eltypeₛᵧₘ
+
+# `x` as a `T` when both are floating-point (see `FUSE_OUTPUT_ELTYPE_KEY`); otherwise `x`.
+@inline scalar_as(::Type{T}, x::AbstractFloat) where {T <: AbstractFloat} = convert(T, x)
+@inline scalar_as(::Type, x) = x
+
+"""
     fused_materialize(bc)
     fused_materialize!(dest, bc)
 
@@ -753,12 +773,21 @@ function lazy_broadcast_expr(cs::CodegenState{T}, idx::Integer, uses, sources) w
     return ex
 end
 
+# A non-elementwise argument of a fused tree, with scalars converted to the output's element
+# type when `FUSE_OUTPUT_ELTYPE_KEY` is set.
+function fused_leaf_expr(cs::CodegenState{T}, idx::Integer) where {T}
+    ex = cs(cs.ir[idx])
+    eltype_expr = get(cs.rewrites, FUSION_ELTYPE_KEY, nothing)
+    (eltype_expr === nothing || !(symtype(cs.ir[idx]) <: Number)) && return ex
+    return declare!(cs, get_misc_identifier(cs), Expr(:call, scalar_as, eltype_expr, ex))
+end
+
 function fused_arg_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
     if uses[idx] == 1 && fusable_parts(cs, idx) !== nothing
         return lazy_broadcast_expr(cs, idx, uses, sources)
     end
     nbors = view_slice_parts(cs, idx)
-    nbors === nothing && return cs(cs.ir[idx])
+    nbors === nothing && return fused_leaf_expr(cs, idx)
     src = sources === nothing ? nothing : get(sources, first(nbors), nothing)
     src === nothing && (src = cs(cs.ir[first(nbors)]))
     ex = Expr(:call, view, src)
@@ -922,6 +951,9 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     other_values = Any[]
 
     eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
+    old_fusion_eltype = get(cs.rewrites, FUSION_ELTYPE_KEY, nothing)
+    cs.rewrites[FUSION_ELTYPE_KEY] = get(cs.rewrites, FUSE_OUTPUT_ELTYPE_KEY, false)::Bool ?
+        eltype_expr : nothing
     one_expr = Expr(:call, one, eltype_expr)
     negone_expr = Expr(:call, :(-), one_expr)
 
@@ -1065,6 +1097,11 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         delete!(cs.rewrites, FUSION_SOURCES_KEY)
     else
         cs.rewrites[FUSION_SOURCES_KEY] = old_fusion_sources
+    end
+    if old_fusion_eltype === nothing
+        delete!(cs.rewrites, FUSION_ELTYPE_KEY)
+    else
+        cs.rewrites[FUSION_ELTYPE_KEY] = old_fusion_eltype
     end
     return declare!(cs, get_misc_identifier(cs), output_buffer)
 end

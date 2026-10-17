@@ -260,3 +260,28 @@ end
     marked = Broadcast.Broadcasted(Code.NoUnalias(+), plain.args)
     @test Broadcast.preprocess(dest, marked).args[2].args[2].x === src
 end
+
+@testset "scalars can be converted to the output element type" begin
+    @syms x[1:20] y[1:20] out[1:20]
+    w = @makearray w[1:20] begin
+        w[1:20] => x .+ 0.1 .* y
+    end
+    xv, yv = Float32.(collect(1:20)) ./ 3, Float32.(collect(20:-1:1)) ./ 7
+    in_f32 = xv .+ 0.1f0 .* yv
+    in_f64 = Float32.(Float64.(xv) .+ 0.1 .* Float64.(yv))
+    @test in_f32 != in_f64
+    for (convert_scalars, expected) in ((false, in_f64), (true, in_f32))
+        rewrites = fused(
+            Code.ALLOCATOR_REWRITES_KEY => returns_buffer(out),
+            Code.FUSE_OUTPUT_ELTYPE_KEY => convert_scalars
+        )
+        ex = Code.fast_toexpr(w, rewrites)
+        @test count_calls(ex, Code.scalar_as) == convert_scalars
+        buf = zeros(Float32, 20)
+        evalwith(ex, (:x => xv, :y => yv, :out => buf))
+        @test buf == expected
+    end
+    # Only floating-point scalars are converted.
+    @test Code.scalar_as(Float32, 2) === 2
+    @test Code.scalar_as(Int, 0.5) === 0.5
+end

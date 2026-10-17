@@ -534,13 +534,20 @@ function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
     new_ranges = RangesT{T}()
     new_expr = unidealize_indices(x.expr, ranges, new_ranges)
     loopvar_order = unique!(filter(x -> x isa BasicSymbolic{T}, vcat(reverse(x.output_idx), collect(keys(ranges)), collect(keys(new_ranges)))))
-
-    if is_array_shape(sh)
-        inner_expr = SetArray(false, outsym, [AtIndex(term(CartesianIndex, x.output_idx...), term(x.reduce, term(getindex, outsym, x.output_idx...), new_expr))])
-    else
-        inner_expr = Assignment(outsym, term(x.reduce, outsym, new_expr))
-    end
     merge!(new_ranges, ranges)
+
+    val = Sym{T}(:__arrayop_val; type = symtype(new_expr), shape = shape(new_expr))
+    accumulated = is_array_shape(sh) ? term(x.reduce, term(getindex, outsym, x.output_idx...), val) : term(x.reduce, outsym, val)
+    # Assign the first contribution so the buffer's contents never enter the reduction.
+    reduction_vars = setdiff(loopvar_order, filter(x -> x isa BasicSymbolic{T}, collect(x.output_idx)))
+    value = if isempty(reduction_vars)
+        val
+    else
+        is_first = mapreduce(k -> term(==, k, first(new_ranges[k])), (a, b) -> term(&, a, b), reduction_vars)
+        term(ifelse_branching, is_first, val, accumulated)
+    end
+    write = is_array_shape(sh) ? SetArray(false, outsym, [AtIndex(term(CartesianIndex, x.output_idx...), value)]) : Assignment(outsym, value)
+    inner_expr = Let([Assignment(val, new_expr)], write, false)
     loops = foldl(reverse(loopvar_order), init=inner_expr) do acc, k
         ForLoop(k, new_ranges[k], acc)
     end

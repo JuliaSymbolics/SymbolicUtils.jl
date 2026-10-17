@@ -217,7 +217,7 @@ Base.copyto!(dst::NoScalarVector, bc::Broadcast.Broadcasted) = (copyto!(dst.data
     @test buf.data == [diff(xv); 2 * xv[20]]
 end
 
-@testset "in-place updates read the written region through the destination" begin
+@testset "in-place updates do not copy their inputs" begin
     # `out` is `x`'s memory, and each region reads `x` only where it writes it.
     @syms x[1:20] y[1:20] dt out[1:20]
     w = @makearray w[1:20] begin
@@ -228,13 +228,11 @@ end
     expected = [xv[1:10] .+ dtv .* yv[1:10]; xv[11:20] .- dtv .* yv[11:20]]
     in_place = fused(
         Code.ALLOCATOR_REWRITES_KEY => returns_buffer(out),
-        Code.FUSE_UNALIAS_KEY => false, Code.FUSE_OUTPUT_ARRAY_KEY => x
+        Code.FUSE_UNALIAS_KEY => false
     )
     ex = Code.fast_toexpr(w, in_place)
     @test count_calls(ex, Base.unalias) == 0
     @test count_calls(ex, Code.fused_materialize_noalias!) == 2
-    # One view of `out` per region and one of `y`; `x` is read through `out`'s views.
-    @test count_calls(ex, view) == 4
 
     shared = copy(xv)
     evalwith(ex, (:x => shared, :y => yv, :dt => dtv, :out => shared))

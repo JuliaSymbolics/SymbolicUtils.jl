@@ -333,15 +333,30 @@ function poly_to_gcd_form(p::PolynomialT)
     return DP.Polynomial(cs, MP.monomials(p))
 end
 
+# `MP.gcd` decides "approximately zero" with an absolute tolerance, so float
+# polynomials are rescaled by a power of two (exact) to unit magnitude first.
+function _scale_for_gcd(p)
+    cs = MP.coefficients(p)
+    T = eltype(cs)
+    T <: Union{AbstractFloat, Complex{<:AbstractFloat}} || return p
+    m = maximum(abs, cs; init = zero(real(T)))
+    (iszero(m) || !isfinite(m)) && return p
+    s = ldexp(one(real(T)), -exponent(m))
+    (iszero(s) || !isfinite(s)) && return p
+    return DP.Polynomial(cs .* s, MP.monomials(p))
+end
+
+_gcd_operand(p::PolynomialT) = _scale_for_gcd(poly_to_gcd_form(p))
+
 function safe_gcd(p1::Union{PolyVarT, PolynomialT}, p2::Union{PolyVarT, PolynomialT})
     if p1 isa PolyVarT && p2 isa PolyVarT
         return gcd(p1, p2)
     elseif p1 isa PolyVarT && p2 isa PolynomialT
-        return gcd(p1, poly_to_gcd_form(p2))
+        return gcd(p1, _gcd_operand(p2))
     elseif p1 isa PolynomialT && p2 isa PolyVarT
-        return gcd(poly_to_gcd_form(p1), p2)
+        return gcd(_gcd_operand(p1), p2)
     elseif p1 isa PolynomialT && p2 isa PolynomialT
-        return gcd(poly_to_gcd_form(p1), poly_to_gcd_form(p2))
+        return gcd(_gcd_operand(p1), _gcd_operand(p2))
     end
 end
 
@@ -355,12 +370,21 @@ end
 """
     _is_multiple(p, g, q)
 
-Whether `p == q * g` exactly, checked in `BigInt` arithmetic so that Int64
-wrap-around cannot hide a remainder. Polynomials with inexact coefficients are
-not checked and always return `true`.
+Whether `p == q * g`, so that cancelling the candidate gcd `g` is valid.
+Exact coefficients must give a zero residual, checked in `BigInt` arithmetic so
+that Int64 wrap-around cannot hide a remainder. Float coefficients may leave a
+residual of at most `eps^(3/4)` (about `2e-12` for `Float64`) relative to the
+largest coefficient of `p`: the cancellation is then exact for coefficients
+perturbed by that relative amount, at any scale. Other coefficient types are not
+checked and always return `true`.
 """
 function _is_multiple(p, g, q)
     T = promote_type(map(x -> eltype(MP.coefficients(MP.polynomial(x))), (p, g, q))...)
+    if T <: Union{AbstractFloat, Complex{<:AbstractFloat}}
+        p = MP.polynomial(p)
+        tol = eps(real(T))^(3 // 4) * maximum(abs, MP.coefficients(p); init = zero(real(T)))
+        return all(c -> abs(c) <= tol, MP.coefficients(p - q * g))
+    end
     T <: _ExactCoeff || return true
     return iszero(_big_exact_poly(p) - _big_exact_poly(q) * _big_exact_poly(g))
 end

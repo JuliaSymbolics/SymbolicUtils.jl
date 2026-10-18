@@ -592,6 +592,20 @@ function Base.filter!(pred::F, s::IRStructureSearchBuffer{T}) where {F, T}
     return s
 end
 
+# DFS postorder from `cur` that doesn't enter nodes in `searched`
+function _unsearched_reachability!(
+        reachability::Vector{Int32}, g::OrderedDiGraph{Int32}, visited::BitVector,
+        searched::BitSet, cur::Int32
+    )
+    visited[cur] = true
+    for nbor in Graphs.outneighbors(g, cur)
+        (visited[nbor] || nbor in searched) && continue
+        _unsearched_reachability!(reachability, g, visited, searched, nbor)
+    end
+    push!(reachability, cur)
+    return reachability
+end
+
 function search_variables!(
         buffer::IRStructureSearchBuffer{T, S}, expr::BasicSymbolic{T};
         is_atomic::F = default_is_atomic, recurse::G = iscall
@@ -610,17 +624,9 @@ function search_variables!(
     reachability = get_cached_idxs!(ir)
     empty!(reachability)
     # Whatever a searched node reaches was handled when it was searched
-    nbors_fn = let searched = buffer.searched
-        function __nbors_fn(graph, i)
-            nbors = Graphs.outneighbors(graph, i)
-            return i in searched ? empty(nbors) : nbors
-        end
-    end
-    rdfs = RecursiveDFS(
-        ir.dependency_graph; neighbors_fn = nbors_fn,
-        on_exit = PushToBuffer(reachability), visited = get_cached_mask!(ir, length(ir))
+    _unsearched_reachability!(
+        reachability, ir.dependency_graph, get_cached_mask!(ir, length(ir)), buffer.searched, idx
     )
-    rdfs(idx)
     pop!(reachability)
 
     mask = get_cached_mask!(ir, length(ir))

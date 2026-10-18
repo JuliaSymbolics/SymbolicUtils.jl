@@ -609,7 +609,19 @@ function search_variables!(
 
     reachability = get_cached_idxs!(ir)
     empty!(reachability)
-    get_reachability!(reachability, ir, idx; visited = get_cached_mask!(ir, length(ir)))
+    # Whatever a searched node reaches was handled when it was searched
+    nbors_fn = let searched = buffer.searched
+        function __nbors_fn(graph, i)
+            nbors = Graphs.outneighbors(graph, i)
+            return i in searched ? empty(nbors) : nbors
+        end
+    end
+    rdfs = RecursiveDFS(
+        ir.dependency_graph; neighbors_fn = nbors_fn,
+        on_exit = PushToBuffer(reachability), visited = get_cached_mask!(ir, length(ir))
+    )
+    rdfs(idx)
+    pop!(reachability)
 
     mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)

@@ -103,6 +103,21 @@ end
     @test issetequal(buffer, buffer)
 end
 
+@testset "`search_variables!` reusing a buffer across overlapping roots" begin
+    s = x + y * sin(w[1] + z)
+    roots = [s * w[2], fn(s) + sum(w), cos(w[1] + z) * s]
+    ir = IRStructure{SymReal}()
+    for kw in ((;), (; recurse = ex -> iscall(ex) && operation(ex) !== sin))
+        buffer = SU.IRStructureSearchBuffer(ir, Set{BasicSymbolic{SymReal}}())
+        reference = Set{BasicSymbolic{SymReal}}()
+        for root in roots
+            SU.search_variables!(buffer, root; kw...)
+            SU.search_variables!(reference, root; kw...)
+            @test issetequal(buffer, reference)
+        end
+    end
+end
+
 @testset "`query`" begin
     expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
     ir = IRStructure{SymReal}()

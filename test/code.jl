@@ -111,20 +111,20 @@ end
     @test toexpr(NaNMath.pow(a, b)) == :($(NaNMath.pow)(a, b))
     @test toexpr(NaNMath.pow(a, b), nanmath_st) == :($(NaNMath.pow)(a, b))
 
-    @test toexpr(a^2) == :($(Base.literal_pow)($(^), a, $(Val(2))))
-    @test toexpr(a^2, nanmath_st) == :($(Base.literal_pow)($(^), a, $(Val(2))))
-    @test toexpr(NaNMath.pow(a, 2)) == :($(Base.literal_pow)($(^), a, $(Val(2))))
-    @test toexpr(NaNMath.pow(a, 2), nanmath_st) == :($(Base.literal_pow)($(^), a, $(Val(2))))
+    @test toexpr(a^2) == :($(Base.literal_pow)($(^), a, $(Val)(2)))
+    @test toexpr(a^2, nanmath_st) == :($(Base.literal_pow)($(^), a, $(Val)(2)))
+    @test toexpr(NaNMath.pow(a, 2)) == :($(Base.literal_pow)($(^), a, $(Val)(2)))
+    @test toexpr(NaNMath.pow(a, 2), nanmath_st) == :($(Base.literal_pow)($(^), a, $(Val)(2)))
 
     @test toexpr(a^-1) == :($(/)(1, a))
     @test toexpr(a^-1, nanmath_st) == :($(/)(1, a))
     @test toexpr(NaNMath.pow(a, -1)) == :($(/)(1, a))
     @test toexpr(NaNMath.pow(a, -1), nanmath_st) == :($(/)(1, a))
 
-    @test toexpr(a^-2) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val(2)))))
-    @test toexpr(a^-2, nanmath_st) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val(2)))))
-    @test toexpr(NaNMath.pow(a, -2)) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val(2)))))
-    @test toexpr(NaNMath.pow(a, -2), nanmath_st) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val(2)))))
+    @test toexpr(a^-2) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val)(2))))
+    @test toexpr(a^-2, nanmath_st) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val)(2))))
+    @test toexpr(NaNMath.pow(a, -2)) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val)(2))))
+    @test toexpr(NaNMath.pow(a, -2), nanmath_st) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val)(2))))
 
     f = GlobalRef(NaNMath, :sin)
     test_repr(toexpr(LiteralExpr(:(let x=1, y=2
@@ -298,11 +298,11 @@ end
 
 @testset "constant integer powers use `literal_pow`" begin
     @syms a::Real x[1:3]::Real
-    @test toexpr(a^3) == :($(Base.literal_pow)($(^), a, $(Val(3))))
-    @test toexpr(a^Int32(3)) == :($(Base.literal_pow)($(^), a, $(Val(3))))
+    @test toexpr(a^3) == :($(Base.literal_pow)($(^), a, $(Val)(3)))
+    @test toexpr(a^Int32(3)) == :($(Base.literal_pow)($(^), a, $(Val)(3)))
     @test toexpr(a^(big(2)^70)).args[1] === (^)
     @test toexpr(a^2.5) == :($(^)(a, 2.5))
-    @test toexpr(x .^ 3) == :($(broadcast)($(Base.literal_pow), $(^), x, $(Val(3))))
+    @test toexpr(x .^ 3) == :($(broadcast)($(Base.literal_pow), $(^), x, $(Val)(3)))
     @test toexpr(x .^ 2.5) == :($(broadcast)($(^), x, 2.5))
 
     for n in 2:5
@@ -443,7 +443,7 @@ end
                 __array_literal_allocator = ones
                 __array_literal_result = __array_literal_allocator((3,))
                 $(setindex!)(__array_literal_result, x, 1)
-                $(setindex!)(__array_literal_result, $(+)($(+)($(sin)(z), y), $(*)(2, $(Base.literal_pow)($(^), x, $(Val(2))))), 2)
+                $(setindex!)(__array_literal_result, $(+)($(+)($(sin)(z), y), $(*)(2, $(Base.literal_pow)($(^), x, $(Val)(2)))), 2)
                 $(setindex!)(__array_literal_result, $(+)(1, $(*)(2, z)), 3)
                 __array_literal_result
             end

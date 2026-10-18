@@ -642,9 +642,9 @@ function function_to_expr(@nospecialize(op::Union{typeof(*),typeof(+)}), O, st)
 end
 
 # Lowering only rewrites `x^n` to `literal_pow` for the `:^` symbol, not the `^` function object.
-function literal_pow_exponent(n)
+function literal_pow_exponent(@nospecialize(n))
     n isa Integer && typemin(Int) <= n <= typemax(Int) || return nothing
-    return Val(Int(n))
+    return Expr(:call, Val, Int(n))
 end
 
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}

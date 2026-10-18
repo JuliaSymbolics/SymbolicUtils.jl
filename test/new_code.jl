@@ -225,25 +225,25 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     test_repr(
         Code.fast_toexpr(a^2, ir, Dict()), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val(2)))
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(2))
         end
     )
     test_repr(
         Code.fast_toexpr(a^2, ir, Dict{Any, Any}(:nanmath => true)), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val(2)))
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(2))
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, 2), ir, Dict()), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val(2)))
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(2))
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, 2), ir, Dict{Any, Any}(:nanmath => true)), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val(2)))
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(2))
         end
     )
 
@@ -283,7 +283,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         quote
             local var"##cse#0" = 1
             local var"##cse#1" = a
-            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val(2)))
+            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val)(2))
             local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
@@ -292,7 +292,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         quote
             local var"##cse#0" = 1
             local var"##cse#1" = a
-            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val(2)))
+            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val)(2))
             local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
@@ -301,7 +301,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         quote
             local var"##cse#0" = 1
             local var"##cse#1" = a
-            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val(2)))
+            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val)(2))
             local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
@@ -310,7 +310,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         quote
             local var"##cse#0" = 1
             local var"##cse#1" = a
-            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val(2)))
+            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val)(2))
             local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
@@ -580,13 +580,13 @@ end
     test_repr(
         Code.fast_toexpr(a^Int32(3), ir, Dict()), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val(3)))
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(3))
         end
     )
     test_repr(
         Code.fast_toexpr(x .^ 2, ir, Dict()), quote
             local var"##cse#0" = x
-            local var"##cse#1" = $(broadcast)($(Base.literal_pow), $(^), var"##cse#0", $(Val(2)))
+            local var"##cse#1" = $(broadcast)($(Base.literal_pow), $(^), var"##cse#0", $(Val)(2))
         end
     )
 
@@ -722,7 +722,7 @@ end
                 local var"##cse#4" = $(sin)(var"##cse#3")
                 local var"##cse#5" = y
                 local var"##cse#6" = 2
-                local var"##cse#7" = $(Base.literal_pow)($(^), var"##cse#2", $(Val(2)))
+                local var"##cse#7" = $(Base.literal_pow)($(^), var"##cse#2", $(Val)(2))
                 local var"##cse#8" = $(*)(var"##cse#6", var"##cse#7")
                 local var"##cse#9" = $(+)(var"##cse#4", var"##cse#5", var"##cse#8")
                 local var"##cse#10" = 1

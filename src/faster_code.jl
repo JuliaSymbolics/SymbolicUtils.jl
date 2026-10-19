@@ -668,11 +668,24 @@ wrapper of `broadcast`, for example one that is never inlined, adds a method for
 is_elementwise_call(f) = f === broadcast
 
 """
+    $TYPEDEF
+
+The parts of an elementwise array expression (see [`fusable_parts`](@ref)): `f` is the IR
+index of the broadcast function, or `+` / `*` themselves, and `args` the IR indices of its
+arguments.
+
+$TYPEDFIELDS
+"""
+struct FusableParts
+    f::Union{Int32, typeof(+), typeof(*)}
+    args::Vector{Int32}
+end
+
+"""
     $TYPEDSIGNATURES
 
-The parts of the elementwise array expression at `idx`, as `(; f, args)` where `f` is the IR
-index of the broadcast function (or `+` / `*` themselves) and `args` the IR indices of its
-arguments. Elementwise expressions are symbolic `broadcast`s, sums of arrays of one shape and
+The parts of the elementwise array expression at `idx` as a [`FusableParts`](@ref).
+Elementwise expressions are symbolic `broadcast`s, sums of arrays of one shape and
 products of one array with scalars. Returns `nothing` for anything else, including matrix
 products.
 """
@@ -695,7 +708,7 @@ end
 # `f(g, As...)` at `idx`, with `is_elementwise_call(f)`: the function `g` and arrays `As`.
 function elementwise_call_parts(cs::CodegenState, idx::Integer)
     nbors = collect(Int32, Graphs.outneighbors(cs.ir.dependency_graph, idx))
-    return (; f = Int32(first(nbors)), args = nbors[2:end])
+    return FusableParts(first(nbors), nbors[2:end])
 end
 
 # `+` of arrays of one shape, or `*` of one array and scalars, at `idx`.
@@ -705,11 +718,11 @@ function elementwise_addmul_parts(cs::CodegenState{T}, sym::BasicSymbolic{T}, id
     args = collect(Int32, addmul_arg_idxs(cs, sym, idx))
     if operation(sym) === (+)
         all(a -> isequal(shape(cs.ir[a]), sh), args) || return nothing
-        return (; f = +, args)
+        return FusableParts(+, args)
     end
     arrays = filter(a -> !(symtype(cs.ir[a]) <: Number), args)
     length(arrays) == 1 && isequal(shape(cs.ir[only(arrays)]), sh) || return nothing
-    return (; f = *, args)
+    return FusableParts(*, args)
 end
 
 """
@@ -765,7 +778,7 @@ end
 
 function lazy_broadcast_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
     parts = fusable_parts(cs, idx)
-    f = parts.f isa Integer ? cs(cs.ir[parts.f]) : parts.f
+    f = parts.f isa Int32 ? cs(cs.ir[parts.f]) : parts.f
     ex = Expr(:call, Base.Broadcast.broadcasted, f)
     for a in parts.args
         push!(ex.args, fused_arg_expr(cs, a, uses, sources))
@@ -777,7 +790,7 @@ end
 # type when `FUSE_OUTPUT_ELTYPE_KEY` is set.
 function fused_leaf_expr(cs::CodegenState{T}, idx::Integer) where {T}
     ex = cs(cs.ir[idx])
-    eltype_expr = get(cs.rewrites, FUSION_ELTYPE_KEY, nothing)
+    eltype_expr = get(cs.rewrites, FUSION_ELTYPE_KEY, nothing)::Union{Nothing, Symbol}
     (eltype_expr === nothing || !(symtype(cs.ir[idx]) <: Number)) && return ex
     return declare!(cs, get_misc_identifier(cs), Expr(:call, scalar_as, eltype_expr, ex))
 end
@@ -806,7 +819,8 @@ other argument is generated as usual.
 """
 function fused_broadcast_expr(cs::CodegenState{T}, idx::Integer) where {T}
     uses = count_fused_uses!(Dict{Int32, Int}(), cs, idx)
-    return lazy_broadcast_expr(cs, idx, uses, get(cs.rewrites, FUSION_SOURCES_KEY, nothing))
+    sources = get(cs.rewrites, FUSION_SOURCES_KEY, nothing)::Union{Nothing, Dict{Int32, Symbol}}
+    return lazy_broadcast_expr(cs, idx, uses, sources)
 end
 
 function codegen_fused_root!(cs::CodegenState{T}, idx::Integer) where {T}
@@ -834,12 +848,12 @@ end
 # of the output, reshaped when the value's shape differs from the region's (`copyto!` order).
 function write_fused_region!(cs::CodegenState{T}, vw::Symbol, region, root_idx::Integer) where {T}
     sh = shape(cs.ir[root_idx])::ShapeVecT
-    dims = Expr(:tuple)
-    for ax in sh
-        push!(dims.args, length(ax))
-    end
     dest = vw
     if length(region) != length(sh) || any(i -> length(region[i]) != length(sh[i]), eachindex(sh))
+        dims = Expr(:tuple)
+        for ax in sh
+            push!(dims.args, length(ax))
+        end
         dest = declare!(cs, get_misc_identifier(cs), Expr(:call, reshape, vw, dims))
     end
     bc = fused_broadcast_expr(cs, root_idx)
@@ -852,7 +866,7 @@ end
 # `Base.unalias(output_buffer, A)`, so the regions read the inputs as they were on entry even
 # if an input shares memory with the output being written.
 function unaliased_fusion_sources!(cs::CodegenState{T}, output_buffer, value_idxs) where {T}
-    srcs = Int32[]
+    srcs = OrderedSet{Int32}()
     seen = Set{Int32}()
     for val_idx in value_idxs
         root = fused_region_root(cs, val_idx)
@@ -874,7 +888,7 @@ function collect_fusion_sources!(srcs, seen, cs::CodegenState, idx::Integer)
     parts = fusable_parts(cs, idx)
     if parts === nothing
         nbors = view_slice_parts(cs, idx)
-        nbors === nothing || first(nbors) in srcs || push!(srcs, first(nbors))
+        nbors === nothing || push!(srcs, first(nbors))
         return
     end
     for a in parts.args
@@ -931,7 +945,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
         ndrop = 0
     end
-    old_fusion_sources = get(cs.rewrites, FUSION_SOURCES_KEY, nothing)
+    old_fusion_sources = get(cs.rewrites, FUSION_SOURCES_KEY, nothing)::Union{Nothing, Dict{Int32, Symbol}}
     cs.rewrites[FUSION_SOURCES_KEY] = if get(cs.rewrites, FUSE_UNALIAS_KEY, true)::Bool
         unaliased_fusion_sources!(cs, output_buffer, Iterators.drop(values_exprs_idxs, ndrop))
     else
@@ -951,7 +965,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     other_values = Any[]
 
     eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
-    old_fusion_eltype = get(cs.rewrites, FUSION_ELTYPE_KEY, nothing)
+    old_fusion_eltype = get(cs.rewrites, FUSION_ELTYPE_KEY, nothing)::Union{Nothing, Symbol}
     cs.rewrites[FUSION_ELTYPE_KEY] = get(cs.rewrites, FUSE_OUTPUT_ELTYPE_KEY, false)::Bool ?
         eltype_expr : nothing
     one_expr = Expr(:call, one, eltype_expr)
@@ -1292,7 +1306,7 @@ end
 
 function codegen_function!(@nospecialize(op), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     # A wrapper of `broadcast` (see `is_elementwise_call`) fuses like `broadcast` itself.
-    if get(cs.rewrites, FUSE_BROADCASTS_KEY, false)::Bool && is_elementwise_call(op) &&
+    if get(cs.rewrites, FUSE_BROADCASTS_KEY, false)::Bool && is_elementwise_call(op)::Bool &&
             fusable_parts(cs, expr_idx) !== nothing
         return codegen_fused_root!(cs, expr_idx)
     end

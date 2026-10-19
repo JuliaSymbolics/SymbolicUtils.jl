@@ -38,6 +38,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
 using Moshi.Match: @match
 import TaskLocalValues: TaskLocalValue
 import Graphs
+using OrderedCollections: OrderedSet
 
 ##== state management ==##
 

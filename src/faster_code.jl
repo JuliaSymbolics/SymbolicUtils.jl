@@ -460,7 +460,7 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
 
     declare!(cs, :_, outer_expr)
 
-    return output_buffer
+    return declare!(cs, get_misc_identifier(cs), output_buffer)
 end
 
 function codegen_function!(f::SymbolicUtils.Fill, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
@@ -613,6 +613,9 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
 
     # Indices and values of regions that write to a scalar
     scalar_idxs = Dict{ShapeVecT, Any}()
+    # `false` writes single-element regions holding an array expression through a view
+    # of the output, like other regions, instead of scalarizing them.
+    scalarize_single_element_regions = get(cs.rewrites, :scalarize_single_element_regions, true)::Bool
     D = length(sh)::Int
     # Utility buffers
     one_regions = ShapeVecT[]
@@ -676,7 +679,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
             # The goal is to batch scalar writes, so we defer them. Storing them in a
             # `Dict` allows later writes to overwrite earlier ones without additional
             # codegen.
-            @match val begin
+            deferred = @match val begin
                 BSImpl.Const(; val = _val) => begin
                     _inner = first(_val)
                     if _isone(_inner)
@@ -686,22 +689,32 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                     else
                         scalar_idxs[region] = _inner
                     end
+                    true
                 end
                 BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    true
                 end
                 BSImpl.Term(; f) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[1]
                     scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    true
                 end
-                _ => begin
+                # Any other value is an array expression. Scalarizing it indexes its inputs
+                # and the output elementwise, which arrays that disallow scalar indexing
+                # (such as GPU arrays) reject, so callers can opt into writing it as a
+                # block below instead.
+                _ => if scalarize_single_element_regions
                     # Unfortunately, scalarizing `val` requires getting the canonical expr.
                     canon_ex = SymbolicUtils.get_canonical_expr!(cs.ir, val_idx)
                     scalar_idxs[region] = cs(canon_ex[SymbolicUtils.stable_eachindex(canon_ex)[1]])
+                    true
+                else
+                    false
                 end
             end
-            continue
+            deferred && continue
         end
 
         # We are writing to a block. First, materialize all scalar writes that happened until now.
@@ -866,6 +879,10 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
                 if _isone(-val)
                     return codegen!(cs, expr_idx, Expr(:call, inv, base_sym))
                 end
+                p = literal_pow_exponent(val)
+                if p !== nothing
+                    return codegen!(cs, expr_idx, Expr(:call, Base.literal_pow, ^, base_sym, p))
+                end
                 if !(val isa Integer) && get(cs.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
                 end
@@ -901,6 +918,18 @@ function widened_branches(cs::CodegenState{T}, true_idx, false_idx) where {T}
     lit_a, lit_b = SymbolicUtils.isconst(cs.ir[true_idx]), SymbolicUtils.isconst(cs.ir[false_idx])
     return (lit_b ? a : Expr(:call, lit_a ? widen_literal : widen_float, a, b)),
         (lit_a ? b : Expr(:call, lit_b ? widen_literal : widen_float, b, a))
+end
+                                
+function codegen_function!(op::typeof(broadcast), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    if length(args_idxs) == 3 && unwrap_const(cs.ir[args_idxs[1]]) === (^)
+        p = literal_pow_exponent(unwrap_const(cs.ir[args_idxs[3]]))
+        if p !== nothing
+            base_sym = cs(cs.ir[args_idxs[2]])
+            return codegen!(cs, expr_idx, Expr(:call, broadcast, Base.literal_pow, ^, base_sym, p))
+        end
+    end
+    return codegen_function_no_nanmath!(op, cs, expr, expr_idx)
 end
 
 function codegen_function!(::typeof(ifelse), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
@@ -1066,7 +1095,11 @@ function add_allocator!(cs::CodegenState, @nospecialize(alloc))
 end
 
 function reset_allocator!(cs::CodegenState, @nospecialize(old_alloc))
-    cs.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    if old_alloc === nothing
+        delete!(cs.rewrites, ALLOCATOR_REWRITES_KEY)
+    else
+        cs.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    end
     return nothing
 end
 

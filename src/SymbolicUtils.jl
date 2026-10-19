@@ -195,7 +195,7 @@ include("ordering.jl")
 include("simplify_rules.jl")
 
 # API = simplify + substitute
-export simplify
+export simplify, trig_reduce
 include("simplify.jl")
 
 export substitute

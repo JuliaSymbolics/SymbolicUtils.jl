@@ -102,3 +102,68 @@ end
     end
     @test isequal(maker, reference)
 end
+
+# Stands in for a GPU array: whole-array operations work, scalar indexing throws.
+struct NoScalarVector{T, A <: AbstractVector{T}} <: AbstractVector{T}
+    data::A
+end
+Base.size(x::NoScalarVector) = size(x.data)
+Base.getindex(::NoScalarVector, ::Int) = error("scalar getindex on NoScalarVector")
+Base.setindex!(::NoScalarVector, _, ::Int) = error("scalar setindex! on NoScalarVector")
+Base.view(x::NoScalarVector, r::AbstractUnitRange) = NoScalarVector(view(x.data, r))
+Base.copyto!(dst::NoScalarVector, src::AbstractArray) = (copyto!(dst.data, src); dst)
+
+@testset "`:scalarize_single_element_regions` rewrite" begin
+    # Longer than `Code.FILL_ARR_LIMIT`, so the output is not scalarized as a whole.
+    @syms out[1:20]::Real p[1:20]::Real q[1:20]::Real a::Real
+    # The in-place form `Symbolics.build_function` generates.
+    iip_allocator = SU.Term{SymReal}(
+        Returns, SU.ArgsT{SymReal}((out,));
+        type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
+    )
+    function build_iip(regions, values, rewrites)
+        maker = SU.ArrayMaker{SymReal}([[r] for r in regions], values)
+        fn = Func([out, p, q, a], [], Code.with_allocator(iip_allocator, maker))
+        return Code.fast_toexpr(fn, IRStructure{SymReal}(), rewrites)
+    end
+    as_blocks = Dict{Any, Any}(:scalarize_single_element_regions => false)
+    pv, qv, av = collect(1.0:20), collect(10.0:10:200), 5.0
+
+    # Single-element regions holding an array expression.
+    cases = [
+        "non-constant" => (
+            [1:19, 20:20], [p[1:19] .+ q[1:19], p[20:20] .- q[1:1]],
+            [pv[1:19] .+ qv[1:19]; pv[20] - qv[1]],
+        ),
+        "constant right-hand side" => (
+            [1:1, 2:20], [SU.Const{SymReal}([2.0]) .- p[1:1], 2 .* p[2:20]],
+            [2.0 - pv[1]; 2 .* pv[2:20]],
+        ),
+        "mixed regions" => (
+            [1:1, 2:10, 11:11, 12:20],
+            [p[1:1] .- q[2:2], p[2:10] .+ q[2:10], 3 .* p[11:11], q[12:20] .- p[12:20]],
+            [pv[1] - qv[2]; pv[2:10] .+ qv[2:10]; 3pv[11]; qv[12:20] .- pv[12:20]],
+        ),
+    ]
+    @testset "scalarized by default: $name" for (name, (regions, values, expected)) in cases
+        ex = build_iip(regions, values, Dict{Any, Any}())
+        @test occursin("batched_setindex!", string(ex))
+        f = eval(ex)
+        @test Base.invokelatest(f, zeros(20), pv, qv, av) ≈ expected
+        @test_throws ErrorException Base.invokelatest(f, NoScalarVector(zeros(20)), pv, qv, av)
+    end
+    @testset "written as blocks when disabled: $name" for (name, (regions, values, expected)) in cases
+        ex = build_iip(regions, values, as_blocks)
+        @test !occursin("batched_setindex!", string(ex))
+        f = eval(ex)
+        @test Base.invokelatest(f, zeros(20), pv, qv, av) ≈ expected
+        @test Base.invokelatest(f, NoScalarVector(zeros(20)), pv, qv, av).data ≈ expected
+    end
+
+    # Scalar values, such as a scalar equation's residual, are always written as scalars.
+    @testset "scalar values stay scalar" for rewrites in (Dict{Any, Any}(), as_blocks)
+        ex = build_iip([1:18, 19:19, 20:20], [p[1:18], SU.Const{SymReal}([a]), SU.Const{SymReal}([2.0])], rewrites)
+        @test occursin("batched_setindex!", string(ex))
+        @test Base.invokelatest(eval(ex), zeros(20), pv, qv, av) ≈ [pv[1:18]; av; 2.0]
+    end
+end

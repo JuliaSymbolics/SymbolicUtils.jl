@@ -778,6 +778,14 @@ end
 
 function lazy_broadcast_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
     parts = fusable_parts(cs, idx)
+    # An integer power is `literal_pow`, as in eager codegen, so fused results match it.
+    if parts.f isa Int32 && length(parts.args) == 2 && unwrap_const(cs.ir[parts.f]) === (^)
+        p = literal_pow_exponent(unwrap_const(cs.ir[parts.args[2]]))
+        if p !== nothing
+            base = fused_arg_expr(cs, parts.args[1], uses, sources)
+            return Expr(:call, Base.Broadcast.broadcasted, Base.literal_pow, ^, base, p)
+        end
+    end
     f = parts.f isa Int32 ? cs(cs.ir[parts.f]) : parts.f
     ex = Expr(:call, Base.Broadcast.broadcasted, f)
     for a in parts.args
@@ -825,12 +833,6 @@ end
 
 function codegen_fused_root!(cs::CodegenState{T}, idx::Integer) where {T}
     return codegen!(cs, idx, Expr(:call, fused_materialize, fused_broadcast_expr(cs, idx)))
-end
-
-function codegen_function!(::typeof(broadcast), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
-    fusable_parts(cs, expr_idx) === nothing &&
-        return codegen_function_no_nanmath!(broadcast, cs, expr, expr_idx)
-    return codegen_fused_root!(cs, expr_idx)
 end
 
 # The elementwise expression an `ArrayMaker` region value at `idx` evaluates: the value
@@ -1268,6 +1270,7 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
 end
 
 function codegen_function!(op::typeof(broadcast), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    fusable_parts(cs, expr_idx) === nothing || return codegen_fused_root!(cs, expr_idx)
     args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
     if length(args_idxs) == 3 && unwrap_const(cs.ir[args_idxs[1]]) === (^)
         p = literal_pow_exponent(unwrap_const(cs.ir[args_idxs[3]]))

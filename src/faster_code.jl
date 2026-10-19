@@ -879,6 +879,9 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
                 if _isone(-val)
                     return codegen!(cs, expr_idx, Expr(:call, inv, base_sym))
                 end
+                if val isa Integer && 2 <= val <= 3
+                    return codegen!(cs, expr_idx, Expr(:call, Base.literal_pow, ^, base_sym, Val(Int(val))))
+                end
                 if !(val isa Integer) && get(cs.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
                 end

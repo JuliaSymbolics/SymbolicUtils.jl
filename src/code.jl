@@ -642,6 +642,12 @@ function function_to_expr(@nospecialize(op::Union{typeof(*),typeof(+)}), O, st)
     end
 end
 
+# Lowering only rewrites `x^n` to `literal_pow` for the `:^` symbol, not the `^` function object.
+function literal_pow_exponent(@nospecialize(n))
+    n isa Integer && typemin(Int) <= n <= typemax(Int) || return nothing
+    return Expr(:call, Val, Int(n))
+end
+
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
     base = toexpr(base, st)
@@ -658,6 +664,10 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
                     val = -val
                     base = Expr(:call, inv, base)
                 end
+                p = literal_pow_exponent(val)
+                if p !== nothing
+                    return Expr(:call, Base.literal_pow, ^, base, p)
+                end
                 if !(val isa Integer) && get(st.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
                 end
@@ -673,6 +683,17 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
             end
         end
     end
+end
+
+function function_to_expr(::typeof(broadcast), O::BasicSymbolic{T}, st) where {T}
+    args = arguments(O)
+    if length(args) == 3 && unwrap_const(args[1]) === (^)
+        p = literal_pow_exponent(unwrap_const(args[3]))
+        if p !== nothing
+            return Expr(:call, broadcast, Base.literal_pow, ^, toexpr(args[2], st), p)
+        end
+    end
+    return function_to_expr_no_nanmath(broadcast, O, st)
 end
 
 function function_to_expr(::typeof(ifelse), O, st)

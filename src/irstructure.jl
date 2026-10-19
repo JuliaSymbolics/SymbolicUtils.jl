@@ -454,6 +454,7 @@ function subset_ir(
     for expr in exprs
         expr_i = get(ir.definition, expr, 0)
         iszero(expr_i) && _throw_expr_not_in_ir(expr)
+        visited[expr_i] && continue
         get_reachability!(reachables, ir, expr_i; visited)
         visited[expr_i] = true
         push!(reachables, expr_i)
@@ -592,6 +593,20 @@ function Base.filter!(pred::F, s::IRStructureSearchBuffer{T}) where {F, T}
     return s
 end
 
+# DFS postorder from `cur` that doesn't enter nodes in `searched`
+function _unsearched_reachability!(
+        reachability::Vector{Int32}, g::OrderedDiGraph{Int32}, visited::BitVector,
+        searched::BitSet, cur::Int32
+    )
+    visited[cur] = true
+    for nbor in Graphs.outneighbors(g, cur)
+        (visited[nbor] || nbor in searched) && continue
+        _unsearched_reachability!(reachability, g, visited, searched, nbor)
+    end
+    push!(reachability, cur)
+    return reachability
+end
+
 function search_variables!(
         buffer::IRStructureSearchBuffer{T, S}, expr::BasicSymbolic{T};
         is_atomic::F = default_is_atomic, recurse::G = iscall
@@ -609,7 +624,11 @@ function search_variables!(
 
     reachability = get_cached_idxs!(ir)
     empty!(reachability)
-    get_reachability!(reachability, ir, idx; visited = get_cached_mask!(ir, length(ir)))
+    # Whatever a searched node reaches was handled when it was searched
+    _unsearched_reachability!(
+        reachability, ir.dependency_graph, get_cached_mask!(ir, length(ir)), buffer.searched, idx
+    )
+    pop!(reachability)
 
     mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)

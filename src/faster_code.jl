@@ -680,12 +680,12 @@ function fusable_parts(cs::CodegenState{T}, idx::Integer) where {T}
     get(cs.rewrites, FUSE_BROADCASTS_KEY, false)::Bool || return nothing
     sym = cs.ir[idx]
     return @match sym begin
-        BSImpl.ArrayOp(; term) => if term isa BasicSymbolic{T} && is_elementwise_call(operation(term))
+        BSImpl.ArrayOp(; term) => if term isa BasicSymbolic{T} && is_elementwise_call(operation(term))::Bool
             elementwise_call_parts(cs, idx)
         else
             nothing
         end
-        BSImpl.Term(; f) && if is_elementwise_call(f) end => elementwise_call_parts(cs, idx)
+        BSImpl.Term(; f) && if is_elementwise_call(f)::Bool end => elementwise_call_parts(cs, idx)
         BSImpl.AddMul(;) => elementwise_addmul_parts(cs, sym, idx)
         BSImpl.Term(; f) && if f === (+) || f === (*) end => elementwise_addmul_parts(cs, sym, idx)
         _ => nothing

@@ -879,8 +879,9 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
                 if _isone(-val)
                     return codegen!(cs, expr_idx, Expr(:call, inv, base_sym))
                 end
-                if val isa Integer && 2 <= val <= 3
-                    return codegen!(cs, expr_idx, Expr(:call, Base.literal_pow, ^, base_sym, Val(Int(val))))
+                p = literal_pow_exponent(val)
+                if p !== nothing
+                    return codegen!(cs, expr_idx, Expr(:call, Base.literal_pow, ^, base_sym, p))
                 end
                 if !(val isa Integer) && get(cs.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
@@ -898,6 +899,18 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
             end
         end
     end
+end
+
+function codegen_function!(op::typeof(broadcast), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
+    args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
+    if length(args_idxs) == 3 && unwrap_const(cs.ir[args_idxs[1]]) === (^)
+        p = literal_pow_exponent(unwrap_const(cs.ir[args_idxs[3]]))
+        if p !== nothing
+            base_sym = cs(cs.ir[args_idxs[2]])
+            return codegen!(cs, expr_idx, Expr(:call, broadcast, Base.literal_pow, ^, base_sym, p))
+        end
+    end
+    return codegen_function_no_nanmath!(op, cs, expr, expr_idx)
 end
 
 function codegen_function!(::typeof(ifelse), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}

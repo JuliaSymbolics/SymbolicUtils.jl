@@ -166,6 +166,7 @@ end
 
     @test unwrap_const(simplify(cos(x)^2 + 1 + sin(x)^2)) == 2
     @test unwrap_const(simplify(cos(y)^2 + 1 + sin(y)^2)) == 2
+    @test simplify(2x*cos(y)^2 + 1 + 2x*sin(y)^2) == 1 + 2x
     @test unwrap_const(simplify(sin(y)^2 + cos(y)^2 + 1)) == 2
 
     # Coefficient -1 distributes into Add, so factoring through r*(sin^2+cos^2)

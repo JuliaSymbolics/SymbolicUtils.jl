@@ -225,25 +225,25 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     test_repr(
         Code.fast_toexpr(a^2, ir, Dict()), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(^)(var"##cse#0", 2)
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(2))
         end
     )
     test_repr(
         Code.fast_toexpr(a^2, ir, Dict{Any, Any}(:nanmath => true)), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(^)(var"##cse#0", 2)
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(2))
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, 2), ir, Dict()), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(^)(var"##cse#0", 2)
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(2))
         end
     )
     test_repr(
         Code.fast_toexpr(NaNMath.pow(a, 2), ir, Dict{Any, Any}(:nanmath => true)), quote
             local var"##cse#0" = a
-            local var"##cse#1" = $(^)(var"##cse#0", 2)
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(2))
         end
     )
 
@@ -283,7 +283,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         quote
             local var"##cse#0" = 1
             local var"##cse#1" = a
-            local var"##cse#2" = $(^)(var"##cse#1", 2)
+            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val)(2))
             local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
@@ -292,7 +292,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         quote
             local var"##cse#0" = 1
             local var"##cse#1" = a
-            local var"##cse#2" = $(^)(var"##cse#1", 2)
+            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val)(2))
             local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
@@ -301,7 +301,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         quote
             local var"##cse#0" = 1
             local var"##cse#1" = a
-            local var"##cse#2" = $(^)(var"##cse#1", 2)
+            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val)(2))
             local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
@@ -310,7 +310,7 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
         quote
             local var"##cse#0" = 1
             local var"##cse#1" = a
-            local var"##cse#2" = $(^)(var"##cse#1", 2)
+            local var"##cse#2" = $(Base.literal_pow)($(^), var"##cse#1", $(Val)(2))
             local var"##cse#3" = $(/)(var"##cse#0", var"##cse#2")
         end
     )
@@ -574,6 +574,35 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
     end
 end
 
+@testset "constant integer powers use `literal_pow`" begin
+    @syms a::Real x[1:3]::Real
+    ir = IRStructure{SymReal}()
+    test_repr(
+        Code.fast_toexpr(a^Int32(3), ir, Dict()), quote
+            local var"##cse#0" = a
+            local var"##cse#1" = $(Base.literal_pow)($(^), var"##cse#0", $(Val)(3))
+        end
+    )
+    test_repr(
+        Code.fast_toexpr(x .^ 2, ir, Dict()), quote
+            local var"##cse#0" = x
+            local var"##cse#1" = $(broadcast)($(Base.literal_pow), $(^), var"##cse#0", $(Val)(2))
+        end
+    )
+
+    for n in 2:5
+        f = eval(Code.fast_toexpr(Func([a], [], a^n), ir, Dict()))
+        for v in (0.1, 1.3, -2.7, 1.3f0, 5)
+            @test @invokelatest(f(v)) ≈ v^n
+            n == 2 && @test @invokelatest(f(v)) === v^n
+        end
+    end
+    g = eval(Code.fast_toexpr(Func([x], [], x .^ 2), ir, Dict()))
+    @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
+    g = eval(Code.fast_toexpr(Func([x], [], x .^ 2.5), ir, Dict()))
+    @test @invokelatest(g([1.0, 4.0, 9.0])) ≈ [1.0, 32.0, 243.0]
+end
+
 @testset "Sparse array CSE" begin
     @syms x y z
     ir = IRStructure{SymReal}()
@@ -693,7 +722,7 @@ end
                 local var"##cse#4" = $(sin)(var"##cse#3")
                 local var"##cse#5" = y
                 local var"##cse#6" = 2
-                local var"##cse#7" = $(^)(var"##cse#2", 2)
+                local var"##cse#7" = $(Base.literal_pow)($(^), var"##cse#2", $(Val)(2))
                 local var"##cse#8" = $(*)(var"##cse#6", var"##cse#7")
                 local var"##cse#9" = $(+)(var"##cse#4", var"##cse#5", var"##cse#8")
                 local var"##cse#10" = 1
@@ -754,8 +783,39 @@ end
                         end
                     end
                 end
+                __miscₛᵧₘ0 = var"##cse#1"
             end
         )
+    end
+
+    @testset "bare `@arrayop` after `with_allocator` (issue #1151)" begin
+        @syms x[1:3] y[1:3]
+        wrapped = Code.with_allocator(zeros, @arrayop (i,) x[i] * y[i])
+        bare = @arrayop (i,) x[i] + y[i]
+        # The order of the two must not matter.
+        for expr in (sum(wrapped) + sum(bare), sum(bare) + sum(wrapped))
+            result = eval(quote
+                let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]
+                    $(Code.fast_toexpr(expr, IRStructure{SymReal}(), Dict()))
+                end
+            end)
+            @test result ≈ 53.0
+        end
+        # `reset_allocator!` must restore the absence of an allocator, not store `nothing`.
+        rewrites = Dict{Any, Any}()
+        Code.fast_toexpr(sum(wrapped), IRStructure{SymReal}(), rewrites)
+        @test !haskey(rewrites, Code.ALLOCATOR_REWRITES_KEY)
+    end
+
+    @testset "`Func` and `Assignment` return an `@arrayop` result" begin
+        @syms x[1:3] y[1:3] z
+        arr = @arrayop (i,) x[i] * y[i]
+        xv, yv = [1.0, 2.0, 3.0], [4.0, 5.0, 6.0]
+        for fn in (Func([x, y], [], arr), Func([x, y], [], Let([Assignment(z, arr)], z, true)),
+                   Func([x, y, Assignment(z, arr)], [], z), Func([x, y], [Assignment(z, arr)], z))
+            f = eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict()))
+            @test @invokelatest(f(xv, yv)) == xv .* yv
+        end
     end
 
     @testset "`Fill`" begin
@@ -1479,4 +1539,38 @@ end
     rule = OptimizationRule("ReplaceSinInLet", detect_let, rewrite_let, 1)
     @test rewritten(rule) === cos
     @test rewritten(Code.with_options(rule, (; f = tan))) === tan
+end
+
+@testset "`ifelse` widens a float branch to the other branch's type" begin
+    @syms x::Real y::Real
+    build(e, args = [x]) = (ir = IRStructure{SymReal}(); populate_ir!(ir, e); eval(Code.fast_toexpr(Func(args, [], e), ir, Dict{Any, Any}())))
+    f = build(ifelse(x > 0, 1.0, 2x))
+    @test only(Base.return_types(f, (BigFloat,))) == BigFloat
+    @test @invokelatest(f(big(1.0))) isa BigFloat
+    @test @invokelatest(f(1f0)) === 1.0
+    @test @invokelatest(f(-1f0)) === -2.0f0
+    @test @invokelatest(f(-1)) === -2
+    eager = build(ifelse_eager(x > 0, 1.0, 2x))
+    @test only(Base.return_types(eager, (BigFloat,))) == BigFloat
+    @test @invokelatest(eager(-1f0)) === -2.0f0
+    @test operation(@invokelatest(eager(y))) === ifelse_eager
+    zero_lit = build(ifelse(x > 0, 0, 2x))
+    @test only(Base.return_types(zero_lit, (BigFloat,))) == BigFloat
+    @test @invokelatest(zero_lit(1f0)) === 0.0f0
+    @test @invokelatest(zero_lit(3)) === 0
+    @test @invokelatest(build(ifelse(x > 0, x, 100000))(Float16(-1))) === 100000
+    @test @invokelatest(build(ifelse(x > 0, x, Int64(2)^53 + 1))(-1.0)) === Int64(2)^53 + 1
+    @test @invokelatest(build(ifelse(x > 0, x, typemin(Int)))(Float16(-1))) === typemin(Int)
+    g = build(ifelse(x > 0, 2y, 3x), [x, y])
+    @test only(Base.return_types(g, (Float64, BigFloat))) == BigFloat
+    @test @invokelatest(build(ifelse(x > 0, y, -1), [x, y])(1.0, UInt(3))) === UInt(3)
+    @test @invokelatest(build(ifelse(x > 0, y, 0.5), [x, y])(1.0, 2)) === 2
+    @test @invokelatest(build(ifelse(x > 0, 1.0, y), [x, y])(-1.0, Int64(2)^53 + 1)) === Int64(2)^53 + 1
+    ncalls = Ref(0)
+    heavy = z -> (ncalls[] += 1; 3z)
+    h = SymbolicUtils.term(heavy, x; type = Real, shape = SymbolicUtils.ShapeVecT())
+    calls(g, v) = (ncalls[] = 0; Base.invokelatest(g, v); ncalls[])
+    lit, ref = build(ifelse(x > 0, 1.0, h)), build(ifelse(x > 0, x, h))
+    @test calls(lit, 1.0) == calls(ref, 1.0)
+    @test calls(lit, -1.0) == calls(ref, -1.0)
 end

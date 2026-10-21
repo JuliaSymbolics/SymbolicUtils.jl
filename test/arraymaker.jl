@@ -6,6 +6,17 @@ using Test
 import SymbolicUtils as SU
 
 @syms x[1:3]::Real y[1:3]::Real z[1:3]::Real
+
+@testset "public constructor" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils, :ArrayMaker)
+    end
+    maker = SymbolicUtils.ArrayMaker{SymReal}(
+        [[1:3], [2:3]], [x, y[1:2]]; shape = SU.ShapeVecT((1:3,))
+    )
+    @test isequal(collect(maker), BS[x[1], y[1], y[2]])
+end
+
 @testset "macro" begin
     w = @makearray w[1:3, 1:3] begin
         w[1:1, 1:3] => x'

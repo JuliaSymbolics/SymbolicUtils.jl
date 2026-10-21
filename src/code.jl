@@ -648,6 +648,17 @@ function literal_pow_exponent(@nospecialize(n))
     return Expr(:call, Val, Int(n))
 end
 
+"""
+Key in the `rewrites` dictionary of codegen states (`NameState`, `LazyState`, and
+`CodegenState` used by [`fast_toexpr`](@ref)). When `false`, constant integer powers
+`x ^ n` lower to `^(x, n)` — including inside `broadcast`ed and fused broadcast
+expressions — instead of `Base.literal_pow(^, x, Val(n))`, reverting to the codegen
+behavior from before `literal_pow` emission was introduced. Defaults to `true`.
+"""
+const USE_LITERAL_POW_KEY = :use_literal_pow
+
+@inline use_literal_pow(rewrites::Dict{Any, Any}) = get(rewrites, USE_LITERAL_POW_KEY, true)::Bool
+
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
     base = toexpr(base, st)
@@ -664,9 +675,11 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
                     val = -val
                     base = Expr(:call, inv, base)
                 end
-                p = literal_pow_exponent(val)
-                if p !== nothing
-                    return Expr(:call, Base.literal_pow, ^, base, p)
+                if use_literal_pow(st.rewrites)
+                    p = literal_pow_exponent(val)
+                    if p !== nothing
+                        return Expr(:call, Base.literal_pow, ^, base, p)
+                    end
                 end
                 if !(val isa Integer) && get(st.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
@@ -687,7 +700,7 @@ end
 
 function function_to_expr(::typeof(broadcast), O::BasicSymbolic{T}, st) where {T}
     args = arguments(O)
-    if length(args) == 3 && unwrap_const(args[1]) === (^)
+    if use_literal_pow(st.rewrites) && length(args) == 3 && unwrap_const(args[1]) === (^)
         p = literal_pow_exponent(unwrap_const(args[3]))
         if p !== nothing
             return Expr(:call, broadcast, Base.literal_pow, ^, toexpr(args[2], st), p)

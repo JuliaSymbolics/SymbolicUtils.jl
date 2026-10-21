@@ -316,6 +316,23 @@ end
     @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
 end
 
+@testset "constant integer powers opt out of `literal_pow`" begin
+    @syms a::Real x[1:3]::Real
+    st = Code.NameState()
+    st.rewrites[Code.USE_LITERAL_POW_KEY] = false
+    @test toexpr(a^3, st) == :($(^)(a, 3))
+    @test toexpr(a^2.5, st) == :($(^)(a, 2.5))
+    @test toexpr(x .^ 3, st) == :($(broadcast)($(^), x, 3))
+
+    f = eval(toexpr(Func([a], [], a^3), st))
+    @test @invokelatest(f(1.3)) === 1.3^3
+    g = eval(toexpr(Func([x], [], x .^ 2), st))
+    @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
+
+    st.rewrites[Code.USE_LITERAL_POW_KEY] = true
+    @test toexpr(a^3, st) == :($(Base.literal_pow)($(^), a, $(Val)(3)))
+end
+
 @testset "Sparse array CSE" begin
     @syms x y z
     arr = [x^2 + y^2 0 0; 0 sin(y^2 + z^2) 0; 0 0 z^2 + x^2]

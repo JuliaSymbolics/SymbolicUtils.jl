@@ -603,6 +603,31 @@ end
     @test @invokelatest(g([1.0, 4.0, 9.0])) ≈ [1.0, 32.0, 243.0]
 end
 
+@testset "constant integer powers opt out of `literal_pow`" begin
+    @syms a::Real x[1:3]::Real
+    ir = IRStructure{SymReal}()
+    no_lit = Dict{Any, Any}(Code.USE_LITERAL_POW_KEY => false)
+    test_repr(
+        Code.fast_toexpr(a^3, ir, no_lit), quote
+            local var"##cse#0" = a
+            local var"##cse#1" = $(^)(var"##cse#0", 3)
+        end
+    )
+    test_repr(
+        Code.fast_toexpr(x .^ 2, ir, no_lit), quote
+            local var"##cse#0" = $(^)
+            local var"##cse#1" = x
+            local var"##cse#2" = 2
+            local var"##cse#3" = $(broadcast)(var"##cse#0", var"##cse#1", var"##cse#2")
+        end
+    )
+
+    f = eval(Code.fast_toexpr(Func([a], [], a^3), ir, no_lit))
+    @test @invokelatest(f(1.3)) === 1.3^3
+    g = eval(Code.fast_toexpr(Func([x], [], x .^ 2), ir, no_lit))
+    @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
+end
+
 @testset "Sparse array CSE" begin
     @syms x y z
     ir = IRStructure{SymReal}()

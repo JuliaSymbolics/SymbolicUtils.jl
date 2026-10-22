@@ -779,7 +779,7 @@ end
 function lazy_broadcast_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
     parts = fusable_parts(cs, idx)
     # An integer power is `literal_pow`, as in eager codegen, so fused results match it.
-    if parts.f isa Int32 && length(parts.args) == 2 && unwrap_const(cs.ir[parts.f]) === (^)
+    if use_literal_pow(cs.rewrites) && parts.f isa Int32 && length(parts.args) == 2 && unwrap_const(cs.ir[parts.f]) === (^)
         p = literal_pow_exponent(unwrap_const(cs.ir[parts.args[2]]))
         if p !== nothing
             base = fused_arg_expr(cs, parts.args[1], uses, sources)
@@ -1247,9 +1247,11 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
                 if _isone(-val)
                     return codegen!(cs, expr_idx, Expr(:call, inv, base_sym))
                 end
-                p = literal_pow_exponent(val)
-                if p !== nothing
-                    return codegen!(cs, expr_idx, Expr(:call, Base.literal_pow, ^, base_sym, p))
+                if use_literal_pow(cs.rewrites)
+                    p = literal_pow_exponent(val)
+                    if p !== nothing
+                        return codegen!(cs, expr_idx, Expr(:call, Base.literal_pow, ^, base_sym, p))
+                    end
                 end
                 if !(val isa Integer) && get(cs.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
@@ -1291,7 +1293,7 @@ end
 function codegen_function!(op::typeof(broadcast), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     fusable_parts(cs, expr_idx) === nothing || return codegen_fused_root!(cs, expr_idx)
     args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
-    if length(args_idxs) == 3 && unwrap_const(cs.ir[args_idxs[1]]) === (^)
+    if use_literal_pow(cs.rewrites) && length(args_idxs) == 3 && unwrap_const(cs.ir[args_idxs[1]]) === (^)
         p = literal_pow_exponent(unwrap_const(cs.ir[args_idxs[3]]))
         if p !== nothing
             base_sym = cs(cs.ir[args_idxs[2]])

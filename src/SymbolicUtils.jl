@@ -216,7 +216,7 @@ end
 @public add_worker, mul_worker
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
-@public Term, Add, Mul, node_count
+@public Term, Add, Mul, ArrayMaker, node_count
 @public isconst
 @public operation_hasname, operation_getname
 @public operation_is_atomic

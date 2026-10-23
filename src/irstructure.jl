@@ -678,11 +678,34 @@ Optimized version of [`SymbolicUtils.query`](@ref) that leverages the provided
 function query(predicate::F, ir::IRStructure{T}, expr::BasicSymbolic{T}; recurse::G = iscall) where {F, T, G}
     predicate(expr) && return true
     idx = ir.definition[expr]
+    return query_multiple(predicate, ir, (idx,); recurse)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Version of [`SymbolicUtils.query`](@ref) that queries the expressions at each index in
+`idxs` (a `Tuple`, `AbstractArray` or `AbstractSet` of `Integer`s) in a single traversal
+of `ir`, sharing the reachability computation between them. Equivalent to (and more
+efficient than) calling [`SymbolicUtils.query`](@ref) on each `ir[idx]` individually
+and combining the results with `|`.
+"""
+function query_multiple(
+        predicate::F, ir::IRStructure{T},
+        idxs::Union{Tuple{Vararg{Integer}}, AbstractArray{<:Integer}, AbstractSet{<:Integer}};
+        recurse::G = iscall
+    ) where {F, T, G}
+    isempty(idxs) && return false
     reachability = get_cached_idxs!(ir)
+    empty!(reachability)
+    visited = get_cached_mask!(ir, length(ir))
+    for _idx in idxs
+        idx = Int32(_idx)
+        predicate(ir.symbols[idx]) && return true
+        get_reachability!(reachability, ir, idx; visited)
+    end
     # Fast path when we know we don't have to filter out subtrees
     if recurse === iscall
-        empty!(reachability)
-        get_reachability!(reachability, ir, idx)
         for i in reachability
             predicate(ir.symbols[i]) && return true
         end
@@ -692,16 +715,16 @@ function query(predicate::F, ir::IRStructure{T}, expr::BasicSymbolic{T}; recurse
 
     # Similar to BFS in `search_variables!`
     mask = get_cached_mask!(ir, length(ir))
-    for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
-        mask[arg_i] = true
+    for idx in idxs
+        for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
+            mask[arg_i] = true
+        end
     end
 
-    empty!(reachability)
-    get_reachability!(reachability, ir, idx)
     for cur_i in Iterators.reverse(reachability)
         mask[cur_i] || continue
         cur = ir[cur_i]
-        predicate(cur) && return false
+        predicate(cur) && return true
         recurse(cur) || continue
         for arg_i in Graphs.outneighbors(ir.dependency_graph, cur_i)
             mask[arg_i] = true

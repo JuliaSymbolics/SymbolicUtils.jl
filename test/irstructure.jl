@@ -139,6 +139,31 @@ end
     @test !SU.query(isequal(z), ir, expr; recurse = ex -> iscall(ex) && operation(ex) !== sin)
 end
 
+@testset "`query_multiple`" begin
+    expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, expr)
+    idxs = collect(eachindex(ir))
+
+    # Equivalent to calling `query` on each index and combining with `|`
+    for pred in (isequal(y), isequal(w[2]), isequal(expr), iscall)
+        for container in (idxs, Tuple(idxs), Set(idxs))
+            @test SU.query_multiple(pred, ir, container) ==
+                  any(i -> SU.query(pred, ir, ir[i]), idxs)
+        end
+        for i in idxs
+            @test SU.query_multiple(pred, ir, (i,)) == SU.query(pred, ir, ir[i])
+        end
+    end
+
+    # `recurse` is respected
+    @test !SU.query_multiple(isequal(z), ir, [ir[expr]]; recurse = ex -> iscall(ex) && operation(ex) !== sin)
+    @test SU.query_multiple(isequal(z), ir, [ir[expr]])
+
+    # Empty input returns `false`
+    @test !SU.query_multiple(Returns(true), ir, Int[])
+end
+
 @testset "show" begin
     # Single leaf node: exact output check (indegree 0, never inlined)
     ir = IRStructure{SymReal}()

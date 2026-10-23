@@ -184,6 +184,71 @@ end
     @test t < 30
 end
 
+@testset "where condition backtracks over AC matches (#776)" begin
+    r = @rule (~x)^(~m)*(~y)^(~n) => (~m, ~n) where (~m)^(~n) == 8
+    @test r(a^2*b^3) == (2, 3)
+    @test r(b^2*a^3) == (2, 3)
+    @test r(a^3*b^2) == (2, 3)
+    @test r(a^3*b^3) === nothing
+
+    r3 = @rule (~x)*(~y)*(~z) => (~x, ~y, ~z) where (~x === c && ~z === a)
+    @eqtest r3(a*b*c) == (c, b, a)
+
+    rsin = @rule sin((~x)^(~m)*(~y)^(~n)) => (~m, ~n) where (~m)^(~n) == 8
+    @test rsin(sin(a^3*b^2)) == (2, 3)
+    @test rsin(sin(a^2*b^3)) == (2, 3)
+
+    rsum = @rule sin((~x)^(~m)*(~y)^(~n)) + ~w => (~m, ~n) where (~m)^(~n) == 8
+    @test rsum(sin(a^3*b^2) + c) == (2, 3)
+    @test rsum(sin(a^2*b^3) + c) == (2, 3)
+
+    # the condition depends on a slot matched after the commutative subterm
+    rmod = @rule mod((~x)^(~m)*(~y)^(~n), ~k) => (~m, ~n) where (~m)^(~n) == ~k
+    @test rmod(mod(a^3*b^2, 8)) == (2, 3)
+    @test rmod(mod(a^2*b^3, 8)) == (2, 3)
+    @test rmod(mod(a^2*b^3, 9)) == (3, 2)
+
+    for k in (2, 3, 4)
+        rk = @rule (~x)^(~m) + (~~rest) => ~m where ~m == k
+        @test rk(a^2 + b^3 + c^4 + d) == k
+    end
+    for v in (a, b, c)
+        rv = @rule (~x)*(~~rest) => ~x where ~x === v
+        @eqtest rv(a*b*c) == v
+    end
+end
+
+@testset "RHS call counter is scoped per Rule call" begin
+    inner = @rule sin(~x) => ~x
+    deltas = Int[]
+    function pred_rhs(x)
+        before = SymbolicUtils.RULE_RHS_CALLS[][]
+        inner(sin(x))
+        push!(deltas, SymbolicUtils.RULE_RHS_CALLS[][] - before)
+        return true
+    end
+    r = @rule (~x::pred_rhs)*(~~rest) => ~x where false
+    @test r(a*b*c) === nothing
+    @test !isempty(deltas)
+    @test all(iszero, deltas)
+end
+
+@testset "Nested segment retries stay bounded" begin
+    @syms F(..)::Real G(..)::Real
+    n = 16
+    calls = Ref(0)
+    reject(x) = (calls[] += 1; false)
+    pats = [:($G(~~$(Symbol(:a, i)), ~~$(Symbol(:b, i)))) for i in 1:n]
+    ex = F(fill(G(a), n)..., a)
+    r = @eval @rule $F($(pats...), ~z::$reject) => 1
+    @test Base.invokelatest(r, ex) === nothing
+    @test calls[] <= 2n
+    calls[] = 0
+    rw = @eval @rule $F($(pats...), ~z) => 1 where $reject(~z)
+    @test Base.invokelatest(rw, ex) === nothing
+    @test calls[] <= SymbolicUtils.COMM_BACKTRACK_BUDGET[] + 1
+end
+
 @testset "Slot matcher with default value" begin
     r_sum = @rule (~x + ~!y)^2 => ~y
     @test r_sum((a + b)^2) in Set([a, b])

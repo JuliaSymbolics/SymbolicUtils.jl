@@ -41,6 +41,22 @@ end
     COMM_BT_USED[][] > COMM_BACKTRACK_BUDGET[]
 end
 
+# Continuation for a term-level matcher. If the rest of the match fails without
+# reaching the rule's RHS, return `token` so the term commits to its first local
+# match. If the RHS (e.g. a `where` condition) rejected the bindings, return
+# `nothing` so the term tries its next local match, until the work budget is spent.
+function guard_continuation(success, token)
+    function guarded(b, n)
+        rhs_calls = RULE_RHS_CALLS[]
+        before = rhs_calls[]
+        result = success(b, n)
+        result === nothing || return result
+        (rhs_calls[] == before || _comm_bt_over_budget()) && return token
+        _comm_bt_tick!()
+        return nothing
+    end
+end
+
 function matcher(val::Any, acSets)
     val = unwrap_const(val)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
@@ -142,19 +158,21 @@ end
 function term_matcher_constructor(term, acSets)
     matchers = vcat([matcher(operation(term), acSets)], map(x -> matcher(unwrap_const(x), acSets), parent(arguments(term))))
 
-    function loop(term, bindings′, matchers′) # Get it to compile faster
+    # `success` continues the match past this term; see `guard_continuation`
+    # for when a later failure makes this term try its next local match.
+    function loop(term, bindings′, matchers′, success) # Get it to compile faster
         if !islist(matchers′)
             if  !islist(term)
-                return bindings′
+                return success(bindings′, 1)
             end
             return nothing
         end
         car(matchers′)(term, bindings′) do b, n
-            loop(drop_n(term, n), b, cdr(matchers′))
+            loop(drop_n(term, n), b, cdr(matchers′), success)
         end
         # explanation of above 3 lines:
-        # car(matchers′)(b,n -> loop(drop_n(term, n), b, cdr(matchers′)), term, bindings′)
-        #                <------ next(b,n) ---------------------------->
+        # car(matchers′)(b,n -> loop(drop_n(term, n), b, cdr(matchers′), success), term, bindings′)
+        #                <------ next(b,n) ------------------------------------->
         # car = first element of list, cdr = rest of the list, drop_n = drop first n elements of list
         # Calls the first matcher, with the "next" function being loop again but with n terms dropepd from term
         # Term is a linked list (a list and a index). drop n advances the index. when the index sorpasses
@@ -168,8 +186,11 @@ function term_matcher_constructor(term, acSets)
             data = car(data) # from (..., ) to ...
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
-            result = loop(data, bindings, matchers)
-            result !== nothing && return success(result, 1)
+            token = Ref{Nothing}(nothing)
+            k = guard_continuation(success, token)
+            result = loop(data, bindings, matchers, k)
+            result === token && return nothing
+            result !== nothing && return result
 
             frankestein = nothing
             if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && _isone(arguments(arguments(data)[1])[1])
@@ -201,8 +222,9 @@ function term_matcher_constructor(term, acSets)
             end
 
             if frankestein !==nothing
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
+                result = loop(frankestein, bindings, matchers, k)
+                result === token && return nothing
+                result !== nothing && return result
             end
 
             return nothing
@@ -224,46 +246,42 @@ function term_matcher_constructor(term, acSets)
 
             T = vartype(data)
             ST = symtype(data)
+            token = Ref{Nothing}(nothing)
             if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
-                if has_segment || length(data_args) > COMM_BACKTRACK_LIMIT[]
-                    # First local match wins. Meter every candidate loop toward
-                    # COMM_BACKTRACK_BUDGET (never stop here — only count).
-                    for inds in acSets(eachindex(data_args), length(data_args))
-                        candidate = Term{T}(f, @views data_args[inds]; type = ST)
-                        _comm_bt_tick!()
-                        result = loop(candidate, bindings, matchers)
-                        result !== nothing && return success(result, 1)
+                # Fixed arity ≤ COMM_BACKTRACK_LIMIT backtracks over distinct local
+                # matches until COMM_BACKTRACK_BUDGET is spent. Otherwise the node
+                # behaves like any other term (see `guard_continuation`).
+                backtrack = !has_segment && length(data_args) <= COMM_BACKTRACK_LIMIT[]
+                tried = Ref{Union{Nothing, Set{Any}}}(nothing)
+                guarded = guard_continuation(success, token)
+                function ac_next(b, n)
+                    backtrack || return guarded(b, n)
+                    key = ac_bindings_key(b)
+                    if tried[] === nothing
+                        tried[] = Set{Any}()
+                    elseif key in tried[]
+                        return nothing
                     end
-                else
-                    # Fixed-arity depth-2 backtracking (arity ≤ COMM_BACKTRACK_LIMIT).
-                    # Meter every candidate loop; once over COMM_BACKTRACK_BUDGET,
-                    # fall back to first-match for this node.
-                    tried = nothing
-                    for inds in acSets(eachindex(data_args), length(data_args))
-                        candidate = Term{T}(f, @views data_args[inds]; type = ST)
-                        _comm_bt_tick!()
-                        result = loop(candidate, bindings, matchers)
-                        if result !== nothing
-                            key = ac_bindings_key(result)
-                            if tried === nothing
-                                tried = Set{Any}()
-                            elseif key in tried
-                                continue
-                            end
-                            push!(tried, key)
-                            if _comm_bt_over_budget()
-                                return success(result, 1)
-                            end
-                            r = success(result, 1)
-                            r !== nothing && return r
-                        end
+                    push!(tried[], key)
+                    if _comm_bt_over_budget()
+                        result = success(b, n)
+                        return result === nothing ? token : result
                     end
+                    return success(b, n)
+                end
+                for inds in acSets(eachindex(data_args), length(data_args))
+                    candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                    _comm_bt_tick!()
+                    result = loop(candidate, bindings, matchers, ac_next)
+                    result === token && return nothing
+                    result !== nothing && return result
                 end
             # if data does not subtype to number, it might not be commutative
             else
                 # call the normal matcher
-                result = loop(data, bindings, matchers)
-                result !== nothing && return success(result, 1)
+                result = loop(data, bindings, matchers, guard_continuation(success, token))
+                result === token && return nothing
+                result !== nothing && return result
             end
             return nothing
         end
@@ -276,14 +294,18 @@ function term_matcher_constructor(term, acSets)
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
             # do the normal matcher
-            result = loop(data, bindings, matchers)
-            result !== nothing && return success(result, 1)
+            token = Ref{Nothing}(nothing)
+            k = guard_continuation(success, token)
+            result = loop(data, bindings, matchers, k)
+            result === token && return nothing
+            result !== nothing && return result
 
             if (operation(data) === ^) && (unwrap_const(arguments(data)[2]) === 1//2)
                 T = vartype(arguments(data)[1])
                 frankestein = Term{T}(sqrt,[arguments(data)[1]])
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
+                result = loop(frankestein, bindings, matchers, k)
+                result === token && return nothing
+                result !== nothing && return result
             end
             return nothing
         end
@@ -296,14 +318,18 @@ function term_matcher_constructor(term, acSets)
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
             # do the normal matcher
-            result = loop(data, bindings, matchers)
-            result !== nothing && return success(result, 1)
+            token = Ref{Nothing}(nothing)
+            k = guard_continuation(success, token)
+            result = loop(data, bindings, matchers, k)
+            result === token && return nothing
+            result !== nothing && return result
 
             if (operation(data) === ^) && (unwrap_const(arguments(data)[1]) === ℯ)
                 T = vartype(arguments(data)[2])
                 frankestein = Term{T}(exp,[arguments(data)[2]])
-                result = loop(frankestein, bindings, matchers)
-                result !== nothing && return success(result, 1)
+                result = loop(frankestein, bindings, matchers, k)
+                result === token && return nothing
+                result !== nothing && return result
             end
             return nothing
         end
@@ -313,8 +339,11 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
 
-            result = loop(car(data), bindings, matchers)
-            result !== nothing && return success(result, 1)
+            token = Ref{Nothing}(nothing)
+            k = guard_continuation(success, token)
+            result = loop(car(data), bindings, matchers, k)
+            result === token && return nothing
+            result !== nothing && return result
             return nothing
         end
         return term_matcher
@@ -348,19 +377,13 @@ function defslot_term_matcher_constructor(term, acSets)
 
     function defslot_term_matcher(success, data, bindings)
         !islist(data) && return nothing # if data is not a list, return nothing
-        # call the normal matcher, with success function that returns the bindings (foo1)
-        #                       <-foo1->
-        result = normal_matcher((b,n)->b, data, bindings)
-        result !== nothing && return success(result, 1)
-        # if no match, try to match with a defslot.
-        # checks whether it matches the normal part if yes executes foo2
-        # foo2: adds the pair (default value name, default value) to the found bindings
-        #       after checking predicate and presence in the bindings. If added
-        #       successfully returns the bindings (foo3), otherwise return nothing
-        #                           <-------------------foo2----------------------------------->
-        #                                                  <-foo3->
-        result = other_part_matcher((b,n)->defslot_matcher((b,n)->b, (defslot.defaultValue,), b), data, bindings)
-        result !== nothing && return success(result, 1)
-        nothing
+        token = Ref{Nothing}(nothing)
+        k = guard_continuation(success, token)
+        result = normal_matcher(k, data, bindings)
+        result === token && return nothing
+        result !== nothing && return result
+        # if no match, match the normal part and bind the defslot to its default value
+        result = other_part_matcher((b,n)->defslot_matcher(k, (defslot.defaultValue,), b), data, bindings)
+        return result === token ? nothing : result
     end
 end

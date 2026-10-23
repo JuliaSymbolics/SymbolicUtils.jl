@@ -383,7 +383,7 @@ The code generation in this function does not need to handle checking if `expr` 
 function codegen_function! end
 
 function hoist_invariant_arrays!(cs::CodegenState{T}, ex::BasicSymbolic{T}) where {T}
-    invariant(x) = !SymbolicUtils.query(SymbolicUtils._is_index_variable, x; recurse = x -> iscall(x) && !SymbolicUtils.isarrayop(x))
+    invariant(x) = !SymbolicUtils.query(SymbolicUtils._is_index_variable, cs.ir, x; recurse = x -> iscall(x) && !SymbolicUtils.isarrayop(x))
     @match ex begin
         BSImpl.Term(; f, args) && if f === getindex end => begin
             arr = args[1]

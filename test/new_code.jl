@@ -1532,6 +1532,20 @@ end
     @test evaluate(OptimizationRule("ReplaceSin", detect_sin, replace_sin, 1, (; f = exp))) ≈ exp(0.5)
 end
 
+@testset "`apply_optimization_rule` returns the rewritten root" begin
+    @syms a::Real
+    rule = OptimizationRule("ReplaceSin", detect_sin, replace_sin, 1)
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, sin(a))
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), rule)), cos(a))
+    @test isequal(last(Code.apply_optimization_rule(ir, [sin(a), a], rule)), [cos(a), a])
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a) + 1, rule)), cos(a) + 1)
+    @syms b::Real
+    fresh_ir(ir, expr, match) = (new_ir = IRStructure{SymReal}(); populate_ir!(new_ir, exp(b) + b^2 + b^3); (new_ir, expr))
+    fresh = OptimizationRule("FreshIR", detect_sin, fresh_ir, 1)
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), fresh)), sin(a))
+end
+
 detect_let(expr::Code.Let, state) = map(SinMatch, eachindex(expr.pairs))
 detect_let(expr::Code.Let, state, options) = detect_let(expr, state)
 

@@ -2310,11 +2310,28 @@ function apply_optimization_rules(expr, state, rules)
 end
 
 apply_optimization_rules(ir::IRStructure, expr::Any, ::Nothing) = ir, expr
+
+remap_root(ir::IRStructure, new_ir::IRStructure, expr::AbstractArray) = map(e -> remap_root(ir, new_ir, e), expr)
+remap_root(ir::IRStructure, new_ir::IRStructure, expr) = expr
+function remap_root(ir::IRStructure, new_ir::IRStructure, expr::BasicSymbolic)
+    haskey(new_ir, expr) && return expr
+    if haskey(ir, expr)
+        idx = ir[expr]
+        same_prefix = length(new_ir) >= length(ir) && all(j -> j == idx || new_ir[j] === ir[j], 1:length(ir))
+        return same_prefix ? new_ir[idx] : expr
+    end
+    iscall(expr) || return expr
+    args = arguments(expr)
+    new_args = map(a -> remap_root(ir, new_ir, a), args)
+    all(k -> new_args[k] === args[k], eachindex(args)) && return expr
+    return maketerm(typeof(expr), operation(expr), new_args, SymbolicUtils.metadata(expr))
+end
+
 function apply_optimization_rule(ir::IRStructure, expr, rules)
     match_data = run_detector(rules, ir, expr)
     if match_data !== nothing
         new_ir, new_expr = run_transformer(rules, ir, expr, match_data)
-        return new_ir, new_expr
+        return new_ir, remap_root(ir, new_ir, new_expr)
     end
 
     return ir, expr

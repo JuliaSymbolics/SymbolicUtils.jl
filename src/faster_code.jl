@@ -529,6 +529,14 @@ function __allocator_call_and_fill_expr(allocator_sym::Symbol, sz_expr::Expr)
     return Expr(:call, get_allocator_and_fill_zero!, allocator_sym, sz_expr)
 end
 
+regions_overlap(a::ShapeVecT, b::ShapeVecT) = all(((x, y),) -> !isempty(intersect(x, y)), zip(a, b))
+
+accumulates(x::BasicSymbolic) = @match x begin
+    BSImpl.ArrayOp(; term) => term === nothing
+    BSImpl.ArrayMaker(;) => true
+    _ => false
+end
+
 function __is_fill_zero(ex::BasicSymbolic{T}) where {T}
     @match ex begin
         BSImpl.ArrayOp(; term) && if term !== nothing end => @match term begin
@@ -937,7 +945,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     end
 
     if _allocator !== zeros && !__allocator_is_returns_expr(T, _allocator) &&
-            isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
+            !(_allocator isa ExistingBufferAllocator) && isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
         output_buffer = codegen_allocator_call!(
             cs, _allocator, expr, expr_idx;
             allocator_call_expr = __allocator_call_and_fill_expr
@@ -965,6 +973,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     negone_regions = ShapeVecT[]
     other_regions = ShapeVecT[]
     other_values = Any[]
+    written = ShapeVecT[]
 
     eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
     old_fusion_eltype = get(cs.rewrites, FUSION_ELTYPE_KEY, nothing)::Union{Nothing, Symbol}
@@ -1060,7 +1069,10 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                     false
                 end
             end
-            deferred && continue
+            if deferred
+                push!(written, region)
+                continue
+            end
         end
 
         # We are writing to a block. First, materialize all scalar writes that happened until now.
@@ -1074,14 +1086,26 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         view_expr = Expr(:call, view, output_buffer)
         @union_split_smallvec region append!(view_expr.args, region)
         vw = declare!(cs, get_misc_identifier(cs), view_expr)
+        inner_idx = iscall(val) && operation(val) === with_allocator ? Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2] : val_idx
+        inner = cs.ir[inner_idx]
+        source = haskey(cs.rewrites, val) || get(cs.cache, val_idx, nothing) isa Symbol ? val :
+            haskey(cs.rewrites, inner) || get(cs.cache, inner_idx, nothing) isa Symbol ? inner : nothing
+        overlapping = any(w -> regions_overlap(w, region), written)
         @match val begin
+            _ && if source !== nothing end => declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, cs(source)))
+            _ && if overlapping && accumulates(inner) end => begin
+                tmp = declare!(cs, get_misc_identifier(cs), Expr(:call, fill!, Expr(:call, similar, vw), false))
+                old_allocator = add_allocator!(cs, ExistingBufferAllocator(tmp))
+                cs(inner)
+                reset_allocator!(cs, old_allocator)
+                declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, tmp))
+            end
             # Replace the allocator. We want it to write directly to the output
             # No point constructing a new expression, just do what `with_allocator`
             # would do in `codegen_ir!`.
             BSImpl.Term(; f) && if f === with_allocator end => begin
                 old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
-                val_nbors = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)
-                cs(cs.ir[val_nbors[2]])
+                cs(inner)
                 reset_allocator!(cs, old_allocator)
             end
             # Any other operation that supports `with_allocator` should be generated to
@@ -1105,6 +1129,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, temp_array))
             end
         end
+        source === nothing && __is_fill_zero(val) || push!(written, region)
     end
     if !isempty(scalar_idxs)
         materialize_scalar_writes()

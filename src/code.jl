@@ -569,6 +569,7 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
     regions, values = @match O begin
         BSImpl.ArrayMaker(; regions, values) => (regions, values)
     end
+    written = ShapeVecT[]
     @union_split_smallvec regions @union_split_smallvec values begin
         for (region, val) in zip(regions, values)
             args = ArgsT{T}((ARRAY_OUTSYM,))
@@ -577,14 +578,20 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
                 push!(args, BSImpl.Const{T}(reg))
             end
             vw = BSImpl.Term{T}(view, args; type = Any)
+            overlapping = any(w -> regions_overlap(w, region), written)
+            rewritten = haskey(st.rewrites, val)
+            !rewritten && __is_fill_zero(val) || push!(written, region)
+            zeroed = :($fill!($similar($view($ARRAY_OUTSYM, $(region...))), false))
             @match val begin
-                BSImpl.ArrayOp(;) => begin
-                    st.rewrites[:arrayop_output] = vw
-                    push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
+                BSImpl.ArrayOp(; term) && if term === nothing && !rewritten end => begin
+                    st.rewrites[:arrayop_output] = overlapping ? zeroed : vw
+                    ex = toexpr(val, st)
+                    push!(ir, Assignment(Symbol("__tmp_ₐ"), overlapping ? :($copyto!($view($ARRAY_OUTSYM, $(region...)), $ex)) : ex))
                 end
-                BSImpl.ArrayMaker(;) => begin
-                    st.rewrites[:arraymaker_output] = vw
-                    push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
+                BSImpl.ArrayMaker(;) && if !rewritten end => begin
+                    st.rewrites[:arraymaker_output] = overlapping ? zeroed : vw
+                    ex = toexpr(val, st)
+                    push!(ir, Assignment(Symbol("__tmp_ₐ"), overlapping ? :($copyto!($view($ARRAY_OUTSYM, $(region...)), $ex)) : ex))
                 end
                 _ => begin
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), :($copyto!($view($ARRAY_OUTSYM, $(region...)), $(toexpr(val, st))))))

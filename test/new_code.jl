@@ -803,6 +803,30 @@ end
         )
     end
 
+    @testset "`@arrayop` computes loop-invariant arrays once" begin
+        @syms x[1:3] y[1:3]
+        ncalls = Ref(0)
+        double = v -> (ncalls[] += 1; 2 .* v)
+        dx = SymbolicUtils.term(double, x; type = Vector{Real}, shape = SymbolicUtils.ShapeVecT((1:3,)))
+        expr = sum(@arrayop (i,) dx[i] + y[i])
+        f = eval(Code.fast_toexpr(Func([x, y], [], expr), IRStructure{SymReal}(), Dict()))
+        @test @invokelatest(f([1.0, 2.0, 3.0], [4.0, 5.0, 6.0])) == 27.0
+        @test ncalls[] == 1
+        @syms c::Real
+        sq = v -> (ncalls[] += 1; sqrt.(v))
+        sx = SymbolicUtils.term(sq, x; type = Vector{Real}, shape = SymbolicUtils.ShapeVecT((1:3,)))
+        g = eval(Code.fast_toexpr(Func([c, x], [], sum(@arrayop (i,) ifelse_branching(c > 0, sx[i], x[i]))), IRStructure{SymReal}(), Dict()))
+        ncalls[] = 0
+        @test @invokelatest(g(-1.0, [-1.0, -2.0, -3.0])) == -6.0
+        @test ncalls[] == 0
+        h = eval(Code.fast_toexpr(Func([c, x], [], sum(@arrayop (i,) x[i] + ifelse_branching(c > 0, sx[1], c))), IRStructure{SymReal}(), Dict()))
+        @test @invokelatest(h(1.0, [4.0, 9.0, 16.0])) == 35.0
+        @test ncalls[] == 1
+        ncalls[] = 0
+        @test @invokelatest(h(-1.0, [4.0, 9.0, 16.0])) == 26.0
+        @test ncalls[] == 0
+    end
+
     @testset "bare `@arrayop` after `with_allocator` (issue #1151)" begin
         @syms x[1:3] y[1:3]
         wrapped = Code.with_allocator(zeros, @arrayop (i,) x[i] * y[i])

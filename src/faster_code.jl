@@ -382,6 +382,25 @@ The code generation in this function does not need to handle checking if `expr` 
 """
 function codegen_function! end
 
+function hoist_invariant_arrays!(cs::CodegenState{T}, ex::BasicSymbolic{T}) where {T}
+    invariant(x) = !SymbolicUtils.query(SymbolicUtils._is_index_variable, cs.ir, x; recurse = x -> iscall(x) && !SymbolicUtils.isarrayop(x))
+    @match ex begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            arr = args[1]
+            iscall(arr) && is_array_shape(shape(arr)) && invariant(arr) && cs(arr)
+        end
+        BSImpl.Term(; f, args) && if f === ifelse_branching end => begin
+            invariant(ex) ? cs(ex) : hoist_invariant_arrays!(cs, args[1])
+        end
+        _ => if iscall(ex)
+            for a in arguments(ex)
+                hoist_invariant_arrays!(cs, a)
+            end
+        end
+    end
+    return nothing
+end
+
 function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
@@ -394,6 +413,7 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
 
     new_ranges = RangesT{T}()
     new_expr = unidealize_indices(innerexpr, ranges, new_ranges)
+    hoist_invariant_arrays!(cs, new_expr)
 
     scoped_cs, bm = enter_scope(cs)
 

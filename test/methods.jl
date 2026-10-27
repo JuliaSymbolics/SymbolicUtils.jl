@@ -381,6 +381,10 @@ end
         @test SymbolicUtils.shape(rebuilt) == SymbolicUtils.shape(c)
         @test symtype(rebuilt) == symtype(c)
     end
+    t = Term{SymReal}(LinearAlgebra.mul!, [c, a, b]; type = symtype(c), shape = SymbolicUtils.shape(c))
+    @test isequal(scalarize(t), scalarize(a * b))
+    t = Term{SymReal}(LinearAlgebra.mul!, [c, a, b, α, β]; type = symtype(c), shape = SymbolicUtils.shape(c))
+    @test isequal(scalarize(t), scalarize(α * (a * b) + β * c))
 end
 
 @testset "Array symbolic operations" begin

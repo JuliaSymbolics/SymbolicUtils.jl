@@ -406,6 +406,14 @@ function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
     return hash(hv, h)
 end
 
+"""
+Number of leading elements of a vector hashed densely by `hash_argsvec` and
+friends. Past this limit only an exponentially-spread sample of the tail is
+hashed (like `Base.hash` for large `AbstractArray`s), so the cost of hashing
+very long argument vectors stays sublinear in their length.
+"""
+const ARGSVEC_HASH_LIMIT = 512
+
 const SHAPEVECT_SEED = 0x70840b1b2d005176 % UInt
 
 """
@@ -414,8 +422,21 @@ const SHAPEVECT_SEED = 0x70840b1b2d005176 % UInt
 Specialized hash for `ShapeT` to hit `hash_range`.
 """
 function hash_shape(sh::ShapeVecT, h::UInt)
-    @union_split_smallvec sh for ax in sh
-        h = hash_range(ax, h)
+    @union_split_smallvec sh begin
+        n = length(sh)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_range(@inbounds(sh[i]), h)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_range(@inbounds(sh[i]), h)
+            i -= skip
+            skip <<= 1
+        end
     end
     return h ⊻ SHAPEVECT_SEED
 end
@@ -429,8 +450,21 @@ const ARGSVEC_SEED = 0x6b2f4a9c1d8e7053 % UInt
 Specialized hash for a vector of symbolic arguments (e.g. `Term`/`ArrayMaker` args).
 """
 function hash_argsvec(v::ArgsT{T}, h::UInt, full::Bool) where {T}
-    @union_split_smallvec v for el in v
-        h = hash_bsimpl(el, h, full)
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_bsimpl(@inbounds(v[i]), h, full)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_bsimpl(@inbounds(v[i]), h, full)
+            i -= skip
+            skip <<= 1
+        end
     end
     return h ⊻ ARGSVEC_SEED
 end
@@ -441,8 +475,23 @@ end
 Specialized hash for `ArrayOp.output_idx`, whose elements are `Int` or symbolic.
 """
 function hash_outputidx(v::SmallV{<:Union{Int, BasicSymbolic}}, h::UInt, full::Bool)
-    @union_split_smallvec v for el in v
-        h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            el = @inbounds(v[i])
+            h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            el = @inbounds(v[i])
+            h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+            i -= skip
+            skip <<= 1
+        end
     end
     return h ⊻ ARGSVEC_SEED
 end
@@ -453,8 +502,21 @@ end
 Specialized hash for `ArrayMaker.regions`, a vector of shapes.
 """
 function hash_regions(v::RegionsT, h::UInt)
-    @union_split_smallvec v for el in v
-        h = hash_shape(el, h)
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_shape(@inbounds(v[i]), h)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_shape(@inbounds(v[i]), h)
+            i -= skip
+            skip <<= 1
+        end
     end
     return h ⊻ ARGSVEC_SEED
 end

@@ -635,8 +635,10 @@ scalarization_function(::typeof(LinearAlgebra.mul!)) = _scalarize_mul!
 function _scalarize_mul!(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), arguments(x))
-    length(args) == 3 && return args[2] * args[3]
-    return args[4] .* (args[2] * args[3]) .+ args[5] .* args[1]
+    AB = reshape(args[2] * args[3], size(args[1]))
+    length(args) == 3 && return AB
+    _iszero(args[5]) && return args[4] .* AB
+    return args[4] .* AB .+ args[5] .* args[1]
 end
 
 scalarization_function(::typeof(broadcast)) = _scalarize_broadcast

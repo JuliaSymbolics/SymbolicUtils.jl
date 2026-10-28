@@ -385,6 +385,12 @@ end
     @test isequal(scalarize(t), scalarize(a * b))
     t = Term{SymReal}(LinearAlgebra.mul!, [c, a, b, α, β]; type = symtype(c), shape = SymbolicUtils.shape(c))
     @test isequal(scalarize(t), scalarize(α * (a * b) + β * c))
+    t = Term{SymReal}(LinearAlgebra.mul!, [SymbolicUtils.Const{SymReal}(fill(NaN, 2, 3)), a, b, α, 0]; type = symtype(c), shape = SymbolicUtils.shape(c))
+    @test isequal(scalarize(t), scalarize(α * (a * b)))
+    @syms d[1:2, 1:1] w[1:4]
+    t = Term{SymReal}(LinearAlgebra.mul!, [d, a, w]; type = symtype(d), shape = SymbolicUtils.shape(d))
+    @test size(scalarize(t)) == (2, 1)
+    @test isequal(vec(scalarize(t)), scalarize(a * w))
 end
 
 @testset "Array symbolic operations" begin

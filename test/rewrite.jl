@@ -218,13 +218,30 @@ end
     end
 end
 
+@testset "Inner segment retries preserve outer operand assignments" begin
+    @syms a b c d e f g h i j k l m n
+    left = sin(sin(a * b * c * d * e * f * g))
+    right = sin(sin(h * i * j * k * l * m * n))
+    for (expected_calls, target) in enumerate(reverse(arguments(left + right)))
+        calls = Ref(0)
+        accept(z) = (calls[] += 1; isequal(z, target))
+        rule = @rule sin(sin(~x * ~~rest)) + ~z => ~z where {accept(~z)}
+        @test isequal(rule(left + right), target)
+        @test calls[] == expected_calls
+    end
+end
+
 @testset "RHS call counter is scoped per Rule call" begin
     inner = @rule sin(~x) => ~x
     deltas = Int[]
     function pred_rhs(x)
         before = SymbolicUtils.RULE_RHS_CALLS[][]
+        before_mode = SymbolicUtils.RULE_RETRY_MODE[][]
         inner(sin(x))
-        push!(deltas, SymbolicUtils.RULE_RHS_CALLS[][] - before)
+        push!(
+            deltas, SymbolicUtils.RULE_RHS_CALLS[][] - before,
+            SymbolicUtils.RULE_RETRY_MODE[][] - before_mode
+        )
         return true
     end
     r = @rule (~x::pred_rhs)*(~~rest) => ~x where false

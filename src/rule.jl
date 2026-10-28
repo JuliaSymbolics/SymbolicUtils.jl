@@ -17,6 +17,8 @@ const COMM_BACKTRACK_BUDGET = Ref(2000)
 const COMM_BT_USED = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
 # Number of RHS evaluations in the current Rule call, scoped like COMM_BT_USED.
 const RULE_RHS_CALLS = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
+# 0: first-match pass; 1: deferred retries; 2: budgeted retry pass.
+const RULE_RETRY_MODE = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
 
 # Matcher patterns with Slot, DefSlot and Segment
 
@@ -333,6 +335,9 @@ function (r::Rule)(term)
     ref[] = 0
     rhs_calls = RULE_RHS_CALLS[]
     saved_rhs_calls = rhs_calls[]
+    retry_mode = RULE_RETRY_MODE[]
+    saved_retry_mode = retry_mode[]
+    retry_mode[] = 0
     try
         # n == 1 means that exactly one term of the input (term,) was matched
         function success(bindings, n)
@@ -340,12 +345,18 @@ function (r::Rule)(term)
             rhs_calls[] += 1
             return rhs(assoc(bindings, :MATCH, term))
         end
-        return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
+        result = r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
+        if result === nothing && retry_mode[] == 1 && !_comm_bt_over_budget()
+            retry_mode[] = 2
+            return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
+        end
+        return result
     catch err
         throw(RuleRewriteError(r, term))
     finally
         ref[] = saved
         rhs_calls[] = saved_rhs_calls
+        retry_mode[] = saved_retry_mode
     end
 end
 

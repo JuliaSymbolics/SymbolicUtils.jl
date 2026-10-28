@@ -41,20 +41,38 @@ end
     COMM_BT_USED[][] > COMM_BACKTRACK_BUDGET[]
 end
 
-# Continuation for a term-level matcher. If the rest of the match fails without
-# reaching the rule's RHS, return `token` so the term commits to its first local
-# match. If the RHS (e.g. a `where` condition) rejected the bindings, return
-# `nothing` so the term tries its next local match, until the work budget is spent.
+# Structural failures commit to a term's first local match. RHS rejections defer
+# further local matches to a budgeted retry pass, after the first-match pass has
+# exhausted outer operand assignments.
 function guard_continuation(success, token)
+    token === nothing && return success
     function guarded(b, n)
         rhs_calls = RULE_RHS_CALLS[]
         before = rhs_calls[]
         result = success(b, n)
         result === nothing || return result
         (rhs_calls[] == before || _comm_bt_over_budget()) && return token
+        retry_mode = RULE_RETRY_MODE[]
+        if retry_mode[] != 2
+            retry_mode[] = 1
+            return token
+        end
         _comm_bt_tick!()
         return nothing
     end
+end
+
+function pattern_may_retry(val, acSets)
+    val = unwrap_const(val)
+    (val isa Segment || val isa DefSlot) && return true
+    iscall(val) || return false
+    op = operation(val)
+    (
+        op === (^) || op === sqrt || op === exp ||
+            (acSets !== nothing && (op === (+) || op === (*)))
+    ) && return true
+    return pattern_may_retry(op, acSets) ||
+        any(arg -> pattern_may_retry(arg, acSets), arguments(val))
 end
 
 function matcher(val::Any, acSets)
@@ -157,6 +175,7 @@ end
 
 function term_matcher_constructor(term, acSets)
     matchers = vcat([matcher(operation(term), acSets)], map(x -> matcher(unwrap_const(x), acSets), parent(arguments(term))))
+    needs_guard = pattern_may_retry(term, acSets)
 
     # `success` continues the match past this term; see `guard_continuation`
     # for when a later failure makes this term try its next local match.
@@ -186,7 +205,7 @@ function term_matcher_constructor(term, acSets)
             data = car(data) # from (..., ) to ...
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
-            token = Ref{Nothing}(nothing)
+            token = needs_guard ? Ref{Nothing}(nothing) : nothing
             k = guard_continuation(success, token)
             result = loop(data, bindings, matchers, k)
             result === token && return nothing
@@ -246,7 +265,7 @@ function term_matcher_constructor(term, acSets)
 
             T = vartype(data)
             ST = symtype(data)
-            token = Ref{Nothing}(nothing)
+            token = needs_guard ? Ref{Nothing}(nothing) : nothing
             if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
                 # Fixed arity ≤ COMM_BACKTRACK_LIMIT backtracks over distinct local
                 # matches until COMM_BACKTRACK_BUDGET is spent. Otherwise the node
@@ -294,7 +313,7 @@ function term_matcher_constructor(term, acSets)
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
             # do the normal matcher
-            token = Ref{Nothing}(nothing)
+            token = needs_guard ? Ref{Nothing}(nothing) : nothing
             k = guard_continuation(success, token)
             result = loop(data, bindings, matchers, k)
             result === token && return nothing
@@ -318,7 +337,7 @@ function term_matcher_constructor(term, acSets)
             !iscall(data) && return nothing # if first element is not a call, return nothing
 
             # do the normal matcher
-            token = Ref{Nothing}(nothing)
+            token = needs_guard ? Ref{Nothing}(nothing) : nothing
             k = guard_continuation(success, token)
             result = loop(data, bindings, matchers, k)
             result === token && return nothing
@@ -339,7 +358,7 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
 
-            token = Ref{Nothing}(nothing)
+            token = needs_guard ? Ref{Nothing}(nothing) : nothing
             k = guard_continuation(success, token)
             result = loop(car(data), bindings, matchers, k)
             result === token && return nothing

@@ -460,12 +460,20 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
     reverse!(loopvar_order)
     ref_expr = Expr(:ref, output_buffer, index_expr)
 
-    declare!(scoped_cs, :__accum, Expr(:call, reducer, ref_expr, inner_result))
-    declare!(scoped_cs, :_, Expr(:(=), ref_expr, :__accum))
-
     merge!(new_ranges, ranges)
+    output_vars = unique(loopvar_order)
     append!(loopvar_order, keys(new_ranges))
     unique!(loopvar_order)
+
+    # Assign the first contribution so the buffer's contents never enter the reduction.
+    reduction_vars = setdiff(loopvar_order, output_vars)
+    if isempty(reduction_vars)
+        declare!(scoped_cs, :_, Expr(:(=), ref_expr, inner_result))
+    else
+        is_first = mapreduce(lv -> Expr(:call, ==, scoped_cs(lv), first(new_ranges[lv])), (a, b) -> Expr(:&&, a, b), reduction_vars)
+        declare!(scoped_cs, :__accum, Expr(:if, is_first, inner_result, Expr(:call, reducer, ref_expr, inner_result)))
+        declare!(scoped_cs, :_, Expr(:(=), ref_expr, :__accum))
+    end
 
     outer_expr = Expr(:block)
     cur_expr = outer_expr

@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
+using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal, scalarize
 using Test
 import NaNMath
 import LinearAlgebra

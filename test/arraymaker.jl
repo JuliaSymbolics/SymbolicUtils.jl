@@ -225,4 +225,10 @@ end
     expected[[1, 3], 2:3] = Wv
     fn = Func([Z, W], [], m)
     @test Base.invokelatest(eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}())), Zv, Wv) == expected
+
+    @test_throws ArgumentError SU.ArrayMaker{SymReal}(((1:3,), ([1, 3],)), ([0, 0, 0], [10, 20, 30]))
+    @test_throws ArgumentError SU.ArrayMaker{SymReal}(((1:20,), ([5, 6, 12],)), (u, SU.Fill(SU.ShapeVecT((1:2,)))(SU.Const{SymReal}(7))))
+    @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), ([true, false, true],)), ([0, 0, 0], [10, 30])))) == [10, 0, 30]
+    @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), (trues(3),)), ([0, 0, 0], [10, 20, 30])))) == [10, 20, 30]
+    @test isempty(collect(SU.ArrayMaker{SymReal}(((Int[],),), (Int[],); shape = SU.ShapeVecT((1:0,)))))
 end

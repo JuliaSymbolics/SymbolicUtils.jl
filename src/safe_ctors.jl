@@ -665,7 +665,12 @@ function split_index_regions(regions, values)
             push!(new_values, value)
             continue
         end
-        for pieces in Iterators.product(map(index_runs, Tuple(region))...)
+        region = map(ax -> ax isa AbstractVector{Bool} ? findall(ax) : ax, Tuple(region))
+        sh = shape(value)
+        if sh isa ShapeVecT && (length(sh) != length(region) || any(i -> length(sh[i]) != length(region[i]), eachindex(region)))
+            _throw_arraymaker_incompatible_shapes(region, value)
+        end
+        for pieces in Iterators.product(map(index_runs, region)...)
             push!(new_regions, map(first, pieces))
             push!(new_values, region_slice(value, map(last, pieces)))
         end
@@ -675,6 +680,7 @@ end
 
 index_runs(ax::AbstractUnitRange{<:Integer}) = ((UnitRange{Int}(ax), 1:length(ax)),)
 function index_runs(ax::AbstractVector{<:Integer})
+    isempty(ax) && return ((1:0, 1:0),)
     runs = Tuple{UnitRange{Int}, UnitRange{Int}}[]
     start = 1
     for k in 2:(length(ax) + 1)

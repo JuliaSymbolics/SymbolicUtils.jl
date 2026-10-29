@@ -630,6 +630,23 @@ function _scalarize_mul(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, tople
     return map(Base.Fix2(*, coeff), res)
 end
 
+scalarization_function(::typeof(LinearAlgebra.mul!)) = _scalarize_mul!
+
+function _scalarize_mul!(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), arguments(x))
+    res = if length(args) == 5 && _iszero(args[4])
+        _iszero(args[5]) ? zero.(args[1]) : args[5] .* args[1]
+    else
+        AB = args[2] * args[3]
+        AB isa AbstractArray && args[1] isa AbstractArray && (AB = reshape(AB, size(args[1])))
+        length(args) == 3 ? AB : _iszero(args[5]) ? args[4] .* AB : args[4] .* AB .+ args[5] .* args[1]
+    end
+    res isa AbstractArray || return res
+    E = eltype(symtype(x))
+    return map(v -> unwrap_const(v) isa Number ? Const{T}(convert(E, unwrap_const(v))) : v, res)
+end
+
 scalarization_function(::typeof(broadcast)) = _scalarize_broadcast
 
 function _scalarize_broadcast(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}

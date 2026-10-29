@@ -1,5 +1,5 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
+using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal, scalarize
 using Test
 import NaNMath
 import LinearAlgebra
@@ -381,6 +381,29 @@ end
         @test SymbolicUtils.shape(rebuilt) == SymbolicUtils.shape(c)
         @test symtype(rebuilt) == symtype(c)
     end
+    t = Term{SymReal}(LinearAlgebra.mul!, [c, a, b]; type = symtype(c), shape = SymbolicUtils.shape(c))
+    @test isequal(scalarize(t), scalarize(a * b))
+    t = Term{SymReal}(LinearAlgebra.mul!, [c, a, b, α, β]; type = symtype(c), shape = SymbolicUtils.shape(c))
+    @test isequal(scalarize(t), scalarize(α * (a * b) + β * c))
+    t = Term{SymReal}(LinearAlgebra.mul!, [SymbolicUtils.Const{SymReal}(fill(NaN, 2, 3)), a, b, α, 0]; type = symtype(c), shape = SymbolicUtils.shape(c))
+    @test isequal(scalarize(t), scalarize(α * (a * b)))
+    @syms d[1:2, 1:1] w[1:4]
+    t = Term{SymReal}(LinearAlgebra.mul!, [d, a, w]; type = symtype(d), shape = SymbolicUtils.shape(d))
+    @test size(scalarize(t)) == (2, 1)
+    @test isequal(vec(scalarize(t)), scalarize(a * w))
+    @syms Au::Matrix{Real} bu::Vector{Real} cu[1:2]
+    t = Term{SymReal}(LinearAlgebra.mul!, [cu, Au, bu]; type = symtype(cu), shape = SymbolicUtils.shape(cu))
+    @test isequal(scalarize(t), scalarize(Au * bu))
+    nan = Const{SymReal}(fill(NaN, 1, 1))
+    t = Term{SymReal}(LinearAlgebra.mul!, [Const{SymReal}(ones(1, 1)), nan, Const{SymReal}(ones(1, 1)), 0, 1]; type = Matrix{Float64}, shape = ShapeVecT((1:1, 1:1)))
+    @test SymbolicUtils.unwrap_const.(scalarize(t)) == ones(1, 1)
+    t = Term{SymReal}(LinearAlgebra.mul!, [nan, nan, nan, 0, 0]; type = Matrix{Float64}, shape = ShapeVecT((1:1, 1:1)))
+    @test SymbolicUtils.unwrap_const.(scalarize(t)) == zeros(1, 1)
+    ints = Const{SymReal}(zeros(Int, 1, 1))
+    t = Term{SymReal}(LinearAlgebra.mul!, [ints, Const{SymReal}(fill(0.5, 1, 1)), Const{SymReal}(ones(1, 1))]; type = Matrix{Int}, shape = ShapeVecT((1:1, 1:1)))
+    @test_throws InexactError scalarize(t)
+    t = Term{SymReal}(LinearAlgebra.mul!, [ints, Const{SymReal}(fill(2.0, 1, 1)), Const{SymReal}(ones(1, 1))]; type = Matrix{Int}, shape = ShapeVecT((1:1, 1:1)))
+    @test SymbolicUtils.unwrap_const(only(scalarize(t))) === 2
 end
 
 @testset "Array symbolic operations" begin

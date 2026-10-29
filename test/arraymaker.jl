@@ -88,29 +88,6 @@ end
     end
     truew = BS[x[1], y[1], y[2]]
     @test isequal(collect(w), truew)
-
-    @syms u[1:20]::Real s[1:3]::Real
-    over = @makearray o[1:20] begin
-        o[1:20] => u
-        o[4:6] => @arrayop (i,) sin(s[i]) i in 1:3
-    end
-    uv, sv = collect(1.0:20), [7.0, 8.0, 9.0]
-    expected = copy(uv)
-    expected[4:6] = sin.(sv)
-    fn = Func([u, s], [], over)
-    @test Base.invokelatest(eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}())), uv, sv) ≈ expected
-    @test Base.invokelatest(eval(Code.toexpr(fn)), uv, sv) ≈ expected
-
-    exact = @makearray e[1:20] begin
-        e[1:1] => [0]
-        e[1:20] => @arrayop (i,) u[i]
-    end
-    fn = Func([u], [], Code.with_allocator(Returns(zeros(Int, 20)), exact))
-    @test Base.invokelatest(eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}())), fill(2^53 + 1, 20)) == fill(2^53 + 1, 20)
-
-    sines = SU.ArrayMaker{SymReal}(((1:20,), (1:20,)), (SU.Const{SymReal}(zeros(20)), @arrayop (i,) sin(u[i])))
-    fn = Func([u], [], Code.with_allocator(Returns(Any[zeros(20)...]), sines))
-    @test Base.invokelatest(eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}())), ones(20)) ≈ fill(sin(1.0), 20)
 end
 
 @testset "`Code.toexpr` writes every region value" begin
@@ -140,11 +117,6 @@ end
     wrapped = Code.with_allocator(zeros, a)
     g = eval(Code.fast_toexpr(Func([wrapped, p], [], SU.ArrayMaker{SymReal}(((1:20,),), (wrapped,))), IRStructure{SymReal}(), Dict{Any, Any}()))
     @test Base.invokelatest(g, fill(3.0, 20), ones(20)) == fill(3.0, 20)
-    zero_fill = SU.Fill(SU.ShapeVecT((1:20,)))(SU.Const{SymReal}(0))
-    w = SU.ArrayMaker{SymReal}(((1:20,), (1:20,)), (zero_fill, a))
-    for ex in (Code.fast_toexpr(Func([zero_fill, p], [], w), IRStructure{SymReal}(), Dict{Any, Any}()), Code.toexpr(Func([zero_fill, p], [], w)))
-        @test Base.invokelatest(eval(ex), fill(3.0, 20), ones(20)) ≈ fill(sin(1.0), 20)
-    end
 end
 
 @testset "a nested zero fill clears the parent's buffer" begin

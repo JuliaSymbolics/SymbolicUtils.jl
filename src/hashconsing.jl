@@ -363,9 +363,11 @@ Specialized `hash` for range types used in `BasicSymbolic`, since the one in `Ba
 iterates over the full range and is thus `O(n)` in the length.
 """
 function hash_range(a::UnitRange{Int}, h::UInt)
+    isempty(a) && (a = 1:0)
     return hash(first(a), hash(last(a), h)) ⊻ UNITRANGE_SALT
 end
 function hash_range(a::StepRange{Int, Int}, h::UInt)
+    isempty(a) && (a = 1:1:0)
     return hash(first(a), hash(last(a), h)) ⊻ STEPRANGE_SALT
 end
 

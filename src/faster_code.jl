@@ -957,7 +957,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     end
 
     if _allocator !== zeros && !__allocator_is_returns_expr(T, _allocator) &&
-            isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
+            !(_allocator isa ExistingBufferAllocator) && isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
         output_buffer = codegen_allocator_call!(
             cs, _allocator, expr, expr_idx;
             allocator_call_expr = __allocator_call_and_fill_expr
@@ -1094,14 +1094,18 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         view_expr = Expr(:call, view, output_buffer)
         @union_split_smallvec region append!(view_expr.args, region)
         vw = declare!(cs, get_misc_identifier(cs), view_expr)
+        inner_idx = iscall(val) && operation(val) === with_allocator ? Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2] : val_idx
+        inner = cs.ir[inner_idx]
+        source = haskey(cs.rewrites, val) || get(cs.cache, val_idx, nothing) isa Symbol ? val :
+            haskey(cs.rewrites, inner) || get(cs.cache, inner_idx, nothing) isa Symbol ? inner : nothing
         @match val begin
+            _ && if source !== nothing end => declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, cs(source)))
             # Replace the allocator. We want it to write directly to the output
             # No point constructing a new expression, just do what `with_allocator`
             # would do in `codegen_ir!`.
             BSImpl.Term(; f) && if f === with_allocator end => begin
                 old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
-                val_nbors = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)
-                cs(cs.ir[val_nbors[2]])
+                cs(inner)
                 reset_allocator!(cs, old_allocator)
             end
             # Any other operation that supports `with_allocator` should be generated to

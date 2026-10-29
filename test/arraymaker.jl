@@ -178,3 +178,57 @@ Base.copyto!(dst::NoScalarVector, src::AbstractArray) = (copyto!(dst.data, src);
         @test Base.invokelatest(eval(ex), zeros(20), pv, qv, av) ≈ [pv[1:18]; av; 2.0]
     end
 end
+
+@testset "index vector regions" begin
+    @syms u[1:20]::Real v[1:20]::Real Z[1:4, 1:5]::Real W[1:2, 1:2]::Real
+    idxs = [2, 3, 19]
+    w = @makearray w[1:20] begin
+        w[1:20] => u
+        w[idxs] => x
+    end
+    idxs[1] = 4
+    @test SU.unwrap_const(arguments(w)[1]) == SU.RegionsT([SU.ShapeVecT((1:20,)), SU.ShapeVecT((2:3,)), SU.ShapeVecT((19:19,))])
+    @test isequal(collect(w), [i == 2 ? x[1] : i == 3 ? x[2] : i == 19 ? x[3] : u[i] for i in 1:20])
+    @test isequal(w, @makearray w[1:20] begin
+        w[1:20] => u
+        w[2:3] => x[1:2]
+        w[19:19] => x[3:3]
+    end)
+    @test isequal(SU.ArrayMaker{SymReal}(((1:20,), ([2, 3, 19],)), (u, x)), w)
+
+    uv, vv = collect(1.0:20), collect(10.0:10:200)
+    values = [SU.@arrayop((i,), sin(u[i]), i in 1:10), SU.@arrayop((i,), v[i] + u[i + 10], i in 1:10)]
+    maker = SU.ArrayMaker{SymReal}([[1:2:19], [20:-2:2]], values)
+    expected = zeros(20)
+    expected[1:2:19] = sin.(uv[1:10])
+    expected[20:-2:2] = vv[1:10] .+ uv[11:20]
+    fn = Func([u, v], [], maker)
+    @test Base.invokelatest(eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}())), uv, vv) ≈ expected
+
+    filled = SU.Fill(SU.ShapeVecT((1:3,)))(SU.Const{SymReal}(7))
+    f = SU.ArrayMaker{SymReal}(((1:20,), ([5, 6, 12],)), (u, filled))
+    @test SU.unwrap_const(arguments(f)[1]) == SU.RegionsT([SU.ShapeVecT((1:20,)), SU.ShapeVecT((5:6,)), SU.ShapeVecT((12:12,))])
+    @test isequal(SU.unwrap_const(arguments(f)[2])[2], SU.Fill(SU.ShapeVecT((1:2,)))(SU.Const{SymReal}(7)))
+    ff = eval(Code.fast_toexpr(Func([u], [], f), IRStructure{SymReal}(), Dict{Any, Any}()))
+    expected = copy(uv)
+    expected[[5, 6, 12]] .= 7
+    @test Base.invokelatest(ff, uv) == expected
+
+    m = @makearray m[1:4, 1:5] begin
+        m[1:4, 1:5] => Z
+        m[[1, 3], 2:3] => W
+    end
+    @test isequal(m[3, 3], W[2, 2])
+    @test isequal(m[2, 3], Z[2, 3])
+    Zv, Wv = reshape(collect(1.0:20), 4, 5), [100.0 200.0; 300.0 400.0]
+    expected = copy(Zv)
+    expected[[1, 3], 2:3] = Wv
+    fn = Func([Z, W], [], m)
+    @test Base.invokelatest(eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}())), Zv, Wv) == expected
+
+    @test_throws ArgumentError SU.ArrayMaker{SymReal}(((1:3,), ([1, 3],)), ([0, 0, 0], [10, 20, 30]))
+    @test_throws ArgumentError SU.ArrayMaker{SymReal}(((1:20,), ([5, 6, 12],)), (u, SU.Fill(SU.ShapeVecT((1:2,)))(SU.Const{SymReal}(7))))
+    @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), ([true, false, true],)), ([0, 0, 0], [10, 30])))) == [10, 0, 30]
+    @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), (trues(3),)), ([0, 0, 0], [10, 20, 30])))) == [10, 20, 30]
+    @test isempty(collect(SU.ArrayMaker{SymReal}(((Int[],),), (Int[],); shape = SU.ShapeVecT((1:0,)))))
+end

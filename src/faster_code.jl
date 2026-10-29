@@ -1090,10 +1090,9 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         inner = cs.ir[inner_idx]
         source = haskey(cs.rewrites, val) || get(cs.cache, val_idx, nothing) isa Symbol ? val :
             haskey(cs.rewrites, inner) || get(cs.cache, inner_idx, nothing) isa Symbol ? inner : nothing
-        overlapping = any(w -> regions_overlap(w, region), written)
         @match val begin
             _ && if source !== nothing end => declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, cs(source)))
-            _ && if overlapping && accumulates(inner) end => begin
+            _ && if accumulates(inner) && any(w -> regions_overlap(w, region), written) end => begin
                 tmp = declare!(cs, get_misc_identifier(cs), Expr(:call, fill!, Expr(:call, similar, vw), false))
                 old_allocator = add_allocator!(cs, ExistingBufferAllocator(tmp))
                 cs(inner)

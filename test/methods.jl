@@ -399,6 +399,11 @@ end
     @test SymbolicUtils.unwrap_const.(scalarize(t)) == ones(1, 1)
     t = Term{SymReal}(LinearAlgebra.mul!, [nan, nan, nan, 0, 0]; type = Matrix{Float64}, shape = ShapeVecT((1:1, 1:1)))
     @test SymbolicUtils.unwrap_const.(scalarize(t)) == zeros(1, 1)
+    ints = Const{SymReal}(zeros(Int, 1, 1))
+    t = Term{SymReal}(LinearAlgebra.mul!, [ints, Const{SymReal}(fill(0.5, 1, 1)), Const{SymReal}(ones(1, 1))]; type = Matrix{Int}, shape = ShapeVecT((1:1, 1:1)))
+    @test_throws InexactError scalarize(t)
+    t = Term{SymReal}(LinearAlgebra.mul!, [ints, Const{SymReal}(fill(2.0, 1, 1)), Const{SymReal}(ones(1, 1))]; type = Matrix{Int}, shape = ShapeVecT((1:1, 1:1)))
+    @test SymbolicUtils.unwrap_const(only(scalarize(t))) === 2
 end
 
 @testset "Array symbolic operations" begin

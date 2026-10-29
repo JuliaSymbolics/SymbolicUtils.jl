@@ -578,8 +578,8 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
                 push!(args, BSImpl.Const{T}(reg))
             end
             vw = BSImpl.Term{T}(view, args; type = Any)
-            overlapping = any(w -> regions_overlap(w, region), written)
             rewritten = haskey(st.rewrites, val)
+            overlapping = !rewritten && accumulates(val) && any(w -> regions_overlap(w, region), written)
             !rewritten && __is_fill_zero(val) || push!(written, region)
             zeroed = :($fill!($similar($view($ARRAY_OUTSYM, $(region...))), false))
             @match val begin

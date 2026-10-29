@@ -774,6 +774,16 @@ end
         @test isequal(reference, value)
     end
 
+    @testset "bare `@arrayop` after a wrapped one" begin
+        @syms x[1:3] y[1:3]
+        wrapped = Code.with_allocator(zeros, @arrayop (i,) x[i] * y[i])
+        bare = @arrayop (i,) x[i] + y[i]
+        ir = IRStructure{SymReal}()
+        expr = Code.fast_toexpr(sum(wrapped) + sum(bare), ir, Dict())
+        result = eval(quote let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]; $expr end end)
+        @test result ≈ 53.0
+    end
+
     @testset "`@arrayop`" begin
         @syms x[1:3] y[1:3]
         ir = IRStructure{SymReal}()

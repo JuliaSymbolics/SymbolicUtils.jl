@@ -133,8 +133,17 @@ the keys are hashed with `full=false` but the current comparison is with `full=t
 allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
 """
 function isequal_rangesdict(d1::RangesT{T}, d2::RangesT{T}, full) where {T}
-    full || return isequal(d1, d2)
     length(d1) == length(d2) || return false
+    if !full
+        # Spelled out instead of `isequal(d1, d2)` for the same reason as `isequal_range`
+        d1 === d2 && return true
+        for (k, v) in d1
+            v2 = get(d2, k, nothing)
+            v2 === nothing && return false
+            isequal_range(v, v2) || return false
+        end
+        return true
+    end
     for (k, v) in d1
         k2 = nothing
         v2 = nothing
@@ -143,10 +152,15 @@ function isequal_rangesdict(d1::RangesT{T}, d2::RangesT{T}, full) where {T}
             k2 === nothing && return false
             v2 = d2[k2]
         end true
-        isequal(v, v2) && isequal_bsimpl(k, k2, true) || return false
+        isequal_range(v, v2::StepRange{Int, Int}) && isequal_bsimpl(k, k2::BasicSymbolic{T}, true) || return false
     end
     return true
 end
+
+# A separate function keeps this call out of the recursive `isequal_bsimpl` cycle. Called from
+# inside it, inference widens it to `isequal(::StepRange, ::StepRange)`, which packages like
+# FixedPointNumbers and CSV invalidate.
+isequal_range(a::StepRange{Int, Int}, b::StepRange{Int, Int}) = isequal(a, b)
 
 isequal_bsimpl(::BSImpl.Type, ::BSImpl.Type, ::Bool) = false
 

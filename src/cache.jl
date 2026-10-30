@@ -213,6 +213,11 @@ The cache is thread-safe and uses TaskLocalValues.jl to maintain a task-specific
 The caching behavior for this function is enabled by default. Use the `enabled` option
 to toggle this.
 
+The `key_filter` option can be used to skip the cache entirely for arguments for
+which caching is not useful. It is called with the positional arguments of the
+function before the cache is consulted; when it returns `false`, the uncached
+implementation is invoked directly and nothing is stored in the cache.
+
 See also: [`SymbolicUtils.get_limit`](@ref), [`SymbolicUtils.set_limit!`](@ref),
 [`SymbolicUtils.get_retain_fraction`](@ref), [`SymbolicUtils.set_retain_fraction!`](@ref),
 [`SymbolicUtils.toggle_caching!`](@ref), [`SymbolicUtils.is_caching_enabled`](@ref),
@@ -226,7 +231,7 @@ macro cache(args...)
     configargs = Base.front(args)
 
     # parse configuration options
-    config = Dict(:limit => 100_000, :retain_fraction => 0.5, :allow_any_return => false, :enabled => true)
+    config = Dict{Symbol, Any}(:limit => 100_000, :retain_fraction => 0.5, :allow_any_return => false, :enabled => true, :key_filter => nothing)
     for carg in configargs
         if !Meta.isexpr(carg, :(=))
             throw(ArgumentError(LazyString("Expected `key = value` syntax, got ", carg)))
@@ -237,7 +242,9 @@ macro cache(args...)
             throw(ArgumentError(
                 "Expected option to be one of $(collect(keys(config))), got $k"))
         end
-        if typeof(v) != typeof(config[k])
+        # `key_filter` is an arbitrary expression evaluated in the caller's scope,
+        # so it cannot be type-checked here.
+        if k !== :key_filter && typeof(v) != typeof(config[k])
             exT = typeof(config[k])
             vT = typeof(v)
             throw(ArgumentError(
@@ -346,6 +353,15 @@ macro cache(args...)
             push!(keyvarsexpr.args, :($kname = $kex))
             keyexprs[i] = kname
         end
+    end
+
+    # The `key_filter` option additionally requires the arguments to pass a
+    # user-provided filter before the cache is consulted. It is called with the
+    # positional arguments of the function.
+    if config[:key_filter] !== nothing
+        filtercall = Expr(:call, config[:key_filter])
+        append!(filtercall.args, argexprs)
+        conditions = :($conditions && $filtercall)
     end
 
     is_singleton_key = false

@@ -1,7 +1,7 @@
 using SymbolicUtils
 using SymbolicUtils: BasicSymbolic, @cache, associated_cache, set_limit!, get_limit,
-                     clear_cache!, SymbolicKey, metadata, maketerm, get_cache_key,
-                     unwrap_const
+    clear_cache!, SymbolicKey, metadata, maketerm, get_cache_key,
+    unwrap_const
 using OhMyThreads: tmap
 using Random
 
@@ -169,4 +169,58 @@ end
 @testset "Keyword argument syntax works" begin
     @test SymbolicUtils.get_limit(f6) == 10
     @test SymbolicUtils.get_retain_fraction(f6) ≈ 0.1
+end
+
+@cache key_filter = iscall function f7(x::BasicSymbolic)::BasicSymbolic
+    return 2x + 1
+end
+
+@testset "key_filter" begin
+    @syms x
+    cache, stats = associated_cache(f7).tlv[]
+
+    # arguments failing the filter bypass the cache entirely: the result is still
+    # computed, but nothing is looked up, stored, or counted
+    val = f7(x)
+    @test isequal(val, 2x + 1)
+    @test isempty(cache)
+    @test stats.hits == stats.misses == stats.clears == 0
+    f7(x)
+    @test isempty(cache)
+    @test stats.hits == stats.misses == stats.clears == 0
+
+    # arguments passing the filter are cached as usual
+    ex = 2x
+    val = f7(ex)
+    @test isequal(val, 2ex + 1)
+    @test length(cache) == 1
+    @test stats.misses == 1
+    f7(ex)
+    @test stats.hits == 1
+end
+
+@cache key_filter = ((x, y) -> y isa Int && y > 0) function f8(x::BasicSymbolic, y::Union{BasicSymbolic, Int})::BasicSymbolic
+    return x + y
+end
+
+@testset "key_filter with multiple arguments" begin
+    @syms x
+    cache, stats = associated_cache(f8).tlv[]
+
+    val = f8(x, -1)
+    @test isequal(val, x + -1)
+    @test isempty(cache)
+    @test stats.hits == stats.misses == 0
+
+    val = f8(x, 2)
+    @test isequal(val, x + 2)
+    @test length(cache) == 1
+    @test stats.misses == 1
+    f8(x, 2)
+    @test stats.hits == 1
+
+    # filtered-out calls never consult the cache
+    val = f8(x, 0)
+    @test isequal(val, x)
+    @test length(cache) == 1
 end

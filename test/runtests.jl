@@ -32,6 +32,9 @@ if GROUP == "Core"
             @safetestset "Empty slice shapes" begin
                 include("empty_slice_shapes.jl")
             end
+            @safetestset "Array slice scalarization" begin
+                include("array_slice_scalarization.jl")
+            end
             @safetestset "ArrayMaker" begin include("arraymaker.jl") end
             @safetestset "Order" begin include("order.jl") end
             @safetestset "PolyForm" begin include("polyform.jl") end

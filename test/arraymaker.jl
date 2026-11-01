@@ -231,4 +231,8 @@ end
     @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), ([true, false, true],)), ([0, 0, 0], [10, 30])))) == [10, 0, 30]
     @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), (trues(3),)), ([0, 0, 0], [10, 20, 30])))) == [10, 20, 30]
     @test isempty(collect(SU.ArrayMaker{SymReal}(((Int[],),), (Int[],); shape = SU.ShapeVecT((1:0,)))))
+
+    @syms o[2:4]::Real
+    @test isequal(collect(SU.ArrayMaker{SymReal}((([1, 2, 3],),), (o,))), [o[2], o[3], o[4]])
+    @test isequal(collect(SU.ArrayMaker{SymReal}(((1:5,), ([1, 4, 5],)), (u[1:5], o))), [o[2], u[2], u[3], o[3], o[4]])
 end

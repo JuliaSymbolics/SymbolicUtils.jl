@@ -692,7 +692,7 @@ function index_runs(ax::AbstractVector{<:Integer})
 end
 
 function region_slice(value, offsets)
-    value isa BasicSymbolic || return value[offsets...]
+    value isa BasicSymbolic || return value[map((o, ax) -> ax[o], offsets, axes(value))...]
     filled = @match value begin
         BSImpl.ArrayOp(; term) => @match term begin
             BSImpl.Term(; f, args) => f isa Fill ? only(args) : nothing
@@ -700,7 +700,8 @@ function region_slice(value, offsets)
         end
         _ => nothing
     end
-    filled === nothing && return value[offsets...]
+    sh = shape(value)
+    filled === nothing && return value[(sh isa ShapeVecT ? map((o, ax) -> ax[o], offsets, Tuple(sh)) : offsets)...]
     return Fill(ShapeVecT(map(o -> 1:length(o), offsets)))(filled)
 end
 

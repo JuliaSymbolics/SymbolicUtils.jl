@@ -218,6 +218,9 @@ which caching is not useful. It is called with the positional arguments of the
 function before the cache is consulted; when it returns `false`, the uncached
 implementation is invoked directly and nothing is stored in the cache.
 
+Keyword arguments are forwarded to the cached function and participate in the
+cache key alongside the positional arguments.
+
 See also: [`SymbolicUtils.get_limit`](@ref), [`SymbolicUtils.set_limit!`](@ref),
 [`SymbolicUtils.get_retain_fraction`](@ref), [`SymbolicUtils.set_retain_fraction!`](@ref),
 [`SymbolicUtils.toggle_caching!`](@ref), [`SymbolicUtils.is_caching_enabled`](@ref),
@@ -342,6 +345,30 @@ macro cache(args...)
         end
     end
 
+    # `fn.kwargs` holds keyword argument *declarations* (`Expr(:kw, name, default)`,
+    # `Expr(:(::), name, T)` or `Expr(:..., name)` for slurping). Splicing them
+    # into the inner call would pass the default expression instead of the bound
+    # variable, so build `name = name`/`name...` forwarding expressions instead.
+    # Keyword arguments also participate in the cache key.
+    callkwargs = nothing
+    if fn.kwargs !== nothing
+        callkwargs = Any[]
+        for kwarg in fn.kwargs
+            kname = kwarg
+            Meta.isexpr(kname, :kw) && (kname = kname.args[1])
+            Meta.isexpr(kname, :...) && (kname = kname.args[1])
+            Meta.isexpr(kname, :(::)) && (kname = kname.args[1])
+            if Meta.isexpr(kwarg, :...)
+                push!(callkwargs, Expr(:..., kname))
+            else
+                push!(callkwargs, Expr(:kw, kname, kname))
+            end
+            push!(keyexprs, :($get_cache_key($kname)))
+            push!(keytypes, Any)
+            valid_key_condition = :($valid_key_condition && !($(Symbol(:key_, length(keyexprs))) isa $CacheSentinel))
+        end
+    end
+
     # the expression for getting the keys
     keyvarsexpr = Expr(:block)
     for (i, kex) in enumerate(keyexprs)
@@ -418,7 +445,7 @@ macro cache(args...)
     cachector = Expr(:call, structT, tlvctor, config[:limit], config[:retain_fraction], config[:enabled])
 
     # call to the workhorse function
-    innercall = EL.codegen_ast(EL.JLCall(fn.name, argexprs, fn.kwargs))
+    innercall = EL.codegen_ast(EL.JLCall(fn.name, argexprs, callkwargs))
 
     # wrapper which takes the name of the cached function
     wrapperfn = EL.JLFunction(; name = name, args = fn.args, kwargs = fn.kwargs)

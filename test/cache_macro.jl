@@ -224,3 +224,52 @@ end
     @test isequal(val, x)
     @test length(cache) == 1
 end
+
+@cache key_filter = (x -> x > 0) function f9(x::Int; shift = 4)::Int
+    return x + shift
+end
+
+@testset "keyword arguments" begin
+    cache, stats = associated_cache(f9).tlv[]
+
+    # keyword arguments are forwarded to the workhorse function on both the
+    # filtered-out branch and the cached branch, not replaced by their defaults
+    @test f9(-2; shift = 11) == 9
+    @test f9(-2; shift = 12) == 10
+    @test isempty(cache)
+    @test stats.hits == stats.misses == 0
+
+    @test f9(2; shift = 11) == 13
+    @test f9(2; shift = 11) == 13
+    @test stats.misses == 1
+    @test stats.hits == 1
+
+    # keyword arguments participate in the cache key
+    @test f9(2) == 6
+    @test f9(2; shift = 5) == 7
+    @test f9(2) == 6
+    @test stats.misses == 3
+    @test stats.hits == 2
+end
+
+@cache function f10(x::Int; shift::Int = 4)::Int
+    return x + shift
+end
+
+@cache function f11(x::Int; kws...)::Int
+    return x + sum(values(kws))
+end
+
+@testset "keyword argument forms" begin
+    # annotated keyword argument
+    @test f10(2; shift = 11) == 13
+    @test f10(2) == 6
+
+    # slurped keyword arguments
+    cache, stats = associated_cache(f11).tlv[]
+    @test f11(1; a = 1, b = 2) == 4
+    @test f11(1; b = 2, a = 1) == 4
+    @test f11(1; a = 1) == 2
+    @test stats.misses == 2
+    @test stats.hits == 1
+end

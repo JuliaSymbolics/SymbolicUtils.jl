@@ -523,6 +523,26 @@ end
     @test a isa Matrix{Float64}
 end
 
+@testset "`array_literal` with more than 32 entries is not splatted (#1181)" begin
+    @syms x
+    has_dynamic_apply(f, argtypes) = any(first(only(code_typed(f, argtypes))).code) do st
+        Meta.isexpr(st, :call) || return false
+        g = st.args[1]
+        return g === Core._apply_iterate || (g isa GlobalRef && g.name === :_apply_iterate)
+    end
+    for n in (32, 40)
+        arr = Const{SymReal}([x + i for i in 1:n])
+        f = eval(toexpr(Func([x], [], arr)))
+        @test @invokelatest(f(0.5)) == [0.5 + i for i in 1:n]
+        @test !has_dynamic_apply(f, (Float64,))
+    end
+    arr = Const{SymReal}(reshape([x + i for i in 1:40], 4, 10))
+    f = eval(toexpr(Func([x], [], arr)))
+    @test @invokelatest(f(0.5)) == reshape([0.5 + i for i in 1:40], 4, 10)
+    @test !has_dynamic_apply(f, (Float64,))
+    @test !has_dynamic_apply(SymbolicUtils.array_literal, (Tuple{Int}, ntuple(_ -> Float64, 40)...))
+end
+
 @testset "destructuring rewrites do not retain `elems` (#1098)" begin
     @syms y1 y2 y3
     function gen_weak()

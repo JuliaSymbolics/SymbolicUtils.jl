@@ -256,7 +256,15 @@ See [`SymbolicUtils.BSImpl.Const`](@ref) for more details.
 The first argument `sz` is the `size` of the represented array. `args...` is `prod(sz)`
 elements representing the elements of the array in column-major order.
 """
-array_literal(sz::NTuple{N, Int}, args...) where {N} = reshape(Base.vect(args...), sz)
+function array_literal(sz::NTuple{N, Int}, args...) where {N}
+    T = eltype(args)
+    isconcretetype(T) || return reshape(Base.vect(args...), sz)
+    vals = Vector{T}(undef, length(args))
+    @inbounds for i in 1:length(args)
+        vals[i] = args[i]
+    end
+    return reshape(vals, sz)
+end
 
 """
     BSImpl.Const{T}(val) where {T}

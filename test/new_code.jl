@@ -1580,6 +1580,29 @@ end
     @test rewritten(Code.with_options(rule, (; f = tan))) === tan
 end
 
+@testset "`array_literal` with more than 32 entries is not splatted (#1181)" begin
+    @syms x
+    has_dynamic_apply(f, argtypes) = any(first(only(code_typed(f, argtypes))).code) do st
+        Meta.isexpr(st, :call) || return false
+        g = st.args[1]
+        return g === Core._apply_iterate || (g isa GlobalRef && g.name === :_apply_iterate)
+    end
+    for n in (32, 40)
+        arr = Const{SymReal}([x + i for i in 1:n])
+        ir = IRStructure{SymReal}()
+        populate_ir!(ir, arr)
+        f = eval(Code.fast_toexpr(Func([x], [], arr), ir, Dict{Any, Any}()))
+        @test @invokelatest(f(0.5)) == [0.5 + i for i in 1:n]
+        @test !has_dynamic_apply(f, (Float64,))
+    end
+    arr = Const{SymReal}(reshape([x + i for i in 1:40], 4, 10))
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, arr)
+    f = eval(Code.fast_toexpr(Func([x], [], arr), ir, Dict{Any, Any}()))
+    @test @invokelatest(f(0.5)) == reshape([0.5 + i for i in 1:40], 4, 10)
+    @test !has_dynamic_apply(f, (Float64,))
+end
+
 @testset "`ifelse` widens a float branch to the other branch's type" begin
     @syms x::Real y::Real
     build(e, args = [x]) = (ir = IRStructure{SymReal}(); populate_ir!(ir, e); eval(Code.fast_toexpr(Func(args, [], e), ir, Dict{Any, Any}())))

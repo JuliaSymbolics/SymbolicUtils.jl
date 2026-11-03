@@ -1094,10 +1094,17 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         view_expr = Expr(:call, view, output_buffer)
         @union_split_smallvec region append!(view_expr.args, region)
         vw = declare!(cs, get_misc_identifier(cs), view_expr)
-        inner_idx = iscall(val) && operation(val) === with_allocator ? Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2] : val_idx
+        inner_idx = val_idx
+        if iscall(val) && operation(val) === with_allocator
+            inner_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
+        end
         inner = cs.ir[inner_idx]
-        source = haskey(cs.rewrites, val) || get(cs.cache, val_idx, nothing) isa Symbol ? val :
-            haskey(cs.rewrites, inner) || get(cs.cache, inner_idx, nothing) isa Symbol ? inner : nothing
+        source = nothing
+        if haskey(cs.rewrites, val) || get(cs.cache, val_idx, nothing) isa Symbol
+            source = val
+        elseif haskey(cs.rewrites, inner) || get(cs.cache, inner_idx, nothing) isa Symbol
+            source = inner
+        end
         @match val begin
             _ && if source !== nothing end => declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, cs(source)))
             # Replace the allocator. We want it to write directly to the output

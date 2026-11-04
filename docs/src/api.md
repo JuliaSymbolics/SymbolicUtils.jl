@@ -8,6 +8,12 @@ SymbolicUtils.@syms
 SymbolicUtils.term
 ```
 
+### Zero and One Checks
+```@docs
+Base.iszero(::SymbolicUtils.BasicSymbolic)
+Base.isone(::SymbolicUtils.BasicSymbolic)
+```
+
 ### Developer Constructors and Utilities
 ```@docs
 SymbolicUtils.Term

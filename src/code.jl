@@ -2338,5 +2338,6 @@ end
 @public CodegenState, codegen!, codegen_function!, is_elementwise_call
 # Helpers that the `codegen_function!` implementer contract documents and requires.
 @public declare!, enter_scope, exit_scope!, rollback!
+@public FUSE_BROADCASTS_KEY, FUSE_UNALIAS_KEY, FUSE_OUTPUT_ELTYPE_KEY, USE_LITERAL_POW_KEY
 
 end

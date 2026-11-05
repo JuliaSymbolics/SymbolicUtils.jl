@@ -919,6 +919,12 @@ function collect_fusion_sources!(srcs, seen, cs::CodegenState, idx::Integer)
     return
 end
 
+function is_materialized(cs::CodegenState{T}, val, idx) where {T}
+    get(cs.cache, idx, nothing) isa Symbol && return true
+    rewritten = get(cs.rewrites, val, nothing)
+    return rewritten !== nothing && !(rewritten isa BasicSymbolic{T})
+end
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     len = length(expr)::Int
@@ -1100,9 +1106,9 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         end
         inner = cs.ir[inner_idx]
         source = nothing
-        if haskey(cs.rewrites, val) || get(cs.cache, val_idx, nothing) isa Symbol
+        if is_materialized(cs, val, val_idx)
             source = val
-        elseif haskey(cs.rewrites, inner) || get(cs.cache, inner_idx, nothing) isa Symbol
+        elseif is_materialized(cs, inner, inner_idx)
             source = inner
         end
         @match val begin

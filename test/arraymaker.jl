@@ -228,3 +228,13 @@ Base.copyto!(dst::NoScalarVector, src::AbstractArray) = (copyto!(dst.data, src);
         @test Base.invokelatest(eval(ex), zeros(20), pv, qv, av) ≈ [pv[1:18]; av; 2.0]
     end
 end
+
+@testset "a rewrite to an uncomputed value is written into its region directly" begin
+    @syms p[1:20]::Real
+    a = @arrayop (i,) p[i]
+    b = @arrayop (i,) -p[i]
+    w = SU.ArrayMaker{SymReal}(((1:20,),), (a,))
+    fn = Func([p], [], Code.with_allocator(Returns(zeros(Int, 20)), w))
+    f = eval(Code.fast_toexpr(fn, SU.IRStructure{SymReal}(), Dict{Any, Any}(a => b)))
+    @test @invokelatest(f(fill(9007199254740993, 20))) == fill(-9007199254740993, 20)
+end

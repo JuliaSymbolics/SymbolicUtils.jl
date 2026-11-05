@@ -257,6 +257,7 @@ The first argument `sz` is the `size` of the represented array. `args...` is `pr
 elements representing the elements of the array in column-major order.
 """
 function array_literal(sz::NTuple{N, Int}, args::Vararg{Any, M}) where {N, M}
+    M > 32 && return reshape(Base.vect(args...), sz)
     T = Base.promote_typeof(args...)
     return __array_literal(sz, T, map(x -> convert(T, x), args))
 end
@@ -265,9 +266,10 @@ end
     return __array_literal(sz, T, args)
 end
 
-array_literal(sz::NTuple{N, Int}) where {N} = Array{Any}(undef, sz...)
+array_literal(sz::NTuple{N, Int}) where {N} = __array_literal(sz, Any, ())
 
 function __array_literal(sz::NTuple{N, Int}, ::Type{T}, args::Tuple) where {N, T}
+    prod(sz) == length(args) || throw(DimensionMismatch(LazyString("new dimensions ", sz, " must be consistent with array size ", length(args))))
     vals = Array{T}(undef, sz...)
     @inbounds for i in 1:length(args)
         vals[i] = args[i]

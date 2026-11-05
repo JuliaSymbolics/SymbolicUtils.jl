@@ -530,6 +530,8 @@ end
         return g === Core._apply_iterate || (g isa GlobalRef && g.name === :_apply_iterate)
     end
     @test !has_dynamic_apply(SymbolicUtils.array_literal, (Tuple{Int}, ntuple(_ -> Float64, 64)...))
+    @test SymbolicUtils.array_literal((2, 2), 1, 2.0, 3, 4) == [1.0 3.0; 2.0 4.0]
+    @test_throws DimensionMismatch SymbolicUtils.array_literal((2,), 1.0)
 end
 
 @testset "destructuring rewrites do not retain `elems` (#1098)" begin

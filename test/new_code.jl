@@ -1475,8 +1475,14 @@ end
     @test isequal(last(Code.apply_optimization_rule(ir, [sin(a), a], rule)), [cos(a), a])
     @test isequal(last(Code.apply_optimization_rule(ir, sin(a) + 1, rule)), cos(a) + 1)
     @syms b::Real
+    multi = IRStructure{SymReal}()
+    populate_ir!(multi, [sin(a), sin(b)])
+    @test isequal(last(Code.apply_optimization_rule(multi, [sin(a), sin(b)], rule)), [cos(a), cos(b)])
     fresh_ir(ir, expr, match) = (new_ir = IRStructure{SymReal}(); populate_ir!(new_ir, exp(b) + b^2 + b^3); (new_ir, expr))
     fresh = OptimizationRule("FreshIR", detect_sin, fresh_ir, 1)
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), fresh)), sin(a))
+    fresh_exp(ir, expr, match) = (new_ir = IRStructure{SymReal}(); populate_ir!(new_ir, exp(a)); (new_ir, expr))
+    fresh = OptimizationRule("FreshExp", detect_sin, fresh_exp, 1)
     @test isequal(last(Code.apply_optimization_rule(ir, sin(a), fresh)), sin(a))
 end
 

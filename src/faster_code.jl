@@ -441,12 +441,11 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
     ref_expr = Expr(:ref, output_buffer, index_expr)
 
     merge!(new_ranges, ranges)
-    output_vars = unique(loopvar_order)
+    reduction_vars = setdiff(keys(new_ranges), loopvar_order)
     append!(loopvar_order, keys(new_ranges))
     unique!(loopvar_order)
 
     # Assign the first contribution so the buffer's contents never enter the reduction.
-    reduction_vars = setdiff(loopvar_order, output_vars)
     if isempty(reduction_vars)
         declare!(scoped_cs, :_, Expr(:(=), ref_expr, inner_result))
     else

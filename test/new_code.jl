@@ -731,6 +731,22 @@ end
     @test eval(expr) == [3, 2, 1]
 end
 
+@testset "`@arrayop` writes do not depend on the buffer" begin
+    @syms x[1:3] y[1:3]
+    prod = @arrayop (i,) x[i] * y[i]
+    outer = @arrayop (i,) x[i] * y[j]
+    buf = zeros(3)
+    for (ex, expected) in ((prod, 32.0), (outer, 90.0)), alloc in (Returns(buf), ones)
+        expr = Code.fast_toexpr(sum(Code.with_allocator(alloc, ex)), IRStructure{SymReal}(), Dict())
+        run() = eval(quote let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]; $expr end end)
+        @test run() == expected
+        @test run() == expected
+    end
+    mx = @arrayop (i,) x[i] reduce=max
+    expr = Code.fast_toexpr(sum(mx), IRStructure{SymReal}(), Dict())
+    @test eval(quote let x = [-1.0, -2.0, -3.0]; $expr end end) == -6.0
+end
+
 @testset "`with_allocator`" begin
     @testset "`array_literal`" begin
         @syms x y z
@@ -793,8 +809,7 @@ end
                             local var"##cse#4" = y
                             local var"##cse#5" = var"##cse#4"[_1]
                             local var"##cse#6" = $(*)(var"##cse#3", var"##cse#5")
-                            __accum = $(+)(var"##cse#1"[$(CartesianIndex)(_1)], var"##cse#6")
-                            _ = (var"##cse#1"[$(CartesianIndex)(_1)] = __accum)
+                            _ = (var"##cse#1"[$(CartesianIndex)(_1)] = var"##cse#6")
                         end
                     end
                 end

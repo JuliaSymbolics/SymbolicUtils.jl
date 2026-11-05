@@ -641,13 +641,15 @@ The `unsafe` keyword argument (default: `false`) can be used to skip hash consin
 performance in internal operations.
 """
 function ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false) where {T}
-    regions, values = split_index_regions(unwrap_args(regions), unwrap_args(values))
+    raw_regions = unwrap_args(regions)
+    regions, values = split_index_regions(raw_regions, unwrap_args(values))
     regions = parse_regions(regions)
     values = parse_args(T, values)
     if shape === nothing
         shape = shape_from_regions(regions)
     end
     shape = shape::ShapeVecT
+    check_logical_axes(raw_regions, shape)
     type = symtype_from_values(values, length(shape))
     validate_values_shapes(regions, values)
     return BSImpl.ArrayMaker{T}(regions, values; metadata, shape, type, unsafe)
@@ -678,9 +680,16 @@ function split_index_regions(regions, values)
     return new_regions, new_values
 end
 
+function check_logical_axes(regions, shape::ShapeVecT)
+    for region in regions, (inds, ax) in zip(shape, region)
+        ax isa AbstractVector{Bool} && !checkindex(Bool, inds, ax) && throw(BoundsError(CartesianIndices(Tuple(shape)), Tuple(region)))
+    end
+end
+
 index_runs(ax::AbstractUnitRange{<:Integer}) = ((UnitRange{Int}(ax), 1:length(ax)),)
 function index_runs(ax::AbstractVector{<:Integer})
     isempty(ax) && return ((1:0, 1:0),)
+    ax = ax[begin:end]
     runs = Tuple{UnitRange{Int}, UnitRange{Int}}[]
     start = 1
     for k in 2:(length(ax) + 1)

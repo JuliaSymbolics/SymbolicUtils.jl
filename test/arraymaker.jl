@@ -179,6 +179,14 @@ Base.copyto!(dst::NoScalarVector, src::AbstractArray) = (copyto!(dst.data, src);
     end
 end
 
+# Index vector with axes `2:n+1`, as `OffsetArrays` would give.
+struct OffsetIndices <: AbstractVector{Int}
+    data::Vector{Int}
+end
+Base.axes(x::OffsetIndices) = (2:length(x.data) + 1,)
+Base.size(x::OffsetIndices) = size(x.data)
+Base.getindex(x::OffsetIndices, i::Int) = x.data[i - 1]
+
 @testset "index vector regions" begin
     @syms u[1:20]::Real v[1:20]::Real Z[1:4, 1:5]::Real W[1:2, 1:2]::Real
     idxs = [2, 3, 19]
@@ -230,9 +238,12 @@ end
     @test_throws ArgumentError SU.ArrayMaker{SymReal}(((1:20,), ([5, 6, 12],)), (u, SU.Fill(SU.ShapeVecT((1:2,)))(SU.Const{SymReal}(7))))
     @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), ([true, false, true],)), ([0, 0, 0], [10, 30])))) == [10, 0, 30]
     @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), (trues(3),)), ([0, 0, 0], [10, 20, 30])))) == [10, 20, 30]
+    @test_throws BoundsError SU.ArrayMaker{SymReal}(((1:3,), ([true, false],)), ([0, 0, 0], [10]))
+    @test_throws BoundsError SU.ArrayMaker{SymReal}(((1:3,), ([true, false, true, false],)), ([0, 0, 0], [10, 30]))
     @test isempty(collect(SU.ArrayMaker{SymReal}(((Int[],),), (Int[],); shape = SU.ShapeVecT((1:0,)))))
 
     @syms o[2:4]::Real
     @test isequal(collect(SU.ArrayMaker{SymReal}((([1, 2, 3],),), (o,))), [o[2], o[3], o[4]])
     @test isequal(collect(SU.ArrayMaker{SymReal}(((1:5,), ([1, 4, 5],)), (u[1:5], o))), [o[2], u[2], u[3], o[3], o[4]])
+    @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:5,), (OffsetIndices([1, 2, 5]),)), (zeros(Int, 5), [10, 20, 50])))) == [10, 20, 0, 0, 50]
 end

@@ -689,7 +689,7 @@ end
 index_runs(ax::AbstractUnitRange{<:Integer}) = ((UnitRange{Int}(ax), 1:length(ax)),)
 function index_runs(ax::AbstractVector{<:Integer})
     isempty(ax) && return ((1:0, 1:0),)
-    ax = ax[begin:end]
+    Base.has_offset_axes(ax) && (ax = ax[begin:end])
     runs = Tuple{UnitRange{Int}, UnitRange{Int}}[]
     start = 1
     for k in 2:(length(ax) + 1)

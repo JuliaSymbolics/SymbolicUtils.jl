@@ -240,6 +240,8 @@ Base.getindex(x::OffsetIndices, i::Int) = x.data[i - 1]
     @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), (trues(3),)), ([0, 0, 0], [10, 20, 30])))) == [10, 20, 30]
     @test_throws BoundsError SU.ArrayMaker{SymReal}(((1:3,), ([true, false],)), ([0, 0, 0], [10]))
     @test_throws BoundsError SU.ArrayMaker{SymReal}(((1:3,), ([true, false, true, false],)), ([0, 0, 0], [10, 30]))
+    @test_throws BoundsError SU.ArrayMaker{SymReal}((([true, false, true],),), ([10, 30],); shape = SU.ShapeVecT((1:4,)))
+    @test_throws BoundsError SU.ArrayMaker{SymReal}((([false, true, false],),), ([10],))
     @test isempty(collect(SU.ArrayMaker{SymReal}(((Int[],),), (Int[],); shape = SU.ShapeVecT((1:0,)))))
 
     @syms o[2:4]::Real

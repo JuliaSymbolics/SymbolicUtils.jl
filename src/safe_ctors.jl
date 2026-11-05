@@ -623,7 +623,8 @@ High-level constructor for arrays composed of blocks of other arrays.
 
 # Arguments
 - `regions`: A list of `AbstractVector{UnitRange{Int}}` denoting subarrays of the resultant
-  array to assign.
+  array to assign. An axis may also be a vector of indices, which is split into one region
+  per run of consecutive indices, each assigned the matching slice of its value.
 - `values`: A corresponding list of (symbolic) values assigned to each entry in `regions`.
 
 # Returns
@@ -640,15 +641,77 @@ The `unsafe` keyword argument (default: `false`) can be used to skip hash consin
 performance in internal operations.
 """
 function ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false) where {T}
-    regions = parse_regions(unwrap_args(regions))
-    values = parse_args(T, unwrap_args(values))
+    raw_regions = unwrap_args(regions)
+    regions, values = split_index_regions(raw_regions, unwrap_args(values))
+    regions = parse_regions(regions)
+    values = parse_args(T, values)
     if shape === nothing
         shape = shape_from_regions(regions)
     end
     shape = shape::ShapeVecT
+    check_logical_axes(raw_regions, shape)
     type = symtype_from_values(values, length(shape))
     validate_values_shapes(regions, values)
     return BSImpl.ArrayMaker{T}(regions, values; metadata, shape, type, unsafe)
+end
+
+is_range_region(region) = all(ax -> ax isa AbstractUnitRange{<:Integer}, region)
+
+function split_index_regions(regions, values)
+    all(is_range_region, regions) && return regions, values
+    new_regions = Any[]
+    new_values = Any[]
+    for (region, value) in zip(regions, values)
+        if is_range_region(region)
+            push!(new_regions, region)
+            push!(new_values, value)
+            continue
+        end
+        region = map(ax -> ax isa AbstractVector{Bool} ? findall(ax) : ax, Tuple(region))
+        sh = shape(value)
+        if sh isa ShapeVecT && (length(sh) != length(region) || any(i -> length(sh[i]) != length(region[i]), eachindex(region)))
+            _throw_arraymaker_incompatible_shapes(region, value)
+        end
+        for pieces in Iterators.product(map(index_runs, region)...)
+            push!(new_regions, map(first, pieces))
+            push!(new_values, region_slice(value, map(last, pieces)))
+        end
+    end
+    return new_regions, new_values
+end
+
+function check_logical_axes(regions, shape::ShapeVecT)
+    for region in regions, (inds, ax) in zip(shape, region)
+        ax isa AbstractVector{Bool} && !checkindex(Bool, inds, ax) && throw(BoundsError(CartesianIndices(Tuple(shape)), Tuple(region)))
+    end
+end
+
+index_runs(ax::AbstractUnitRange{<:Integer}) = ((UnitRange{Int}(ax), 1:length(ax)),)
+function index_runs(ax::AbstractVector{<:Integer})
+    isempty(ax) && return ((1:0, 1:0),)
+    Base.has_offset_axes(ax) && (ax = ax[begin:end])
+    runs = Tuple{UnitRange{Int}, UnitRange{Int}}[]
+    start = 1
+    for k in 2:(length(ax) + 1)
+        k <= length(ax) && ax[k] == ax[k - 1] + 1 && continue
+        push!(runs, (ax[start]:ax[k - 1], start:(k - 1)))
+        start = k
+    end
+    return runs
+end
+
+function region_slice(value, offsets)
+    value isa BasicSymbolic || return value[map((o, ax) -> ax[o], offsets, axes(value))...]
+    filled = @match value begin
+        BSImpl.ArrayOp(; term) => @match term begin
+            BSImpl.Term(; f, args) => f isa Fill ? only(args) : nothing
+            _ => nothing
+        end
+        _ => nothing
+    end
+    sh = shape(value)
+    filled === nothing && return value[(sh isa ShapeVecT ? map((o, ax) -> ax[o], offsets, Tuple(sh)) : offsets)...]
+    return Fill(ShapeVecT(map(o -> 1:length(o), offsets)))(filled)
 end
 
 function shape_from_regions(regions::RegionsT)::ShapeVecT

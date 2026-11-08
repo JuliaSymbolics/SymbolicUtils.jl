@@ -234,7 +234,7 @@ end
     a = @arrayop (i,) p[i]
     b = @arrayop (i,) -p[i]
     w = SU.ArrayMaker{SymReal}(((1:20,),), (a,))
-    fn = Func([p], [], Code.with_allocator(Returns(zeros(Int, 20)), w))
+    fn = Func([p], [], Code.with_allocator(Returns(zeros(Int64, 20)), w))
     f = eval(Code.fast_toexpr(fn, SU.IRStructure{SymReal}(), Dict{Any, Any}(a => b)))
     @test @invokelatest(f(fill(9007199254740993, 20))) == fill(-9007199254740993, 20)
 end

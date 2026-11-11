@@ -75,9 +75,10 @@ end
     @test repr(cbrt(x + y)) == "cbrt(x + y)"
     @test repr(sqrt(C(3))) == "sqrt(3)"
     @test repr(x^(2 // 3)) == "x^(2//3)"
-    @test repr(x^(3 // 2)) == "sqrt(x)*x"
-    @test repr(x * x * sqrt(x)) == "sqrt(x)*x^2"
-    @test repr((x + y)^(3 // 2)) == "sqrt(x + y)*(x + y)"
+    @test repr(x^(3 // 2)) == "sqrt(x)^3"
+    @test repr(x * x * sqrt(x)) == "sqrt(x)^5"
+    @test repr((x + y)^(3 // 2)) == "sqrt(x + y)^3"
+    @test repr(x^(3 // 2) * y) == "(sqrt(x)^3)*y"
     @test repr(2 * sqrt(C(3))) == "2sqrt(3)"
     @test repr(sqrt(x) * y) == "sqrt(x)*y"
 end

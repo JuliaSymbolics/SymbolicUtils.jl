@@ -183,11 +183,7 @@ function show_pow(io::IO, x::BasicSymbolic)
         print(io, e === 1 // 2 ? "sqrt(" : "cbrt(", base, ")")
         return
     elseif e isa Rational{Int} && denominator(e) == 2 && e > 0
-        # x^((2k+1)//2) prints as sqrt(x)*x^k
-        print(io, "sqrt(", base, ")*")
-        print_arg(io, base)
-        k = fld(numerator(e), 2)
-        isone(k) || print(io, "^", k)
+        print(io, "sqrt(", base, ")^", numerator(e))
         return
     end
     if isnegative(base)

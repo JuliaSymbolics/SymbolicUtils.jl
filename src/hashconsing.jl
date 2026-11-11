@@ -370,15 +370,41 @@ function hash_range(a::StepRange{Int, Int}, h::UInt)
 end
 
 """
+Number of leading entries of a dict hashed densely by `hash_addmuldict`. Past
+this limit only an exponentially-spread sample of the remaining entries is
+hashed (like `hash_argsvec` for long argument vectors), so the cost of hashing
+very large `AddMul` dicts stays sublinear in their size.
+
+Note that unlike an argument vector, a dict has no canonical order: two `isequal`
+dicts built by different insertion sequences may iterate differently and so hash
+different sampled subsets. The resulting hash inconsistency only degrades
+deduplication in the hashcons table; `isequal_addmuldict` is unaffected.
+"""
+const ADDMULDICT_HASH_LIMIT = 512
+
+"""
     $TYPEDSIGNATURES
 
 Hash `AddMul.dict`, accounting for the fact that the keys are inserted with `full=false`
 when currently `full` may be `true`. `full` should be equal to the current value of
 `COMPARE_FULL`. Passing `full` prevents repeatedly accessing a `TaskLocalValue`.
+
+For `length(d) > ADDMULDICT_HASH_LIMIT` only a sample of the entries is hashed:
+the first `ADDMULDICT_HASH_LIMIT` entries densely, then those at the
+exponentially-spread positions `n, n-1, n-3, n-7, ...` of one forward iteration,
+mirroring `hash_argsvec`.
 """
 function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
     hv = Base.hasha_seed % UInt
+    n = length(d)
+    h = hash(n, h)
+    m = min(n, ADDMULDICT_HASH_LIMIT)
+    i, skip = n, 1   # next tail position to sample; descends n, n-1, n-3, n-7, ...
+    pos = 0
     for (k, v) in d
+        pos += 1
+        pos <= m || pos == i || continue
+        pos == i && (i -= skip; skip <<= 1)
         h1 = hash_somescalar(v, zero(UInt))
         full && (h1 = hash_maybe_fntype(typeof(v), h1))
         h1 = hash_bsimpl(k, h1, full)

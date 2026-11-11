@@ -1267,6 +1267,8 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
                 if _isone(-val)
                     return codegen!(cs, expr_idx, Expr(:call, inv, base_sym))
                 end
+                root = root_expr(base_sym, val, cs.rewrites)
+                root === nothing || return codegen!(cs, expr_idx, root)
                 if use_literal_pow(cs.rewrites)
                     p = literal_pow_exponent(val)
                     if p !== nothing

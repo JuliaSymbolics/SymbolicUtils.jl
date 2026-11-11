@@ -178,6 +178,18 @@ function show_pow(io::IO, x::BasicSymbolic)
     base, exp = @match x begin
         BSImpl.Term(; args) => args
     end
+    e = unwrap_const(exp)
+    if e === 1 // 2 || e === 1 // 3
+        print(io, e === 1 // 2 ? "sqrt(" : "cbrt(", base, ")")
+        return
+    elseif e isa Rational{Int} && denominator(e) == 2 && e > 0
+        # x^((2k+1)//2) prints as sqrt(x)*x^k
+        print(io, "sqrt(", base, ")*")
+        print_arg(io, base)
+        k = fld(numerator(e), 2)
+        isone(k) || print(io, "^", k)
+        return
+    end
     if isnegative(base)
         print(io, "(")
         print(io, base)
@@ -256,6 +268,8 @@ end
 function print_arg(io::IO, @nospecialize(f), x::BasicSymbolic; paren = true)
     paren || return print(io, x)
     iscall(f)::Bool && return print(io, x)
+    # printed as a `sqrt`/`cbrt` call, which needs no parentheses
+    f === (^) && (e = unwrap_const(arguments(x)[2]); e === 1 // 2 || e === 1 // 3) && return print(io, x)
 
     if f === (*) || f === (+) || f === (^) || f === (/) || (applicable(nameof, f)::Bool && Base.isbinaryoperator(nameof(f)::Symbol)::Bool)
         print(io, "(", x, ")")

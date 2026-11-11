@@ -146,6 +146,46 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
 end
 _split_arrterm_scalar_coeff(::Type{T}, ex) where {T} = one_of_vartype(T), Const{T}(ex)
 
+function _has_const_key(dict)
+    for k in keys(dict)
+        isconst(k) && return true
+    end
+    return false
+end
+
+"""
+    _normalize_radicals!(::Type{T}, coeff, dict)
+
+Canonicalize the numeric radicals of a product, which are the `Const` keys of `dict`.
+Whole powers move into the coefficient and radicals with the same exponent are merged
+into one radicand, so every key is left as `r ^ f` with `0 < f < 1`. Returns the new
+coefficient.
+"""
+function _normalize_radicals!(::Type{T}, coeff, dict) where {T}
+    pending = Tuple{Integer, Union{Integer, Rational}}[]
+    for (k, v) in dict
+        isconst(k) && push!(pending, (unwrap_const(k)::Integer, v))
+    end
+    filter!(kvp -> !isconst(kvp[1]), dict)
+    radicands = Dict{Rational, Integer}()
+    while !isempty(pending)
+        n, e = pop!(pending)
+        c, r, f = _radical_parts(n, e)
+        coeff *= c
+        isone(r) && continue
+        other = pop!(radicands, f, nothing)
+        if other === nothing
+            radicands[f] = r
+        else
+            push!(pending, (big(r) * other, f))
+        end
+    end
+    for (f, r) in radicands
+        dict[Const{T}(r)] = f
+    end
+    return coeff
+end
+
 function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term) where {T}
     @nospecialize term
     if term isa BasicSymbolic{T}
@@ -157,7 +197,8 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
                     _accumulate!(num_dict, k, v)
                 end
             end
-            BSImpl.Term(; f, args) && if f === (^) && !isconst(args[1]) && isconst(args[2]) end => begin
+            BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) && (!isconst(args[1]) ||
+                    _is_radical_base(unwrap_const(args[1])) && _is_radical_exp(unwrap_const(args[2]))) end => begin
                 base, exp = args
                 _accumulate!(num_dict, base, unwrap_const(exp))
             end
@@ -254,6 +295,14 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
             continue
         end
         _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, term)
+    end
+    # Numeric radicals are never zero, so they always move to the numerator.
+    if _has_const_key(num_dict) || _has_const_key(den_dict)
+        for (k, v) in den_dict
+            isconst(k) && _accumulate!(num_dict, k, -v)
+        end
+        filter!(kvp -> !isconst(kvp[1]), den_dict)
+        num_coeff[] = _normalize_radicals!(T, num_coeff[], num_dict)
     end
     for k in keys(num_dict)
         haskey(den_dict, k) || continue

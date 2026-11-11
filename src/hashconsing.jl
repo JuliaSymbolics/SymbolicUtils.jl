@@ -110,16 +110,28 @@ allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
 """
 function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full::Bool) where {T}
     full || return isequal(d1, d2)
+    d1 === d2 && return true
     length(d1) == length(d2) || return false
-    for (k, v) in d1
-        k2 = nothing
-        v2 = nothing
-        @manually_scope COMPARE_FULL => false begin
-            k2 = getkey(d2, k, nothing)
-            k2 === nothing && return false
-            v2 = d2[k2]
-        end true
-        isequal_somescalar(v, v2) && typeof(v) === typeof(v2) && isequal_bsimpl(k, k2, true) || return false
+    # The keys of `d2` were hashed under COMPARE_FULL=false, so lookups must run
+    # under that scope. It only has to cover `ht_keyindex`; `isequal_somescalar`
+    # does not read COMPARE_FULL, so the scope is hoisted out of the loop instead
+    # of being set and restored per entry. `ht_keyindex` + direct slot access
+    # does one probe per key instead of two (`getkey` + `getindex`).
+    @manually_scope COMPARE_FULL => false begin
+        for (k, v) in d1
+            idx = Base.ht_keyindex(d2, k)
+            idx < 0 && return false
+            @inbounds k2 = d2.keys[idx]
+            @inbounds v2 = d2.vals[idx]
+            # `isequal_bsimpl` must run with COMPARE_FULL=full: its `full` arg
+            # covers the structural checks, but the metadata path compares
+            # arbitrary values through `isequal`, which reads COMPARE_FULL when
+            # it reaches a BasicSymbolic. Identical keys skip the call entirely,
+            # so the restore happens only for non-interned keys.
+            ok = isequal_somescalar(v, v2) && typeof(v) === typeof(v2) &&
+                 (k === k2 || @manually_scope(COMPARE_FULL => full, isequal_bsimpl(k, k2, true)))
+            ok || return false
+        end
     end
     return true
 end
@@ -135,15 +147,19 @@ allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
 function isequal_rangesdict(d1::RangesT{T}, d2::RangesT{T}, full) where {T}
     full || return isequal(d1, d2)
     length(d1) == length(d2) || return false
-    for (k, v) in d1
-        k2 = nothing
-        v2 = nothing
-        @manually_scope COMPARE_FULL => false begin
-            k2 = getkey(d2, k, nothing)
-            k2 === nothing && return false
-            v2 = d2[k2]
-        end true
-        isequal(v, v2) && isequal_bsimpl(k, k2, true) || return false
+    # As in isequal_addmuldict: the scope only has to cover the probe, and
+    # `isequal_bsimpl` needs COMPARE_FULL=full restored for its metadata path —
+    # paid only for keys that are not `===`.
+    @manually_scope COMPARE_FULL => false begin
+        for (k, v) in d1
+            idx = Base.ht_keyindex(d2, k)
+            idx < 0 && return false
+            @inbounds k2 = d2.keys[idx]
+            @inbounds v2 = d2.vals[idx]
+            ok = isequal(v, v2) &&
+                 (k === k2 || @manually_scope(COMPARE_FULL => full, isequal_bsimpl(k, k2, true)))
+            ok || return false
+        end
     end
     return true
 end

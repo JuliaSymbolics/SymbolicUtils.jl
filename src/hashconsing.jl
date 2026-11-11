@@ -136,13 +136,12 @@ function isequal_rangesdict(d1::RangesT{T}, d2::RangesT{T}, full) where {T}
     full || return isequal(d1, d2)
     length(d1) == length(d2) || return false
     for (k, v) in d1
-        k2 = nothing
-        v2 = nothing
-        @manually_scope COMPARE_FULL => false begin
+        kv = @manually_scope COMPARE_FULL => false begin
             k2 = getkey(d2, k, nothing)
-            k2 === nothing && return false
-            v2 = d2[k2]
+            k2 === nothing ? nothing : (k2, d2[k2])
         end true
+        kv === nothing && return false
+        k2, v2 = kv
         isequal(v, v2) && isequal_bsimpl(k, k2, true) || return false
     end
     return true

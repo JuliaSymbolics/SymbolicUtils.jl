@@ -257,7 +257,7 @@ The first argument `sz` is the `size` of the represented array. `args...` is `pr
 elements representing the elements of the array in column-major order.
 """
 function array_literal(sz::NTuple{N, Int}, args::Vararg{Any, M}) where {N, M}
-    M > 32 && return reshape(Base.vect(args...), sz)
+    M > 31 && return reshape(Base.vect(args...), sz)
     T = Base.promote_typeof(args...)
     return __array_literal(sz, T, map(x -> convert(T, x), args))
 end

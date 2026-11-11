@@ -532,6 +532,15 @@ end
     @test !has_dynamic_apply(SymbolicUtils.array_literal, (Tuple{Int}, ntuple(_ -> Float64, 64)...))
     @test SymbolicUtils.array_literal((2, 2), 1, 2.0, 3, 4) == [1.0 3.0; 2.0 4.0]
     @test_throws DimensionMismatch SymbolicUtils.array_literal((2,), 1.0)
+    for n in (31, 32)
+        mixed = eval(:(x -> SymbolicUtils.array_literal(($n,), $((isodd(i) ? :x : i for i in 1:n)...))))
+        same = eval(:(x -> SymbolicUtils.array_literal(($n,), $((:x for _ in 1:n)...))))
+        @test Base.invokelatest(mixed, 0.5)::Vector{Float64} == [isodd(i) ? 0.5 : i for i in 1:n]
+        allocated(f) = (f(0.5); @allocated f(0.5))
+        @test Base.invokelatest(allocated, mixed) <= 2 * Base.invokelatest(allocated, same)
+    end
+    @test SymbolicUtils.array_literal((4, 10), ntuple(i -> i % 3 == 0 ? Float32(i) : i, 40)...)::Matrix{Float32} == reshape(1:40, 4, 10)
+    @test_throws DimensionMismatch SymbolicUtils.array_literal((41,), ntuple(i -> isodd(i) ? 1.0 : i, 40)...)
 end
 
 @testset "destructuring rewrites do not retain `elems` (#1098)" begin

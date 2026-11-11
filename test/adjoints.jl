@@ -68,5 +68,6 @@ end
     @test only(Zygote.gradient(x -> sum(SymbolicUtils.array_literal((n,), ntuple(_ -> x, n)...)), 1.0)) == n
   end
   @test only(Zygote.gradient(x -> sum(SymbolicUtils.array_literal((2, 2), x, 2x, 3, x)), 1.0)) == 4
+  @test only(Zygote.gradient(x -> sum(SymbolicUtils.array_literal((40,), ntuple(i -> isodd(i) ? x : i, 40)...)), 1.0)) == 20
   @test Zygote.gradient((a, b) -> SymbolicUtils.array_literal((2,), a, b)[2], 1.0, 2.0) == (0.0, 1.0)
 end

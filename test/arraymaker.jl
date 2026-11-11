@@ -248,4 +248,19 @@ Base.getindex(x::OffsetIndices, i::Int) = x.data[i - 1]
     @test isequal(collect(SU.ArrayMaker{SymReal}((([1, 2, 3],),), (o,))), [o[2], o[3], o[4]])
     @test isequal(collect(SU.ArrayMaker{SymReal}(((1:5,), ([1, 4, 5],)), (u[1:5], o))), [o[2], u[2], u[3], o[3], o[4]])
     @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:5,), (OffsetIndices([1, 2, 5]),)), (zeros(Int, 5), [10, 20, 50])))) == [10, 20, 0, 0, 50]
+
+    @syms Y[1:4, 1:4]::Real
+    m2 = @makearray m2[1:4, 1:4] begin
+        m2[1:4, 1:4] => Y
+        m2[[1, 3], [2, 4]] => W
+    end
+    @test isequal(collect(m2), [(i, j) in ((1, 2), (3, 2), (1, 4), (3, 4)) ? W[(i + 1) ÷ 2, j ÷ 2] : Y[i, j] for i in 1:4, j in 1:4])
+
+    for ax in (1:3, [1, 2, 4], Int[], OffsetIndices([1, 2, 5]))
+        @test (@inferred SU.index_runs(ax)) isa Vector{NTuple{2, UnitRange{Int}}}
+    end
+    for (value, offsets) in (([10, 20, 30], (1:2,)), (x, (2:3,)), (filled, (1:2,)))
+        @test (@inferred SU.region_slice(SymReal, value, offsets)) isa SU.BasicSymbolic{SymReal}
+    end
+    @test (@inferred SU.split_index_regions(SymReal, Any[(1:20,), ([2, 3, 19],)], Any[u, x])) isa Tuple{SU.RegionsT, SU.ArgsT{SymReal}}
 end

@@ -642,7 +642,7 @@ performance in internal operations.
 """
 function ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false) where {T}
     raw_regions = unwrap_args(regions)
-    regions, values = split_index_regions(raw_regions, unwrap_args(values))
+    regions, values = split_index_regions(T, raw_regions, unwrap_args(values))
     regions = parse_regions(regions)
     values = parse_args(T, values)
     if shape === nothing
@@ -657,14 +657,14 @@ end
 
 is_range_region(region) = all(ax -> ax isa AbstractUnitRange{<:Integer}, region)
 
-function split_index_regions(regions, values)
-    all(is_range_region, regions) && return regions, values
-    new_regions = Any[]
-    new_values = Any[]
+function split_index_regions(::Type{T}, regions, values) where {T}
+    all(is_range_region, regions) && return parse_regions(regions), parse_args(T, values)
+    new_regions = RegionsT()
+    new_values = ArgsT{T}()
     for (region, value) in zip(regions, values)
         if is_range_region(region)
-            push!(new_regions, region)
-            push!(new_values, value)
+            push!(new_regions, parse_shape(region))
+            push!(new_values, Const{T}(value))
             continue
         end
         region = map(ax -> ax isa AbstractVector{Bool} ? findall(ax) : ax, Tuple(region))
@@ -672,9 +672,17 @@ function split_index_regions(regions, values)
         if sh isa ShapeVecT && (length(sh) != length(region) || any(i -> length(sh[i]) != length(region[i]), eachindex(region)))
             _throw_arraymaker_incompatible_shapes(region, value)
         end
-        for pieces in Iterators.product(map(index_runs, region)...)
-            push!(new_regions, map(first, pieces))
-            push!(new_values, region_slice(value, map(last, pieces)))
+        runs = Vector{NTuple{2, UnitRange{Int}}}[index_runs(ax) for ax in region]
+        for I in StableIndices(ShapeVecT(map(rs -> 1:length(rs), runs)))
+            new_region = ShapeVecT()
+            offsets = ShapeVecT()
+            for d in eachindex(runs)
+                dest, source = runs[d][I[d]]
+                push!(new_region, dest)
+                push!(offsets, source)
+            end
+            push!(new_regions, new_region)
+            push!(new_values, region_slice(T, value, Tuple(offsets)))
         end
     end
     return new_regions, new_values
@@ -686,11 +694,11 @@ function check_logical_axes(regions, shape::ShapeVecT)
     end
 end
 
-index_runs(ax::AbstractUnitRange{<:Integer}) = ((UnitRange{Int}(ax), 1:length(ax)),)
+index_runs(ax::AbstractUnitRange{<:Integer}) = NTuple{2, UnitRange{Int}}[(UnitRange{Int}(ax), 1:length(ax))]
 function index_runs(ax::AbstractVector{<:Integer})
-    isempty(ax) && return ((1:0, 1:0),)
+    runs = NTuple{2, UnitRange{Int}}[]
+    isempty(ax) && return push!(runs, (1:0, 1:0))
     firstindex(ax) == 1 || (ax = ax[begin:end])
-    runs = Tuple{UnitRange{Int}, UnitRange{Int}}[]
     start = 1
     for k in 2:(length(ax) + 1)
         k <= length(ax) && ax[k] == ax[k - 1] + 1 && continue
@@ -700,8 +708,8 @@ function index_runs(ax::AbstractVector{<:Integer})
     return runs
 end
 
-function region_slice(value, offsets)
-    value isa BasicSymbolic || return value[map((o, ax) -> ax[o], offsets, axes(value))...]
+function region_slice(::Type{T}, @nospecialize(value), @nospecialize(offsets)) where {T}
+    value isa BasicSymbolic{T} || return Const{T}(value[map((o, ax) -> ax[o], offsets, axes(value))...])
     filled = @match value begin
         BSImpl.ArrayOp(; term) => @match term begin
             BSImpl.Term(; f, args) => f isa Fill ? only(args) : nothing
@@ -710,8 +718,8 @@ function region_slice(value, offsets)
         _ => nothing
     end
     sh = shape(value)
-    filled === nothing && return value[(sh isa ShapeVecT ? map((o, ax) -> ax[o], offsets, Tuple(sh)) : offsets)...]
-    return Fill(ShapeVecT(map(o -> 1:length(o), offsets)))(filled)
+    filled === nothing && return Const{T}(value[(sh isa ShapeVecT ? map((o, ax) -> ax[o], offsets, Tuple(sh)) : offsets)...])
+    return Const{T}(Fill(ShapeVecT(map(o -> 1:length(o), offsets)))(filled))
 end
 
 function shape_from_regions(regions::RegionsT)::ShapeVecT

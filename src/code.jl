@@ -577,12 +577,13 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
                 push!(args, BSImpl.Const{T}(reg))
             end
             vw = BSImpl.Term{T}(view, args; type = Any)
+            rewritten = haskey(st.rewrites, val)
             @match val begin
-                BSImpl.ArrayOp(;) => begin
+                BSImpl.ArrayOp(; term) && if term === nothing && !rewritten end => begin
                     st.rewrites[:arrayop_output] = vw
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
                 end
-                BSImpl.ArrayMaker(;) => begin
+                BSImpl.ArrayMaker(;) && if !rewritten end => begin
                     st.rewrites[:arraymaker_output] = vw
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
                 end

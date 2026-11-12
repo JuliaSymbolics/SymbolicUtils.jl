@@ -137,7 +137,8 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
                     MA.operate!(*, poly, _maybe_widen(MA.copy_if_mutable(coeff), widen))
                     for (k, v) in dict
                         if safe_isinteger(v)
-                            tpoly = _to_poly!(poly_to_bs, bs_to_poly, k, recurse, widen) ^ Int(v)
+                            tpoly = _to_poly!(poly_to_bs, bs_to_poly, k, recurse, widen)
+                            _isone(v) || (tpoly = tpoly ^ Int(v))
                         else
                             tpoly = _to_poly!(poly_to_bs, bs_to_poly, k ^ v, recurse, widen)
                         end
@@ -156,7 +157,7 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
                     mv = DP.MonomialVector{PolyVarOrder, MonomialOrder}([poly], [Int[exp]])
                     return PolynomialT(PolyCoeffT[1], mv)
                 end
-                poly = poly ^ Int(exp)
+                _isone(exp) || (poly = poly ^ Int(exp))
                 new_expr = from_poly(poly_to_bs, poly)
                 if !isequal(expr, new_expr)
                     poly = _to_poly!(poly_to_bs, bs_to_poly, from_poly(poly_to_bs, poly), recurse, widen)

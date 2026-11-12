@@ -195,7 +195,7 @@ include("ordering.jl")
 include("simplify_rules.jl")
 
 # API = simplify + substitute
-export simplify
+export simplify, trig_reduce
 include("simplify.jl")
 
 export substitute
@@ -204,7 +204,7 @@ include("substitute.jl")
 include("ordereddigraph.jl")
 include("graph_traversal.jl")
 
-export IRStructure, populate_ir!, print_ir, get_reachability
+export IRStructure, populate_ir!, print_ir, get_reachability, get_reachability!
 include("irstructure.jl")
 
 include("code.jl")
@@ -216,7 +216,7 @@ end
 @public add_worker, mul_worker
 @public BasicSymbolic, unwrap, isadd, ismul
 @public symtype, issym, isterm, isdiv, Sym
-@public Term, Add, Mul, node_count
+@public Term, Add, Mul, ArrayMaker, node_count
 @public isconst
 @public operation_hasname, operation_getname
 @public operation_is_atomic

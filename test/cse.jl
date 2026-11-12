@@ -61,9 +61,9 @@ end
     end
     ex = term(foo, [a^2 + b^2, b^2 + c], (a^2 + b^2, b^2 + c), c; type = Real)
     sorted_nodes = topological_sort(ex)
-    @test length(sorted_nodes) == 8
-    @test operation(sorted_nodes[6].rhs) === SymbolicUtils.array_literal
-    @test operation(sorted_nodes[7].rhs) === tuple
+    @test length(sorted_nodes) == 7
+    @test operation(sorted_nodes[5].rhs) === SymbolicUtils.array_literal
+    @test operation(sorted_nodes[6].rhs) === tuple
     expr = quote
         a = 1
         b = 2
@@ -254,4 +254,29 @@ end
         end
     end
     @test eval(expr) == 6
+end
+
+@testset "CSE does not hoist scalar numeric constants" begin
+    @syms a g1 g2 v1 v2
+    ex = 2 * a * g1 * v1 + 2 * a * g2 * v2 + a^2 * v1 + a^2 * v2
+    let_expr = cse(ex)
+    # hoisting the exponent into a temporary hides it from `^` lowering,
+    # which then cannot emit `Base.literal_pow`
+    @test !any(p -> SymbolicUtils.isconst(p.rhs) && SymbolicUtils.unwrap_const(p.rhs) isa Number, let_expr.pairs)
+    code = toexpr(let_expr)
+    has_literal_pow = Ref(false)
+    walk(x) = x isa Expr ? foreach(walk, x.args) : (has_literal_pow[] |= x === Base.literal_pow)
+    walk(code)
+    @test has_literal_pow[]
+    @test !occursin("NaNMath.pow", string(code))
+
+    f = eval(:((a, g1, g2, v1, v2) -> $code))
+    vals = (1.3, 0.4, -0.7, 2.1, 0.9)
+    @test Base.invokelatest(f, vals...) ≈ 2 * vals[1] * vals[2] * vals[4] + 2 * vals[1] * vals[3] * vals[5] +
+        vals[1]^2 * vals[4] + vals[1]^2 * vals[5]
+
+    # a lone constant and non-real scalar constants still work
+    for c in (2, 2.5, 1 // 2, 1 + 2im, true)
+        @test eval(toexpr(cse(SymbolicUtils.Const{SymReal}(c)))) == c
+    end
 end

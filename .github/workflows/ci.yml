@@ -13,13 +13,16 @@ permissions:
   actions: write
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         version:
-          - 'min'
+          - '1.10'
           - '1.11' # to test inference
           - '1'
         group:

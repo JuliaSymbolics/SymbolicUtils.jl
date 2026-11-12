@@ -106,6 +106,9 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
     type::TypeT = symtype(Const{T}(first(terms)))
     # type = promoted_symtype(+, terms)
     newcoeff = 0
+    # Counts result entries whose value is zero, so `filter!` below only runs
+    # when cancellation or a non-canonical input actually produced one.
+    zref = Ref(0)
     result = awb.dict
     for term in terms
         term = unwrap(term)
@@ -120,13 +123,20 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                     @match variant begin
                         AddMulVariant.ADD => begin
                             newcoeff = newcoeff .+ coeff
-                            for (k, v) in dict
-                                _accumulate!(result, k, v)
+                            if isempty(result) && dict isa ACDict{T}
+                                # No keys can collide: seed the result with a
+                                # bulk copy instead of probing every entry.
+                                _dict_copy_into!(result, dict)
+                                zref[] += count(iszero, values(dict))
+                            else
+                                for (k, v) in dict
+                                    _accumulate!(result, k, v, zref)
+                                end
                             end
                         end
                         AddMulVariant.MUL => begin
                             newterm = Mul{T}(1, dict; shape, type, metadata)
-                            _accumulate!(result, newterm, coeff)
+                            _accumulate!(result, newterm, coeff, zref)
                         end
                     end
                 end
@@ -134,12 +144,12 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                     if is_array_shape(SymbolicUtils.shape(term))
                         coeff, arrterm = _split_arrterm_scalar_coeff(T, term)
                         if isconst(coeff)
-                            _accumulate!(result, arrterm, unwrap_const(coeff))
+                            _accumulate!(result, arrterm, unwrap_const(coeff), zref)
                         else
-                            _accumulate!(result, term, 1)
+                            _accumulate!(result, term, 1, zref)
                         end
                     else
-                        _accumulate!(result, term, 1)
+                        _accumulate!(result, term, 1, zref)
                     end
                 end
             end
@@ -147,7 +157,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
             error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
         elseif term isa AbstractIrrational
             term = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
-            _accumulate!(result, term, 1)
+            _accumulate!(result, term, 1, zref)
         else
             newcoeff = newcoeff .+ term
         end
@@ -164,7 +174,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
             end
         end
     end
-    filter!(!(iszero ∘ last), result)
+    zref[] > 0 && filter!(!(iszero ∘ last), result)
     if isempty(result)
         if arr_witness !== nothing && !(newcoeff isa AbstractArray)
             return (newcoeff * arr_witness)::BasicSymbolic{T}

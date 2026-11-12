@@ -38,6 +38,7 @@ import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, a
 using Moshi.Match: @match
 import TaskLocalValues: TaskLocalValue
 import Graphs
+using OrderedCollections: OrderedSet
 
 ##== state management ==##
 
@@ -98,7 +99,11 @@ function add_allocator!(state::Union{NameState, LazyState}, @nospecialize(alloc)
 end
 
 function reset_allocator!(state::Union{NameState, LazyState}, @nospecialize(old_alloc))
-    state.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    if old_alloc === nothing
+        delete!(state.rewrites, ALLOCATOR_REWRITES_KEY)
+    else
+        state.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    end
     return nothing
 end
 
@@ -637,6 +642,23 @@ function function_to_expr(@nospecialize(op::Union{typeof(*),typeof(+)}), O, st)
     end
 end
 
+# Lowering only rewrites `x^n` to `literal_pow` for the `:^` symbol, not the `^` function object.
+function literal_pow_exponent(@nospecialize(n))
+    n isa Integer && typemin(Int) <= n <= typemax(Int) || return nothing
+    return Expr(:call, Val, Int(n))
+end
+
+"""
+Key in the `rewrites` dictionary of codegen states (`NameState`, `LazyState`, and
+`CodegenState` used by [`fast_toexpr`](@ref)). When `false`, constant integer powers
+`x ^ n` lower to `^(x, n)` — including inside `broadcast`ed and fused broadcast
+expressions — instead of `Base.literal_pow(^, x, Val(n))`, reverting to the codegen
+behavior from before `literal_pow` emission was introduced. Defaults to `true`.
+"""
+const USE_LITERAL_POW_KEY = :use_literal_pow
+
+@inline use_literal_pow(rewrites::Dict{Any, Any}) = get(rewrites, USE_LITERAL_POW_KEY, true)::Bool
+
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
     base = toexpr(base, st)
@@ -653,6 +675,12 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
                     val = -val
                     base = Expr(:call, inv, base)
                 end
+                if use_literal_pow(st.rewrites)
+                    p = literal_pow_exponent(val)
+                    if p !== nothing
+                        return Expr(:call, Base.literal_pow, ^, base, p)
+                    end
+                end
                 if !(val isa Integer) && get(st.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
                 end
@@ -668,6 +696,17 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
             end
         end
     end
+end
+
+function function_to_expr(::typeof(broadcast), O::BasicSymbolic{T}, st) where {T}
+    args = arguments(O)
+    if use_literal_pow(st.rewrites) && length(args) == 3 && unwrap_const(args[1]) === (^)
+        p = literal_pow_exponent(unwrap_const(args[3]))
+        if p !== nothing
+            return Expr(:call, broadcast, Base.literal_pow, ^, toexpr(args[2], st), p)
+        end
+    end
+    return function_to_expr_no_nanmath(broadcast, O, st)
 end
 
 function function_to_expr(::typeof(ifelse), O, st)
@@ -1849,7 +1888,10 @@ end
 
 function _cse_compute(expr::BasicSymbolic{T}, state::CSEState) where {T}
     @match expr begin
-        BSImpl.Const(;) => begin
+        BSImpl.Const(; val) => begin
+            # Scalar numbers stay literal: a hoisted exponent would hide it from `^`
+            # lowering, which needs a literal to emit `Base.literal_pow`.
+            val isa Number && return expr
             new_expr = expr
             sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
             push!(state.sorted_exprs, sym ← new_expr)
@@ -2296,8 +2338,9 @@ end
 @public LazyState, create_array, cse_inside_expr, fast_toexpr, function_to_expr, get_rewrites
 @public supports_with_allocator, with_allocator, with_options
 # Extension points for the IR/`CodegenState` codegen path (parallel to `function_to_expr`).
-@public CodegenState, codegen!, codegen_function!
+@public CodegenState, codegen!, codegen_function!, is_elementwise_call
 # Helpers that the `codegen_function!` implementer contract documents and requires.
 @public declare!, enter_scope, exit_scope!, rollback!
+@public FUSE_BROADCASTS_KEY, FUSE_UNALIAS_KEY, FUSE_OUTPUT_ELTYPE_KEY, USE_LITERAL_POW_KEY
 
 end

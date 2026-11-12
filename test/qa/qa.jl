@@ -20,12 +20,15 @@ run_qa(
                 # `mapreduce` method have to name its input union to resolve.
                 :AbstractArrayOrBroadcasted,
                 :_setindex!, :acos, :acosh, :asin, :atanh, :copy, :cos, :eval,
-                :hash_abstractarray_seed, :hasha_seed, :ht_keyindex2,
+                :hash_abstractarray_seed, :hasha_seed, :ht_keyindex2, :ht_keyindex,
                 :ht_keyindex2_shorthash!, :instantiate, :kwcall, :lgamma, :literal_pow,
                 :log, :log1p, :log10, :log2, :mul_prod, :pow, :postwalk,
                 :promote_typejoin, :return_type, :show_unquoted, :sin, :sqrt, :tan,
                 :typed_hcat, :typed_hvncat, :typed_hvcat, :typed_vcat, :RefValue, :add_sum,
                 :ReinterpretArray, :ReshapedArray, :promote_eltypeof, :promote_typeof,
+                # Fused broadcast codegen builds lazy broadcasts and controls how their
+                # inputs are unaliased from the destination.
+                :broadcasted, :materialize, :preprocess, :preprocess_args, :unalias,
                 # Public in Julia 1.12, but not marked public on supported Julia 1.11.
                 :filter, :map, :peel, :reverse,
             ),

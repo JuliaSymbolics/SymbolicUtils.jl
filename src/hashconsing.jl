@@ -110,16 +110,28 @@ allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
 """
 function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full::Bool) where {T}
     full || return isequal(d1, d2)
+    d1 === d2 && return true
     length(d1) == length(d2) || return false
-    for (k, v) in d1
-        k2 = nothing
-        v2 = nothing
-        @manually_scope COMPARE_FULL => false begin
-            k2 = getkey(d2, k, nothing)
-            k2 === nothing && return false
-            v2 = d2[k2]
-        end true
-        isequal_somescalar(v, v2) && typeof(v) === typeof(v2) && isequal_bsimpl(k, k2, true) || return false
+    # The keys of `d2` were hashed under COMPARE_FULL=false, so lookups must run
+    # under that scope. It only has to cover `ht_keyindex`; `isequal_somescalar`
+    # does not read COMPARE_FULL, so the scope is hoisted out of the loop instead
+    # of being set and restored per entry. `ht_keyindex` + direct slot access
+    # does one probe per key instead of two (`getkey` + `getindex`).
+    @manually_scope COMPARE_FULL => false begin
+        for (k, v) in d1
+            idx = Base.ht_keyindex(d2, k)
+            idx < 0 && return false
+            @inbounds k2 = d2.keys[idx]
+            @inbounds v2 = d2.vals[idx]
+            # `isequal_bsimpl` must run with COMPARE_FULL=full: its `full` arg
+            # covers the structural checks, but the metadata path compares
+            # arbitrary values through `isequal`, which reads COMPARE_FULL when
+            # it reaches a BasicSymbolic. Identical keys skip the call entirely,
+            # so the restore happens only for non-interned keys.
+            ok = isequal_somescalar(v, v2) && typeof(v) === typeof(v2) &&
+                 (k === k2 || @manually_scope(COMPARE_FULL => full, isequal_bsimpl(k, k2, true)))
+            ok || return false
+        end
     end
     return true
 end
@@ -135,15 +147,19 @@ allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
 function isequal_rangesdict(d1::RangesT{T}, d2::RangesT{T}, full) where {T}
     full || return isequal(d1, d2)
     length(d1) == length(d2) || return false
-    for (k, v) in d1
-        k2 = nothing
-        v2 = nothing
-        @manually_scope COMPARE_FULL => false begin
-            k2 = getkey(d2, k, nothing)
-            k2 === nothing && return false
-            v2 = d2[k2]
-        end true
-        isequal(v, v2) && isequal_bsimpl(k, k2, true) || return false
+    # As in isequal_addmuldict: the scope only has to cover the probe, and
+    # `isequal_bsimpl` needs COMPARE_FULL=full restored for its metadata path —
+    # paid only for keys that are not `===`.
+    @manually_scope COMPARE_FULL => false begin
+        for (k, v) in d1
+            idx = Base.ht_keyindex(d2, k)
+            idx < 0 && return false
+            @inbounds k2 = d2.keys[idx]
+            @inbounds v2 = d2.vals[idx]
+            ok = isequal(v, v2) &&
+                 (k === k2 || @manually_scope(COMPARE_FULL => full, isequal_bsimpl(k, k2, true)))
+            ok || return false
+        end
     end
     return true
 end
@@ -370,15 +386,41 @@ function hash_range(a::StepRange{Int, Int}, h::UInt)
 end
 
 """
+Number of leading entries of a dict hashed densely by `hash_addmuldict`. Past
+this limit only an exponentially-spread sample of the remaining entries is
+hashed (like `hash_argsvec` for long argument vectors), so the cost of hashing
+very large `AddMul` dicts stays sublinear in their size.
+
+Note that unlike an argument vector, a dict has no canonical order: two `isequal`
+dicts built by different insertion sequences may iterate differently and so hash
+different sampled subsets. The resulting hash inconsistency only degrades
+deduplication in the hashcons table; `isequal_addmuldict` is unaffected.
+"""
+const ADDMULDICT_HASH_LIMIT = 512
+
+"""
     $TYPEDSIGNATURES
 
 Hash `AddMul.dict`, accounting for the fact that the keys are inserted with `full=false`
 when currently `full` may be `true`. `full` should be equal to the current value of
 `COMPARE_FULL`. Passing `full` prevents repeatedly accessing a `TaskLocalValue`.
+
+For `length(d) > ADDMULDICT_HASH_LIMIT` only a sample of the entries is hashed:
+the first `ADDMULDICT_HASH_LIMIT` entries densely, then those at the
+exponentially-spread positions `n, n-1, n-3, n-7, ...` of one forward iteration,
+mirroring `hash_argsvec`.
 """
 function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
     hv = Base.hasha_seed % UInt
+    n = length(d)
+    h = hash(n, h)
+    m = min(n, ADDMULDICT_HASH_LIMIT)
+    i, skip = n, 1   # next tail position to sample; descends n, n-1, n-3, n-7, ...
+    pos = 0
     for (k, v) in d
+        pos += 1
+        pos <= m || pos == i || continue
+        pos == i && (i -= skip; skip <<= 1)
         h1 = hash_somescalar(v, zero(UInt))
         full && (h1 = hash_maybe_fntype(typeof(v), h1))
         h1 = hash_bsimpl(k, h1, full)
@@ -406,6 +448,14 @@ function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
     return hash(hv, h)
 end
 
+"""
+Number of leading elements of a vector hashed densely by `hash_argsvec` and
+friends. Past this limit only an exponentially-spread sample of the tail is
+hashed (like `Base.hash` for large `AbstractArray`s), so the cost of hashing
+very long argument vectors stays sublinear in their length.
+"""
+const ARGSVEC_HASH_LIMIT = 512
+
 const SHAPEVECT_SEED = 0x70840b1b2d005176 % UInt
 
 """
@@ -414,8 +464,21 @@ const SHAPEVECT_SEED = 0x70840b1b2d005176 % UInt
 Specialized hash for `ShapeT` to hit `hash_range`.
 """
 function hash_shape(sh::ShapeVecT, h::UInt)
-    @union_split_smallvec sh for ax in sh
-        h = hash_range(ax, h)
+    @union_split_smallvec sh begin
+        n = length(sh)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_range(@inbounds(sh[i]), h)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_range(@inbounds(sh[i]), h)
+            i -= skip
+            skip <<= 1
+        end
     end
     return h ⊻ SHAPEVECT_SEED
 end
@@ -429,8 +492,21 @@ const ARGSVEC_SEED = 0x6b2f4a9c1d8e7053 % UInt
 Specialized hash for a vector of symbolic arguments (e.g. `Term`/`ArrayMaker` args).
 """
 function hash_argsvec(v::ArgsT{T}, h::UInt, full::Bool) where {T}
-    @union_split_smallvec v for el in v
-        h = hash_bsimpl(el, h, full)
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_bsimpl(@inbounds(v[i]), h, full)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_bsimpl(@inbounds(v[i]), h, full)
+            i -= skip
+            skip <<= 1
+        end
     end
     return h ⊻ ARGSVEC_SEED
 end
@@ -441,8 +517,23 @@ end
 Specialized hash for `ArrayOp.output_idx`, whose elements are `Int` or symbolic.
 """
 function hash_outputidx(v::SmallV{<:Union{Int, BasicSymbolic}}, h::UInt, full::Bool)
-    @union_split_smallvec v for el in v
-        h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            el = @inbounds(v[i])
+            h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            el = @inbounds(v[i])
+            h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+            i -= skip
+            skip <<= 1
+        end
     end
     return h ⊻ ARGSVEC_SEED
 end
@@ -453,8 +544,21 @@ end
 Specialized hash for `ArrayMaker.regions`, a vector of shapes.
 """
 function hash_regions(v::RegionsT, h::UInt)
-    @union_split_smallvec v for el in v
-        h = hash_shape(el, h)
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_shape(@inbounds(v[i]), h)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_shape(@inbounds(v[i]), h)
+            i -= skip
+            skip <<= 1
+        end
     end
     return h ⊻ ARGSVEC_SEED
 end

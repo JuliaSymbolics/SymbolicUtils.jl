@@ -339,7 +339,8 @@ later entries overwrite earlier ones. If a region of the array is left unassigne
 blocks, accessing it is invalid. When used in code generation, these unassigned regions
 can take arbitrary and possibly unassigned values.
 
-In most cases, `ArrayMaker` should not be created directly. Prefer using [`@makearray`](@ref).
+Use [`SymbolicUtils.ArrayMaker`](@ref) for region and value lists assembled at runtime.
+The [`@makearray`](@ref) macro supports a fixed sequence of block assignments.
 
 ## Array arithmetic
 

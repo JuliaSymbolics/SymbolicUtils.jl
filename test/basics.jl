@@ -1295,7 +1295,7 @@ end
     @test isequal(v1.coeff, 0.5)
     v2 = (1//2)x
     @test v2.coeff !== 0.5
-    @test v2.coeff === 1//2
+    @test SymbolicUtils.unwrap(v2.coeff) === 1//2
 end
 
 @testset "`imag(::Real)`" begin

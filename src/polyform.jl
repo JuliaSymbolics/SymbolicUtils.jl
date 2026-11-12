@@ -76,8 +76,10 @@ end
 _widen_coeff(x::Integer) = big(x)
 _widen_coeff(x::Rational) = Rational{BigInt}(x)
 _widen_coeff(x::Complex{<:Union{Integer, Rational}}) = complex(_widen_coeff(real(x)), _widen_coeff(imag(x)))
+_widen_coeff(x::AnyNumber.AnyNumber) = _widen_coeff(unwrap(x))
 _widen_coeff(x) = x
 _maybe_widen(x, widen::Bool) = widen ? _widen_coeff(x) : x
+_maybe_widen(x::AnyNumber.AnyNumber, widen::Bool) = _maybe_widen(unwrap(x), widen)
 
 # Mixing a `Float64` with a widened `Rational{BigInt}` promotes to `BigFloat`, so
 # floats are narrowed back too, unless the input itself carried `BigFloat`s.

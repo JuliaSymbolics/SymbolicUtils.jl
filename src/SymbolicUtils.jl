@@ -138,6 +138,7 @@ export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Sym, Term,
 # Add, Mul and Pow
 PrecompileTools.@recompile_invalidations begin
+    include("anynumber.jl")
     include("types.jl")
     include("terminterface.jl")
     include("hashconsing.jl")
@@ -210,7 +211,6 @@ include("irstructure.jl")
 include("code.jl")
 
 PrecompileTools.@recompile_invalidations begin
-    include("anynumber.jl")
     include("despecialize.jl")
 end
 

@@ -443,6 +443,7 @@ performance in internal operations.
 """
 @inline function BSImpl.AddMul{T}(coeff, dict, variant::AddMulVariant.T; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     @nospecialize coeff
+    coeff = _wrap_coeff(coeff)
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
     dict = parse_dict(T, dict)

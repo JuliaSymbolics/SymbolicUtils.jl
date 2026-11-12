@@ -128,7 +128,9 @@ function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full::Bool) where {T}
             # arbitrary values through `isequal`, which reads COMPARE_FULL when
             # it reaches a BasicSymbolic. Identical keys skip the call entirely,
             # so the restore happens only for non-interned keys.
-            ok = isequal_somescalar(v, v2) && typeof(v) === typeof(v2) &&
+            uv = unwrap(v)
+            uv2 = unwrap(v2)
+            ok = isequal_somescalar(uv, uv2) && typeof(uv) === typeof(uv2) &&
                  (k === k2 || @manually_scope(COMPARE_FULL => full, isequal_bsimpl(k, k2, true)))
             ok || return false
         end
@@ -283,7 +285,9 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool)::Bool 
             (f1 === f2 || isequal(f1, f2)::Bool) && isequal_argsvec(args1, args2, full) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
-            isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && isequal_shapes(s1, s2) && t1 === t2
+            uc1 = unwrap(c1)
+            uc2 = unwrap(c2)
+            isequal_somescalar(uc1, uc2) && (!full || (typeof(uc1) === typeof(uc2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.Div(; num = n1, den = d1, type = t1, shape = s1), BSImpl.Div(; num = n2, den = d2, type = t2, shape = s2)) => begin
             isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && isequal_shapes(s1, s2) && t1 === t2
@@ -421,8 +425,9 @@ function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
         pos += 1
         pos <= m || pos == i || continue
         pos == i && (i -= skip; skip <<= 1)
-        h1 = hash_somescalar(v, zero(UInt))
-        full && (h1 = hash_maybe_fntype(typeof(v), h1))
+        uv = unwrap(v)
+        h1 = hash_somescalar(uv, zero(UInt))
+        full && (h1 = hash_maybe_fntype(typeof(uv), h1))
         h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
     end
@@ -723,9 +728,9 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
+            htmp = hash_somescalar(unwrap(coeff), hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
             if full
-                htmp = hash_maybe_fntype(typeof(coeff)::TypeT, htmp)
+                htmp = hash_maybe_fntype(typeof(unwrap(coeff))::TypeT, htmp)
             end
             htmp
         end

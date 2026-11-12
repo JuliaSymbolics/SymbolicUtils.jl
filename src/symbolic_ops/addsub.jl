@@ -122,7 +122,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                 BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
-                            newcoeff = newcoeff .+ coeff
+                            newcoeff = newcoeff .+ unwrap(coeff)
                             if isempty(result) && dict isa ACDict{T}
                                 # No keys can collide: seed the result with a
                                 # bulk copy instead of probing every entry.

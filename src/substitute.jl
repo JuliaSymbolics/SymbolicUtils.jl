@@ -635,16 +635,18 @@ scalarization_function(::typeof(LinearAlgebra.mul!)) = _scalarize_mul!
 function _scalarize_mul!(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
     @nospecialize f
     args = map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), arguments(x))
+    args[2] isa AbstractMatrix && args[3] isa AbstractVecOrMat || return _default_scalarize(f, x, Val{toplevel}())
+    args[1] isa AbstractMatrix || args[1] isa AbstractVector && args[3] isa AbstractVector || return _default_scalarize(f, x, Val{toplevel}())
+    size(args[1], 1) == size(args[2], 1) && size(args[2], 2) == size(args[3], 1) && size(args[1], 2) == size(args[3], 2) || return _default_scalarize(f, x, Val{toplevel}())
     res = if length(args) == 5 && _iszero(args[4])
         _iszero(args[5]) ? zero.(args[1]) : args[5] .* args[1]
     else
-        AB = args[2] * args[3]
-        AB isa AbstractArray && args[1] isa AbstractArray && (AB = reshape(AB, size(args[1])))
+        AB = reshape(args[2] * args[3], size(args[1]))
         length(args) == 3 ? AB : _iszero(args[5]) ? args[4] .* AB : args[4] .* AB .+ args[5] .* args[1]
     end
-    res isa AbstractArray || return res
     E = eltype(symtype(x))
-    return map(v -> unwrap_const(v) isa Number ? Const{T}(convert(E, unwrap_const(v))) : v, res)
+    res = map(v -> unwrap_const(v) isa Number ? Const{T}(convert(E, unwrap_const(v))) : v, res)
+    return all(v -> symtype(v) <: E, res) ? res : _default_scalarize(f, x, Val{toplevel}())
 end
 
 scalarization_function(::typeof(broadcast)) = _scalarize_broadcast

@@ -392,8 +392,10 @@ end
     @test size(scalarize(t)) == (2, 1)
     @test isequal(vec(scalarize(t)), scalarize(a * w))
     @syms Au::Matrix{Real} bu::Vector{Real} cu[1:2]
-    t = Term{SymReal}(LinearAlgebra.mul!, [cu, Au, bu]; type = symtype(cu), shape = SymbolicUtils.shape(cu))
-    @test isequal(scalarize(t), scalarize(Au * bu))
+    for args in ([cu, Au, bu], [cu, Au, bu, 2, 3])
+        t = Term{SymReal}(LinearAlgebra.mul!, args; type = symtype(cu), shape = SymbolicUtils.shape(cu))
+        @test isequal(scalarize(t), [t[1], t[2]])
+    end
     nan = Const{SymReal}(fill(NaN, 1, 1))
     t = Term{SymReal}(LinearAlgebra.mul!, [Const{SymReal}(ones(1, 1)), nan, Const{SymReal}(ones(1, 1)), 0, 1]; type = Matrix{Float64}, shape = ShapeVecT((1:1, 1:1)))
     @test SymbolicUtils.unwrap_const.(scalarize(t)) == ones(1, 1)
@@ -404,6 +406,25 @@ end
     @test_throws InexactError scalarize(t)
     t = Term{SymReal}(LinearAlgebra.mul!, [ints, Const{SymReal}(fill(2.0, 1, 1)), Const{SymReal}(ones(1, 1))]; type = Matrix{Int}, shape = ShapeVecT((1:1, 1:1)))
     @test SymbolicUtils.unwrap_const(only(scalarize(t))) === 2
+    @syms Af[1:1, 1:1]::Float64 bf[1:1]::Float64 ci[1:1]::Int cf[1:1]::Float32
+    for coeffs in ((), (1, 1))
+        t = Term{SymReal}(LinearAlgebra.mul!, [ci, Af, bf, coeffs...]; type = symtype(ci), shape = SymbolicUtils.shape(ci))
+        @test_throws InexactError substitute(only(scalarize(t)), Dict(Af => [0.5;;], bf => [1.0], ci => [0]); fold = Val(true))
+        t = Term{SymReal}(LinearAlgebra.mul!, [cf, Af, bf, coeffs...]; type = symtype(cf), shape = SymbolicUtils.shape(cf))
+        @test SymbolicUtils.unwrap_const(substitute(only(scalarize(t)), Dict(Af => [1 + 2.0^-30;;], bf => [1.0], cf => Float32[0]); fold = Val(true))) === 1.0f0
+    end
+    sq = Const{SymReal}([1.0 2; 3 4])
+    for coeffs in ((), (1, 1), (0, 1), (0, 0))
+        t = Term{SymReal}(LinearAlgebra.mul!, [Const{SymReal}(zeros(1, 4)), sq, sq, coeffs...]; type = Matrix{Float64}, shape = ShapeVecT((1:1, 1:4)))
+        @test_throws DimensionMismatch SymbolicUtils.evaluate(first(scalarize(t)))
+    end
+    @syms c2[1:2] b41[1:4, 1:1]
+    t = Term{SymReal}(LinearAlgebra.mul!, [c2, a, b41]; type = symtype(c2), shape = SymbolicUtils.shape(c2))
+    @test isequal(scalarize(t), [t[1], t[2]])
+    @syms u[1:3]::Real y[1:2]::Real
+    L = Const{SymReal}(sparse([1.0 0 2; 0 3 0]))
+    t = Term{SymReal}(LinearAlgebra.mul!, [y, L, u]; type = symtype(u), shape = SymbolicUtils.shape(y))
+    @test isequal(scalarize(t), scalarize(L * u))
 end
 
 @testset "Array symbolic operations" begin

@@ -1889,7 +1889,10 @@ end
 
 function _cse_compute(expr::BasicSymbolic{T}, state::CSEState) where {T}
     @match expr begin
-        BSImpl.Const(;) => begin
+        BSImpl.Const(; val) => begin
+            # Scalar numbers stay literal: a hoisted exponent would hide it from `^`
+            # lowering, which needs a literal to emit `Base.literal_pow`.
+            val isa Number && return expr
             new_expr = expr
             sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
             push!(state.sorted_exprs, sym ← new_expr)
@@ -2339,5 +2342,6 @@ end
 @public CodegenState, codegen!, codegen_function!, is_elementwise_call
 # Helpers that the `codegen_function!` implementer contract documents and requires.
 @public declare!, enter_scope, exit_scope!, rollback!
+@public FUSE_BROADCASTS_KEY, FUSE_UNALIAS_KEY, FUSE_OUTPUT_ELTYPE_KEY, USE_LITERAL_POW_KEY
 
 end

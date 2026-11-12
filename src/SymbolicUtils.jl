@@ -204,7 +204,7 @@ include("substitute.jl")
 include("ordereddigraph.jl")
 include("graph_traversal.jl")
 
-export IRStructure, populate_ir!, print_ir, get_reachability
+export IRStructure, populate_ir!, print_ir, get_reachability, get_reachability!
 include("irstructure.jl")
 
 include("code.jl")

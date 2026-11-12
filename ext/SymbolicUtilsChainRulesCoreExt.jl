@@ -29,9 +29,10 @@ end
 
 function rrule(::typeof(SymbolicUtils.array_literal), sz::NTuple{D, Int}, elems::Vararg{Any, N}) where {D, N}
   y = SymbolicUtils.array_literal(sz, elems...)
+  project = ntuple(i -> ProjectTo(elems[i]), Val(N))
   function array_literal_pullback(Δ)
     dx = unthunk(Δ)
-    (NoTangent(), NoTangent(), ntuple(i -> dx[i], Val(N))...)
+    (NoTangent(), NoTangent(), ntuple(i -> project[i](dx[i]), Val(N))...)
   end
   y, array_literal_pullback
 end

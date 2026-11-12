@@ -56,6 +56,7 @@ if GROUP == "Core"
             @safetestset "Method library" begin include("methods.jl") end
             @safetestset "IRStructure" begin include("irstructure.jl") end
             @safetestset "OrderedDiGraph" begin include("ordereddigraph.jl") end
+            @safetestset "AnyNumber" begin include("anynumber.jl") end
         end
     end
 end

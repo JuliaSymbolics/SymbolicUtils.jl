@@ -449,6 +449,22 @@ end
     @test SymbolicUtils.shape(block.pairs[1].lhs) == [1:3, 1:3]
 end
 
+@testset "`@arrayop` writes do not depend on the buffer" begin
+    @syms x[1:3] y[1:3]
+    prod = @arrayop (i,) x[i] * y[i]
+    outer = @arrayop (i,) x[i] * y[j]
+    buf = zeros(3)
+    for (ex, expected) in ((prod, 32.0), (outer, 90.0)), alloc in (Returns(buf), ones)
+        expr = toexpr(sum(Code.with_allocator(alloc, ex)))
+        run() = eval(quote let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]; $expr end end)
+        @test run() == expected
+        @test run() == expected
+    end
+    mx = @arrayop (i,) x[i] reduce=max
+    expr = toexpr(sum(mx))
+    @test eval(quote let x = [-1.0, -2.0, -3.0]; $expr end end) == -6.0
+end
+
 @testset "`with_allocator`" begin
     @testset "`array_literal`" begin
         @syms x y z
@@ -503,8 +519,11 @@ end
                     let _out = $(ones)((3,))
                         var"%_out" = for _1 in 1:1:3
                             begin
-                                _out[$(CartesianIndex)(_1)] = $(+)($(getindex)(_out, _1), $(*)($(getindex)(x, _1), $(getindex)(y, _1)))
-                                nothing
+                                __arrayop_val = $(*)($(getindex)(x, _1), $(getindex)(y, _1))
+                                begin
+                                    _out[$(CartesianIndex)(_1)] = __arrayop_val
+                                    nothing
+                                end
                             end
                         end
                         _out

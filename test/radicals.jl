@@ -53,6 +53,8 @@ end
     @syms x
     @test isequal(6 / (s3 * x), 2 * s3 / x)
     @test isequal((s3 * x) / 3, (1 // 3) * s3 * x)
+    @test isequal((s3 * x)^2, 3x^2)
+    @test isequal((s3 * x)^2.0, 3.0 * x^2.0)
 
     @syms w vartype = SafeReal
     ss3 = Const{SafeReal}(3)^(1 // 2)

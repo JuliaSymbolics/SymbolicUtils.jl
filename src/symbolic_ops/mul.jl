@@ -146,12 +146,7 @@ function _split_arrterm_scalar_coeff(::Type{T}, ex::BasicSymbolic{T}) where {T}
 end
 _split_arrterm_scalar_coeff(::Type{T}, ex) where {T} = one_of_vartype(T), Const{T}(ex)
 
-function _has_const_key(dict)
-    for k in keys(dict)
-        isconst(k) && return true
-    end
-    return false
-end
+_has_const_key(dict) = any(isconst, keys(dict))
 
 """
     _normalize_radicals!(::Type{T}, coeff, dict)
@@ -161,10 +156,18 @@ Whole powers move into the coefficient and radicals with the same exponent are m
 into one radicand, so every key is left as `r ^ f` with `0 < f < 1`. Returns the new
 coefficient.
 """
-function _normalize_radicals!(::Type{T}, coeff, dict) where {T}
+function _normalize_radicals!(::Type{T}, @nospecialize(coeff), dict) where {T}
     pending = Tuple{Integer, Union{Integer, Rational}}[]
     for (k, v) in dict
-        isconst(k) && push!(pending, (unwrap_const(k)::Integer, v))
+        isconst(k) || continue
+        # `_mul_worker!` only makes a `Const` a key when it is a `_is_radical_base`
+        n = unwrap_const(k)::Integer
+        if v isa Union{Integer, Rational}
+            push!(pending, (n, v))
+        else
+            # an inexact exponent, e.g. from `(sqrt(2) * x) ^ 2.0`
+            coeff *= n ^ v
+        end
     end
     filter!(kvp -> !isconst(kvp[1]), dict)
     radicands = Dict{Rational, Integer}()

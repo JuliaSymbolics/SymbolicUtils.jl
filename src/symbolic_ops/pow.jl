@@ -78,7 +78,13 @@ Write `n ^ e`, for a positive integer `n` and an integer or rational `e`, as `c 
 and return `(c, r, f)`, where `0 <= f < 1` and `r` has no `denominator(f)`-th power
 factor that `_split_perfect_power` finds. `r` is `1` when the power is rational.
 """
-function _radical_parts(n::Integer, e::Union{Integer, Rational})
+function _radical_parts(@nospecialize(n::Integer), @nospecialize(e::Union{Integer, Rational}))
+    # split out the common case by hand; everything else is a dynamic dispatch
+    n isa Int && e isa Rational{Int} && return _radical_parts_kernel(n, e)
+    return _radical_parts_kernel(n, e)
+end
+
+function _radical_parts_kernel(n::Integer, e::Union{Integer, Rational})
     k = floor(Int, e)
     f = e - k
     c = iszero(k) ? one(n) : k > 0 ? big(n) ^ k : 1 // big(n) ^ (-k)
@@ -88,11 +94,12 @@ function _radical_parts(n::Integer, e::Union{Integer, Rational})
     return _narrow(c), _narrow(r), f
 end
 
-_is_radical_base(n) = n isa Integer && !(n isa Bool) && n > 0
-_is_radical_exp(e) = e isa Rational && !isone(denominator(e))
+_is_radical_base(@nospecialize(n)) = n isa Integer && !(n isa Bool) && n > 0
+_is_radical_exp(@nospecialize(e)) = e isa Rational && !isone(denominator(e))
 
 # The canonical form of `n ^ e`: a rational coefficient times `r ^ f` with `0 < f < 1`.
 function _const_radical(::Type{T}, n::Integer, e::Rational, type::TypeT) where {T}
+    @nospecialize n e
     c, r, f = _radical_parts(n, e)
     isone(r) && return Const{T}(c)
     base = Const{T}(r)
@@ -111,6 +118,7 @@ _inv_const_radical(x::BasicSymbolic) = arguments(x)[1] ^ (-unwrap_const(argument
 
 # An integer or rational to a non-integer rational power stays exact.
 function _const_pow(::Type{T}, n::Union{Integer, Rational}, b::Rational, type::TypeT) where {T}
+    @nospecialize n b
     iszero(n) && return Const{T}(b > 0 ? 0 : n ^ b)
     # a negative base is left unevaluated rather than throwing a `DomainError`
     n < 0 && return BSImpl.Term{T}(^, ArgsT{T}((Const{T}(n), Const{T}(b))); type)
@@ -196,7 +204,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                     # not `sqrt(x)*sqrt(y)` for negative `x`, `y`), but a positive constant
                     # factor can always be pulled out.
                     rest = Mul{T}(coeff < 0 ? -1 : 1, copy(dict); shape, type)
-                    return (Const{T}(abs(coeff)) ^ b) * (rest ^ b)
+                    return (Const{T}(abs(coeff)) ^ b)::BasicSymbolic{T} * (rest ^ b)::BasicSymbolic{T}
                 end
             end
             _ => nothing

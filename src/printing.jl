@@ -218,6 +218,7 @@ function show_ref(io::IO, var::BasicSymbolic)
 end
 
 function _isnegative(@nospecialize(val))
+    val = unwrap(val)
     if val isa Int
         return val < 0
     elseif val isa Int32

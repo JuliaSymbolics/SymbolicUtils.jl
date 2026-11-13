@@ -122,7 +122,11 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                 BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
-                            newcoeff = newcoeff .+ coeff
+                            newcoeff = if coeff isa AnyNumber.AnyNumber
+                                coeff.is_concrete ? newcoeff .+ coeff.concrete : newcoeff .+ coeff.other
+                            else
+                                newcoeff .+ coeff
+                            end
                             if isempty(result) && dict isa ACDict{T}
                                 # No keys can collide: seed the result with a
                                 # bulk copy instead of probing every entry.
@@ -146,10 +150,10 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                         if isconst(coeff)
                             _accumulate!(result, arrterm, unwrap_const(coeff), zref)
                         else
-                            _accumulate!(result, term, 1, zref)
+                            _accumulate!(result, term, _ANY_ONE, zref)
                         end
                     else
-                        _accumulate!(result, term, 1, zref)
+                        _accumulate!(result, term, _ANY_ONE, zref)
                     end
                 end
             end
@@ -157,7 +161,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
             error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
         elseif term isa AbstractIrrational
             term = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
-            _accumulate!(result, term, 1, zref)
+            _accumulate!(result, term, _ANY_ONE, zref)
         else
             newcoeff = newcoeff .+ term
         end

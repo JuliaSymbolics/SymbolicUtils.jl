@@ -103,6 +103,33 @@ end
 """
     $TYPEDSIGNATURES
 
+Compare two `AddMul` `coeff` fields or `ACDict` values `a` and `b`, honoring
+`full` (the `COMPARE_FULL` type-sensitivity mode) the way `isequal_bsimpl`'s
+structural rules do. Differing `is_concrete` flags imply differing stored
+types, so they can only match in non-full mode.
+"""
+@inline function isequal_coeffs(a::Union{AnyNumber.AnyNumber, AbstractArray},
+        b::Union{AnyNumber.AnyNumber, AbstractArray}, full::Bool)
+    @nospecialize a b
+    a === b && return true
+    if a isa AnyNumber.AnyNumber && b isa AnyNumber.AnyNumber
+        if a.is_concrete !== b.is_concrete
+            return !full && isequal(a, b)
+        elseif a.is_concrete
+            return (!full || typeof(a.concrete) === typeof(b.concrete)) && isequal(a, b)
+        else
+            return (!full || typeof(a.other) === typeof(b.other)) && isequal_somescalar(a.other, b.other)
+        end
+    else
+        ua = unwrap(a)
+        ub = unwrap(b)
+        return isequal_somescalar(ua, ub) && (!full || (typeof(ua) === typeof(ub)))
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Compare two dictionaries of the form inside `AddMul`. Handles the edge case where
 the keys are hashed with `full=false` but the current comparison is with `full=true`.
 `full` is a boolean which should be the current value of `COMPARE_FULL[]`. Passing it
@@ -127,8 +154,10 @@ function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full::Bool) where {T}
             # covers the structural checks, but the metadata path compares
             # arbitrary values through `isequal`, which reads COMPARE_FULL when
             # it reaches a BasicSymbolic. Identical keys skip the call entirely,
-            # so the restore happens only for non-interned keys.
-            ok = isequal_somescalar(v, v2) && typeof(v) === typeof(v2) &&
+            # so the restore happens only for non-interned keys. The dict values
+            # are only ever compared under `full`, so pass it literally and let
+            # the `!full` branches of `isequal_coeffs` fold away.
+            ok = isequal_coeffs(v, v2, true) &&
                  (k === k2 || @manually_scope(COMPARE_FULL => full, isequal_bsimpl(k, k2, true)))
             ok || return false
         end
@@ -283,7 +312,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool)::Bool 
             (f1 === f2 || isequal(f1, f2)::Bool) && isequal_argsvec(args1, args2, full) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
-            isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && isequal_shapes(s1, s2) && t1 === t2
+            isequal_coeffs(c1, c2, full) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.Div(; num = n1, den = d1, type = t1, shape = s1), BSImpl.Div(; num = n2, den = d2, type = t2, shape = s2)) => begin
             isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && isequal_shapes(s1, s2) && t1 === t2
@@ -423,8 +452,13 @@ function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
         pos += 1
         pos <= m || pos == i || continue
         pos == i && (i -= skip; skip <<= 1)
-        h1 = hash_somescalar(v, zero(UInt))
-        full && (h1 = hash_maybe_fntype(typeof(v), h1))
+        if v === _ANY_ONE
+            h1 = full ? _HASH_AN_ONE_FULL : _HASH_AN_ONE
+        elseif v === _ANY_ZERO
+            h1 = full ? _HASH_AN_ZERO_FULL : _HASH_AN_ZERO
+        else
+            h1 = _hash_coeff(v, zero(UInt), full)
+        end
         h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
     end
@@ -630,6 +664,14 @@ function hash_maybe_fntype(T::TypeT, h::UInt)
     end
 end
 
+@inline _hash_coeff(v::AnyNumber.AnyNumber, h::UInt, full::Bool) =
+    full ? hash_maybe_fntype(typeof(v.is_concrete ? v.concrete : v.other), hash(v, h)) : hash(v, h)
+
+const _HASH_AN_ONE = _hash_coeff(_ANY_ONE, zero(UInt), false)
+const _HASH_AN_ONE_FULL = _hash_coeff(_ANY_ONE, zero(UInt), true)
+const _HASH_AN_ZERO = _hash_coeff(_ANY_ZERO, zero(UInt), false)
+const _HASH_AN_ZERO_FULL = _hash_coeff(_ANY_ZERO, zero(UInt), true)
+
 function value_typed_hash(m, h::UInt)
     @nospecialize m
     h = hash(typeof(m), h)
@@ -725,9 +767,13 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
+            htmp = if coeff isa AnyNumber.AnyNumber
+                Base.hash(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
+            else
+                hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
+            end
             if full
-                htmp = hash_maybe_fntype(typeof(coeff)::TypeT, htmp)
+                htmp = hash_maybe_fntype(typeof(coeff isa AnyNumber.AnyNumber ? (coeff.is_concrete ? coeff.concrete : coeff.other) : coeff)::TypeT, htmp)
             end
             htmp
         end

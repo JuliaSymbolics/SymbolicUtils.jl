@@ -138,6 +138,7 @@ export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Sym, Term,
 # Add, Mul and Pow
 PrecompileTools.@recompile_invalidations begin
+    include("anynumber.jl")
     include("types.jl")
     include("terminterface.jl")
     include("hashconsing.jl")
@@ -244,6 +245,10 @@ end
 
 # `Code` is a developer-facing submodule used by downstream code generators.
 @public Code
+
+# `AnyNumber` is a developer-facing submodule providing a manually
+# union-split `Number` wrapper for fast paths over abstract `Number` fields.
+@public AnyNumber
 
 # `simplify_rules.jl` does `using .Rewriters`, so these already resolve as
 # `SymbolicUtils.X` and callers depend on that spelling. Declare them public here so

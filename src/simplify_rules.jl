@@ -396,6 +396,7 @@ how e.g. `-im` is considered negative). Zero (in either sense) doesn't count
 as negative.
 """
 function _is_neg_term(v)
+    v = unwrap(v)
     v isa Real && return (v < 0)::Bool
     if v isa Complex
         rv = real(v)
@@ -430,7 +431,8 @@ function _has_neg_leading(x)
         BSImpl.Const(; val) => return val isa Real && (val < 0)::Bool
         BSImpl.AddMul(; coeff, dict, variant) => begin
             if variant === AddMulVariant.MUL
-                return coeff isa Real && (coeff < 0)::Bool
+                rc = unwrap(coeff)
+                return rc isa Real && (rc < 0)::Bool
             else
                 neg = 0
                 pos = 0

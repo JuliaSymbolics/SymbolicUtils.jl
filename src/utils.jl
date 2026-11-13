@@ -18,6 +18,18 @@ very large integers that cannot be accurately represented as `Int`.
 """
 safe_isinteger(@nospecialize(x::Number)) = isinteger(x) && abs(x) < typemax(Int)
 safe_isinteger(x) = false
+# `isinteger(::AnyNumber)` and `abs(::AnyNumber)` go through generic dispatch
+# and allocate a fresh wrapper; dispatch on the stored value instead using the
+# same union-split tree the `AnyNumber` methods are generated from. The leaf
+# inlines the `Number` method's body — calling `safe_isinteger` would hit the
+# `@nospecialize` generic and throw away the split's concrete dispatch.
+let tree = AnyNumber._dispatch_tree(
+        env -> :(isinteger($(env[1])) && abs($(env[1])) < typemax(Int)),
+        (:x,); wrap = false, assert = Bool)
+    @eval function safe_isinteger(x::AnyNumber.AnyNumber)
+        $tree
+    end
+end
 
 """
     $TYPEDSIGNATURES

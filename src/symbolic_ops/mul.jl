@@ -166,14 +166,14 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
                 _mul_worker!(T, den_coeff, num_coeff, den_dict, num_dict, den)
             end
             x => begin
-                _accumulate!(num_dict, x, 1)
+                _accumulate!(num_dict, x, _ANY_ONE)
             end
         end
     elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal}
         error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
     elseif term isa AbstractIrrational
         base = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
-        _accumulate!(num_dict, base, 1)
+        _accumulate!(num_dict, base, _ANY_ONE)
     else
         num_coeff[] *= term
     end
@@ -183,20 +183,22 @@ end
 mutable struct MulWorkerBuffer{T}
     num_dict::ACDict{T}
     den_dict::ACDict{T}
-    const num_coeff::Base.RefValue{PolyCoeffT}
-    const den_coeff::Base.RefValue{PolyCoeffT}
+    const num_coeff::Base.RefValue{AnyNumber.AnyNumber}
+    const den_coeff::Base.RefValue{AnyNumber.AnyNumber}
     busy::Bool
 end
 
 function MulWorkerBuffer{T}() where {T}
-    MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1), false)
+    MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(),
+                       Ref{AnyNumber.AnyNumber}(_ANY_ONE),
+                       Ref{AnyNumber.AnyNumber}(_ANY_ONE), false)
 end
 
 function Base.empty!(mwb::MulWorkerBuffer)
     empty!(mwb.num_dict)
     empty!(mwb.den_dict)
-    mwb.num_coeff[] = 1
-    mwb.den_coeff[] = 1
+    mwb.num_coeff[] = _ANY_ONE
+    mwb.den_coeff[] = _ANY_ONE
     return mwb
 end
 
@@ -261,9 +263,9 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         denexp = den_dict[k]
         if (numexp >= denexp)::Bool
             num_dict[k] = numexp - denexp
-            den_dict[k] = 0
+            den_dict[k] = _ANY_ZERO
         else
-            num_dict[k] = 0
+            num_dict[k] = _ANY_ZERO
             den_dict[k] = denexp - numexp
         end
     end

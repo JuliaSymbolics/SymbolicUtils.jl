@@ -51,7 +51,7 @@ preferred over the `BSImpl.AddMul{T}` constructor.
 """
 @inline function Add{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
-    coeff = unwrap(coeff)
+    coeff isa AnyNumber.AnyNumber || (coeff = unwrap(coeff))
     dict = unwrap_dict(dict)
     if isempty(dict)
         return Const{T}(coeff)
@@ -94,7 +94,7 @@ preferred over the `BSImpl.AddMul{T}` constructor.
 """
 @inline function Mul{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
-    coeff = unwrap(coeff)
+    coeff isa AnyNumber.AnyNumber || (coeff = unwrap(coeff))
     dict = unwrap_dict(dict)
     if isempty(dict)
         return Const{T}(coeff)
@@ -146,6 +146,7 @@ Return a tuple containing a boolean indicating whether `x` has a rational/intege
 and the rational/integer factor (or `NaN` otherwise).
 """
 function ratcoeff(x)
+    x = unwrap(x)
     if iscall(x) && operation(x) === (*)
         ratcoeff(get_mul_coefficient(x))
     elseif safe_isinteger(x)
@@ -249,6 +250,8 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
     @match (n, d) begin
         (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => Const{T}(safe_div(v1, v2))
         (BSImpl.Const(; val = c1), BSImpl.AddMul(; coeff = c2, dict, type, shape, variant)) && if variant == AddMulVariant.MUL end => begin
+            c1 = unwrap(c1)
+            c2 = unwrap(c2)
             if c1 isa Rat && c2 isa Rat
                 tmp = c1 // c2
                 c1 = tmp.num
@@ -264,6 +267,8 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
             BSImpl.AddMul(; coeff = c2, dict = d2, type = t2, shape = sh2, variant = v2)) &&
             if v1 == AddMulVariant.MUL && v2 == AddMulVariant.MUL end => begin
 
+            c1 = unwrap(c1)
+            c2 = unwrap(c2)
             if c1 isa Rat && c2 isa Rat
                 tmp = c1 // c2
                 c1 = tmp.num

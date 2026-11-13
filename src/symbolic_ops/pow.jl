@@ -94,16 +94,16 @@ function _radical_parts_kernel(n::Integer, e::Union{Integer, Rational})
     return _narrow(c), _narrow(r), f
 end
 
-_is_radical_base(@nospecialize(n)) = n isa Integer && !(n isa Bool) && n > 0
-_is_radical_exp(@nospecialize(e)) = e isa Rational && !isone(denominator(e))
+_is_radical_base(@nospecialize(n)) = n isa Integer && !(n isa Bool) && (n > 0)::Bool
+_is_radical_exp(@nospecialize(e)) = e isa Rational && !(isone(denominator(e)))::Bool
 
 # The canonical form of `n ^ e`: a rational coefficient times `r ^ f` with `0 < f < 1`.
 function _const_radical(::Type{T}, n::Integer, e::Rational, type::TypeT) where {T}
     @nospecialize n e
     c, r, f = _radical_parts(n, e)
-    isone(r) && return Const{T}(c)
+    isone(r)::Bool && return Const{T}(c)
     base = Const{T}(r)
-    isone(c) && return BSImpl.Term{T}(^, ArgsT{T}((base, Const{T}(f))); type)
+    isone(c)::Bool && return BSImpl.Term{T}(^, ArgsT{T}((base, Const{T}(f))); type)
     return BSImpl.AddMul{T}(c, ACDict{T}(base => f), AddMulVariant.MUL; type, shape = ShapeVecT())
 end
 
@@ -114,14 +114,16 @@ function _is_const_radical(x::BasicSymbolic)
         _ => false
     end
 end
-_inv_const_radical(x::BasicSymbolic) = arguments(x)[1] ^ (-unwrap_const(arguments(x)[2]))
+function _inv_const_radical(x::BasicSymbolic{T}) where {T}
+    return (arguments(x)[1] ^ (-unwrap_const(arguments(x)[2])))::BasicSymbolic{T}
+end
 
 # An integer or rational to a non-integer rational power stays exact.
 function _const_pow(::Type{T}, n::Union{Integer, Rational}, b::Rational, type::TypeT) where {T}
     @nospecialize n b
-    iszero(n) && return Const{T}(b > 0 ? 0 : n ^ b)
+    iszero(n)::Bool && return Const{T}((b > 0)::Bool ? 0 : n ^ b)
     # a negative base is left unevaluated rather than throwing a `DomainError`
-    n < 0 && return BSImpl.Term{T}(^, ArgsT{T}((Const{T}(n), Const{T}(b))); type)
+    (n < 0)::Bool && return BSImpl.Term{T}(^, ArgsT{T}((Const{T}(n), Const{T}(b))); type)
     n isa Integer && return _const_radical(T, n, b, type)
     num = _const_radical(T, numerator(n), b, type)
     den = _const_radical(T, denominator(n), -b, type)
@@ -178,10 +180,10 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
             # `(x^p)^b == x^(p*b)` for integer `b`, and for any real `b` when `0 < p <= 1`
             # since the principal argument of `x^p` then cannot wrap.
             BSImpl.Term(; f, args) && if f === (^) && isconst(args[2]) && symtype(args[2]) <: Number &&
-                    (safe_isinteger(b) || b isa Real && (p = unwrap_const(args[2]); p isa Real && 0 < p <= 1)) end => begin
+                    (safe_isinteger(b) || b isa Real && (p = unwrap_const(args[2]); p isa Real && (0 < p <= 1)::Bool)) end => begin
                 base, exp = args
                 exp = unwrap_const(exp) * b
-                exp isa Rational && isone(denominator(exp)) && (exp = numerator(exp))
+                exp isa Rational && isone(denominator(exp))::Bool && (exp = numerator(exp))
                 return Const{T}(base ^ exp)
             end
             _ => nothing
@@ -203,7 +205,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                     # A non-integer power does not distribute over a product (`sqrt(x*y)` is
                     # not `sqrt(x)*sqrt(y)` for negative `x`, `y`), but a positive constant
                     # factor can always be pulled out.
-                    rest = Mul{T}(coeff < 0 ? -1 : 1, copy(dict); shape, type)
+                    rest = Mul{T}((coeff < 0)::Bool ? -1 : 1, copy(dict); shape, type)
                     return (Const{T}(abs(coeff)) ^ b)::BasicSymbolic{T} * (rest ^ b)::BasicSymbolic{T}
                 end
             end

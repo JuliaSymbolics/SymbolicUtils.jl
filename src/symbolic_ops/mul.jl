@@ -175,7 +175,7 @@ function _normalize_radicals!(::Type{T}, @nospecialize(coeff), dict) where {T}
         n, e = pop!(pending)
         c, r, f = _radical_parts(n, e)
         coeff *= c
-        isone(r) && continue
+        isone(r)::Bool && continue
         other = pop!(radicands, f, nothing)
         if other === nothing
             radicands[f] = r

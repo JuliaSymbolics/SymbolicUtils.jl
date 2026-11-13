@@ -40,9 +40,16 @@ const CANONICALIZE_TIMES = (
     @rule(*(~x) => ~x),
 )
 
+# Rules see literals unwrapped, where `2^(3//2)` would fold to a float. Products of exact
+# numeric radicals are already canonical at construction, so such a match is declined.
+function _rule_pow(x, e)
+    unwrap_const(x) isa Union{Integer, Rational} && _is_radical_exp(unwrap_const(e)) && return nothing
+    return x ^ e
+end
+
 const MUL_DISTRIBUTE = Chain((
-    @ordered_acrule((~x)^(~n) * (~x)^(~m) => (~x)^(~n + ~m)),
-    @acrule((~y)^(~n) * ~y => (~y)^(~n + 1)),
+    @ordered_acrule((~x)^(~n) * (~x)^(~m) => _rule_pow(~x, ~n + ~m)),
+    @acrule((~y)^(~n) * ~y => _rule_pow(~y, ~n + 1)),
 ))
 
 const CANONICALIZE_POW = (
@@ -56,9 +63,8 @@ const CANONICALIZE_POW = (
 const POW_RULES = (
     @rule(^(~x::_isone, ~z) => 1),
     @rule(ℯ^(~x) => exp(~x)),
-    @rule((~x)^(1//2) => sqrt(~x)),
     # sqrt(x^2) = |x| on reals; for complex, sqrt(z^2) = ±z ≠ |z|
-    @rule(sqrt((~x::_isreal)^2) => abs(~x)),
+    @rule(((~x::_isreal)^2)^(1//2) => abs(~x)),
     # |x|^2 = x^2 for reals; for complex, |z|^2 = z*conj(z) ≠ z^2
     @rule((abs(~x::_isreal))^2 => (~x)^2),
 )
@@ -66,8 +72,16 @@ const POW_RULES = (
 # Unary minus canonicalizes to *(-1, x), so abs(-x) is abs(*(-1, x)).
 _is_neg_literal(x) = _isnegative(unwrap_const(x))
 
+# Raw `sqrt`/`cbrt` terms (e.g. from `term(sqrt, x)`) become canonical rational powers.
+function _canonical_root(x)
+    iscall(x) && vartype(x) !== TreeReal || return nothing
+    f = operation(x)
+    f === sqrt || f === cbrt || return nothing
+    return Const{vartype(x)}(arguments(x)[1]) ^ (f === sqrt ? 1 // 2 : 1 // 3)
+end
+
 const ASSORTED_RULES = (
-    @rule(sqrt(~x::is_literal_number) => _extract_perfect_square(~x)),
+    _canonical_root,
     @rule(identity(~x) => ~x),
     @rule(-(~x) => -1*~x),
     @rule(-(~x, ~y) => ~x + -1(~y)),
@@ -243,8 +257,10 @@ const BOOLEAN_RULES = (
     # or term(!, false)
     @rule((~f)(~x::is_literal_number) => (~f)(~x)),
     # and this simplifies any binary comparison operator
-    @rule((~f)(~x::is_literal_number, ~y::is_literal_number) => (~f)(~x, ~y)),
+    @rule((~f)(~x::is_literal_number, ~y::is_literal_number) => _fold_literals(~f, ~x, ~y)),
 )
+
+_fold_literals(f, x, y) = f === (^) ? _rule_pow(x, y) : f(x, y)
 
 const NUMBER_SIMPLIFIER = RestartedChain((
     If(iscall, Chain(ASSORTED_RULES)),

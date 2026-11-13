@@ -222,6 +222,25 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
         return BSImpl.Div{T}(n, d, simplified; type, kw...)
     end
 
+    # Numeric radicals are never zero, so they always move to the numerator.
+    @match d begin
+        BSImpl.Term(;) && if _is_const_radical(d) end => begin
+            return Const{T}(n * _inv_const_radical(d))
+        end
+        BSImpl.AddMul(; coeff, dict, variant, type = dtype, shape = dshape) && if variant == AddMulVariant.MUL && _has_const_key(dict) end => begin
+            inv = one_of_vartype(T)
+            for (k, v) in dict
+                isconst(k) && (inv *= k ^ (-v))
+            end
+            rest = Mul{T}(coeff, filter(kvp -> !isconst(kvp[1]), dict); type = dtype, shape = dshape)
+            return Div{T}(n * inv, rest, simplified; type, kw...)
+        end
+        BSImpl.Const(; val) && if _is_const_radical(n) end => begin
+            return Const{T}(n * safe_div(1, val))
+        end
+        _ => nothing
+    end
+
     if !(T === SafeReal)
         n, d = quick_cancel(Const{T}(n), Const{T}(d))
     end

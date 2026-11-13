@@ -152,7 +152,7 @@ newf = substitute(f, Dict(a=>b)) # unrelated substitution
 
 
 @test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=Val(false)),
-              1 + term(sqrt, 2, type=Real))
+              1 + sqrt(SymbolicUtils.Const{SymReal}(2)))
 @test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=Val(true))) isa Float64
 @info "Metadata test ends"
 
@@ -1087,13 +1087,14 @@ end
 
 @testset "Issue#1079: simplify preserves exact sqrt terms" begin
     @syms x y
-    s = term(sqrt, 2)
+    s = sqrt(SymbolicUtils.Const{SymReal}(2))
     # `simplify` must not fold exact `sqrt` terms into `Float64`.
     @test unwrap_const(simplify(s^2)) === 2
     @test unwrap_const(simplify(s^4)) === 4
     @test unwrap_const(simplify(s * s)) === 2
     @test isequal(simplify(2s), 2s)
     @test !has_float64(simplify((s * term(sqrt, 3))^2))
+    @test !has_float64(simplify(2 * term(sqrt, 2)))
     # Odd powers already stayed symbolic; keep them exact.
     @test isequal(simplify(s^3), s^3)
     # Cases that already worked must remain exact.

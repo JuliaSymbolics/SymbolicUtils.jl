@@ -489,7 +489,10 @@ function quick_pow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSy
     base, exp = arguments(x)
     exp = unwrap_const(exp)
     exp isa Number || return (x, y)
-    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), one_of_vartype(T)) : (x, y)
+    isequal(base, y) || return (x, y)
+    exp >= 1 && return (base ^ (exp - 1), one_of_vartype(T))
+    exp > 0 && return (one_of_vartype(T), base ^ (1 - exp))
+    return (x, y)
 end
 
 # Double Pow case

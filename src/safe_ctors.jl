@@ -51,7 +51,9 @@ preferred over the `BSImpl.AddMul{T}` constructor.
 """
 @inline function Add{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
-    coeff = unwrap(coeff)
+    # `coeff isa AnyNumber` is forwarded as-is: `unwrap` would box the inline
+    # concrete union just for `_wrap_coeff` to re-box it downstream.
+    coeff isa AnyNumber.AnyNumber || (coeff = unwrap(coeff))
     dict = unwrap_dict(dict)
     if isempty(dict)
         return Const{T}(coeff)
@@ -94,7 +96,9 @@ preferred over the `BSImpl.AddMul{T}` constructor.
 """
 @inline function Mul{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
-    coeff = unwrap(coeff)
+    # `coeff isa AnyNumber` is forwarded as-is: `unwrap` would box the inline
+    # concrete union just for `_wrap_coeff` to re-box it downstream.
+    coeff isa AnyNumber.AnyNumber || (coeff = unwrap(coeff))
     dict = unwrap_dict(dict)
     if isempty(dict)
         return Const{T}(coeff)

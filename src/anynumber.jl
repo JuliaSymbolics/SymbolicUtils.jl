@@ -29,12 +29,27 @@ module AnyNumber
     [`CONCRETE_TYPES`](@ref) (e.g. `Rational{Int} * Complex{Int}`) demote to `other`,
     and `other`-path results may re-enter the concrete path.
     """
+    # Shared boxes for the most common literal results — `AnyNumber` is
+    # immutable, so `0`, `1` and `-1` can be shared rather than re-allocated on
+    # every operation or dictionary insertion. `===` on `Int` is type-exact, so
+    # `Int8(1)`/`true` still allocate their own box and preserve `typeof`.
+    const _ZERO = AnyNumber(0, true, _NOVALUE)
+    const _ONE = AnyNumber(1, true, _NOVALUE)
+    const _NEGONE = AnyNumber(-1, true, _NOVALUE)
+
     # `_wrap` must stay a single method: `SymbolicUtils` compiles with
     # `max_methods=1`, so a call site whose argument admits more than one
     # applicable `_wrap` signature infers `Any`. Idempotency for `AnyNumber` input
     # is folded in rather than dispatched on.
     @inline function _wrap(x::Number)
-        x isa ConcreteT && return AnyNumber(x, true, _NOVALUE)
+        if x isa ConcreteT
+            if x isa Int
+                x === 0 && return _ZERO
+                x === 1 && return _ONE
+                x === -1 && return _NEGONE
+            end
+            return AnyNumber(x, true, _NOVALUE)
+        end
         x isa AnyNumber && return x
         return AnyNumber(0, false, x)
     end

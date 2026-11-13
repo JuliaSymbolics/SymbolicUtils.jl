@@ -198,7 +198,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                             BSImpl.AddMul(; dict = d2, variant = v2, type, shape, metadata) && if v2 == AddMulVariant.MUL end => begin
                                 Mul{T}(v, d2; shape, type, metadata)
                             end
-                            _ => Mul{T}(v, ACDict{T}(k => 1); shape, type)
+                            _ => Mul{T}(v, ACDict{T}(k => _ANY_ONE); shape, type)
                         end
                         push!(newargs, newterm)
                     end
@@ -208,7 +208,9 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                         push!(newargs, Const{T}(coeff))
                     end
                     for (k, v) in dict
-                        push!(newargs, k ^ v)
+                        # `.concrete`/`.other` avoids boxing the field union
+                        # the way `unwrap(::AnyNumber)` does inside `pow`.
+                        push!(newargs, k ^ (v.is_concrete ? v.concrete : v.other))
                     end
                 end
             end

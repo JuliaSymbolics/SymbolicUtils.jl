@@ -348,6 +348,11 @@ const ACDict{T} = Dict{BasicSymbolic{T}, AnyNumber.AnyNumber}
 # coefficient hits the generated union-split paths instead of dynamic dispatch on
 # `Number`. Non-`Number` coefficients (array offsets produced by broadcasted
 # addition, e.g. `v + [1, 2]`) pass through unchanged.
+# The shared `0`/`1`/`-1` boxes `AnyNumber._wrap` returns for `Int` results;
+# aliased here so hot paths can test membership or insert them directly.
+const _ANY_ZERO = AnyNumber._ZERO
+const _ANY_ONE = AnyNumber._ONE
+const _ANY_NEGONE = AnyNumber._NEGONE
 _wrap_coeff(c::Number) = AnyNumber.AnyNumber(c)
 _wrap_coeff(c) = c
 # `ConstructionBase.setproperties` and similar generic constructors reach the

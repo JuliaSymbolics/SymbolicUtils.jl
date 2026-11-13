@@ -12,14 +12,16 @@ module AnyNumber
         concrete::ConcreteT
         is_concrete::Bool
         other::Number
-    end
 
-    """
-    Placeholder for the field that is not in use. `_NoValue` is a zero-field
-    singleton, so storing `_NOVALUE` costs no allocation.
-    """
-    struct _NoValue <: Number end
-    const _NOVALUE = _NoValue()
+        # `other` is left undefined on the concrete path: it is only ever read
+        # when `is_concrete` is false, so pointing it at a sentinel would just
+        # add a reference-field store (and a GC-visible pointer) to every
+        # concrete allocation. The `Val` tags select the constructor — `true`
+        # for the concrete path, `false` for `other` — and keep each call site
+        # single-method so `max_methods=1` inference does not widen to `Any`.
+        AnyNumber(x::ConcreteT, ::Val{true}) = new(x, true)
+        AnyNumber(x::Number, ::Val{false}) = new(0, false, x)
+    end
 
     """
         _wrap(x) -> AnyNumber
@@ -33,9 +35,9 @@ module AnyNumber
     # immutable, so `0`, `1` and `-1` can be shared rather than re-allocated on
     # every operation or dictionary insertion. `===` on `Int` is type-exact, so
     # `Int8(1)`/`true` still allocate their own box and preserve `typeof`.
-    const _ZERO = AnyNumber(0, true, _NOVALUE)
-    const _ONE = AnyNumber(1, true, _NOVALUE)
-    const _NEGONE = AnyNumber(-1, true, _NOVALUE)
+    const _ZERO = AnyNumber(0, Val(true))
+    const _ONE = AnyNumber(1, Val(true))
+    const _NEGONE = AnyNumber(-1, Val(true))
 
     # `_wrap` must stay a single method: `SymbolicUtils` compiles with
     # `max_methods=1`, so a call site whose argument admits more than one
@@ -48,10 +50,10 @@ module AnyNumber
                 x === 1 && return _ONE
                 x === -1 && return _NEGONE
             end
-            return AnyNumber(x, true, _NOVALUE)
+            return AnyNumber(x, Val(true))
         end
         x isa AnyNumber && return x
-        return AnyNumber(0, false, x)
+        return AnyNumber(x, Val(false))
     end
     AnyNumber(x::Number) = _wrap(x)
     # Resolves the ambiguity between `AnyNumber(::Number)` and
@@ -264,6 +266,11 @@ module AnyNumber
 
     Base.convert(::Type{AnyNumber}, a::AnyNumber) = a
     Base.convert(::Type{AnyNumber}, x::Number) = AnyNumber(x)
+
+    # `other` is `#undef` on the concrete path, which the generic fieldwise
+    # `deepcopy` would read. An immutable `AnyNumber` is already a correct
+    # deep copy of itself.
+    Base.deepcopy_internal(x::AnyNumber, dict::IdDict) = x
 
     # Type-targeted methods (`convert`, `T(a)`, `floor(T, a)`, `rationalize(T, a)`,
     # `round(T, a, r)`) enumerate literal types rather than catching all with

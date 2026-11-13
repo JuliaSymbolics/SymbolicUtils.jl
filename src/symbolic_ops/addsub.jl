@@ -122,10 +122,6 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                 BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
-                            # `coeff.concrete`/`coeff.other` avoid the box
-                            # `unwrap` pays to materialize `Union{ConcreteT,
-                            # Number}`: the concrete union stays unboxed and
-                            # `.other` is already a heap object.
                             newcoeff = if coeff isa AnyNumber.AnyNumber
                                 coeff.is_concrete ? newcoeff .+ coeff.concrete : newcoeff .+ coeff.other
                             else

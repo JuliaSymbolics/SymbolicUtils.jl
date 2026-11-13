@@ -103,15 +103,14 @@ end
 """
     $TYPEDSIGNATURES
 
-Compare two `AddMul` coefficient/dict-value scalars `a` and `b`, honoring
+Compare two `AddMul` `coeff` fields or `ACDict` values `a` and `b`, honoring
 `full` (the `COMPARE_FULL` type-sensitivity mode) the way `isequal_bsimpl`'s
-structural rules do. `AnyNumber` values are compared on the wrapper itself —
-`unwrap` would box the inline concrete union — using its generated `isequal`,
-which union-splits internally. Shared `_ANY_*` boxes and interned wrappers hit
-the `===` fast path. Differing `is_concrete` flags imply differing stored
+structural rules do. Differing `is_concrete` flags imply differing stored
 types, so they can only match in non-full mode.
 """
-@inline function isequal_coeffs(a, b, full::Bool)
+@inline function isequal_coeffs(a::Union{AnyNumber.AnyNumber, AbstractArray},
+        b::Union{AnyNumber.AnyNumber, AbstractArray}, full::Bool)
+    @nospecialize a b
     a === b && return true
     if a isa AnyNumber.AnyNumber && b isa AnyNumber.AnyNumber
         if a.is_concrete !== b.is_concrete
@@ -440,13 +439,6 @@ the first `ADDMULDICT_HASH_LIMIT` entries densely, then those at the
 exponentially-spread positions `n, n-1, n-3, n-7, ...` of one forward iteration,
 mirroring `hash_argsvec`.
 """
-# Precomputed value-hashes for the shared `_ANY_ONE`/`_ANY_ZERO` boxes, letting
-# the per-entry loop skip both the unwrap and the scalar-dispatch chain.
-const _HASH_AN_ONE = hash(_ANY_ONE, zero(UInt))
-const _HASH_AN_ONE_FULL = hash(Int, _HASH_AN_ONE)
-const _HASH_AN_ZERO = hash(_ANY_ZERO, zero(UInt))
-const _HASH_AN_ZERO_FULL = hash(Int, _HASH_AN_ZERO)
-
 function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
     hv = Base.hasha_seed % UInt
     n = length(d)
@@ -463,10 +455,7 @@ function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
         elseif v === _ANY_ZERO
             h1 = full ? _HASH_AN_ZERO_FULL : _HASH_AN_ZERO
         else
-            # `hash(::AnyNumber, h)` union-splits internally; `unwrap` would box
-            # the inline union value on every entry.
-            h1 = hash(v, zero(UInt))
-            full && (h1 = hash_maybe_fntype(typeof(v.is_concrete ? v.concrete : v.other), h1))
+            h1 = _hash_coeff(v, zero(UInt), full)
         end
         h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
@@ -673,6 +662,14 @@ function hash_maybe_fntype(T::TypeT, h::UInt)
     end
 end
 
+@inline _hash_coeff(v::AnyNumber.AnyNumber, h::UInt, full::Bool) =
+    full ? hash_maybe_fntype(typeof(v.is_concrete ? v.concrete : v.other), hash(v, h)) : hash(v, h)
+
+const _HASH_AN_ONE = _hash_coeff(_ANY_ONE, zero(UInt), false)
+const _HASH_AN_ONE_FULL = _hash_coeff(_ANY_ONE, zero(UInt), true)
+const _HASH_AN_ZERO = _hash_coeff(_ANY_ZERO, zero(UInt), false)
+const _HASH_AN_ZERO_FULL = _hash_coeff(_ANY_ZERO, zero(UInt), true)
+
 function value_typed_hash(m, h::UInt)
     @nospecialize m
     h = hash(typeof(m), h)
@@ -768,8 +765,6 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            # `hash(::AnyNumber, h)` union-splits internally; `unwrap` would box
-            # the inline union value.
             htmp = if coeff isa AnyNumber.AnyNumber
                 Base.hash(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
             else

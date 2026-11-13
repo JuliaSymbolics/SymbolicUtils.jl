@@ -100,34 +100,44 @@ module AnyNumber
         return _unionsplit_chain(esc(v), esc(body))
     end
 
-    # Builds the nested `is_concrete` dispatch tree for a call over `args`, where
-    # each argument contributes `if a.is_concrete; v = a.concrete; <unionsplit v>;
-    # else <use a.other> end`. `make_call(env)` receives the resolved argument
-    # expressions (a bound `v` on concrete paths, `a.other` otherwise) and returns
-    # the call expression. `wrap` selects whether the result goes through `_wrap`
+    # Builds the nested `is_concrete` dispatch tree for a call over `args`. Each
+    # argument contributes `if a.is_concrete; v = a.concrete; ...; else <use
+    # a.other> end`, and the concrete bindings are union-split *only* on the path
+    # where every argument is concrete. A mixed `concrete × other` leaf
+    # dynamic-dispatches anyway (the `.other` argument is `Number`-typed), so
+    # splitting the concrete argument there would just duplicate the leaf for no
+    # benefit. `make_call(env)` receives the resolved argument expressions (a
+    # bound `v` on concrete paths, `a.other` otherwise) and returns the call
+    # expression. `wrap` selects whether the result goes through `_wrap`
     # (arithmetic) or is returned raw (comparisons, predicates, `convert`).
     # `assert` optionally type-asserts the leaf call — needed on `.other` paths
     # where inference cannot prove e.g. `+(::Number, ::Int)` returns a `Number`,
     # and free on concrete leaves where it folds away.
     function _dispatch_tree(make_call, args::Tuple; wrap::Bool, assert = nothing)
-        function rec(i, env)
+        function rec(i, env, bound)
             if i > length(args)
                 call = make_call(env)
                 ex = assert === nothing ? call : Expr(:(::), call, assert)
-                return wrap ? :(_wrap($ex)) : ex
+                leaf = wrap ? :(_wrap($ex)) : ex
+                if length(bound) == length(args)
+                    for v in Iterators.reverse(bound)
+                        leaf = _unionsplit_chain(v, leaf)
+                    end
+                end
+                return leaf
             end
             a = args[i]
             v = gensym(Symbol(:v_, a))
             return quote
                 if $a.is_concrete
                     $v = $a.concrete
-                    $(_unionsplit_chain(v, rec(i + 1, Any[env; v])))
+                    $(rec(i + 1, Any[env; v], Any[bound; v]))
                 else
-                    $(rec(i + 1, Any[env; :($a.other)]))
+                    $(rec(i + 1, Any[env; :($a.other)], bound))
                 end
             end
         end
-        return rec(1, Any[])
+        return rec(1, Any[], Any[])
     end
 
     _call(f, env) = Expr(:call, GlobalRef(Base, f), env...)

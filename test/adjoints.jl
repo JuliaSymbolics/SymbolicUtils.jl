@@ -62,3 +62,16 @@ end
   # ReverseDiff differentiate through), so NoTangent would silently zero real
   # gradients. Such calls must stay outside withgradient (hoist).
 end
+
+@testset "array_literal adjoint" begin
+  for n in (2, 4, 40)
+    @test only(Zygote.gradient(x -> sum(SymbolicUtils.array_literal((n,), ntuple(_ -> x, n)...)), 1.0)) == n
+  end
+  @test only(Zygote.gradient(x -> sum(SymbolicUtils.array_literal((2, 2), x, 2x, 3, x)), 1.0)) == 4
+  @test only(Zygote.gradient(x -> sum(SymbolicUtils.array_literal((40,), ntuple(i -> isodd(i) ? x : i, 40)...)), 1.0)) == 20
+  @test Zygote.gradient((a, b) -> SymbolicUtils.array_literal((2,), a, b)[2], 1.0, 2.0) == (0.0, 1.0)
+  _, pb = Zygote.pullback((x, z) -> SymbolicUtils.array_literal((2,), x, z), 1.0, 2.0 + 3im)
+  @test pb(ComplexF64[im, im]) === (0.0, 0.0 + 1.0im)
+  _, pb = Zygote.pullback((a, b) -> SymbolicUtils.array_literal((2,), a, b), 1.0f0, 2.0)
+  @test pb([3.0, 4.0]) === (3.0f0, 4.0)
+end

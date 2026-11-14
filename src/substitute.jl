@@ -630,6 +630,28 @@ function _scalarize_mul(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, tople
     return map(Base.Fix2(*, coeff), res)
 end
 
+scalarization_function(::typeof(LinearAlgebra.mul!)) = _scalarize_mul!
+
+function _scalarize_mul!(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    @nospecialize f
+    args = map(unwrap_const ∘ Base.Fix2(scalarize, Val{toplevel}()), arguments(x))
+    args[2] isa AbstractMatrix && args[3] isa AbstractVecOrMat || return _default_scalarize(f, x, Val{toplevel}())
+    args[1] isa AbstractMatrix || args[1] isa AbstractVector && args[3] isa AbstractVector || return _default_scalarize(f, x, Val{toplevel}())
+    size(args[1], 1) == size(args[2], 1) && size(args[2], 2) == size(args[3], 1) && size(args[1], 2) == size(args[3], 2) && size(args[2], 2) > 0 || return _default_scalarize(f, x, Val{toplevel}())
+    E = eltype(symtype(x))
+    P = promote_type(eltype(symtype(arguments(x)[2])), eltype(symtype(arguments(x)[3])))
+    P <: Number && !(P <: Union{Integer, Rational}) || return _default_scalarize(f, x, Val{toplevel}())
+    all(c -> c isa Number, args[4:end]) && promote_type(P, map(typeof, args[4:end])...) <: E || return _default_scalarize(f, x, Val{toplevel}())
+    res = if length(args) == 5 && _iszero(args[4])
+        _iszero(args[5]) ? zero.(args[1]) : args[5] .* args[1]
+    else
+        AB = reshape(args[2] * args[3], size(args[1]))
+        length(args) == 3 ? AB : _iszero(args[5]) ? args[4] .* AB : args[4] .* AB .+ args[5] .* args[1]
+    end
+    res = map(v -> unwrap_const(v) isa Number ? Const{T}(convert(E, unwrap_const(v))) : v, res)
+    return all(v -> symtype(v) <: E, res) ? res : _default_scalarize(f, x, Val{toplevel}())
+end
+
 scalarization_function(::typeof(broadcast)) = _scalarize_broadcast
 
 function _scalarize_broadcast(f, x::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}

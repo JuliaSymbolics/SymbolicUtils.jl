@@ -32,7 +32,7 @@ function rrule(::typeof(SymbolicUtils.array_literal), sz::NTuple{D, Int}, elems:
   project = ntuple(i -> ProjectTo(elems[i]), Val(N))
   function array_literal_pullback(Δ)
     dx = unthunk(Δ)
-    (NoTangent(), NoTangent(), ntuple(i -> project[i](dx[i]), Val(N))...)
+    ntuple(i -> i <= 2 ? NoTangent() : project[i - 2](dx[i - 2]), Val(N + 2))
   end
   y, array_literal_pullback
 end

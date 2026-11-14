@@ -429,10 +429,10 @@ end
     @test SymbolicUtils.unwrap_const(SymbolicUtils.evaluate(only(scalarize(t)))) === LinearAlgebra.mul!(zeros(Float32, 1, 1), [1.0 2.0^-25 -1.0], ones(3, 1))[1]
     t = Term{SymReal}(LinearAlgebra.mul!, [Const{SymReal}(ones(1, 1)), Const{SymReal}(zeros(1, 0)), Const{SymReal}(zeros(0, 1)), Inf, 0]; type = Matrix{Float64}, shape = ShapeVecT((1:1, 1:1)))
     @test SymbolicUtils.unwrap_const(SymbolicUtils.evaluate(only(scalarize(t)))) == 0.0
-    @syms Ab[1:1, 1:2]::Bool bb[1:2]::Bool cb[1:1]::Bool Aa[1:1, 1:1]::Any ba[1:1]::Any ca[1:1]::Any
+    @syms Ab[1:1, 1:2]::Bool bb[1:2]::Bool cb[1:1]::Bool Aany[1:1, 1:1]::Any bany[1:1]::Any cany[1:1]::Any
     t = Term{SymReal}(LinearAlgebra.mul!, [cb, Ab, bb]; type = symtype(cb), shape = SymbolicUtils.shape(cb))
     @test_throws InexactError substitute(only(scalarize(t)), Dict(Ab => fill(true, 1, 2), bb => fill(true, 2), cb => fill(false, 1)); fold = Val(true))
-    t = Term{SymReal}(LinearAlgebra.mul!, [ca, Aa, ba]; type = symtype(ca), shape = SymbolicUtils.shape(ca))
+    t = Term{SymReal}(LinearAlgebra.mul!, [cany, Aany, bany]; type = symtype(cany), shape = SymbolicUtils.shape(cany))
     @test isequal(scalarize(t), [t[1]])
     @syms c2[1:2] b41[1:4, 1:1]
     t = Term{SymReal}(LinearAlgebra.mul!, [c2, a, b41]; type = symtype(c2), shape = SymbolicUtils.shape(c2))

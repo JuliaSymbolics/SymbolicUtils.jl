@@ -1334,7 +1334,7 @@ function codegen_function!(op::typeof(broadcast), cs::CodegenState{T}, expr::Bas
         p = literal_pow_exponent(unwrap_const(cs.ir[args_idxs[3]]))
         if p !== nothing
             base_sym = cs(cs.ir[args_idxs[2]])
-            return codegen!(cs, expr_idx, Expr(:call, broadcast, Base.literal_pow, ^, base_sym, p))
+            return codegen!(cs, expr_idx, Expr(:call, fused_materialize, Expr(:call, Base.Broadcast.broadcasted, Base.literal_pow, ^, base_sym, p)))
         end
     end
     return codegen_function_no_nanmath!(op, cs, expr, expr_idx)

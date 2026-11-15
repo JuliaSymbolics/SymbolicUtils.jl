@@ -704,7 +704,7 @@ function function_to_expr(::typeof(broadcast), O::BasicSymbolic{T}, st) where {T
     if use_literal_pow(st.rewrites) && length(args) == 3 && unwrap_const(args[1]) === (^)
         p = literal_pow_exponent(unwrap_const(args[3]))
         if p !== nothing
-            return Expr(:call, broadcast, Base.literal_pow, ^, toexpr(args[2], st), p)
+            return Expr(:call, fused_materialize, Expr(:call, Base.Broadcast.broadcasted, Base.literal_pow, ^, toexpr(args[2], st), p))
         end
     end
     return function_to_expr_no_nanmath(broadcast, O, st)

@@ -302,7 +302,7 @@ end
     @test toexpr(a^Int32(3)) == :($(Base.literal_pow)($(^), a, $(Val)(3)))
     @test toexpr(a^(big(2)^70)).args[1] === (^)
     @test toexpr(a^2.5) == :($(^)(a, 2.5))
-    @test toexpr(x .^ 3) == :($(broadcast)($(Base.literal_pow), $(^), x, $(Val)(3)))
+    @test toexpr(x .^ 3) == :($(Code.fused_materialize)($(Base.Broadcast.broadcasted)($(Base.literal_pow), $(^), x, $(Val)(3))))
     @test toexpr(x .^ 2.5) == :($(broadcast)($(^), x, 2.5))
 
     for n in 2:5
@@ -314,6 +314,9 @@ end
     end
     g = eval(toexpr(Func([x], [], x .^ 2)))
     @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
+    v = [1.0, 2.0, 3.0]
+    allocated(f) = (f(v); @allocated f(v))
+    @test @invokelatest(allocated(g)) < 2 * allocated(w -> w .^ 2)
 end
 
 @testset "constant integer powers opt out of `literal_pow`" begin

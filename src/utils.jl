@@ -143,6 +143,10 @@ memoizing results for previously seen values.
         return false
     end
 end
+
+"""Return whether `x` is a known symbolic zero."""
+Base.iszero(x::BasicSymbolic) = _iszero(x)
+
 """
     $TYPEDSIGNATURES
 
@@ -203,6 +207,10 @@ memoizing results for previously seen values.
         return false
     end
 end
+
+"""Return whether `x` is a known symbolic one."""
+Base.isone(x::BasicSymbolic) = _isone(x)
+
 """
     $TYPEDSIGNATURES
 

@@ -749,9 +749,10 @@ end
     @test SymbolicUtils.unwrap_const(simplify(term(sqrt, 1024))) === 32
     @test SymbolicUtils.unwrap_const(simplify(term(sqrt, 9 // 4))) === 3 // 2
 
-    # irrational results are unevaluated `sqrt` terms, never floats
-    @test isequal(simplify(term(sqrt, 2)), term(sqrt, 2))
-    @test isequal(simplify(term(sqrt, 3)), term(sqrt, 3))
+    # irrational results are exact rational powers, never floats
+    C = SymbolicUtils.Const{SymReal}
+    @test isequal(simplify(term(sqrt, 2)), C(2)^(1 // 2))
+    @test isequal(simplify(term(sqrt, 3)), sqrt(C(3)))
 
     # the largest perfect square factor is pulled out of the radicand
     @test isequal(simplify(term(sqrt, 12)), simplify(2 * term(sqrt, 3)))
@@ -773,10 +774,10 @@ end
     # still correct, and found quickly
     p = 1_000_003
     @test SymbolicUtils.unwrap_const(simplify(term(sqrt, big(p)^2))) === p
-    s, r = SymbolicUtils._split_perfect_square(big(p)^2 * 3)
+    s, r = SymbolicUtils._split_perfect_power(big(p)^2 * 3, 2)
     @test s^2 * r == big(p)^2 * 3
 
-    # Negative arguments are not simplified by the rule, they stay un-evaluated
-    @test isequal(simplify(term(sqrt, -1)), term(sqrt, -1))
-    @test isequal(simplify(term(sqrt, -1 // 2)), term(sqrt, -1 // 2))
+    # Negative arguments stay un-evaluated
+    @test isequal(simplify(term(sqrt, -1)), term(^, -1, 1 // 2; type = Real))
+    @test isequal(simplify(term(sqrt, -1 // 2)), term(^, -1 // 2, 1 // 2; type = Real))
 end

@@ -660,6 +660,32 @@ const USE_LITERAL_POW_KEY = :use_literal_pow
 
 @inline use_literal_pow(rewrites::Dict{Any, Any}) = get(rewrites, USE_LITERAL_POW_KEY, true)::Bool
 
+function int_pow_expr(base, p::Int, rewrites::Dict{Any, Any})
+    isone(p) && return base
+    use_literal_pow(rewrites) || return Expr(:call, ^, base, p)
+    return Expr(:call, Base.literal_pow, ^, base, Expr(:call, Val, p))
+end
+
+# `x^((2k+1)//2)` lowers to `sqrt(x) * x^k`, and `x^(p//3)` to `cbrt(x)^p`, which unlike
+# `^` is defined for negative `x`. Returns `nothing` for any other exponent.
+function root_expr(base, @nospecialize(val), rewrites::Dict{Any, Any})
+    val isa Rational && val > 0 || return nothing
+    if denominator(val) == 2
+        sq = get(rewrites, :nanmath, false)::Bool ? GlobalRef(NaNMath, :sqrt) : sqrt
+        k = Int(fld(numerator(val), 2))
+        k == 0 && return Expr(:call, sq, base)
+        if base isa Expr
+            # evaluate a compound base only once
+            b = gensym(:base)
+            return Expr(:let, Expr(:(=), b, base), Expr(:call, *, Expr(:call, sq, b), int_pow_expr(b, k, rewrites)))
+        end
+        return Expr(:call, *, Expr(:call, sq, base), int_pow_expr(base, k, rewrites))
+    elseif denominator(val) == 3
+        return int_pow_expr(Expr(:call, cbrt, base), Int(numerator(val)), rewrites)
+    end
+    return nothing
+end
+
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
     base = toexpr(base, st)
@@ -676,6 +702,8 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
                     val = -val
                     base = Expr(:call, inv, base)
                 end
+                root = root_expr(base, val, st.rewrites)
+                root === nothing || return root
                 if use_literal_pow(st.rewrites)
                     p = literal_pow_exponent(val)
                     if p !== nothing

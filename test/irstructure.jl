@@ -769,3 +769,20 @@ end
     subber = IRSubstituter{true}(ir, Dict{typeof(expr), typeof(expr)}())
     @test unwrap_const(subber(expr))::Float64 ≈ (2.0 + sin(1.0))
 end
+
+@testset "`get_canonical_expr!` when a rebuilt node folds to a constant" begin
+    T = SymReal
+    @syms a::Real b::Real c[1:4]::Real v[1:4]::Real
+    lit = SU.Term{T}(SU.array_literal, SU.ArgsT{T}((SU.Const{T}((2,)), a, b)); type = Vector{Real}, shape = SU.ShapeVecT((1:2,)))
+    read_lit = SU.Term{T}(getindex, SU.ArgsT{T}((lit, SU.Const{T}(1))); type = Real)
+    read_ao = SU.Term{T}(getindex, SU.ArgsT{T}((SU.@arrayop((i,), c[i] * v[i]), SU.Const{T}(2))); type = Real)
+    for (read, old, new, expected) in ((read_lit, a, SU.Const{T}(3.0), 3.0 + b), (read_ao, c, SU.Const{T}([1.0, 0.0, 1.0, 1.0]), b))
+        top = read + b
+        ir = IRStructure{T}()
+        populate_ir!(ir, top)
+        read_idx = ir[read]
+        replace_node!(ir, old, new)
+        @test isequal(SU.get_canonical_expr!(ir, ir[top]), expected)
+        @test isempty(Graphs.outneighbors(ir.dependency_graph, read_idx))
+    end
+end

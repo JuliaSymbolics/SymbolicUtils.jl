@@ -208,7 +208,7 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                         push!(newargs, Const{T}(coeff))
                     end
                     for (k, v) in dict
-                        push!(newargs, k ^ (v.is_concrete ? v.concrete : v.other))
+                        push!(newargs, k ^ AnyNumbers._value(v))
                     end
                 end
             end

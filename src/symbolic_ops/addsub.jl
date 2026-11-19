@@ -122,8 +122,8 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                 BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
-                            newcoeff = if coeff isa AnyNumber.AnyNumber
-                                coeff.is_concrete ? newcoeff .+ coeff.concrete : newcoeff .+ coeff.other
+                            newcoeff = if coeff isa AnyNumbers.AnyNumber
+                                newcoeff .+ AnyNumbers._value(coeff)
                             else
                                 newcoeff .+ coeff
                             end

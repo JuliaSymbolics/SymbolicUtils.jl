@@ -108,15 +108,15 @@ Compare two `AddMul` `coeff` fields or `ACDict` values `a` and `b`, honoring
 structural rules do. Differing `is_concrete` flags imply differing stored
 types, so they can only match in non-full mode.
 """
-@inline function isequal_coeffs(a::Union{AnyNumber.AnyNumber, AbstractArray},
-        b::Union{AnyNumber.AnyNumber, AbstractArray}, full::Bool)
+@inline function isequal_coeffs(a::Union{AnyNumbers.AnyNumber, AbstractArray},
+        b::Union{AnyNumbers.AnyNumber, AbstractArray}, full::Bool)
     @nospecialize a b
     a === b && return true
-    if a isa AnyNumber.AnyNumber && b isa AnyNumber.AnyNumber
+    if a isa AnyNumbers.AnyNumber && b isa AnyNumbers.AnyNumber
         if a.is_concrete !== b.is_concrete
-            return !full && isequal(a, b)
+            return !full && _safe_isequal_somescalar(a, b)
         elseif a.is_concrete
-            return (!full || typeof(a.concrete) === typeof(b.concrete)) && isequal(a, b)
+            return (!full || typeof(a.concrete) === typeof(b.concrete)) && _safe_isequal_somescalar(a, b)
         else
             return (!full || typeof(a.other) === typeof(b.other)) && isequal_somescalar(a.other, b.other)
         end
@@ -662,8 +662,8 @@ function hash_maybe_fntype(T::TypeT, h::UInt)
     end
 end
 
-@inline _hash_coeff(v::AnyNumber.AnyNumber, h::UInt, full::Bool) =
-    full ? hash_maybe_fntype(typeof(v.is_concrete ? v.concrete : v.other), hash(v, h)) : hash(v, h)
+@inline _hash_coeff(v::AnyNumbers.AnyNumber, h::UInt, full::Bool) =
+    full ? hash_maybe_fntype(typeof(AnyNumbers._value(v)), hash(v, h)) : hash(v, h)
 
 const _HASH_AN_ONE = _hash_coeff(_ANY_ONE, zero(UInt), false)
 const _HASH_AN_ONE_FULL = _hash_coeff(_ANY_ONE, zero(UInt), true)
@@ -765,15 +765,13 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = if coeff isa AnyNumber.AnyNumber
-                Base.hash(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
+            seed = hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full)
+            if coeff isa AnyNumbers.AnyNumber
+                _hash_coeff(coeff, seed, full)
             else
-                hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
+                htmp = hash_somescalar(coeff, seed)
+                full ? hash_maybe_fntype(typeof(coeff)::TypeT, htmp) : htmp
             end
-            if full
-                htmp = hash_maybe_fntype(typeof(coeff isa AnyNumber.AnyNumber ? (coeff.is_concrete ? coeff.concrete : coeff.other) : coeff)::TypeT, htmp)
-            end
-            htmp
         end
         BSImpl.Div(; num, den, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2

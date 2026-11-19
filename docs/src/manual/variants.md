@@ -160,7 +160,7 @@ A `Term` can be constructed using `Term{T}(f, args; type, shape, metadata)` or
 
 ```julia
 struct AddMul
-    const coeff::Any
+    const coeff::Union{AnyNumber, AbstractArray}
     const dict::ACDict{T}
     const variant::AddMulVariant.T
     const metadata::MetadataT
@@ -173,6 +173,16 @@ end
 `AddMul` is a specialized representation for associative-commutative addition and
 multiplication. The two operations are distinguished using the [`SymbolicUtils.AddMulVariant`](@ref)
 EnumX.jl enum. It has two variants: `AddMulVariant.ADD` and `AddMulVariant.MUL`.
+
+`coeff` and the values of `dict` store numbers inside
+[`SymbolicUtils.AnyNumber`](@ref), an internal `Number` wrapper that keeps
+common concrete types (`Int`, `Float64`, `Rational{Int}`, `Complex{Int}`,
+`ComplexF64`) in an inline union for fast dispatch. It satisfies the same
+interfaces as the value it wraps (`isequal`, `hash`, arithmetic, `iszero`,
+`Int`, `Float64`, ... compare and convert as the unwrapped value would), so
+`coeff == 2` and `Int(coeff)` behave as expected. Code that needs the
+underlying concrete value or its exact type should use
+`SymbolicUtils.unwrap(coeff)`.
 
 For multiplication terms, `coeff` is a constant non-symbolic coefficient multiplied
 with the expression. `dict` is a map from terms being multiplied to their exponents. For

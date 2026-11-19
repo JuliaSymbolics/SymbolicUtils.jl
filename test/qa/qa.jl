@@ -7,6 +7,11 @@ run_qa(
         no_implicit_imports = (; allow_unanalyzable = (SymbolicUtils.BasicSymbolicImpl,)),
         no_stale_explicit_imports = (; allow_unanalyzable = (SymbolicUtils.BasicSymbolicImpl,)),
         all_qualified_accesses_via_owners = (; ignore = (:copy,)),
+        # `AnyNumber` extends `Base.deepcopy_internal` because its `other` field
+        # is `#undef` on the concrete path, which the generic fieldwise copy
+        # would read. The function is not public in `Base`, so the explicit
+        # import needs an exception.
+        all_explicit_imports_are_public = (; ignore = (:deepcopy_internal,)),
         all_qualified_accesses_are_public = (;
             ignore = (
                 Symbol("@__doc__"), Symbol("@compiler_options"), Symbol("@nany"),

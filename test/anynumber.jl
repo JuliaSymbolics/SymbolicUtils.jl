@@ -1,7 +1,7 @@
 using SymbolicUtils
 using Test
 
-const ANM = SymbolicUtils.AnyNumber
+const ANM = SymbolicUtils.AnyNumbers
 const AN = ANM.AnyNumber
 const CONCRETE_TYPES = ANM.CONCRETE_TYPES
 
@@ -171,8 +171,8 @@ end
     @test (AN(1) + big"2") == 3 && !(AN(1) + big"2").is_concrete
     @test (AN(1) + Float32(1)) == 2 && !(AN(1) + Float32(1)).is_concrete
     @test AN(2) * true == 2 && (AN(2) * true).is_concrete   # `2 * true` -> Int, re-enters
-    @test (AN(1) << 2).concrete == 4
-    @test (1 | AN(2)).concrete == 3
+    @test (AN(1) << AN(2)).concrete == 4
+    @test (AN(1) | AN(2)).concrete == 3
     @test (AN(1) // 2).concrete == 1 // 2
     @test (1 // AN(2)).concrete == 1 // 2
     @test_throws MethodError AN(1.5) // 1
@@ -193,7 +193,7 @@ end
     @test clamp(AN(1), 0, 3) == 1 && clamp(AN(1), 0, 3) isa AN
     @test fma(AN(1), 2, 3) == 5 && fma(AN(1), 2, 3) isa AN
     @test muladd(AN(2), 3, 1) == 7 && muladd(AN(2), 3, 1) isa AN
-    @test powermod(AN(2), 10, 7) == 2 && powermod(AN(2), 10, 7) isa AN
+    @test powermod(AN(2), AN(10), AN(7)) == 2 && powermod(AN(2), AN(10), AN(7)) isa AN
 end
 
 @testset "conversion, type functions, printing" begin

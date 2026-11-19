@@ -18,3 +18,15 @@ still provide convenient constructors for them. For example, `Sym{Real}(:x)`
 would still work. For constructor that takes a collection like `Term`s, we
 recommend directly construct `Any` element type constructors like `Term(f,
 Any[x1, x2])` to reduce extra memory allocation and compile time.
+
+## `AddMul` coefficients are stored as `AnyNumber`
+
+`BSImpl.AddMul.coeff` and the values of `AddMul.dict` (the `ACDict`) now store
+numbers wrapped in [`SymbolicUtils.AnyNumber`](@ref) instead of the raw `Number`.
+`AnyNumber` behaves like the wrapped value for arithmetic, comparisons,
+`isequal`, `hash`, `iszero`/`isone`, and conversions, so `coeff == 2`,
+`coeff + 1`, `hash(coeff)` and `Int(coeff)` behave as before. However, code that
+inspects the coefficient's *type* (`coeff isa Integer`, `typeof(coeff)`, or
+dispatching on the value type) will now see `AnyNumber` and must call
+`SymbolicUtils.unwrap(coeff)` to recover the raw value first. The same applies
+to dict values obtained from `x.dict` for `Add`/`Mul` expressions.

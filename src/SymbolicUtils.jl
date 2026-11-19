@@ -139,6 +139,7 @@ export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
 # Add, Mul and Pow
 PrecompileTools.@recompile_invalidations begin
     include("anynumber.jl")
+    using .AnyNumbers
     include("types.jl")
     include("terminterface.jl")
     include("hashconsing.jl")
@@ -246,8 +247,8 @@ end
 # `Code` is a developer-facing submodule used by downstream code generators.
 @public Code
 
-# `AnyNumber` is a developer-facing submodule providing a manually
-# union-split `Number` wrapper for fast paths over abstract `Number` fields.
+# `AnyNumber` is a developer-facing `Number` wrapper (from the `AnyNumbers`
+# submodule) for fast paths over abstract `Number` fields.
 @public AnyNumber
 
 # `simplify_rules.jl` does `using .Rewriters`, so these already resolve as

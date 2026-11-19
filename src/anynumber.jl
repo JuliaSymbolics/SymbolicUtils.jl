@@ -1,4 +1,8 @@
-module AnyNumber
+module AnyNumbers
+
+    import Base: deepcopy_internal
+    using DocStringExtensions: TYPEDSIGNATURES
+    using SymbolicIndexingInterface: NotSymbolic, symbolic_type
 
     export AnyNumber
 
@@ -20,36 +24,38 @@ module AnyNumber
         # for the concrete path, `false` for `other` — and keep each call site
         # single-method so `max_methods=1` inference does not widen to `Any`.
         AnyNumber(x::ConcreteT, ::Val{true}) = new(x, true)
-        AnyNumber(x::Number, ::Val{false}) = new(0, false, x)
+        function AnyNumber(x::Number, ::Val{false})
+            (x isa ConcreteT || x isa AnyNumber) &&
+                throw(ArgumentError("AnyNumber(x, Val(false)) requires a non-ConcreteT Number"))
+            return new(0, false, x)
+        end
     end
 
+    # Shared boxes for small-`Int` results — `AnyNumber` is immutable, so the
+    # common coefficients `-8:8` can be shared rather than re-allocated on every
+    # operation or dictionary insertion. `===` on `Int` is type-exact, so
+    # `Int8(1)`/`true` still allocate their own box and preserve `typeof`.
+    const _SMALL_INTS = ntuple(i -> AnyNumber(i - 9, Val(true)), 17)
+    const _ZERO = _SMALL_INTS[9]
+    const _ONE = _SMALL_INTS[10]
+    const _NEGONE = _SMALL_INTS[8]
+
     """
-        _wrap(x) -> AnyNumber
+        $TYPEDSIGNATURES
 
     Wrap `x` in an `AnyNumber`, deriving `is_concrete` from `x`'s own type rather
     than from the inputs: concrete-path operations whose result leaves
     [`CONCRETE_TYPES`](@ref) (e.g. `Rational{Int} * Complex{Int}`) demote to `other`,
     and `other`-path results may re-enter the concrete path.
-    """
-    # Shared boxes for the most common literal results — `AnyNumber` is
-    # immutable, so `0`, `1` and `-1` can be shared rather than re-allocated on
-    # every operation or dictionary insertion. `===` on `Int` is type-exact, so
-    # `Int8(1)`/`true` still allocate their own box and preserve `typeof`.
-    const _ZERO = AnyNumber(0, Val(true))
-    const _ONE = AnyNumber(1, Val(true))
-    const _NEGONE = AnyNumber(-1, Val(true))
 
-    # `_wrap` must stay a single method: `SymbolicUtils` compiles with
-    # `max_methods=1`, so a call site whose argument admits more than one
-    # applicable `_wrap` signature infers `Any`. Idempotency for `AnyNumber` input
-    # is folded in rather than dispatched on.
+    `_wrap` must stay a single method: `SymbolicUtils` compiles with
+    `max_methods=1`, so a call site whose argument admits more than one
+    applicable `_wrap` signature infers `Any`. Idempotency for `AnyNumber` input
+    is folded in rather than dispatched on.
+    """
     @inline function _wrap(x::Number)
         if x isa ConcreteT
-            if x isa Int
-                x === 0 && return _ZERO
-                x === 1 && return _ONE
-                x === -1 && return _NEGONE
-            end
+            x isa Int && -8 <= x <= 8 && return _SMALL_INTS[x + 9]
             return AnyNumber(x, Val(true))
         end
         x isa AnyNumber && return x
@@ -61,7 +67,7 @@ module AnyNumber
     AnyNumber(a::AnyNumber) = a
 
     """
-        _value(a::AnyNumber)
+        $TYPEDSIGNATURES
 
     The stored value with its static type erased to `Number`. Convenience for
     non-interface code (tests, debugging); interface methods never use it because
@@ -90,7 +96,7 @@ module AnyNumber
     end
 
     """
-        @unionsplit v body
+        $TYPEDSIGNATURES
 
     Evaluate `body` with `v` (a local bound to a `ConcreteT` value, typically
     `a.concrete`) manually union-split over each member of [`CONCRETE_TYPES`](@ref).
@@ -161,15 +167,18 @@ module AnyNumber
     # `div(x, y, r)` is the only 3-arg RoundingMode division form whose Base
     # signature is typed enough to extend without ambiguity (`rem(x, y, r)`
     # conflicts with Base's per-mode `rem(x, y, ::RoundingMode{:M})` methods).
-    tree = _dispatch_tree(
-        env -> _call(:div, env, (), (:r,)), (:a, :b);
-        wrap = true, assert = Number
-    )
-    @eval function Base.div(a::AnyNumber, b::AnyNumber, r::RoundingMode)
-        $tree
+    let tree = _dispatch_tree(
+            env -> _call(:div, env, (), (:r,)), (:a, :b);
+            wrap = true, assert = Number
+        )
+        @eval function Base.div(a::AnyNumber, b::AnyNumber, r::RoundingMode)
+            $tree
+        end
     end
-    Base.div(a::AnyNumber, b::Number, r::RoundingMode) = div(a, _wrap(b), r)
-    Base.div(a::Number, b::AnyNumber, r::RoundingMode) = div(_wrap(a), b, r)
+    Base.div(a::AnyNumber, b::Number, r::RoundingMode) =
+        _issymbolic(b) ? div(_value(a), b, r) : div(a, _wrap(b), r)
+    Base.div(a::Number, b::AnyNumber, r::RoundingMode) =
+        _issymbolic(a) ? div(a, _value(b), r) : div(_wrap(a), b, r)
 
     for f in (:(==), :<, :<=, :>, :>=, :isless, :isequal)
         tree = _dispatch_tree(
@@ -181,12 +190,13 @@ module AnyNumber
         end
     end
 
-    tree = _dispatch_tree(
-        env -> _call(:cmp, env), (:a, :b);
-        wrap = false, assert = Int
-    )
-    @eval function Base.cmp(a::AnyNumber, b::AnyNumber)
-        $tree
+    let tree = _dispatch_tree(
+            env -> _call(:cmp, env), (:a, :b);
+            wrap = false, assert = Int
+        )
+        @eval function Base.cmp(a::AnyNumber, b::AnyNumber)
+            $tree
+        end
     end
 
     for f in (:fma, :muladd, :clamp, :powermod, :hypot)
@@ -250,15 +260,16 @@ module AnyNumber
     end
 
     # `rationalize` accepts a `tol` keyword.
-    tree = _dispatch_tree(
-        env -> _call(
-            :rationalize, env,
-            (Expr(:parameters, Expr(:..., :kwargs)),), ()
-        ),
-        (:a,); wrap = true, assert = Number
-    )
-    @eval function Base.rationalize(a::AnyNumber; kwargs...)
-        $tree
+    let tree = _dispatch_tree(
+            env -> _call(
+                :rationalize, env,
+                (Expr(:parameters, Expr(:..., :kwargs)),), ()
+            ),
+            (:a,); wrap = true, assert = Number
+        )
+        @eval function Base.rationalize(a::AnyNumber; kwargs...)
+            $tree
+        end
     end
 
     # `hash` must agree with the wrapped value for `Dict`/hash-consing interop.
@@ -278,9 +289,10 @@ module AnyNumber
     Base.convert(::Type{AnyNumber}, x::Number) = AnyNumber(x)
 
     # `other` is `#undef` on the concrete path, which the generic fieldwise
-    # `deepcopy` would read. An immutable `AnyNumber` is already a correct
-    # deep copy of itself.
-    Base.deepcopy_internal(x::AnyNumber, dict::IdDict) = x
+    # `deepcopy` would read. Concrete values are isbits, so they share safely;
+    # `other` may hold a mutable number (e.g. `BigInt`) and is copied.
+    deepcopy_internal(x::AnyNumber, dict::IdDict) =
+        x.is_concrete ? x : AnyNumber(deepcopy_internal(x.other, dict), Val(false))
 
     # Type-targeted methods (`convert`, `T(a)`, `floor(T, a)`, `rationalize(T, a)`,
     # `round(T, a, r)`) enumerate literal types rather than catching all with
@@ -294,14 +306,14 @@ module AnyNumber
         Int8, Int16, Int32, Int64, Int128, BigInt,
         UInt8, UInt16, UInt32, UInt64, UInt128,
         Float16, Float32, Float64, BigFloat,
-        Number, Real, AbstractFloat, Integer, Signed, Unsigned, AbstractIrrational,
+        Real, AbstractFloat, Integer, Signed, Unsigned, AbstractIrrational,
     )
-    # `Rational`/`Complex`/`Irrational` are concrete UnionAlls — nothing can
+    # `Rational`/`Complex`/`Irrational` are concrete union-alls — nothing can
     # subtype them — so `where` bounds on these are ambiguity-free, and binding `T`
     # preserves the requested parameter (`Rational{BigInt}`, `ComplexF64`; a literal
     # `::Type{Complex}` method would wrongly reduce `convert(ComplexF64, a)` to
     # `convert(Complex, v)` → `Complex{Int}`).
-    const _SEALED_UNIONALLS = (:Rational, :Complex, :Irrational)
+    const _SEALED_PARAM_TYPES = (:Rational, :Complex, :Irrational)
     for T in _CONVERT_TYPES
         tree = _dispatch_tree(
             env -> _call(:convert, env, (T,), ()), (:a,);
@@ -312,7 +324,7 @@ module AnyNumber
         end
         @eval (::Type{$T})(a::AnyNumber) = convert($T, a)
     end
-    for U in _SEALED_UNIONALLS
+    for U in _SEALED_PARAM_TYPES
         tree = _dispatch_tree(
             env -> _call(:convert, env, (:T,), ()), (:a,);
             wrap = false, assert = :T
@@ -352,15 +364,16 @@ module AnyNumber
         return @unionsplit v _wrap(Base.literal_pow(^, v, Val{p}()))
     end
 
-    tree = _dispatch_tree(
-        env -> Expr(
-            :call, GlobalRef(Base, :isapprox),
-            Expr(:parameters, Expr(:..., :kws)), env...
-        ),
-        (:a, :b); wrap = false, assert = Bool
-    )
-    @eval function Base.isapprox(a::AnyNumber, b::AnyNumber; kws...)
-        $tree
+    let tree = _dispatch_tree(
+            env -> Expr(
+                :call, GlobalRef(Base, :isapprox),
+                Expr(:parameters, Expr(:..., :kws)), env...
+            ),
+            (:a, :b); wrap = false, assert = Bool
+        )
+        @eval function Base.isapprox(a::AnyNumber, b::AnyNumber; kws...)
+            $tree
+        end
     end
 
     for f in (:floor, :ceil, :trunc, :round)
@@ -387,7 +400,7 @@ module AnyNumber
                 $tree
             end
         end
-        for U in _SEALED_UNIONALLS
+        for U in _SEALED_PARAM_TYPES
             tree = _dispatch_tree(
                 env -> _call(
                     f, env,
@@ -414,7 +427,7 @@ module AnyNumber
             $tree
         end
     end
-    for U in _SEALED_UNIONALLS
+    for U in _SEALED_PARAM_TYPES
         tree = _dispatch_tree(
             env -> _call(:round, env, (:T,), (:r,)),
             (:a,); wrap = false, assert = :T
@@ -424,20 +437,22 @@ module AnyNumber
         end
     end
 
-    tree = _dispatch_tree(
-        env -> _call(:round, env, (), (:r,)),
-        (:a,); wrap = true, assert = Number
-    )
-    @eval function Base.round(a::AnyNumber, r::RoundingMode)
-        $tree
+    let tree = _dispatch_tree(
+            env -> _call(:round, env, (), (:r,)),
+            (:a,); wrap = true, assert = Number
+        )
+        @eval function Base.round(a::AnyNumber, r::RoundingMode)
+            $tree
+        end
     end
 
-    tree = _dispatch_tree(
-        env -> _call(:rem2pi, env, (), (:r,)), (:a,);
-        wrap = true, assert = Number
-    )
-    @eval function Base.rem2pi(a::AnyNumber, r::RoundingMode)
-        $tree
+    let tree = _dispatch_tree(
+            env -> _call(:rem2pi, env, (), (:r,)), (:a,);
+            wrap = true, assert = Number
+        )
+        @eval function Base.rem2pi(a::AnyNumber, r::RoundingMode)
+            $tree
+        end
     end
 
     Base.zero(::Type{AnyNumber}) = AnyNumber(0)
@@ -449,32 +464,52 @@ module AnyNumber
     # Mixed-signature forwards. Several Base fallbacks dispatch on `Real` pairs
     # (`min`, `isless`, `cmp`) or don't promote at all (bitwise ops, `//`), so every
     # binary op gets forwards that wrap the plain argument and re-dispatch to the
-    # split `AnyNumber`/`AnyNumber` method.
+    # split `AnyNumber`/`AnyNumber` method. A `Number` argument that is symbolic
+    # (`Num`, `BasicSymbolic` wrappers, `symbolic_type != NotSymbolic()`) is never
+    # wrapped: the operation belongs to the symbolic's own methods, so the
+    # `AnyNumber` is unwrapped instead and the result stays symbolic. The check
+    # dispatches on the argument's type and folds to `false` for plain numbers.
+    @inline _issymbolic(@nospecialize(x)) = symbolic_type(x) !== NotSymbolic()
+    @inline _rawarg(x) = x
+    @inline _rawarg(a::AnyNumber) = _value(a)
+
+    # Only ops that are meaningful for every `CONCRETE_TYPES` member or are
+    # registered symbolic functions (`diadic` in `methods.jl`, `binomial`) get
+    # mixed forwards: bitwise/number-theoretic ops cannot apply to
+    # `Float64`/`Rational`/`Complex` contents, and each forward is also an
+    # ambiguity source against downstream `f(::Number, ::SymbolicNumber)`.
     for f in (
-            :+, :-, :*, :/, :\, :div, :fld, :cld, :mod, :rem, :mod1, :fld1,
-            :gcd, :lcm, :invmod, :min, :max, :copysign, :flipsign, :atan, :atand,
-            :hypot, :ldexp, :widemul, :binomial,
-            :<<, :>>, :>>>, :&, :|, :xor,
+            :+, :-, :*, :/, :\, :div, :fld, :cld, :mod, :rem,
+            :gcd, :lcm, :min, :max, :copysign, :atan,
+            :hypot, :widemul, :binomial,
             :(==), :<, :<=, :>, :>=, :isless, :isequal, :cmp,
         )
-        @eval Base.$f(a::AnyNumber, b::Number) = $f(a, _wrap(b))
-        @eval Base.$f(a::Number, b::AnyNumber) = $f(_wrap(a), b)
+        @eval Base.$f(a::AnyNumber, b::Number) =
+            _issymbolic(b) ? $f(_value(a), b) : $f(a, _wrap(b))
+        @eval Base.$f(a::Number, b::AnyNumber) =
+            _issymbolic(a) ? $f(a, _value(b)) : $f(_wrap(a), b)
     end
 
     # `//` is restricted to `Real` to avoid ambiguities with `//(::Complex, ::Real)`
     # and `//(::Number, ::Complex)` — `AnyNumber` is never `Complex`. Base's
     # `//(::Number, ::Complex)` still handles a complex denominator.
-    Base.://(a::AnyNumber, b::Real) = a // _wrap(b)
-    Base.://(a::Real, b::AnyNumber) = _wrap(a) // b
+    Base.://(a::AnyNumber, b::Real) =
+        _issymbolic(b) ? _value(a) // b : a // _wrap(b)
+    Base.://(a::Real, b::AnyNumber) =
+        _issymbolic(a) ? a // _value(b) : _wrap(a) // b
 
     # `^` needs an `Integer`-bound method to stay more specific than Base's
     # `^(::Number, ::Integer)` for `a^n`.
     Base.:^(a::AnyNumber, b::Integer) = ^(a, _wrap(b))
-    Base.:^(a::AnyNumber, b::Number) = ^(a, _wrap(b))
-    Base.:^(a::Number, b::AnyNumber) = ^(_wrap(a), b)
+    Base.:^(a::AnyNumber, b::Number) =
+        _issymbolic(b) ? _value(a) ^ b : ^(a, _wrap(b))
+    Base.:^(a::Number, b::AnyNumber) =
+        _issymbolic(a) ? a ^ _value(b) : ^(_wrap(a), b)
 
-    Base.isapprox(a::AnyNumber, b::Number; kws...) = isapprox(a, _wrap(b); kws...)
-    Base.isapprox(a::Number, b::AnyNumber; kws...) = isapprox(_wrap(a), b; kws...)
+    Base.isapprox(a::AnyNumber, b::Number; kws...) =
+        _issymbolic(b) ? isapprox(_value(a), b; kws...) : isapprox(a, _wrap(b); kws...)
+    Base.isapprox(a::Number, b::AnyNumber; kws...) =
+        _issymbolic(a) ? isapprox(a, _value(b); kws...) : isapprox(_wrap(a), b; kws...)
 
     # Disambiguations against more specific Base methods.
     Base.widemul(a::AnyNumber, b::Bool) = widemul(a, _wrap(b))
@@ -490,34 +525,37 @@ module AnyNumber
                 (Number, Number, AnyNumber), (AnyNumber, AnyNumber, Number),
                 (AnyNumber, Number, AnyNumber), (Number, AnyNumber, AnyNumber),
             ),
-            f in (:clamp, :fma, :muladd, :powermod, :hypot)
-        @eval Base.$f(x::$X, y::$Y, z::$Z) = $f(_wrap(x), _wrap(y), _wrap(z))
+            f in (:clamp, :fma, :muladd)
+        @eval function Base.$f(x::$X, y::$Y, z::$Z)
+            if _issymbolic(x) || _issymbolic(y) || _issymbolic(z)
+                return $f(_rawarg(x), _rawarg(y), _rawarg(z))
+            end
+            return $f(_wrap(x), _wrap(y), _wrap(z))
+        end
     end
 
-end # module AnyNumber
+    """
+        AnyNumber <: Number
 
-# Inside the module, `AnyNumber` resolves to the struct rather than the module
-# itself, so the module docstring must be attached out here where the binding is
-# unambiguous.
-"""
+    Developer-facing `Number` wrapper —
+
+        struct AnyNumber <: Number
+            concrete::ConcreteT
+            is_concrete::Bool
+            other::Number
+        end
+
+    a `Number` backed by either a small isbits union (`concrete`) or an arbitrary
+    `Number` (`other`), selected by `is_concrete`. Every operation checks
+    `is_concrete` first and manually union-splits the concrete value through
+    `@unionsplit`, avoiding dynamic dispatch and letting escape analysis
+    elide the wrapper. Results are passed through `_wrap`, which
+    re-derives the flag from the result type: concrete-path operations whose
+    result leaves `CONCRETE_TYPES` (e.g. `Rational{Int} * Complex{Int}`)
+    demote to `other`, and `other`-path results may re-enter the concrete path.
+    Functions returning tuples (`frexp`, `modf`, `divrem`, `minmax`, `sincos`,
+    ...) are intentionally unsupported.
+    """
     AnyNumber
 
-Developer-facing submodule providing `AnyNumber` —
-
-    struct AnyNumber <: Number
-        concrete::ConcreteT
-        is_concrete::Bool
-        other::Number
-    end
-
-a `Number` backed by either a small isbits union (`concrete`) or an arbitrary
-`Number` (`other`), selected by `is_concrete`. Every operation checks
-`is_concrete` first and manually union-splits the concrete value through
-`@unionsplit`, avoiding dynamic dispatch and letting escape analysis elide the
-wrapper. Results are passed through `_wrap`, which re-derives the flag from the
-result type: concrete-path operations whose result leaves `CONCRETE_TYPES`
-(e.g. `Rational{Int} * Complex{Int}`) demote to `other`, and `other`-path
-results may re-enter the concrete path. Functions returning tuples (`frexp`,
-`modf`, `divrem`, `minmax`, `sincos`, ...) are intentionally unsupported.
-"""
-AnyNumber
+end # module AnyNumbers

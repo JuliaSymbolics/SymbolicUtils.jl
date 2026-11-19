@@ -183,15 +183,15 @@ end
 mutable struct MulWorkerBuffer{T}
     num_dict::ACDict{T}
     den_dict::ACDict{T}
-    const num_coeff::Base.RefValue{AnyNumber.AnyNumber}
-    const den_coeff::Base.RefValue{AnyNumber.AnyNumber}
+    const num_coeff::Base.RefValue{AnyNumbers.AnyNumber}
+    const den_coeff::Base.RefValue{AnyNumbers.AnyNumber}
     busy::Bool
 end
 
 function MulWorkerBuffer{T}() where {T}
     MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(),
-                       Ref{AnyNumber.AnyNumber}(_ANY_ONE),
-                       Ref{AnyNumber.AnyNumber}(_ANY_ONE), false)
+                       Ref{AnyNumbers.AnyNumber}(_ANY_ONE),
+                       Ref{AnyNumbers.AnyNumber}(_ANY_ONE), false)
 end
 
 function Base.empty!(mwb::MulWorkerBuffer)

@@ -76,10 +76,9 @@ end
 _widen_coeff(x::Integer) = big(x)
 _widen_coeff(x::Rational) = Rational{BigInt}(x)
 _widen_coeff(x::Complex{<:Union{Integer, Rational}}) = complex(_widen_coeff(real(x)), _widen_coeff(imag(x)))
-_widen_coeff(x::AnyNumber.AnyNumber) = _widen_coeff(unwrap(x))
 _widen_coeff(x) = x
 _maybe_widen(x, widen::Bool) = widen ? _widen_coeff(x) : x
-_maybe_widen(x::AnyNumber.AnyNumber, widen::Bool) = _maybe_widen(unwrap(x), widen)
+_maybe_widen(x::AnyNumbers.AnyNumber, widen::Bool) = _maybe_widen(unwrap(x), widen)
 
 # Mixing a `Float64` with a widened `Rational{BigInt}` promotes to `BigFloat`, so
 # floats are narrowed back too, unless the input itself carried `BigFloat`s.
@@ -121,7 +120,7 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
             @match variant begin
                 AddMulVariant.ADD => begin
                     poly = zeropoly()
-                    MA.operate!(+, poly, _maybe_widen(MA.copy_if_mutable(coeff), widen))
+                    MA.operate!(+, poly, _maybe_widen(MA.copy_if_mutable(unwrap(coeff)), widen))
                     for (k, v) in dict
                         tpoly = _to_poly!(poly_to_bs, bs_to_poly, k, recurse, widen)
                         cv = _maybe_widen(v, widen)
@@ -136,7 +135,7 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
                 end
                 AddMulVariant.MUL => begin
                     poly = onepoly()
-                    MA.operate!(*, poly, _maybe_widen(MA.copy_if_mutable(coeff), widen))
+                    MA.operate!(*, poly, _maybe_widen(MA.copy_if_mutable(unwrap(coeff)), widen))
                     for (k, v) in dict
                         if safe_isinteger(v)
                             tpoly = _to_poly!(poly_to_bs, bs_to_poly, k, recurse, widen)

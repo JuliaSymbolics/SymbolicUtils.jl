@@ -86,23 +86,32 @@ unwrap_args(args::ROArgsT) = args
 """
     $TYPEDSIGNATURES
 
-Convert a dictionary into standardized `ACDict{T}` format for `AddMul`.
+Convert a dictionary into the `AnyNumbers.AnyNumberDict` wrapping an
+`ACDict{T}` that `AddMul` stores.
 
 # Arguments
 - `::Type{T}`: The `SymVariant` type (`SymReal`, `SafeReal`, or `TreeReal`)
 - `dict::AbstractDict`: Dictionary to convert
 
 # Returns
-- The input if already in `ACDict{T}` format
-- A new `ACDict{T}` populated with all key-value pairs otherwise
+- The input if already an `AnyNumberDict` over `ACDict{T}`
+- An `AnyNumberDict` over the input if it is an `ACDict{T}`
+- An `AnyNumberDict` over a new `ACDict{T}` populated with all key-value
+  pairs otherwise
 """
 function parse_dict(::Type{T}, dict::AbstractDict) where {T}
-    dict isa ACDict{T} && return dict
+    if dict isa AnyNumbers.AnyNumberDict
+        inner = parent(dict)
+        inner isa ACDict{T} && return dict
+        dict = inner
+    elseif dict isa ACDict{T}
+        return AnyNumbers.AnyNumberDict(dict)
+    end
     _dict = ACDict{T}()
     for (k, v) in dict
         _dict[k] = v
     end
-    return _dict::ACDict{T}
+    return AnyNumbers.AnyNumberDict(_dict)
 end
 
 """
@@ -132,6 +141,10 @@ function unwrap_dict(dict)
     end
 end
 unwrap_dict(dict::OrderedDict{<:BasicSymbolic}) = dict
+function unwrap_dict(dict::AnyNumbers.AnyNumberDict)
+    inner = unwrap_dict(parent(dict))
+    return inner === parent(dict) ? dict : AnyNumbers.AnyNumberDict(inner)
+end
 
 """
     $TYPEDSIGNATURES
@@ -443,7 +456,7 @@ performance in internal operations.
 """
 @inline function BSImpl.AddMul{T}(coeff, dict, variant::AddMulVariant.T; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     @nospecialize coeff
-    coeff = _wrap_coeff(coeff)
+    coeff = unwrap(coeff)
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
     dict = parse_dict(T, dict)

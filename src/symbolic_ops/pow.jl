@@ -134,7 +134,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
     if b isa Number
         @match a begin
             BSImpl.AddMul(; coeff, dict, variant, shape, type) && if variant == AddMulVariant.MUL end => begin
-                rc = unwrap(coeff)
+                rc = coeff
                 if rc isa Real && rc < 0 && !safe_isinteger(b)
                     coeff = (-rc) ^ b
                     newmul = BSImpl.AddMul{T}(-1, dict, variant; shape, type)
@@ -147,7 +147,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                     # return mul_worker(T, (coeff, newpow))
                 else
                     coeff = _exact_coeff_pow(rc, b)
-                    dict = copy(dict)
+                    dict = copy(parent(dict))
                     map!(Base.Fix1(*, b), values(dict))
                     return BSImpl.AddMul{T}(coeff, dict, variant; shape, type)
                 end

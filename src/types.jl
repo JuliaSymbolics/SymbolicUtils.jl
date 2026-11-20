@@ -247,8 +247,8 @@ Core ADT for symbolic expressions.
         id::IdentT
     end
     struct AddMul
-        const coeff::Union{AnyNumbers.AnyNumber, AbstractArray}
-        const dict::Dict{BasicSymbolicImpl.Type{T}, AnyNumbers.AnyNumber}
+        const coeff::Any
+        const dict::AnyNumbers.AnyNumberDict{BasicSymbolicImpl.Type{T}, Dict{BasicSymbolicImpl.Type{T}, AnyNumbers.AnyNumber}}
         const variant::AddMulVariant.T
         const metadata::MetadataT
         const shape::ShapeT
@@ -344,10 +344,11 @@ allocating a new dictionary.
 """
 const ACDict{T} = Dict{BasicSymbolic{T}, AnyNumbers.AnyNumber}
 
-# `AddMul.coeff` stores `AnyNumber`s so that arithmetic on the accumulated
-# coefficient hits the generated union-split paths instead of dynamic dispatch on
-# `Number`. Non-`Number` coefficients (array offsets produced by broadcasted
-# addition, e.g. `v + [1, 2]`) pass through unchanged.
+# `AddMul` stores its `dict` inside `AnyNumbers.AnyNumberDict`, so `x.dict`
+# iterates raw `Number` values for outside readers while internal merges work
+# on `parent(x.dict)`'s `AnyNumber` values through the union-split paths.
+# `AddMul.coeff` is raw `Any`; paths that accumulate on it wrap on access via
+# `_wrap_coeff` — shared boxes make common small-`Int` wraps free.
 # The shared `0`/`1`/`-1` boxes `AnyNumbers._wrap` returns for `Int` results;
 # aliased here so hot paths can test membership or insert them directly.
 const _ANY_ZERO = AnyNumbers._ZERO
@@ -655,7 +656,7 @@ function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple) 
             BSImpl.Term{T}(get(p, :f, f), get(p, :args, args), get(p, :metadata, metadata),
                            get(p, :shape, shape), get(p, :type, type), Z, Z, nothing)
         BSImpl.AddMul(; coeff, dict, variant, metadata, shape, type) =>
-            BSImpl.AddMul{T}(_wrap_coeff(get(p, :coeff, coeff)), get(p, :dict, dict), get(p, :variant, variant),
+            BSImpl.AddMul{T}(unwrap(get(p, :coeff, coeff)), parse_dict(T, get(p, :dict, dict)), get(p, :variant, variant),
                              get(p, :metadata, metadata), get(p, :shape, shape), get(p, :type, type),
                              ArgsCacheT{T}(), Z, Z, nothing)
         BSImpl.Div(; num, den, simplified, metadata, shape, type) =>

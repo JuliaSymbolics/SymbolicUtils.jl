@@ -534,6 +534,8 @@ module AnyNumbers
         end
     end
 
+    include("anydict.jl")
+
     """
         AnyNumber <: Number
 

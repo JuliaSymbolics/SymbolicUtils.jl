@@ -244,3 +244,73 @@ end
     # wrapper leaks. ~48B per add for 1000 adds.
     @test @allocated(sum_split(v)) < 80_000
 end
+
+@testset "AnyNumberDict" begin
+    using SymbolicUtils: ACDict, SymReal, BSImpl, MData
+    ANDict = ANM.AnyNumberDict
+    @syms a b
+
+    inner = ACDict{SymReal}(a => AN(2), b => AN(3))
+    d = ANDict(inner)
+    @test d isa AbstractDict
+    @test valtype(d) === Number
+    @test parent(d) === inner
+    @test eltype(values(inner)) === AN
+
+    # reads unwrap
+    @test d[a] === 2
+    @test get(d, a, 99) === 2
+    @test get(d, a + b, 99) === 99
+    @test collect(values(d)) == [2, 3] || collect(values(d)) == [3, 2]
+    @test all(v isa Int for v in values(d))
+    @test Set(k for (k, v) in d) == Set([a, b])
+    @test all(v isa Int for (k, v) in d)
+    @test length(d) == 2 && haskey(d, a) && !isempty(d)
+
+    # mutation round-trips through the wrapper into AnyNumber storage
+    d[a] = 5
+    @test d[a] === 5
+    @test inner[a] isa AN && isequal(inner[a], AN(5))
+    @test get!(d, a + b, 7) === 7
+    @test inner[a + b] isa AN
+    delete!(d, a + b)
+    @test !haskey(d, a + b)
+    empty!(d)
+    @test isempty(d) && isempty(inner)
+
+    # equality against raw dictionaries
+    d = ANDict(ACDict{SymReal}(a => 1, b => 2))
+    @test d == Dict(a => 1, b => 2)
+    @test d == ACDict{SymReal}(a => AN(1), b => AN(2))
+    @test isequal(d, Dict(a => 1, b => 2))
+    @test copy(d) isa ANDict
+    @test Dict(d) isa Dict && Dict(d)[a] === 1
+
+    # AddMul stores the wrapper; outward reads are raw, parent is the AN dict
+    e = 2a + 3b + 4
+    @test e.dict isa ANDict
+    @test all(v -> v isa Int, values(e.dict))
+    @test all(v -> v isa AN, values(parent(e.dict)))
+    @test e.dict == Dict(a => 2, b => 3)
+    @test e.dict[a] === 2
+
+    # coeff is stored raw; internal arithmetic wraps on access
+    @test e.coeff === 4
+    m = 7a * b
+    @test m.coeff === 7
+    @test SymbolicUtils.get_mul_coefficient(m) === 7
+
+    # array coefficients pass through untouched
+    @syms v[1:3]::Real
+    ex = v + [1, 2, 3]
+    @test isequal(ex.coeff, [1, 2, 3])
+    @test all(v -> v isa Int, values(ex.dict))
+
+    # full-comparison mode still distinguishes value types
+    x1 = 0.5a
+    x2 = (1 // 2)a
+    SymbolicUtils.COMPARE_FULL[] = true
+    @test !isequal(x1, x2)
+    SymbolicUtils.COMPARE_FULL[] = false
+    @test isequal(x1, x2)
+end

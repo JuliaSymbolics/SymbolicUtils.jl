@@ -122,25 +122,22 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                 BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
-                            newcoeff = if coeff isa AnyNumbers.AnyNumber
-                                newcoeff .+ AnyNumbers._value(coeff)
-                            else
-                                newcoeff .+ coeff
-                            end
-                            if isempty(result) && dict isa ACDict{T}
+                            newcoeff = newcoeff .+ coeff
+                            inner = parent(dict)
+                            if isempty(result) && inner isa ACDict{T}
                                 # No keys can collide: seed the result with a
                                 # bulk copy instead of probing every entry.
-                                _dict_copy_into!(result, dict)
-                                zref[] += count(iszero, values(dict))
+                                _dict_copy_into!(result, inner)
+                                zref[] += count(iszero, values(inner))
                             else
-                                for (k, v) in dict
+                                for (k, v) in inner
                                     _accumulate!(result, k, v, zref)
                                 end
                             end
                         end
                         AddMulVariant.MUL => begin
                             newterm = Mul{T}(1, dict; shape, type, metadata)
-                            _accumulate!(result, newterm, coeff, zref)
+                            _accumulate!(result, newterm, _wrap_coeff(coeff), zref)
                         end
                     end
                 end
@@ -187,7 +184,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
     end
     var = Add{T}(newcoeff, result; type, shape)::BasicSymbolic{T}
     @match var begin
-        BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())
+        BSImpl.AddMul(; dict) && if parent(dict) === result end => (awb.dict = ACDict{T}())
         _ => nothing
     end
     return var
@@ -214,7 +211,7 @@ function -(a::BasicSymbolic{T}) where {T}
             @match variant begin
                 AddMulVariant.ADD => begin
                     coeff = -coeff
-                    dict = copy(dict)
+                    dict = copy(parent(dict))
                     map!(-, values(dict))
                     return BSImpl.AddMul{T}(coeff, dict, variant; shape, type)
                 end

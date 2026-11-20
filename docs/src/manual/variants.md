@@ -160,8 +160,8 @@ A `Term` can be constructed using `Term{T}(f, args; type, shape, metadata)` or
 
 ```julia
 struct AddMul
-    const coeff::Union{AnyNumber, AbstractArray}
-    const dict::ACDict{T}
+    const coeff::Any
+    const dict::AnyNumbers.AnyNumberDict{T}
     const variant::AddMulVariant.T
     const metadata::MetadataT
     const shape::ShapeT
@@ -174,15 +174,13 @@ end
 multiplication. The two operations are distinguished using the [`SymbolicUtils.AddMulVariant`](@ref)
 EnumX.jl enum. It has two variants: `AddMulVariant.ADD` and `AddMulVariant.MUL`.
 
-`coeff` and the values of `dict` store numbers inside
+`dict` is an `AnyNumbers.AnyNumberDict`, an `AbstractDict` view that unwraps
+every value it returns, so `dict` reads and iterates raw numbers. Internally
+it wraps a `Dict{BasicSymbolic{T}, AnyNumber}` — retrievable via
+`Base.parent(dict)` — where each coefficient is stored inside
 [`SymbolicUtils.AnyNumber`](@ref), an internal `Number` wrapper that keeps
 common concrete types (`Int`, `Float64`, `Rational{Int}`, `Complex{Int}`,
-`ComplexF64`) in an inline union for fast dispatch. It satisfies the same
-interfaces as the value it wraps (`isequal`, `hash`, arithmetic, `iszero`,
-`Int`, `Float64`, ... compare and convert as the unwrapped value would), so
-`coeff == 2` and `Int(coeff)` behave as expected. Code that needs the
-underlying concrete value or its exact type should use
-`SymbolicUtils.unwrap(coeff)`.
+`ComplexF64`) in an inline union for fast dispatch. `coeff` is stored raw.
 
 For multiplication terms, `coeff` is a constant non-symbolic coefficient multiplied
 with the expression. `dict` is a map from terms being multiplied to their exponents. For

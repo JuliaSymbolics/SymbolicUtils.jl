@@ -152,8 +152,8 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
         @match term begin
             BSImpl.Const(; val) => (num_coeff[] *= val)
             BSImpl.AddMul(; coeff, dict, variant) && if variant == AddMulVariant.MUL end => begin
-                num_coeff[] *= coeff
-                for (k, v) in dict
+                num_coeff[] *= _wrap_coeff(coeff)
+                for (k, v) in parent(dict)
                     _accumulate!(num_dict, k, v)
                 end
             end
@@ -286,7 +286,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     else
         num = Mul{T}(num_coeff[], num_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match num begin
-            BSImpl.AddMul(; dict) && if dict === num_dict end => begin
+            BSImpl.AddMul(; dict) && if parent(dict) === num_dict end => begin
                 mwb.num_dict = ACDict{T}()
             end
             _ => nothing
@@ -299,7 +299,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     else
         den = Mul{T}(den_coeff[], den_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match den begin
-            BSImpl.AddMul(; dict) && if dict === den_dict end => begin
+            BSImpl.AddMul(; dict) && if parent(dict) === den_dict end => begin
                 mwb.den_dict = ACDict{T}()
             end
             _ => nothing

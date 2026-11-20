@@ -19,14 +19,14 @@ would still work. For constructor that takes a collection like `Term`s, we
 recommend directly construct `Any` element type constructors like `Term(f,
 Any[x1, x2])` to reduce extra memory allocation and compile time.
 
-## `AddMul` coefficients are stored as `AnyNumber`
+## `AddMul` dictionaries are `AnyNumberDict`s over `AnyNumber` values
 
-`BSImpl.AddMul.coeff` and the values of `AddMul.dict` (the `ACDict`) now store
-numbers wrapped in [`SymbolicUtils.AnyNumber`](@ref) instead of the raw `Number`.
-`AnyNumber` behaves like the wrapped value for arithmetic, comparisons,
-`isequal`, `hash`, `iszero`/`isone`, and conversions, so `coeff == 2`,
-`coeff + 1`, `hash(coeff)` and `Int(coeff)` behave as before. However, code that
-inspects the coefficient's *type* (`coeff isa Integer`, `typeof(coeff)`, or
-dispatching on the value type) will now see `AnyNumber` and must call
-`SymbolicUtils.unwrap(coeff)` to recover the raw value first. The same applies
-to dict values obtained from `x.dict` for `Add`/`Mul` expressions.
+`BSImpl.AddMul.dict` is now a `SymbolicUtils.AnyNumbers.AnyNumberDict`, an
+`AbstractDict{K, Number}` view over the coefficient dictionary instead of a
+plain `Dict`. Every value it returns (`getindex`, `get`, `iterate`, `values`)
+is the raw `Number`, so `x.dict == Dict(a => 1)`, `x.dict[k]`, and iteration
+behave as before. `typeof(x.dict)` and `x.dict isa Dict`/`ACDict` will no
+longer hold; `x.dict isa AbstractDict` remains true. Internal code can access
+the wrapped dictionary — whose values are
+[`SymbolicUtils.AnyNumber`](@ref) wrappers — via `Base.parent(x.dict)`.
+`AddMul.coeff` continues to store the raw coefficient value.

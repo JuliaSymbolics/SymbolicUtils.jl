@@ -51,7 +51,7 @@ preferred over the `BSImpl.AddMul{T}` constructor.
 """
 @inline function Add{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
-    coeff isa AnyNumbers.AnyNumber || (coeff = unwrap(coeff))
+    coeff = unwrap(coeff)
     dict = unwrap_dict(dict)
     if isempty(dict)
         return Const{T}(coeff)
@@ -94,7 +94,7 @@ preferred over the `BSImpl.AddMul{T}` constructor.
 """
 @inline function Mul{T}(coeff, dict; kw...) where {T}
     @nospecialize coeff kw
-    coeff isa AnyNumbers.AnyNumber || (coeff = unwrap(coeff))
+    coeff = unwrap(coeff)
     dict = unwrap_dict(dict)
     if isempty(dict)
         return Const{T}(coeff)
@@ -261,7 +261,7 @@ function Div{T}(n, d, simplified; type = promote_symtype(/, symtype(n), symtype(
             d = Mul{T}(c2, dict, ; type, shape)
         end
         (BSImpl.AddMul(; coeff, dict, type, shape, variant), BSImpl.Const(; val)) && if variant == AddMulVariant.MUL end => begin
-            return Mul{T}(safe_div(unwrap(coeff), val), dict, ; type, shape)
+            return Mul{T}(safe_div(coeff, val), dict, ; type, shape)
         end
         (BSImpl.AddMul(; coeff = c1, dict = d1, type = t1, shape = sh1, variant = v1),
             BSImpl.AddMul(; coeff = c2, dict = d2, type = t2, shape = sh2, variant = v2)) &&

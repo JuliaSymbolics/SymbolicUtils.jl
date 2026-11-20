@@ -11,6 +11,7 @@ rewriters, and substitution APIs documented on the main [API page](@ref "API Ref
 SymbolicUtils.:<ₑ
 SymbolicUtils.@cache
 SymbolicUtils.ACDict
+SymbolicUtils.AnyNumber
 SymbolicUtils.AddMulVariant
 SymbolicUtils.ArgsT
 SymbolicUtils.BSImpl

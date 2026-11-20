@@ -248,7 +248,7 @@ Core ADT for symbolic expressions.
     end
     struct AddMul
         const coeff::Any
-        const dict::Dict{BasicSymbolicImpl.Type{T}, Number}
+        const dict::AnyNumbers.AnyNumberDict{BasicSymbolicImpl.Type{T}, Dict{BasicSymbolicImpl.Type{T}, AnyNumbers.AnyNumber}}
         const variant::AddMulVariant.T
         const metadata::MetadataT
         const shape::ShapeT
@@ -338,11 +338,30 @@ the type returned from [`TermInterface.arguments`](@ref).
 """
 const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
 """
-The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to the
-[`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will avoid
-allocating a new dictionary.
+The type of the mutable dictionary wrapped inside the [`ACDict`](@ref) stored
+in [`BSImpl.AddMul`](@ref). Internal code obtains it via `parent(x.dict)` and
+mutates it directly; its values are [`AnyNumbers.AnyNumber`](@ref), so merges
+hit the union-split arithmetic paths. Passing this to the
+[`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will
+avoid allocating a new dictionary.
 """
-const ACDict{T} = Dict{BasicSymbolic{T}, Number}
+const ACDictInner{T} = Dict{BasicSymbolic{T}, AnyNumbers.AnyNumber}
+"""
+The type of the `dict` field stored in [`BSImpl.AddMul`](@ref): an
+[`AnyNumbers.AnyNumberDict`](@ref) over an [`ACDictInner`](@ref). It iterates
+raw `Number` values for outside readers; internal code should use
+`parent(x.dict)` and work on the wrapped dictionary directly.
+"""
+const ACDict{T} = AnyNumbers.AnyNumberDict{BasicSymbolic{T}, ACDictInner{T}}
+
+# `AddMul.coeff` is raw `Any`; paths that accumulate on it wrap on access via
+# `_wrap_coeff` — shared boxes make common small-`Int` wraps free.
+# The shared `0`/`1`/`-1` boxes `AnyNumbers._wrap` returns for `Int` results;
+# aliased here so hot paths can test membership or insert them directly.
+const _ANY_ZERO = AnyNumbers._ZERO
+const _ANY_ONE = AnyNumbers._ONE
+_wrap_coeff(c::Number) = AnyNumbers.AnyNumber(c)
+_wrap_coeff(c) = c
 
 # Add `val` to the value stored at `key` in `h`, inserting `val` if `key` is absent.
 function _accumulate!(h::AbstractDict, key, val)
@@ -585,6 +604,11 @@ Return the inner `Symbolic` wrapped in a non-symbolic subtype. Defaults to
 returning the input as-is.
 """
 unwrap(@nospecialize(x)) = x
+# `AnyNumber` is a `Number` wrapper, so it participates in the same unwrapping
+# convention as symbolic wrappers: `Const.val`, `_iszero`/`_isone`, and paths
+# that dispatch on concrete scalar types all see the raw stored number.
+unwrap(x::AnyNumbers.AnyNumber) = AnyNumbers._value(x)
+symtype(x::AnyNumbers.AnyNumber) = symtype(AnyNumbers._value(x))
 
 """
     $(TYPEDSIGNATURES)
@@ -639,7 +663,7 @@ function ConstructionBase.setproperties(obj::BSImpl.Type{T}, patch::NamedTuple) 
             BSImpl.Term{T}(get(p, :f, f), get(p, :args, args), get(p, :metadata, metadata),
                            get(p, :shape, shape), get(p, :type, type), Z, Z, nothing)
         BSImpl.AddMul(; coeff, dict, variant, metadata, shape, type) =>
-            BSImpl.AddMul{T}(get(p, :coeff, coeff), get(p, :dict, dict), get(p, :variant, variant),
+            BSImpl.AddMul{T}(unwrap(get(p, :coeff, coeff)), parse_dict(T, get(p, :dict, dict)), get(p, :variant, variant),
                              get(p, :metadata, metadata), get(p, :shape, shape), get(p, :type, type),
                              ArgsCacheT{T}(), Z, Z, nothing)
         BSImpl.Div(; num, den, simplified, metadata, shape, type) =>
@@ -883,7 +907,7 @@ function get_mul_coefficient(x)
                 return 1
             end
         end
-        BSImpl.AddMul(; coeff) => return coeff
+        BSImpl.AddMul(; coeff) => return unwrap(coeff)
     end
 end
 

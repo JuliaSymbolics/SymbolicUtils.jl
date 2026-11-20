@@ -18,6 +18,15 @@ very large integers that cannot be accurately represented as `Int`.
 """
 safe_isinteger(@nospecialize(x::Number)) = isinteger(x) && abs(x) < typemax(Int)
 safe_isinteger(x) = false
+# `isinteger(::AnyNumber)` and `abs(::AnyNumber)` go through generic dispatch
+# and allocate a fresh wrapper; dispatch on the stored value instead. The leaf
+# inlines the `Number` method's body — calling `safe_isinteger` would hit the
+# `@nospecialize` generic and throw away the split's concrete dispatch.
+function safe_isinteger(x::AnyNumbers.AnyNumber)
+    x.is_concrete || return safe_isinteger(x.other)
+    v = x.concrete
+    return AnyNumbers.@unionsplit v isinteger(v) && abs(v) < typemax(Int)
+end
 
 """
     $TYPEDSIGNATURES

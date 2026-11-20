@@ -86,23 +86,31 @@ unwrap_args(args::ROArgsT) = args
 """
     $TYPEDSIGNATURES
 
-Convert a dictionary into standardized `ACDict{T}` format for `AddMul`.
+Convert a dictionary into the `ACDict{T}` that `AddMul` stores.
 
 # Arguments
 - `::Type{T}`: The `SymVariant` type (`SymReal`, `SafeReal`, or `TreeReal`)
 - `dict::AbstractDict`: Dictionary to convert
 
 # Returns
-- The input if already in `ACDict{T}` format
-- A new `ACDict{T}` populated with all key-value pairs otherwise
+- The input if already an `ACDict{T}`
+- An `ACDict{T}` over the input if it is an `ACDictInner{T}`
+- An `ACDict{T}` over a new `ACDictInner{T}` populated with all key-value
+  pairs otherwise
 """
 function parse_dict(::Type{T}, dict::AbstractDict) where {T}
-    dict isa ACDict{T} && return dict
-    _dict = ACDict{T}()
+    if dict isa AnyNumbers.AnyNumberDict
+        inner = parent(dict)
+        inner isa ACDictInner{T} && return dict
+        dict = inner
+    elseif dict isa ACDictInner{T}
+        return AnyNumbers.AnyNumberDict(dict)
+    end
+    _dict = ACDictInner{T}()
     for (k, v) in dict
         _dict[k] = v
     end
-    return _dict::ACDict{T}
+    return AnyNumbers.AnyNumberDict(_dict)
 end
 
 """
@@ -132,6 +140,10 @@ function unwrap_dict(dict)
     end
 end
 unwrap_dict(dict::OrderedDict{<:BasicSymbolic}) = dict
+function unwrap_dict(dict::AnyNumbers.AnyNumberDict)
+    inner = unwrap_dict(parent(dict))
+    return inner === parent(dict) ? dict : AnyNumbers.AnyNumberDict(inner)
+end
 
 """
     $TYPEDSIGNATURES
@@ -440,7 +452,7 @@ Internal constructor for addition and multiplication expressions.
 
 # Arguments
 - `coeff`: The leading coefficient (for addition) or coefficient (for multiplication)
-- `dict`: Dictionary mapping terms to their coefficients/exponents (normalized to `ACDict{T}`)
+- `dict`: Dictionary mapping terms to their coefficients/exponents (normalized to `ACDict{T}` by `parse_dict`)
 - `variant::AddMulVariant.T`: Either `AddMulVariant.ADD` or `AddMulVariant.MUL`
 - `metadata`: Optional metadata dictionary (default: `nothing`)
 - `type`: The result type of the operation (required keyword argument)
@@ -462,6 +474,7 @@ performance in internal operations.
 """
 @inline function BSImpl.AddMul{T}(coeff, dict, variant::AddMulVariant.T; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     @nospecialize coeff
+    coeff = unwrap(coeff)
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
     dict = parse_dict(T, dict)

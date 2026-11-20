@@ -152,8 +152,8 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
         @match term begin
             BSImpl.Const(; val) => (num_coeff[] *= val)
             BSImpl.AddMul(; coeff, dict, variant) && if variant == AddMulVariant.MUL end => begin
-                num_coeff[] *= coeff
-                for (k, v) in dict
+                num_coeff[] *= _wrap_coeff(coeff)
+                for (k, v) in parent(dict)
                     _accumulate!(num_dict, k, v)
                 end
             end
@@ -166,14 +166,14 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
                 _mul_worker!(T, den_coeff, num_coeff, den_dict, num_dict, den)
             end
             x => begin
-                _accumulate!(num_dict, x, 1)
+                _accumulate!(num_dict, x, _ANY_ONE)
             end
         end
     elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal}
         error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
     elseif term isa AbstractIrrational
         base = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
-        _accumulate!(num_dict, base, 1)
+        _accumulate!(num_dict, base, _ANY_ONE)
     else
         num_coeff[] *= term
     end
@@ -181,22 +181,24 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
 end
 
 mutable struct MulWorkerBuffer{T}
-    num_dict::ACDict{T}
-    den_dict::ACDict{T}
-    const num_coeff::Base.RefValue{PolyCoeffT}
-    const den_coeff::Base.RefValue{PolyCoeffT}
+    num_dict::ACDictInner{T}
+    den_dict::ACDictInner{T}
+    const num_coeff::Base.RefValue{AnyNumbers.AnyNumber}
+    const den_coeff::Base.RefValue{AnyNumbers.AnyNumber}
     busy::Bool
 end
 
 function MulWorkerBuffer{T}() where {T}
-    MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1), false)
+    MulWorkerBuffer{T}(ACDictInner{T}(), ACDictInner{T}(),
+                       Ref{AnyNumbers.AnyNumber}(_ANY_ONE),
+                       Ref{AnyNumbers.AnyNumber}(_ANY_ONE), false)
 end
 
 function Base.empty!(mwb::MulWorkerBuffer)
     empty!(mwb.num_dict)
     empty!(mwb.den_dict)
-    mwb.num_coeff[] = 1
-    mwb.den_coeff[] = 1
+    mwb.num_coeff[] = _ANY_ONE
+    mwb.den_coeff[] = _ANY_ONE
     return mwb
 end
 
@@ -261,9 +263,9 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         denexp = den_dict[k]
         if (numexp >= denexp)::Bool
             num_dict[k] = numexp - denexp
-            den_dict[k] = 0
+            den_dict[k] = _ANY_ZERO
         else
-            num_dict[k] = 0
+            num_dict[k] = _ANY_ZERO
             den_dict[k] = denexp - numexp
         end
     end
@@ -284,8 +286,8 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     else
         num = Mul{T}(num_coeff[], num_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match num begin
-            BSImpl.AddMul(; dict) && if dict === num_dict end => begin
-                mwb.num_dict = ACDict{T}()
+            BSImpl.AddMul(; dict) && if parent(dict) === num_dict end => begin
+                mwb.num_dict = ACDictInner{T}()
             end
             _ => nothing
         end
@@ -297,8 +299,8 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     else
         den = Mul{T}(den_coeff[], den_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match den begin
-            BSImpl.AddMul(; dict) && if dict === den_dict end => begin
-                mwb.den_dict = ACDict{T}()
+            BSImpl.AddMul(; dict) && if parent(dict) === den_dict end => begin
+                mwb.den_dict = ACDictInner{T}()
             end
             _ => nothing
         end

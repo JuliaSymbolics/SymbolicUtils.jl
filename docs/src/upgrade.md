@@ -18,3 +18,16 @@ still provide convenient constructors for them. For example, `Sym{Real}(:x)`
 would still work. For constructor that takes a collection like `Term`s, we
 recommend directly construct `Any` element type constructors like `Term(f,
 Any[x1, x2])` to reduce extra memory allocation and compile time.
+
+## `AddMul` dictionaries are `AnyNumberDict`s over `AnyNumber` values
+
+`BSImpl.AddMul.dict` is now a `SymbolicUtils.AnyNumbers.AnyNumberDict`, an
+`AbstractDict{K, Number}` view over the coefficient dictionary instead of a
+plain `Dict`. Every value it returns (`getindex`, `get`, `iterate`, `values`)
+is the raw `Number`, so `x.dict == Dict(a => 1)`, `x.dict[k]`, and iteration
+behave as before. `x.dict isa Dict` no longer holds, but `x.dict isa ACDict{T}`
+remains true: `ACDict` is exactly the wrapper type stored in the `dict` field,
+and the wrapped `Dict{K, AnyNumber}` is available as `ACDictInner{T}`. Internal code can access
+the wrapped dictionary — whose values are
+[`SymbolicUtils.AnyNumber`](@ref) wrappers — via `Base.parent(x.dict)`.
+`AddMul.coeff` continues to store the raw coefficient value.

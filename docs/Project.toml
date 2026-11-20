@@ -6,6 +6,6 @@ TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 
 [compat]
 Documenter = "1.17.0"
-DocStringExtensions = "0.9"
+DocStringExtensions = "0.9, 0.10"
 SymbolicUtils = "4.20.2"
 TermInterface = "2.0"

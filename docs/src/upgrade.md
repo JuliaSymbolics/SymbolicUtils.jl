@@ -25,8 +25,9 @@ Any[x1, x2])` to reduce extra memory allocation and compile time.
 `AbstractDict{K, Number}` view over the coefficient dictionary instead of a
 plain `Dict`. Every value it returns (`getindex`, `get`, `iterate`, `values`)
 is the raw `Number`, so `x.dict == Dict(a => 1)`, `x.dict[k]`, and iteration
-behave as before. `typeof(x.dict)` and `x.dict isa Dict`/`ACDict` will no
-longer hold; `x.dict isa AbstractDict` remains true. Internal code can access
+behave as before. `x.dict isa Dict` no longer holds, but `x.dict isa ACDict{T}`
+remains true: `ACDict` is exactly the wrapper type stored in the `dict` field,
+and the wrapped `Dict{K, AnyNumber}` is available as `ACDictInner{T}`. Internal code can access
 the wrapped dictionary — whose values are
 [`SymbolicUtils.AnyNumber`](@ref) wrappers — via `Base.parent(x.dict)`.
 `AddMul.coeff` continues to store the raw coefficient value.

@@ -338,15 +338,22 @@ the type returned from [`TermInterface.arguments`](@ref).
 """
 const ROArgsT{T} = ReadOnlyVector{BasicSymbolic{T}, ArgsT{T}}
 """
-The type of the dictionary stored in [`BSImpl.AddMul`](@ref). Passing this to the
-[`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will avoid
-allocating a new dictionary.
+The type of the mutable dictionary wrapped inside the [`ACDict`](@ref) stored
+in [`BSImpl.AddMul`](@ref). Internal code obtains it via `parent(x.dict)` and
+mutates it directly; its values are [`AnyNumbers.AnyNumber`](@ref), so merges
+hit the union-split arithmetic paths. Passing this to the
+[`SymbolicUtils.Add`](@ref) or [`SymbolicUtils.Mul`](@ref) constructors will
+avoid allocating a new dictionary.
 """
-const ACDict{T} = Dict{BasicSymbolic{T}, AnyNumbers.AnyNumber}
+const ACDictInner{T} = Dict{BasicSymbolic{T}, AnyNumbers.AnyNumber}
+"""
+The type of the `dict` field stored in [`BSImpl.AddMul`](@ref): an
+[`AnyNumbers.AnyNumberDict`](@ref) over an [`ACDictInner`](@ref). It iterates
+raw `Number` values for outside readers; internal code should use
+`parent(x.dict)` and work on the wrapped dictionary directly.
+"""
+const ACDict{T} = AnyNumbers.AnyNumberDict{BasicSymbolic{T}, ACDictInner{T}}
 
-# `AddMul` stores its `dict` inside `AnyNumbers.AnyNumberDict`, so `x.dict`
-# iterates raw `Number` values for outside readers while internal merges work
-# on `parent(x.dict)`'s `AnyNumber` values through the union-split paths.
 # `AddMul.coeff` is raw `Any`; paths that accumulate on it wrap on access via
 # `_wrap_coeff` — shared boxes make common small-`Int` wraps free.
 # The shared `0`/`1`/`-1` boxes `AnyNumbers._wrap` returns for `Int` results;

@@ -103,7 +103,7 @@ end
 """
     $TYPEDSIGNATURES
 
-Compare two `AddMul` `coeff` fields or `ACDict` values `a` and `b`, honoring
+Compare two `AddMul` `coeff` fields or `ACDictInner` values `a` and `b`, honoring
 `full` (the `COMPARE_FULL` type-sensitivity mode) the way `isequal_bsimpl`'s
 structural rules do. Differing `is_concrete` flags imply differing stored
 types, so they can only match in non-full mode.
@@ -134,10 +134,10 @@ the keys are hashed with `full=false` but the current comparison is with `full=t
 `full` is a boolean which should be the current value of `COMPARE_FULL[]`. Passing it
 allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
 """
-isequal_addmuldict(d1::AnyNumbers.AnyNumberDict, d2::AnyNumbers.AnyNumberDict, full::Bool) =
+isequal_addmuldict(d1::ACDict, d2::ACDict, full::Bool) =
     isequal_addmuldict(parent(d1), parent(d2), full)
 
-function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full::Bool) where {T}
+function isequal_addmuldict(d1::ACDictInner{T}, d2::ACDictInner{T}, full::Bool) where {T}
     full || return isequal(d1, d2)
     d1 === d2 && return true
     length(d1) == length(d2) || return false
@@ -441,10 +441,10 @@ the first `ADDMULDICT_HASH_LIMIT` entries densely, then those at the
 exponentially-spread positions `n, n-1, n-3, n-7, ...` of one forward iteration,
 mirroring `hash_argsvec`.
 """
-hash_addmuldict(d::AnyNumbers.AnyNumberDict, h::UInt, full::Bool) =
+hash_addmuldict(d::ACDict, h::UInt, full::Bool) =
     hash_addmuldict(parent(d), h, full)
 
-function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
+function hash_addmuldict(d::ACDictInner, h::UInt, full::Bool)
     hv = Base.hasha_seed % UInt
     n = length(d)
     h = hash(n, h)

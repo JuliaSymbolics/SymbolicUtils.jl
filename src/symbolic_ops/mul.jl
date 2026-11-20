@@ -181,15 +181,15 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
 end
 
 mutable struct MulWorkerBuffer{T}
-    num_dict::ACDict{T}
-    den_dict::ACDict{T}
+    num_dict::ACDictInner{T}
+    den_dict::ACDictInner{T}
     const num_coeff::Base.RefValue{AnyNumbers.AnyNumber}
     const den_coeff::Base.RefValue{AnyNumbers.AnyNumber}
     busy::Bool
 end
 
 function MulWorkerBuffer{T}() where {T}
-    MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(),
+    MulWorkerBuffer{T}(ACDictInner{T}(), ACDictInner{T}(),
                        Ref{AnyNumbers.AnyNumber}(_ANY_ONE),
                        Ref{AnyNumbers.AnyNumber}(_ANY_ONE), false)
 end
@@ -287,7 +287,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         num = Mul{T}(num_coeff[], num_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match num begin
             BSImpl.AddMul(; dict) && if parent(dict) === num_dict end => begin
-                mwb.num_dict = ACDict{T}()
+                mwb.num_dict = ACDictInner{T}()
             end
             _ => nothing
         end
@@ -300,7 +300,7 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
         den = Mul{T}(den_coeff[], den_dict; type = safe_eltype(type)::TypeT)::BasicSymbolic{T}
         @match den begin
             BSImpl.AddMul(; dict) && if parent(dict) === den_dict end => begin
-                mwb.den_dict = ACDict{T}()
+                mwb.den_dict = ACDictInner{T}()
             end
             _ => nothing
         end

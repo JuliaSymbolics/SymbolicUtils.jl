@@ -86,28 +86,27 @@ unwrap_args(args::ROArgsT) = args
 """
     $TYPEDSIGNATURES
 
-Convert a dictionary into the `AnyNumbers.AnyNumberDict` wrapping an
-`ACDict{T}` that `AddMul` stores.
+Convert a dictionary into the `ACDict{T}` that `AddMul` stores.
 
 # Arguments
 - `::Type{T}`: The `SymVariant` type (`SymReal`, `SafeReal`, or `TreeReal`)
 - `dict::AbstractDict`: Dictionary to convert
 
 # Returns
-- The input if already an `AnyNumberDict` over `ACDict{T}`
-- An `AnyNumberDict` over the input if it is an `ACDict{T}`
-- An `AnyNumberDict` over a new `ACDict{T}` populated with all key-value
+- The input if already an `ACDict{T}`
+- An `ACDict{T}` over the input if it is an `ACDictInner{T}`
+- An `ACDict{T}` over a new `ACDictInner{T}` populated with all key-value
   pairs otherwise
 """
 function parse_dict(::Type{T}, dict::AbstractDict) where {T}
     if dict isa AnyNumbers.AnyNumberDict
         inner = parent(dict)
-        inner isa ACDict{T} && return dict
+        inner isa ACDictInner{T} && return dict
         dict = inner
-    elseif dict isa ACDict{T}
+    elseif dict isa ACDictInner{T}
         return AnyNumbers.AnyNumberDict(dict)
     end
-    _dict = ACDict{T}()
+    _dict = ACDictInner{T}()
     for (k, v) in dict
         _dict[k] = v
     end
@@ -434,7 +433,7 @@ Internal constructor for addition and multiplication expressions.
 
 # Arguments
 - `coeff`: The leading coefficient (for addition) or coefficient (for multiplication)
-- `dict`: Dictionary mapping terms to their coefficients/exponents (normalized to `ACDict{T}`)
+- `dict`: Dictionary mapping terms to their coefficients/exponents (normalized to `ACDict{T}` by `parse_dict`)
 - `variant::AddMulVariant.T`: Either `AddMulVariant.ADD` or `AddMulVariant.MUL`
 - `metadata`: Optional metadata dictionary (default: `nothing`)
 - `type`: The result type of the operation (required keyword argument)

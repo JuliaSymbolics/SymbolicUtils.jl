@@ -142,7 +142,7 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                     if _isone(coeff)
                         return Term{T}(^, ArgsT{T}((newmul, b)); shape, type)
                     else
-                        return BSImpl.AddMul{T}(coeff, ACDict{T}(newmul => b), AddMulVariant.MUL; shape, type)
+                        return BSImpl.AddMul{T}(coeff, ACDictInner{T}(newmul => b), AddMulVariant.MUL; shape, type)
                     end
                     # return mul_worker(T, (coeff, newpow))
                 else

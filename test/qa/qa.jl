@@ -43,7 +43,7 @@ run_qa(
     # interface; the underlying representations are owned by DynamicPolynomials.
     reexports_allow = (
         :arguments, :iscall, :operation, :sorted_arguments,
-        :ACDict, :MonomialOrder, :MonomialT, :PolyCoeffT, :PolyVarOrder,
+        :ACDict, :ACDictInner, :MonomialOrder, :MonomialT, :PolyCoeffT, :PolyVarOrder,
         :PolyVarT, :PolynomialT, :ROArgsT, :TypeT,
     ),
 )

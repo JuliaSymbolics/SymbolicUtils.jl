@@ -233,7 +233,7 @@ end
 # JuliaSymbolics packages. They are intentionally public without being exported:
 # ordinary users should prefer the higher-level constructors and transformations.
 @public <ₑ, @cache, @map_methods, @mapreduce_methods, @number_methods, number_methods
-@public ACDict, AddMulVariant, ArgsT, BSImpl, BasicSymbolicImpl, Const, Div
+@public ACDict, ACDictInner, AddMulVariant, ArgsT, BSImpl, BasicSymbolicImpl, Const, Div
 @public MetadataT, MonomialOrder, MonomialT, Mul, Operator, PolyCoeffT, PolyVarOrder
 @public PolyVarT, PolynomialT, ROArgsT, Rule, StableIndex, Substituter, SymBroadcast
 @public TypeT, _indexed_ndims, _isone, _iszero, basicsymbolic_to_polyvar, clear_cache!

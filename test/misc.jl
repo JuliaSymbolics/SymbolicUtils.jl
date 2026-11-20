@@ -288,7 +288,8 @@ end
     dict = Base.ImmutableDict(x => 1, y => 2)
     result = SymbolicUtils.parse_dict(SymbolicUtils.SymReal, dict)
     @test result isa SymbolicUtils.AnyNumbers.AnyNumberDict
-    @test parent(result) isa SymbolicUtils.ACDict{SymbolicUtils.SymReal}
+    @test result isa SymbolicUtils.ACDict{SymbolicUtils.SymReal}
+    @test parent(result) isa SymbolicUtils.ACDictInner{SymbolicUtils.SymReal}
     @test isequal(result, dict)
 end
 

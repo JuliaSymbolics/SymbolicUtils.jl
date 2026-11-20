@@ -413,7 +413,7 @@ Return `true` if `x` "looks negative": a negative number, a Mul with a
 negative numeric coefficient, or an Add with more negative terms than
 positive ones.
 
-For `ADD`, `dict` (an `ACDict`, i.e. a plain `Dict`) has no deterministic
+For `ADD`, the `Dict` wrapped in `dict` (an `ACDict`) has no deterministic
 iteration order, so instead of picking out a single "leading term" we take a
 majority vote over the sign of every term (including the constant `coeff`,
 if nonzero): `x` is treated as negative if strictly more terms are negative

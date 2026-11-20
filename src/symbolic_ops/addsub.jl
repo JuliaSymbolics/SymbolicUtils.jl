@@ -46,11 +46,11 @@ end
 end
 
 mutable struct AddWorkerBuffer{T}
-    dict::ACDict{T}
+    dict::ACDictInner{T}
     busy::Bool
 end
 
-AddWorkerBuffer{T}() where {T} = AddWorkerBuffer{T}(ACDict{T}(), false)
+AddWorkerBuffer{T}() where {T} = AddWorkerBuffer{T}(ACDictInner{T}(), false)
 
 Base.empty!(awb::AddWorkerBuffer) = empty!(awb.dict)
 
@@ -124,7 +124,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                         AddMulVariant.ADD => begin
                             newcoeff = newcoeff .+ coeff
                             inner = parent(dict)
-                            if isempty(result) && inner isa ACDict{T}
+                            if isempty(result) && inner isa ACDictInner{T}
                                 # No keys can collide: seed the result with a
                                 # bulk copy instead of probing every entry.
                                 _dict_copy_into!(result, inner)
@@ -184,7 +184,7 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
     end
     var = Add{T}(newcoeff, result; type, shape)::BasicSymbolic{T}
     @match var begin
-        BSImpl.AddMul(; dict) && if parent(dict) === result end => (awb.dict = ACDict{T}())
+        BSImpl.AddMul(; dict) && if parent(dict) === result end => (awb.dict = ACDictInner{T}())
         _ => nothing
     end
     return var

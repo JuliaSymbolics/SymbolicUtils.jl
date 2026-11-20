@@ -246,11 +246,11 @@ end
 end
 
 @testset "AnyNumberDict" begin
-    using SymbolicUtils: ACDict, SymReal, BSImpl, MData
+    using SymbolicUtils: ACDict, ACDictInner, SymReal, BSImpl, MData
     ANDict = ANM.AnyNumberDict
     @syms a b
 
-    inner = ACDict{SymReal}(a => AN(2), b => AN(3))
+    inner = ACDictInner{SymReal}(a => AN(2), b => AN(3))
     d = ANDict(inner)
     @test d isa AbstractDict
     @test valtype(d) === Number
@@ -279,16 +279,20 @@ end
     @test isempty(d) && isempty(inner)
 
     # equality against raw dictionaries
-    d = ANDict(ACDict{SymReal}(a => 1, b => 2))
+    d = ANDict(ACDictInner{SymReal}(a => 1, b => 2))
     @test d == Dict(a => 1, b => 2)
-    @test d == ACDict{SymReal}(a => AN(1), b => AN(2))
+    @test d == ACDictInner{SymReal}(a => AN(1), b => AN(2))
+    @test d == ACDict{SymReal}(a => 1, b => 2)
     @test isequal(d, Dict(a => 1, b => 2))
     @test copy(d) isa ANDict
     @test Dict(d) isa Dict && Dict(d)[a] === 1
 
     # AddMul stores the wrapper; outward reads are raw, parent is the AN dict
     e = 2a + 3b + 4
+    @test e.dict isa ACDict{SymReal}
+    @test typeof(e.dict) === ACDict{SymReal}
     @test e.dict isa ANDict
+    @test parent(e.dict) isa ACDictInner{SymReal}
     @test all(v -> v isa Int, values(e.dict))
     @test all(v -> v isa AN, values(parent(e.dict)))
     @test e.dict == Dict(a => 2, b => 3)

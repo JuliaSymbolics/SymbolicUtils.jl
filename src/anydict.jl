@@ -19,6 +19,10 @@ struct AnyNumberDict{K, D <: AbstractDict{K, AnyNumber}} <: AbstractDict{K, Numb
 end
 
 AnyNumberDict(d::AnyNumberDict) = d
+AnyNumberDict{K, D}(kvs::Pair...) where {K, D <: AbstractDict{K, AnyNumber}} =
+    AnyNumberDict{K, D}(D(kvs...))
+AnyNumberDict{K, D}(kv::Pair) where {K, D <: AbstractDict{K, AnyNumber}} =
+    AnyNumberDict{K, D}(D(kv))
 function AnyNumberDict(d::AbstractDict{K}) where {K}
     if d isa AbstractDict{K, AnyNumber}
         return AnyNumberDict{K, typeof(d)}(d)

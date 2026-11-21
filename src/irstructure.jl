@@ -946,9 +946,6 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     # break `IRStructure` invariants. `ir.definition` already contains `new`,
     # so after this function it would point to `old`, and the index it used
     # to point to would also contain `new` but not be referred to in `definition`.
-    # To fix this, we simply add metadata to `new`. A fresh `Ref` is unique by
-    # identity, so it makes `new` unique even if there are additional
-    # `replace_node!` calls with the same `new`.
     if haskey(ir, new)
         if isconst(new)
             # We can't `setmetadata` on `Const`

@@ -946,22 +946,18 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     # break `IRStructure` invariants. `ir.definition` already contains `new`,
     # so after this function it would point to `old`, and the index it used
     # to point to would also contain `new` but not be referred to in `definition`.
-    # To fix this, we simply add metadata to `new`. A fresh `gensym` makes `new`
-    # unique even if there are additional `replace_node!` calls with the same `new`.
+    # To fix this, we simply add metadata to `new`. A fresh `Ref` is unique by
+    # identity, so it makes `new` unique even if there are additional
+    # `replace_node!` calls with the same `new`.
     if haskey(ir, new)
-        tag = gensym(:replace_node)
         if isconst(new)
             # We can't `setmetadata` on `Const`
             new = BSImpl.Term{T}(
                 identity, ArgsT{T}((new,));
-                type = symtype(new), shape = shape(new),
-                metadata = Base.ImmutableDict(
-                    Base.ImmutableDict{DataType, Any}(),
-                    typeof(replace_node!) => tag
-                )
+                type = symtype(new), shape = shape(new)
             )
         end
-        new = setmetadata(new, typeof(replace_node!), tag)
+        new = setmetadata(new, typeof(replace_node!), Ref(nothing))
     end
     ir.symbols[idx] = new
     delete!(ir.definition, old)

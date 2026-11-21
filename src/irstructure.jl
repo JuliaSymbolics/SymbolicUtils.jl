@@ -932,7 +932,9 @@ Replace the expression `old` in `ir` with the expression `new`. `old` must alrea
 Note that this is not symbolic substitution, since any expressions that depend on `old` will not
 be updated. This will simply update the internal graph data structure such that the expression
 at `old` is now `new`, and the arguments of `new` form the out-neighbors of the vertex. This breaks
-the canonical form of `ir`.
+the canonical form of `ir`: the indices of expressions that depend on `old` are added to
+`ir.non_canonical_idxs`. If `new` already exists in `ir`, a variant of it tagged with metadata is
+stored instead, so the two indices stay distinct.
 """
 function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
     idx = ir[old]

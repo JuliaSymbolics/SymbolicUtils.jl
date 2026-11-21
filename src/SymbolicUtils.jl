@@ -225,7 +225,7 @@ end
 @public fntype_ret_type
 @public FnType
 @public Mapper, Mapreducer, array_literal
-@public infer_vartype, search_variables!
+@public infer_vartype, search_variables!, replace_node!
 
 # These names form the developer interface consumed by Symbolics.jl and related
 # JuliaSymbolics packages. They are intentionally public without being exported:

@@ -300,6 +300,10 @@ end
 end
 
 @testset "`replace_node!`" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils, :replace_node!)
+    end
+
     @testset "Leaf replacement" begin
         # Replacing a leaf: edges unchanged (early return after symbol update)
         ir = IRStructure{SymReal}()

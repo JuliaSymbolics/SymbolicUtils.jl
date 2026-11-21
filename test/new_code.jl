@@ -1516,6 +1516,15 @@ end
     @test remapped isa SparseMatrixCSC && nnz(remapped) == 2 && isequal(nonzeros(remapped), [cos(a), b])
     remapped = last(Code.apply_optimization_rule(ir, sparsevec([2], [sin(a)], 3), rule))
     @test remapped isa SparseVector && nnz(remapped) == 1 && isequal(nonzeros(remapped), [cos(a)])
+    upper = last(Code.apply_optimization_rule(ir, UpperTriangular([sin(a) b; b a]), rule))
+    @test upper isa UpperTriangular && isequal(parent(upper), [cos(a) b; b a])
+    lower = last(Code.apply_optimization_rule(ir, LowerTriangular([sin(a) b; b a]), rule))
+    @test lower isa LowerTriangular && isequal(parent(lower), [cos(a) b; b a])
+    transposed = last(Code.apply_optimization_rule(ir, transpose(sparse([1, 2], [1, 2], [sin(a), b])), rule))
+    @test transposed isa Transpose{<:Any, <:SparseMatrixCSC} && nnz(parent(transposed)) == 2 && isequal(nonzeros(parent(transposed)), [cos(a), b])
+    viewed = last(Code.apply_optimization_rule(ir, view(sparse([1, 2], [1, 2], [sin(a), b]), :, 1:2), rule))
+    @test viewed isa SubArray && nnz(parent(viewed)) == 2 && isequal(nonzeros(parent(viewed)), [cos(a), b])
+    @test isequal(last(Code.apply_optimization_rule(ir, (x = sin(a), y = b), rule)), (x = cos(a), y = b))
 
     shared = a
     for _ in 1:24

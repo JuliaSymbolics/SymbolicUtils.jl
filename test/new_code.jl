@@ -1484,6 +1484,34 @@ end
     fresh_exp(ir, expr, match) = (new_ir = IRStructure{SymReal}(); populate_ir!(new_ir, exp(a)); (new_ir, expr))
     fresh = OptimizationRule("FreshExp", detect_sin, fresh_exp, 1)
     @test isequal(last(Code.apply_optimization_rule(ir, sin(a), fresh)), sin(a))
+    @test isequal(last(Code.apply_optimization_rule(ir, (sin(a), 1 + sin(a)), rule)), (cos(a), 1 + cos(a)))
+
+    function wrap(ir, expr, matches)
+        new_ir = copy(ir)
+        for m in matches
+            node = new_ir[m.idx]
+            replace_node!(new_ir, node, node + 10)
+        end
+        return new_ir, expr
+    end
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), OptimizationRule("Wrap", detect_sin, wrap, 1))), sin(a) + 10)
+
+    any_match(ir, expr) = [SinMatch(1)]
+    new_root(ir, expr, matches) = (copy(ir), 3 * sin(a))
+    both = [rule, OptimizationRule("NewRoot", any_match, new_root, 2)]
+    @test isequal(last(Code.apply_optimization_rules(ir, sin(a), both)), 3 * sin(a))
+
+    replaced_ir, _ = Code.apply_optimization_rule(ir, sin(a), rule)
+    populate_ir!(replaced_ir, sin(a))
+    keep(ir, expr, matches) = (copy(ir), expr)
+    @test isequal(last(Code.apply_optimization_rule(replaced_ir, sin(a) + 2a, OptimizationRule("Keep", any_match, keep, 1))), sin(a) + 2a)
+
+    shared = a
+    for _ in 1:24
+        shared = sin(shared) + cos(shared)
+    end
+    Code.apply_optimization_rule(ir, sin(a) + 2a, rule)
+    @test (@elapsed Code.apply_optimization_rule(ir, shared, rule)) < 1
 end
 
 detect_let(expr::Code.Let, state) = map(SinMatch, eachindex(expr.pairs))

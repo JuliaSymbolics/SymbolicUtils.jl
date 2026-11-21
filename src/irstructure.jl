@@ -932,9 +932,9 @@ Replace the expression `old` in `ir` with the expression `new`. `old` must alrea
 Note that this is not symbolic substitution, since any expressions that depend on `old` will not
 be updated. This will simply update the internal graph data structure such that the expression
 at `old` is now `new`, and the operation (if symbolic) and arguments of `new` form the
-out-neighbors of the vertex. This breaks the canonical form of `ir`: the indices of the direct
-users of `old` are added to `ir.non_canonical_idxs`. If `new` already exists in `ir`, metadata
-holding the index of `old` is applied to the replacement before storage; constants are first
+out-neighbors of the vertex. This can break the canonical form of `ir`: the indices of the
+direct users of `old` are added to `ir.non_canonical_idxs`. If `new` already exists in `ir`,
+metadata unique to this call is applied to the replacement before storage; constants are first
 wrapped in an `identity` term.
 """
 function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
@@ -946,10 +946,10 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     # break `IRStructure` invariants. `ir.definition` already contains `new`,
     # so after this function it would point to `old`, and the index it used
     # to point to would also contain `new` but not be referred to in `definition`.
-    # To fix this, we simply add metadata to `new`. The index of `old` is unique
-    # in `ir`, so it makes `new` unique even if there are additional
-    # `replace_node!` calls with the same `new`.
+    # To fix this, we simply add metadata to `new`. A fresh `gensym` makes `new`
+    # unique even if there are additional `replace_node!` calls with the same `new`.
     if haskey(ir, new)
+        tag = gensym(:replace_node)
         if isconst(new)
             # We can't `setmetadata` on `Const`
             new = BSImpl.Term{T}(
@@ -957,11 +957,11 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
                 type = symtype(new), shape = shape(new),
                 metadata = Base.ImmutableDict(
                     Base.ImmutableDict{DataType, Any}(),
-                    typeof(replace_node!) => idx
+                    typeof(replace_node!) => tag
                 )
             )
         end
-        new = setmetadata(new, typeof(replace_node!), idx)
+        new = setmetadata(new, typeof(replace_node!), tag)
     end
     ir.symbols[idx] = new
     delete!(ir.definition, old)

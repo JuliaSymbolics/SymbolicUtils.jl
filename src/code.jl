@@ -2160,10 +2160,10 @@ If `options !== nothing` it is passed as a trailing argument to both, so the
 corresponding methods need to accept it.
 
 On an `IRStructure`, the detector is `detector(ir, expr)` and the transformer is
-`transformer(ir, expr, match_data) -> (new_ir, new_expr)`. If the transformer returns the
-`expr` it was given, every node in it that it replaced with
-[`SymbolicUtils.replace_node!`](@ref) is mapped to its replacement; any other returned
-expression is kept as it is.
+`transformer(ir, expr, match_data) -> (new_ir, new_expr)`. Every node of the returned
+`new_expr` that the transformer replaced with [`SymbolicUtils.replace_node!`](@ref) is mapped
+to its replacement. The search goes through arrays, tuples, `MakeTuple`s and the arguments of
+terms that are not in `new_ir`.
 """
 struct OptimizationRule{D, T, O}
     name::String
@@ -2286,7 +2286,20 @@ function remap_root(new_ir::IRStructure, expr)
     isempty(new_ir.replaced) && return expr
     return remap_root(new_ir, expr, IdDict{Any, Any}())
 end
-remap_root(new_ir::IRStructure, expr::Union{AbstractArray, Tuple}, cache) = map(e -> remap_root(new_ir, e, cache), expr)
+function remap_root(new_ir::IRStructure, expr::Union{AbstractArray, Tuple}, cache)
+    new_expr = map(e -> remap_root(new_ir, e, cache), expr)
+    return all(((n, e),) -> n === e, zip(new_expr, expr)) ? expr : new_expr
+end
+function remap_root(new_ir::IRStructure, expr::SparseMatrixCSC, cache)
+    I, J, V = findnz(expr)
+    new_V = remap_root(new_ir, V, cache)
+    return new_V === V ? expr : sparse(I, J, new_V, size(expr)...)
+end
+function remap_root(new_ir::IRStructure, expr::SparseVector, cache)
+    I, V = findnz(expr)
+    new_V = remap_root(new_ir, V, cache)
+    return new_V === V ? expr : SparseArrays.sparsevec(I, new_V, length(expr))
+end
 remap_root(new_ir::IRStructure, expr::MakeTuple, cache) = MakeTuple(remap_root(new_ir, expr.elems, cache))
 remap_root(new_ir::IRStructure, expr, cache) = expr
 function remap_root(new_ir::IRStructure, expr::BasicSymbolic, cache)
@@ -2307,7 +2320,6 @@ function apply_optimization_rule(ir::IRStructure, expr, rules)
     if match_data !== nothing
         empty!(ir.replaced)
         new_ir, new_expr = run_transformer(rules, ir, expr, match_data)
-        new_expr === expr || return new_ir, new_expr
         return new_ir, remap_root(new_ir, new_expr)
     end
 

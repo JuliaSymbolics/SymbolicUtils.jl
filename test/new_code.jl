@@ -1505,6 +1505,17 @@ end
     populate_ir!(replaced_ir, sin(a))
     keep(ir, expr, matches) = (copy(ir), expr)
     @test isequal(last(Code.apply_optimization_rule(replaced_ir, sin(a) + 2a, OptimizationRule("Keep", any_match, keep, 1))), sin(a) + 2a)
+    two_copies(ir, expr, matches) = keep(replace_sin(ir, expr, matches)..., matches)
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a) + 1, OptimizationRule("TwoCopies", detect_sin, two_copies, 1))), cos(a) + 1)
+    extend(ir, expr, matches) = (first(replace_sin(ir, expr, matches)), [expr, b])
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), OptimizationRule("Extend", detect_sin, extend, 1))), [cos(a), b])
+    unchanged = [b, a]
+    @test last(Code.apply_optimization_rule(ir, unchanged, rule)) === unchanged
+
+    remapped = last(Code.apply_optimization_rule(ir, sparse([1, 2], [1, 2], [sin(a), b]), rule))
+    @test remapped isa SparseMatrixCSC && nnz(remapped) == 2 && isequal(nonzeros(remapped), [cos(a), b])
+    remapped = last(Code.apply_optimization_rule(ir, sparsevec([2], [sin(a)], 3), rule))
+    @test remapped isa SparseVector && nnz(remapped) == 1 && isequal(nonzeros(remapped), [cos(a)])
 
     shared = a
     for _ in 1:24

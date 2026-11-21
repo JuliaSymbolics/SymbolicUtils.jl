@@ -66,7 +66,7 @@ struct IRStructure{T}
     non_canonical_idxs::BitSet
     """
     Map from each expression removed by [`SymbolicUtils.replace_node!`](@ref) to the index
-    it was replaced at, since the last optimization rule was applied. `copy` starts it empty.
+    it was replaced at, since the last optimization rule was applied.
     """
     replaced::IdDict{BasicSymbolic{T}, Int32}
 end
@@ -209,7 +209,7 @@ function Base.copy(ir::IRStructure{T}) where {T}
         copy(ir.cached_mask),
         copy(ir.cached_idxs),
         copy(ir.non_canonical_idxs),
-        IdDict{BasicSymbolic{T}, Int32}(),
+        copy(ir.replaced),
     )
 end
 

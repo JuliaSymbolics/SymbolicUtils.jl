@@ -590,6 +590,10 @@ end
     @test ir[zidx] !== y # different metadata
     @test ir[ir[zidx]] == zidx
     @test ir[ir[yidx]] == yidx
+    x2idx = populate_ir!(ir, x)
+    replace_node!(ir, x, y)
+    @test ir[ir[x2idx]] == x2idx
+    @test ir[ir[xidx]] == xidx
 
     @testset "`isconst(new)`" begin
         @syms x y z

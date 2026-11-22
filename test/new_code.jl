@@ -810,6 +810,11 @@ end
                 __miscₛᵧₘ0 = var"##cse#1"
             end
         )
+        @syms A[1:2, 1:3]
+        for red in (@arrayop((i,), A[i, j]), @arrayop((i,), A[i, j], j in 1:3))
+            g = eval(Code.fast_toexpr(Func([A], [], red), IRStructure{SymReal}(), Dict()))
+            @test Base.invokelatest(g, reshape(Float64.(1:6), 2, 3)) == [9.0, 12.0]
+        end
     end
 
     @testset "`@arrayop` computes loop-invariant arrays once" begin

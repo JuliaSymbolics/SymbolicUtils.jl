@@ -522,6 +522,11 @@ end
                 end
             ).args[2]
         )
+        @syms A[1:2, 1:3]
+        for red in (@arrayop((i,), A[i, j]), @arrayop((i,), A[i, j], j in 1:3))
+            g = eval(toexpr(Func([A], [], red)))
+            @test Base.invokelatest(g, reshape(Float64.(1:6), 2, 3)) == [9.0, 12.0]
+        end
     end
 end
 

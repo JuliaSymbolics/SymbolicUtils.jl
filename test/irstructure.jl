@@ -300,6 +300,10 @@ end
 end
 
 @testset "`replace_node!`" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils, :replace_node!)
+    end
+
     @testset "Leaf replacement" begin
         # Replacing a leaf: edges unchanged (early return after symbol update)
         ir = IRStructure{SymReal}()
@@ -586,6 +590,16 @@ end
     @test ir[zidx] !== y # different metadata
     @test ir[ir[zidx]] == zidx
     @test ir[ir[yidx]] == yidx
+    x2idx = populate_ir!(ir, x)
+    replace_node!(ir, x, y)
+    @test ir[ir[x2idx]] == x2idx
+    @test ir[ir[xidx]] == xidx
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, [x, y, z])
+    replace_node!(ir, x, y)
+    sub = subset_ir(ir, [z, ir[1], y])
+    replace_node!(sub, z, y)
+    @test [sub[sub[i]] for i in 1:3] == 1:3
 
     @testset "`isconst(new)`" begin
         @syms x y z
@@ -597,6 +611,12 @@ end
         replace_node!(ir, x, r)
         replace_node!(ir, y, r)
         @test operation(ir[yidx]) === identity
+        x2idx = populate_ir!(ir, x)
+        replace_node!(ir, x, r)
+        x3idx = populate_ir!(ir, x)
+        replace_node!(ir, x, r)
+        idxs = [xidx, yidx, x2idx, x3idx]
+        @test [ir[ir[i]] for i in idxs] == idxs
     end
 end
 

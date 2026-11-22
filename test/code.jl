@@ -535,6 +535,8 @@ end
         @test Base.invokelatest(g, [1.0, 2.0, 3.0]) == [1.0]
         g = compiled([x], @arrayop((), x[1], reduce = (-)))
         @test Base.invokelatest(x -> g(x), [1.0, 2.0, 3.0]) == 1.0
+        g = compiled([x], @arrayop((), x[j], reduce = (-)))
+        @test Base.invokelatest(x -> g(x), [1.0, 2.0, 3.0]) == -6.0
     end
 end
 

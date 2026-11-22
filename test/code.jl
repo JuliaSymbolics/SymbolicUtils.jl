@@ -531,6 +531,8 @@ end
         M = reshape(Float64.(1:6), 2, 3)
         g = compiled([A], Code.with_allocator(Returns(fill(77.0, 2, 3)), @arrayop((i, j), A[i, j])))
         @test Base.invokelatest(g, M) == M
+        g = compiled([x], Code.with_allocator(Returns(fill(77.0, 3)), @arrayop((i,), 2x[i], i in 1:3)))
+        @test Base.invokelatest(g, [1.0, 2.0, 3.0]) == [2.0, 4.0, 6.0]
         g = compiled([x], Code.with_allocator(Returns([77.0]), @arrayop((1,), x[1])))
         @test Base.invokelatest(g, [1.0, 2.0, 3.0]) == [1.0]
         g = compiled([x], @arrayop((), x[1], reduce = (-)))

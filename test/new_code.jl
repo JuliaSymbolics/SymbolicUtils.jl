@@ -783,6 +783,13 @@ end
         arr = @arrayop (i,) x[i] * y[i]
         wrapped = Code.with_allocator(ones, arr)
         @test isequal(collect(arr), collect(wrapped))
+        buffer = ones(3)
+        expr = Code.with_allocator(Returns(buffer), arr)
+        f = eval(Code.fast_toexpr(Func([x, y], [], expr), ir, Dict()))
+        for _ in 1:2
+            got = Base.invokelatest(f, [-0.0, 2.0, 3.0], [1.0, 2.0, 2.0])
+            @test isequal(got, [-0.0, 4.0, 6.0])
+        end
         test_repr(
             Code.fast_toexpr(wrapped, ir, Dict()),
             quote
@@ -796,8 +803,7 @@ end
                             local var"##cse#4" = y
                             local var"##cse#5" = var"##cse#4"[_1]
                             local var"##cse#6" = $(*)(var"##cse#3", var"##cse#5")
-                            __accum = $(+)(var"##cse#1"[$(CartesianIndex)(_1)], var"##cse#6")
-                            _ = (var"##cse#1"[$(CartesianIndex)(_1)] = __accum)
+                            _ = (var"##cse#1"[$(CartesianIndex)(_1)] = var"##cse#6")
                         end
                     end
                 end

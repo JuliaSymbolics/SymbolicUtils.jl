@@ -537,7 +537,8 @@ function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
     loopvar_order = unique!(filter(x -> x isa BasicSymbolic{T}, vcat(reverse(x.output_idx), collect(keys(ranges)), collect(keys(new_ranges)))))
 
     if is_array_shape(sh)
-        inner_expr = SetArray(false, outsym, [AtIndex(term(CartesianIndex, x.output_idx...), term(x.reduce, term(getindex, outsym, x.output_idx...), new_expr))])
+        value = all(k -> any(isequal(k), x.output_idx), loopvar_order) ? new_expr : term(x.reduce, term(getindex, outsym, x.output_idx...), new_expr)
+        inner_expr = SetArray(false, outsym, [AtIndex(term(CartesianIndex, x.output_idx...), value)])
     else
         inner_expr = Assignment(outsym, term(x.reduce, outsym, new_expr))
     end

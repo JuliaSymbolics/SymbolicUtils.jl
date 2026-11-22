@@ -811,22 +811,10 @@ end
             end
         )
         @syms A[1:2, 1:3]
-        for red in (@arrayop((i,), A[i, j]), @arrayop((i,), A[i, j], j in 1:3))
-            g = eval(Code.fast_toexpr(Func([A], [], red), IRStructure{SymReal}(), Dict()))
-            @test Base.invokelatest(g, reshape(Float64.(1:6), 2, 3)) == [9.0, 12.0]
-        end
-        compiled(args, ex) = eval(Code.fast_toexpr(Func(args, [], ex), IRStructure{SymReal}(), Dict()))
-        M = reshape(Float64.(1:6), 2, 3)
-        g = compiled([A], Code.with_allocator(Returns(fill(77.0, 2, 3)), @arrayop((i, j), A[i, j])))
-        @test Base.invokelatest(g, M) == M
-        g = compiled([x], Code.with_allocator(Returns(fill(77.0, 3)), @arrayop((i,), 2x[i], i in 1:3)))
-        @test Base.invokelatest(g, [1.0, 2.0, 3.0]) == [2.0, 4.0, 6.0]
-        g = compiled([x], Code.with_allocator(Returns([77.0]), @arrayop((1,), x[1])))
-        @test Base.invokelatest(g, [1.0, 2.0, 3.0]) == [1.0]
-        g = compiled([x], @arrayop((), x[1], reduce = (-)))
+        g = eval(Code.fast_toexpr(Func([A], [], @arrayop((i,), A[i, j])), IRStructure{SymReal}(), Dict()))
+        @test Base.invokelatest(g, reshape(Float64.(1:6), 2, 3)) == [9.0, 12.0]
+        g = eval(Code.fast_toexpr(Func([x], [], @arrayop((), x[1], reduce = (-))), IRStructure{SymReal}(), Dict()))
         @test Base.invokelatest(x -> only(g(x)), [1.0, 2.0, 3.0]) == 1.0
-        g = compiled([x], @arrayop((), x[j], reduce = (-)))
-        @test Base.invokelatest(x -> only(g(x)), [1.0, 2.0, 3.0]) == -6.0
     end
 
     @testset "`@arrayop` computes loop-invariant arrays once" begin

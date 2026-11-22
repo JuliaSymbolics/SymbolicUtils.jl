@@ -527,6 +527,14 @@ end
             g = eval(toexpr(Func([A], [], red)))
             @test Base.invokelatest(g, reshape(Float64.(1:6), 2, 3)) == [9.0, 12.0]
         end
+        compiled(args, ex) = eval(toexpr(Func(args, [], ex)))
+        M = reshape(Float64.(1:6), 2, 3)
+        g = compiled([A], Code.with_allocator(Returns(fill(77.0, 2, 3)), @arrayop((i, j), A[i, j])))
+        @test Base.invokelatest(g, M) == M
+        g = compiled([x], Code.with_allocator(Returns([77.0]), @arrayop((1,), x[1])))
+        @test Base.invokelatest(g, [1.0, 2.0, 3.0]) == [1.0]
+        g = compiled([x], @arrayop((), x[1], reduce = (-)))
+        @test Base.invokelatest(x -> g(x), [1.0, 2.0, 3.0]) == 1.0
     end
 end
 

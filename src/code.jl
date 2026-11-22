@@ -536,11 +536,12 @@ function inplace_expr(x::BasicSymbolic{T}, outsym) where {T}
     new_expr = unidealize_indices(x.expr, ranges, new_ranges)
     loopvar_order = unique!(filter(x -> x isa BasicSymbolic{T}, vcat(reverse(x.output_idx), collect(keys(ranges)), collect(keys(new_ranges)))))
 
+    assign = all(k -> any(isequal(k), x.output_idx), loopvar_order)
     if is_array_shape(sh)
-        value = all(k -> any(isequal(k), x.output_idx), loopvar_order) ? new_expr : term(x.reduce, term(getindex, outsym, x.output_idx...), new_expr)
+        value = assign ? new_expr : term(x.reduce, term(getindex, outsym, x.output_idx...), new_expr)
         inner_expr = SetArray(false, outsym, [AtIndex(term(CartesianIndex, x.output_idx...), value)])
     else
-        inner_expr = Assignment(outsym, term(x.reduce, outsym, new_expr))
+        inner_expr = Assignment(outsym, assign ? new_expr : term(x.reduce, outsym, new_expr))
     end
     merge!(new_ranges, ranges)
     loops = foldl(reverse(loopvar_order), init=inner_expr) do acc, k

@@ -460,13 +460,10 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
     reverse!(loopvar_order)
     ref_expr = Expr(:ref, output_buffer, index_expr)
 
+    declare!(scoped_cs, :__accum, Expr(:call, reducer, ref_expr, inner_result))
+    declare!(scoped_cs, :_, Expr(:(=), ref_expr, :__accum))
+
     merge!(new_ranges, ranges)
-    if all(k -> any(isequal(k), loopvar_order), keys(new_ranges))
-        declare!(scoped_cs, :_, Expr(:(=), ref_expr, inner_result))
-    else
-        declare!(scoped_cs, :__accum, Expr(:call, reducer, ref_expr, inner_result))
-        declare!(scoped_cs, :_, Expr(:(=), ref_expr, :__accum))
-    end
     append!(loopvar_order, keys(new_ranges))
     unique!(loopvar_order)
 

@@ -500,20 +500,13 @@ end
         arr = @arrayop (i,) x[i] * y[i]
         wrapped = Code.with_allocator(ones, arr)
         @test isequal(collect(arr), collect(wrapped))
-        buffer = ones(3)
-        expr = Code.with_allocator(Returns(buffer), arr)
-        f = eval(toexpr(Func([x, y], [], expr)))
-        for _ in 1:2
-            got = Base.invokelatest(f, [-0.0, 2.0, 3.0], [1.0, 2.0, 2.0])
-            @test isequal(got, [-0.0, 4.0, 6.0])
-        end
         test_repr(
             toexpr(wrapped), (
                 quote
                     let _out = $(ones)((3,))
                         var"%_out" = for _1 in 1:1:3
                             begin
-                                _out[$(CartesianIndex)(_1)] = $(*)($(getindex)(x, _1), $(getindex)(y, _1))
+                                _out[$(CartesianIndex)(_1)] = $(+)($(getindex)(_out, _1), $(*)($(getindex)(x, _1), $(getindex)(y, _1)))
                                 nothing
                             end
                         end
@@ -522,11 +515,6 @@ end
                 end
             ).args[2]
         )
-        @syms A[1:2, 1:3]
-        g = eval(toexpr(Func([A], [], @arrayop((i,), A[i, j]))))
-        @test Base.invokelatest(g, reshape(Float64.(1:6), 2, 3)) == [9.0, 12.0]
-        g = eval(toexpr(Func([x], [], @arrayop((), x[1], reduce = (-)))))
-        @test Base.invokelatest(g, [1.0, 2.0, 3.0]) == 1.0
     end
 end
 

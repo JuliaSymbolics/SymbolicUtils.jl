@@ -60,7 +60,8 @@ const POW_RULES = (
     @rule(sqrt((~x)^2) => abs(~x)),
 )
 
-_is_add_or_mul(x) = iscall(x) && (operation(x) === (+) || operation(x) === (*))
+_cartesian_scalar(x) = symtype(x) <: Number && (!iscall(x) || all(_cartesian_scalar, arguments(x)))
+_is_add_or_mul(x) = iscall(x) && (operation(x) === (+) || operation(x) === (*)) && _cartesian_scalar(x)
 
 function _cartesian_parts(x)
     symtype(x) <: Real && return (x, 0)

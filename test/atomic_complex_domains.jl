@@ -100,3 +100,17 @@ using SymbolicUtils
         end
     end
 end
+
+@testset "matrix product projections" begin
+    for V in (SymbolicUtils.SymReal, SymbolicUtils.SafeReal)
+        sh = SymbolicUtils.ShapeVecT((1:2, 1:2))
+        a = SymbolicUtils.Sym{V}(:A; type = Matrix{ComplexF64}, shape = sh)
+        b = SymbolicUtils.Sym{V}(:B; type = Matrix{ComplexF64}, shape = sh)
+        av = ComplexF64[1 + 2im 3 - im; -2 + im 4 + 3im]
+        bv = ComplexF64[2 - im -1 + im; 3 + 2im 1 - im]
+        for f in (real, imag)
+            result = substitute(f(a * b), Dict(a => av, b => bv); fold = Val(true))
+            @test SymbolicUtils.unwrap_const(result) == f.(av * bv)
+        end
+    end
+end

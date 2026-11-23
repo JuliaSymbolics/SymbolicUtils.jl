@@ -30,11 +30,12 @@ rewriters.
 
 """
 module Rewriters
-using TermInterface
+import TermInterface
+import TermInterface: maketerm
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count,
-                      _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT,
-                      Const, SmallV, BSImpl, unwrap_const, BasicSymbolic, isconst
+import SymbolicUtils: iscall, operation, arguments, metadata, node_count,
+                      @manually_scope, COMPARE_FULL, ROArgsT, ArgsT,
+                      Const, unwrap_const, BasicSymbolic
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 """
@@ -45,7 +46,7 @@ A rewriter that always returns `nothing`, indicating no rewrite occurred.
 This is useful as a placeholder or for conditional rewriting patterns.
 
 # Examples
-```julia
+```julia-repl
 julia> Empty()(x)
 nothing
 ```
@@ -68,7 +69,7 @@ A conditional rewriter that applies `yes` if `cond(x)` is true, otherwise applie
 - `no`: The rewriter to apply if the condition is false
 
 # Examples
-```julia
+```julia-repl
 julia> r = IfElse(x -> x > 0, x -> -x, x -> x)
 julia> r(5)  # Returns -5
 julia> r(-3) # Returns -3
@@ -100,7 +101,7 @@ This is equivalent to `IfElse(cond, yes, Empty())`.
 - `yes`: The rewriter to apply if the condition is true
 
 # Examples
-```julia
+```julia-repl
 julia> r = If(x -> x > 0, x -> -x)
 julia> r(5)  # Returns -5
 julia> r(-3) # Returns -3 (unchanged)
@@ -121,7 +122,7 @@ If a rewriter returns `nothing`, the input is passed unchanged to the next rewri
 - `stop_on_match`: If true, stop at the first rewriter that produces a change
 
 # Examples
-```julia
+```julia-repl
 julia> r1 = @rule sin(~x)^2 + cos(~x)^2 => 1
 julia> r2 = @rule sin(2*(~x)) => 2*sin(~x)*cos(~x)
 julia> chain = Chain([r1, r2])
@@ -178,7 +179,7 @@ is restarted with that result as the new input.
 - `rws`: A collection of rewriters to apply
 
 # Examples
-```julia
+```julia-repl
 julia> r1 = @rule ~x + ~x => 2 * ~x
 julia> r2 = @rule 2 * ~x => ~x * 2
 julia> chain = RestartedChain([r1, r2])
@@ -228,7 +229,7 @@ The rewriter is applied repeatedly until the output equals the input
 - `rw`: The rewriter to apply repeatedly
 
 # Examples
-```julia
+```julia-repl
 julia> r = @rule ~x + ~x => 2 * ~x
 julia> fp = Fixpoint(r)
 julia> fp(x + x + x + x)  # Keeps applying until no more changes
@@ -257,14 +258,14 @@ end
     FixpointNoCycle(rw)
 
 `FixpointNoCycle` behaves like [`Fixpoint`](@ref),
-but returns a rewriter which applies `rw` repeatedly until 
-it produces a result that was already produced before, for example, 
-if the repeated application of `rw` produces results `a, b, c, d, b` in order, 
-`FixpointNoCycle` stops because `b` has been already produced. 
+but returns a rewriter which applies `rw` repeatedly until
+it produces a result that was already produced before, for example,
+if the repeated application of `rw` produces results `a, b, c, d, b` in order,
+`FixpointNoCycle` stops because `b` has been already produced.
 """
 struct FixpointNoCycle{C}
     rw::C
-    hist::Vector{UInt64} # vector of hashes for history
+    hist::Vector{UInt} # vector of hashes for history
 end
 
 instrument(x::FixpointNoCycle, f) = Fixpoint(instrument(x.rw, f))
@@ -301,7 +302,7 @@ function instrument(x::Walk{ord, C,F, M,threaded}, f) where {ord,C,F, M,threaded
                                                             x.maketerm)
 end
 
-using .Threads
+import .Threads
 
 
 """
@@ -320,7 +321,7 @@ simplification of subexpressions before the containing expression.
 - `filter`: Function which returns whether to search into a subtree
 
 # Examples
-```julia
+```julia-repl
 julia> r = @rule ~x + ~x => 2 * ~x
 julia> pw = Postwalk(r)
 julia> pw((x + x) * (y + y))  # Simplifies both additions
@@ -349,7 +350,7 @@ transformation of the overall structure before processing subexpressions.
 - `filter`: Function which returns whether to search into a subtree
 
 # Examples
-```julia
+```julia-repl
 julia> r = @rule sin(~x) => cos(~x)
 julia> pw = Prewalk(r)
 julia> pw(sin(sin(x)))  # Transforms outer sin first
@@ -373,7 +374,7 @@ This is useful for making rewriters that preserve the input when no rule applies
 - `rw`: The rewriter to wrap
 
 # Examples
-```julia
+```julia-repl
 julia> r = @rule sin(~x) => cos(~x)
 julia> pt = PassThrough(r)
 julia> pt(sin(x))  # Returns cos(x)
@@ -424,7 +425,7 @@ function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M,
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
-            x = p.rw(x)
+            x = Const{T}(@something(p.rw(x), x))
         end
         if iscall(x) && p.filter(x)
             args = arguments(x)::ROArgsT{T}
@@ -453,12 +454,10 @@ function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M,
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))
             end
         end
-        return ord === :post ? Const{T}(p.rw(x)) : x
+        return ord === :post ? Const{T}(@something(p.rw(x), x)) : x
     else
-        return Const{T}(p.rw(x))
+        return Const{T}(@something(p.rw(x), x))
     end
 end
 
 end # end module
-
-

@@ -1,34 +1,68 @@
 using Pkg, Test, SafeTestsets
 
-@testset begin
-    if haskey(ENV, "SU_BENCHMARK_ONLY")
-        @safetestset "Benchmark" begin include("benchmark.jl") end
-    else
-        if v"1.11" <= VERSION < v"1.12"
-            # as of this comment, `@snoop_inference` on 1.12 has a tendency to never
-            # end. I have kept a REPL going for 24 hours.
-            #
-            # The test is commented out because it behaves weirdly. It fails in CI,
-            # fails differently in Pkg.test locally, and is fine when run as a script.
-            # @safetestset "Precompilation" begin include("precompilation.jl") end
+const GROUP = get(ENV, "GROUP", "Core")
+
+function activate_qa_env()
+    Pkg.activate("qa")
+    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    return Pkg.instantiate()
+end
+
+if GROUP == "Core"
+    @testset "Core" begin
+        if haskey(ENV, "SU_BENCHMARK_ONLY")
+            @safetestset "Benchmark" begin include("benchmark.jl") end
+        else
+            if v"1.11" <= VERSION < v"1.12"
+                # as of this comment, `@snoop_inference` on 1.12 has a tendency to never
+                # end. I have kept a REPL going for 24 hours.
+                #
+                # The test is commented out because it behaves weirdly. It fails in CI,
+                # fails differently in Pkg.test locally, and is fine when run as a script.
+                # @safetestset "Precompilation" begin include("precompilation.jl") end
+            end
+            @safetestset "Basics" begin include("basics.jl") end
+            @safetestset "Thread-safe arguments" begin include("threadsafe_arguments.jl") end
+            @safetestset "ArrayOp" begin include("arrayop.jl") end
+            @safetestset "Constant array indices" begin include("constant_array_indices.jl") end
+            @safetestset "Array reduction cache" begin include("array_reduction_cache.jl") end
+            @safetestset "Empty stable indices" begin
+                include("empty_stable_indices.jl")
+            end
+            @safetestset "Empty slice shapes" begin
+                include("empty_slice_shapes.jl")
+            end
+            @safetestset "ArrayMaker" begin include("arraymaker.jl") end
+            @safetestset "Order" begin include("order.jl") end
+            @safetestset "PolyForm" begin include("polyform.jl") end
+            @safetestset "Rewrite" begin include("rewrite.jl") end
+            @safetestset "Rulesets" begin include("rulesets.jl") end
+            @safetestset "Trig Reduce" begin include("trig_reduce.jl") end
+            @safetestset "Inference" begin include("inference.jl") end
+            @safetestset "Code" begin include("code.jl") end
+            @safetestset "New codegen" begin include("new_code.jl") end
+            @safetestset "Fused broadcast codegen" begin include("fused_broadcast.jl") end
+            @safetestset "Symbolic codegen primitives" begin include("symbolic_codegen_primitives.jl") end
+            @safetestset "CSE" begin include("cse.jl") end
+            @safetestset "Conditionals" begin include("conditionals.jl") end
+            @safetestset "Interface" begin include("interface.jl") end
+            # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed
+            @safetestset "Fuzz" begin include("fuzz.jl") end
+            @safetestset "Adjoints" begin include("adjoints.jl") end
+            @safetestset "Hash Consing" begin include("hash_consing.jl") end
+            @safetestset "Cache macro" begin include("cache_macro.jl") end
+            @safetestset "Recursive utilities" begin include("recursive_utils.jl") end
+            @safetestset "Misc" begin include("misc.jl") end
+            @safetestset "Method library" begin include("methods.jl") end
+            @safetestset "IRStructure" begin include("irstructure.jl") end
+            @safetestset "OrderedDiGraph" begin include("ordereddigraph.jl") end
         end
-        @safetestset "Basics" begin include("basics.jl") end
-        @safetestset "ArrayOp" begin include("arrayop.jl") end
-        @safetestset "Order" begin include("order.jl") end
-        @safetestset "PolyForm" begin include("polyform.jl") end
-        @safetestset "Rewrite" begin include("rewrite.jl") end
-        @safetestset "Rulesets" begin include("rulesets.jl") end
-        @safetestset "Inference" begin include("inference.jl") end
-        @safetestset "Code" begin include("code.jl") end
-        @safetestset "CSE" begin include("cse.jl") end
-        @safetestset "Interface" begin include("interface.jl") end
-        # Disabled until https://github.com/JuliaMath/SpecialFunctions.jl/issues/446 is fixed
-        @safetestset "Fuzz" begin include("fuzz.jl") end
-        @safetestset "Adjoints" begin include("adjoints.jl") end
-        @safetestset "Hash Consing" begin include("hash_consing.jl") end
-        @safetestset "Cache macro" begin include("cache_macro.jl") end
-        @safetestset "Recursive utilities" begin include("recursive_utils.jl") end
-        @safetestset "Misc" begin include("misc.jl") end
-        @safetestset "Method library" begin include("methods.jl") end
     end
+end
+
+if GROUP == "QA"
+    activate_qa_env()
+    @safetestset "SciMLTesting QA" begin include("qa/qa.jl") end
+    @safetestset "AdjView JET" begin include("qa/adjview_jet.jl") end
+    @safetestset "Substitute broadcast JET" begin include("qa/substitute_broadcast_jet.jl") end
 end

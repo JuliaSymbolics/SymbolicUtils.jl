@@ -130,8 +130,8 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Clear the cache for cached function `fn`. This is task specific. Also
-resets the stats.
+Clear the cache for [`SymbolicUtils.@cache`](@ref)d function `fn`. This is task specific.
+Also resets the stats.
 """
 function clear_cache!(fn)
     dict, stats = associated_cache(fn).tlv[]
@@ -213,11 +213,19 @@ The cache is thread-safe and uses TaskLocalValues.jl to maintain a task-specific
 The caching behavior for this function is enabled by default. Use the `enabled` option
 to toggle this.
 
+The `key_filter` option can be used to skip the cache entirely for arguments for
+which caching is not useful. It is called with the positional arguments of the
+function before the cache is consulted; when it returns `false`, the uncached
+implementation is invoked directly and nothing is stored in the cache.
+
+Keyword arguments are forwarded to the cached function and participate in the
+cache key alongside the positional arguments.
+
 See also: [`SymbolicUtils.get_limit`](@ref), [`SymbolicUtils.set_limit!`](@ref),
 [`SymbolicUtils.get_retain_fraction`](@ref), [`SymbolicUtils.set_retain_fraction!`](@ref),
 [`SymbolicUtils.toggle_caching!`](@ref), [`SymbolicUtils.is_caching_enabled`](@ref),
 [`SymbolicUtils.get_stats`](@ref), [`SymbolicUtils.clear_cache!`](@ref),
-[`SymbolicUtils.reset_stats!`].
+[`SymbolicUtils.reset_stats!`](@ref).
 """
 macro cache(args...)
     # the last argument is the function expression, all prior arguments are
@@ -226,10 +234,10 @@ macro cache(args...)
     configargs = Base.front(args)
 
     # parse configuration options
-    config = Dict(:limit => 100_000, :retain_fraction => 0.5, :allow_any_return => false, :enabled => true)
+    config = Dict{Symbol, Any}(:limit => 100_000, :retain_fraction => 0.5, :allow_any_return => false, :enabled => true, :key_filter => nothing)
     for carg in configargs
         if !Meta.isexpr(carg, :(=))
-            throw(ArgumentError("Expected `key = value` syntax, got $carg"))
+            throw(ArgumentError(LazyString("Expected `key = value` syntax, got ", carg)))
         end
         k, v = carg.args
 
@@ -237,7 +245,9 @@ macro cache(args...)
             throw(ArgumentError(
                 "Expected option to be one of $(collect(keys(config))), got $k"))
         end
-        if typeof(v) != typeof(config[k])
+        # `key_filter` is an arbitrary expression evaluated in the caller's scope,
+        # so it cannot be type-checked here.
+        if k !== :key_filter && typeof(v) != typeof(config[k])
             exT = typeof(config[k])
             vT = typeof(v)
             throw(ArgumentError(
@@ -322,16 +332,40 @@ macro cache(args...)
             end
             continue
         end
-            
+
         # use `eval` to get the type because we need to know if it's a `BasicSymbolic`
         T = Base.eval(__module__, Texpr)
         if T <: BasicSymbolic
-            push!(keytypes, SymbolicKey) 
+            push!(keytypes, SymbolicKey)
             push!(keyexprs, :($get_cache_key($argname)))
             valid_key_condition = :($valid_key_condition && !($(Symbol(:key_, length(keyexprs))) isa $CacheSentinel))
         else
             push!(keytypes, T)
             push!(keyexprs, argname)
+        end
+    end
+
+    # `fn.kwargs` holds keyword argument *declarations* (`Expr(:kw, name, default)`,
+    # `Expr(:(::), name, T)` or `Expr(:..., name)` for slurping). Splicing them
+    # into the inner call would pass the default expression instead of the bound
+    # variable, so build `name = name`/`name...` forwarding expressions instead.
+    # Keyword arguments also participate in the cache key.
+    callkwargs = nothing
+    if fn.kwargs !== nothing
+        callkwargs = Any[]
+        for kwarg in fn.kwargs
+            kname = kwarg
+            Meta.isexpr(kname, :kw) && (kname = kname.args[1])
+            Meta.isexpr(kname, :...) && (kname = kname.args[1])
+            Meta.isexpr(kname, :(::)) && (kname = kname.args[1])
+            if Meta.isexpr(kwarg, :...)
+                push!(callkwargs, Expr(:..., kname))
+            else
+                push!(callkwargs, Expr(:kw, kname, kname))
+            end
+            push!(keyexprs, :($get_cache_key($kname)))
+            push!(keytypes, Any)
+            valid_key_condition = :($valid_key_condition && !($(Symbol(:key_, length(keyexprs))) isa $CacheSentinel))
         end
     end
 
@@ -346,6 +380,15 @@ macro cache(args...)
             push!(keyvarsexpr.args, :($kname = $kex))
             keyexprs[i] = kname
         end
+    end
+
+    # The `key_filter` option additionally requires the arguments to pass a
+    # user-provided filter before the cache is consulted. It is called with the
+    # positional arguments of the function.
+    if config[:key_filter] !== nothing
+        filtercall = Expr(:call, config[:key_filter])
+        append!(filtercall.args, argexprs)
+        conditions = :($conditions && $filtercall)
     end
 
     is_singleton_key = false
@@ -402,7 +445,7 @@ macro cache(args...)
     cachector = Expr(:call, structT, tlvctor, config[:limit], config[:retain_fraction], config[:enabled])
 
     # call to the workhorse function
-    innercall = EL.codegen_ast(EL.JLCall(fn.name, argexprs, fn.kwargs))
+    innercall = EL.codegen_ast(EL.JLCall(fn.name, argexprs, callkwargs))
 
     # wrapper which takes the name of the cached function
     wrapperfn = EL.JLFunction(; name = name, args = fn.args, kwargs = fn.kwargs)
@@ -447,7 +490,7 @@ macro cache(args...)
     return quote
         $(EL.codegen_ast(structdef))
         $(EL.codegen_ast(filterfn))
-        
+
         const $cachename = $cachector
 
         $(EL.codegen_ast(fn))

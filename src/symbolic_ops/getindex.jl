@@ -1,8 +1,18 @@
+"""
+    _indexed_ndims(index_types...)
+
+Return the number of array dimensions selected by a tuple of index types.
+Integer and scalar indices consume no dimensions, while `Colon` and integer
+vectors consume one. Invalid index types throw `ArgumentError`.
+
+This helper is part of the developer indexing interface used by
+`promote_symtype(getindex, ...)`.
+"""
 @inline _indexed_ndims() = 0
 @inline _indexed_ndims(::Type{T}, rest...) where {T <: Integer} = _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{<:AbstractVector{<:Integer}}, rest...) = 1 + _indexed_ndims(rest...)
 @inline _indexed_ndims(::Type{Colon}, rest...) = 1 + _indexed_ndims(rest...)
-@inline _indexed_ndims(::Type{T}, rest...) where {T} = throw(ArgumentError("Invalid index type $T."))
+@inline _indexed_ndims(::Type{T}, rest...) where {T} = throw(ArgumentError(LazyString("Invalid index type ", T, ".")))
 
 function promote_symtype(::typeof(getindex), ::Type{T}, Ts::Vararg{Any, N}) where {N, eT, T <: AbstractArray{eT, N}}
     nD = _indexed_ndims(Ts...)
@@ -33,15 +43,11 @@ end
 end
 
 @noinline function throw_index_larger_than_shape(i, ii, shi)
-    throw(ArgumentError("""
-    Tried to index array whose `$i`th dimension has shape $shi with index $ii.
-    """))
+    throw(ArgumentError(LazyString("Tried to index array whose `", i, "`th dimension has shape ", shi, " with index ", ii, ".")))
 end
 
 @noinline function throw_not_array(x)
-    throw(ArgumentError("""
-    Cannot call `getindex` on non-array symbolics - found array of shape $x.
-    """))
+    throw(ArgumentError(LazyString("Cannot call `getindex` on non-array symbolics - found array of shape ", x, ".")))
 end
 
 function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
@@ -52,8 +58,9 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeVecT...)
     result = ShapeVecT()
     for (i, idx) in enumerate(shidxs)
         isempty(idx) && continue
-        idx[1] == 1:0 && sharr isa Unknown && throw_no_unknown_colon()
-        ii = idx[1] == 1:0 ? sharr[i] : 1:length(idx[1])
+        iscolon = idx[1] === COLON_AXIS
+        iscolon && sharr isa Unknown && throw_no_unknown_colon()
+        ii = iscolon ? sharr[i] : 1:length(idx[1])
         push!(result, ii)
         if sharr isa ShapeVecT && length(ii) > length(sharr[i])
             throw_index_larger_than_shape(i, ii, sharr[i])
@@ -67,7 +74,15 @@ function promote_shape(::typeof(getindex), sharr::ShapeT, shidxs::ShapeT...)
     throw(ArgumentError("Cannot use arrays of unknown size for indexing."))
 end
 
-Base.@propagate_inbounds function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+function Base.getindex(arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+    # Fast path: scalar integer indexing into ArrayOp bypasses @cache (each index is unique).
+    # Guarded on VERSION because calling _getindex directly from this Vararg Union method
+    # triggers a segfault in Julia 1.10's codegen (general_use_analysis).
+    @static if VERSION >= v"1.11"
+        if isarrayop(arr) && all(x -> x isa Int, idxs)
+            return _getindex(T, arr, idxs...)
+        end
+    end
     if T === SymReal
         return _getindex_1(arr, idxs...)
     elseif T === SafeReal
@@ -153,6 +168,9 @@ Base.getindex(x::StableIndex, i::Int) = x.idxs[i]
 Base.length(x::StableIndex) = length(x.idxs)
 Base.iterate(x::StableIndex, args...) = iterate(x.idxs, args...)
 Base.eltype(::Type{StableIndex}) = Int
+Base.isequal(a::StableIndex{T}, b::StableIndex{T}) where {T} = isequal(a.idxs, b.idxs)
+const STABLE_INDEX_SEED = 0x47da907bc9126ce1 % UInt
+Base.hash(a::StableIndex, h::UInt) = hash(a.idxs, h) ⊻ STABLE_INDEX_SEED
 
 function Base.to_indices(A, inds, I::Tuple{StableIndex{Int}})
     return (as_linear_idx(axes(A), I[1]),)
@@ -217,9 +235,15 @@ function _stable_getindex_2(arr::BasicSymbolic{SafeReal}, sidxs::StableIndex)
     __stable_getindex(arr, sidxs)
 end
 
+function _throw_arraymaker_out_of_range(x::BasicSymbolic, idx)
+    throw(ArgumentError(LazyString("Index ", idx, " is out of range for `", x, "`.")))
+end
+
 function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {T, I}
     idxs = sidxs.idxs
-    isempty(idxs) && return arr
+    # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+    # Indexing a 0-dim array with no indices extracts its single element.
+    isempty(idxs) && return symtype(arr) <: AbstractArray{<:Any, 0} ? _getindex(T, arr) : arr
     sh = shape(arr)
     if I === Int
         sh = sh::ShapeVecT
@@ -228,13 +252,39 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
             BSImpl.Term(; f, args) && if f === array_literal end => begin
                 return args[1 + as_linear_idx(sh, sidxs)]
             end
+            BSImpl.Term(; f, args) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray end => begin
+                return args[as_linear_idx(sh, sidxs)]
+            end
             BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => begin
                 return args[as_linear_idx(sh, sidxs)]
+            end
+            BSImpl.ArrayMaker(; regions, values) => begin
+                length(sh) == length(idxs) || _throw_cartesian_indexing()
+                @union_split_smallvec regions @union_split_smallvec values @union_split_smallvec idxs begin
+                    for (reg, val) in Iterators.reverse(zip(regions, values))
+                        @union_split_smallvec reg begin
+                            all(splat(in), zip(idxs, reg)) || continue
+                            new_idxs = SmallV{Int}()
+                            sizehint!(new_idxs, length(idxs))
+                            for (idx, ax) in zip(idxs, reg)
+                                push!(new_idxs, idx - first(ax) + 1)
+                            end
+                            return __stable_getindex(val, StableIndex(new_idxs))
+                        end
+                    end
+                    _throw_arraymaker_out_of_range(arr, sidxs)
+                end
             end
             _ => nothing
         end
     end
     @match arr begin
+        BSImpl.Term(; f, args) && if (f === adjoint || f === transpose) && length(args) == 1 &&
+                length(shape(args[1])) == 1 && length(idxs) == 2 &&
+                idxs[1] isa Int && idxs[1] == 1 end => begin
+            element = args[1][idxs[2]]
+            return f(element)
+        end
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
             inner = args[1][sidxs]
             return BSImpl.Term{T}(f, ArgsT{T}((inner,)); type = symtype(inner), shape = ShapeVecT())
@@ -283,7 +333,7 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
                 end
             end
             new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
-            result = substitute(new_expr, subrules; fold = Val{false}(), filterer = !isarrayop)
+            result = substitute(new_expr, subrules; filterer = !isarrayop)
             return result
         end
         _ => begin
@@ -296,13 +346,22 @@ function __stable_getindex(arr::BasicSymbolic{T}, sidxs::StableIndex{I}) where {
     end
 end
 
-Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
+function _getindex(::Type{T}, arr::BasicSymbolic{T}, idxs::Union{BasicSymbolic{T}, Int, AbstractRange{Int}, Colon}...) where {T}
     @match arr begin
         BSImpl.Const(; val) && if all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => return Const{T}(val[unwrap_const.(idxs)...])
         BSImpl.Term(; f) && if f === array_literal && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
             return Const{T}(reshape(@view(arguments(arr)[2:end]), Tuple(size(arr)))[unwrap_const.(idxs)...])
         end
+        BSImpl.Term(; f) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray && all(x -> !(x isa BasicSymbolic{T}) || isconst(x), idxs) end => begin
+            return Const{T}(reshape(arguments(arr), Tuple(size(arr)))[unwrap_const.(idxs)...])
+        end
         BSImpl.Term(; f, args) && if f isa TypeT && f <: CartesianIndex end => return args[idxs...]
+        BSImpl.Term(; f, args) && if (f === adjoint || f === transpose) && length(args) == 1 &&
+                length(shape(args[1])) == 1 && length(idxs) == 2 &&
+                idxs[1] isa Int && idxs[1] == 1 end => begin
+            element = args[1][idxs[2]]
+            return f(element)
+        end
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
             inner = args[1][idxs...]
             return BSImpl.Term{T}(f, ArgsT{T}((inner,)); type = symtype(inner), shape = shape(inner))
@@ -323,7 +382,7 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
                 idx = idxs[idxs_i]
                 idxs_i += 1
                 # special case when `oldidx` is `Colon()`
-                if length(oldidx_sh) == 1 && oldidx_sh[1] == 1:0
+                if unwrap_const(oldidx) isa Colon
                     push!(newargs, Const{T}(idx))
                 elseif idx isa Colon
                     push!(newargs, oldidx)
@@ -333,6 +392,28 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
             end
             @assert idxs_i == length(idxs) + 1
             return BSImpl.Term{T}(f, newargs; type, shape = newshape)
+        end
+        _ => nothing
+    end
+
+    # Fast path: scalar integer indexing into ArrayOp (dominant path during scalarize).
+    @match arr begin
+        BSImpl.ArrayOp(; output_idx, expr, ranges, reduce, term) && if all(x -> x isa Int, idxs) end => begin
+            subrules = Dict{BasicSymbolic{T}, Union{BasicSymbolic{T}, Int}}()
+            for i in 1:length(idxs)
+                outidx = output_idx[i]
+                newidx = idxs[i]::Int
+                if outidx isa BasicSymbolic{T}
+                    if haskey(ranges, outidx)
+                        subrules[outidx] = ranges[outidx][newidx]
+                    else
+                        subrules[outidx] = newidx
+                    end
+                end
+            end
+            new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
+            result = substitute(new_expr, subrules; filterer = !isarrayop)
+            return result
         end
         _ => nothing
     end
@@ -394,15 +475,18 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
             end
             if isempty(new_output_idx)
                 new_expr = reduce_eliminated_idxs(expr, output_idx, ranges, reduce)
-                result = substitute(new_expr, subrules; fold = Val{false}(), filterer = !isarrayop)
+                result = substitute(new_expr, subrules; filterer = !isarrayop)
                 return result
             else
-                new_expr = substitute(expr, subrules; fold = Val{false}(), filterer = !isarrayop)
+                new_expr = substitute(expr, subrules; filterer = !isarrayop)
                 if term !== nothing
                     term = getindex(term, idxs...)
                 end
                 return BSImpl.ArrayOp{T}(new_output_idx, new_expr, reduce, term, new_ranges; type, shape = newshape)
             end
+        end
+        BSImpl.ArrayMaker(;) && if all(Base.Fix2(isa, Int), idxs) end => begin
+            return getindex(arr, StableIndex(SmallV{Int}(idxs)))
         end
         _ => begin
             if is_array_shape(newshape)
@@ -434,7 +518,8 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
                 new_expr = BSImpl.Term{T}(getindex, expr_args; type = eltype(type), shape = ShapeVecT())
                 new_term = BSImpl.Term{T}(getindex, term_args; type, shape = newshape)
                 return BSImpl.ArrayOp{T}(new_output_idx, new_expr, +, new_term, ranges; type, shape = newshape)
-            elseif is_array_shape(sh)
+            # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+            elseif is_array_shape(sh) || symtype(arr) <: AbstractArray{<:Any, 0}
                 return BSImpl.Term{T}(getindex, ArgsT{T}((arr, Const{T}.(idxs)...)); type, shape = newshape)
             else
                 return arr
@@ -443,6 +528,9 @@ Base.@propagate_inbounds function _getindex(::Type{T}, arr::BasicSymbolic{T}, id
     end
 end
 function _getindex(::Type{T}, x::AbstractArray, idxs...) where {T}
-    Const{T}(getindex(x, idxs...))
+    if any(idx -> idx isa BasicSymbolic{T}, idxs)
+        return _getindex(T, Const{T}(x), idxs...)
+    end
+    return Const{T}(getindex(x, idxs...))
 end
 Base.getindex(x::BasicSymbolic{T}, i::CartesianIndex) where {T} = x[Tuple(i)...]

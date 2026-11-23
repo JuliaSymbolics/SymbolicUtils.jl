@@ -14,11 +14,11 @@ can be set using the `::T` syntax.
 # Examples:
 
 - `@syms foo bar::Real baz::Int` will create
-variable `foo` of symtype `Number` (the default), `bar` of symtype `Real`
-and `baz` of symtype `Int`
+  variable `foo` of symtype `Number` (the default), `bar` of symtype `Real`
+  and `baz` of symtype `Int`
 - `@syms f(x) g(y::Real, x)::Int h(a::Int, f(b))` creates 1-arg `f` 2-arg `g`
-and 2 arg `h`. The second argument to `h` must be a one argument function-like
-variable. So, `h(1, g)` will fail and `h(1, f)` will work.
+  and 2 arg `h`. The second argument to `h` must be a one argument function-like
+  variable. So, `h(1, g)` will fail and `h(1, f)` will work.
 
 # Formal syntax
 
@@ -230,9 +230,13 @@ Base.@nospecializeinfer function parse_variable(x; default_type = Number)::Parse
         result = parse_variable(x.args[1]; default_type)
         shape = Expr(:call, ShapeVecT, Expr(:tuple, x.args[2:end]...))
         ntype = result[:type]
-        ndim = length(x.args) - 1
-        if ndim > 0 && Meta.isexpr(x.args[end], :...)
-            ndim = :($(ndim - 1) + length($(x.args[end].args[1])))
+        ndim = 0
+        for i in 2:length(x.args)
+            if Meta.isexpr(x.args[i], :...)
+                ndim = :($(ndim) + length($(x.args[i].args[1])))
+            else
+                ndim = ndim isa Int ? ndim + 1 : :($(ndim) + 1)
+            end
         end
         if Meta.isexpr(ntype, :curly) && ntype.args[1] === FnType
             ntype.args[3] = :($Array{$(ntype.args[3]), $(ndim)})
@@ -352,6 +356,13 @@ struct BS{T} end
     error("Cannot infer `vartype` from array literal - use `BS{T}[...]` instead of `BS[...]`")
 end
 
+@inline function _typed_cat(f, ::Type{BS}, xs...)
+    return f(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+end
+@inline function _typed_cat(f, ::Type{BS{T}}, xs...) where {T}
+    return f(BasicSymbolic{T}, xs...)
+end
+
 @inline function Base.getindex(::Type{BS}, xs...)
     BasicSymbolic{vartype_from_literal(xs...)}[xs...]
 end
@@ -359,41 +370,68 @@ end
     BasicSymbolic{T}[xs...]
 end
 @inline function Base.typed_vcat(::Type{BS}, xs...)
-    Base.typed_vcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+    return _typed_cat(Base.typed_vcat, BS, xs...)
 end
 @inline function Base.typed_vcat(::Type{BS{T}}, xs...) where {T}
-    Base.typed_vcat(BasicSymbolic{T}, xs...)
+    return _typed_cat(Base.typed_vcat, BS{T}, xs...)
 end
-@inline function Base.typed_vcat(::Type{BS}, xs::Number...)
-    Base.typed_vcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
-end
-@inline function Base.typed_vcat(::Type{BS{T}}, xs::Number...) where {T}
-    Base.typed_vcat(BasicSymbolic{T}, xs...)
-end
+@inline Base.typed_vcat(::Type{BS}, xs::Number...) = _typed_cat(Base.typed_vcat, BS, xs...)
+@inline Base.typed_vcat(::Type{BS{T}}, xs::Number...) where {T} = _typed_cat(Base.typed_vcat, BS{T}, xs...)
+@inline Base.typed_vcat(::Type{BS}) = _typed_cat(Base.typed_vcat, BS)
+@inline Base.typed_vcat(::Type{BS{T}}) where {T} = _typed_cat(Base.typed_vcat, BS{T})
 @inline function Base.typed_hcat(::Type{BS}, xs...)
-    Base.typed_hcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
+    return _typed_cat(Base.typed_hcat, BS, xs...)
 end
 @inline function Base.typed_hcat(::Type{BS{T}}, xs...) where {T}
-    Base.typed_hcat(BasicSymbolic{T}, xs...)
+    return _typed_cat(Base.typed_hcat, BS{T}, xs...)
 end
-@inline function Base.typed_hcat(::Type{BS}, xs::Number...)
-    Base.typed_hcat(BasicSymbolic{vartype_from_literal(xs...)}, xs...)
-end
-@inline function Base.typed_hcat(::Type{BS{T}}, xs::Number...) where {T}
-    Base.typed_hcat(BasicSymbolic{T}, xs...)
-end
+@inline Base.typed_hcat(::Type{BS}, xs::Number...) = _typed_cat(Base.typed_hcat, BS, xs...)
+@inline Base.typed_hcat(::Type{BS{T}}, xs::Number...) where {T} = _typed_cat(Base.typed_hcat, BS{T}, xs...)
+@inline Base.typed_hcat(::Type{BS}) = _typed_cat(Base.typed_hcat, BS)
+@inline Base.typed_hcat(::Type{BS{T}}) where {T} = _typed_cat(Base.typed_hcat, BS{T})
 @inline function Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs...)
-    Base.typed_hvcat(BasicSymbolic{vartype_from_literal(xs...)}, dims, xs...)
+    return _typed_cat(Base.typed_hvcat, BS, dims, xs...)
 end
 @inline function Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims, xs...) where {T}
-    Base.typed_hvcat(BasicSymbolic{T}, dims, xs...)
+    return _typed_cat(Base.typed_hvcat, BS{T}, dims, xs...)
 end
-@inline function Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs::Number...)
-    Base.typed_hvcat(BasicSymbolic{vartype_from_literal(xs...)}, dims, xs::Number...)
+@inline Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs::Number...) =
+    _typed_cat(Base.typed_hvcat, BS, dims, xs...)
+@inline Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims, xs::Number...) where {T} =
+    _typed_cat(Base.typed_hvcat, BS{T}, dims, xs...)
+@inline Base.typed_hvcat(::Type{BS}, dims::Base.Dims) = _typed_cat(Base.typed_hvcat, BS, dims)
+@inline Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims) where {T} =
+    _typed_cat(Base.typed_hvcat, BS{T}, dims)
+
+const _AbstractVecOrMat = Union{AbstractVector, AbstractMatrix}
+const _AdjointVectorOrNumber = Union{Number, LinearAlgebra.Adjoint{<:Any, <:AbstractVector}}
+const _TransposeVectorOrNumber = Union{Number, LinearAlgebra.Transpose{<:Any, <:AbstractVector}}
+
+for cat in (:typed_vcat, :typed_hcat)
+    @eval begin
+        @inline Base.$cat(::Type{BS}, x::AbstractArray) = _typed_cat(Base.$cat, BS, x)
+        @inline Base.$cat(::Type{BS{T}}, x::AbstractArray) where {T} = _typed_cat(Base.$cat, BS{T}, x)
+        @inline Base.$cat(::Type{BS}, x::AbstractArray, y::AbstractArray) = _typed_cat(Base.$cat, BS, x, y)
+        @inline Base.$cat(::Type{BS{T}}, x::AbstractArray, y::AbstractArray) where {T} = _typed_cat(Base.$cat, BS{T}, x, y)
+        @inline Base.$cat(::Type{BS}, xs::AbstractArray...) = _typed_cat(Base.$cat, BS, xs...)
+        @inline Base.$cat(::Type{BS{T}}, xs::AbstractArray...) where {T} = _typed_cat(Base.$cat, BS{T}, xs...)
+        @inline Base.$cat(::Type{BS}, xs::_AbstractVecOrMat...) = _typed_cat(Base.$cat, BS, xs...)
+        @inline Base.$cat(::Type{BS{T}}, xs::_AbstractVecOrMat...) where {T} = _typed_cat(Base.$cat, BS{T}, xs...)
+    end
 end
-@inline function Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims, xs::Number...) where {T}
-    Base.typed_hvcat(BasicSymbolic{T}, dims, xs...)
+
+for ArgT in (_AdjointVectorOrNumber, _TransposeVectorOrNumber)
+    @eval begin
+        @inline Base.typed_hcat(::Type{BS}, xs::$ArgT...) = _typed_cat(Base.typed_hcat, BS, xs...)
+        @inline Base.typed_hcat(::Type{BS{T}}, xs::$ArgT...) where {T} = _typed_cat(Base.typed_hcat, BS{T}, xs...)
+    end
 end
+
+@inline Base.typed_hvcat(::Type{BS}, dims::Base.Dims, xs::_AbstractVecOrMat...) =
+    _typed_cat(Base.typed_hvcat, BS, dims, xs...)
+@inline Base.typed_hvcat(::Type{BS{T}}, dims::Base.Dims, xs::_AbstractVecOrMat...) where {T} =
+    _typed_cat(Base.typed_hvcat, BS{T}, dims, xs...)
+
 @inline function Base.typed_hvncat(::Type{BS}, dims::Base.Dims, rf::Bool, xs...)
     Base.typed_hvncat(BasicSymbolic{vartype_from_literal(xs...)}, dims, rf, xs...)
 end
@@ -406,4 +444,3 @@ end
 @inline function Base.typed_hvncat(::Type{BS{T}}, dim::Int, xs...) where {T}
     Base.typed_hvncat(BasicSymbolic{T}, dim, xs...)
 end
-

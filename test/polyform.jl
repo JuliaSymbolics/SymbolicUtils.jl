@@ -1,5 +1,6 @@
 using SymbolicUtils: Term, symtype, unwrap_const, Add, Mul
 using Test, SymbolicUtils
+import Random
 
 include("utils.jl")
 
@@ -67,6 +68,206 @@ end
     @eqtest simplify_fractions((x * y + (1//2) * x) / (2 * x)) == (1//2 + y) / 2
 end
 
+import DynamicPolynomials as DP
+import MultivariatePolynomials as MP
+using SymbolicUtils: PolynomialT, poly_to_gcd_form, MonomialOrder
+
+# `to_poly!` returns `PolynomialT = DP.Polynomial{V,M,Number}` — the
+# coefficient eltype is the abstract `Number`. The previous broadcast form in
+# `poly_to_gcd_form` (`Integer.(coeffs)`, `rationalize.(...)`, `float.(...)`,
+# `(complex ∘ float).(...)`) preserved abstractness whenever the underlying
+# concrete element types were *heterogeneous* — e.g.
+# `Integer.(Number[Int8(1), Int64(-2), Int64(1)])` returns
+# `Vector{Signed}` rather than `Vector{Int64}`. The resulting
+# `DP.Polynomial` then carried an abstract type parameter
+# (`Signed` / `Integer` / `AbstractFloat` / `Real`), and `MP.gcd`'s
+# `isolate_variable` crashed downstream with a
+# `MethodError(Term{T,M} where T, (::Vector{Term{<:Any, M}},))`.
+#
+# Guard: each branch of `poly_to_gcd_form` must return a polynomial with a
+# *concrete* coefficient type even when the input vector is heterogeneous
+# within the relevant numeric kind.
+let v = only(DP.@polyvar __PolyToGcdFormTest__ monomial_order = MonomialOrder)
+    # CRITICAL: build the coefficient vector with the typed-literal form
+    # `Number[Int8(1), Int64(-2), Int64(1)]` rather than going through
+    # `Vector{Number}([…])` — the latter passes through an inner untyped
+    # literal which `promote_type`-normalises to the LUB element type
+    # (collapsing Int8+Int64 down to Int64 before reaching `Vector{Number}`),
+    # so the heterogeneity is gone and the bug doesn't reproduce.
+    function poly_with_coeffs(coeffs::Vector{Number}, monos_template)
+        DP.Polynomial(coeffs, MP.monomials(monos_template))
+    end
+
+    @testset "poly_to_gcd_form gives concrete coefficient eltype" begin
+        @testset "heterogeneous integer kinds (Int8 + Int64)" begin
+            # Pre-fix: `Integer.(Number[Int8(1), Int64(-2), Int64(1)])` →
+            # `Vector{Signed}` → polynomial type parameter `Signed` (abstract).
+            p = poly_with_coeffs(Number[Int8(1), Int64(-2), Int64(1)],
+                                  (1 - v) * (1 - v))   # 1 - 2v + v^2
+            @test p isa PolynomialT
+            g = poly_to_gcd_form(p)
+            T = eltype(MP.coefficients(g))
+            @test isconcretetype(T)
+            @test T <: Integer
+            @test MP.coefficients(g) == [1, -2, 1]
+        end
+
+        @testset "heterogeneous rational kinds (Rational{Int8} + Rational{Int64})" begin
+            p = poly_with_coeffs(Number[Rational{Int8}(1, 2), Rational{Int64}(-1, 3)],
+                                  (1//2 - v))
+            g = poly_to_gcd_form(p)
+            T = eltype(MP.coefficients(g))
+            @test isconcretetype(T)
+            @test T <: Rational
+        end
+
+        @testset "rationals too large for Int64 are not narrowed" begin
+            r = Rational{BigInt}(big(10)^25, 7)
+            g = poly_to_gcd_form(poly_with_coeffs(Number[r, 1], (1 - v)))
+            @test eltype(MP.coefficients(g)) === Rational{BigInt}
+            @test MP.coefficients(g) == [r, 1]
+        end
+
+        @testset "heterogeneous float kinds (Float32 + Float64)" begin
+            p = poly_with_coeffs(Number[Float32(1.5), Float64(-2.5)], (1.5 - v))
+            g = poly_to_gcd_form(p)
+            T = eltype(MP.coefficients(g))
+            @test isconcretetype(T)
+            @test T <: AbstractFloat
+        end
+
+        @testset "heterogeneous complex kinds (ComplexF32 + ComplexF64)" begin
+            p = poly_with_coeffs(Number[ComplexF32(1, 2), ComplexF64(0, 0.5)],
+                                  (1.0 + 2.0im - v))
+            g = poly_to_gcd_form(p)
+            T = eltype(MP.coefficients(g))
+            @test isconcretetype(T)
+            @test T <: Complex
+        end
+
+        @testset "MP.gcd works on heterogeneous-coefficient polynomials" begin
+            # On the buggy version this used to throw
+            # `MethodError(Term{T,M} where T, (::Vector{Term{<:Any, M}},))`
+            # via the `isolate_variable` path inside `multivariate_gcd`.
+            p1 = poly_with_coeffs(Number[Int8(1), Int64(-2), Int64(1)],
+                                   (1 - v) * (1 - v))     # 1 - 2v + v^2
+            p2 = poly_with_coeffs(Number[Int8(1), Int64(-1)],
+                                   (1 + v^2))             # 1 + v^2 (template; coeffs replaced)
+            g1 = poly_to_gcd_form(p1)
+            g2 = poly_to_gcd_form(p2)
+            @test gcd(g1, g2) isa DP.Polynomial
+        end
+
+        @testset "homogeneous Int32 widens to Int64 (32-bit gcd safety)" begin
+            # On 32-bit Julia, integer literals are Int32; homogeneous
+            # `Integer.(::Vector{Int32})` used to keep Int32 and then
+            # `MP.gcd`/`div_multiple` could DivideError (MomentClosure).
+            p = poly_with_coeffs(Number[Int32(1), Int32(-2), Int32(1)],
+                                  (1 - v) * (1 - v))
+            g = poly_to_gcd_form(p)
+            @test eltype(MP.coefficients(g)) === Int64
+            @test gcd(g, g) isa DP.Polynomial
+        end
+
+        @testset "BigInt coefficients beyond typemax(Int) stay exact (#1111)" begin
+            a = big(10)^19
+            p = poly_with_coeffs(Number[a, a], (a + a * v))
+            g = poly_to_gcd_form(p)
+            @test eltype(MP.coefficients(g)) === BigInt
+            @test MP.coefficients(g) == [a, a]
+        end
+    end
+end
+
+@testset "simplify_fractions doesn't crash on heterogeneous coefficients" begin
+    # End-to-end repro of the crash surfaced via SymbolicIntegration.jl's
+    # difficult-test verifier: a `simplify(num/den; expand=true)` whose num/den
+    # both go through `to_poly!` → `safe_gcd` → `poly_to_gcd_form`, where
+    # heterogeneous coefficient types (e.g. integers in `num` mixed with
+    # rationals/floats in `den`) used to send `MP.gcd` into the abstract-eltype
+    # `MethodError` path.
+    @syms x
+
+    # Mix of integer, rational, and float coefficients across num and den.
+    num = (x^4 - x^3 + 2x^2 - x + 2)
+    den = (x - 1) * (x^2 + 2)^2
+    @test simplify_fractions(num / den) isa Any   # just must not throw
+
+    # Float ↔ rational mix.
+    @test simplify_fractions((1.0 + 0.5*x - x^2) / ((1//2)*x^2 - 1)) isa Any
+end
+
+@testset "exact gcd cancellation survives Int64 overflow (#1139)" begin
+    @syms x::Real
+    val(ex, d) = unwrap_const(substitute(ex, d))
+    q(v) = Dict(x => big(v) // 1)
+
+    e = x / (x^2 + 2) + (x^2 + 2)^2 / (x^2 * (x^2 - 2)^2)
+    @testset for expand in (false, true)
+        s = simplify(e; expand)
+        for v in (3 // 10, 19 // 10, -7 // 10, 5 // 2)
+            @test val(s, q(v)) == val(e, q(v))
+        end
+    end
+
+    # Int64 gcd arithmetic overflows here; the true gcd is -3 - x.
+    n = -9 + 9x + x^2 + 2x^3 - 8x^4 - 18x^5 - 5x^6
+    d = 15 - x - 14x^2 + 2x^3 + 17x^4 + 14x^5 - 6x^6 - 3x^7
+    @testset for expand in (false, true)
+        s = simplify(n / d; expand)
+        @test val(s, q(0)) == -3 // 5
+        for v in (3 // 10, 1 // 2, -2 // 5)
+            @test val(s, q(v)) == val(n / d, q(v))
+        end
+        @test val(s, q(-3)) == -921 // 2590
+    end
+
+    B1, B2 = big(2)^70 + 1, big(2)^1100
+    for (e, at1) in (
+            ((B1 * x^2 + (B1 + 1) * x + 1) / (x + 1), B1 + 1),
+            ((B2 * x^2 + 2B2 * x + B2) / (x + 1), 2B2),
+        )
+        @testset for expand in (false, true)
+            s = simplify(e; expand)
+            @test !SymbolicUtils.isdiv(s)
+            @test val(s, Dict(x => 1)) isa Integer
+            @test val(s, Dict(x => 1)) == at1
+            @test val(s, q(3 // 7)) == val(e, q(3 // 7))
+        end
+    end
+
+    rng = Random.MersenneTwister(1139)
+    rpoly(n) = sum(rand(rng, -20:20) * x^i for i in 0:n) + x^(n + 1)
+    for _ in 1:30
+        k = rand(rng, -4:4)
+        a, b = rpoly(rand(rng, 1:6)), rpoly(rand(rng, 1:6))
+        e = expand(a * (x - k)) / expand(b * (x - k))
+        s = simplify(e)
+        for v in (1 // 3, -2 // 7, 5 // 2)
+            iszero(val(b, q(v))) || @test val(s, q(v)) == val(e, q(v))
+        end
+        iszero(val(b, q(k))) || @test val(s, q(k)) == val(a, q(k)) / val(b, q(k))
+    end
+end
+
+@testset "simplify_div with Rational{BigInt} coefficients (#1082)" begin
+    # `to_poly!` keeps whatever concrete coefficient types the expression
+    # carries; `safe_gcd` widens the gcd computation to `Rational{Int64}` via
+    # `poly_to_gcd_form`. `div_multiple` must divide the *converted* partial
+    # polynomials — otherwise it mixes `Rational{BigInt}` and `Rational{Int64}`
+    # inside MutableArithmetics' buffered `sub_mul`, which is unimplemented.
+    @syms x
+    half = big(1) // big(2)
+    # Expanded numerator so `quick_cancel` cannot cancel textually.
+    num = x^2 + (big(3) // big(2)) * x + half
+    den = x + half
+    # Must not throw, and must give the same result as the equivalent
+    # Rational{Int64} coefficient expression.
+    @test isequal(simplify_fractions(num / den),
+                  simplify_fractions((x^2 + (3 // 2) * x + 1 // 2) / (x + 1 // 2)))
+    @test unwrap_const(simplify_fractions(num / num)) == 1
+end
+
 @testset "isone iszero" begin
     @syms a b c d e f g h i
     x = (f + ((((g*(c^2)*(e^2)) / d - e*h*(c^2)) / b + (-c*e*f*g) / d + c*e*i) /
@@ -78,4 +279,66 @@ end
     @test SymbolicUtils.fraction_iszero(x)
     @test !SymbolicUtils.fraction_isone(x)
     @test SymbolicUtils.fraction_isone(o)
+end
+
+@testset "expand with array reductions and callable-struct operations" begin
+    @syms a b x[1:3]
+    s = sum(abs2, x .+ 1)
+    @test isequal(expand(s), s)
+    @test isequal(expand(a * (s + b)), a * s + a * b)
+    @test isequal(expand(s / 3), (1 // 3) * s)
+end
+
+@testset "simplify cancels BigInt coefficients beyond typemax(Int) (#1111)" begin
+    @syms x
+    # Issue MWE: 10^19 exceeds typemax(Int) on both 32- and 64-bit.
+    a = big(10)^19
+    # Safe side of the gate must be derived from typemax(Int): on x86
+    # (Int32) big(10)^18 is already past the bound, so hard-coding 10^18
+    # made `@test safe_isinteger(b)` fail in CI's 32-bit job.
+    b = big(typemax(Int)) ÷ 2
+    @test !SymbolicUtils.safe_isinteger(a)
+    @test SymbolicUtils.safe_isinteger(b)
+    @eqtest simplify((a * x + a) / (a * x)) == (1 + x) / x
+    @eqtest simplify((b * x + b) / (b * x)) == (1 + x) / x
+end
+
+@testset "simplify survives rational coefficients too large for Int64" begin
+    @syms x
+    ex = ((3 + 2x) * (x - (big(10)^25) // 7)^2) / (x + 3 // 2)
+    s = simplify(ex)
+    for v in (3, -5 // 2, big(10)^30)
+        @test unwrap_const(substitute(s, Dict(x => v))) ==
+            unwrap_const(substitute(ex, Dict(x => v)))
+    end
+end
+
+@testset "Rational{Int64} coefficient products that overflow Int64" begin
+    @syms a b
+    big_den = 1_000_000_000_000
+    ex = ((1 // 3) * a + (1 // big_den) * b)^2 / (a + b)
+    @test isequal(simplify(ex), ex)
+    @test isequal(simplify_fractions(ex), ex)
+
+    e = expand(((1 // 3) * a + (1 // big_den) * b)^2)
+    @test isequal(e, (1 // 9) * a^2 + (2 // (3big_den)) * a * b + (1 // big(big_den)^2) * b^2)
+
+    @syms c
+    const_types(ex) = Set(
+        typeof(unwrap_const(x)) for t in arguments(ex)
+            for x in (iscall(t) ? arguments(t) : (t,)) if SymbolicUtils.isconst(x)
+    )
+    mixed = expand((0.5c + (1 // 3) * a + (1 // big_den) * b)^2)
+    @test !any(T -> T <: Union{BigFloat, Complex{BigFloat}}, const_types(mixed))
+    @test Float64 in const_types(mixed)
+    user_big = expand((big(1) / 3 * c + (1 // 3) * a + (1 // big_den) * b)^2)
+    @test BigFloat in const_types(user_big)
+
+    num = expand((a + (1 // big_den) * b)^2 * (a - b))
+    s = simplify_fractions(num / (a + (1 // big_den) * b))
+    @test !occursin("a + (1//1000000000000)*b", repr(s))
+    for (va, vb) in ((2, 3), (-1 // 5, 7), (big(10)^13, 1))
+        @test unwrap_const(substitute(s, Dict(a => va, b => vb))) ==
+            (va + vb // big(big_den)) * (va - vb)
+    end
 end

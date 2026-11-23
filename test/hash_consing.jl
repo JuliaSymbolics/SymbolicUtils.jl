@@ -1,13 +1,28 @@
 using SymbolicUtils, Test
 using SymbolicUtils: Term, Add, Mul, Div, metadata, BasicSymbolic, PolyCoeffT, ACDict
+using SymbolicUtils: Fill, Mapper, Mapreducer, ShapeVecT, SymReal
 import MultivariatePolynomials as MP
 import TermInterface
 
-hash2(a) = SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true hash(a)
+include("equality_memo.jl")
+
 isequal2(a, b) = SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true isequal(a, b)
+
+const BSImpl = SymbolicUtils.BasicSymbolicImpl
 
 struct Ctx1 end
 struct Ctx2 end
+
+struct ThrowingEqualityScalar
+    tag::Symbol
+    value::Int
+end
+
+Base.hash(x::ThrowingEqualityScalar, h::UInt) = hash(x.value, h)
+function Base.isequal(a::ThrowingEqualityScalar, b::ThrowingEqualityScalar)
+    a.tag === b.tag && return isequal(a.value, b.value)
+    throw(ArgumentError("incomparable scalar tags"))
+end
 
 @testset "Sym" begin
     x1 = only(@syms x)
@@ -37,10 +52,10 @@ end
     t1 = sin(a)
     t2 = sin(a)
     @test t1.id === t2.id
-    t3 = Term{SymReal}(identity,[a])
-    t4 = Term{SymReal}(identity,[a])
+    t3 = Term{SymReal}(identity, [a])
+    t4 = Term{SymReal}(identity, [a])
     @test t3.id === t4.id
-    t5 = Term{SymReal}(identity,[a]; type = Int)
+    t5 = Term{SymReal}(identity, [a]; type = Int)
     @test t3.id !== t5.id
     tm1 = setmetadata(t1, Ctx1, "meta_1")
     @test t1.id !== tm1.id
@@ -51,43 +66,59 @@ end
     d2 = b + a
     @test d1.id === d2.id
     d3 = b - 2 + a
-    d4 = a + b  - 2
+    d4 = a + b - 2
     @test d3.id === d4.id
     d5 = Add{SymReal}(0, ACDict{SymReal}(a => 1, b => 1); type = Int)
     @test d5.id !== d1.id
 
-    dm1 = setmetadata(d1,Ctx1,"meta_1")
+    dm1 = setmetadata(d1, Ctx1, "meta_1")
     @test d1.id !== dm1.id
+
+    # Dict value types must distinguish Int from Rational under full compare/hash,
+    # so simplify can replace n//1 coefficients without colliding on the stale object.
+    @syms p q
+    add_rat = (2 // 1) * p + (3 // 1) * q
+    add_int = 2 * p + 3 * q
+    @test isequal(add_int, add_rat)
+    @test !isequal2(add_int, add_rat)
+    @test add_int.id !== add_rat.id
 end
 
 @testset "Mul" begin
-    m1 = a*b
-    m2 = b*a
+    m1 = a * b
+    m2 = b * a
     @test m1.id === m2.id
-    m3 = 6*a*b
-    m4 = 3*a*2*b
+    m3 = 6 * a * b
+    m4 = 3 * a * 2 * b
     @test m3.id === m4.id
     m5 = Mul{SymReal}(1, ACDict{SymReal}(a => 1, b => 1); type = Int)
     @test m5.id !== m1.id
 
     mm1 = setmetadata(m1, Ctx1, "meta_1")
     @test m1.id !== mm1.id
+
+    @syms r s
+    mul_rat = r^(2 // 1) * s
+    mul_int = r^2 * s
+    @test isequal(mul_int, mul_rat)
+    @test !isequal2(mul_int, mul_rat)
+    @test mul_int.id !== mul_rat.id
 end
 
 @testset "Div" begin
-    v1 = a/b
-    v2 = a/b
+    v1 = a / b
+    v2 = a / b
     @test v1.id === v2.id
-    v3 = -1/a
-    v4 = -1/a
+    v3 = -1 / a
+    v4 = -1 / a
     @test v3.id === v4.id
-    v5 = 3a/6
-    v6 = 2a/4
+    v5 = 3a / 6
+    v6 = 2a / 4
     @test v5.id === v6.id
-    v7 = Div{SymReal}(-1,a, false; type = Float64)
+    v7 = Div{SymReal}(-1, a, false; type = Float64)
     @test v7.id !== v3.id
 
-    vm1 = setmetadata(v1,Ctx1, "meta_1")
+    vm1 = setmetadata(v1, Ctx1, "meta_1")
     @test vm1.id !== v1.id
 end
 
@@ -99,7 +130,7 @@ end
     p4 = a^(2^-b)
     @test p3.id === p4.id
 
-    pm1 = setmetadata(p1,Ctx1, "meta_1")
+    pm1 = setmetadata(p1, Ctx1, "meta_1")
     @test pm1.id !== p1.id
 end
 
@@ -132,12 +163,99 @@ end
     SymbolicUtils.ENABLE_HASHCONSING[] = true
 end
 
-@testset "`hash2` is cached" begin
+@testset "`hash` is cached" begin
     @syms a b f(..)
     for ex in [a + b, a * b, f(a)]
-        h = hash2(ex)
-        @test h == ex.hash2[]
+        # Cached field stores the metadata-free hash at seed UInt(0).
+        # Do not compare to bare `hash(ex)` — Julia 1.13+ mixes a process seed.
+        h = hash(ex, UInt(0))
+        @test h == ex.hash[]
         ex2 = setmetadata(ex, Int, 3)
-        @test ex2.hash2[] != h
+        # the hash is metadata-free
+        @test hash(ex2, UInt(0)) == h
+    end
+end
+
+@testset "Metadata type is considered in hashconsing" begin
+    @syms x
+    x1 = setmetadata(x, Int, 1)
+    x2 = setmetadata(x, Int, 1.0)
+    @test x1 !== x2
+    @test !isequal2(x1, x2)
+
+    x1 = setmetadata(x, Int, [1])
+    x2 = setmetadata(x, Int, [1])
+    @test x1 === x2
+    @test hash(x1) == hash(x2)
+end
+
+@testset "Throwing scalar equality is not a hashconsing match" begin
+    @test_throws ArgumentError isequal(
+        ThrowingEqualityScalar(:tag1, 1), ThrowingEqualityScalar(:tag2, 1)
+    )
+
+    x1 = BSImpl.Const{SymReal}(ThrowingEqualityScalar(:tag1, 1))
+    x2 = BSImpl.Const{SymReal}(ThrowingEqualityScalar(:tag2, 1))
+    x3 = BSImpl.Const{SymReal}(ThrowingEqualityScalar(:tag1, 1))
+
+    @test x1 !== x2
+    @test x1 === x3
+    @test !isequal2(x1, x2)
+end
+
+@testset "Operations hash by content" begin
+    @syms p q
+
+    @testset "Fill" begin
+        f1 = Fill(ShapeVecT([1:3, 1:2]))
+        f2 = Fill(ShapeVecT([1:3, 1:2]))
+        f3 = Fill(ShapeVecT([1:3, 1:4]))
+        @test f1 == f2
+        @test isequal(f1, f2)
+        @test hash(f1) == hash(f2)
+        @test isequal(f1, deepcopy(f1)) && hash(f1) == hash(deepcopy(f1))
+        @test f1 != f3
+        @test hash(f1) != hash(f3)
+        # As an `ArrayOp` operation, content-identical fills hash-cons together.
+        a1 = f1(p)
+        a2 = f2(p)
+        @test isequal(a1, a2)
+        @test hash(a1) == hash(a2)
+    end
+
+    @testset "Mapper" begin
+        m1 = Mapper(sin)
+        m2 = Mapper(sin)
+        m3 = Mapper(cos)
+        @test m1 == m2
+        @test isequal(m1, m2)
+        @test hash(m1) == hash(m2)
+        @test isequal(m1, deepcopy(m1)) && hash(m1) == hash(deepcopy(m1))
+        @test m1 != m3
+        @test hash(m1) != hash(m3)
+        # As a `Term` operation, content-identical mappers hash-cons to the same node.
+        t1 = Term{SymReal}(Mapper(sin), [p])
+        t2 = Term{SymReal}(Mapper(sin), [p])
+        @test t1.id === t2.id
+        @test hash(t1) == hash(t2)
+    end
+
+    @testset "Mapreducer" begin
+        r1 = Mapreducer(sin, +, 1, nothing)
+        r2 = Mapreducer(sin, +, 1, nothing)
+        r3 = Mapreducer(sin, +, 2, nothing)   # different dims
+        r4 = Mapreducer(cos, +, 1, nothing)   # different f
+        r5 = Mapreducer(sin, +, 1, 0.0)       # different init
+        @test r1 == r2
+        @test isequal(r1, r2)
+        @test hash(r1) == hash(r2)
+        @test isequal(r1, deepcopy(r1)) && hash(r1) == hash(deepcopy(r1))
+        @test r1 != r3 && hash(r1) != hash(r3)
+        @test r1 != r4 && hash(r1) != hash(r4)
+        @test r1 != r5 && hash(r1) != hash(r5)
+        t1 = Term{SymReal}(Mapreducer(sin, +, 1, nothing), [p])
+        t2 = Term{SymReal}(Mapreducer(sin, +, 1, nothing), [p])
+        @test t1.id === t2.id
+        @test hash(t1) == hash(t2)
     end
 end

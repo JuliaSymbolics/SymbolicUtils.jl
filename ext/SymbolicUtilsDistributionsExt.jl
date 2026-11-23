@@ -3,7 +3,8 @@ module SymbolicUtilsDistributionsExt
 using SymbolicUtils
 using SymbolicUtils: BasicSymbolic, BSImpl, ArgsT, Const, ShapeT, ShapeVecT,
                      promote_symtype, promote_shape, shape, symtype
-using Distributions
+using Distributions: pdf, logpdf, cdf, logcdf, quantile
+import Distributions
 
 for f in [pdf, logpdf, cdf, logcdf, quantile]
     @eval function SymbolicUtils.promote_symtype(::$(typeof(f)), ::Type{T},

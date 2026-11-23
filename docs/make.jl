@@ -1,4 +1,4 @@
-using Documenter, SymbolicUtils
+using Documenter, DocStringExtensions, SymbolicUtils, TermInterface
 
 include("pages.jl")
 DocMeta.setdocmeta!(SymbolicUtils, :DocTestSetup, :(using SymbolicUtils); recursive=true)
@@ -6,16 +6,7 @@ DocMeta.setdocmeta!(SymbolicUtils, :DocTestSetup, :(using SymbolicUtils); recurs
 makedocs(
     sitename="SymbolicUtils.jl",
     authors="Shashi Gowda",
-    modules=[SymbolicUtils],
     clean=true, doctest=true,
-    warnonly=Documenter.except(
-        :doctest,
-        :linkcheck,
-        :parse_error,
-        :example_block,
-        # Other available options are
-        # :autodocs_block, :cross_references, :docs_block, :eval_block, :example_block, :footnote, :meta_block, :missing_docs, :setup_block
-    ),
     format = Documenter.HTML(#analytics = "UA-90474609-3",
                              assets = ["assets/favicon.ico"],
                              canonical="https://docs.sciml.ai/SymbolicUtils/stable/"),

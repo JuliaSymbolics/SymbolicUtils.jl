@@ -13,11 +13,11 @@ variable. In other words, `T` was the [`SymbolicUtils.symtype`](@ref) of the var
 
 In SymbolicUtils v4, the `symtype` is not stored in the type, and is instead a field of the
 struct. This allows for greatly increased type-stability. The type `T` in `BasicSymbolic{T}`
-now represents a tag known as thw [`vartype`](@ref). This flag determines the assumptions
+now represents a tag known as the [`vartype`](@ref). This flag determines the assumptions
 made about the symbolic algebra. It can take one of three values:
 
 - [`SymReal`](@ref): The default behavior.
-- [`SafeReal`](@ref): Idential to `SymReal`, but common factors in the numerator and denominator
+- [`SafeReal`](@ref): Identical to `SymReal`, but common factors in the numerator and denominator
   of a division are not cancelled.
 - [`TreeReal`](@ref): Assumes nothing about the algebra, and always uses the `Term` variant to
   represent an expression.
@@ -26,7 +26,7 @@ A given expression must be pure in its `vartype`. In other words, no operation s
 of different `vartype`s.
 
 !!! warning "A short note on (im-)mutability"
-  
+
     While `ismutabletype(BasicSymbolic)` returns `true`, symbolic types are IMMUTABLE.
     Any mutation is undefined behavior and can lead to very confusing and hard-to-debug issues.
     This includes internal mutation, such as mutating `AddMul.dict`. The arrays returned from
@@ -130,8 +130,8 @@ tag for the type of quantity represented here. `shape` stores the shape if the v
 an array symbolic.
 
 - `metadata` is either `nothing` or a map from `DataType` keys to arbitrary values. Any
-interaction with metadata should be done by providing such a mapping during construction
-or using [`getmetadata`](@ref), [`setmetadata`](@ref), [`hasmetadata`](@ref).
+  interaction with metadata should be done by providing such a mapping during construction
+  or using [`getmetadata`](@ref), [`setmetadata`](@ref), [`hasmetadata`](@ref).
 - `type` is a Julia type.
 - `shape` is as described above.
 
@@ -171,10 +171,10 @@ end
 ```
 
 `AddMul` is a specialized representation for associative-commutative addition and
-multiplication. The two operations are distinguised using the [`AddMulVariant`](@ref)
+multiplication. The two operations are distinguished using the [`SymbolicUtils.AddMulVariant`](@ref)
 EnumX.jl enum. It has two variants: `AddMulVariant.ADD` and `AddMulVariant.MUL`.
 
-For multiplication terms, `coeff` is a constant non-symbolic coefficient multipled
+For multiplication terms, `coeff` is a constant non-symbolic coefficient multiplied
 with the expression. `dict` is a map from terms being multiplied to their exponents. For
 example, `2x^2 * (y + z)^3` is represented with `coeff = 2` and
 `dict = ACDict{T}(x => 2, (y + z) => 3)`. A valid multiplication term is subject to the
@@ -266,6 +266,7 @@ struct ArrayOp
     const metadata::MetadataT
     const shape::ShapeT
     const type::TypeT
+    # ...
 end
 ```
 
@@ -295,7 +296,7 @@ range of indices over which they should iterate, in case such a range is explici
 provided.
 
 !!! note
-  
+
   The common global index variable is printed as `_1`, `_2`, ... in arrayops. It is not
   a valid symbolic variable outside of an `ArrayOp`'s `expr`.
 
@@ -317,12 +318,36 @@ should be preferred. This does not allow specifying the `type` and `shape`, sinc
 values are tied to the fields of the variant and are thus determined. The `BSImpl.ArrayOp`
 constructor should be used with extreme caution, since it does not validate input.
 
+```julia
+struct ArrayMaker
+    const regions::SmallV{ShapeVecT}
+    const values::SmallV{BasicSymbolicImpl.Type{T}}
+    const metadata::MetadataT
+    const shape::ShapeT
+    const type::TypeT
+    # ...
+end
+```
+
+`ArrayMaker` is used to represent symbolic arrays composed of (potentially overlapping)
+blocks of other arrays. It is represented as a sequence `regions` of subarrays of the result,
+and a corresponding sequence `values` of values assigned to them. Each entry in `regions`
+must have the same number of dimensions as the represented array; singleton dimensions
+cannot be removed. The corresponding entry in `values` must have a size identical to
+the assigned subarray. Again, singleton dimensions cannot be dropped. In case of overlaps,
+later entries overwrite earlier ones. If a region of the array is left unassigned by all
+blocks, accessing it is invalid. When used in code generation, these unassigned regions
+can take arbitrary and possibly unassigned values.
+
+Use [`SymbolicUtils.ArrayMaker`](@ref) for region and value lists assembled at runtime.
+The [`@makearray`](@ref) macro supports a fixed sequence of block assignments.
+
 ## Array arithmetic
 
 SymbolicUtils implements a simple array algebra in addition to the default scalar algebra.
 Similar to how [`SymbolicUtils.promote_symtype`](@ref) given a function and symtypes of
 its arguments returns the symtype of the result, [`SymbolicUtils.promote_shape`](@ref)
-does the same for the shapes of the arguments. Implementing _both_ methods is cruicial
+does the same for the shapes of the arguments. Implementing _both_ methods is crucial
 for correctly using custom functions in symbolic expressions. Without `promote_shape`,
 SymbolicUtils will use `Unknown(-1)` as the shape.
 
@@ -341,7 +366,7 @@ to Base-like behavior:
   `axes`, `ndims`, `collect` are type-unstable. [`SymbolicUtils.stable_eachindex`](@ref) is
   useful as a type-stable iteration alternative.
 - `ifelse` requires that both the true and false cases have identical shape.
-- Symbolic arrays _only_ support cartesian indexing. For example, given `@syms x[1:3, 1:3]`
+- Symbolic arrays _only_ support Cartesian indexing. For example, given `@syms x[1:3, 1:3]`
   accessing `x[4]` is invalid and `x[1, 2]` should be used. Valid indices are
   `Int`, `Colon`, `AbstractRange{Int}` and symbolic expressions with integer `symtype`.
   A single `CartesianIndex` of appropriate dimension can also be used to symbolically
@@ -390,6 +415,10 @@ Here, `f1(x)` is considered a symbolic function `f1` called with the argument `x
 [`SymbolicUtils.is_called_function_symbolic`](@ref) can be used to differentiate between
 these cases.
 
+```@docs
+SymbolicUtils.FnType
+```
+
 ## API
 
 ### Basics
@@ -411,18 +440,18 @@ unwrap_const
 ### Inner constructors
 
 ```@docs
-SymbolicUtils.array_literal
 SymbolicUtils.BSImpl.Const
 SymbolicUtils.BSImpl.Sym
 SymbolicUtils.BSImpl.Term
 SymbolicUtils.BSImpl.AddMul
 SymbolicUtils.BSImpl.Div
 SymbolicUtils.BSImpl.ArrayOp
+SymbolicUtils.BSImpl.ArrayMaker
 ```
 
 ### High-level constructors
 
-```@docs
+```@docs; canonical=false
 SymbolicUtils.Const
 SymbolicUtils.Sym
 SymbolicUtils.Term
@@ -431,6 +460,8 @@ SymbolicUtils.Mul
 SymbolicUtils.Div
 SymbolicUtils.ArrayOp
 @arrayop
+SymbolicUtils.ArrayMaker
+@makearray
 ```
 
 ### Variant checking
@@ -448,6 +479,7 @@ SymbolicUtils.ismul
 SymbolicUtils.isdiv
 SymbolicUtils.ispow
 SymbolicUtils.isarrayop
+SymbolicUtils.isarraymaker
 ```
 
 ### Using custom functions in expressions
@@ -506,10 +538,6 @@ SymbolicUtils.MetadataT
 SymbolicUtils.SmallV
 SymbolicUtils.ShapeVecT
 SymbolicUtils.ShapeT
-SymbolicUtils.TypeT
-SymbolicUtils.ArgsT
-SymbolicUtils.ROArgsT
-SymbolicUtils.ACDict
 SymbolicUtils.OutIdxT
 SymbolicUtils.RangesT
 ```

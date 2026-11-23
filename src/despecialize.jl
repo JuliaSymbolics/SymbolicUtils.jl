@@ -41,9 +41,21 @@ expand(x::Complex{Float64}, _...) = x
 simplify(x::Int; _...) = x
 simplify(x::Complex{Int}; _...) = x
 simplify(x::Complex{Float64}; _...) = x
+"""
+    isbinop(x)
+
+Return whether `x` is recognized as a binary symbolic operator. This extension
+point defaults to `false` for non-symbolic values and can be specialized by
+symbolic operator implementations.
+"""
+function isbinop end
+
 isbinop(::Int) = false
 isbinop(::String) = false
 isbinop(::__InternalInvalidator1) = false
 operator_to_term(::__InternalInvalidator4, ::BasicSymbolic) = _unreachable()
 operator_to_term(::__InternalInvalidator5, ::BasicSymbolic) = _unreachable()
 operator_to_term(::__InternalInvalidator6, ::BasicSymbolic) = _unreachable()
+show_metadata(::IO, ::BasicSymbolic, ::Type{__InternalInvalidator1}, ::Any) = _unreachable()
+show_metadata(::IO, ::BasicSymbolic, ::Type{__InternalInvalidator2}, ::Any) = _unreachable()
+show_metadata(::IO, ::BasicSymbolic, ::Type{__InternalInvalidator3}, ::Any) = _unreachable()

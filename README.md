@@ -1,4 +1,4 @@
-# SymbolicUtils.jl 
+# SymbolicUtils.jl
 
 [![Join the chat at https://julialang.zulipchat.com #sciml-bridged](https://img.shields.io/static/v1?label=Zulip&message=chat&color=9558b2&labelColor=389826)](https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged)
 [![Global Docs](https://img.shields.io/badge/docs-SciML-blue.svg)](https://docs.sciml.ai/SymbolicUtils/stable/)
@@ -34,7 +34,7 @@ julia> using SymbolicUtils
 
 julia> SymbolicUtils.show_simplified[] = true
 
-julia> @syms x::Real y::Real z::Complex f(::Number)::Real
+julia> @syms x::Real y::Real z::Complex{Real} f(::Number)::Real
 (x, y, z, f(::Number)::Real)
 
 julia> 2x^2 - y + x^2

@@ -5,6 +5,7 @@ struct Add{T} end
 struct Mul{T} end
 struct Div{T} end
 struct ArrayOp{T} end
+struct ArrayMaker{T} end
 
 """
     Const{T}(val) where {T}
@@ -25,7 +26,7 @@ Alias for [`BSImpl.Sym{T}`](@ref).
 
 Alias for [`BSImpl.Term{T}`](@ref) except it also unwraps `args`.
 """
-@inline function Term{T}(f, args; type = _promote_symtype(f, args), kw...) where {T}
+@inline function Term{T}(@nospecialize(f), args; type = _promote_symtype(f, args), kw...) where {T}
     args = unwrap_args(args)
     BSImpl.Term{T}(f, args; type, kw...)
 end
@@ -66,6 +67,13 @@ preferred over the `BSImpl.AddMul{T}` constructor.
     BSImpl.AddMul{T}(coeff, dict, AddMulVariant.ADD; kw...)
 end
 
+function _has_array_key(dict)
+    for k in keys(dict)
+        is_array_shape(shape(k)) && return true
+    end
+    return false
+end
+
 """
     Mul{T}(coeff, dict; kw...) where {T}
 
@@ -92,14 +100,25 @@ preferred over the `BSImpl.AddMul{T}` constructor.
         return Const{T}(coeff)
     elseif _iszero(coeff)
         return zero_of_vartype(T)
-    elseif _isone(coeff) && length(dict) == 1
+    end
+    if _has_array_key(dict)
+        factors = ArgsT{T}()
+        sizehint!(factors, length(dict) + 1)
+        push!(factors, Const{T}(coeff))
+        for (k, v) in dict
+            # `k ^ 1` is just `k`; avoid `^` so an array base isn't rejected.
+            push!(factors, _isone(v) ? k : k ^ v)
+        end
+        return mul_worker(T, factors)::BasicSymbolic{T}
+    end
+    if _isone(coeff) && length(dict) == 1
         k, v = first(dict)
         if _isone(v)
             return k
         else
             return (k ^ v)::BasicSymbolic{T}
         end
-    elseif _isone(-coeff) && length(dict) == 1
+    elseif length(dict) == 1 && _isone(-coeff)
         k, v = first(dict)
         if _isone(v)
             @match k begin
@@ -290,7 +309,7 @@ Helper struct for tracking index variable usage in array operations.
 
 # Fields
 - `idx_to_axes::IdxToAxesT{T}`: Maps index variables to the axes they index
-- `search_buffer::Set{BasicSymbolic{T}}`: Reusable buffer for variable searches
+- `search_buffer::OrderedSet{BasicSymbolic{T}}`: Reusable buffer for variable searches
 - `buffers::Vector{Vector{IndexedAxis{T}}}`: Pool of reusable buffers
 
 # Details
@@ -299,12 +318,12 @@ are indexed by which index variables and validates consistency.
 """
 struct IndexedAxes{T}
     idx_to_axes::IdxToAxesT{T}
-    search_buffer::Set{BasicSymbolic{T}}
+    search_buffer::OrderedSet{BasicSymbolic{T}}
     buffers::Vector{Vector{IndexedAxis{T}}}
 end
 
 function IndexedAxes{T}() where {T}
-    IndexedAxes{T}(IdxToAxesT{T}(), Set{BasicSymbolic{T}}(), Vector{IndexedAxis{T}}[])
+    IndexedAxes{T}(IdxToAxesT{T}(), OrderedSet{BasicSymbolic{T}}(), Vector{IndexedAxis{T}}[])
 end
 
 function Base.empty!(ix::IndexedAxes)
@@ -413,10 +432,10 @@ function get_indexed_axes!(ix::IndexedAxes{T}, expr::BasicSymbolic{T}) where {T}
         empty!(vars)
         search_variables!(vars, idx; is_atomic = _is_index_variable)
         if length(vars) != 1
-            throw(ArgumentError("""
-            Expected $dim-th index of $expr to be a function of a single index variable. \
-            Found expression $idx involving variables $vars.
-            """))
+            throw(ArgumentError(LazyString(
+                "Expected ", dim, "-th index of ", expr,
+                " to be a function of a single index variable.",
+                " Found expression ", idx, " involving variables ", vars, ".")))
         end
         idxsym = first(vars)
         _pad = idx - idxsym
@@ -499,21 +518,22 @@ function arrayop_shape(output_idx::AbstractVector, expr::BasicSymbolic{T}, range
             if is_bound
                 iaxis.pad === nothing && continue
                 if !issubset(reference_axis .+ iaxis.pad, sh[iaxis.dim])
-                    throw(ArgumentError("""
-                    Expected bound range $reference_axis of $idxsym with offset \
-                    $(iaxis.pad) to be within bounds \
-                    of dimension $(iaxis.dim) of variable $(iaxis.sym) ($(sh[iaxis.dim])) \
-                    where it is used.
-                    """))
+                    throw(ArgumentError(LazyString(
+                        "Expected bound range ", reference_axis,
+                        " of ", idxsym, " with offset ", iaxis.pad,
+                        " to be within bounds of dimension ", iaxis.dim,
+                        " of variable ", iaxis.sym,
+                        " (", sh[iaxis.dim], ") where it is used.")))
                 end
             else
                 if !isequal(length(reference_axis), length(sh[iaxis.dim]))
-                    throw(ArgumentError("""
-                    Expected all usages of index variable $idxsym be in axes of equal \
-                    range. Found usage in dimension $(iaxis.dim) of variable $(iaxis.sym) \
-                    which has range $(sh[iaxis.dim]) different from inferred range \
-                    $reference_axis.
-                    """))
+                    throw(ArgumentError(LazyString(
+                        "Expected all usages of index variable ", idxsym,
+                        " be in axes of equal range.",
+                        " Found usage in dimension ", iaxis.dim,
+                        " of variable ", iaxis.sym,
+                        " which has range ", sh[iaxis.dim],
+                        " different from inferred range ", reference_axis, ".")))
                 end
             end
         end
@@ -529,7 +549,7 @@ function arrayop_shape(output_idx::AbstractVector, expr::BasicSymbolic{T}, range
                 continue
             end
             if !haskey(idx_to_axes, idx)
-                throw(ArgumentError("Could not infer range of output index $idx."))
+                throw(ArgumentError(LazyString("Could not infer range of output index ", idx, ".")))
             end
             iaxes = idx_to_axes[idx]
             canonical_axis_idx = findfirst(iaxes) do iaxis
@@ -589,11 +609,196 @@ function ArrayOp{T}(output_idx, expr, reduce, term, ranges; metadata = nothing, 
     term = unwrap_const(unwrap(term))
     sh = arrayop_shape(collect(unwrap(output_idx)), unwrap(expr), unwrap_const(ranges))
     if term !== nothing && shape(term) != sh
-        throw(ArgumentError("""
-        Shape of `term` $term provided to `ArrayOp` ($(shape(term))) must be identical to \
-        inferred shape $sh.
-        """))
+        throw(ArgumentError(LazyString(
+            "Shape of `term` ", term, " provided to `ArrayOp` (",
+            shape(term), ") must be identical to inferred shape ", sh, ".")))
     end
     return BSImpl.ArrayOp{T}(output_idx, expr, reduce, term, ranges; type, shape = sh, metadata, unsafe)
 end
 
+"""
+    ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false)
+
+High-level constructor for arrays composed of blocks of other arrays.
+
+# Arguments
+- `regions`: A list of `AbstractVector{UnitRange{Int}}` denoting subarrays of the resultant
+  array to assign. An axis may also be a vector of indices, which is split into one region
+  per run of consecutive indices, each assigned the matching slice of its value.
+- `values`: A corresponding list of (symbolic) values assigned to each entry in `regions`.
+
+# Returns
+- `BasicSymbolic{T}`: An `ArrayMaker` representing the resultant array.
+
+# Details
+This constructor validates and parses the data necessary to construct an `ArrayMaker`. The
+[`SymbolicUtils.symtype`](@ref) of the resultant array is automatically inferred. Refer to
+the [`@makearray`](@ref) documentation for the constraints on `regions` and `values`.
+
+# Extended help
+
+The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
+performance in internal operations.
+"""
+function ArrayMaker{T}(regions, values; shape = nothing, metadata = nothing, unsafe = false) where {T}
+    raw_regions = unwrap_args(regions)
+    regions, values = split_index_regions(T, raw_regions, unwrap_args(values))
+    regions = parse_regions(regions)
+    values = parse_args(T, values)
+    if shape === nothing
+        shape = shape_from_regions(regions)
+    end
+    shape = shape::ShapeVecT
+    check_logical_axes(raw_regions, shape)
+    type = symtype_from_values(values, length(shape))
+    validate_values_shapes(regions, values)
+    return BSImpl.ArrayMaker{T}(regions, values; metadata, shape, type, unsafe)
+end
+
+is_range_region(region) = all(ax -> ax isa AbstractUnitRange{<:Integer}, region)
+
+function split_index_regions(::Type{T}, regions, values) where {T}
+    all(is_range_region, regions) && return parse_regions(regions), parse_args(T, values)
+    new_regions = RegionsT()
+    new_values = ArgsT{T}()
+    for (region, value) in zip(regions, values)
+        if is_range_region(region)
+            push!(new_regions, parse_shape(region))
+            push!(new_values, Const{T}(value))
+            continue
+        end
+        region = map(ax -> ax isa AbstractVector{Bool} ? findall(ax) : ax, Tuple(region))
+        sh = shape(value)
+        if sh isa ShapeVecT && (length(sh) != length(region) || any(i -> length(sh[i]) != length(region[i]), eachindex(region)))
+            _throw_arraymaker_incompatible_shapes(region, value)
+        end
+        runs = Vector{NTuple{2, UnitRange{Int}}}[index_runs(ax) for ax in region]
+        for I in StableIndices(ShapeVecT(map(rs -> 1:length(rs), runs)))
+            new_region = ShapeVecT()
+            offsets = ShapeVecT()
+            for d in eachindex(runs)
+                dest, source = runs[d][I[d]]
+                push!(new_region, dest)
+                push!(offsets, source)
+            end
+            push!(new_regions, new_region)
+            push!(new_values, region_slice(T, value, Tuple(offsets)))
+        end
+    end
+    return new_regions, new_values
+end
+
+function check_logical_axes(regions, shape::ShapeVecT)
+    for region in regions, (inds, ax) in zip(shape, region)
+        ax isa AbstractVector{Bool} && !checkindex(Bool, inds, ax) && throw(BoundsError(CartesianIndices(Tuple(shape)), Tuple(region)))
+    end
+end
+
+index_runs(ax::AbstractUnitRange{<:Integer}) = NTuple{2, UnitRange{Int}}[(UnitRange{Int}(ax), 1:length(ax))]
+function index_runs(ax::AbstractVector{<:Integer})
+    runs = NTuple{2, UnitRange{Int}}[]
+    isempty(ax) && return push!(runs, (1:0, 1:0))
+    firstindex(ax) == 1 || (ax = ax[begin:end])
+    start = 1
+    for k in 2:(length(ax) + 1)
+        k <= length(ax) && ax[k] == ax[k - 1] + 1 && continue
+        push!(runs, (ax[start]:ax[k - 1], start:(k - 1)))
+        start = k
+    end
+    return runs
+end
+
+function region_slice(::Type{T}, @nospecialize(value), @nospecialize(offsets)) where {T}
+    value isa BasicSymbolic{T} || return Const{T}(value[map((o, ax) -> ax[o], offsets, axes(value))...])
+    filled = @match value begin
+        BSImpl.ArrayOp(; term) => @match term begin
+            BSImpl.Term(; f, args) => f isa Fill ? only(args) : nothing
+            _ => nothing
+        end
+        _ => nothing
+    end
+    sh = shape(value)
+    filled === nothing && return Const{T}(value[(sh isa ShapeVecT ? map((o, ax) -> ax[o], offsets, Tuple(sh)) : offsets)...])
+    return Const{T}(Fill(ShapeVecT(map(o -> 1:length(o), offsets)))(filled))
+end
+
+function shape_from_regions(regions::RegionsT)::ShapeVecT
+    all_same_ndims = @union_split_smallvec regions allequal(Iterators.map(length, regions))
+    @assert all_same_ndims """
+    All regions provided to `ArrayMaker` must have the same number of dimensions.
+    """
+    ndim = length(first(regions))
+    starts = SmallV{Int}()
+    stops = SmallV{Int}()
+    sizehint!(starts, ndim)
+    sizehint!(stops, ndim)
+    for _ in 1:ndim
+        push!(starts, typemax(Int))
+        push!(stops, typemin(Int))
+    end
+
+    for region in regions
+        for (i, axis) in enumerate(region)
+            starts[i] = min(starts[i], first(axis))
+            stops[i] = max(stops[i], last(axis))
+        end
+    end
+
+    shape = ShapeVecT()
+    sizehint!(shape, ndim)
+    @union_split_smallvec starts begin
+        @union_split_smallvec stops begin
+            for (i, (start, stop)) in enumerate(zip(starts, stops))
+                if start == typemax(Int) || stop == typemin(Int)
+                    throw(ArgumentError(LazyString("Unable to infer bounds for ", i, "-th dimension of `ArrayMaker`.")))
+                end
+                push!(shape, start:stop)
+            end
+        end
+    end
+
+    return shape
+end
+
+function symtype_from_values(values::ArgsT, ndims::Int)
+    sT = symtype(first(values))::TypeT
+    @assert sT <: AbstractArray
+    T::TypeT = safe_eltype(sT)::TypeT
+    for v in values
+        sT = symtype(v)
+        @assert sT <: AbstractArray
+        eT = safe_eltype(sT)::TypeT
+        T = promote_type_fast_path(T, eT)
+    end
+
+    return Array{T, ndims}
+end
+
+function _throw_arraymaker_incompatible_shapes(region, val)
+    throw(ArgumentError(LazyString(
+        "Incompatible shapes found in `@arraymaker`: Value `", val,
+        "` of shape ", shape(val), " assigned to region ", region, ".")))
+end
+
+function validate_values_shapes(regions::RegionsT, values::ArgsT{T}) where {T}
+    szbuf1 = SmallV{Int}()
+    szbuf2 = SmallV{Int}()
+    @union_split_smallvec regions @union_split_smallvec values begin
+        for (reg, val) in zip(regions, values)
+            empty!(szbuf1)
+            empty!(szbuf2)
+            sh = shape(val)
+            if sh isa ShapeVecT
+                @union_split_smallvec sh for ax in sh
+                    push!(szbuf2, length(ax))
+                end
+            else
+                sh.ndims == length(reg) || _throw_arraymaker_incompatible_shapes(reg, val)
+            end
+            @union_split_smallvec reg for ax in reg
+                push!(szbuf1, length(ax))
+            end
+            isequal(szbuf1, szbuf2) || _throw_arraymaker_incompatible_shapes(reg, val)
+        end
+    end
+end

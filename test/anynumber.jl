@@ -193,6 +193,7 @@ end
     @test clamp(AN(1), 0, 3) == 1 && clamp(AN(1), 0, 3) isa AN
     @test fma(AN(1), 2, 3) == 5 && fma(AN(1), 2, 3) isa AN
     @test muladd(AN(2), 3, 1) == 7 && muladd(AN(2), 3, 1) isa AN
+    @test muladd(2, 1 + 2im, AN(3)) == 5 + 4im
     @test powermod(AN(2), AN(10), AN(7)) == 2 && powermod(AN(2), AN(10), AN(7)) isa AN
 end
 

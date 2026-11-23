@@ -308,7 +308,7 @@ module AnyNumbers
         Float16, Float32, Float64, BigFloat,
         Real, AbstractFloat, Integer, Signed, Unsigned, AbstractIrrational,
     )
-    # `Rational`/`Complex`/`Irrational` are concrete union-alls — nothing can
+    # `Rational`/`Complex`/`Irrational` are concrete UnionAll types — nothing can
     # subtype them — so `where` bounds on these are ambiguity-free, and binding `T`
     # preserves the requested parameter (`Rational{BigInt}`, `ComplexF64`; a literal
     # `::Type{Complex}` method would wrongly reduce `convert(ComplexF64, a)` to
@@ -533,6 +533,10 @@ module AnyNumbers
             return $f(_wrap(x), _wrap(y), _wrap(z))
         end
     end
+
+    Base.muladd(x::Real, y::Complex, z::AnyNumber) =
+        _issymbolic(x) || _issymbolic(y) ? muladd(x, y, _value(z)) :
+        muladd(_wrap(x), _wrap(y), z)
 
     include("anydict.jl")
 

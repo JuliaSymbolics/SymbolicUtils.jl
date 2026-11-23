@@ -348,7 +348,7 @@ avoid allocating a new dictionary.
 const ACDictInner{T} = Dict{BasicSymbolic{T}, AnyNumbers.AnyNumber}
 """
 The type of the `dict` field stored in [`BSImpl.AddMul`](@ref): an
-[`AnyNumbers.AnyNumberDict`](@ref) over an [`ACDictInner`](@ref). It iterates
+`AnyNumbers.AnyNumberDict` over an `ACDictInner`. It iterates
 raw `Number` values for outside readers; internal code should use
 `parent(x.dict)` and work on the wrapped dictionary directly.
 """

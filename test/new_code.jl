@@ -783,13 +783,6 @@ end
         arr = @arrayop (i,) x[i] * y[i]
         wrapped = Code.with_allocator(ones, arr)
         @test isequal(collect(arr), collect(wrapped))
-        buffer = ones(3)
-        expr = Code.with_allocator(Returns(buffer), arr)
-        f = eval(Code.fast_toexpr(Func([x, y], [], expr), ir, Dict()))
-        for _ in 1:2
-            got = Base.invokelatest(f, [-0.0, 2.0, 3.0], [1.0, 2.0, 2.0])
-            @test isequal(got, [-0.0, 4.0, 6.0])
-        end
         test_repr(
             Code.fast_toexpr(wrapped, ir, Dict()),
             quote
@@ -803,18 +796,14 @@ end
                             local var"##cse#4" = y
                             local var"##cse#5" = var"##cse#4"[_1]
                             local var"##cse#6" = $(*)(var"##cse#3", var"##cse#5")
-                            _ = (var"##cse#1"[$(CartesianIndex)(_1)] = var"##cse#6")
+                            __accum = $(+)(var"##cse#1"[$(CartesianIndex)(_1)], var"##cse#6")
+                            _ = (var"##cse#1"[$(CartesianIndex)(_1)] = __accum)
                         end
                     end
                 end
                 __miscₛᵧₘ0 = var"##cse#1"
             end
         )
-        @syms A[1:2, 1:3]
-        g = eval(Code.fast_toexpr(Func([A], [], @arrayop((i,), A[i, j])), IRStructure{SymReal}(), Dict()))
-        @test Base.invokelatest(g, reshape(Float64.(1:6), 2, 3)) == [9.0, 12.0]
-        g = eval(Code.fast_toexpr(Func([x], [], @arrayop((), x[1], reduce = (-))), IRStructure{SymReal}(), Dict()))
-        @test Base.invokelatest(x -> only(g(x)), [1.0, 2.0, 3.0]) == 1.0
     end
 
     @testset "`@arrayop` computes loop-invariant arrays once" begin

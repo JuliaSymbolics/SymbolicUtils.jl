@@ -151,9 +151,11 @@ newf = substitute(f, Dict(a=>b)) # unrelated substitution
 @test getmetadata(newf, Ctx1) == "yes"
 
 
-@test isequal(substitute(1+sqrt(a), Dict(a => 2), fold=Val(false)),
-              1 + sqrt(SymbolicUtils.Const{SymReal}(2)))
-@test unwrap_const(substitute(1+sqrt(a), Dict(a => 2), fold=Val(true))) isa Float64
+@test isequal(
+    substitute(1 + sqrt(a), Dict(a => 2), fold = Val(false)),
+    1 + term(sqrt, 2, type = Real)
+)
+@test unwrap_const(substitute(1 + sqrt(a), Dict(a => 2), fold = Val(true))) isa Float64
 @info "Metadata test ends"
 
 @testset "Base methods" begin

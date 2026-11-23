@@ -148,15 +148,17 @@ function NaNMath.sqrt(a::BasicSymbolic{SymReal})
     return Term{SymReal}(NaNMath.sqrt, ArgsT{SymReal}((a,)); type = promote_symtype(NaNMath.sqrt, symtype(a)))
 end
 
-# Roots are rational powers, so every spelling shares one canonical form.
-function Base.sqrt(a::BasicSymbolic{SymReal})
-    promote_shape(sqrt, shape(a))
-    return a ^ (1 // 2)
+function _symbolic_root(f, a::BasicSymbolic{SymReal})
+    sh = promote_shape(f, shape(a))
+    if isconst(a)
+        result = _const_root(SymReal, f, unwrap_const(a))
+        result === nothing || return result
+    end
+    return Term{SymReal}(f, ArgsT{SymReal}((a,)); type = promote_symtype(f, symtype(a)), shape = sh)
 end
-function Base.cbrt(a::BasicSymbolic{SymReal})
-    promote_shape(cbrt, shape(a))
-    return a ^ (1 // 3)
-end
+
+Base.sqrt(a::BasicSymbolic{SymReal}) = _symbolic_root(sqrt, a)
+Base.cbrt(a::BasicSymbolic{SymReal}) = _symbolic_root(cbrt, a)
 @number_methods(BasicSymbolic{TreeReal},
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a),)); type = promote_symtype(f, symtype(a))),
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a), Const{TreeReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))))
@@ -2208,8 +2210,7 @@ nothing.
 function _split_perfect_power(n::Integer, q::Integer)
     s, r = one(n), n
     for p in PRIMES_UP_TO_TRIAL_LIMIT
-        # a `p^q` that overflows `Int` is skipped along with all larger primes
-        q * ndigits(p; base = 2) < 63 || break
+        _int_pow_fits(p, q) || break
         p_q = p ^ q
         p_q > r && break
         while iszero(mod(r, p_q))

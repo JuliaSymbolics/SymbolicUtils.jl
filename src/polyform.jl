@@ -470,6 +470,10 @@ function quick_cancel(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
         return reverse(quick_mulpow(y, x))
     elseif opx === (*) && opy === (*)
         return quick_mulmul(x, y)
+    elseif opx === sqrt && isequal(only(arguments(x)), y)
+        return one_of_vartype(T), x
+    elseif opy === sqrt && isequal(x, only(arguments(y)))
+        return y, one_of_vartype(T)
     elseif opx === (^) && !icy
         return quick_pow(x, y)
     elseif opy === (^) && !icx

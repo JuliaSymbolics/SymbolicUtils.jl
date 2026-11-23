@@ -778,6 +778,6 @@ end
     @test s^2 * r == big(p)^2 * 3
 
     # Negative arguments stay un-evaluated
-    @test isequal(simplify(term(sqrt, -1)), term(^, -1, 1 // 2; type = Real))
-    @test isequal(simplify(term(sqrt, -1 // 2)), term(^, -1 // 2, 1 // 2; type = Real))
+    @test isequal(simplify(term(sqrt, -1)), term(sqrt, -1))
+    @test isequal(simplify(term(sqrt, -1 // 2)), term(sqrt, -1 // 2))
 end

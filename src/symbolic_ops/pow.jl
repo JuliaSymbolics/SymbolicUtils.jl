@@ -130,6 +130,19 @@ function _const_pow(::Type{T}, n::Union{Integer, Rational}, b::Rational, type::T
     return mul_worker(T, (num, den))::BasicSymbolic{T}
 end
 
+function _const_root(::Type{T}, f, @nospecialize(n)) where {T}
+    n isa Real || return nothing
+    if (n < 0)::Bool
+        f === sqrt && return nothing
+        if n isa Union{Integer, Rational} && isfinite(n)
+            return -_const_pow(T, -big(n), 1 // 3, Real)
+        end
+    elseif n isa Union{Integer, Rational} && !(n isa Bool) && isfinite(n)
+        return _const_pow(T, n, f === sqrt ? 1 // 2 : 1 // 3, Real)
+    end
+    return Const{T}(f(n))
+end
+
 function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicSymbolic{T}}) where {T <: Union{SymReal, SafeReal}}
     if !_numeric_or_arrnumeric_symtype(a) || !_numeric_or_arrnumeric_symtype(b)
         throw(MethodError(^, (a, b)))
@@ -185,6 +198,17 @@ function ^(a::BasicSymbolic{T}, b::Union{AbstractArray{<:Number}, Number, BasicS
                 exp = unwrap_const(exp) * b
                 exp isa Rational && isone(denominator(exp))::Bool && (exp = numerator(exp))
                 return Const{T}(base ^ exp)
+            end
+            BSImpl.Term(; f, args) && if f === sqrt || f === cbrt end => begin
+                root = f === sqrt ? 2 : 3
+                num = b isa Rational ? numerator(b) : b
+                if num isa Real && safe_isinteger(num) && iszero(rem(Int(num), root))
+                    exp = div(Int(num), root)
+                    if b isa Rational && !isone(denominator(b))::Bool
+                        exp = exp // denominator(b)
+                    end
+                    return f === cbrt && T === SymReal && exp == 1 // 2 ? sqrt(args[1]) : Const{T}(args[1]^exp)
+                end
             end
             _ => nothing
         end

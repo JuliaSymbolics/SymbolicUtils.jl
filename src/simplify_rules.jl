@@ -65,6 +65,7 @@ const POW_RULES = (
     @rule(ℯ^(~x) => exp(~x)),
     # sqrt(x^2) = |x| on reals; for complex, sqrt(z^2) = ±z ≠ |z|
     @rule(((~x::_isreal)^2)^(1//2) => abs(~x)),
+    @rule((~x)^(1 // 2) => ~x isa BasicSymbolic{SymReal} && !isconst(~x) ? sqrt(~x) : nothing),
     # |x|^2 = x^2 for reals; for complex, |z|^2 = z*conj(z) ≠ z^2
     @rule((abs(~x::_isreal))^2 => (~x)^2),
 )
@@ -72,12 +73,13 @@ const POW_RULES = (
 # Unary minus canonicalizes to *(-1, x), so abs(-x) is abs(*(-1, x)).
 _is_neg_literal(x) = _isnegative(unwrap_const(x))
 
-# Raw `sqrt`/`cbrt` terms (e.g. from `term(sqrt, x)`) become canonical rational powers.
 function _canonical_root(x)
     iscall(x) && vartype(x) !== TreeReal || return nothing
     f = operation(x)
     f === sqrt || f === cbrt || return nothing
-    return Const{vartype(x)}(arguments(x)[1]) ^ (f === sqrt ? 1 // 2 : 1 // 3)
+    arg = only(arguments(x))
+    isconst(arg) || return nothing
+    return _const_root(vartype(x), f, unwrap_const(arg))
 end
 
 const ASSORTED_RULES = (

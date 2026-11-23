@@ -171,16 +171,25 @@ function _normalize_radicals!(::Type{T}, @nospecialize(coeff), dict) where {T}
     end
     filter!(kvp -> !isconst(kvp[1]), dict)
     radicands = Dict{Rational, Integer}()
+    exponents = Dict{Integer, Rational}()
     while !isempty(pending)
         n, e = pop!(pending)
         c, r, f = _radical_parts(n, e)
         coeff *= c
         isone(r)::Bool && continue
+        previous = pop!(exponents, r, nothing)
+        if previous !== nothing
+            delete!(radicands, previous)
+            push!(pending, (r, f + previous))
+            continue
+        end
         other = pop!(radicands, f, nothing)
-        if other === nothing
-            radicands[f] = r
-        else
+        if other !== nothing
+            delete!(exponents, other)
             push!(pending, (big(r) * other, f))
+        else
+            radicands[f] = r
+            exponents[r] = f
         end
     end
     for (f, r) in radicands

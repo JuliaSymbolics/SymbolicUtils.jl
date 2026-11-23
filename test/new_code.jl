@@ -586,7 +586,7 @@ end
     test_repr(
         Code.fast_toexpr(x .^ 2, ir, Dict()), quote
             local var"##cse#0" = x
-            local var"##cse#1" = $(broadcast)($(Base.literal_pow), $(^), var"##cse#0", $(Val)(2))
+            local var"##cse#1" = $(Code.fused_materialize)($(Base.Broadcast.broadcasted)($(Base.literal_pow), $(^), var"##cse#0", $(Val)(2)))
         end
     )
 
@@ -599,8 +599,36 @@ end
     end
     g = eval(Code.fast_toexpr(Func([x], [], x .^ 2), ir, Dict()))
     @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
+    v = [1.0, 2.0, 3.0]
+    allocated(f) = (f(v); @allocated f(v))
+    @test @invokelatest(allocated(g)) < 2 * allocated(w -> w .^ 2)
     g = eval(Code.fast_toexpr(Func([x], [], x .^ 2.5), ir, Dict()))
     @test @invokelatest(g([1.0, 4.0, 9.0])) ≈ [1.0, 32.0, 243.0]
+end
+
+@testset "constant integer powers opt out of `literal_pow`" begin
+    @syms a::Real x[1:3]::Real
+    ir = IRStructure{SymReal}()
+    no_lit = Dict{Any, Any}(Code.USE_LITERAL_POW_KEY => false)
+    test_repr(
+        Code.fast_toexpr(a^3, ir, no_lit), quote
+            local var"##cse#0" = a
+            local var"##cse#1" = $(^)(var"##cse#0", 3)
+        end
+    )
+    test_repr(
+        Code.fast_toexpr(x .^ 2, ir, no_lit), quote
+            local var"##cse#0" = $(^)
+            local var"##cse#1" = x
+            local var"##cse#2" = 2
+            local var"##cse#3" = $(broadcast)(var"##cse#0", var"##cse#1", var"##cse#2")
+        end
+    )
+
+    f = eval(Code.fast_toexpr(Func([a], [], a^3), ir, no_lit))
+    @test @invokelatest(f(1.3)) === 1.3^3
+    g = eval(Code.fast_toexpr(Func([x], [], x .^ 2), ir, no_lit))
+    @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
 end
 
 @testset "Sparse array CSE" begin
@@ -755,7 +783,13 @@ end
         bare = @arrayop (i,) x[i] + y[i]
         ir = IRStructure{SymReal}()
         expr = Code.fast_toexpr(sum(wrapped) + sum(bare), ir, Dict())
-        result = eval(quote let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]; $expr end end)
+        result = eval(
+            quote
+                let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]
+                    $expr
+                end
+            end
+        )
         @test result ≈ 53.0
     end
 
@@ -786,6 +820,30 @@ end
                 __miscₛᵧₘ0 = var"##cse#1"
             end
         )
+    end
+
+    @testset "`@arrayop` computes loop-invariant arrays once" begin
+        @syms x[1:3] y[1:3]
+        ncalls = Ref(0)
+        double = v -> (ncalls[] += 1; 2 .* v)
+        dx = SymbolicUtils.term(double, x; type = Vector{Real}, shape = SymbolicUtils.ShapeVecT((1:3,)))
+        expr = sum(@arrayop (i,) dx[i] + y[i])
+        f = eval(Code.fast_toexpr(Func([x, y], [], expr), IRStructure{SymReal}(), Dict()))
+        @test @invokelatest(f([1.0, 2.0, 3.0], [4.0, 5.0, 6.0])) == 27.0
+        @test ncalls[] == 1
+        @syms c::Real
+        sq = v -> (ncalls[] += 1; sqrt.(v))
+        sx = SymbolicUtils.term(sq, x; type = Vector{Real}, shape = SymbolicUtils.ShapeVecT((1:3,)))
+        g = eval(Code.fast_toexpr(Func([c, x], [], sum(@arrayop (i,) ifelse_branching(c > 0, sx[i], x[i]))), IRStructure{SymReal}(), Dict()))
+        ncalls[] = 0
+        @test @invokelatest(g(-1.0, [-1.0, -2.0, -3.0])) == -6.0
+        @test ncalls[] == 0
+        h = eval(Code.fast_toexpr(Func([c, x], [], sum(@arrayop (i,) x[i] + ifelse_branching(c > 0, sx[1], c))), IRStructure{SymReal}(), Dict()))
+        @test @invokelatest(h(1.0, [4.0, 9.0, 16.0])) == 35.0
+        @test ncalls[] == 1
+        ncalls[] = 0
+        @test @invokelatest(h(-1.0, [4.0, 9.0, 16.0])) == 26.0
+        @test ncalls[] == 0
     end
 
     @testset "bare `@arrayop` after `with_allocator` (issue #1151)" begin

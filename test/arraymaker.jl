@@ -6,6 +6,17 @@ using Test
 import SymbolicUtils as SU
 
 @syms x[1:3]::Real y[1:3]::Real z[1:3]::Real
+
+@testset "public constructor" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils, :ArrayMaker)
+    end
+    maker = SymbolicUtils.ArrayMaker{SymReal}(
+        [[1:3], [2:3]], [x, y[1:2]]; shape = SU.ShapeVecT((1:3,))
+    )
+    @test isequal(collect(maker), BS[x[1], y[1], y[2]])
+end
+
 @testset "macro" begin
     w = @makearray w[1:3, 1:3] begin
         w[1:1, 1:3] => x'
@@ -90,6 +101,56 @@ end
     @test isequal(collect(w), truew)
 end
 
+@testset "`Code.toexpr` writes every region value" begin
+    @syms p[1:2]::Real q[1:2]::Real
+    w = @makearray w[1:2] begin
+        w[1:2] => p .+ q
+    end
+    @test Base.invokelatest(eval(Code.toexpr(Func([p, q], [], w))), [1.0, 2.0], [10.0, 20.0]) == [11.0, 22.0]
+
+    @syms r[1:20]::Real
+    a = @arrayop (i,) sin(r[i])
+    b = @arrayop (i,) cos(r[i])
+    f = eval(Code.toexpr(Func([a, r], [], Code.MakeTuple((SU.ArrayMaker{SymReal}(((1:20,),), (a,)), b)))))
+    out = Base.invokelatest(f, fill(0.5, 20), ones(20))
+    @test out[1] == fill(0.5, 20)
+    @test out[2] ≈ fill(cos(1.0), 20)
+end
+
+@testset "region values computed earlier are still written" begin
+    @syms p[1:20]::Real q[1:20]::Real
+    a = @arrayop (i,) sin(p[i])
+    w = SU.ArrayMaker{SymReal}(((1:20,), (21:40,)), (a .+ q, a))
+    f = eval(Code.fast_toexpr(Func([p, q], [], w), IRStructure{SymReal}(), Dict{Any, Any}()))
+    @test Base.invokelatest(f, ones(20), fill(2.0, 20)) ≈ [fill(sin(1.0) + 2, 20); fill(sin(1.0), 20)]
+    g = eval(Code.fast_toexpr(Func([a], [], SU.ArrayMaker{SymReal}(((1:20,),), (a,))), IRStructure{SymReal}(), Dict{Any, Any}()))
+    @test Base.invokelatest(g, fill(3.0, 20)) == fill(3.0, 20)
+    wrapped = Code.with_allocator(zeros, a)
+    g = eval(Code.fast_toexpr(Func([wrapped, p], [], SU.ArrayMaker{SymReal}(((1:20,),), (wrapped,))), IRStructure{SymReal}(), Dict{Any, Any}()))
+    @test Base.invokelatest(g, fill(3.0, 20), ones(20)) == fill(3.0, 20)
+end
+
+@testset "a nested zero fill clears the parent's buffer" begin
+    @syms p[1:20]::Real buf[1:20]::Real
+    a = @arrayop (i,) sin(p[i])
+    zero_fill = SU.Fill(SU.ShapeVecT((1:20,)))(SU.Const{SymReal}(0))
+    inner = SU.ArrayMaker{SymReal}(((1:20,), (1:20,)), (zero_fill, a))
+    iip = SU.Term{SymReal}(
+        Returns, SU.ArgsT{SymReal}((buf,));
+        type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
+    )
+    fn = Func([p, buf], [], Code.with_allocator(iip, SU.ArrayMaker{SymReal}(((1:20,),), (inner,))))
+    f = eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}()))
+    @test Base.invokelatest(f, ones(20), fill(5.0, 20)) ≈ fill(sin(1.0), 20)
+end
+
+@testset "equal empty axes hash equally" begin
+    sh = SU.ShapeVecT((1:3, 1:0))
+    mk(ax) = SU.ArrayMaker{SymReal}(((1:3, ax),), (SU.Const{SymReal}(zeros(3, 0)),); shape = sh)
+    @test isequal(mk(1:0), mk(3:2))
+    @test hash(mk(1:0)) == hash(mk(3:2))
+end
+
 @testset "`SVector` in arguments" begin
     @syms x y z
     regions = SU.RegionsT((SU.ShapeVecT((1:1,)), SU.ShapeVecT((2:2,)), SU.ShapeVecT((3:3,))))
@@ -166,4 +227,101 @@ Base.copyto!(dst::NoScalarVector, src::AbstractArray) = (copyto!(dst.data, src);
         @test occursin("batched_setindex!", string(ex))
         @test Base.invokelatest(eval(ex), zeros(20), pv, qv, av) ≈ [pv[1:18]; av; 2.0]
     end
+end
+
+# Index vector with axes `2:n+1`, as `OffsetArrays` would give.
+struct OffsetIndices <: AbstractVector{Int}
+    data::Vector{Int}
+end
+Base.axes(x::OffsetIndices) = (2:length(x.data) + 1,)
+Base.size(x::OffsetIndices) = size(x.data)
+Base.getindex(x::OffsetIndices, i::Int) = x.data[i - 1]
+
+@testset "index vector regions" begin
+    @syms u[1:20]::Real v[1:20]::Real Z[1:4, 1:5]::Real W[1:2, 1:2]::Real
+    idxs = [2, 3, 19]
+    w = @makearray w[1:20] begin
+        w[1:20] => u
+        w[idxs] => x
+    end
+    idxs[1] = 4
+    @test SU.unwrap_const(arguments(w)[1]) == SU.RegionsT([SU.ShapeVecT((1:20,)), SU.ShapeVecT((2:3,)), SU.ShapeVecT((19:19,))])
+    @test isequal(collect(w), [i == 2 ? x[1] : i == 3 ? x[2] : i == 19 ? x[3] : u[i] for i in 1:20])
+    @test isequal(w, @makearray w[1:20] begin
+        w[1:20] => u
+        w[2:3] => x[1:2]
+        w[19:19] => x[3:3]
+    end)
+    @test isequal(SU.ArrayMaker{SymReal}(((1:20,), ([2, 3, 19],)), (u, x)), w)
+
+    uv, vv = collect(1.0:20), collect(10.0:10:200)
+    values = [SU.@arrayop((i,), sin(u[i]), i in 1:10), SU.@arrayop((i,), v[i] + u[i + 10], i in 1:10)]
+    maker = SU.ArrayMaker{SymReal}([[1:2:19], [20:-2:2]], values)
+    expected = zeros(20)
+    expected[1:2:19] = sin.(uv[1:10])
+    expected[20:-2:2] = vv[1:10] .+ uv[11:20]
+    fn = Func([u, v], [], maker)
+    @test Base.invokelatest(eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}())), uv, vv) ≈ expected
+
+    filled = SU.Fill(SU.ShapeVecT((1:3,)))(SU.Const{SymReal}(7))
+    f = SU.ArrayMaker{SymReal}(((1:20,), ([5, 6, 12],)), (u, filled))
+    @test SU.unwrap_const(arguments(f)[1]) == SU.RegionsT([SU.ShapeVecT((1:20,)), SU.ShapeVecT((5:6,)), SU.ShapeVecT((12:12,))])
+    @test isequal(SU.unwrap_const(arguments(f)[2])[2], SU.Fill(SU.ShapeVecT((1:2,)))(SU.Const{SymReal}(7)))
+    ff = eval(Code.fast_toexpr(Func([u], [], f), IRStructure{SymReal}(), Dict{Any, Any}()))
+    expected = copy(uv)
+    expected[[5, 6, 12]] .= 7
+    @test Base.invokelatest(ff, uv) == expected
+
+    m = @makearray m[1:4, 1:5] begin
+        m[1:4, 1:5] => Z
+        m[[1, 3], 2:3] => W
+    end
+    @test isequal(m[3, 3], W[2, 2])
+    @test isequal(m[2, 3], Z[2, 3])
+    Zv, Wv = reshape(collect(1.0:20), 4, 5), [100.0 200.0; 300.0 400.0]
+    expected = copy(Zv)
+    expected[[1, 3], 2:3] = Wv
+    fn = Func([Z, W], [], m)
+    @test Base.invokelatest(eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict{Any, Any}())), Zv, Wv) == expected
+    @test Base.invokelatest(eval(Code.toexpr(fn)), Zv, Wv) == expected
+
+    @test_throws ArgumentError SU.ArrayMaker{SymReal}(((1:3,), ([1, 3],)), ([0, 0, 0], [10, 20, 30]))
+    @test_throws ArgumentError SU.ArrayMaker{SymReal}(((1:20,), ([5, 6, 12],)), (u, SU.Fill(SU.ShapeVecT((1:2,)))(SU.Const{SymReal}(7))))
+    @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), ([true, false, true],)), ([0, 0, 0], [10, 30])))) == [10, 0, 30]
+    @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:3,), (trues(3),)), ([0, 0, 0], [10, 20, 30])))) == [10, 20, 30]
+    @test_throws BoundsError SU.ArrayMaker{SymReal}(((1:3,), ([true, false],)), ([0, 0, 0], [10]))
+    @test_throws BoundsError SU.ArrayMaker{SymReal}(((1:3,), ([true, false, true, false],)), ([0, 0, 0], [10, 30]))
+    @test_throws BoundsError SU.ArrayMaker{SymReal}((([true, false, true],),), ([10, 30],); shape = SU.ShapeVecT((1:4,)))
+    @test_throws BoundsError SU.ArrayMaker{SymReal}((([false, true, false],),), ([10],))
+    @test isempty(collect(SU.ArrayMaker{SymReal}(((Int[],),), (Int[],); shape = SU.ShapeVecT((1:0,)))))
+
+    @syms o[2:4]::Real
+    @test isequal(collect(SU.ArrayMaker{SymReal}((([1, 2, 3],),), (o,))), [o[2], o[3], o[4]])
+    @test isequal(collect(SU.ArrayMaker{SymReal}(((1:5,), ([1, 4, 5],)), (u[1:5], o))), [o[2], u[2], u[3], o[3], o[4]])
+    @test SU.unwrap_const.(collect(SU.ArrayMaker{SymReal}(((1:5,), (OffsetIndices([1, 2, 5]),)), (zeros(Int, 5), [10, 20, 50])))) == [10, 20, 0, 0, 50]
+
+    @syms Y[1:4, 1:4]::Real
+    m2 = @makearray m2[1:4, 1:4] begin
+        m2[1:4, 1:4] => Y
+        m2[[1, 3], [2, 4]] => W
+    end
+    @test isequal(collect(m2), [(i, j) in ((1, 2), (3, 2), (1, 4), (3, 4)) ? W[(i + 1) ÷ 2, j ÷ 2] : Y[i, j] for i in 1:4, j in 1:4])
+
+    for ax in (1:3, [1, 2, 4], Int[], OffsetIndices([1, 2, 5]))
+        @test (@inferred SU.index_runs(ax)) isa Vector{NTuple{2, UnitRange{Int}}}
+    end
+    for (value, offsets) in (([10, 20, 30], (1:2,)), (x, (2:3,)), (filled, (1:2,)))
+        @test (@inferred SU.region_slice(SymReal, value, offsets)) isa SU.BasicSymbolic{SymReal}
+    end
+    @test (@inferred SU.split_index_regions(SymReal, Any[(1:20,), ([2, 3, 19],)], Any[u, x])) isa Tuple{SU.RegionsT, SU.ArgsT{SymReal}}
+end
+
+@testset "a rewrite to an uncomputed value is written into its region directly" begin
+    @syms p[1:20]::Real
+    a = @arrayop (i,) p[i]
+    b = @arrayop (i,) -p[i]
+    w = SU.ArrayMaker{SymReal}(((1:20,),), (a,))
+    fn = Func([p], [], Code.with_allocator(Returns(zeros(Int64, 20)), w))
+    f = eval(Code.fast_toexpr(fn, SU.IRStructure{SymReal}(), Dict{Any, Any}(a => b)))
+    @test @invokelatest(f(fill(9007199254740993, 20))) == fill(-9007199254740993, 20)
 end

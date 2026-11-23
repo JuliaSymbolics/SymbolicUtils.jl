@@ -577,12 +577,13 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
                 push!(args, BSImpl.Const{T}(reg))
             end
             vw = BSImpl.Term{T}(view, args; type = Any)
+            rewritten = haskey(st.rewrites, val)
             @match val begin
-                BSImpl.ArrayOp(;) => begin
+                BSImpl.ArrayOp(; term) && if term === nothing && !rewritten end => begin
                     st.rewrites[:arrayop_output] = vw
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
                 end
-                BSImpl.ArrayMaker(;) => begin
+                BSImpl.ArrayMaker(;) && if !rewritten end => begin
                     st.rewrites[:arraymaker_output] = vw
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
                 end
@@ -648,6 +649,17 @@ function literal_pow_exponent(@nospecialize(n))
     return Expr(:call, Val, Int(n))
 end
 
+"""
+Key in the `rewrites` dictionary of codegen states (`NameState`, `LazyState`, and
+`CodegenState` used by [`fast_toexpr`](@ref)). When `false`, constant integer powers
+`x ^ n` lower to `^(x, n)` — including inside `broadcast`ed and fused broadcast
+expressions — instead of `Base.literal_pow(^, x, Val(n))`, reverting to the codegen
+behavior from before `literal_pow` emission was introduced. Defaults to `true`.
+"""
+const USE_LITERAL_POW_KEY = :use_literal_pow
+
+@inline use_literal_pow(rewrites::Dict{Any, Any}) = get(rewrites, USE_LITERAL_POW_KEY, true)::Bool
+
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
     base = toexpr(base, st)
@@ -664,9 +676,11 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
                     val = -val
                     base = Expr(:call, inv, base)
                 end
-                p = literal_pow_exponent(val)
-                if p !== nothing
-                    return Expr(:call, Base.literal_pow, ^, base, p)
+                if use_literal_pow(st.rewrites)
+                    p = literal_pow_exponent(val)
+                    if p !== nothing
+                        return Expr(:call, Base.literal_pow, ^, base, p)
+                    end
                 end
                 if !(val isa Integer) && get(st.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
@@ -687,10 +701,10 @@ end
 
 function function_to_expr(::typeof(broadcast), O::BasicSymbolic{T}, st) where {T}
     args = arguments(O)
-    if length(args) == 3 && unwrap_const(args[1]) === (^)
+    if use_literal_pow(st.rewrites) && length(args) == 3 && unwrap_const(args[1]) === (^)
         p = literal_pow_exponent(unwrap_const(args[3]))
         if p !== nothing
-            return Expr(:call, broadcast, Base.literal_pow, ^, toexpr(args[2], st), p)
+            return Expr(:call, fused_materialize, Expr(:call, Base.Broadcast.broadcasted, Base.literal_pow, ^, toexpr(args[2], st), p))
         end
     end
     return function_to_expr_no_nanmath(broadcast, O, st)
@@ -1875,7 +1889,10 @@ end
 
 function _cse_compute(expr::BasicSymbolic{T}, state::CSEState) where {T}
     @match expr begin
-        BSImpl.Const(;) => begin
+        BSImpl.Const(; val) => begin
+            # Scalar numbers stay literal: a hoisted exponent would hide it from `^`
+            # lowering, which needs a literal to emit `Base.literal_pow`.
+            val isa Number && return expr
             new_expr = expr
             sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
             push!(state.sorted_exprs, sym ← new_expr)
@@ -2325,5 +2342,6 @@ end
 @public CodegenState, codegen!, codegen_function!, is_elementwise_call
 # Helpers that the `codegen_function!` implementer contract documents and requires.
 @public declare!, enter_scope, exit_scope!, rollback!
+@public FUSE_BROADCASTS_KEY, FUSE_UNALIAS_KEY, FUSE_OUTPUT_ELTYPE_KEY, USE_LITERAL_POW_KEY
 
 end

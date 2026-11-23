@@ -296,3 +296,14 @@ end
     eager = Code.fast_toexpr(expr, Dict{Any, Any}())
     @test evalwith(ex, (:x => xv, :y => yv)) == evalwith(eager, (:x => xv, :y => yv))
 end
+
+@testset "integer powers fuse as `^` when `literal_pow` is disabled" begin
+    @syms x[1:4] y[1:4]
+    expr = x .^ 3 .+ y .^ 2
+    ex = Code.fast_toexpr(expr, fused(Code.USE_LITERAL_POW_KEY => false))
+    @test count_calls(ex, Code.fused_materialize) == 1
+    @test count_calls(ex, broadcast) == 0
+    @test count_calls(ex, Base.literal_pow) == 0
+    xv, yv = [0.1, 0.7, 1.3, 2.9], [1.5, -2.0, 3.25, 4.1]
+    @test evalwith(ex, (:x => xv, :y => yv)) == xv .^ 3 .+ yv .^ 2
+end

@@ -20,7 +20,7 @@ run_qa(
                 # `mapreduce` method have to name its input union to resolve.
                 :AbstractArrayOrBroadcasted,
                 :_setindex!, :acos, :acosh, :asin, :atanh, :copy, :cos, :eval,
-                :hash_abstractarray_seed, :hasha_seed, :ht_keyindex2,
+                :hash_abstractarray_seed, :hasha_seed, :ht_keyindex2, :ht_keyindex,
                 :ht_keyindex2_shorthash!, :instantiate, :kwcall, :lgamma, :literal_pow,
                 :log, :log1p, :log10, :log2, :mul_prod, :pow, :postwalk,
                 :promote_typejoin, :return_type, :show_unquoted, :sin, :sqrt, :tan,

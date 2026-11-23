@@ -382,6 +382,25 @@ The code generation in this function does not need to handle checking if `expr` 
 """
 function codegen_function! end
 
+function hoist_invariant_arrays!(cs::CodegenState{T}, ex::BasicSymbolic{T}) where {T}
+    invariant(x) = !SymbolicUtils.query(SymbolicUtils._is_index_variable, cs.ir, x; recurse = x -> iscall(x) && !SymbolicUtils.isarrayop(x))
+    @match ex begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            arr = args[1]
+            iscall(arr) && is_array_shape(shape(arr)) && invariant(arr) && cs(arr)
+        end
+        BSImpl.Term(; f, args) && if f === ifelse_branching end => begin
+            invariant(ex) ? cs(ex) : hoist_invariant_arrays!(cs, args[1])
+        end
+        _ => if iscall(ex)
+            for a in arguments(ex)
+                hoist_invariant_arrays!(cs, a)
+            end
+        end
+    end
+    return nothing
+end
+
 function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     output_buffer = codegen_allocator_call!(cs, _allocator, expr, expr_idx)
@@ -394,6 +413,7 @@ function codegen_function!(::Type{ArrayOp{T}}, cs::CodegenState{T}, expr::BasicS
 
     new_ranges = RangesT{T}()
     new_expr = unidealize_indices(innerexpr, ranges, new_ranges)
+    hoist_invariant_arrays!(cs, new_expr)
 
     scoped_cs, bm = enter_scope(cs)
 
@@ -779,7 +799,7 @@ end
 function lazy_broadcast_expr(cs::CodegenState{T}, idx::Integer, uses, sources) where {T}
     parts = fusable_parts(cs, idx)
     # An integer power is `literal_pow`, as in eager codegen, so fused results match it.
-    if parts.f isa Int32 && length(parts.args) == 2 && unwrap_const(cs.ir[parts.f]) === (^)
+    if use_literal_pow(cs.rewrites) && parts.f isa Int32 && length(parts.args) == 2 && unwrap_const(cs.ir[parts.f]) === (^)
         p = literal_pow_exponent(unwrap_const(cs.ir[parts.args[2]]))
         if p !== nothing
             base = fused_arg_expr(cs, parts.args[1], uses, sources)
@@ -899,6 +919,12 @@ function collect_fusion_sources!(srcs, seen, cs::CodegenState, idx::Integer)
     return
 end
 
+function is_materialized(cs::CodegenState{T}, val, idx) where {T}
+    get(cs.cache, idx, nothing) isa Symbol && return true
+    rewritten = get(cs.rewrites, val, nothing)
+    return rewritten !== nothing && !(rewritten isa BasicSymbolic{T})
+end
+
 function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     _allocator = get_allocator!(cs, zeros)
     len = length(expr)::Int
@@ -937,7 +963,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     end
 
     if _allocator !== zeros && !__allocator_is_returns_expr(T, _allocator) &&
-            isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
+            !(_allocator isa ExistingBufferAllocator) && isequal(regions[1], sh) && __is_fill_zero(cs.ir[first(values_exprs_idxs)])
         output_buffer = codegen_allocator_call!(
             cs, _allocator, expr, expr_idx;
             allocator_call_expr = __allocator_call_and_fill_expr
@@ -1074,14 +1100,25 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
         view_expr = Expr(:call, view, output_buffer)
         @union_split_smallvec region append!(view_expr.args, region)
         vw = declare!(cs, get_misc_identifier(cs), view_expr)
+        inner_idx = val_idx
+        if iscall(val) && operation(val) === with_allocator
+            inner_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
+        end
+        inner = cs.ir[inner_idx]
+        source = nothing
+        if is_materialized(cs, val, val_idx)
+            source = val
+        elseif is_materialized(cs, inner, inner_idx)
+            source = inner
+        end
         @match val begin
+            _ && if source !== nothing end => declare!(cs, get_misc_identifier(cs), Expr(:call, copyto!, vw, cs(source)))
             # Replace the allocator. We want it to write directly to the output
             # No point constructing a new expression, just do what `with_allocator`
             # would do in `codegen_ir!`.
             BSImpl.Term(; f) && if f === with_allocator end => begin
                 old_allocator = add_allocator!(cs, ExistingBufferAllocator(vw))
-                val_nbors = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)
-                cs(cs.ir[val_nbors[2]])
+                cs(inner)
                 reset_allocator!(cs, old_allocator)
             end
             # Any other operation that supports `with_allocator` should be generated to
@@ -1247,9 +1284,11 @@ function codegen_function!(op::typeof(^), cs::CodegenState{T}, expr::BasicSymbol
                 if _isone(-val)
                     return codegen!(cs, expr_idx, Expr(:call, inv, base_sym))
                 end
-                p = literal_pow_exponent(val)
-                if p !== nothing
-                    return codegen!(cs, expr_idx, Expr(:call, Base.literal_pow, ^, base_sym, p))
+                if use_literal_pow(cs.rewrites)
+                    p = literal_pow_exponent(val)
+                    if p !== nothing
+                        return codegen!(cs, expr_idx, Expr(:call, Base.literal_pow, ^, base_sym, p))
+                    end
                 end
                 if !(val isa Integer) && get(cs.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
@@ -1291,11 +1330,11 @@ end
 function codegen_function!(op::typeof(broadcast), cs::CodegenState{T}, expr::BasicSymbolic{T}, expr_idx::Integer) where {T}
     fusable_parts(cs, expr_idx) === nothing || return codegen_fused_root!(cs, expr_idx)
     args_idxs = Graphs.outneighbors(cs.ir.dependency_graph, expr_idx)
-    if length(args_idxs) == 3 && unwrap_const(cs.ir[args_idxs[1]]) === (^)
+    if use_literal_pow(cs.rewrites) && length(args_idxs) == 3 && unwrap_const(cs.ir[args_idxs[1]]) === (^)
         p = literal_pow_exponent(unwrap_const(cs.ir[args_idxs[3]]))
         if p !== nothing
             base_sym = cs(cs.ir[args_idxs[2]])
-            return codegen!(cs, expr_idx, Expr(:call, broadcast, Base.literal_pow, ^, base_sym, p))
+            return codegen!(cs, expr_idx, Expr(:call, fused_materialize, Expr(:call, Base.Broadcast.broadcasted, Base.literal_pow, ^, base_sym, p)))
         end
     end
     return codegen_function_no_nanmath!(op, cs, expr, expr_idx)

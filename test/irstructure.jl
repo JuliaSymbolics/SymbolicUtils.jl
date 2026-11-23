@@ -139,6 +139,31 @@ end
     @test !SU.query(isequal(z), ir, expr; recurse = ex -> iscall(ex) && operation(ex) !== sin)
 end
 
+@testset "`query_multiple`" begin
+    expr = x + 2y + 3sin(z + fn(w[1] + sum(w) * tanh(w'w)))
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, expr)
+    idxs = collect(eachindex(ir))
+
+    # Equivalent to calling `query` on each index and combining with `|`
+    for pred in (isequal(y), isequal(w[2]), isequal(expr), iscall)
+        for container in (idxs, Tuple(idxs), Set(idxs))
+            @test SU.query_multiple(pred, ir, container) ==
+                  any(i -> SU.query(pred, ir, ir[i]), idxs)
+        end
+        for i in idxs
+            @test SU.query_multiple(pred, ir, (i,)) == SU.query(pred, ir, ir[i])
+        end
+    end
+
+    # `recurse` is respected
+    @test !SU.query_multiple(isequal(z), ir, [ir[expr]]; recurse = ex -> iscall(ex) && operation(ex) !== sin)
+    @test SU.query_multiple(isequal(z), ir, [ir[expr]])
+
+    # Empty input returns `false`
+    @test !SU.query_multiple(Returns(true), ir, Int[])
+end
+
 @testset "show" begin
     # Single leaf node: exact output check (indegree 0, never inlined)
     ir = IRStructure{SymReal}()
@@ -275,6 +300,10 @@ end
 end
 
 @testset "`replace_node!`" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils, :replace_node!)
+    end
+
     @testset "Leaf replacement" begin
         # Replacing a leaf: edges unchanged (early return after symbol update)
         ir = IRStructure{SymReal}()
@@ -561,6 +590,16 @@ end
     @test ir[zidx] !== y # different metadata
     @test ir[ir[zidx]] == zidx
     @test ir[ir[yidx]] == yidx
+    x2idx = populate_ir!(ir, x)
+    replace_node!(ir, x, y)
+    @test ir[ir[x2idx]] == x2idx
+    @test ir[ir[xidx]] == xidx
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, [x, y, z])
+    replace_node!(ir, x, y)
+    sub = subset_ir(ir, [z, ir[1], y])
+    replace_node!(sub, z, y)
+    @test [sub[sub[i]] for i in 1:3] == 1:3
 
     @testset "`isconst(new)`" begin
         @syms x y z
@@ -572,6 +611,12 @@ end
         replace_node!(ir, x, r)
         replace_node!(ir, y, r)
         @test operation(ir[yidx]) === identity
+        x2idx = populate_ir!(ir, x)
+        replace_node!(ir, x, r)
+        x3idx = populate_ir!(ir, x)
+        replace_node!(ir, x, r)
+        idxs = [xidx, yidx, x2idx, x3idx]
+        @test [ir[ir[i]] for i in idxs] == idxs
     end
 end
 
@@ -743,4 +788,21 @@ end
     ir = IRStructure{SymReal}()
     subber = IRSubstituter{true}(ir, Dict{typeof(expr), typeof(expr)}())
     @test unwrap_const(subber(expr))::Float64 ≈ (2.0 + sin(1.0))
+end
+
+@testset "`get_canonical_expr!` when a rebuilt node folds to a constant" begin
+    T = SymReal
+    @syms a::Real b::Real c[1:4]::Real v[1:4]::Real
+    lit = SU.Term{T}(SU.array_literal, SU.ArgsT{T}((SU.Const{T}((2,)), a, b)); type = Vector{Real}, shape = SU.ShapeVecT((1:2,)))
+    read_lit = SU.Term{T}(getindex, SU.ArgsT{T}((lit, SU.Const{T}(1))); type = Real)
+    read_ao = SU.Term{T}(getindex, SU.ArgsT{T}((SU.@arrayop((i,), c[i] * v[i]), SU.Const{T}(2))); type = Real)
+    for (read, old, new, expected) in ((read_lit, a, SU.Const{T}(3.0), 3.0 + b), (read_ao, c, SU.Const{T}([1.0, 0.0, 1.0, 1.0]), b))
+        top = read + b
+        ir = IRStructure{T}()
+        populate_ir!(ir, top)
+        read_idx = ir[read]
+        replace_node!(ir, old, new)
+        @test isequal(SU.get_canonical_expr!(ir, ir[top]), expected)
+        @test isempty(Graphs.outneighbors(ir.dependency_graph, read_idx))
+    end
 end

@@ -1,5 +1,6 @@
 using SymbolicUtils
 using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType
+using SymbolicUtils: arguments, iscall, operation, unwrap_const
 using Test
 import NaNMath
 import LinearAlgebra
@@ -144,9 +145,6 @@ end
 end
 
 @testset "promote_shape for complex" begin
-    # `complex` used to hit the generic `Unknown(-1)` fallback, so terms rebuilt
-    # through `maketerm` (e.g. by `substitute`) looked like arrays and poisoned
-    # downstream shape inference (`^` of an unknown-shape base infers `Unknown(2)`)
     @test promote_shape(complex, ShapeVecT()) == ShapeVecT()
     @test promote_shape(complex, ShapeVecT(), ShapeVecT()) == ShapeVecT()
     @test_throws ArgumentError promote_shape(complex, ShapeVecT((1:2,)), ShapeVecT())
@@ -158,19 +156,19 @@ end
     @test SymbolicUtils.shape(res) == ShapeVecT()
 end
 
-@testset "complex with non-real arguments" begin
-    @syms x::Real
-    # complex(a, b) == a + im*b, also for complex a and b
-    @test promote_symtype(complex, Complex{Real}, Real) == Complex{Real}
-    @test promote_symtype(complex, Complex{Float64}, Complex{Float64}) == Complex{Float64}
-    c = complex(x, x)
+@testset "Substitution into complex terms" begin
+    @syms x::Real z::Complex{Float64}
+    c = term(complex, x, x)
     @test symtype(c) == Complex{Real}
-    C = Const{SymbolicUtils.SymReal}
-    @test isequal(complex(C(1.0), C(2.0)), C(1.0 + 2.0im))
-    # substituting a complex value into the real slot of `complex(re, im)`
-    # lowers the rebuilt term to `re + im*imag` instead of throwing
-    res = substitute(c, Dict(x => 1.0 + 2.0im); fold = Val(true))
-    @test SymbolicUtils.unwrap_const(res) ≈ (1.0 + 2.0im) + im*(1.0 + 2.0im)
+    @test_throws MethodError complex(z, x)
+    @test_throws AssertionError promote_symtype(complex, Complex{Float64}, Real)
+    @test_throws AssertionError substitute(c, Dict(x => 1.0 + 2.0im); fold = Val(false))
+    @test_throws MethodError substitute(c, Dict(x => 1.0 + 2.0im); fold = Val(true))
+
+    res = substitute(c, Dict(x => 2.0); fold = Val(false))
+    @test iscall(res) && operation(res) === complex
+    @test unwrap_const.(arguments(res)) == [2.0, 2.0]
+    @test unwrap_const(substitute(c, Dict(x => 2.0); fold = Val(true))) === 2.0 + 2.0im
 end
 
 @testset "real on symbolic" begin

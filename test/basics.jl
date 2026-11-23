@@ -109,6 +109,8 @@ end
 
 struct Ctx1 end
 struct Ctx2 end
+struct Ctx3 end
+struct Ctx4 end
 
 # needs to be written like this to avoid a segfault on Julia 1.10
 @info "Metadata test"
@@ -127,6 +129,16 @@ for a = [a, sin(a), a+b, a*b, a^3]
 
     @test getmetadata(a′, Ctx1) == "meta_1"
     @test getmetadata(a′, Ctx2) == "meta_2"
+
+    a′ = setmetadata(a′, Ctx3, "meta_3")
+    a′ = setmetadata(a′, Ctx4, "meta_4")
+    a′ = setmetadata(a′, Ctx3, "updated_3")
+    @test getmetadata.(Ref(a′), (Ctx1, Ctx2, Ctx3, Ctx4)) ==
+        ("meta_1", "meta_2", "updated_3", "meta_4")
+
+    a′ = setmetadata(a′, Ctx2, "updated_2")
+    @test getmetadata.(Ref(a′), (Ctx1, Ctx2, Ctx3, Ctx4)) ==
+        ("meta_1", "updated_2", "updated_3", "meta_4")
 end
 
 # In substitute #283
@@ -197,12 +209,17 @@ end
     # typed_vcat
     @test BS{SymReal}[1; 2] isa Vector{BasicSymbolic{SymReal}}
     @test BS[1; a] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[1; 2; a] isa Vector{BasicSymbolic{SymReal}}
+    @test BS[a; missing] isa Vector{BasicSymbolic{SymReal}}
     # typed_hcat
     @test BS{SymReal}[1 2] isa Matrix{BasicSymbolic{SymReal}}
     @test BS[1 a] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[1 2 a] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[a missing] isa Matrix{BasicSymbolic{SymReal}}
     # typed_hvcat
     @test BS{SymReal}[1 2; 3 4] isa Matrix{BasicSymbolic{SymReal}}
     @test BS[1 a; 3 4] isa Matrix{BasicSymbolic{SymReal}}
+    @test BS[a missing; nothing :x] isa Matrix{BasicSymbolic{SymReal}}
     # typed_hvncat, ::Int
     @test BS{SymReal}[1;; 2] isa Matrix{BasicSymbolic{SymReal}}
     @test BS[1;; a] isa Matrix{BasicSymbolic{SymReal}}
@@ -853,6 +870,14 @@ end
     end
 end
 
+@testset "sum(transpose(broadcast(exp, x))) with symbolic indices (#1149)" begin
+    @syms nv[1:3]
+    # sum/mapreduce indexes transpose(broadcast(...)) with a symbolic first index;
+    # __stable_getindex must not treat `idxs[1] == 1` as a boolean when idxs[1] is symbolic.
+    result = sum(transpose(broadcast(exp, nv)))
+    @test result isa BasicSymbolic
+end
+
 @testset "err test" begin
     @syms t()
     @test_throws ErrorException t(2)
@@ -939,7 +964,7 @@ end
     @syms a b c
     t = SymbolicUtils.maketerm(typeof(b + c), +, [a,  (b+c)], nothing)
     @test isequal(t.dict, ACDict{SymReal}(a => 1, b => 1, c => 1))
-    @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  1//2],  nothing), b)
+    @test isequal(SymbolicUtils.maketerm(typeof(b^2), ^, [b^2,  3],  nothing), b^6)
 
     # test that maketerm doesn't hard-code BasicSymbolic subtype
     # and is consistent with BasicSymbolic arithmetic operations
@@ -988,7 +1013,7 @@ end
     # Promoted symtype is a subtype of referred
     @syms x::Int y::Int
     new_expr = SymbolicUtils.maketerm(typeof(ref_expr), (+), [x, y], nothing)
-    @test symtype(new_expr) == Int64
+    @test symtype(new_expr) == Int
 
     # Check that the Array type does not get changed to AbstractArray
     new_expr = SymbolicUtils.maketerm(
@@ -1007,8 +1032,11 @@ end
 
 @testset "hash" begin
     @syms a b
-    @test hash(a + b, UInt(0)) === hash(a + b) === hash(a + b, UInt(0)) # test caching
-    @test hash(a + b, UInt(2)) !== hash(a + b)
+    # Cache is keyed on hash(x, UInt(0)). Julia 1.13+ `hash(x)` mixes a
+    # process-wide seed, so it is intentionally not identical to hash(x, UInt(0)).
+    h0 = hash(a + b, UInt(0))
+    @test h0 === hash(a + b, UInt(0))
+    @test hash(a + b, UInt(2)) !== h0
 end
 
 @testset "methoderror" begin
@@ -1030,6 +1058,56 @@ end
         @test isequal(-x, -1x)
         @test isequal(x^1, x)
         @test isequal(unwrap_const((x^-1)*inv(x^-1)), 1)
+    end
+end
+
+# Helpers for the Issue#1079 regression test below.
+has_float64(x) = begin
+    x isa AbstractFloat && return true
+    x isa SymbolicUtils.BasicSymbolic || return false
+    if SymbolicUtils.iscall(x)
+        return any(has_float64, SymbolicUtils.arguments(x))
+    end
+    return SymbolicUtils.unwrap_const(x) isa AbstractFloat
+end
+
+eval_num(x) = begin
+    x isa SymbolicUtils.BasicSymbolic || return Float64(x)
+    if !SymbolicUtils.iscall(x)
+        return Float64(SymbolicUtils.unwrap_const(x))
+    end
+    op = SymbolicUtils.operation(x)
+    args = SymbolicUtils.arguments(x)
+    op === (+) && return sum(eval_num, args)
+    op === (*) && return prod(eval_num, args)
+    op === (^) && return eval_num(args[1]) ^ eval_num(args[2])
+    op === (sqrt) && return sqrt(eval_num(args[1]))
+    return Float64(SymbolicUtils.unwrap_const(x))
+end
+
+@testset "Issue#1079: simplify preserves exact sqrt terms" begin
+    @syms x y
+    s = term(sqrt, 2)
+    # `simplify` must not fold exact `sqrt` terms into `Float64`.
+    @test unwrap_const(simplify(s^2)) === 2
+    @test unwrap_const(simplify(s^4)) === 4
+    @test unwrap_const(simplify(s * s)) === 2
+    @test isequal(simplify(2s), 2s)
+    @test !has_float64(simplify((s * term(sqrt, 3))^2))
+    # Odd powers already stayed symbolic; keep them exact.
+    @test isequal(simplify(s^3), s^3)
+    # Cases that already worked must remain exact.
+    @test iszero(unwrap_const(simplify(s - s)))
+    @test isone(unwrap_const(simplify(s / s)))
+    # Fractional powers of symbolic radicands preserve their exact identities.
+    @test isequal(sqrt(x)^(2 // 3), x^(1 // 3))
+    @test unwrap_const(simplify(cbrt(x)^(3 // 2) - sqrt(x))) === 0
+    @test unwrap_const(simplify(sqrt(x)^(2 // 3) - x^(1 // 3))) === 0
+    @test unwrap_const(simplify(sqrt(x)^(4 // 3) - x^(2 // 3))) === 0
+    @test unwrap_const(simplify(sqrt(x + y)^(2 // 3) - (x + y)^(1 // 3))) === 0
+    # The results are mathematically equal to the inputs (checked numerically).
+    for e in (2s, s^2, s^4, s * s, (s * term(sqrt, 3))^2)
+        @test isapprox(eval_num(simplify(e)), eval_num(e))
     end
 end
 
@@ -1078,6 +1156,47 @@ end
     @test unwrap_const(x/3x) == 1//3
     @test isequal(x / 1, x)
     @test isequal(x / -1, -x)
+end
+
+# https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1101
+@testset "Exact coefficient powers don't overflow" begin
+    @syms x y c
+    typed_coeff(ex) = (k = get_mul_coefficient(ex); (typeof(k), k))
+    big_rat = (Rational{BigInt}, 1 // big(30555)^7)
+    @test typed_coeff(((x * y) / 30555.0)^7) == big_rat
+    @test typed_coeff(substitute((x * y / c)^7, Dict(c => 30555.0))) == big_rat
+    @test isequal(substitute((x * y / c)^7, Dict(c => 30555.0)), ((x * y) / 30555.0)^7)
+    @test typed_coeff(((x * y) / 30555)^7) == big_rat
+    @test isequal(((x * y) / 30555)^7, (1 // big(30555)^7) * x^7 * y^7)
+    @test typed_coeff((30555 * x * y)^7) == (BigInt, big(30555)^7)
+    @test typed_coeff((-30555 * x * y)^7) == (BigInt, -big(30555)^7)
+    @test typed_coeff((3x * y)^40) == (BigInt, big(3)^40)
+    @test typed_coeff(((2 + 3im) * x * y)^40) == (Complex{BigInt}, big(2 + 3im)^40)
+    @test typed_coeff(((1 // 3 + (1 // 5)im) * x * y)^20) ==
+        (Complex{Rational{BigInt}}, (big(1) // 3 + (big(1) // 5)im)^20)
+
+    @syms p q vartype = SafeReal
+    @test typed_coeff(((p * q) / 30555.0)^7) == big_rat
+end
+
+@testset "Exact coefficient powers that fit keep their type" begin
+    @syms x y
+    typed_coeff(ex) = (k = get_mul_coefficient(ex); (typeof(k), k))
+    @test get_mul_coefficient((x * y) / 30555.0) === 1 // 30555
+    @test get_mul_coefficient(((x * y) / 30555)^2) === 1 // 30555^2
+    @test get_mul_coefficient((3x * y)^5) === 243
+    # the largest power of 3 that fits `Int`, past the fast-path bound
+    k = Sys.WORD_SIZE == 64 ? 39 : 19
+    @test get_mul_coefficient((3x * y)^k) === 3^k
+    @test get_mul_coefficient(((1 // 3) * x * y)^k) === 1 // 3^k
+    @test get_mul_coefficient(((2 // 3) * x * y)^3) === 8 // 27
+    @test get_mul_coefficient(((2 + 1im) * x * y)^2) === 3 + 4im
+    @test get_mul_coefficient((im * x * y)^2) === -1 + 0im
+    @test get_mul_coefficient((-x * y)^3) === -1
+    @test get_mul_coefficient((2.0 * x * y)^7) === 128.0
+    @test typed_coeff((3x * y)^big(2)) == (BigInt, 9)
+    @test typed_coeff((big(3) * x * y)^2) == (BigInt, 9)
+    @test typed_coeff(((big(1) // 3) * x * y)^2) == (Rational{BigInt}, 1 // 9)
 end
 
 @testset "mul worker buffer is reentrancy-safe" begin
@@ -1220,6 +1339,18 @@ end
         truth = v[idxs[1:ndims(v)]...]
         @test isequal(el, truth)
     end
+    # An empty `StableIndex` on a non-0-dim array-typed symbolic returns the
+    # symbolic itself; element extraction only applies to 0-dim arrays.
+    for (name, T, sh) in (
+            (:vec_sym, Vector{Real}, SymbolicUtils.Unknown(1)),
+            (:mat_sym, Matrix{Real}, SymbolicUtils.Unknown(2)),
+            (:scalar_shaped_vec, Vector{Real}, ShapeVecT()),
+        )
+        arr = Sym{SymbolicUtils.SymReal}(name; type = T, shape = sh)
+        @test isequal(arr[SymbolicUtils.StableIndex(Int[])], arr)
+    end
+    zerodim_sym = Sym{SymbolicUtils.SymReal}(:zerodim_sym; type = Array{Real, 0}, shape = ShapeVecT())
+    @test symtype(zerodim_sym[SymbolicUtils.StableIndex(Int[])]) == Real
 end
 
 @testset "`StableIndex{Int}(::BasicSymbolic)`" begin
@@ -1347,6 +1478,26 @@ end
     @test !SII.hasname((2x)[1])
 end
 
+struct NamedProjection end
+SymbolicUtils.promote_symtype(::NamedProjection, ::Type) = Real
+SymbolicUtils.operation_hasname(::NamedProjection, args) = SII.hasname(args[1])
+SymbolicUtils.operation_getname(::NamedProjection, args) = SII.getname(args[1])
+
+struct AnonProjection end
+SymbolicUtils.promote_symtype(::AnonProjection, ::Type) = Real
+
+@testset "`operation_hasname`/`operation_getname` are extensible" begin
+    @syms x
+    # An operation that projects out of a named parent opts in and is named through it.
+    named = SymbolicUtils.term(NamedProjection(), x)
+    @test SII.hasname(named)
+    @test SII.getname(named) === :x
+    # Operations that do not opt in stay anonymous, and so does a projection whose
+    # parent is unnamed.
+    @test !SII.hasname(SymbolicUtils.term(AnonProjection(), x))
+    @test !SII.hasname(SymbolicUtils.term(NamedProjection(), 2x))
+end
+
 @testset "Div * Array" begin
     @syms x y z
     ex = (x / y) * BS[z, 1]
@@ -1424,4 +1575,15 @@ end
 @testset "Non-`Sym` expression as operation" begin
     @syms x y z o(..)::FnType{Tuple{Number}, Number, Nothing}
     @test_nowarn repr(o(x)(y + z))
+end
+
+@testset "`maketerm` on `map`/`mapreduce` works correctly" begin
+    @syms x[1:3]
+    ex = map(identity, x)
+    ex2 = SymbolicUtils.maketerm(typeof(ex), operation(ex), arguments(ex), nothing)
+    @test isequal(ex2, ex)
+
+    ex = sum(x)
+    ex2 = SymbolicUtils.maketerm(typeof(ex), operation(ex), arguments(ex), nothing)
+    @test isequal(ex2, ex)
 end

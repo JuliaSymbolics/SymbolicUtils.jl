@@ -2,6 +2,8 @@ using SymbolicUtils, SymbolicUtils.Code
 using SymbolicUtils: IRStructure, SymReal, ShapeVecT, FnType
 using Test
 
+test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linenums!(b))
+
 @testset "`symFunc` construction" begin
     @syms x::Real y::Real
 
@@ -146,6 +148,22 @@ end
     @test fn(3.0, 4.0) ≈ 7.0
 end
 
+@testset "`symAssignment` with `x(t)` lhs does not generate function" begin
+    @syms t::Real x(t)::Real
+    asgn = Code.symAssignment(x(t), t + 1)
+    ir = IRStructure{SymReal}()
+    expr = Code.fast_toexpr(asgn, ir, Dict{Any, Any}(:readable_variables => true))
+    test_repr(
+        expr, quote
+            local var"##cse#0" = (var"x(t)" = begin
+                local var"##cse#0" = 1
+                local var"##cse#1" = t
+                local var"##cse#2" = $(+)(var"##cse#0", var"##cse#1")
+            end)
+        end
+    )
+end
+
 @testset "`promote_symtype` for `Let`" begin
     @test SymbolicUtils.promote_symtype(Code.Let, Real) == Real
     @test SymbolicUtils.promote_symtype(Code.Let, Real, Float64) == Float64
@@ -212,6 +230,21 @@ end
         end
     end)
     @test result ≈ 7.0
+end
+
+@testset "Self-referential assignment inside `symLet`" begin
+    @syms x::Real y::Real
+    l = Code.symLet([Code.symAssignment(x, x + y)], x + y)
+    ir = IRStructure{SymReal}()
+    # `test_repr` won't work without `:readable_variables => true`, but that
+    # also masks the codegen intricacies with self-referential assignments.
+    expr = Code.fast_toexpr(l, ir, Dict{Any,Any}())
+    result = eval(quote
+        let x = 3.0, y = 4.0
+            $expr
+        end
+    end)
+    @test result ≈ 11.0
 end
 
 @testset "`symLet` inside `symFunc`" begin
@@ -286,4 +319,20 @@ end
         end
     end)
     @test result ≈ 7.0
+end
+
+@testset "`symFunc` involving already-generated expression of argument" begin
+    # If `symFunc` took an argument that is already present in the outer function and
+    # contained in its body an expression already generated, it would refer to the
+    # previously generated expression instead of re-computing it in terms of the argument.
+    # See the test case for an example.
+    @syms x y
+    sfn = Code.symFunc([x], 2x + y)
+    # `fn` takes `x` as an argument, same as `sfn`. `atan` ensures `2x` is already generated
+    # before the body of `sfn`. Previously, the body of `sfn` would refer to the outer `2x`.
+    # In other words, calling `fn` would have been equivalent to `atan(2x, 2x + y)` instead
+    # of the correct `atan(2x, 2 * (2x + y) + y)`.
+    fn = Code.Func([x, y], [], atan(2x, sfn(2x + y)))
+    f = eval(Code.fast_toexpr(fn, IRStructure{SymReal}(), Dict()))
+    @test f(1.0, 2.0) ≈ atan(2.0, 2 * (2.0 + 2.0) + 2.0)
 end

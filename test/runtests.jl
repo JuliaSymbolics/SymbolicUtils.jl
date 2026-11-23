@@ -22,15 +22,26 @@ if GROUP == "Core"
                 # @safetestset "Precompilation" begin include("precompilation.jl") end
             end
             @safetestset "Basics" begin include("basics.jl") end
+            @safetestset "Thread-safe arguments" begin include("threadsafe_arguments.jl") end
             @safetestset "ArrayOp" begin include("arrayop.jl") end
+            @safetestset "Constant array indices" begin include("constant_array_indices.jl") end
+            @safetestset "Array reduction cache" begin include("array_reduction_cache.jl") end
+            @safetestset "Empty stable indices" begin
+                include("empty_stable_indices.jl")
+            end
+            @safetestset "Empty slice shapes" begin
+                include("empty_slice_shapes.jl")
+            end
             @safetestset "ArrayMaker" begin include("arraymaker.jl") end
             @safetestset "Order" begin include("order.jl") end
             @safetestset "PolyForm" begin include("polyform.jl") end
             @safetestset "Rewrite" begin include("rewrite.jl") end
             @safetestset "Rulesets" begin include("rulesets.jl") end
+            @safetestset "Trig Reduce" begin include("trig_reduce.jl") end
             @safetestset "Inference" begin include("inference.jl") end
             @safetestset "Code" begin include("code.jl") end
             @safetestset "New codegen" begin include("new_code.jl") end
+            @safetestset "Fused broadcast codegen" begin include("fused_broadcast.jl") end
             @safetestset "Symbolic codegen primitives" begin include("symbolic_codegen_primitives.jl") end
             @safetestset "CSE" begin include("cse.jl") end
             @safetestset "Conditionals" begin include("conditionals.jl") end
@@ -51,5 +62,7 @@ end
 
 if GROUP == "QA"
     activate_qa_env()
+    @safetestset "SciMLTesting QA" begin include("qa/qa.jl") end
     @safetestset "AdjView JET" begin include("qa/adjview_jet.jl") end
+    @safetestset "Substitute broadcast JET" begin include("qa/substitute_broadcast_jet.jl") end
 end

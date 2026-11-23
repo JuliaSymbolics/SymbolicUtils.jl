@@ -4,11 +4,25 @@ using SymbolicUtils: Fill, Mapper, Mapreducer, ShapeVecT, SymReal
 import MultivariatePolynomials as MP
 import TermInterface
 
-hash2(a) = SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true hash(a)
+include("equality_memo.jl")
+
 isequal2(a, b) = SymbolicUtils.@manually_scope SymbolicUtils.COMPARE_FULL => true isequal(a, b)
+
+const BSImpl = SymbolicUtils.BasicSymbolicImpl
 
 struct Ctx1 end
 struct Ctx2 end
+
+struct ThrowingEqualityScalar
+    tag::Symbol
+    value::Int
+end
+
+Base.hash(x::ThrowingEqualityScalar, h::UInt) = hash(x.value, h)
+function Base.isequal(a::ThrowingEqualityScalar, b::ThrowingEqualityScalar)
+    a.tag === b.tag && return isequal(a.value, b.value)
+    throw(ArgumentError("incomparable scalar tags"))
+end
 
 @testset "Sym" begin
     x1 = only(@syms x)
@@ -38,10 +52,10 @@ end
     t1 = sin(a)
     t2 = sin(a)
     @test t1.id === t2.id
-    t3 = Term{SymReal}(identity,[a])
-    t4 = Term{SymReal}(identity,[a])
+    t3 = Term{SymReal}(identity, [a])
+    t4 = Term{SymReal}(identity, [a])
     @test t3.id === t4.id
-    t5 = Term{SymReal}(identity,[a]; type = Int)
+    t5 = Term{SymReal}(identity, [a]; type = Int)
     @test t3.id !== t5.id
     tm1 = setmetadata(t1, Ctx1, "meta_1")
     @test t1.id !== tm1.id
@@ -52,43 +66,59 @@ end
     d2 = b + a
     @test d1.id === d2.id
     d3 = b - 2 + a
-    d4 = a + b  - 2
+    d4 = a + b - 2
     @test d3.id === d4.id
     d5 = Add{SymReal}(0, ACDict{SymReal}(a => 1, b => 1); type = Int)
     @test d5.id !== d1.id
 
-    dm1 = setmetadata(d1,Ctx1,"meta_1")
+    dm1 = setmetadata(d1, Ctx1, "meta_1")
     @test d1.id !== dm1.id
+
+    # Dict value types must distinguish Int from Rational under full compare/hash,
+    # so simplify can replace n//1 coefficients without colliding on the stale object.
+    @syms p q
+    add_rat = (2 // 1) * p + (3 // 1) * q
+    add_int = 2 * p + 3 * q
+    @test isequal(add_int, add_rat)
+    @test !isequal2(add_int, add_rat)
+    @test add_int.id !== add_rat.id
 end
 
 @testset "Mul" begin
-    m1 = a*b
-    m2 = b*a
+    m1 = a * b
+    m2 = b * a
     @test m1.id === m2.id
-    m3 = 6*a*b
-    m4 = 3*a*2*b
+    m3 = 6 * a * b
+    m4 = 3 * a * 2 * b
     @test m3.id === m4.id
     m5 = Mul{SymReal}(1, ACDict{SymReal}(a => 1, b => 1); type = Int)
     @test m5.id !== m1.id
 
     mm1 = setmetadata(m1, Ctx1, "meta_1")
     @test m1.id !== mm1.id
+
+    @syms r s
+    mul_rat = r^(2 // 1) * s
+    mul_int = r^2 * s
+    @test isequal(mul_int, mul_rat)
+    @test !isequal2(mul_int, mul_rat)
+    @test mul_int.id !== mul_rat.id
 end
 
 @testset "Div" begin
-    v1 = a/b
-    v2 = a/b
+    v1 = a / b
+    v2 = a / b
     @test v1.id === v2.id
-    v3 = -1/a
-    v4 = -1/a
+    v3 = -1 / a
+    v4 = -1 / a
     @test v3.id === v4.id
-    v5 = 3a/6
-    v6 = 2a/4
+    v5 = 3a / 6
+    v6 = 2a / 4
     @test v5.id === v6.id
-    v7 = Div{SymReal}(-1,a, false; type = Float64)
+    v7 = Div{SymReal}(-1, a, false; type = Float64)
     @test v7.id !== v3.id
 
-    vm1 = setmetadata(v1,Ctx1, "meta_1")
+    vm1 = setmetadata(v1, Ctx1, "meta_1")
     @test vm1.id !== v1.id
 end
 
@@ -100,7 +130,7 @@ end
     p4 = a^(2^-b)
     @test p3.id === p4.id
 
-    pm1 = setmetadata(p1,Ctx1, "meta_1")
+    pm1 = setmetadata(p1, Ctx1, "meta_1")
     @test pm1.id !== p1.id
 end
 
@@ -133,13 +163,16 @@ end
     SymbolicUtils.ENABLE_HASHCONSING[] = true
 end
 
-@testset "`hash2` is cached" begin
+@testset "`hash` is cached" begin
     @syms a b f(..)
     for ex in [a + b, a * b, f(a)]
-        h = hash2(ex)
-        @test h == ex.hash2[]
+        # Cached field stores the metadata-free hash at seed UInt(0).
+        # Do not compare to bare `hash(ex)` — Julia 1.13+ mixes a process seed.
+        h = hash(ex, UInt(0))
+        @test h == ex.hash[]
         ex2 = setmetadata(ex, Int, 3)
-        @test ex2.hash2[] != h
+        # the hash is metadata-free
+        @test hash(ex2, UInt(0)) == h
     end
 end
 
@@ -148,12 +181,26 @@ end
     x1 = setmetadata(x, Int, 1)
     x2 = setmetadata(x, Int, 1.0)
     @test x1 !== x2
-    @test hash2(x1) != hash2(x2)
+    @test !isequal2(x1, x2)
 
     x1 = setmetadata(x, Int, [1])
     x2 = setmetadata(x, Int, [1])
     @test x1 === x2
-    @test hash2(x1) == hash2(x2)
+    @test hash(x1) == hash(x2)
+end
+
+@testset "Throwing scalar equality is not a hashconsing match" begin
+    @test_throws ArgumentError isequal(
+        ThrowingEqualityScalar(:tag1, 1), ThrowingEqualityScalar(:tag2, 1)
+    )
+
+    x1 = BSImpl.Const{SymReal}(ThrowingEqualityScalar(:tag1, 1))
+    x2 = BSImpl.Const{SymReal}(ThrowingEqualityScalar(:tag2, 1))
+    x3 = BSImpl.Const{SymReal}(ThrowingEqualityScalar(:tag1, 1))
+
+    @test x1 !== x2
+    @test x1 === x3
+    @test !isequal2(x1, x2)
 end
 
 @testset "Operations hash by content" begin

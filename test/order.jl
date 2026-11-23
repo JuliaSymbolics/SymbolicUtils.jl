@@ -90,3 +90,23 @@ end
     args = sort(arguments(expr), lt=<ₑ)
     @test all(((a, b), )->a <ₑ b,  combinations(args, 2))
 end
+
+@testset "ordering of array-valued constants" begin
+    @syms x[1:2, 1:3]
+    A = [0.0 1.0; 1.0 0.0]
+    B = [1.0 0.0; 0.0 1.0]
+    ex = A * x + B * x
+    @test isequal(ex, B * x + A * x)
+    @test !(SymbolicUtils.:<ₑ(A, A))
+    @test SymbolicUtils.:<ₑ(A, B) != SymbolicUtils.:<ₑ(B, A)
+    @test string(ex) isa String
+end
+
+@testset "ordering of function-valued constants" begin
+    @syms x[1:3] y[1:3]
+    @test SymbolicUtils.:<ₑ(/, x)
+    @test !SymbolicUtils.:<ₑ(x, /)
+    ex = (x ./ y) .+ (x .- y)
+    @test string(ex) isa String
+    @test SymbolicUtils.:<ₑ("a", :b) != SymbolicUtils.:<ₑ(:b, "a")
+end

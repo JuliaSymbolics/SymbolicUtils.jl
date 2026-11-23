@@ -69,10 +69,60 @@ function random_term(len; atoms, funs, fallback_atom=1)
     xs[]
 end
 
+function build_deep_expr(vars, depth)
+    expr = vars[1]
+    for i in 1:depth
+        v = vars[mod1(i, length(vars))]
+        expr = sin(expr * v + v^2 - v)
+    end
+    return expr
+end
+
+# Programmatic symbols: needed when an expression wants more atoms than the
+# fixed list @syms creates.
+_bench_sym(i) = SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol("_bx", i); type = Real)
+
+# An n-term canonical sum of distinct symbols.
+function bench_bigsum(i0, i1)
+    SymbolicUtils.add_worker(SymbolicUtils.SymReal, [_bench_sym(i) for i in i0:i1])
+end
+
+# p <- R(θ_k) p + t_k with a fresh symbolic angle θ_k and fresh translation
+# symbols (tx_k, ty_k) every iteration. expand() distributes the trig factors
+# over each component's terms, so with fresh symbols per step nothing collects
+# and each component ends a ~2^k-term sum of products of trig leaves.
+function bench_affine_chain(k)
+    x, y = _bench_sym(1), _bench_sym(2)
+    for i in 1:k
+        θ = SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol("_bθ", i); type = Real)
+        u = SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol("_btx", i); type = Real)
+        v = SymbolicUtils.Sym{SymbolicUtils.SymReal}(Symbol("_bty", i); type = Real)
+        x, y = SymbolicUtils.expand(cos(θ) * x - sin(θ) * y + u),
+               SymbolicUtils.expand(sin(θ) * x + cos(θ) * y + v)
+    end
+    x
+end
+
+function batch_isequal(xs, ys, reps)
+    acc = true
+    n = length(xs)
+    for i in 1:reps
+        acc &= isequal(xs[mod1(i, n)], ys[mod1(i, n)])
+    end
+    return acc
+end
+
 let r = @rule(~x => ~x), rs = RuleSet([r]),
     acr = @rule(~x::is_literal_number + ~y => ~y)
 
     overhead = SUITE["overhead"]  = BenchmarkGroup()
+
+    iseq = overhead["isequal"] = BenchmarkGroup()
+    exprs1 = [build_deep_expr([a, b, c, d], 300) for _ in 1:16]
+    exprs2 = [build_deep_expr([b, c, d, a], 300) for _ in 1:16]
+    iseq["identical"] = @benchmarkable batch_isequal($exprs1, $exprs1, 2000)
+    iseq["different"] = @benchmarkable batch_isequal($exprs1, $exprs2, 2000)
+
     overhead["rule"]  = BenchmarkGroup()
 
     overhead["rule"]["noop:Int"]  = @benchmarkable $r(1)
@@ -187,6 +237,17 @@ let
     ex1 = random_term(50; atoms, funs)
     ex2 = random_term(50; atoms, funs)
     arith["division"] = @benchmarkable $ex1 / $ex2
+
+    # two 100_000-term canonical sums with half their terms in common:
+    # exercises the Add dict-merge plus interning of the result, not the
+    # small-term fast paths
+    s1 = bench_bigsum(1, 100_000)
+    s2 = bench_bigsum(50_001, 150_000)
+    arith["add_100k_term_sums"] = @benchmarkable $s1 + $s2
+
+    # repeated rotation + translation of a position vector with fresh symbolic
+    # angles/translations each step; component ends a ~2^k-term expanded sum
+    arith["affine_chain_k10"] = @benchmarkable bench_affine_chain(10)
 end
 
 @static if length(methods(SymbolicUtils.clear_cache!)) < 4

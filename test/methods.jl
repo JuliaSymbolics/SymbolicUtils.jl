@@ -1,9 +1,54 @@
 using SymbolicUtils
-using SymbolicUtils: Sym, Term, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType
+using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
 using SymbolicUtils: arguments, iscall, operation, unwrap_const
 using Test
 import NaNMath
 import LinearAlgebra
+import SparseArrays
+using StaticArrays: SVector
+using SparseArrays: sparse
+
+struct NoMatrixVector{T} <: AbstractVector{T}
+    data::Vector{T}
+end
+Base.size(x::NoMatrixVector) = size(x.data)
+Base.getindex(x::NoMatrixVector, i::Int) = x.data[i]
+
+module MapreduceMethodsFixture
+    using SymbolicUtils
+
+    struct WrappedArray{T, N} <: AbstractArray{T, N}
+        value::Array{T, N}
+    end
+    Base.size(x::WrappedArray) = size(x.value)
+    unwrap(x::WrappedArray) = x.value
+    SymbolicUtils.@mapreduce_methods WrappedArray unwrap identity
+end
+Base.Matrix(::LinearAlgebra.Diagonal{T, V}) where {T, V <: NoMatrixVector} =
+    error("unexpected dense conversion")
+
+@testset "public shape promotion interface" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils, :Unknown)
+        @test Base.ispublic(SymbolicUtils, :ShapeVecT)
+        @test Base.ispublic(SymbolicUtils, :ShapeT)
+        @test Base.ispublic(SymbolicUtils, :shape)
+        @test Base.ispublic(SymbolicUtils, :promote_shape)
+        @test Base.ispublic(SymbolicUtils, :Term)
+        @test Base.ispublic(SymbolicUtils, :Add)
+        @test Base.ispublic(SymbolicUtils, :Mul)
+        @test Base.ispublic(SymbolicUtils, :node_count)
+    end
+end
+
+@testset "public API docstrings" begin
+    @test @doc(SymbolicUtils.FnType) !== nothing
+    @test @doc(SymbolicUtils.Term) !== nothing
+    @test @doc(SymbolicUtils.Add) !== nothing
+    @test @doc(SymbolicUtils.Mul) !== nothing
+    @test @doc(SymbolicUtils.node_count) !== nothing
+end
+
 import SpecialFunctions: besselj, bessely, besseli, besselk, polygamma, beta, logbeta, hankelh1, hankelh2, expint, gamma, erf
 
 @testset "promote_symtype with BigInt" begin
@@ -230,9 +275,63 @@ end
     @test_throws MethodError !x
 end
 
+@testset "Boolean operators short-circuit on constant arguments" begin
+    @syms p::Bool q::Bool
+    ct = Const{SymReal}(true)
+    cf = Const{SymReal}(false)
+
+    # `&`: a literal `true` drops out, a literal `false` short-circuits to `false`
+    @test isequal(p & true, p)
+    @test isequal(true & p, p)
+    @test isequal(p & false, cf)
+    @test isequal(false & p, cf)
+    @test operation(p & q) === (&)
+
+    # `|`: a literal `false` drops out, a literal `true` short-circuits to `true`
+    @test isequal(p | false, p)
+    @test isequal(false | p, p)
+    @test isequal(p | true, ct)
+    @test isequal(true | p, ct)
+    @test operation(p | q) === (|)
+
+    # `xor`: only a literal `false` short-circuits (to the other argument);
+    # a literal `true` does not fold to a negation
+    @test isequal(xor(p, false), p)
+    @test isequal(xor(false, p), p)
+    @test operation(xor(p, true)) === xor
+    @test operation(xor(true, p)) === xor
+    @test operation(xor(p, q)) === xor
+end
+
+@testset "Boolean negation short-circuits on constant arguments" begin
+    ct = Const{SymReal}(true)
+    cf = Const{SymReal}(false)
+    @test isequal(!ct, cf)
+    @test isequal(!cf, ct)
+    @test isequal(~ct, cf)
+    @test isequal(~cf, ct)
+end
+
 @testset "ifelse with error" begin
     @syms x::Real
     @test_throws ArgumentError promote_symtype(ifelse, Real, Int, Float64)
+end
+
+@testset "ifelse short-circuits on constant condition" begin
+    @syms cond::Bool x::Real y::Real
+    ct = Const{SymReal}(true)
+    cf = Const{SymReal}(false)
+    @test isequal(ifelse(ct, x, y), x)
+    @test isequal(ifelse(cf, x, y), y)
+    @test operation(ifelse(cond, x, y)) === ifelse
+end
+
+@testset "ifelse short-circuits on constant boolean branches" begin
+    @syms cond::Bool
+    ct = Const{SymReal}(true)
+    cf = Const{SymReal}(false)
+    @test isequal(ifelse(cond, ct, cf), cond)
+    @test isequal(ifelse(cond, cf, ct), !cond)
 end
 
 @testset "IndexStyle" begin
@@ -290,6 +389,26 @@ end
 
     @test_throws ArgumentError promote_shape(LinearAlgebra.det, Unknown(3))
     @test_throws ArgumentError promote_shape(LinearAlgebra.det, ShapeVecT((1:3,)))
+end
+
+@testset "LinearAlgebra.mul! promote" begin
+    shC = ShapeVecT((1:2, 1:3))
+    shA = ShapeVecT((1:2, 1:4))
+    shB = ShapeVecT((1:4, 1:3))
+    @test promote_symtype(LinearAlgebra.mul!, Matrix{Real}, Matrix{Real}, Matrix{Real}) == Matrix{Real}
+    @test promote_shape(LinearAlgebra.mul!, shC, shA, shB) == shC
+    @test promote_shape(LinearAlgebra.mul!, shC, shA, shB, ShapeVecT(), ShapeVecT()) == shC
+    @test promote_shape(LinearAlgebra.mul!, ShapeVecT((1:2,)), shA, ShapeVecT((1:4,))) == ShapeVecT((1:2,))
+    @test promote_shape(LinearAlgebra.mul!, Unknown(2), shA, shB) == Unknown(2)
+
+    # Rebuilding a `mul!` term from its operation and arguments keeps the output's shape
+    @syms c[1:2, 1:3] a[1:2, 1:4] b[1:4, 1:3] α β
+    for args in ([c, a, b], [c, a, b, α, β])
+        t = Term{SymReal}(LinearAlgebra.mul!, args; type = symtype(c), shape = SymbolicUtils.shape(c))
+        rebuilt = SymbolicUtils.maketerm(typeof(t), operation(t), arguments(t), nothing)
+        @test SymbolicUtils.shape(rebuilt) == SymbolicUtils.shape(c)
+        @test symtype(rebuilt) == symtype(c)
+    end
 end
 
 @testset "Array symbolic operations" begin
@@ -366,7 +485,8 @@ end
 end
 
 @testset "Map operations on symbolics" begin
-    @syms a[1:3]::Float64 b[1:3]::Float64
+    @syms a[1:3]::Float64 b[1:3]::Float64 f(..)
+    @syms safe_f(..) safe_a[1:3]::Float64 vartype = SafeReal
 
     result = map(sin, a)
     @test isequal(collect(result), [sin(a[1]), sin(a[2]), sin(a[3])])
@@ -376,6 +496,110 @@ end
 
     result3 = map(+, a, [1.0, 2.0, 3.0])
     @test isequal(collect(result3), [a[1] + 1.0, a[2] + 2.0, a[3] + 3.0])
+
+    diagonal = LinearAlgebra.Diagonal([1, 2])
+    mapped_diagonal = map(f, diagonal)
+    @test mapped_diagonal isa BasicSymbolic
+    @test isequal(collect(mapped_diagonal), [f(1) f(0); f(0) f(2)])
+    no_matrix = LinearAlgebra.Diagonal(NoMatrixVector([1, 2]))
+    mapped_no_matrix = map(f, no_matrix)
+    @test mapped_no_matrix isa BasicSymbolic
+    @test size(mapped_no_matrix) == (2, 2)
+    sparse_lower = LinearAlgebra.LowerTriangular(SparseArrays.spdiagm([1, 2]))
+    mapped_sparse_lower = map(f, sparse_lower)
+    @test mapped_sparse_lower isa BasicSymbolic
+    @test size(mapped_sparse_lower) == (2, 2)
+    @test isequal(mapreduce(f, +, diagonal), f(1) + f(2) + 2f(0))
+
+    sparse_diagonal = sparse([1 0; 0 2])
+    mapped_sparse_diagonal = map(f, sparse_diagonal)
+    @test mapped_sparse_diagonal isa BasicSymbolic
+    @test isequal(collect(mapped_sparse_diagonal), [f(1) f(0); f(0) f(2)])
+    mapped_sparse_diagonals = map(f, sparse_diagonal, sparse_diagonal)
+    @test mapped_sparse_diagonals isa BasicSymbolic
+    @test isequal(
+        collect(mapped_sparse_diagonals),
+        [f(1, 1) f(0, 0); f(0, 0) f(2, 2)]
+    )
+    sparse_vector = SparseArrays.sparsevec([1, 3], [1, 2], 3)
+    mapped_sparse_vector = map(f, sparse_vector)
+    @test mapped_sparse_vector isa BasicSymbolic
+    @test isequal(collect(mapped_sparse_vector), [f(1), f(0), f(2)])
+    # A symbolic callable over any constant array traces lazily, whatever the array type.
+    dense = [1 0; 0 2]
+    for arr in (
+            dense, [1, 2], 1:2, view([1, 2], 1:2), transpose(dense), LinearAlgebra.Symmetric(dense),
+            LinearAlgebra.Hermitian(dense), LinearAlgebra.UpperHessenberg(dense),
+            SVector(1, 2), [1, 2]', transpose([1, 2]), SparseArrays.spdiagm([1, 2])[:, 1:2],
+            BitVector([true, false]), reshape(1:4, 2, 2),
+        )
+        mapped = map(f, arr)
+        @test mapped isa BasicSymbolic
+        @test isequal(collect(mapped), map(v -> f(v), collect(arr)))
+    end
+    @test isequal(collect(map(f, dense)), [f(1) f(0); f(0) f(2)])
+    @test symtype(map(f, dense)) == Matrix{Number}
+    for zerodim in (fill(1), reshape(1:1, ()))
+        mapped_zerodim = map(f, zerodim)
+        @test mapped_zerodim isa BasicSymbolic
+        @test symtype(mapped_zerodim) == Array{Number, 0}
+        @test isempty(SymbolicUtils.shape(mapped_zerodim))
+        @test isequal(collect(mapped_zerodim), f(1))
+    end
+    sym_zerodim = Sym{SymReal}(:sym_zerodim; type = Array{Real, 0}, shape = SymbolicUtils.ShapeVecT())
+    mapped_sym_zerodim = map(sin, sym_zerodim)
+    @test symtype(mapped_sym_zerodim) == Array{Real, 0}
+    @test symtype(only(SymbolicUtils.arguments(mapped_sym_zerodim[]))) == Real
+    @test symtype(only(SymbolicUtils.arguments(collect(mapped_sym_zerodim)))) == Real
+    @test isequal(
+        substitute(mapped_sym_zerodim[], Dict(sym_zerodim => fill(1)); fold = Val(true)),
+        Const{SymReal}(sin(1))
+    )
+    for (x, y) in ((diagonal, dense), (dense, diagonal), (sparse_diagonal, dense), (SVector(1, 2), [1, 2]), ([1, 2], SVector(1, 2)))
+        mapped = map(f, x, y)
+        @test mapped isa BasicSymbolic
+        @test isequal(collect(mapped), map((v, w) -> f(v, w), collect(x), collect(y)))
+    end
+    @test_throws ArgumentError map(safe_f, a)
+    @test_throws ArgumentError map(+, a, a, safe_a)
+    @test_throws ArgumentError mapreduce(safe_f, +, a)
+    @test_throws ArgumentError mapreduce(+, +, a, a, safe_a)
+end
+
+@testset "@mapreduce_methods" begin
+    using .MapreduceMethodsFixture: MapreduceMethodsFixture, WrappedArray
+
+    ambiguities = Test.detect_ambiguities(
+        SymbolicUtils, MapreduceMethodsFixture; recursive = true
+    )
+    # The macro can only close intersections with methods in modules
+    # SymbolicUtils controls; third-party `mapreduce` overloads (e.g.
+    # FillArrays', loaded transitively by other test files) intersect the
+    # generated methods by construction and are out of scope here.
+    fixture_ambiguities = filter(ambiguities) do (first_method, second_method)
+        mod1 = first_method.module
+        mod2 = second_method.module
+        (mod1 === MapreduceMethodsFixture || mod2 === MapreduceMethodsFixture) &&
+            mod1 in (Base, SymbolicUtils, MapreduceMethodsFixture) &&
+            mod2 in (Base, SymbolicUtils, MapreduceMethodsFixture)
+    end
+    @test isempty(fixture_ambiguities)
+
+    w1 = WrappedArray([1, 2])
+    w2 = WrappedArray([3, 4])
+    @test mapreduce(identity, +, w1) == 3
+    @test mapreduce(+, +, w1, w2) == mapreduce(+, +, [1, 2], [3, 4])
+    @test mapreduce(+, +, [10, 20], w2) == mapreduce(+, +, [10, 20], [3, 4])
+    @test mapreduce(+, +, w1, [10, 20]) == mapreduce(+, +, [1, 2], [10, 20])
+    @test mapreduce(+, +, w1, Broadcast.broadcasted(+, [3, 4])) ==
+        mapreduce(+, +, [1, 2], [3, 4])
+    @syms f(..) g(..) c[1:2]
+    @test isequal(mapreduce(f, +, w1), f(1) + f(2))
+    @test isequal(mapreduce(f, g, w1), g(f(1), f(2)))
+    @test mapreduce(+, +, w1, c) isa BasicSymbolic
+    @test mapreduce(+, +, c, w1) isa BasicSymbolic
+    @syms sf(..) vartype = SafeReal
+    @test_throws ErrorException mapreduce(f, sf, w1)
 end
 
 @testset "in operator on symbolics" begin
@@ -394,7 +618,29 @@ end
     @test isa(result2, BasicSymbolic)
 
     result3 = in(x, [1.0, 2.0, 3.0])
+    result4 = in(x, SVector(1.0, 2.0, 3.0))
+    @test isa(result4, BasicSymbolic)
+    @test symtype(result4) == Bool
     @test isa(result3, BasicSymbolic)
+    result5 = in(x, reshape(1.0:4.0, 2, 2))
+    @test isa(result5, BasicSymbolic)
+    @test symtype(result5) == Bool
+
+    @syms y::Float64
+    for zerodim in (fill(1), reshape(1:1, ()))
+        result_zerodim = in(x, zerodim)
+        @test isa(result_zerodim, BasicSymbolic)
+        @test symtype(result_zerodim) == Bool
+        @test SymbolicUtils.operation(result_zerodim) === in
+        @test isequal(substitute(result_zerodim, Dict(x => y)), in(y, zerodim))
+        @test isequal(
+            substitute(result_zerodim, Dict(x => 1.0); fold = Val(true)),
+            Const{SymReal}(1.0 in zerodim)
+        )
+    end
+    @test_throws ArgumentError Base.in(x, y)
+    scalar_shaped_arr = Sym{SymReal}(:scalar_shaped_arr; type = Vector{Real}, shape = ShapeVecT())
+    @test_throws ArgumentError Base.in(x, scalar_shaped_arr)
 end
 
 @testset "Symbol conversion" begin
@@ -515,4 +761,50 @@ end
 @testset "`Fill` with non-symbolic argument" begin
     f = Fill(ShapeVecT((1:3, 1:3)))
     @test f(1) == fill(1, 3, 3)
+end
+
+@testset "`promote_symtype` for `reshape`" begin
+    @test SymbolicUtils.promote_symtype(reshape, Vector{Int}, Int, Int) === Matrix{Int}
+    @test SymbolicUtils.promote_symtype(reshape, Vector{Real}, Int, Int, Int) === Array{Real, 3}
+end
+
+@testset "`sqrt` simplification rule" begin
+    # exact results stay exact numbers, not symbolic expressions
+    @test SymbolicUtils.unwrap_const(simplify(term(sqrt, 0))) === 0
+    @test SymbolicUtils.unwrap_const(simplify(term(sqrt, 1))) === 1
+    @test SymbolicUtils.unwrap_const(simplify(term(sqrt, 4))) === 2
+    @test SymbolicUtils.unwrap_const(simplify(term(sqrt, 49))) === 7
+    @test SymbolicUtils.unwrap_const(simplify(term(sqrt, 1024))) === 32
+    @test SymbolicUtils.unwrap_const(simplify(term(sqrt, 9 // 4))) === 3 // 2
+
+    # irrational results are unevaluated `sqrt` terms, never floats
+    @test isequal(simplify(term(sqrt, 2)), term(sqrt, 2))
+    @test isequal(simplify(term(sqrt, 3)), term(sqrt, 3))
+
+    # the largest perfect square factor is pulled out of the radicand
+    @test isequal(simplify(term(sqrt, 12)), simplify(2 * term(sqrt, 3)))
+    @test isequal(simplify(term(sqrt, 8)), simplify(2 * term(sqrt, 2)))
+    @test isequal(simplify(term(sqrt, 12 // 49)), simplify((2 // 7) * term(sqrt, 3)))
+    @test isequal(simplify(term(sqrt, 1 // 3)), simplify((1 // 3) * term(sqrt, 3)))
+    @test isequal(simplify(term(sqrt, 7 // 2)), simplify((1 // 2) * term(sqrt, 14)))
+
+    # the value is the square root it claims to be
+    fold(v) = let v = SymbolicUtils.unwrap_const(v)
+        v isa Number ? float(v) :
+        SymbolicUtils.operation(v)(map(fold, SymbolicUtils.arguments(v))...)
+    end
+    for x in (2, 3, 5, 8, 12, 1024, 12 // 49, 1 // 3, 7 // 2, 9 // 4)
+        @test fold(simplify(term(sqrt, x))) ≈ sqrt(float(x))
+    end
+
+    # a radicand whose prime factors all lie beyond the trial division bound is
+    # still correct, and found quickly
+    p = 1_000_003
+    @test SymbolicUtils.unwrap_const(simplify(term(sqrt, big(p)^2))) === p
+    s, r = SymbolicUtils._split_perfect_square(big(p)^2 * 3)
+    @test s^2 * r == big(p)^2 * 3
+
+    # Negative arguments are not simplified by the rule, they stay un-evaluated
+    @test isequal(simplify(term(sqrt, -1)), term(sqrt, -1))
+    @test isequal(simplify(term(sqrt, -1 // 2)), term(sqrt, -1 // 2))
 end

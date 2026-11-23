@@ -13,6 +13,13 @@ test_repr(a, b) = @test repr(Base.remove_linenums!(a)) == repr(Base.remove_linen
 nanmath_st = Code.NameState()
 nanmath_st.rewrites[:nanmath] = true
 
+@testset "public array-construction extension point" begin
+    if isdefined(Base, :ispublic)
+        @test Base.ispublic(SymbolicUtils.Code, :create_array)
+    end
+    @test @doc(SymbolicUtils.Code.create_array) !== nothing
+end
+
 @testset "Code" begin
     @syms a b c d e p q t x(t) y(t) z(t)
     @test toexpr(Assignment(a, b)) == :(a = b)
@@ -104,20 +111,20 @@ nanmath_st.rewrites[:nanmath] = true
     @test toexpr(NaNMath.pow(a, b)) == :($(NaNMath.pow)(a, b))
     @test toexpr(NaNMath.pow(a, b), nanmath_st) == :($(NaNMath.pow)(a, b))
 
-    @test toexpr(a^2) == :($(^)(a, 2))
-    @test toexpr(a^2, nanmath_st) == :($(^)(a, 2))
-    @test toexpr(NaNMath.pow(a, 2)) == :($(^)(a, 2))
-    @test toexpr(NaNMath.pow(a, 2), nanmath_st) == :($(^)(a, 2))
+    @test toexpr(a^2) == :($(Base.literal_pow)($(^), a, $(Val)(2)))
+    @test toexpr(a^2, nanmath_st) == :($(Base.literal_pow)($(^), a, $(Val)(2)))
+    @test toexpr(NaNMath.pow(a, 2)) == :($(Base.literal_pow)($(^), a, $(Val)(2)))
+    @test toexpr(NaNMath.pow(a, 2), nanmath_st) == :($(Base.literal_pow)($(^), a, $(Val)(2)))
 
     @test toexpr(a^-1) == :($(/)(1, a))
     @test toexpr(a^-1, nanmath_st) == :($(/)(1, a))
     @test toexpr(NaNMath.pow(a, -1)) == :($(/)(1, a))
     @test toexpr(NaNMath.pow(a, -1), nanmath_st) == :($(/)(1, a))
 
-    @test toexpr(a^-2) == :($(/)(1, $(^)(a, 2)))
-    @test toexpr(a^-2, nanmath_st) == :($(/)(1, $(^)(a, 2)))
-    @test toexpr(NaNMath.pow(a, -2)) == :($(/)(1, $(^)(a, 2)))
-    @test toexpr(NaNMath.pow(a, -2), nanmath_st) == :($(/)(1, $(^)(a, 2)))
+    @test toexpr(a^-2) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val)(2))))
+    @test toexpr(a^-2, nanmath_st) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val)(2))))
+    @test toexpr(NaNMath.pow(a, -2)) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val)(2))))
+    @test toexpr(NaNMath.pow(a, -2), nanmath_st) == :($(/)(1, $(Base.literal_pow)($(^), a, $(Val)(2))))
 
     f = GlobalRef(NaNMath, :sin)
     test_repr(toexpr(LiteralExpr(:(let x=1, y=2
@@ -172,6 +179,21 @@ nanmath_st.rewrites[:nanmath] = true
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray(transpose([a b;a+b a/b]), arr)))) == [1 3;2 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(([a b;a+b a/b])', arr)))) == [1 3;2 1/2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray(transpose([a, b]), arr)))) == [1 2]
+
+    @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
+                          MakeArray([a, b]', arr)))) == [1 2]
+
+    let M = [a b; a+b a/b]
+        @test eval(toexpr(Let([a ← 1, b ← 2], MakeArray(M', typeof(M'))))) == [1 3; 2 1/2]
+        f = eval(toexpr(Func([a, b], [], M')))
+        @test Base.invokelatest(f, 1, 2) == [1 3; 2 1/2]
+    end
 
     @test eval(toexpr(Let([a ← 1, b ← 2, arr ← [1,2]],
                           MakeArray(UpperTriangular([a b;a+b a/b]), arr)))) == [1 2;0 1/2]
@@ -229,13 +251,17 @@ nanmath_st.rewrites[:nanmath] = true
               :((a,b,$(+)(a,b))))
 
     @test SpawnFetch{Multithreaded}([()->1,()->2],vcat)|>toexpr|>eval == [1,2]
-    @test @elapsed(SpawnFetch{Multithreaded}([:(()->sleep(2)),
+    # Warm first so the timed check measures parallelism, not compile time (#1107).
+    let spawn_ex = SpawnFetch{Multithreaded}([:(()->sleep(2)),
                                               Func([:x],
                                                    [],
                                                    :(sleep(x)))],
                                              [(),
                                               (2,)],
-                                             vcat)|>toexpr|>eval) < 3
+                                             vcat) |> toexpr
+        eval(spawn_ex)
+        @test @elapsed(eval(spawn_ex)) < 3
+    end
 
     let
         @syms a b
@@ -268,6 +294,46 @@ nanmath_st.rewrites[:nanmath] = true
         f = eval(toexpr(Func([a, b], [], t)))
         @test @invokelatest(f(1.0, 2.0)) ≈ 13.0 + sqrt(2)
     end
+end
+
+@testset "constant integer powers use `literal_pow`" begin
+    @syms a::Real x[1:3]::Real
+    @test toexpr(a^3) == :($(Base.literal_pow)($(^), a, $(Val)(3)))
+    @test toexpr(a^Int32(3)) == :($(Base.literal_pow)($(^), a, $(Val)(3)))
+    @test toexpr(a^(big(2)^70)).args[1] === (^)
+    @test toexpr(a^2.5) == :($(^)(a, 2.5))
+    @test toexpr(x .^ 3) == :($(Code.fused_materialize)($(Base.Broadcast.broadcasted)($(Base.literal_pow), $(^), x, $(Val)(3))))
+    @test toexpr(x .^ 2.5) == :($(broadcast)($(^), x, 2.5))
+
+    for n in 2:5
+        f = eval(toexpr(Func([a], [], a^n)))
+        for v in (0.1, 1.3, -2.7, 1.3f0, 5)
+            @test @invokelatest(f(v)) ≈ v^n
+            n == 2 && @test @invokelatest(f(v)) === v^n
+        end
+    end
+    g = eval(toexpr(Func([x], [], x .^ 2)))
+    @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
+    v = [1.0, 2.0, 3.0]
+    allocated(f) = (f(v); @allocated f(v))
+    @test @invokelatest(allocated(g)) < 2 * allocated(w -> w .^ 2)
+end
+
+@testset "constant integer powers opt out of `literal_pow`" begin
+    @syms a::Real x[1:3]::Real
+    st = Code.NameState()
+    st.rewrites[Code.USE_LITERAL_POW_KEY] = false
+    @test toexpr(a^3, st) == :($(^)(a, 3))
+    @test toexpr(a^2.5, st) == :($(^)(a, 2.5))
+    @test toexpr(x .^ 3, st) == :($(broadcast)($(^), x, 3))
+
+    f = eval(toexpr(Func([a], [], a^3), st))
+    @test @invokelatest(f(1.3)) === 1.3^3
+    g = eval(toexpr(Func([x], [], x .^ 2), st))
+    @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
+
+    st.rewrites[Code.USE_LITERAL_POW_KEY] = true
+    @test toexpr(a^3, st) == :($(Base.literal_pow)($(^), a, $(Val)(3)))
 end
 
 @testset "Sparse array CSE" begin
@@ -397,7 +463,7 @@ end
                 __array_literal_allocator = ones
                 __array_literal_result = __array_literal_allocator((3,))
                 $(setindex!)(__array_literal_result, x, 1)
-                $(setindex!)(__array_literal_result, $(+)($(+)($(sin)(z), y), $(*)(2, $(^)(x, 2))), 2)
+                $(setindex!)(__array_literal_result, $(+)($(+)($(sin)(z), y), $(*)(2, $(Base.literal_pow)($(^), x, $(Val)(2)))), 2)
                 $(setindex!)(__array_literal_result, $(+)(1, $(*)(2, z)), 3)
                 __array_literal_result
             end
@@ -458,4 +524,47 @@ end
     @test r isa Base.ReshapedArray
     a = Code.create_array(typeof(r), nothing, Val(2), Val((2, 2)), r...)
     @test a isa Matrix{Float64}
+end
+
+@testset "`array_literal` with more than 32 entries is not splatted (#1181)" begin
+    has_dynamic_apply(f, argtypes) = any(first(only(code_typed(f, argtypes))).code) do st
+        Meta.isexpr(st, :call) || return false
+        g = st.args[1]
+        return g === Core._apply_iterate || (g isa GlobalRef && g.name === :_apply_iterate)
+    end
+    @test !has_dynamic_apply(SymbolicUtils.array_literal, (Tuple{Int}, ntuple(_ -> Float64, 64)...))
+    @test SymbolicUtils.array_literal((2, 2), 1, 2.0, 3, 4) == [1.0 3.0; 2.0 4.0]
+    @test_throws DimensionMismatch SymbolicUtils.array_literal((2,), 1.0)
+    for n in (31, 32)
+        mixed = eval(:(x -> SymbolicUtils.array_literal(($n,), $((isodd(i) ? :x : i for i in 1:n)...))))
+        same = eval(:(x -> SymbolicUtils.array_literal(($n,), $((:x for _ in 1:n)...))))
+        @test Base.invokelatest(mixed, 0.5)::Vector{Float64} == [isodd(i) ? 0.5 : i for i in 1:n]
+        allocated(f) = (f(0.5); @allocated f(0.5))
+        @test Base.invokelatest(allocated, mixed) <= 2 * Base.invokelatest(allocated, same)
+    end
+    @test SymbolicUtils.array_literal((4, 10), ntuple(i -> i % 3 == 0 ? Float32(i) : i, 40)...)::Matrix{Float32} == reshape(1:40, 4, 10)
+    @test_throws DimensionMismatch SymbolicUtils.array_literal((41,), ntuple(i -> isodd(i) ? 1.0 : i, 40)...)
+end
+
+@testset "destructuring rewrites do not retain `elems` (#1098)" begin
+    @syms y1 y2 y3
+    function gen_weak()
+        elems = [y1, y2, y3]
+        toexpr(Func([DestructuredArgs(elems, :u; create_bindings = false)], [], y1 + y2))
+        return WeakRef(elems)
+    end
+    refs = [gen_weak() for _ in 1:20]
+    GC.gc(true)
+    @test all(r -> r.value === nothing, refs)
+
+    function rhs_exprs(elems)
+        st = Code.NameState()
+        toexpr(Func([DestructuredArgs(elems, :u; create_bindings = false)], [], y1), st)
+        return [st.rewrites[e] for e in elems]
+    end
+    ex1 = rhs_exprs([y1, y2, y3])
+    ex2 = rhs_exprs([y3, y2, y1])
+    @test ex1 == [:(u[1]), :(u[2]), :(u[3])]
+    @test ex2 == ex1
+    @test all(ex1 .=== ex2)
 end

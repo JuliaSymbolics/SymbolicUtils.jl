@@ -1,4 +1,15 @@
 [deps]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+Aqua = "0.8"
+JET = "0.9, 0.10, 0.11, 0.12"
+SciMLTesting = "2.4"
+SymbolicUtils = "4"
+Test = "1"
+julia = "1.10"

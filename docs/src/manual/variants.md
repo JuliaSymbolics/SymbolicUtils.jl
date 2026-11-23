@@ -171,7 +171,7 @@ end
 ```
 
 `AddMul` is a specialized representation for associative-commutative addition and
-multiplication. The two operations are distinguished using the [`AddMulVariant`](@ref)
+multiplication. The two operations are distinguished using the [`SymbolicUtils.AddMulVariant`](@ref)
 EnumX.jl enum. It has two variants: `AddMulVariant.ADD` and `AddMulVariant.MUL`.
 
 For multiplication terms, `coeff` is a constant non-symbolic coefficient multiplied
@@ -339,7 +339,8 @@ later entries overwrite earlier ones. If a region of the array is left unassigne
 blocks, accessing it is invalid. When used in code generation, these unassigned regions
 can take arbitrary and possibly unassigned values.
 
-In most cases, `ArrayMaker` should not be created directly. Prefer using [`@makearray`](@ref).
+Use [`SymbolicUtils.ArrayMaker`](@ref) for region and value lists assembled at runtime.
+The [`@makearray`](@ref) macro supports a fixed sequence of block assignments.
 
 ## Array arithmetic
 
@@ -414,6 +415,10 @@ Here, `f1(x)` is considered a symbolic function `f1` called with the argument `x
 [`SymbolicUtils.is_called_function_symbolic`](@ref) can be used to differentiate between
 these cases.
 
+```@docs
+SymbolicUtils.FnType
+```
+
 ## API
 
 ### Basics
@@ -435,7 +440,6 @@ unwrap_const
 ### Inner constructors
 
 ```@docs
-SymbolicUtils.array_literal
 SymbolicUtils.BSImpl.Const
 SymbolicUtils.BSImpl.Sym
 SymbolicUtils.BSImpl.Term
@@ -447,7 +451,7 @@ SymbolicUtils.BSImpl.ArrayMaker
 
 ### High-level constructors
 
-```@docs
+```@docs; canonical=false
 SymbolicUtils.Const
 SymbolicUtils.Sym
 SymbolicUtils.Term
@@ -534,10 +538,6 @@ SymbolicUtils.MetadataT
 SymbolicUtils.SmallV
 SymbolicUtils.ShapeVecT
 SymbolicUtils.ShapeT
-SymbolicUtils.TypeT
-SymbolicUtils.ArgsT
-SymbolicUtils.ROArgsT
-SymbolicUtils.ACDict
 SymbolicUtils.OutIdxT
 SymbolicUtils.RangesT
 ```

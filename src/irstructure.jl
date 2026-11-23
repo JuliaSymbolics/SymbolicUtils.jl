@@ -454,6 +454,7 @@ function subset_ir(
     for expr in exprs
         expr_i = get(ir.definition, expr, 0)
         iszero(expr_i) && _throw_expr_not_in_ir(expr)
+        visited[expr_i] && continue
         get_reachability!(reachables, ir, expr_i; visited)
         visited[expr_i] = true
         push!(reachables, expr_i)
@@ -592,6 +593,20 @@ function Base.filter!(pred::F, s::IRStructureSearchBuffer{T}) where {F, T}
     return s
 end
 
+# DFS postorder from `cur` that doesn't enter nodes in `searched`
+function _unsearched_reachability!(
+        reachability::Vector{Int32}, g::OrderedDiGraph{Int32}, visited::BitVector,
+        searched::BitSet, cur::Int32
+    )
+    visited[cur] = true
+    for nbor in Graphs.outneighbors(g, cur)
+        (visited[nbor] || nbor in searched) && continue
+        _unsearched_reachability!(reachability, g, visited, searched, nbor)
+    end
+    push!(reachability, cur)
+    return reachability
+end
+
 function search_variables!(
         buffer::IRStructureSearchBuffer{T, S}, expr::BasicSymbolic{T};
         is_atomic::F = default_is_atomic, recurse::G = iscall
@@ -609,7 +624,11 @@ function search_variables!(
 
     reachability = get_cached_idxs!(ir)
     empty!(reachability)
-    get_reachability!(reachability, ir, idx; visited = get_cached_mask!(ir, length(ir)))
+    # Whatever a searched node reaches was handled when it was searched
+    _unsearched_reachability!(
+        reachability, ir.dependency_graph, get_cached_mask!(ir, length(ir)), buffer.searched, idx
+    )
+    pop!(reachability)
 
     mask = get_cached_mask!(ir, length(ir))
     for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
@@ -659,11 +678,34 @@ Optimized version of [`SymbolicUtils.query`](@ref) that leverages the provided
 function query(predicate::F, ir::IRStructure{T}, expr::BasicSymbolic{T}; recurse::G = iscall) where {F, T, G}
     predicate(expr) && return true
     idx = ir.definition[expr]
+    return query_multiple(predicate, ir, (idx,); recurse)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Version of [`SymbolicUtils.query`](@ref) that queries the expressions at each index in
+`idxs` (a `Tuple`, `AbstractArray` or `AbstractSet` of `Integer`s) in a single traversal
+of `ir`, sharing the reachability computation between them. Equivalent to (and more
+efficient than) calling [`SymbolicUtils.query`](@ref) on each `ir[idx]` individually
+and combining the results with `|`.
+"""
+function query_multiple(
+        predicate::F, ir::IRStructure{T},
+        idxs::Union{Tuple{Vararg{Integer}}, AbstractArray{<:Integer}, AbstractSet{<:Integer}};
+        recurse::G = iscall
+    ) where {F, T, G}
+    isempty(idxs) && return false
     reachability = get_cached_idxs!(ir)
+    empty!(reachability)
+    visited = get_cached_mask!(ir, length(ir))
+    for _idx in idxs
+        idx = Int32(_idx)
+        predicate(ir.symbols[idx]) && return true
+        get_reachability!(reachability, ir, idx; visited)
+    end
     # Fast path when we know we don't have to filter out subtrees
     if recurse === iscall
-        empty!(reachability)
-        get_reachability!(reachability, ir, idx)
         for i in reachability
             predicate(ir.symbols[i]) && return true
         end
@@ -673,16 +715,16 @@ function query(predicate::F, ir::IRStructure{T}, expr::BasicSymbolic{T}; recurse
 
     # Similar to BFS in `search_variables!`
     mask = get_cached_mask!(ir, length(ir))
-    for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
-        mask[arg_i] = true
+    for idx in idxs
+        for arg_i in Graphs.outneighbors(ir.dependency_graph, idx)
+            mask[arg_i] = true
+        end
     end
 
-    empty!(reachability)
-    get_reachability!(reachability, ir, idx)
     for cur_i in Iterators.reverse(reachability)
         mask[cur_i] || continue
         cur = ir[cur_i]
-        predicate(cur) && return false
+        predicate(cur) && return true
         recurse(cur) || continue
         for arg_i in Graphs.outneighbors(ir.dependency_graph, cur_i)
             mask[arg_i] = true
@@ -780,6 +822,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
     # Remove `idx` from the end
     pop!(reachability)
 
+    can_fold = false
     for i in reachability
         # Check the cache, filter, and rules for `i`
         cached = get(sub.cache, i, zero(Int32))
@@ -805,6 +848,12 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
         # We will already have processed the children since we're iterating
         # reachable nodes in topological order (dependencies before dependents)
         children = Graphs.outneighbors(ir.dependency_graph, i)
+        if Fold && !(operation(sym) isa BasicSymbolic{T}) && all(isconst ∘ Base.Fix1(getindex, ir), children)
+            modified[i] = true
+            push!(queue, i)
+            can_fold = true
+            continue
+        end
         # If none of the children are modified, `i` isn't modified and we can skip it
         if !any(Base.Fix1(getindex, modified), children)
             sub.cache[i] = i
@@ -820,7 +869,7 @@ function substitute_ir!(sub::IRSubstituter{Fold, T}, idx::Int32) where {Fold, T}
     # be skipped since the children are all filtered out. As a result, this method is
     # very useful for sparse substitutions.
     children = Graphs.outneighbors(ir.dependency_graph, idx)
-    if !any(Base.Fix1(getindex, modified), children)
+    if !any(Base.Fix1(getindex, modified), children) && !(Fold && can_fold)
         return sub.cache[idx] = idx
     end
     push!(queue, idx)
@@ -882,8 +931,11 @@ end
 Replace the expression `old` in `ir` with the expression `new`. `old` must already exist in `ir`.
 Note that this is not symbolic substitution, since any expressions that depend on `old` will not
 be updated. This will simply update the internal graph data structure such that the expression
-at `old` is now `new`, and the arguments of `new` form the out-neighbors of the vertex. This breaks
-the canonical form of `ir`.
+at `old` is now `new`, and the operation (if symbolic) and arguments of `new` form the
+out-neighbors of the vertex. This can break the canonical form of `ir`: the indices of the
+direct users of `old` are added to `ir.non_canonical_idxs`. If `new` already exists in `ir`,
+metadata unique to this call is applied to the replacement before storage; constants are first
+wrapped in an `identity` term.
 """
 function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
     idx = ir[old]
@@ -894,23 +946,15 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     # break `IRStructure` invariants. `ir.definition` already contains `new`,
     # so after this function it would point to `old`, and the index it used
     # to point to would also contain `new` but not be referred to in `definition`.
-    # To fix this, we simply add metadata to `new`. We know `old` is unique in
-    # `ir`, so its `objectid` is a simple way to make `new` unique even if
-    # there are additional `replace_node!` calls with the same `new`, since they
-    # will have different `old`.
     if haskey(ir, new)
         if isconst(new)
             # We can't `setmetadata` on `Const`
             new = BSImpl.Term{T}(
                 identity, ArgsT{T}((new,));
-                type = symtype(new), shape = shape(new),
-                metadata = Base.ImmutableDict(
-                    Base.ImmutableDict{DataType, Any}(),
-                    typeof(replace_node!) => objectid(old)
-                )
+                type = symtype(new), shape = shape(new)
             )
         end
-        new = setmetadata(new, typeof(replace_node!), objectid(old))
+        new = setmetadata(new, typeof(replace_node!), Ref(nothing))
     end
     ir.symbols[idx] = new
     delete!(ir.definition, old)
@@ -974,7 +1018,10 @@ function get_canonical_expr!(ir::IRStructure{T}, idx::Integer) where {T}
     return __get_canonical_expr(ir, idx)
 end
 
-@deprecate get_canonical_expr(ir, idx) get_canonical_expr!(ir, idx)
+# `get_canonical_expr` was never exported; the default `export_old = true` of `@deprecate`
+# would silently add it to the public API that the (also non-public) `get_canonical_expr!`
+# does not have.
+@deprecate get_canonical_expr(ir, idx) get_canonical_expr!(ir, idx) false
 
 """
     $TYPEDSIGNATURES
@@ -1035,12 +1082,14 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
         push!(weakdefs, node)
         rem_outedges!(ir.dependency_graph, node)
 
-        if op isa BasicSymbolic{T}
-            Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, op))
-        end
-        args = parent(arguments(new_sym))
-        @union_split_smallvec args for arg in args
-            Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, arg))
+        if iscall(new_sym)
+            if op isa BasicSymbolic{T}
+                Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, op))
+            end
+            args = parent(arguments(new_sym))
+            @union_split_smallvec args for arg in args
+                Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, arg))
+            end
         end
         # `node` is now canonical
         delete!(ir.non_canonical_idxs, node)

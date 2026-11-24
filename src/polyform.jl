@@ -78,6 +78,7 @@ _widen_coeff(x::Rational) = Rational{BigInt}(x)
 _widen_coeff(x::Complex{<:Union{Integer, Rational}}) = complex(_widen_coeff(real(x)), _widen_coeff(imag(x)))
 _widen_coeff(x) = x
 _maybe_widen(x, widen::Bool) = widen ? _widen_coeff(x) : x
+_maybe_widen(x::AnyNumbers.AnyNumber, widen::Bool) = _maybe_widen(unwrap(x), widen)
 
 # Mixing a `Float64` with a widened `Rational{BigInt}` promotes to `BigFloat`, so
 # floats are narrowed back too, unless the input itself carried `BigFloat`s.
@@ -119,7 +120,7 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
             @match variant begin
                 AddMulVariant.ADD => begin
                     poly = zeropoly()
-                    MA.operate!(+, poly, _maybe_widen(MA.copy_if_mutable(coeff), widen))
+                    MA.operate!(+, poly, _maybe_widen(MA.copy_if_mutable(unwrap(coeff)), widen))
                     for (k, v) in dict
                         tpoly = _to_poly!(poly_to_bs, bs_to_poly, k, recurse, widen)
                         cv = _maybe_widen(v, widen)
@@ -134,7 +135,7 @@ function _to_poly!(poly_to_bs::AbstractDict, bs_to_poly::AbstractDict, expr::Bas
                 end
                 AddMulVariant.MUL => begin
                     poly = onepoly()
-                    MA.operate!(*, poly, _maybe_widen(MA.copy_if_mutable(coeff), widen))
+                    MA.operate!(*, poly, _maybe_widen(MA.copy_if_mutable(unwrap(coeff)), widen))
                     for (k, v) in dict
                         if safe_isinteger(v)
                             tpoly = _to_poly!(poly_to_bs, bs_to_poly, k, recurse, widen)
@@ -563,19 +564,21 @@ end
 function quick_mulmul(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSymbolic{T}}
     @match (x, y) begin
         (BSImpl.AddMul(; coeff = c1, dict = d1, type = t1, shape = s1, variant = vr1), BSImpl.AddMul(; coeff = c2, dict = d2, type = t2, shape = s2, variant = vr2)) => begin
-            newd1 = d1
-            newd2 = d2
-            for (k1, v1) in d1
-                haskey(d2, k1) || continue
-                v2 = d2[k1]
-                if newd1 === d1
-                    newd1 = copy(d1)
-                    newd2 = copy(d2)
+            inner1 = parent(d1)
+            inner2 = parent(d2)
+            newd1 = inner1
+            newd2 = inner2
+            for (k1, v1) in inner1
+                haskey(inner2, k1) || continue
+                v2 = inner2[k1]
+                if newd1 === inner1
+                    newd1 = copy(inner1)
+                    newd2 = copy(inner2)
                 end
                 delete!((v1 >= v2) ? newd2 : newd1, k1)
                 setindex!((v1 >= v2) ? newd1 : newd2, abs(v1 - v2), k1)
             end
-            if newd1 === d1
+            if newd1 === inner1
                 return x, y
             end
             filter!(!iszero ∘ last, newd1)

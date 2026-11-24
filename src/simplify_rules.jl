@@ -396,6 +396,7 @@ how e.g. `-im` is considered negative). Zero (in either sense) doesn't count
 as negative.
 """
 function _is_neg_term(v)
+    v = unwrap(v)
     v isa Real && return (v < 0)::Bool
     if v isa Complex
         rv = real(v)
@@ -412,7 +413,7 @@ Return `true` if `x` "looks negative": a negative number, a Mul with a
 negative numeric coefficient, or an Add with more negative terms than
 positive ones.
 
-For `ADD`, `dict` (an `ACDict`, i.e. a plain `Dict`) has no deterministic
+For `ADD`, the `Dict` wrapped in `dict` (an `ACDict`) has no deterministic
 iteration order, so instead of picking out a single "leading term" we take a
 majority vote over the sign of every term (including the constant `coeff`,
 if nonzero): `x` is treated as negative if strictly more terms are negative
@@ -430,7 +431,8 @@ function _has_neg_leading(x)
         BSImpl.Const(; val) => return val isa Real && (val < 0)::Bool
         BSImpl.AddMul(; coeff, dict, variant) => begin
             if variant === AddMulVariant.MUL
-                return coeff isa Real && (coeff < 0)::Bool
+                rc = unwrap(coeff)
+                return rc isa Real && (rc < 0)::Bool
             else
                 neg = 0
                 pos = 0

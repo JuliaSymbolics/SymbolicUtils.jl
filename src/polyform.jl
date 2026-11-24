@@ -471,6 +471,10 @@ function quick_cancel(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: Basi
         return reverse(quick_mulpow(y, x))
     elseif opx === (*) && opy === (*)
         return quick_mulmul(x, y)
+    elseif opx === sqrt && isequal(only(arguments(x)), y)
+        return one_of_vartype(T), x
+    elseif opy === sqrt && isequal(x, only(arguments(y)))
+        return y, one_of_vartype(T)
     elseif opx === (^) && !icy
         return quick_pow(x, y)
     elseif opy === (^) && !icx
@@ -489,7 +493,10 @@ function quick_pow(x::S, y::S)::Tuple{S, S} where {T <: SymVariant, S <: BasicSy
     base, exp = arguments(x)
     exp = unwrap_const(exp)
     exp isa Number || return (x, y)
-    isequal(base, y) && exp >= 1 ? (base ^ (exp - 1), one_of_vartype(T)) : (x, y)
+    isequal(base, y) || return (x, y)
+    exp >= 1 && return (base ^ (exp - 1), one_of_vartype(T))
+    exp > 0 && return (one_of_vartype(T), base ^ (1 - exp))
+    return (x, y)
 end
 
 # Double Pow case

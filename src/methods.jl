@@ -142,7 +142,23 @@ end
                 Term{SymReal}(f, ArgsT{SymReal}((Const{SymReal}(a),)); type = promote_symtype(f, symtype(a))),
                 Term{SymReal}(f, ArgsT{SymReal}((Const{SymReal}(a), Const{SymReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))),
                 # Avoid declaring for `exp` since matrix exponential method exists
-                [+, -, *, /, //, \, ^, exp])
+                [+, -, *, /, //, \, ^, exp, sqrt, cbrt])
+# the `sqrt` skip above also matches `NaNMath.sqrt`, which stays an ordinary call
+function NaNMath.sqrt(a::BasicSymbolic{SymReal})
+    return Term{SymReal}(NaNMath.sqrt, ArgsT{SymReal}((a,)); type = promote_symtype(NaNMath.sqrt, symtype(a)))
+end
+
+function _symbolic_root(f, a::BasicSymbolic{SymReal})
+    sh = promote_shape(f, shape(a))
+    if isconst(a)
+        result = _const_root(SymReal, f, unwrap_const(a))
+        result === nothing || return result
+    end
+    return Term{SymReal}(f, ArgsT{SymReal}((a,)); type = promote_symtype(f, symtype(a)), shape = sh)
+end
+
+Base.sqrt(a::BasicSymbolic{SymReal}) = _symbolic_root(sqrt, a)
+Base.cbrt(a::BasicSymbolic{SymReal}) = _symbolic_root(cbrt, a)
 @number_methods(BasicSymbolic{TreeReal},
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a),)); type = promote_symtype(f, symtype(a))),
                 Term{TreeReal}(f, ArgsT{TreeReal}((Const{TreeReal}(a), Const{TreeReal}(b))); type = promote_symtype(f, symtype(a), symtype(b))))
@@ -2158,26 +2174,9 @@ function promote_symtype(::typeof(reshape), Tarr::TypeT, Tidxs::TypeT...)
     return Array{safe_eltype(Tarr), length(Tidxs)}
 end
 
-function _extract_perfect_square(x)
-    val = unwrap_const(x)
-    (val isa Integer || val isa Rational) || return nothing
-    val < 0 && return nothing
-    iszero(val) && return 0
-    isone(val) && return 1
-    # sqrt(num//den) == sqrt(num*den)//den
-    num, den = numerator(val), denominator(val)
-    s, r = _split_perfect_square(widemul(num, den))
-    c = _narrow(s // den)
-    r_narrow = _narrow(r)
-    (isone(c) && r_narrow == val) && return nothing
-    isone(r_narrow) && return c
-    radical = term(sqrt, r_narrow)
-    isone(c) ? radical : c * radical
-end
-
 """
 Only prime factors up to this bound are pulled out of a radicand by
-`_split_perfect_square`, so that a large radicand cannot make its loop
+`_split_perfect_power`, so that a large radicand cannot make its loop
 run away.
 """
 const PERFECT_SQUARE_TRIAL_LIMIT = 10000
@@ -2198,29 +2197,36 @@ end
 const PRIMES_UP_TO_TRIAL_LIMIT = _primes_up_to(PERFECT_SQUARE_TRIAL_LIMIT)
 
 """
-    _split_perfect_square(n::Integer)
+    _split_perfect_power(n::Integer, q::Integer)
 
-Write the nonnegative integer `n` as `n == s^2 * r` and return `(s, r)`.
+Write the nonnegative integer `n` as `n == s^q * r` and return `(s, r)`.
 
 Prime factors are removed by trial division up to
 `PERFECT_SQUARE_TRIAL_LIMIT`, then the remaining cofactor is tested for
-being a perfect square itself. Any pair with `n == s^2*r` is a correct answer; a
+being a perfect power itself. Any pair with `n == s^q*r` is a correct answer; a
 larger `s` only yields a tidier radical, so bounding the search costs exactness
 nothing.
 """
-function _split_perfect_square(n::Integer)
+function _split_perfect_power(n::Integer, q::Integer)
     s, r = one(n), n
     for p in PRIMES_UP_TO_TRIAL_LIMIT
-        p_sq = p * p
-        p_sq > r && break
-        while iszero(mod(r, p_sq))
-            r = r ÷ p_sq
+        _int_pow_fits(p, q) || break
+        p_q = p ^ q
+        p_q > r && break
+        while iszero(mod(r, p_q))
+            r = r ÷ p_q
             s *= p
         end
     end
-    q = isqrt(r)
-    if q * q == r
-        s *= q
+    if q == 2
+        c = isqrt(r)
+    elseif 1 < r < maxintfloat(Float64)
+        c = round(Int, Float64(r) ^ (1 / q))
+    else
+        return (s, r)
+    end
+    if c > 1 && (q == 2 ? c * c == r : big(c) ^ q == r)
+        s *= c
         r = one(n)
     end
     return (s, r)

@@ -2,6 +2,7 @@ module SymbolicUtilsChainRulesCoreExt
 
 using ChainRulesCore
 import ChainRulesCore: rrule
+import SymbolicUtils
 import SymbolicUtils.Code
 using SymbolicUtils: BasicSymbolic
 
@@ -24,6 +25,16 @@ function rrule(::typeof(Code.create_array), A::Type{<:AbstractArray}, T, u::Val{
     (NoTangent(), NoTangent(), NoTangent(), NoTangent(), NoTangent(), ntuple(i -> dx[i], Val(N))...)
   end
   y, create_array_pullback
+end
+
+function rrule(::typeof(SymbolicUtils.array_literal), sz::NTuple{D, Int}, elems::Vararg{Any, N}) where {D, N}
+  y = SymbolicUtils.array_literal(sz, elems...)
+  project = ntuple(i -> ProjectTo(elems[i]), Val(N))
+  function array_literal_pullback(Δ)
+    dx = unthunk(Δ)
+    ntuple(i -> i <= 2 ? NoTangent() : project[i - 2](dx[i - 2]), Val(N + 2))
+  end
+  y, array_literal_pullback
 end
 
 end

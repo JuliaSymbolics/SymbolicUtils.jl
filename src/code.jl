@@ -577,12 +577,13 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
                 push!(args, BSImpl.Const{T}(reg))
             end
             vw = BSImpl.Term{T}(view, args; type = Any)
+            rewritten = haskey(st.rewrites, val)
             @match val begin
-                BSImpl.ArrayOp(;) => begin
+                BSImpl.ArrayOp(; term) && if term === nothing && !rewritten end => begin
                     st.rewrites[:arrayop_output] = vw
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
                 end
-                BSImpl.ArrayMaker(;) => begin
+                BSImpl.ArrayMaker(;) && if !rewritten end => begin
                     st.rewrites[:arraymaker_output] = vw
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
                 end
@@ -703,7 +704,7 @@ function function_to_expr(::typeof(broadcast), O::BasicSymbolic{T}, st) where {T
     if use_literal_pow(st.rewrites) && length(args) == 3 && unwrap_const(args[1]) === (^)
         p = literal_pow_exponent(unwrap_const(args[3]))
         if p !== nothing
-            return Expr(:call, broadcast, Base.literal_pow, ^, toexpr(args[2], st), p)
+            return Expr(:call, fused_materialize, Expr(:call, Base.Broadcast.broadcasted, Base.literal_pow, ^, toexpr(args[2], st), p))
         end
     end
     return function_to_expr_no_nanmath(broadcast, O, st)

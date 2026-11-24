@@ -931,8 +931,11 @@ end
 Replace the expression `old` in `ir` with the expression `new`. `old` must already exist in `ir`.
 Note that this is not symbolic substitution, since any expressions that depend on `old` will not
 be updated. This will simply update the internal graph data structure such that the expression
-at `old` is now `new`, and the arguments of `new` form the out-neighbors of the vertex. This breaks
-the canonical form of `ir`.
+at `old` is now `new`, and the operation (if symbolic) and arguments of `new` form the
+out-neighbors of the vertex. This can break the canonical form of `ir`: the indices of the
+direct users of `old` are added to `ir.non_canonical_idxs`. If `new` already exists in `ir`,
+metadata unique to this call is applied to the replacement before storage; constants are first
+wrapped in an `identity` term.
 """
 function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymbolic{T}) where {T}
     idx = ir[old]
@@ -943,23 +946,15 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     # break `IRStructure` invariants. `ir.definition` already contains `new`,
     # so after this function it would point to `old`, and the index it used
     # to point to would also contain `new` but not be referred to in `definition`.
-    # To fix this, we simply add metadata to `new`. We know `old` is unique in
-    # `ir`, so its `objectid` is a simple way to make `new` unique even if
-    # there are additional `replace_node!` calls with the same `new`, since they
-    # will have different `old`.
     if haskey(ir, new)
         if isconst(new)
             # We can't `setmetadata` on `Const`
             new = BSImpl.Term{T}(
                 identity, ArgsT{T}((new,));
-                type = symtype(new), shape = shape(new),
-                metadata = Base.ImmutableDict(
-                    Base.ImmutableDict{DataType, Any}(),
-                    typeof(replace_node!) => objectid(old)
-                )
+                type = symtype(new), shape = shape(new)
             )
         end
-        new = setmetadata(new, typeof(replace_node!), objectid(old))
+        new = setmetadata(new, typeof(replace_node!), Ref(nothing))
     end
     ir.symbols[idx] = new
     delete!(ir.definition, old)
@@ -1087,12 +1082,14 @@ function __get_canonical_expr(ir::IRStructure{T}, idx::Integer) where {T}
         push!(weakdefs, node)
         rem_outedges!(ir.dependency_graph, node)
 
-        if op isa BasicSymbolic{T}
-            Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, op))
-        end
-        args = parent(arguments(new_sym))
-        @union_split_smallvec args for arg in args
-            Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, arg))
+        if iscall(new_sym)
+            if op isa BasicSymbolic{T}
+                Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, op))
+            end
+            args = parent(arguments(new_sym))
+            @union_split_smallvec args for arg in args
+                Graphs.add_edge!(ir.dependency_graph, node, populate_ir!(ir, arg))
+            end
         end
         # `node` is now canonical
         delete!(ir.non_canonical_idxs, node)

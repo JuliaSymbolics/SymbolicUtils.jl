@@ -586,7 +586,7 @@ end
     test_repr(
         Code.fast_toexpr(x .^ 2, ir, Dict()), quote
             local var"##cse#0" = x
-            local var"##cse#1" = $(broadcast)($(Base.literal_pow), $(^), var"##cse#0", $(Val)(2))
+            local var"##cse#1" = $(Code.fused_materialize)($(Base.Broadcast.broadcasted)($(Base.literal_pow), $(^), var"##cse#0", $(Val)(2)))
         end
     )
 
@@ -599,6 +599,9 @@ end
     end
     g = eval(Code.fast_toexpr(Func([x], [], x .^ 2), ir, Dict()))
     @test @invokelatest(g([1.0, 2.0, 3.0])) == [1.0, 4.0, 9.0]
+    v = [1.0, 2.0, 3.0]
+    allocated(f) = (f(v); @allocated f(v))
+    @test @invokelatest(allocated(g)) < 2 * allocated(w -> w .^ 2)
     g = eval(Code.fast_toexpr(Func([x], [], x .^ 2.5), ir, Dict()))
     @test @invokelatest(g([1.0, 4.0, 9.0])) ≈ [1.0, 32.0, 243.0]
 end
@@ -772,6 +775,22 @@ end
             end
         )
         @test isequal(reference, value)
+    end
+
+    @testset "bare `@arrayop` after a wrapped one" begin
+        @syms x[1:3] y[1:3]
+        wrapped = Code.with_allocator(zeros, @arrayop (i,) x[i] * y[i])
+        bare = @arrayop (i,) x[i] + y[i]
+        ir = IRStructure{SymReal}()
+        expr = Code.fast_toexpr(sum(wrapped) + sum(bare), ir, Dict())
+        result = eval(
+            quote
+                let x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0]
+                    $expr
+                end
+            end
+        )
+        @test result ≈ 53.0
     end
 
     @testset "`@arrayop`" begin

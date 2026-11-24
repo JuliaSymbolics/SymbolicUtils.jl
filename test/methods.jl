@@ -1,5 +1,6 @@
 using SymbolicUtils
 using SymbolicUtils: Sym, Term, Add, Mul, node_count, symtype, BasicSymbolic, Const, ArgsT, promote_symtype, promote_shape, ShapeVecT, Unknown, array_literal, Fill, SymbolicRound, FnType, SymReal
+using SymbolicUtils: arguments, iscall, operation, unwrap_const
 using Test
 import NaNMath
 import LinearAlgebra
@@ -186,6 +187,33 @@ end
     @test promote_shape(real, ShapeVecT((1:2, 1:3))) == ShapeVecT((1:2, 1:3))
     @test promote_shape(imag, ShapeVecT((1:2,))) == ShapeVecT((1:2,))
     @test promote_shape(conj, ShapeVecT()) == ShapeVecT()
+end
+
+@testset "promote_shape for complex" begin
+    @test promote_shape(complex, ShapeVecT()) == ShapeVecT()
+    @test promote_shape(complex, ShapeVecT(), ShapeVecT()) == ShapeVecT()
+    @test_throws ArgumentError promote_shape(complex, ShapeVecT((1:2,)), ShapeVecT())
+
+    @syms x::Real
+    ex = real(SymbolicUtils.term(complex, x, x)^0.5) + 1
+    @test SymbolicUtils.shape(ex) == ShapeVecT()
+    res = substitute(ex, Dict(x => 2.0))
+    @test SymbolicUtils.shape(res) == ShapeVecT()
+end
+
+@testset "Substitution into complex terms" begin
+    @syms x::Real z::Complex{Float64}
+    c = term(complex, x, x)
+    @test symtype(c) == Complex{Real}
+    @test_throws MethodError complex(z, x)
+    @test_throws AssertionError promote_symtype(complex, Complex{Float64}, Real)
+    @test_throws AssertionError substitute(c, Dict(x => 1.0 + 2.0im); fold = Val(false))
+    @test_throws MethodError substitute(c, Dict(x => 1.0 + 2.0im); fold = Val(true))
+
+    res = substitute(c, Dict(x => 2.0); fold = Val(false))
+    @test iscall(res) && operation(res) === complex
+    @test unwrap_const.(arguments(res)) == [2.0, 2.0]
+    @test unwrap_const(substitute(c, Dict(x => 2.0); fold = Val(true))) === 2.0 + 2.0im
 end
 
 @testset "real on symbolic" begin

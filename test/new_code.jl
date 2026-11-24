@@ -1575,6 +1575,74 @@ end
     @test evaluate(OptimizationRule("ReplaceSin", detect_sin, replace_sin, 1, (; f = exp))) ≈ exp(0.5)
 end
 
+@testset "`apply_optimization_rule` returns the rewritten root" begin
+    @syms a::Real
+    rule = OptimizationRule("ReplaceSin", detect_sin, replace_sin, 1)
+    ir = IRStructure{SymReal}()
+    populate_ir!(ir, sin(a))
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), rule)), cos(a))
+    @test isequal(last(Code.apply_optimization_rule(ir, [sin(a), a], rule)), [cos(a), a])
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a) + 1, rule)), cos(a) + 1)
+    @syms b::Real
+    multi = IRStructure{SymReal}()
+    populate_ir!(multi, [sin(a), sin(b)])
+    @test isequal(last(Code.apply_optimization_rule(multi, [sin(a), sin(b)], rule)), [cos(a), cos(b)])
+    fresh_ir(ir, expr, match) = (new_ir = IRStructure{SymReal}(); populate_ir!(new_ir, exp(b) + b^2 + b^3); (new_ir, expr))
+    fresh = OptimizationRule("FreshIR", detect_sin, fresh_ir, 1)
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), fresh)), sin(a))
+    fresh_exp(ir, expr, match) = (new_ir = IRStructure{SymReal}(); populate_ir!(new_ir, exp(a)); (new_ir, expr))
+    fresh = OptimizationRule("FreshExp", detect_sin, fresh_exp, 1)
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), fresh)), sin(a))
+    @test isequal(last(Code.apply_optimization_rule(ir, (sin(a), 1 + sin(a)), rule)), (cos(a), 1 + cos(a)))
+
+    function wrap(ir, expr, matches)
+        new_ir = copy(ir)
+        for m in matches
+            node = new_ir[m.idx]
+            replace_node!(new_ir, node, node + 10)
+        end
+        return new_ir, expr
+    end
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), OptimizationRule("Wrap", detect_sin, wrap, 1))), sin(a) + 10)
+
+    any_match(ir, expr) = [SinMatch(1)]
+    new_root(ir, expr, matches) = (copy(ir), 3 * sin(a))
+    both = [rule, OptimizationRule("NewRoot", any_match, new_root, 2)]
+    @test isequal(last(Code.apply_optimization_rules(ir, sin(a), both)), 3 * sin(a))
+
+    replaced_ir, _ = Code.apply_optimization_rule(ir, sin(a), rule)
+    populate_ir!(replaced_ir, sin(a))
+    keep(ir, expr, matches) = (copy(ir), expr)
+    @test isequal(last(Code.apply_optimization_rule(replaced_ir, sin(a) + 2a, OptimizationRule("Keep", any_match, keep, 1))), sin(a) + 2a)
+    two_copies(ir, expr, matches) = keep(replace_sin(ir, expr, matches)..., matches)
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a) + 1, OptimizationRule("TwoCopies", detect_sin, two_copies, 1))), cos(a) + 1)
+    extend(ir, expr, matches) = (first(replace_sin(ir, expr, matches)), [expr, b])
+    @test isequal(last(Code.apply_optimization_rule(ir, sin(a), OptimizationRule("Extend", detect_sin, extend, 1))), [cos(a), b])
+    unchanged = [b, a]
+    @test last(Code.apply_optimization_rule(ir, unchanged, rule)) === unchanged
+
+    remapped = last(Code.apply_optimization_rule(ir, sparse([1, 2], [1, 2], [sin(a), b]), rule))
+    @test remapped isa SparseMatrixCSC && nnz(remapped) == 2 && isequal(nonzeros(remapped), [cos(a), b])
+    remapped = last(Code.apply_optimization_rule(ir, sparsevec([2], [sin(a)], 3), rule))
+    @test remapped isa SparseVector && nnz(remapped) == 1 && isequal(nonzeros(remapped), [cos(a)])
+    upper = last(Code.apply_optimization_rule(ir, UpperTriangular([sin(a) b; b a]), rule))
+    @test upper isa UpperTriangular && isequal(parent(upper), [cos(a) b; b a])
+    lower = last(Code.apply_optimization_rule(ir, LowerTriangular([sin(a) b; b a]), rule))
+    @test lower isa LowerTriangular && isequal(parent(lower), [cos(a) b; b a])
+    transposed = last(Code.apply_optimization_rule(ir, transpose(sparse([1, 2], [1, 2], [sin(a), b])), rule))
+    @test transposed isa Transpose{<:Any, <:SparseMatrixCSC} && nnz(parent(transposed)) == 2 && isequal(nonzeros(parent(transposed)), [cos(a), b])
+    viewed = last(Code.apply_optimization_rule(ir, view(sparse([1, 2], [1, 2], [sin(a), b]), :, 1:2), rule))
+    @test viewed isa SubArray && nnz(parent(viewed)) == 2 && isequal(nonzeros(parent(viewed)), [cos(a), b])
+    @test isequal(last(Code.apply_optimization_rule(ir, (x = sin(a), y = b), rule)), (x = cos(a), y = b))
+
+    shared = a
+    for _ in 1:24
+        shared = sin(shared) + cos(shared)
+    end
+    Code.apply_optimization_rule(ir, sin(a) + 2a, rule)
+    @test (@elapsed Code.apply_optimization_rule(ir, shared, rule)) < 1
+end
+
 detect_let(expr::Code.Let, state) = map(SinMatch, eachindex(expr.pairs))
 detect_let(expr::Code.Let, state, options) = detect_let(expr, state)
 

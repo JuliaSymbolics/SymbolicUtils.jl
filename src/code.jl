@@ -14,6 +14,7 @@ using SciMLPublic: @public
 using StaticArraysCore: MArray, SArray
 using SparseArrays: AbstractSparseArray, SparseMatrixCSC, SparseVector, findnz, issparse, sparse
 using LinearAlgebra: Adjoint, Transpose, UpperTriangular
+using Setfield: @set
 using SpecialFunctions: lgamma
 using DocStringExtensions: SIGNATURES, TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 
@@ -2197,6 +2198,13 @@ transformer(expr::Code.Let, match_data::Union{Nothing, Vector{<:AbstractMatched}
 
 If `options !== nothing` it is passed as a trailing argument to both, so the
 corresponding methods need to accept it.
+
+On an `IRStructure`, the detector is `detector(ir, expr)` and the transformer is
+`transformer(ir, expr, match_data) -> (new_ir, new_expr)`. Every node of the returned
+`new_expr` that the transformer replaced with [`SymbolicUtils.replace_node!`](@ref) is mapped
+to its replacement. The search goes through arrays (keeping triangular, transposed, viewed and
+sparse wrappers), tuples, named tuples, `MakeTuple`s and the arguments of terms that are not in
+`new_ir`; a symbolic function in operation position is not searched.
 """
 struct OptimizationRule{D, T, O}
     name::String
@@ -2314,11 +2322,58 @@ function apply_optimization_rules(expr, state, rules)
 end
 
 apply_optimization_rules(ir::IRStructure, expr::Any, ::Nothing) = ir, expr
+
+function remap_root(new_ir::IRStructure, expr)
+    isempty(new_ir.replaced) && return expr
+    return remap_root(new_ir, expr, IdDict{Any, Any}())
+end
+function remap_root(new_ir::IRStructure, expr::Union{AbstractArray, Tuple, NamedTuple}, cache)
+    if expr isa AbstractArray && parent(expr) !== expr && hasfield(typeof(expr), :parent)
+        p = parent(expr)
+        new_p = remap_root(new_ir, p, cache)
+        return new_p === p ? expr : @set expr.parent = new_p
+    end
+    new_expr = map(e -> remap_root(new_ir, e, cache), expr)
+    return all(((n, e),) -> n === e, zip(new_expr, expr)) ? expr : new_expr
+end
+for T in (UpperTriangular, LinearAlgebra.LowerTriangular)
+    @eval function remap_root(new_ir::IRStructure, expr::$T, cache)
+        data = parent(expr)
+        new_data = remap_root(new_ir, data, cache)
+        return new_data === data ? expr : $T(new_data)
+    end
+end
+function remap_root(new_ir::IRStructure, expr::SparseMatrixCSC, cache)
+    I, J, V = findnz(expr)
+    new_V = remap_root(new_ir, V, cache)
+    return new_V === V ? expr : sparse(I, J, new_V, size(expr)...)
+end
+function remap_root(new_ir::IRStructure, expr::SparseVector, cache)
+    I, V = findnz(expr)
+    new_V = remap_root(new_ir, V, cache)
+    return new_V === V ? expr : SparseArrays.sparsevec(I, new_V, length(expr))
+end
+remap_root(new_ir::IRStructure, expr::MakeTuple, cache) = MakeTuple(remap_root(new_ir, expr.elems, cache))
+remap_root(new_ir::IRStructure, expr, cache) = expr
+function remap_root(new_ir::IRStructure, expr::BasicSymbolic, cache)
+    return get!(cache, expr) do
+        idx = get(new_ir.replaced, expr, 0)
+        iszero(idx) || return new_ir[idx]
+        haskey(new_ir, expr) && return expr
+        iscall(expr) || return expr
+        args = arguments(expr)
+        new_args = map(a -> remap_root(new_ir, a, cache), args)
+        all(k -> new_args[k] === args[k], eachindex(args)) && return expr
+        return maketerm(typeof(expr), operation(expr), new_args, SymbolicUtils.metadata(expr))
+    end
+end
+
 function apply_optimization_rule(ir::IRStructure, expr, rules)
     match_data = run_detector(rules, ir, expr)
     if match_data !== nothing
+        empty!(ir.replaced)
         new_ir, new_expr = run_transformer(rules, ir, expr, match_data)
-        return new_ir, new_expr
+        return new_ir, remap_root(new_ir, new_expr)
     end
 
     return ir, expr

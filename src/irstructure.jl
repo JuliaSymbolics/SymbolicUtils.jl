@@ -64,6 +64,11 @@ struct IRStructure{T}
     after the canonical form is broken.
     """
     non_canonical_idxs::BitSet
+    """
+    Map from each expression removed by [`SymbolicUtils.replace_node!`](@ref) to the index
+    it was replaced at, since the last optimization rule was applied.
+    """
+    replaced::IdDict{BasicSymbolic{T}, Int32}
 end
 
 """
@@ -75,7 +80,7 @@ function IRStructure{T}() where {T}
     ir = IRStructure{T}(
         OrderedDiGraph{Int32}(), BasicSymbolic{T}[],
         IdDict{BasicSymbolic{T}, Int32}(), Dict{BasicSymbolic{T}, Vector{Int32}}(),
-        BitVector(), Int32[], BitSet()
+        BitVector(), Int32[], BitSet(), IdDict{BasicSymbolic{T}, Int32}()
     )
     # It's pretty easy to hit this
     sizehint!(ir, 100)
@@ -204,6 +209,7 @@ function Base.copy(ir::IRStructure{T}) where {T}
         copy(ir.cached_mask),
         copy(ir.cached_idxs),
         copy(ir.non_canonical_idxs),
+        copy(ir.replaced),
     )
 end
 
@@ -959,6 +965,7 @@ function replace_node!(ir::IRStructure{T}, old::BasicSymbolic{T}, new::BasicSymb
     ir.symbols[idx] = new
     delete!(ir.definition, old)
     ir.definition[new] = idx
+    ir.replaced[old] = idx
     weakdefs = ir.weak_definitions[old]
     filter!(!isequal(idx), weakdefs)
     isempty(weakdefs) && delete!(ir.weak_definitions, old)

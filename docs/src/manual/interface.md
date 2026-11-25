@@ -4,7 +4,7 @@ This section is for Julia package developers who may want to use the `simplify` 
 
 ## Defining the interface
 
-SymbolicUtils matchers can match any Julia object that implements an interface to traverse it as a tree. The interface in question, is defined in the [TermInterface.jl](https://github.com/JuliaSymbolics/TermInterface.jl) package. Its purpose is to provide a shared interface between various symbolic programming Julia packages. 
+SymbolicUtils matchers can match any Julia object that implements an interface to traverse it as a tree. The interface in question, is defined in the [TermInterface.jl](https://github.com/JuliaSymbolics/TermInterface.jl) package. Its purpose is to provide a shared interface between various symbolic programming Julia packages.
 
 In particular, you should define methods from TermInterface.jl for an expression tree type `T` with symbol types `S` to  work
 with SymbolicUtils.jl

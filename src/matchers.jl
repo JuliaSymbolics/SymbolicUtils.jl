@@ -6,6 +6,41 @@
 # 3. Callback: takes arguments Dictionary × Number of elements matched
 #
 
+# Normalize a bound value for AC backtracking deduplication.
+# Segment captures are sequences; keep their order (they may sit under a
+# non-commutative call where order matters). Single-slot values are left as-is.
+function canonicalize_ac_bind(v)
+    if v isa AbstractVector || v isa Tuple
+        isempty(v) && return ()
+        return Tuple(v)
+    else
+        return v
+    end
+end
+
+# Fingerprint of a bindings dict so identical AC local matches share one
+# continuation attempt (same slot/segment values, including segment order).
+function ac_bindings_key(binds::ImmutableDict{Symbol, Any})
+    ks = Symbol[]
+    vs = Any[]
+    for (k, v) in binds
+        k === :____ && continue
+        push!(ks, k)
+        push!(vs, canonicalize_ac_bind(v))
+    end
+    p = sortperm(ks)
+    return (ntuple(i -> ks[p[i]], length(ks)), ntuple(i -> vs[p[i]], length(vs)))
+end
+
+@inline function _comm_bt_tick!()
+    COMM_BT_USED[][] += 1
+    nothing
+end
+
+@inline function _comm_bt_over_budget()
+    COMM_BT_USED[][] > COMM_BACKTRACK_BUDGET[]
+end
+
 function matcher(val::Any, acSets)
     val = unwrap_const(val)
     # if val is a call (like an operation) creates a term matcher or term matcher with defslot
@@ -29,16 +64,16 @@ end
 function matcher(slot::Slot, acSets)
     function slot_matcher(next, data, bindings)
         !islist(data) && return nothing
+        cd = unwrap_const(car(data))
         val = get(bindings, slot.name, nothing)
         # if slot name already is in bindings, check if it matches
         if val !== nothing
-            if isequal(val, unwrap_const(car(data)))::Bool
+            if isequal(val, cd)::Bool
                 return next(bindings, 1)
             end
         # elseif the first element of data matches the slot predicate, add it to bindings and call next
-        elseif slot.predicate(unwrap_const(car(data)))::Bool
-            rest = car(data)
-            binds = assoc(bindings, slot.name, rest)
+        elseif slot.predicate(cd)::Bool
+            binds = assoc(bindings, slot.name, cd)
             next(binds, 1)
         end
     end
@@ -132,10 +167,10 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data) # from (..., ) to ...
             !iscall(data) && return nothing # if first element is not a call, return nothing
-            
+
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
-            
+
             frankestein = nothing
             if (operation(data) === ^) && iscall(arguments(data)[1]) && (operation(arguments(data)[1]) === /) && _isone(arguments(arguments(data)[1])[1])
                 # if data is of the alternative form (1/...)^(...)
@@ -156,10 +191,13 @@ function term_matcher_constructor(term, acSets)
                 # if data is a exp call, it might match with base e
                 T = vartype(arguments(data)[1])
                 frankestein = Term{T}(^,[ℯ, arguments(data)[1]])
-            elseif operation(data)===sqrt
+            elseif operation(data) === sqrt
                 # if data is a sqrt call, it might match with exponent 1//2
-                T = vartype(arguments(data)[1])
-                frankestein = Term{T}(^,[arguments(data)[1], 1//2])
+                radicand = arguments(data)[1]
+                if !isconst(radicand) || unwrap_const(radicand) isa AbstractFloat
+                    T = vartype(radicand)
+                    frankestein = Term{T}(^, [radicand, 1 // 2])
+                end
             end
 
             if frankestein !==nothing
@@ -173,25 +211,53 @@ function term_matcher_constructor(term, acSets)
     # if we want to do commutative checks, i.e. call matcher with different order of the arguments
     elseif acSets!==nothing && (operation(term) === (+) || operation(term) === (*))
         has_segment = any([isa(unwrap_const(a),Segment) for a in arguments(term)])
+        op = operation(term)
         function commutative_term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data)
             !iscall(data) && return nothing # if first element is not a call, return nothing
-            operation(term) !== operation(data) && return nothing # if the operation of data is not the correct one, don't even try
+            f = operation(data)
+            op !== f && return nothing # if the operation of data is not the correct one, don't even try
             data_args = arguments(data)
             # if the number of arguments is different, and the rule doesnt have a segment, return nothing
             !has_segment && length(matchers)-1 !== length(data_args) && return nothing
 
-            
             T = vartype(data)
-            if symtype(data) <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
-                f = operation(data)
-                
-                for inds in acSets(eachindex(data_args), length(data_args))
-                    candidate = Term{T}(f, @views data_args[inds])
-
-                    result = loop(candidate, bindings, matchers)                
-                    result !== nothing && return success(result,1)
+            ST = symtype(data)
+            if ST <: Number && length(data_args)<COMM_CHECKS_LIMIT[]
+                if has_segment || length(data_args) > COMM_BACKTRACK_LIMIT[]
+                    # First local match wins. Meter every candidate loop toward
+                    # COMM_BACKTRACK_BUDGET (never stop here — only count).
+                    for inds in acSets(eachindex(data_args), length(data_args))
+                        candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                        _comm_bt_tick!()
+                        result = loop(candidate, bindings, matchers)
+                        result !== nothing && return success(result, 1)
+                    end
+                else
+                    # Fixed-arity depth-2 backtracking (arity ≤ COMM_BACKTRACK_LIMIT).
+                    # Meter every candidate loop; once over COMM_BACKTRACK_BUDGET,
+                    # fall back to first-match for this node.
+                    tried = nothing
+                    for inds in acSets(eachindex(data_args), length(data_args))
+                        candidate = Term{T}(f, @views data_args[inds]; type = ST)
+                        _comm_bt_tick!()
+                        result = loop(candidate, bindings, matchers)
+                        if result !== nothing
+                            key = ac_bindings_key(result)
+                            if tried === nothing
+                                tried = Set{Any}()
+                            elseif key in tried
+                                continue
+                            end
+                            push!(tried, key)
+                            if _comm_bt_over_budget()
+                                return success(result, 1)
+                            end
+                            r = success(result, 1)
+                            r !== nothing && return r
+                        end
+                    end
                 end
             # if data does not subtype to number, it might not be commutative
             else
@@ -208,7 +274,7 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data)
             !iscall(data) && return nothing # if first element is not a call, return nothing
-            
+
             # do the normal matcher
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
@@ -228,7 +294,7 @@ function term_matcher_constructor(term, acSets)
             !islist(data) && return nothing # if data is not a list, return nothing
             data = car(data)
             !iscall(data) && return nothing # if first element is not a call, return nothing
-            
+
             # do the normal matcher
             result = loop(data, bindings, matchers)
             result !== nothing && return success(result, 1)
@@ -246,7 +312,7 @@ function term_matcher_constructor(term, acSets)
         function term_matcher(success, data, bindings)
             !islist(data) && return nothing # if data is not a list, return nothing
             !iscall(car(data)) && return nothing # if first element is not a call, return nothing
-            
+
             result = loop(car(data), bindings, matchers)
             result !== nothing && return success(result, 1)
             return nothing
@@ -259,7 +325,7 @@ end
 # (~x + ...complicated pattern...)     *          ~!y
 #    normal part (can bee a tree)   operation     defslot part
 
-# Note: there is a bit of a waste here bc the matcher get created twice, both 
+# Note: there is a bit of a waste here bc the matcher get created twice, both
 # in the normal_matcher and in defslot_matcher and other_part_matcher
 function defslot_term_matcher_constructor(term, acSets)
     a = parent(arguments(term))
@@ -277,7 +343,7 @@ function defslot_term_matcher_constructor(term, acSets)
         f = operation(term)
         other_part_matcher = term_matcher_constructor(Term{T}(f, others), acSets)
     end
-    
+
     normal_matcher = term_matcher_constructor(term, acSets)
 
     function defslot_term_matcher(success, data, bindings)
@@ -289,7 +355,7 @@ function defslot_term_matcher_constructor(term, acSets)
         # if no match, try to match with a defslot.
         # checks whether it matches the normal part if yes executes foo2
         # foo2: adds the pair (default value name, default value) to the found bindings
-        #       after checking predicate and presence in the bindings. If added 
+        #       after checking predicate and presence in the bindings. If added
         #       successfully returns the bindings (foo3), otherwise return nothing
         #                           <-------------------foo2----------------------------------->
         #                                                  <-foo3->

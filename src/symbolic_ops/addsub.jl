@@ -1,5 +1,5 @@
 @noinline function throw_unequal_shape_error(x, y)
-    throw(ArgumentError("Cannot add arguments of different sizes - encountered shapes $x and $y."))
+    throw(ArgumentError(LazyString("Cannot add arguments of different sizes - encountered shapes ", x, " and ", y, ".")))
 end
 
 promote_shape(::typeof(+), shape::ShapeT) = shape
@@ -14,7 +14,12 @@ function promote_shape(::typeof(+), sh1::ShapeT, sh2::ShapeT, shs::ShapeT...)
         promote_shape(+, sh2, shs...)
     elseif sh2 isa Unknown
         promote_shape(+, sh1, shs...)
-    else
+    elseif sh1 isa ShapeVecT && sh2 isa ShapeVecT
+        if isempty(sh1)
+            # `isempty(sh2)` guaranteed because `nd1 == nd2`
+            all(s -> s isa ShapeVecT && isempty(s), shs) && return sh1
+            return promote_shape(+, sh1, shs...)
+        end
         new_shape = ShapeVecT()
         sizehint!(new_shape, length(sh1))
         for (shi, shj) in zip(sh1, sh2)
@@ -42,14 +47,27 @@ end
 
 mutable struct AddWorkerBuffer{T}
     dict::ACDict{T}
+    busy::Bool
 end
 
-AddWorkerBuffer{T}() where {T} = AddWorkerBuffer{T}(ACDict{T}())
+AddWorkerBuffer{T}() where {T} = AddWorkerBuffer{T}(ACDict{T}(), false)
 
 Base.empty!(awb::AddWorkerBuffer) = empty!(awb.dict)
 
 const SYMREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SymReal}}(AddWorkerBuffer{SymReal})
 const SAFEREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SafeReal}}(AddWorkerBuffer{SafeReal})
+
+@inline function _run_addbuffer(buf::AddWorkerBuffer{T}, terms) where {T}
+    if buf.busy
+        buf = AddWorkerBuffer{T}()
+    end
+    buf.busy = true
+    try
+        return buf(terms)
+    finally
+        buf.busy = false
+    end
+end
 
 """
     $METHODLIST
@@ -57,8 +75,8 @@ const SAFEREAL_ADDBUFFER = TaskLocalValue{AddWorkerBuffer{SafeReal}}(AddWorkerBu
 Add an indexable list or tuple of terms `terms` with the given vartype. Applicable only for
 symbolic expressions with numeric or array of numeric symtype.
 """
-add_worker(::Type{SymReal}, terms) = SYMREAL_ADDBUFFER[](terms)
-add_worker(::Type{SafeReal}, terms) = SAFEREAL_ADDBUFFER[](terms)
+add_worker(::Type{SymReal}, terms) = _run_addbuffer(SYMREAL_ADDBUFFER[], terms)
+add_worker(::Type{SafeReal}, terms) = _run_addbuffer(SAFEREAL_ADDBUFFER[], terms)
 
 function _added_shape(terms::Tuple)
     promote_shape(+, ntuple(shape ∘ Base.Fix1(getindex, terms), Val(length(terms)))...)
@@ -88,6 +106,9 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
     type::TypeT = symtype(Const{T}(first(terms)))
     # type = promoted_symtype(+, terms)
     newcoeff = 0
+    # Counts result entries whose value is zero, so `filter!` below only runs
+    # when cancellation or a non-canonical input actually produced one.
+    zref = Ref(0)
     result = awb.dict
     for term in terms
         term = unwrap(term)
@@ -101,32 +122,65 @@ function (awb::AddWorkerBuffer{T})(terms) where {T}
                 BSImpl.AddMul(; coeff, dict, variant, shape, type, metadata) => begin
                     @match variant begin
                         AddMulVariant.ADD => begin
-                            newcoeff += coeff
-                            for (k, v) in dict
-                                result[k] = get(result, k, 0) + v
+                            newcoeff = newcoeff .+ coeff
+                            if isempty(result) && dict isa ACDict{T}
+                                # No keys can collide: seed the result with a
+                                # bulk copy instead of probing every entry.
+                                _dict_copy_into!(result, dict)
+                                zref[] += count(iszero, values(dict))
+                            else
+                                for (k, v) in dict
+                                    _accumulate!(result, k, v, zref)
+                                end
                             end
                         end
                         AddMulVariant.MUL => begin
                             newterm = Mul{T}(1, dict; shape, type, metadata)
-                            result[newterm] = get(result, newterm, 0) + coeff
+                            _accumulate!(result, newterm, coeff, zref)
                         end
                     end
                 end
                 _ => begin
-                    result[term] = get(result, term, 0) + 1
+                    if is_array_shape(SymbolicUtils.shape(term))
+                        coeff, arrterm = _split_arrterm_scalar_coeff(T, term)
+                        if isconst(coeff)
+                            _accumulate!(result, arrterm, unwrap_const(coeff), zref)
+                        else
+                            _accumulate!(result, term, 1, zref)
+                        end
+                    else
+                        _accumulate!(result, term, 1, zref)
+                    end
                 end
             end
         elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal} || term isa BasicSymbolic{TreeReal}
-            error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
+            error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
         elseif term isa AbstractIrrational
             term = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
-            result[term] = get(result, term, 0) + 1
+            _accumulate!(result, term, 1, zref)
         else
-            newcoeff += term
+            newcoeff = newcoeff .+ term
         end
     end
-    filter!(!(iszero ∘ last), result)
-    isempty(result) && return Const{T}(newcoeff)
+    # If every term cancels we still need to preserve the array shape (a scalar `0` cannot
+    # stand in for a zero vector). Grab a surviving array-shaped key before filtering so the
+    # all-cancel case can be rebuilt as `coeff * arr` (e.g. `y - y` => `0y`).
+    arr_witness = nothing
+    if is_array_shape(shape)
+        for k in keys(result)
+            if is_array_shape(SymbolicUtils.shape(k))
+                arr_witness = k
+                break
+            end
+        end
+    end
+    zref[] > 0 && filter!(!(iszero ∘ last), result)
+    if isempty(result)
+        if arr_witness !== nothing && !(newcoeff isa AbstractArray)
+            return (newcoeff * arr_witness)::BasicSymbolic{T}
+        end
+        return Const{T}(newcoeff)
+    end
     var = Add{T}(newcoeff, result; type, shape)::BasicSymbolic{T}
     @match var begin
         BSImpl.AddMul(; dict) && if dict === result end => (awb.dict = ACDict{T}())

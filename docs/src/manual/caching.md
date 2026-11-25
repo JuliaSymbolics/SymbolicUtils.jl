@@ -9,10 +9,12 @@ benefits when the arguments are symbolic.
 SymbolicUtils.@cache
 SymbolicUtils.associated_cache
 SymbolicUtils.get_limit
-SymbolicUtils.set_limit
-SymbolicUtils.get_retain_fractions
-SymbolicUtils.set_retain_fractions
-SymbolicUtils.toggle_caching
+SymbolicUtils.set_limit!
+SymbolicUtils.get_retain_fraction
+SymbolicUtils.set_retain_fraction!
+SymbolicUtils.toggle_caching!
 SymbolicUtils.is_caching_enabled
-SymbolicUtils.clear_cache
+SymbolicUtils.clear_cache!
+SymbolicUtils.get_stats
+SymbolicUtils.reset_stats!
 ```

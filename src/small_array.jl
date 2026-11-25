@@ -305,8 +305,7 @@ function Base.sizehint!(x::SmallVec{T, V}, n::Int; kwargs...) where {T, V}
     x
 end
 
-Base.iterate(x::SmallVec) = iterate(x.data)
-Base.iterate(x::SmallVec, st::Int) = iterate(x.data, st)
+Base.iterate(x::SmallVec, i::Int = 1) = i > length(x) ? nothing : (@inbounds x[i], i + 1)
 Base.any(f::F, x::SmallVec) where {F <: Function} = any(f, x.data)
 Base.all(f::F, x::SmallVec) where {F <: Function} = all(f, x.data)
 function Base.map(f::F, x::SmallVec{T, Vector{T}}) where {F, T}
@@ -327,7 +326,7 @@ function Base.resize!(x::SmallVec{T, V}, sz::Integer) where {T, V}
     else
         resize!(tmp, sz)
     end
-    resize!(x.data, sz)
+    return x
 end
 function Base.insert!(x::SmallVec{T, V}, i::Integer, val) where {T, V}
     if x.data isa Backing{T} && isfull(x.data)

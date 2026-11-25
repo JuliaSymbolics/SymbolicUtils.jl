@@ -17,7 +17,7 @@ using SymbolicUtils
 expr1 = x + y
 operation(expr1)    # returns +
 
-expr2 = x * y  
+expr2 = x * y
 operation(expr2)    # returns *
 
 # Function calls
@@ -91,7 +91,7 @@ function TermInterface.sorted_arguments(x::BasicSymbolic{T})::ROArgsT{T} where {
     elseif T === SafeReal
         return _sorted_args2(x)
     elseif T === TreeReal
-        return _sorted_args2(x)
+        return _sorted_args3(x)
     end
     _unreachable()
 end
@@ -109,23 +109,39 @@ function __sorted_args(x::BasicSymbolic{T})::ROArgsT{T} where {T}
     @match x begin
         BSImpl.AddMul(; variant) => begin
             args = copy(parent(arguments(x)))
-            degrees = SmallV{RODegreesT}()
-            sizehint!(degrees, length(args))
-            @union_split_smallvec args begin
-                for arg in args
-                    push!(degrees, get_degrees(arg))
+            @match variant begin
+                AddMulVariant.ADD => begin
+                    @union_split_smallvec args begin
+                        sort!(args; lt = <ₑ)
+                    end
+                    return ROArgsT{T}(ArgsT{T}(args))
+                end
+                AddMulVariant.MUL => begin
+                    degrees = SmallV{RODegreesT}()
+                    sizehint!(degrees, length(args))
+                    @union_split_smallvec args begin
+                        for arg in args
+                            push!(degrees, get_degrees(arg))
+                        end
+                    end
+                    idxs = @union_split_smallvec degrees begin
+                        sortperm(degrees)
+                    end
+                    return ROArgsT{T}(ArgsT{T}(args[idxs]))
                 end
             end
-            idxs = @union_split_smallvec degrees begin
-                @match variant begin
-                    AddMulVariant.ADD => sortperm(degrees; lt = monomial_lt)
-                    AddMulVariant.MUL => sortperm(degrees)
-                end
-            end
-            return ROArgsT{T}(ArgsT{T}(args[idxs]))
         end
         _ => return arguments(x)
     end
+end
+
+@inline function _get_cached_arguments(cache::ArgsCacheT{T}) where {T}
+    return @atomic :acquire cache.value
+end
+
+@inline function _publish_cached_arguments!(cache::ArgsCacheT{T}, candidate::ArgsT{T}) where {T}
+    result = @atomicreplace :acquire_release :acquire cache.value nothing => candidate
+    return result.success ? candidate : result.old::ArgsT{T}
 end
 
 """
@@ -147,7 +163,7 @@ using SymbolicUtils
 expr1 = x + y
 arguments(expr1)    # returns collection containing x and y
 
-expr2 = x * y * z  
+expr2 = x * y * z
 arguments(expr2)    # returns collection containing x, y, and z
 
 # Function calls
@@ -168,11 +184,14 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
         BSImpl.Sym(_) => throw(ArgumentError("`Sym` does not have arguments."))
         BSImpl.Term(; args) => ROArgsT{T}(args)
         BSImpl.AddMul(; coeff, dict, variant, args, shape, type) => begin
-            isempty(args) || return ROArgsT{T}(args)
+            cached = _get_cached_arguments(args)
+            cached === nothing || return ROArgsT{T}(cached)
+
+            newargs = ArgsT{T}()
             @match variant begin
                 AddMulVariant.ADD => begin
                     if !iszero(coeff)
-                        push!(args, Const{T}(coeff))
+                        push!(newargs, Const{T}(coeff))
                     end
                     for (k, v) in dict
                         newterm = @match k begin
@@ -181,39 +200,45 @@ function TermInterface.arguments(x::BSImpl.Type{T})::ROArgsT{T} where {T}
                             end
                             _ => Mul{T}(v, ACDict{T}(k => 1); shape, type)
                         end
-                        push!(args, newterm)
+                        push!(newargs, newterm)
                     end
                 end
                 AddMulVariant.MUL => begin
                     if !_isone(coeff)
-                        push!(args, Const{T}(coeff))
+                        push!(newargs, Const{T}(coeff))
                     end
                     for (k, v) in dict
-                        push!(args, k ^ v)
+                        push!(newargs, k ^ v)
                     end
                 end
             end
-            return ROArgsT{T}(args)
+            return ROArgsT{T}(_publish_cached_arguments!(args, newargs))
         end
         BSImpl.Div(num, den) => ROArgsT{T}(ArgsT{T}((num, den)))
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, args) => begin
             if term === nothing
-                isempty(args) || return ROArgsT{T}(args)
-                push!(args, Const{T}(output_idx))
-                push!(args, Const{T}(expr))
-                push!(args, Const{T}(reduce))
-                push!(args, Const{T}(term))
-                push!(args, Const{T}(ranges))
-                return ROArgsT{T}(args)
+                cached = _get_cached_arguments(args)
+                cached === nothing || return ROArgsT{T}(cached)
+
+                newargs = ArgsT{T}()
+                push!(newargs, Const{T}(output_idx))
+                push!(newargs, Const{T}(expr))
+                push!(newargs, Const{T}(reduce))
+                push!(newargs, Const{T}(term))
+                push!(newargs, Const{T}(ranges))
+                return ROArgsT{T}(_publish_cached_arguments!(args, newargs))
             elseif term isa BasicSymbolic{T}
                 return arguments(term)
             end
         end
         BSImpl.ArrayMaker(; regions, values, args) => begin
-            isempty(args) || return ROArgsT{T}(args)
-            push!(args, BSImpl.Const{T}(regions))
-            push!(args, BSImpl.Const{T}(values))
-            return ROArgsT{T}(args)
+            cached = _get_cached_arguments(args)
+            cached === nothing || return ROArgsT{T}(cached)
+
+            newargs = ArgsT{T}()
+            push!(newargs, BSImpl.Const{T}(regions))
+            push!(newargs, BSImpl.Const{T}(values))
+            return ROArgsT{T}(_publish_cached_arguments!(args, newargs))
         end
     end
 end
@@ -221,11 +246,11 @@ end
 """
     $TYPEDSIGNATURES
 
-Check if a symbolic expression `expr` represents a function call. Returns `true` if the 
+Check if a symbolic expression `expr` represents a function call. Returns `true` if the
 expression is a composite expression with an operation and arguments, `false` otherwise.
 
-This function is fundamental for traversing and analyzing symbolic expressions. In 
-SymbolicUtils.jl, an expression is considered a "call" if it represents a function 
+This function is fundamental for traversing and analyzing symbolic expressions. In
+SymbolicUtils.jl, an expression is considered a "call" if it represents a function
 application (including operators like +, -, *, etc.).
 
 # Examples
@@ -236,7 +261,7 @@ using SymbolicUtils
 # Basic variables are not calls
 iscall(x)           # false
 
-# Function calls are calls  
+# Function calls are calls
 expr = sin(x + y)
 iscall(expr)        # true
 
@@ -251,8 +276,16 @@ function TermInterface.iscall(s::BSImpl.Type)
     !MData.isa_variant(s, BSImpl.Sym) && !MData.isa_variant(s, BSImpl.Const)
 end
 
+# Remaining TermInterface API functions
+isexpr(s::BSImpl.Type) = iscall(s)
+head(s::BSImpl.Type) = operation(s)
+children(s::BSImpl.Type) = arguments(s)
+sorted_children(s::BSImpl.Type) = sorted_arguments(s)
+
 function TermInterface.maketerm(::Type{BasicSymbolic{TreeReal}}, f, args, metadata; @nospecialize(type = _promote_symtype(f, args)))
-    sh = promote_shape(f, shape.(args)...)::ShapeT
+    # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+    sh = f === in && length(args) > 1 && symtype(args[2]) <: AbstractArray{<:Any, 0} ? ShapeVecT() :
+        promote_shape(f, shape.(args)...)::ShapeT
     Term{TreeReal}(f, args; type, shape=sh, metadata=metadata)
 end
 
@@ -260,11 +293,26 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
     @nospecialize f
     args = unwrap_args(args)
     if f isa Symbol
-        error("$f must not be a Symbol")
+        error(LazyString(f, " must not be a Symbol"))
     elseif f === ArrayOp{T}
         return ArrayOp{T}(args...)::BasicSymbolic{T}
+    elseif f isa Mapper
+        return f(args...)::BasicSymbolic{T}
+    elseif f isa Mapreducer
+        return f(args...)::BasicSymbolic{T}
     elseif f === ArrayMaker{T}
-        return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, @view(arguments(args[2])[2:end]))
+        values_arg = args[2]
+        @match values_arg begin
+            BSImpl.Term(; f = vf, args = vargs) => if vf === array_literal
+                return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, @view(vargs[2:end]))
+            elseif vf <: StaticArraysCore.SVector
+                return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, vargs)
+            else
+                _unreachable()
+            end
+            BSImpl.Const(; val) => return ArrayMaker{T}(unwrap_const(args[1])::RegionsT, val)
+            _ => _unreachable()
+        end
     elseif f === broadcast
         _f, _args = Iterators.peel(args)
         res = broadcast(unwrap_const(_f), _args...)
@@ -272,6 +320,8 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
             @set! res.metadata = metadata
         end
         return res::BasicSymbolic{T}
+    elseif f isa Fill
+        return f(args[1])
     elseif f === getindex
         # This can't call `getindex` because that goes through `@cache`, which is unstable
         # and doesn't precompile.
@@ -327,7 +377,9 @@ function TermInterface.maketerm(::Type{BasicSymbolic{T}}, f, args, metadata; @no
         end
     else
         @label FALLBACK
-        sh = promote_shape(f, shape.(args)...)
+        # `shape` cannot distinguish a 0-dim array from a scalar; `symtype` can.
+        sh = f === in && length(args) > 1 && symtype(args[2]) <: AbstractArray{<:Any, 0} ? ShapeVecT() :
+            promote_shape(f, shape.(args)...)
         Term{T}(f, args; type, shape=sh, metadata=metadata)
     end
 end

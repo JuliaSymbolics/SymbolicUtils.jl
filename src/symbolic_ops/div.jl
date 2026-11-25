@@ -1,21 +1,18 @@
 @noinline function throw_bad_div_shape(x, y)
-    throw(ArgumentError("""
-    Arguments have invalid shapes for division - found shapes $x and $y.
-    """))
+    throw(ArgumentError(LazyString("Arguments have invalid shapes for division - found shapes ", x, " and ", y, ".")))
 end
 
 @noinline function throw_vecdiv(x, y)
-    throw(ArgumentError("""
-    When dividing a vector, the denominator must be a scalar, vector or column matrix. \
-    Found arguments with shapes $x and $y.
-    """))
+    throw(ArgumentError(LazyString(
+        "When dividing a vector, the denominator must be a scalar,",
+        " vector or column matrix.",
+        " Found arguments with shapes ", x, " and ", y, ".")))
 end
 
 @noinline function throw_scalardiv(x, y)
-    throw(ArgumentError("""
-    When dividing a scalar, the denominator must be a scalar or vector. Found arguments \
-    with shapes $x and $y.
-    """))
+    throw(ArgumentError(LazyString(
+        "When dividing a scalar, the denominator must be a scalar or vector.",
+        " Found arguments with shapes ", x, " and ", y, ".")))
 end
 
 # S = Scalar, * = Any, V = Vector, M = Matrix
@@ -121,23 +118,23 @@ function //(a::S, b::AbstractArray{S}) where {S <: NonTreeSym}
 end
 
 @noinline function throw_bad_dims(x, y)
-    throw(ArgumentError("""
-    Both arguments to \\ must have <= 2 dimensions. Found arguments with shapes $x and $y.
-    """))
+    throw(ArgumentError(LazyString(
+        "Both arguments to \\ must have <= 2 dimensions.",
+        " Found arguments with shapes ", x, " and ", y, ".")))
 end
 
 @noinline function throw_scalar_rhs(x, y)
-    throw(ArgumentError("""
-    The second argument to \\ cannot be a scalar if the first argument is an array. Found
-    arguments with shapes $x and $y.
-    """))
+    throw(ArgumentError(LazyString(
+        "The second argument to \\ cannot be a scalar",
+        " if the first argument is an array.",
+        " Found arguments with shapes ", x, " and ", y, ".")))
 end
 
 @noinline function throw_first_dim_different(x, y)
-    throw(ArgumentError("""
-    The length of the first dimension of both arguments to \\ must be identical. Found
-    arguments with shapes $x and $y.
-    """))
+    throw(ArgumentError(LazyString(
+        "The length of the first dimension of both arguments",
+        " to \\ must be identical.",
+        " Found arguments with shapes ", x, " and ", y, ".")))
 end
 
 # S = Scalar, * = Any, V = Vector, M = Matrix

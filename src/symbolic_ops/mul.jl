@@ -1,19 +1,22 @@
 *(a::BasicSymbolic) = a
 
 @noinline function throw_expected_matrix(x)
-    throw(ArgumentError("Expected matrix in multiplication, got argument of shape $x."))
+    throw(ArgumentError(LazyString("Expected matrix in multiplication, got argument of shape ", x, ".")))
 end
 @noinline function throw_expected_matvec(x)
-    throw(ArgumentError("""
-    Expected matrix or vector in multiplication, got argument of shape $x.
-    """))
+    throw(ArgumentError(LazyString("Expected matrix or vector in multiplication, got argument of shape ", x, ".")))
 end
 @noinline function throw_incompatible_shapes(x, y)
-    throw(ArgumentError("""
-    Encountered incompatible shapes $x and $y when multiplying.
-    """))
+    throw(ArgumentError(LazyString("Encountered incompatible shapes ", x, " and ", y, " when multiplying.")))
 end
 
+"""
+    is_array_shape(shape)
+
+Return `true` when a symbolic shape represents an array rather than a scalar.
+`Unknown` is considered an array shape because its rank may be nonzero; an empty
+`ShapeVecT` is the scalar shape.
+"""
 is_array_shape(sh::ShapeT) = sh isa Unknown || _ndims_from_shape(sh) > 0
 function _multiplied_shape(shapes)
     first_arr = findfirst(is_array_shape, shapes)
@@ -151,26 +154,26 @@ function _mul_worker!(::Type{T}, num_coeff, den_coeff, num_dict, den_dict, term)
             BSImpl.AddMul(; coeff, dict, variant) && if variant == AddMulVariant.MUL end => begin
                 num_coeff[] *= coeff
                 for (k, v) in dict
-                    num_dict[k] = get(num_dict, k, 0) + v
+                    _accumulate!(num_dict, k, v)
                 end
             end
             BSImpl.Term(; f, args) && if f === (^) && !isconst(args[1]) && isconst(args[2]) end => begin
                 base, exp = args
-                num_dict[base] = get(num_dict, base, 0) + unwrap_const(exp)
+                _accumulate!(num_dict, base, unwrap_const(exp))
             end
             BSImpl.Div(; num, den) => begin
                 _mul_worker!(T, num_coeff, den_coeff, num_dict, den_dict, num)
                 _mul_worker!(T, den_coeff, num_coeff, den_dict, num_dict, den)
             end
             x => begin
-                num_dict[x] = get(num_dict, x, 0) + 1
+                _accumulate!(num_dict, x, 1)
             end
         end
     elseif term isa BasicSymbolic{SymReal} || term isa BasicSymbolic{SafeReal}
-        error("Cannot operate on symbolics with different vartypes. Found `$T` and `$(vartype(term))`.")
+        error(LazyString("Cannot operate on symbolics with different vartypes. Found `", T, "` and `", vartype(term), "`."))
     elseif term isa AbstractIrrational
         base = BSImpl.Term{T}(identity, ArgsT{T}((Const{T}(term),)); type = Real, shape = ShapeVecT())
-        num_dict[base] = get(num_dict, base, 0) + 1
+        _accumulate!(num_dict, base, 1)
     else
         num_coeff[] *= term
     end
@@ -180,12 +183,13 @@ end
 mutable struct MulWorkerBuffer{T}
     num_dict::ACDict{T}
     den_dict::ACDict{T}
-    const num_coeff::RefValue{PolyCoeffT}
-    const den_coeff::RefValue{PolyCoeffT}
+    const num_coeff::Base.RefValue{PolyCoeffT}
+    const den_coeff::Base.RefValue{PolyCoeffT}
+    busy::Bool
 end
 
 function MulWorkerBuffer{T}() where {T}
-    MulWorkerBuffer{T}(Dict{BasicSymbolic{T}, Any}(), Dict{BasicSymbolic{T}, Any}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1))
+    MulWorkerBuffer{T}(ACDict{T}(), ACDict{T}(), Ref{PolyCoeffT}(1), Ref{PolyCoeffT}(1), false)
 end
 
 function Base.empty!(mwb::MulWorkerBuffer)
@@ -352,21 +356,35 @@ function (mwb::MulWorkerBuffer{T})(terms) where {T}
     return Term{T}(*, new_arrterms; type, shape = newshape)
 end
 
+@inline function _run_mulbuffer(buf::MulWorkerBuffer{T}, terms) where {T}
+    if buf.busy
+        buf = MulWorkerBuffer{T}()
+    end
+    buf.busy = true
+    try
+        return buf(terms)
+    finally
+        buf.busy = false
+    end
+end
+
 """
     $METHODLIST
 
 Multiply an indexable list or tuple of terms `terms` with the given vartype. Applicable
 only for symbolic expressions with numeric or array of numeric symtype.
 """
-mul_worker(::Type{SymReal}, terms) = SYMREAL_MULBUFFER[](terms)
-mul_worker(::Type{SafeReal}, terms) = SAFEREAL_MULBUFFER[](terms)
+mul_worker(::Type{SymReal}, terms) = _run_mulbuffer(SYMREAL_MULBUFFER[], terms)
+mul_worker(::Type{SafeReal}, terms) = _run_mulbuffer(SAFEREAL_MULBUFFER[], terms)
 
 function *(x::T, args::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
+    length(args) == 1 && args[1] isa Number && _isone(args[1]) && return x
     mul_worker(vartype(T), (x, args...))
 end
 
 for T in [:(PolyadicNumericOpFirstArgT{T}), Int, Float64, Bool]
     @eval function *(a::$T, b::T, bs::Union{Number, T, AbstractArray{<:Number}, AbstractArray{T}}...) where {T <: NonTreeSym}
+        isempty(bs) && a isa Number && _isone(a) && return b
         return mul_worker(vartype(T), (a, b, bs...))
     end
 end

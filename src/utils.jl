@@ -63,10 +63,10 @@ expressions requiring special handling.
 """
 function has_trig_exp(term)
     !iscall(term) && return false
-    fns = (sin, cos, tan, cot, sec, csc, exp, cosh, sinh)
+    fns = (sin, cos, tan, cot, sec, csc, exp, cosh, sinh, tanh, coth, sech, csch)
     op = operation(term)
 
-    if Base.@nany 9 i->fns[i] === op
+    if Base.@nany 13 i->fns[i] === op
         return true
     else
         return any(has_trig_exp, parent(arguments(term)))
@@ -79,6 +79,8 @@ sym_isa(::Type{T}) where {T} = @nospecialize(x) -> x isa T || symtype(x) <: T
 
 isliteral(::Type{T}) where {T} = x -> x isa T
 is_literal_number(x) = isliteral(Number)(unwrap_const(x))
+
+@inline _literal_negates(a, b) = unwrap_const(a) == -unwrap_const(b)
 
 # checking the type directly is faster than dynamic dispatch in type unstable code
 """
@@ -419,7 +421,7 @@ end
 # Linked List interface
 @inline function assoc(d::ImmutableDict{Symbol, Any}, k::Symbol, v::Any)
     @nospecialize v
-    ImmutableDict(d, k, unwrap_const(v))
+    Base.ImmutableDict{Symbol,Any}(d, k, unwrap_const(v))
 end
 
 struct LL{V}
@@ -493,4 +495,3 @@ end
 Count the nodes in a symbolic expression tree satisfying `iscall` and `arguments`.
 """
 node_count(t) = iscall(t) ? reduce(+, node_count(x) for x in arguments(t), init = 0) + 1 : 1
-

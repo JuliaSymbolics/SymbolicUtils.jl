@@ -1,6 +1,22 @@
 
 @inline alwaystrue(x) = true
 const COMM_CHECKS_LIMIT = Ref(10)
+# Max arity for fixed-arity commutative backtracking. Above this, use first-match.
+const COMM_BACKTRACK_LIMIT = Ref(5)
+# Per-Rule-call work meter (TaskLocal, nested-safe via save/restore in
+# `(r::Rule)(term)`): each candidate `loop` call in commutative_term_matcher
+# increments this (segment/first-match and backtracking branches). Backtracking
+# stops once the count exceeds the budget; the segment/first-match branch only
+# counts and never stops. This bounds how many local-match attempts (including
+# ticks inside continuations such as n! segment searches) may be spent on
+# backtracking before falling back to first-match; it does not abort an
+# in-flight first-match/segment enumeration. Nested Rule calls (e.g. predicates
+# or RHS that apply another rule) get their own zeroed meter and restore the
+# outer count in `finally`. Value tuned so fixed+segment failing matches stay
+# within ~3× of master on the segcont probes while depth-2 #586 cases still
+# succeed.
+const COMM_BACKTRACK_BUDGET = Ref(2000)
+const COMM_BT_USED = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
 
 # Matcher patterns with Slot, DefSlot and Segment
 
@@ -112,9 +128,41 @@ function makesegment(s::Expr, keys)
     end
 
     name = s.args[1]
-    
+
     push!(keys, name)
     :(Segment($(QuoteNode(name)), $(esc(s.args[2]))))
+end
+
+# True if `expr` contains a pattern slot (`~x`, `~~x`, or `~!x`).
+function pattern_expr_has_slot(expr)
+    if expr isa Expr
+        if expr.head === :call && !isempty(expr.args) && expr.args[1] === :(~)
+            return true
+        end
+        return any(pattern_expr_has_slot, expr.args)
+    end
+    return false
+end
+
+# Replace `$v` interpolations with `v` so the result can be `esc`'d as a value.
+function unquote_dollar(expr)
+    if expr isa Expr
+        if expr.head === :$
+            return unquote_dollar(expr.args[1])
+        end
+        return Expr(expr.head, map(unquote_dollar, expr.args)...)
+    end
+    return expr
+end
+
+# Nested slot-free heads: call value callees, build terms for symbolic callees.
+_apply_head(f, args...) = f isa BasicSymbolic ? term(f, args...; type=Any, shape=ShapeVecT()) : f(args...)
+
+function build_head(h)
+    if h isa Expr && h.head === :call && h.args[1] isa Expr && h.args[1].head === :call
+        return :($_apply_head($(build_head(h.args[1])), $(map(a -> esc(unquote_dollar(a)), h.args[2:end])...)))
+    end
+    return esc(unquote_dollar(h))
 end
 
 # parent call is needed to know which default value to give if any default slots are present
@@ -139,6 +187,9 @@ by the rule system. It handles several special syntaxes:
 - `~!x`: Matches a term with a default value (creates a `DefSlot`)
 - `~x::predicate`: Adds a predicate constraint to the slot
 - `\$expr`: Interpolates a value directly
+- A slot-free call in operator position is turned into a head value: nested calls
+  invoke value callees and build terms around `BasicSymbolic` callees, then the
+  result is matched by equality (like `\$`-interpolation).
 
 The function tracks pattern variable names in `keys` and uses `parentCall` to determine
 appropriate default values for default slots in operations like `+`, `*`, and `^`.
@@ -161,6 +212,11 @@ function makepattern(expr, keys, parentCall=nothing)
                 # bc when the expression is not quoted, 3//2 is a Rational{Int64}, not a call
                 return esc(expr.args[2] // expr.args[3])
             else
+                head = expr.args[1]
+                # Slot-free call heads: evaluate value callees, build terms for symbolic ones.
+                if head isa Expr && head.head === :call && !pattern_expr_has_slot(head)
+                    return :(term($(build_head(head)), $(map(x -> makepattern(x, keys, operation(expr)), expr.args[2:end])...); type=Any, shape=$ShapeVecT()))
+                end
                 # make a pattern for every argument of the expr.
                 :(term($(map(x->makepattern(x, keys, operation(expr)), expr.args)...); type=Any, shape=$ShapeVecT()))
             end
@@ -229,6 +285,20 @@ abstract type AbstractRule end # Currently doesn't really do anything. Can be re
 #-----------------------------
 #### Regular Rewriting Rules
 
+"""
+    Rule{L, M, R}
+
+Compiled representation of a rewrite rule created by [`@rule`](@ref) or
+[`@acrule`](@ref).
+
+# Fields
+
+- `expr`: the original rule expression used for display.
+- `lhs`: the pattern matched by the rule.
+- `matcher`: the compiled matcher for `lhs`.
+- `rhs`: the replacement expression or function.
+- `depth`: the maximum expression depth inspected by the rule.
+"""
 struct Rule{L, M, R} <: AbstractRule
     expr::Expr               # rule pattern stored for pretty printing
     lhs::L                   # the pattern
@@ -256,13 +326,19 @@ const EMPTY_IMMUTABLE_DICT = ImmutableDict{Symbol, Any}(:____, nothing)
 
 function (r::Rule)(term)
     rhs = r.rhs
-
+    # Scope the work meter to this call so nested Rule applications (predicates /
+    # RHS) cannot zero the outer count or leak their ticks into the caller.
+    ref = COMM_BT_USED[]
+    saved = ref[]
+    ref[] = 0
     try
         # n == 1 means that exactly one term of the input (term,) was matched
         success(bindings, n) = n == 1 ? (rhs(assoc(bindings, :MATCH, term))) : nothing
         return r.matcher(success, (term,), EMPTY_IMMUTABLE_DICT)
     catch err
         throw(RuleRewriteError(r, term))
+    finally
+        ref[] = saved
     end
 end
 
@@ -599,6 +675,14 @@ macro acrule(expr)
     end
 end
 
+"""
+    @ordered_acrule(lhs => rhs)
+
+Construct an associative-commutative rewrite rule whose matcher visits the
+commutative permutations in a deterministic order. `lhs` is the pattern and
+`rhs` is the replacement expression. This is a developer extension point used
+by the built-in simplification rules.
+"""
 macro ordered_acrule(expr)
     @assert expr.head == :call && expr.args[1] == :(=>)
     lhs = expr.args[2]
@@ -625,18 +709,20 @@ Base.show(io::IO, acr::ACRule) = print(io, "ACRule(", acr.rule, ")")
 
 function (acr::ACRule)(term)
     r = Rule(acr)
-    if !iscall(term) || operation(term) != operation(r.lhs)
+    if !iscall(term)
         # different operations -> try deflsot
         r(term)
     else
-        f =  operation(term)
+        f = operation(term)
         # Assume that the matcher was formed by closing over a term
-        if f != operation(r.lhs) # Maybe offer a fallback if m.term errors. 
-            return nothing
+        if f !== operation(r.lhs)
+            # different operations -> try deflsot
+            return r(term)
         end
 
         T = vartype(term)
         args = arguments(term)
+        length(args) < acr.arity && return nothing
         is_full_perm = acr.arity == length(args)
         if is_full_perm
             args_buf = copy(parent(args))
@@ -688,3 +774,27 @@ getdepth(::Any) = typemax(Int)
 end
 
 Base.@deprecate RuleSet(x) Postwalk(Chain(x))
+
+"""
+    RuleSet(rules)
+
+Deprecated. Build the rewriter explicitly instead:
+
+```julia
+using SymbolicUtils.Rewriters
+Postwalk(Chain(rules))
+```
+
+`RuleSet` was the original way to turn a collection of `@rule`s into a callable rewriter.
+It applied every rule in order at every node of the expression, bottom up. That is exactly
+`Postwalk(Chain(rules))`, and `RuleSet(rules)` now constructs and returns that object while
+emitting a deprecation warning; it will be removed in the next breaking release.
+
+Spelling the rewriter out is preferred because the traversal and the combination strategy
+become explicit and independently choosable. `Chain` can be swapped for
+[`SymbolicUtils.Rewriters.RestartedChain`](@ref) to restart the rule list after every
+successful rewrite, [`SymbolicUtils.Rewriters.Fixpoint`](@ref) to iterate to convergence, or
+[`SymbolicUtils.Rewriters.Prewalk`](@ref) to rewrite top down instead of bottom up. See
+[`SymbolicUtils.Rewriters`](@ref) for the full set of combinators.
+"""
+RuleSet

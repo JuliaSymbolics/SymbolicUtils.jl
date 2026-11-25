@@ -7,5 +7,6 @@ pages = Any["index.md",
                             "manual/recursive_utils.md",
                             ],
             "api.md",
+            "developer_api.md",
             "upgrade.md"
             ]

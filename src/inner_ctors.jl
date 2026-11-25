@@ -141,6 +141,7 @@ function unwrap_dict(dict)
         dict
     end
 end
+unwrap_dict(dict::OrderedDict{<:BasicSymbolic}) = dict
 
 """
     $TYPEDSIGNATURES
@@ -265,7 +266,26 @@ See [`SymbolicUtils.BSImpl.Const`](@ref) for more details.
 The first argument `sz` is the `size` of the represented array. `args...` is `prod(sz)`
 elements representing the elements of the array in column-major order.
 """
-array_literal(sz::NTuple{N, Int}, args...) where {N} = reshape(Base.vect(args...), sz)
+function array_literal(sz::NTuple{N, Int}, args::Vararg{Any, M}) where {N, M}
+    M > 31 && return reshape(Base.vect(args...), sz)
+    T = Base.promote_typeof(args...)
+    return __array_literal(sz, T, map(x -> convert(T, x), args))
+end
+
+@inline function array_literal(sz::NTuple{N, Int}, args::T...) where {N, T}
+    return __array_literal(sz, T, args)
+end
+
+array_literal(sz::NTuple{N, Int}) where {N} = __array_literal(sz, Any, ())
+
+function __array_literal(sz::NTuple{N, Int}, ::Type{T}, args::Tuple) where {N, T}
+    prod(sz) == length(args) || throw(DimensionMismatch(LazyString("new dimensions ", sz, " must be consistent with array size ", length(args))))
+    vals = Array{T}(undef, sz...)
+    @inbounds for i in 1:length(args)
+        vals[i] = args[i]
+    end
+    return vals
+end
 
 """
     BSImpl.Const{T}(val) where {T}
@@ -298,11 +318,11 @@ The `unsafe` flag skips hash consing for performance in internal operations.
     if val isa BasicSymbolic{T}
         return val
     elseif val isa BasicSymbolic{SymReal}
-        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
+        error(LazyString("Cannot construct `BasicSymbolic{", T, "}` from `BasicSymbolic{SymReal}`."))
     elseif val isa BasicSymbolic{SafeReal}
-        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{SymReal}`.")
+        error(LazyString("Cannot construct `BasicSymbolic{", T, "}` from `BasicSymbolic{SymReal}`."))
     elseif val isa BasicSymbolic{TreeReal}
-        error("Cannot construct `BasicSymbolic{$T}` from `BasicSymbolic{TreeReal}`.")
+        error(LazyString("Cannot construct `BasicSymbolic{", T, "}` from `BasicSymbolic{TreeReal}`."))
     elseif val isa AbstractArray && _is_array_of_symbolics(val)
         isadjoint = val isa LinearAlgebra.Adjoint
         istranspose = val isa LinearAlgebra.Transpose
@@ -412,7 +432,7 @@ should be the expected return type of calling `f` with `args`.
 The `unsafe` keyword argument (default: `false`) can be used to skip hash consing for
 performance in internal operations.
 """
-@inline function BSImpl.Term{T}(f, args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
+@inline function BSImpl.Term{T}(@nospecialize(f), args; metadata = nothing, type, shape = default_shape(type), unsafe = false) where {T}
     metadata = parse_metadata(metadata)
     shape = parse_shape(shape)
     args = parse_args(T, args)

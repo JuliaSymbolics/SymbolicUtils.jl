@@ -9,32 +9,94 @@ information.
 """
 const COMPARE_FULL = TaskLocalValue{Bool}(Returns(false))
 
-"""
-    $TYPEDSIGNATURES
+struct EqualityKey
+    a::BasicSymbolic
+    b::BasicSymbolic
+    full::Bool
+    hash::UInt
+end
 
-Generated function which manually dispatches on `isequal` for common scalar types,
-avoiding dynamic dispatch in common cases.
+EqualityKey(a, b, full) = EqualityKey(a, b, full, hash((objectid(a), objectid(b), full)))
+
+function Base.isequal(a::EqualityKey, b::EqualityKey)
+    return a.a === b.a && a.b === b.b && a.full === b.full
+end
+
+function Base.hash(key::EqualityKey, h::UInt)
+    return hash(key.hash, h)
+end
+
+mutable struct EqualityMemo
+    const results::Dict{EqualityKey, Bool}
+    const small::Vector{Pair{EqualityKey, Bool}}
+    active::Bool
+end
+
+function equality_memo_get(memo::EqualityMemo, key::EqualityKey)
+    isempty(memo.results) || return get(memo.results, key, nothing)
+    for (cached_key, result) in memo.small
+        isequal(cached_key, key) && return result
+    end
+    return nothing
+end
+
+function equality_memo_set!(memo::EqualityMemo, key::EqualityKey, result::Bool)
+    # Small comparisons must not clear a table sized for a previous large DAG.
+    if isempty(memo.results) && length(memo.small) < 8
+        push!(memo.small, key => result)
+    else
+        for (cached_key, cached_result) in memo.small
+            memo.results[cached_key] = cached_result
+        end
+        empty!(memo.small)
+        memo.results[key] = result
+    end
+    return result
+end
+
 """
-@generated function isequal_somescalar(a, b)
-    @nospecialize a b
-    
+Task-local memo of object pairs and comparison modes for a DAG traversal.
+Keys retain the objects and check identity even when their identity hashes collide.
+The outermost comparison empties the memo on exit, retaining capacity for reuse.
+"""
+const EQUALITY_MEMO = TaskLocalValue(
+    () -> EqualityMemo(Dict{EqualityKey, Bool}(), Pair{EqualityKey, Bool}[], false)
+)
+
+macro __generate_isequal_somescalar()
     expr = Expr(:if)
     cur_expr = expr
 
     N = length(SCALARS)
     for (i, (t1, t2)) in enumerate(Iterators.product(SCALARS, SCALARS))
         push!(cur_expr.args, :(a isa $t1 && b isa $t2))
-        push!(cur_expr.args, :(isequal(a, b)))
+        push!(cur_expr.args, :(_safe_isequal_somescalar(a, b)))
         i == N * N && continue
         new_expr = Expr(:elseif)
         push!(cur_expr.args, new_expr)
         cur_expr = new_expr
     end
-    
-    push!(cur_expr.args, :(isequal(a, b)::Bool))
-    quote
-        @nospecialize a b
-        $expr
+
+    push!(cur_expr.args, :(_safe_isequal_somescalar(a, b)))
+    return esc(expr)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Generated function which manually dispatches on `isequal` for common scalar types,
+avoiding dynamic dispatch in common cases.
+"""
+function isequal_somescalar(@nospecialize(a), @nospecialize(b))
+    return @__generate_isequal_somescalar
+end
+
+function _safe_isequal_somescalar(@nospecialize(a), @nospecialize(b))
+    try
+        return isequal(a, b)::Bool
+    catch err
+        err isa InterruptException && rethrow()
+        return false
     end
 end
 
@@ -48,16 +110,28 @@ allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
 """
 function isequal_addmuldict(d1::ACDict{T}, d2::ACDict{T}, full::Bool) where {T}
     full || return isequal(d1, d2)
+    d1 === d2 && return true
     length(d1) == length(d2) || return false
-    for (k, v) in d1
-        k2 = nothing
-        v2 = nothing
-        @manually_scope COMPARE_FULL => false begin
-            k2 = getkey(d2, k, nothing)
-            k2 === nothing && return false
-            v2 = d2[k2]
-        end true
-        isequal_somescalar(v, v2) && isequal_bsimpl(k, k2, true) || return false
+    # The keys of `d2` were hashed under COMPARE_FULL=false, so lookups must run
+    # under that scope. It only has to cover `ht_keyindex`; `isequal_somescalar`
+    # does not read COMPARE_FULL, so the scope is hoisted out of the loop instead
+    # of being set and restored per entry. `ht_keyindex` + direct slot access
+    # does one probe per key instead of two (`getkey` + `getindex`).
+    @manually_scope COMPARE_FULL => false begin
+        for (k, v) in d1
+            idx = Base.ht_keyindex(d2, k)
+            idx < 0 && return false
+            @inbounds k2 = d2.keys[idx]
+            @inbounds v2 = d2.vals[idx]
+            # `isequal_bsimpl` must run with COMPARE_FULL=full: its `full` arg
+            # covers the structural checks, but the metadata path compares
+            # arbitrary values through `isequal`, which reads COMPARE_FULL when
+            # it reaches a BasicSymbolic. Identical keys skip the call entirely,
+            # so the restore happens only for non-interned keys.
+            ok = isequal_somescalar(v, v2) && typeof(v) === typeof(v2) &&
+                 (k === k2 || @manually_scope(COMPARE_FULL => full, isequal_bsimpl(k, k2, true)))
+            ok || return false
+        end
     end
     return true
 end
@@ -73,15 +147,19 @@ allows avoiding repeatedly accessing a `TaskLocalValue`, which can be slow.
 function isequal_rangesdict(d1::RangesT{T}, d2::RangesT{T}, full) where {T}
     full || return isequal(d1, d2)
     length(d1) == length(d2) || return false
-    for (k, v) in d1
-        k2 = nothing
-        v2 = nothing
-        @manually_scope COMPARE_FULL => false begin
-            k2 = getkey(d2, k, nothing)
-            k2 === nothing && return false
-            v2 = d2[k2]
-        end true
-        isequal(v, v2) && isequal_bsimpl(k, k2, true) || return false
+    # As in isequal_addmuldict: the scope only has to cover the probe, and
+    # `isequal_bsimpl` needs COMPARE_FULL=full restored for its metadata path —
+    # paid only for keys that are not `===`.
+    @manually_scope COMPARE_FULL => false begin
+        for (k, v) in d1
+            idx = Base.ht_keyindex(d2, k)
+            idx < 0 && return false
+            @inbounds k2 = d2.keys[idx]
+            @inbounds v2 = d2.vals[idx]
+            ok = isequal(v, v2) &&
+                 (k === k2 || @manually_scope(COMPARE_FULL => full, isequal_bsimpl(k, k2, true)))
+            ok || return false
+        end
     end
     return true
 end
@@ -172,7 +250,8 @@ end
 Core equality comparison for `BasicSymbolic`. `full` is the current value of
 `COMPARE_FULL[]`, but passed explicitly to reduce accessing a `TaskLocalValue`.
 """
-function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where {T}
+# Declared `Bool` because the memo grows the recursion past what inference settles on.
+function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool)::Bool where {T}
     a === b && return true
     ida = a.id
     idb = b.id
@@ -186,6 +265,13 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
         return false
     end
 
+    memo = EQUALITY_MEMO[]
+    memo_key = EqualityKey(a, b, full)
+    if memo.active
+        cached = equality_memo_get(memo, memo_key)
+        cached === nothing || return cached
+    end
+
     partial = @match (a, b) begin
         (BSImpl.Const(; val = v1), BSImpl.Const(; val = v2)) => begin
             isequal_somescalar(v1, v2)::Bool && (!full || (typeof(v1) === typeof(v2))::Bool)
@@ -194,7 +280,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
             n1 === n2 && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.Term(; f = f1, args = args1, shape = s1, type = t1), BSImpl.Term(; f = f2, args = args2, shape = s2, type = t2)) => begin
-            isequal(f1, f2)::Bool && isequal_argsvec(args1, args2, full) && isequal_shapes(s1, s2) && t1 === t2
+            (f1 === f2 || isequal(f1, f2)::Bool) && isequal_argsvec(args1, args2, full) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.AddMul(; coeff = c1, dict = d1, variant = v1, shape = s1, type = t1), BSImpl.AddMul(; coeff = c2, dict = d2, variant = v2, shape = s2, type = t2)) => begin
             isequal_somescalar(c1, c2) && (!full || (typeof(c1) === typeof(c2))) && isequal_addmuldict(d1, d2, full) && isequal(v1, v2) && isequal_shapes(s1, s2) && t1 === t2
@@ -203,7 +289,7 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
             isequal_bsimpl(n1, n2, full) && isequal_bsimpl(d1, d2, full) && isequal_shapes(s1, s2) && t1 === t2
         end
         (BSImpl.ArrayOp(; output_idx = o1, expr = e1, reduce = f1, term = t1, ranges = r1, shape = s1, type = type1), BSImpl.ArrayOp(; output_idx = o2, expr = e2, reduce = f2, term = t2, ranges = r2, shape = s2, type = type2)) => begin
-            isequal(o1, o2) && isequal(e1, e2) && isequal(f1, f2)::Bool && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && isequal_shapes(s1, s2) && type1 === type2
+            isequal(o1, o2) && isequal(e1, e2) && (f1 === f2 || isequal(f1, f2)::Bool) && isequal(t1, t2) && isequal_rangesdict(r1, r2, full) && isequal_shapes(s1, s2) && type1 === type2
         end
         (BSImpl.ArrayMaker(; regions = r1, values = v1, shape = s1, type = t1), BSImpl.ArrayMaker(; regions = r2, values = v2, shape = s2, type = t2)) => begin
             r1 == r2 && isequal_argsvec(v1, v2, full) && isequal_shapes(s1, s2) && t1 === t2
@@ -212,11 +298,39 @@ function isequal_bsimpl(a::BSImpl.Type{T}, b::BSImpl.Type{T}, full::Bool) where 
     if full && partial && !(Ta <: BSImpl.Const)
         partial = metadata_isequal(metadata(a), metadata(b))
     end
+    memo.active && equality_memo_set!(memo, memo_key, partial)
     return partial
 end
 
-function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
-    isequal_bsimpl(a, b, COMPARE_FULL[])
+@inline function Base.isequal(a::BSImpl.Type, b::BSImpl.Type)
+    a === b && return true
+    return isequal_with_memo(a, b)
+end
+
+@noinline function isequal_with_memo(a::BSImpl.Type, b::BSImpl.Type)
+    ida = a.id
+    idb = b.id
+    ida === idb && ida !== nothing && return true
+
+    Ta = MData.variant_type(a)
+    Tb = MData.variant_type(b)
+    Ta === Tb || return false
+
+    Ta <: BSImpl.Sym && a.name !== b.name && return false
+
+    full = COMPARE_FULL[]
+    full && ida !== nothing && idb !== nothing && return false
+
+    memo = EQUALITY_MEMO[]
+    memo.active && return isequal_bsimpl(a, b, full)
+    try
+        memo.active = true
+        return isequal_bsimpl(a, b, full)
+    finally
+        empty!(memo.small)
+        isempty(memo.results) || empty!(memo.results)
+        memo.active = false
+    end
 end
 
 Base.isequal(a::BSImpl.Type, b::WeakRef) = isequal(a, b.value)
@@ -225,14 +339,7 @@ Base.isequal(a::WeakRef, b::BSImpl.Type) = isequal(a.value, b)
 const SYM_SALT = 0x4de7d7c66d41da43 % UInt
 const DIV_SALT = 0x334b218e73bbba53 % UInt
 
-"""
-    $TYPEDSIGNATURES
-
-Manual dispatch on `hash` for common scalar types, avoiding dynamic dispatch when
-`a` is uninferred.
-"""
-@inline @generated function hash_somescalar(a, h::UInt)
-    @nospecialize a
+macro __generate_hash_somescalar()
     expr = Expr(:if)
     cur_expr = expr
 
@@ -245,13 +352,53 @@ Manual dispatch on `hash` for common scalar types, avoiding dynamic dispatch whe
         push!(cur_expr.args, new_expr)
         cur_expr = new_expr
     end
-    
+
     push!(cur_expr.args, :(hash(a, h)::UInt))
-    quote
-        @nospecialize a
-        $expr
-    end
+    return esc(expr)
 end
+"""
+    $TYPEDSIGNATURES
+
+Manual dispatch on `hash` for common scalar types, avoiding dynamic dispatch when
+`a` is uninferred.
+"""
+function hash_somescalar(@nospecialize(a), h::UInt)
+    # Done this way because the manual dispatch chain is too long to write out
+    # by hand, `@eval` causes Revise to error, and `@generated` completely
+    # negates the `@nospecialize`.
+    return @__generate_hash_somescalar
+end
+
+const UNITRANGE_SALT = 0x65888b97ed76e7a3 % UInt
+const STEPRANGE_SALT = 0x84a577a5769bf2c2 % UInt
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized `hash` for range types used in `BasicSymbolic`, since the one in `Base`
+iterates over the full range and is thus `O(n)` in the length.
+"""
+function hash_range(a::UnitRange{Int}, h::UInt)
+    isempty(a) && (a = 1:0)
+    return hash(first(a), hash(last(a), h)) ⊻ UNITRANGE_SALT
+end
+function hash_range(a::StepRange{Int, Int}, h::UInt)
+    isempty(a) && (a = 1:1:0)
+    return hash(first(a), hash(last(a), h)) ⊻ STEPRANGE_SALT
+end
+
+"""
+Number of leading entries of a dict hashed densely by `hash_addmuldict`. Past
+this limit only an exponentially-spread sample of the remaining entries is
+hashed (like `hash_argsvec` for long argument vectors), so the cost of hashing
+very large `AddMul` dicts stays sublinear in their size.
+
+Note that unlike an argument vector, a dict has no canonical order: two `isequal`
+dicts built by different insertion sequences may iterate differently and so hash
+different sampled subsets. The resulting hash inconsistency only degrades
+deduplication in the hashcons table; `isequal_addmuldict` is unaffected.
+"""
+const ADDMULDICT_HASH_LIMIT = 512
 
 """
     $TYPEDSIGNATURES
@@ -259,11 +406,25 @@ end
 Hash `AddMul.dict`, accounting for the fact that the keys are inserted with `full=false`
 when currently `full` may be `true`. `full` should be equal to the current value of
 `COMPARE_FULL`. Passing `full` prevents repeatedly accessing a `TaskLocalValue`.
+
+For `length(d) > ADDMULDICT_HASH_LIMIT` only a sample of the entries is hashed:
+the first `ADDMULDICT_HASH_LIMIT` entries densely, then those at the
+exponentially-spread positions `n, n-1, n-3, n-7, ...` of one forward iteration,
+mirroring `hash_argsvec`.
 """
 function hash_addmuldict(d::ACDict, h::UInt, full::Bool)
-    hv = Base.hasha_seed
+    hv = Base.hasha_seed % UInt
+    n = length(d)
+    h = hash(n, h)
+    m = min(n, ADDMULDICT_HASH_LIMIT)
+    i, skip = n, 1   # next tail position to sample; descends n, n-1, n-3, n-7, ...
+    pos = 0
     for (k, v) in d
+        pos += 1
+        pos <= m || pos == i || continue
+        pos == i && (i -= skip; skip <<= 1)
         h1 = hash_somescalar(v, zero(UInt))
+        full && (h1 = hash_maybe_fntype(typeof(v), h1))
         h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
     end
@@ -280,13 +441,128 @@ when currently `full` may be `true`. `full` should be equal to the current value
 Compute a hash value for a ranges dictionary used in `ArrayOp` variants.
 """
 function hash_rangesdict(d::RangesT, h::UInt, full::Bool)
-    hv = Base.hasha_seed
+    hv = Base.hasha_seed % UInt
     for (k, v) in d
-        h1 = hash(v, zero(UInt))
+        h1 = hash_range(v, zero(UInt))
         h1 = hash_bsimpl(k, h1, full)
         hv ⊻= h1
     end
     return hash(hv, h)
+end
+
+"""
+Number of leading elements of a vector hashed densely by `hash_argsvec` and
+friends. Past this limit only an exponentially-spread sample of the tail is
+hashed (like `Base.hash` for large `AbstractArray`s), so the cost of hashing
+very long argument vectors stays sublinear in their length.
+"""
+const ARGSVEC_HASH_LIMIT = 512
+
+const SHAPEVECT_SEED = 0x70840b1b2d005176 % UInt
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized hash for `ShapeT` to hit `hash_range`.
+"""
+function hash_shape(sh::ShapeVecT, h::UInt)
+    @union_split_smallvec sh begin
+        n = length(sh)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_range(@inbounds(sh[i]), h)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_range(@inbounds(sh[i]), h)
+            i -= skip
+            skip <<= 1
+        end
+    end
+    return h ⊻ SHAPEVECT_SEED
+end
+hash_shape(sh::Unknown, h::UInt) = hash(sh, h)
+
+const ARGSVEC_SEED = 0x6b2f4a9c1d8e7053 % UInt
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized hash for a vector of symbolic arguments (e.g. `Term`/`ArrayMaker` args).
+"""
+function hash_argsvec(v::ArgsT{T}, h::UInt, full::Bool) where {T}
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_bsimpl(@inbounds(v[i]), h, full)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_bsimpl(@inbounds(v[i]), h, full)
+            i -= skip
+            skip <<= 1
+        end
+    end
+    return h ⊻ ARGSVEC_SEED
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized hash for `ArrayOp.output_idx`, whose elements are `Int` or symbolic.
+"""
+function hash_outputidx(v::SmallV{<:Union{Int, BasicSymbolic}}, h::UInt, full::Bool)
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            el = @inbounds(v[i])
+            h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            el = @inbounds(v[i])
+            h = el isa Int ? hash(el, h) : hash_bsimpl(el, h, full)
+            i -= skip
+            skip <<= 1
+        end
+    end
+    return h ⊻ ARGSVEC_SEED
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized hash for `ArrayMaker.regions`, a vector of shapes.
+"""
+function hash_regions(v::RegionsT, h::UInt)
+    @union_split_smallvec v begin
+        n = length(v)
+        h = hash(n, h)
+        m = min(n, ARGSVEC_HASH_LIMIT)
+        for i in 1:m
+            h = hash_shape(@inbounds(v[i]), h)
+        end
+        i = n
+        skip = 1
+        while i > m
+            h = hash(i, h)
+            h = hash_shape(@inbounds(v[i]), h)
+            i -= skip
+            skip <<= 1
+        end
+    end
+    return h ⊻ ARGSVEC_SEED
 end
 
 """
@@ -295,9 +571,11 @@ end
 Custom hash functions for `vartype(x)`, since hashes of types defined in a module are not
 stable across machines or processes.
 """
-vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a, h)
-vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d, h)
-vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
+# `% UInt` so these seeds fit on 32-bit (`UInt === UInt32`); bare UInt64
+# literals passed to `hash` can InexactError when mixed into a UInt32 seed.
+vartype_hash(::Type{SymReal}, h::UInt) = hash(0x3fffc14710d3391a % UInt, h)
+vartype_hash(::Type{SafeReal}, h::UInt) = hash(0x0e8c1e3ac836f40d % UInt, h)
+vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155 % UInt, h)
 
 """
     $TYPEDSIGNATURES
@@ -305,9 +583,9 @@ vartype_hash(::Type{TreeReal}, h::UInt) = hash(0x44ec30357ff75155, h)
 Custom hash functions for `AddMul.variant`, since it falls back to the `Base.Enum`
 implementation, which uses `objectid`, which changes across runs.
 """
-hash_addmulvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 : 0x5e0a17a14cd8c815, h)
+hash_addmulvariant(x::AddMulVariant.T, h::UInt) = hash(x === AddMulVariant.ADD ? 0x6d86258fc9cc0742 % UInt : 0x5e0a17a14cd8c815 % UInt, h)
 
-const FNTYPE_SEED = 0x8b414291138f6c45
+const FNTYPE_SEED = 0x8b414291138f6c45 % UInt
 
 """
     $TYPEDSIGNATURES
@@ -317,7 +595,7 @@ stable across machines or processes.
 """
 function hash_maybe_fntype(T::TypeT, h::UInt)
     @nospecialize T
-    if T === Number
+    return if T === Number
         hash(Number, h)
     elseif T === Real
         hash(Real, h)
@@ -393,10 +671,10 @@ function hash_metadata(m::MetadataT, h::UInt)
     if m === nothing
         return hash(nothing, h)
     elseif m isa Base.ImmutableDict{DataType, Any}
-        hv = Base.hasha_seed
+        hv = Base.hasha_seed % UInt
         return hash(hash_metadict(m, hv), h)
     end
-    _unreachable()
+    return _unreachable()
 end
 
 """
@@ -427,7 +705,7 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
             h = Base.hash(name, h)
-            h = Base.hash(shape, h)
+            h = hash_shape(shape, h)
             h = hash_maybe_fntype(type, h)
             h ⊻ SYM_SALT
         end
@@ -436,38 +714,37 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
             !full && !iszero(hash) && return hash
             h = hash_maybe_fntype(type, h)
             if shape isa Unknown
-                h = Base.hash(shape, h)
+                h = hash_shape(shape, h)
             elseif shape isa ShapeVecT
-                h = Base.hash(shape, h)
+                h = hash_shape(shape, h)
             else
                 _unreachable()
             end
-            
-            Base.hash(f, Base.hash(args, h))::UInt
+            Base.hash(f, hash_argsvec(args, h, full))::UInt
         end
         BSImpl.AddMul(; coeff, dict, variant, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, Base.hash(shape, hash_maybe_fntype(type, h))), full))
+            htmp = hash_somescalar(coeff, hash_addmuldict(dict, hash_addmulvariant(variant, hash_shape(shape, hash_maybe_fntype(type, h))), full))
             if full
                 htmp = hash_maybe_fntype(typeof(coeff)::TypeT, htmp)
             end
             htmp
         end
-        BSImpl.Div(; num, den, type, hash, hash2) => begin
+        BSImpl.Div(; num, den, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            hash_bsimpl(num, hash_bsimpl(den, Base.hash(shape, hash_maybe_fntype(type, h)), full), full) ⊻ DIV_SALT
+            hash_bsimpl(num, hash_bsimpl(den, hash_shape(shape, hash_maybe_fntype(type, h)), full), full) ⊻ DIV_SALT
         end
         BSImpl.ArrayOp(; output_idx, expr, reduce, term, ranges, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, Base.hash(shape, hash_maybe_fntype(type, h)), full)))::UInt, full))
+            hash_outputidx(output_idx, hash_bsimpl(expr, Base.hash(reduce, Base.hash(term, hash_rangesdict(ranges, hash_shape(shape, hash_maybe_fntype(type, h)), full)))::UInt, full), full)
         end
         BSImpl.ArrayMaker(; regions, values, shape, type, hash, hash2) => begin
             full && !iszero(hash2) && return hash2
             !full && !iszero(hash) && return hash
-            Base.hash(regions, Base.hash(values, Base.hash(shape, hash_maybe_fntype(type, h))))
+            hash_regions(regions, hash_argsvec(values, hash_shape(shape, hash_maybe_fntype(type, h)), full))
         end
     end
 
@@ -480,7 +757,9 @@ function hash_bsimpl(s::BSImpl.Type{T}, h::UInt, full) where {T}
 end
 
 function Base.hash(s::BSImpl.Type, h::UInt)
-    hash_bsimpl(s, h, COMPARE_FULL[])
+    # Always use the metadata-free hash to avoids a task-local lookup on every hash.
+    # This is coarser than `full = true` but is still ok as a hash function in both modes.
+    return hash_bsimpl(s, h, false)
 end
 
 const ENABLE_HASHCONSING = Ref(true)
@@ -494,7 +773,7 @@ const WCS_TREEREAL = WeakCacheSet{BasicSymbolic{TreeReal}}()
 @inline wcs_for_vartype(::Type{TreeReal}) = WCS_TREEREAL
 
 function generate_id()
-    IDType()
+    return IDType()
 end
 
 """
@@ -502,23 +781,32 @@ $(TYPEDSIGNATURES)
 
 Implements hash consing (flyweight design pattern) for `BasicSymbolic` objects.
 
-This function checks if an equivalent `BasicSymbolic` object already exists. It uses a 
-custom hash function (`hash2`) incorporating metadata and symtypes to search for existing 
-objects in a `WeakCacheSet` (`wcs`). Due to the possibility of hash collisions (where 
-different objects produce the same hash), a custom equality check (`isequal_with_metadata`) 
-which includes metadata comparison, is used to confirm the equivalence of objects with 
-matching hashes. If an equivalent object is found, the existing object is returned; 
-otherwise, the input `s` is returned. This reduces memory usage, improves compilation time 
-for runtime code generation, and supports built-in common subexpression elimination, 
+This function checks if an equivalent `BasicSymbolic` object already exists. It uses a
+custom hash function (`hash2`) incorporating metadata and symtypes to search for existing
+objects in a `WeakCacheSet` (`wcs`). Due to the possibility of hash collisions (where
+different objects produce the same hash), a custom equality check (`isequal_with_metadata`)
+which includes metadata comparison, is used to confirm the equivalence of objects with
+matching hashes. If an equivalent object is found, the existing object is returned;
+otherwise, the input `s` is returned. This reduces memory usage, improves compilation time
+for runtime code generation, and supports built-in common subexpression elimination,
 particularly when working with symbolic objects with metadata.
 
-Using a `WeakCacheSet` ensures that only weak references to `BasicSymbolic` objects are 
-stored, allowing objects that are no longer strongly referenced to be garbage collected. 
-Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and 
-`Base.isequal` to accommodate metadata without disrupting existing tests reliant on the 
+Using a `WeakCacheSet` ensures that only weak references to `BasicSymbolic` objects are
+stored, allowing objects that are no longer strongly referenced to be garbage collected.
+Custom functions `hash2` and `isequal_with_metadata` are used instead of `Base.hash` and
+`Base.isequal` to accommodate metadata without disrupting existing tests reliant on the
 original behavior of those functions.
 """
 
+"""
+    hashcons(expr::BasicSymbolic; reregister = false)
+
+Intern `expr` in the vartype-specific weak hash-cons table and return the
+canonical object. If `reregister` is `false`, an expression with an existing
+identifier is returned unchanged; setting it to `true` permits registration in
+the current table. Hash-consing is a developer optimization and preserves
+`isequal` semantics, including symbolic metadata.
+"""
 function hashcons(s::BSImpl.Type{T}, reregister = false) where {T}
     if !ENABLE_HASHCONSING[]
         return s
@@ -551,7 +839,7 @@ Get the default zero constant for a given `BasicSymbolic` variant type.
 # Returns
 - A `Const` variant representing zero with the appropriate variant type
 """
-@inline defaultval(::Type{BasicSymbolic{SymReal}}) =  CONST_ZERO_SYMREAL
+@inline defaultval(::Type{BasicSymbolic{SymReal}}) = CONST_ZERO_SYMREAL
 @inline defaultval(::Type{BasicSymbolic{SafeReal}}) = CONST_ZERO_SAFEREAL
 @inline defaultval(::Type{BasicSymbolic{TreeReal}}) = CONST_ZERO_TREEREAL
 
@@ -571,4 +859,3 @@ Return a `Const` representing `1` with the provided `vartype`.
 @inline one_of_vartype(::Type{SymReal}) = CONST_ONE_SYMREAL
 @inline one_of_vartype(::Type{SafeReal}) = CONST_ONE_SAFEREAL
 @inline one_of_vartype(::Type{TreeReal}) = CONST_ONE_TREEREAL
-

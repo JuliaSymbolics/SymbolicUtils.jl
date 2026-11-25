@@ -8,6 +8,14 @@ SymbolicUtils.@syms
 SymbolicUtils.term
 ```
 
+### Developer Constructors and Utilities
+```@docs
+SymbolicUtils.Term
+SymbolicUtils.Add
+SymbolicUtils.Mul
+SymbolicUtils.node_count
+```
+
 ### Metadata
 ```@docs
 SymbolicUtils.hasmetadata
@@ -18,6 +26,43 @@ SymbolicUtils.setmetadata
 ### Type Promotion
 ```@docs; canonical=false
 SymbolicUtils.promote_symtype
+SymbolicUtils.promote_shape
+SymbolicUtils.Unknown
+SymbolicUtils.ShapeVecT
+SymbolicUtils.ShapeT
+SymbolicUtils.fntype_ret_type
+SymbolicUtils.unwrap
+```
+
+### Array Operation Callables
+```@docs
+SymbolicUtils.Mapper
+SymbolicUtils.Mapreducer
+SymbolicUtils.array_literal
+```
+
+### Intermediate Representation
+```@docs
+SymbolicUtils.IRStructure
+SymbolicUtils.populate_ir!
+SymbolicUtils.print_ir
+SymbolicUtils.get_reachability
+```
+
+### Developer IR and cache interfaces
+
+These interfaces support custom IR traversals and cache integrations. They are
+documented for package developers; ordinary symbolic manipulation should use
+the higher-level APIs above.
+
+```@docs
+SymbolicUtils.get_reachability!
+SymbolicUtils.replace_node!
+SymbolicUtils.search_variables!
+SymbolicUtils.infer_vartype
+SymbolicUtils.CacheStats
+SymbolicUtils.Code.cse_inside_expr
+SymbolicUtils.Code.cse_bind_expr
 ```
 
 ## Rewriting System
@@ -26,9 +71,15 @@ SymbolicUtils.promote_symtype
 ```@docs
 @rule
 @acrule
+SymbolicUtils.@ordered_acrule
 ```
 
 ### Rewriters
+
+Every combinator below except `FixpointNoCycle` is also public as `SymbolicUtils.X`, so
+`using SymbolicUtils: Chain, Prewalk` and `using SymbolicUtils.Rewriters: Chain, Prewalk`
+are both supported.
+
 ```@docs
 SymbolicUtils.Rewriters
 SymbolicUtils.Rewriters.Empty
@@ -47,6 +98,7 @@ SymbolicUtils.Rewriters.PassThrough
 
 ```@docs
 SymbolicUtils.simplify
+SymbolicUtils.trig_reduce
 SymbolicUtils.expand
 SymbolicUtils.substitute
 ```
@@ -57,4 +109,15 @@ SymbolicUtils.substitute
 SymbolicUtils.simplify_fractions
 SymbolicUtils.quick_cancel
 SymbolicUtils.flatten_fractions
+```
+
+## Deprecated
+
+These names are still exported so that existing code keeps working, but each one warns on
+use and will be removed in the next breaking release. Their entries record what to write
+instead.
+
+```@docs
+SymbolicUtils.istree
+SymbolicUtils.RuleSet
 ```

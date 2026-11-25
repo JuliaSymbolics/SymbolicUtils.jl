@@ -1,4 +1,22 @@
-function Base.show(io::IO, x::BasicSymbolic{TreeReal})
+"""
+    show_metadata(io, x) -> Bool
+
+Hook for custom printing based on metadata. Return `true` if printing has been handled.
+Downstream packages can extend `show_metadata(io, x, ::Type{Ctx}, val)` for their
+metadata context and call `show_plain(io, x)` to bypass this hook.
+"""
+function show_metadata(io::IO, x::BasicSymbolic)
+    md = metadata(x)
+    md isa Base.ImmutableDict{DataType, Any} || return false
+    for (ctx, val) in md
+        show_metadata(io, x, ctx, val) && return true
+    end
+    return false
+end
+
+show_metadata(::IO, ::BasicSymbolic, ::DataType, @nospecialize(val)) = false
+
+function show_plain(io::IO, x::BasicSymbolic{TreeReal})
     @match x begin
         BSImpl.Sym(; name) => Base.show_unquoted(io, name)
         BSImpl.Const(; val) => begin
@@ -15,7 +33,7 @@ function Base.show(io::IO, x::BasicSymbolic{TreeReal})
     end
 end
 
-function Base.show(io::IO, x::BasicSymbolic)
+function show_plain(io::IO, x::BasicSymbolic)
     @match x begin
         BSImpl.Sym(; name) => Base.show_unquoted(io, name)
         BSImpl.Const(; val) => begin
@@ -39,6 +57,16 @@ function Base.show(io::IO, x::BasicSymbolic)
     end
 end
 
+function Base.show(io::IO, x::BasicSymbolic{TreeReal})
+    show_metadata(io, x) && return
+    show_plain(io, x)
+end
+
+function Base.show(io::IO, x::BasicSymbolic)
+    show_metadata(io, x) && return
+    show_plain(io, x)
+end
+
 show_term(io::IO, x::BasicSymbolic{TreeReal}) = show_call(io, operation(x), x)
 
 function show_term(io::IO, x::BasicSymbolic)
@@ -54,14 +82,22 @@ function show_term(io::IO, x::BasicSymbolic)
     elseif f === identity && (arg = arguments(x)[1]; isconst(arg))
         show(io, arg)
     else
-        show_call(io, f, x)
+        # Break the back edge to avoid invalidations cascading up
+        @invokelatest show_call(io, f, x)
     end
 end
 
-function show_call(io::IO, @nospecialize(f), x::BasicSymbolic; @nospecialize(kw...))
+"""
+    show_call(io, f, expr; kwargs...)
+
+Render a symbolic call `expr` to `io` using operation `f`. This is the developer
+printing hook used by the symbolic display machinery. Keyword arguments are
+accepted for specialized printers and are otherwise ignored.
+"""
+function show_call(io::IO, @nospecialize(f), x::BasicSymbolic{T}; @nospecialize(kw...)) where {T}
     args = parent(arguments(x))
     len_args = length(args)
-    fname = applicable(nameof, f)::Bool ? nameof(f)::Symbol : :_
+    fname = applicable(nameof, f)::Bool && !(f isa BasicSymbolic{T}) ? nameof(f)::Symbol : :_
     if Base.isunaryoperator(fname) && len_args == 1
         print(io, fname)
         print_arg(io, args[1])
@@ -93,6 +129,17 @@ function show_call(io::IO, @nospecialize(f), x::BasicSymbolic; @nospecialize(kw.
             i == len_kwargs || print(io, ", ")
         end
     end
+    print(io, ")")
+end
+
+function show_call(io::IO, @nospecialize(f::SymbolicRound), x::BasicSymbolic{T}) where {T}
+    inner = first(arguments(x))
+    print(io, "round(")
+    printstyled(io, symtype(x); color = :blue)
+    print(io, ", ")
+    print(io, inner)
+    print(io, ", ")
+    printstyled(io, f.mode; color = :blue)
     print(io, ")")
 end
 
@@ -400,4 +447,3 @@ function show_arraymaker(io::IO, x::BasicSymbolic)
     print(io, "end")
     compact && print(io, ")")
 end
-

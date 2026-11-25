@@ -30,11 +30,12 @@ rewriters.
 
 """
 module Rewriters
-using TermInterface
+import TermInterface
+import TermInterface: maketerm
 
-import SymbolicUtils: iscall, operation, arguments, sorted_arguments, metadata, node_count,
-                      _promote_symtype, @manually_scope, COMPARE_FULL, ROArgsT, ArgsT,
-                      Const, SmallV, BSImpl, unwrap_const, BasicSymbolic, isconst
+import SymbolicUtils: iscall, operation, arguments, metadata, node_count,
+                      @manually_scope, COMPARE_FULL, ROArgsT, ArgsT,
+                      Const, unwrap_const, BasicSymbolic
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 """
@@ -257,14 +258,14 @@ end
     FixpointNoCycle(rw)
 
 `FixpointNoCycle` behaves like [`Fixpoint`](@ref),
-but returns a rewriter which applies `rw` repeatedly until 
-it produces a result that was already produced before, for example, 
-if the repeated application of `rw` produces results `a, b, c, d, b` in order, 
-`FixpointNoCycle` stops because `b` has been already produced. 
+but returns a rewriter which applies `rw` repeatedly until
+it produces a result that was already produced before, for example,
+if the repeated application of `rw` produces results `a, b, c, d, b` in order,
+`FixpointNoCycle` stops because `b` has been already produced.
 """
 struct FixpointNoCycle{C}
     rw::C
-    hist::Vector{UInt64} # vector of hashes for history
+    hist::Vector{UInt} # vector of hashes for history
 end
 
 instrument(x::FixpointNoCycle, f) = Fixpoint(instrument(x.rw, f))
@@ -301,7 +302,7 @@ function instrument(x::Walk{ord, C,F, M,threaded}, f) where {ord,C,F, M,threaded
                                                             x.maketerm)
 end
 
-using .Threads
+import .Threads
 
 
 """
@@ -424,7 +425,7 @@ function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M,
     @assert ord === :pre || ord === :post
     if iscall(x)
         if ord === :pre
-            x = p.rw(x)
+            x = Const{T}(@something(p.rw(x), x))
         end
         if iscall(x) && p.filter(x)
             args = arguments(x)::ROArgsT{T}
@@ -453,12 +454,10 @@ function (p::Walk{ord, C, F, M, true})(x::BasicSymbolic{T}) where {ord, C, F, M,
                 x = p.maketerm(typeof(x), operation(x), args, metadata(x))
             end
         end
-        return ord === :post ? Const{T}(p.rw(x)) : x
+        return ord === :post ? Const{T}(@something(p.rw(x), x)) : x
     else
-        return Const{T}(p.rw(x))
+        return Const{T}(@something(p.rw(x), x))
     end
 end
 
 end # end module
-
-

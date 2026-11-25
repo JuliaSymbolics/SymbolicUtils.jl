@@ -3,7 +3,12 @@ $(DocStringExtensions.README)
 """
 module SymbolicUtils
 
-using DocStringExtensions
+if isdefined(Base, :Experimental) && isdefined(Base.Experimental, Symbol("@max_methods"))
+    @eval Base.Experimental.@compiler_options max_methods=1
+end
+
+import DocStringExtensions
+using DocStringExtensions: METHODLIST, SIGNATURES, TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 
 export @syms, term, hasmetadata, getmetadata, setmetadata
 
@@ -11,31 +16,36 @@ using Moshi.Data: @data
 import Moshi.Data as MData
 using Moshi.Match: @match
 using EnumX: @enumx
-using TermInterface
-using Setfield
-import Setfield: PropertyLens
-using SymbolicIndexingInterface
+import TermInterface
+import Setfield
+using Setfield: @set, @set!
+import SymbolicIndexingInterface
+using SymbolicIndexingInterface: ArraySymbolic, NotSymbolic, ScalarSymbolic, getname, hasname,
+                                 symbolic_type
 import Base: +, -, *, /, //, \, ^, ImmutableDict
-using ConstructionBase
-using TermInterface
-import TermInterface: iscall, operation, arguments, metadata, maketerm, sorted_arguments
+import ConstructionBase
+import TermInterface: children, iscall, isexpr, head, operation, arguments, metadata, maketerm, sorted_arguments, sorted_children
+import DataStructures: OrderedDict, OrderedSet, Accumulator, counter
+import OrderedCollections
 # For ReverseDiffExt
 import ArrayInterface
 import ExproniconLite as EL
 import TaskLocalValues: TaskLocalValue
 using WeakCacheSets: WeakCacheSet, getkey!
-using Base: RefValue
 import MacroTools
 import PrecompileTools
 PrecompileTools.@recompile_invalidations begin
     import MultivariatePolynomials as MP
     import DynamicPolynomials as DP
     import MutableArithmetics as MA
-    import SparseArrays: SparseMatrixCSC, findnz, sparse
-    using DataStructures
-    using ReadOnlyArrays
+    import SparseArrays
+    import SparseArrays: SparseMatrixCSC, SparseVector, findnz, sparse
+    import ReadOnlyArrays: ReadOnlyVector
+    import Graphs
+    import StaticArraysCore
 end
 import LinearAlgebra
+using SciMLPublic: @public
 
 macro manually_scope(val, expr, is_forced = false)
     @assert Meta.isexpr(val, :call)
@@ -98,6 +108,30 @@ end
 include("cache.jl")
 Base.@deprecate istree iscall
 
+"""
+    istree(x)
+
+Deprecated spelling of [`iscall`](@ref). Returns `true` if `x` is a function call
+expression, i.e. one for which [`operation`](@ref) and [`arguments`](@ref) are defined.
+
+`istree` was the name used by the pre-`TermInterface` symbolic interface. It is retained
+only so that older code keeps running, emits a deprecation warning on every call, and will
+be removed in the next breaking release. New code should call `iscall` instead:
+
+```julia
+iscall(x)      # instead of istree(x)
+```
+
+Note that `iscall` is not merely a rename: the term interface splits the old notion of "is
+this a tree node" into `iscall` (the expression is an `operation` applied to `arguments`)
+and the container-specific predicates such as [`SymbolicUtils.issym`](@ref). Code that used
+`istree` to mean "not a leaf" should check `iscall`; code that used `!istree(x)` to mean "is
+a symbol" should check `SymbolicUtils.issym(x)`, which is the precise question.
+
+See also: [`iscall`](@ref), [`operation`](@ref), [`arguments`](@ref).
+"""
+istree
+
 include("small_array.jl")
 
 export istree, operation, arguments, sorted_arguments, iscall, unwrap_const
@@ -125,9 +159,11 @@ export @makearray
 include("arraymaker.jl")
 
 # Methods on symbolic objects
+export ifelse_eager, ifelse_branching
 PrecompileTools.@recompile_invalidations begin
-using SpecialFunctions, NaNMath
+import SpecialFunctions, NaNMath
 include("methods.jl")
+
 include("printing.jl")
 end
 # LinkedList, simplification utilities
@@ -159,17 +195,60 @@ include("ordering.jl")
 include("simplify_rules.jl")
 
 # API = simplify + substitute
-export simplify
+export simplify, trig_reduce
 include("simplify.jl")
 
 export substitute
 include("substitute.jl")
+
+include("ordereddigraph.jl")
+include("graph_traversal.jl")
+
+export IRStructure, populate_ir!, print_ir, get_reachability, get_reachability!
+include("irstructure.jl")
 
 include("code.jl")
 
 PrecompileTools.@recompile_invalidations begin
     include("despecialize.jl")
 end
+
+@public add_worker, mul_worker
+@public BasicSymbolic, unwrap, isadd, ismul
+@public symtype, issym, isterm, isdiv, Sym
+@public Term, Add, Mul, ArrayMaker, node_count
+@public isconst
+@public operation_hasname, operation_getname
+@public operation_is_atomic
+@public ispow
+@public Unknown, ShapeVecT, ShapeT, shape, promote_shape
+@public fntype_ret_type
+@public FnType
+@public Mapper, Mapreducer, array_literal
+@public infer_vartype, search_variables!, replace_node!
+
+# These names form the developer interface consumed by Symbolics.jl and related
+# JuliaSymbolics packages. They are intentionally public without being exported:
+# ordinary users should prefer the higher-level constructors and transformations.
+@public <ₑ, @cache, @map_methods, @mapreduce_methods, @number_methods, number_methods
+@public ACDict, AddMulVariant, ArgsT, BSImpl, BasicSymbolicImpl, Const, Div
+@public MetadataT, MonomialOrder, MonomialT, Mul, Operator, PolyCoeffT, PolyVarOrder
+@public PolyVarT, PolynomialT, ROArgsT, Rule, StableIndex, Substituter, SymBroadcast
+@public TypeT, _indexed_ndims, _isone, _iszero, basicsymbolic_to_polyvar, clear_cache!
+@public default_is_atomic, default_substitute_filter, denominators, evaluate, from_poly
+@public get_substitution_dict, hashcons, is_array_shape, is_called_function_symbolic
+@public is_function_symbolic, isarrayop, isbinop, numerators, one_of_vartype
+@public operator_to_term, parse_variable, promote_symtype, query, scalarize
+@public search_variables, show_call, stable_eachindex, sym_from_parse_result, to_poly!
+@public toggle_caching!, zero_of_vartype, zeropoly
+
+# `Code` is a developer-facing submodule used by downstream code generators.
+@public Code
+
+# `simplify_rules.jl` does `using .Rewriters`, so these already resolve as
+# `SymbolicUtils.X` and callers depend on that spelling. Declare them public here so
+# reaching them through this module is API rather than a side effect of that import.
+@public Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
 PrecompileTools.@setup_workload begin
     fold1 = Val{false}()
@@ -214,5 +293,10 @@ end
 
 precompile(Tuple{typeof(Base.show), Base.TTY, SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}})
 precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:color,), Tuple{Symbol}}, typeof(Base.printstyled), Base.TTY, Int64})
+
+let BS = BasicSymbolic{SymReal}
+    precompile(Tuple{typeof(Base.collect), BS})
+    precompile(Tuple{typeof(SymbolicUtils._getindex), Type{SymReal}, BS, Int64, Vararg{Int64}})
+end
 
 end # module

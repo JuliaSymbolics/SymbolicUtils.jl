@@ -1,26 +1,44 @@
+"""
+$(DocStringExtensions.README)
+
+Developer-facing intermediate-representation and code-generation helpers for
+SymbolicUtils. The public names in this module are stable extension points for
+packages that generate code from symbolic expressions; ordinary callers should
+prefer `SymbolicUtils.build_function`-style high-level APIs.
+"""
 module Code
 
-using StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
-      DocStringExtensions
+import StaticArraysCore, SparseArrays, LinearAlgebra, NaNMath, SpecialFunctions,
+       DocStringExtensions
+using SciMLPublic: @public
+using StaticArraysCore: MArray, SArray
+using SparseArrays: AbstractSparseArray, SparseMatrixCSC, SparseVector, findnz, issparse, sparse
+using LinearAlgebra: Adjoint, Transpose, UpperTriangular
+using SpecialFunctions: lgamma
+using DocStringExtensions: SIGNATURES, TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 
 export toexpr, Assignment, (←), Let, Func, DestructuredArgs, LiteralExpr,
        SetArray, MakeArray, MakeSparseArray, MakeTuple, AtIndex,
-       SpawnFetch, Multithreaded, ForLoop, cse
+       SpawnFetch, Multithreaded, ForLoop, cse,
+       symFunc, symAssignment, symLet, symDestructuredArgs
 
 export OptimizationRule, substitute_in_ir, apply_optimization_rules
 
 import ..SymbolicUtils
 import ..SymbolicUtils.Rewriters
 import SymbolicUtils: @matchable, BasicSymbolic, Sym, Term, iscall, operation, arguments, issym,
-                      symtype, sorted_arguments, metadata, isterm, term, maketerm, unwrap_const,
-                      ArgsT, Const, SymVariant, _is_array_of_symbolics, _is_tuple_of_symbolics,
-                      ArrayOp, isarrayop, IdxToAxesT, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
+                      symtype, sorted_arguments, term, maketerm, unwrap_const,
+                      ArgsT, Const, SymVariant, _is_array_of_symbolics,
+                      ArrayOp, ROArgsT, shape, Unknown, ShapeVecT, BSImpl,
                       search_variables!, _is_index_variable, RangesT, IDXS_SYM, is_array_shape,
                       symtype, vartype, add_worker, search_variables!, @union_split_smallvec,
                       ArrayMaker, TypeT, ShapeT, SymReal, SafeReal, TreeReal, _unreachable, unwrap,
-                      AddMulVariant, _isone, _iszero
+                      AddMulVariant, _isone, Fill, IRStructure, populate_ir!, FnType,
+                      ifelse_branching
 using Moshi.Match: @match
-import SymbolicIndexingInterface: symbolic_type, NotSymbolic
+import TaskLocalValues: TaskLocalValue
+import Graphs
+using OrderedCollections: OrderedSet
 
 ##== state management ==##
 
@@ -34,6 +52,13 @@ function union_rewrites!(n, ts)
     end
 end
 
+"""
+    LazyState()
+
+Lazily initialized rewrite state used while generating code from a symbolic
+expression. The state exposes the same rewrite dictionary interface as
+`NameState` after its first access.
+"""
 struct LazyState
     ref::Ref{Any}
 end
@@ -47,6 +72,121 @@ end
 @inline Base.getproperty(st::LazyState, f::Symbol) = f==:symbolify ?  getproperty(st, :rewrites) : getproperty(get(st), f)
 
 ##========================##
+
+"""
+The rewrite key used in conjunction with [`SymbolicUtils.Code.with_allocator`](@ref) to
+store user-provided allocators.
+"""
+const ALLOCATOR_REWRITES_KEY = :__internal_allocator
+
+"""
+    $TYPEDSIGNATURES
+
+Get the allocator to use for a symbolic expression. If the rewrite rules contain
+an entry for `ALLOCATOR_REWRITES_KEY`, will return that value and erase the rule
+(since allocators cannot be reused). Otherwise, returns `default`.
+"""
+function get_allocator!(state::Union{NameState, LazyState}, @nospecialize(default))
+    result = get(state.rewrites, ALLOCATOR_REWRITES_KEY, default)
+    delete!(state.rewrites, ALLOCATOR_REWRITES_KEY)
+    return result
+end
+
+function add_allocator!(state::Union{NameState, LazyState}, @nospecialize(alloc))
+    old_allocator = get(state.rewrites, ALLOCATOR_REWRITES_KEY, nothing)
+    state.rewrites[ALLOCATOR_REWRITES_KEY] = alloc
+    return old_allocator
+end
+
+function reset_allocator!(state::Union{NameState, LazyState}, @nospecialize(old_alloc))
+    if old_alloc === nothing
+        delete!(state.rewrites, ALLOCATOR_REWRITES_KEY)
+    else
+        state.rewrites[ALLOCATOR_REWRITES_KEY] = old_alloc
+    end
+    return nothing
+end
+
+@noinline function throw_bad_allocator()
+    throw(ArgumentError("`with_allocator` can only be used on `array_literal`, `@arrayop` and `@makearray` expressions."))
+end
+
+"""
+    supports_with_allocator(ex::BasicSymbolic)
+
+    Return `true` when `ex` is an allocating symbolic expression accepted by
+    [`with_allocator`](@ref). The supported forms are `array_literal`,
+    `SymbolicUtils.@arrayop`, and `SymbolicUtils.@makearray`, including array
+    operations backed by `Fill`.
+"""
+function supports_with_allocator(ex::BasicSymbolic{T}) where {T}
+    return @match ex begin
+        BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => true
+        BSImpl.ArrayOp(; term, shape) => if term === nothing && is_array_shape(shape)
+            true
+        else
+            @match term begin
+                BSImpl.Term(; f) => f isa Fill
+                _ => false
+            end
+        end
+        BSImpl.ArrayMaker(;) => true
+        _ => false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Associate an allocating expression with an allocator. Expressions such as
+[`SymbolicUtils.@arrayop`](@ref), [`SymbolicUtils.@makearray`](@ref), and
+[`SymbolicUtils.array_literal`](@ref) need to allocate an array
+for their results. By default, the generated code will allocate an array using any method it
+deems appropriate (such as `zeros`). To use a specific allocation method, or perhaps provide
+a preallocated array of the appropriate size and `eltype`, `with_allocator` can be used.
+The first argument is an allocator (API described below), and the second argument is
+an expression which allocates an array. The array allocation will use the provided allocator.
+Note that this only applies to immediate next allocation in `ex`. For example, an
+`array_literal` containing an `@arrayop` has two allocations. `with_allocator` on the
+outer `array_literal` will only control the allocation used for `array_literal`, and not
+`@arrayop`. Each allocating expression needs its own `with_allocator`.
+
+# Allocator API
+
+The API for the allocator is relatively simple. It should be a callable accepting an
+`NTuple{N, Int}` indicating the size of the required array, and returning an array of the
+appropriate `eltype` and indicated size. The array should be mutable, allowing `setindex!`.
+
+Note that the `eltype` of the array is not provided, and is the responsibility of the
+allocator to identify. This is intentional, since figuring this out ahead of time can be
+prohibitively expensive. For example, to obtain a value representing the `eltype` of an
+`@arrayop` can require running the entire set of reduction loops. The `symtype` of the
+expression is also typically very wide - it is usually a type like `Real` or `Number`. The
+provider of the allocator typically has more information about the required `eltype`, since
+they know how the expression is involved in the larger code, where the arguments come from,
+and the concrete types of the buffers.
+"""
+function with_allocator(@nospecialize(alloc), ex::BasicSymbolic{T}) where {T}
+    supports_with_allocator(ex) || throw_bad_allocator()
+
+    return BSImpl.Term{T}(
+        with_allocator, ArgsT{T}((BSImpl.Const{T}(alloc), ex));
+        type = symtype(ex), shape = shape(ex)
+    )
+end
+
+SymbolicUtils.scalarization_function(::typeof(with_allocator)) = _with_allocator_scalarize
+
+function _with_allocator_scalarize(::typeof(with_allocator), ex::BasicSymbolic{T}, ::Val{toplevel}) where {T, toplevel}
+    args = arguments(ex)
+    return SymbolicUtils.scalarize(args[2], Val{toplevel}())
+end
+
+SymbolicUtils.promote_symtype(::typeof(with_allocator), ::TypeT, T::TypeT) = T
+function SymbolicUtils.promote_shape(::typeof(with_allocator), _sh::ShapeT, sh::ShapeT)
+    @nospecialize _sh sh
+    return sh
+end
 
 abstract type CodegenPrimitive end
 
@@ -206,6 +346,15 @@ function function_to_expr_no_nanmath(@nospecialize(op), O::BasicSymbolic{T}, st)
     return expr
 end
 
+"""
+    function_to_expr(op, expr, state)
+
+    Lower one symbolic operation to a Julia expression during code generation.
+    This is a developer extension point used by `SymbolicUtils.Code.toexpr` and
+    the IR-based code generator. `state` must be the active code-generation
+    state; custom operation handlers should preserve the expression and state
+    invariants expected by the surrounding generator.
+"""
 function function_to_expr(@nospecialize(op), O, st)
     # Avoid using `op in NaNMathFuns` since that is dynamic dispatch.
     # Also avoid using `nameof(op)` for the same reason.
@@ -260,7 +409,7 @@ function function_to_expr(@nospecialize(op::SymbolicUtils.Mapreducer), O, st)
     out === nothing || return out
     expr = Expr(:call, mapreduce)
     kws = Expr(:parameters)
-    if op.dims isa Int
+    if !(op.dims isa Colon)
         push!(kws.args, Expr(:kw, :dims, op.dims))
     end
     if op.init !== nothing
@@ -299,11 +448,20 @@ function function_to_expr(::Type{ArrayOp{T}}, O::BasicSymbolic{T}, st) where {T}
     out === nothing || return out
 
     # TODO: better infer default eltype from `O`
+    _allocator = get_allocator!(st, nothing)
+
     output_eltype = get(st.rewrites, :arrayop_eltype, Float64)
     delete!(st.rewrites, :arrayop_eltype)
     sh = shape(O)
     default_output_buffer = if is_array_shape(sh)
-        term(zeros, output_eltype, size(O))
+        if _allocator === nothing
+            term(zeros, output_eltype, size(O))
+        else
+            @match _allocator begin
+                if _allocator isa BasicSymbolic{T} end && BSImpl.Const(; val) => term(val, size(O))
+                _ => term(_allocator, size(O))
+            end
+        end
     else
         term(zero, output_eltype)
     end
@@ -395,11 +553,16 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
     out = get(st.rewrites, O, nothing)
     out === nothing || return out
 
+    _allocator = get_allocator!(st, nothing)
     # TODO: better infer default eltype from `O`
     output_eltype = get(st.rewrites, :arraymaker_eltype, Float64)
     delete!(st.rewrites, :arraymaker_eltype)
     sh = shape(O)
-    default_output_buffer = term(zeros, output_eltype, size(O))
+    default_output_buffer = if _allocator === nothing
+        term(zeros, output_eltype, size(O))
+    else
+        term(_allocator, size(O))
+    end
     output_buffer = get(st.rewrites, :arraymaker_output, default_output_buffer)
     delete!(st.rewrites, :arraymaker_output)
     ir = Assignment[]
@@ -414,12 +577,13 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
                 push!(args, BSImpl.Const{T}(reg))
             end
             vw = BSImpl.Term{T}(view, args; type = Any)
+            rewritten = haskey(st.rewrites, val)
             @match val begin
-                BSImpl.ArrayOp(;) => begin
+                BSImpl.ArrayOp(; term) && if term === nothing && !rewritten end => begin
                     st.rewrites[:arrayop_output] = vw
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
                 end
-                BSImpl.ArrayMaker(;) => begin
+                BSImpl.ArrayMaker(;) && if !rewritten end => begin
                     st.rewrites[:arraymaker_output] = vw
                     push!(ir, Assignment(Symbol("__tmp_ₐ"), toexpr(val, st)))
                 end
@@ -430,6 +594,26 @@ function function_to_expr(::Type{ArrayMaker{T}}, O::BasicSymbolic{T}, st) where 
         end
     end
     return toexpr(Let([Assignment(ARRAY_OUTSYM, output_buffer)], Let(ir, ARRAY_OUTSYM, false), true), st)
+end
+
+function function_to_expr(::typeof(SymbolicUtils.array_literal), O::BasicSymbolic{T}, st) where {T}
+    _allocator = get_allocator!(st, nothing)
+    if _allocator === nothing
+        return function_to_expr_no_nanmath(SymbolicUtils.array_literal, O, st)
+    end
+    expr = Expr(:block)
+    if _allocator isa BasicSymbolic{T}
+        push!(expr.args, Expr(:(=), :__array_literal_allocator, toexpr(_allocator, st)))
+    else
+        push!(expr.args, Expr(:(=), :__array_literal_allocator, _allocator))
+    end
+    args = parent(arguments(O))
+    push!(expr.args, Expr(:(=), :__array_literal_result, Expr(:call, :__array_literal_allocator, unwrap_const(args[1]))))
+    @union_split_smallvec args for (idx, arg) in enumerate(Iterators.drop(args, 1))
+        push!(expr.args, Expr(:call, setindex!, :__array_literal_result, toexpr(arg, st), idx))
+    end
+    push!(expr.args, :__array_literal_result)
+    return expr
 end
 
 function function_to_expr(@nospecialize(op::Union{typeof(*),typeof(+)}), O, st)
@@ -459,6 +643,23 @@ function function_to_expr(@nospecialize(op::Union{typeof(*),typeof(+)}), O, st)
     end
 end
 
+# Lowering only rewrites `x^n` to `literal_pow` for the `:^` symbol, not the `^` function object.
+function literal_pow_exponent(@nospecialize(n))
+    n isa Integer && typemin(Int) <= n <= typemax(Int) || return nothing
+    return Expr(:call, Val, Int(n))
+end
+
+"""
+Key in the `rewrites` dictionary of codegen states (`NameState`, `LazyState`, and
+`CodegenState` used by [`fast_toexpr`](@ref)). When `false`, constant integer powers
+`x ^ n` lower to `^(x, n)` — including inside `broadcast`ed and fused broadcast
+expressions — instead of `Base.literal_pow(^, x, Val(n))`, reverting to the codegen
+behavior from before `literal_pow` emission was introduced. Defaults to `true`.
+"""
+const USE_LITERAL_POW_KEY = :use_literal_pow
+
+@inline use_literal_pow(rewrites::Dict{Any, Any}) = get(rewrites, USE_LITERAL_POW_KEY, true)::Bool
+
 function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     base, exp = arguments(O)
     base = toexpr(base, st)
@@ -474,6 +675,12 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
                 if (val < 0)::Bool
                     val = -val
                     base = Expr(:call, inv, base)
+                end
+                if use_literal_pow(st.rewrites)
+                    p = literal_pow_exponent(val)
+                    if p !== nothing
+                        return Expr(:call, Base.literal_pow, ^, base, p)
+                    end
                 end
                 if !(val isa Integer) && get(st.rewrites, :nanmath, false)::Bool
                     op = NaNMath.pow
@@ -492,7 +699,27 @@ function function_to_expr(op::typeof(^), O::BasicSymbolic{T}, st) where {T}
     end
 end
 
+function function_to_expr(::typeof(broadcast), O::BasicSymbolic{T}, st) where {T}
+    args = arguments(O)
+    if use_literal_pow(st.rewrites) && length(args) == 3 && unwrap_const(args[1]) === (^)
+        p = literal_pow_exponent(unwrap_const(args[3]))
+        if p !== nothing
+            return Expr(:call, fused_materialize, Expr(:call, Base.Broadcast.broadcasted, Base.literal_pow, ^, toexpr(args[2], st), p))
+        end
+    end
+    return function_to_expr_no_nanmath(broadcast, O, st)
+end
+
 function function_to_expr(::typeof(ifelse), O, st)
+    args = arguments(O)
+    return Expr(:if, toexpr(args[1], st), toexpr(args[2], st), toexpr(args[3], st))
+end
+
+# `ifelse_branching` lowers to an `if`/`else` (only the taken branch is evaluated). `toexpr`
+# inlines recursively, so this slow path is naturally lazy. `ifelse_eager` needs no special
+# handling: it is a registered function whose definition calls `ifelse`, so the generic
+# `function_to_expr` fallback lowers it to a plain (eager) call.
+function function_to_expr(::typeof(ifelse_branching), O, st)
     args = arguments(O)
     return Expr(:if, toexpr(args[1], st), toexpr(args[2], st), toexpr(args[3], st))
 end
@@ -521,10 +748,13 @@ end
 function toexpr(O::BasicSymbolic{T}, st) where {T}
     @match O begin
         BSImpl.Const(;) => nothing # Constants should not be rewritten; they are literal values.
-        _ => if haskey(st.rewrites, O)
-            O = st.rewrites[O]
-            if !(O isa BasicSymbolic{T})
-                return manual_dispatch_toexpr(O, st)
+        _ => begin
+            rw = get(st.rewrites, O, nothing)
+            if rw !== nothing
+                O = rw
+                if !(O isa BasicSymbolic{T})
+                    return manual_dispatch_toexpr(O, st)
+                end
             end
         end
     end
@@ -542,11 +772,18 @@ function toexpr(O::BasicSymbolic{T}, st) where {T}
             return function_to_expr(ArrayOp{T}, O, st)
         end
         BSImpl.ArrayMaker(;) => return function_to_expr(ArrayMaker{T}, O, st)
-        BSImpl.Term(; f) => begin
+        BSImpl.Term(; f, args) => begin
             if f === (^)
                 return function_to_expr((^), O, st)
             elseif f === ifelse
                 return function_to_expr(ifelse, O, st)
+            elseif f === SymbolicUtils.array_literal
+                return function_to_expr(SymbolicUtils.array_literal, O, st)
+            elseif f === with_allocator
+                old_allocator = add_allocator!(st, args[1])
+                result = toexpr(args[2], st)
+                reset_allocator!(st, old_allocator)
+                return result
             else
                 return function_to_expr(f, O, st)
             end
@@ -604,6 +841,13 @@ function search_variables!(buffer, dargs::DestructuredArgs; kw...)
 end
 
 toexpr(x::DestructuredArgs, st) = toexpr(x.name, st)
+"""
+    get_rewrites(expr)
+
+    Collect symbolic subexpressions that need rewrite bindings during code
+    generation. This developer hook returns an empty collection for literals
+    and recursively visits arrays, tuples, and destructured arguments.
+"""
 get_rewrites(args::DestructuredArgs) = []
 function get_rewrites(args::Union{AbstractArray, Tuple})
     rws = []
@@ -618,20 +862,24 @@ get_rewrites(x::BasicSymbolic) = iscall(x) ? Any[x] : []
 # Used in Symbolics
 Base.@deprecate_binding get_symbolify get_rewrites
 
+@inline function destructured_elem_expr(@nospecialize(name), @nospecialize(idx))
+    if idx isa Symbol
+        return Expr(:., name, QuoteNode(idx))
+    else
+        return Expr(:ref, name, idx)
+    end
+end
+
 function get_assignments(d::DestructuredArgs, st)
     name = manual_dispatch_toexpr(d, st)
-    assigns = Assignment[]
-    for i in 1:(length(d.inds)::Int)
-        idx = d.inds[i]
-        if idx isa Symbol
-            ex = Expr(:., name, QuoteNode(idx))
-        else
-            ex = Expr(:ref, name, idx)
-        end
+    n = length(d.inds)::Int
+    assigns = Vector{Assignment}(undef, n)
+    for i in 1:n
+        ex = destructured_elem_expr(name, d.inds[i])
         if d.inbounds && d.create_bindings
             ex = Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), ex)
         end
-        push!(assigns, Assignment(d.elems[i], ex))
+        assigns[i] = Assignment(d.elems[i], ex)
     end
     return assigns
 end
@@ -700,16 +948,106 @@ function search_variables!(buffer, l::Let; kw...)
     union!(buffer, rhsbuf)
 end
 
-function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{DestructuredArgs, Assignment}), st)
+@inline function store_rewrite!(rewrites::Dict{Any, Any}, @nospecialize(key), @nospecialize(val))
+    if key isa BasicSymbolic{SymReal}
+        rewrites[key] = val
+    elseif key isa BasicSymbolic{SafeReal}
+        rewrites[key] = val
+    elseif key isa BasicSymbolic{TreeReal}
+        rewrites[key] = val
+    else
+        rewrites[key] = val
+    end
+    return nothing
+end
+
+const DESTRUCTURING_REWRITES_CACHE = TaskLocalValue{Dict{Tuple{Any, AbstractRange}, Vector{Expr}}}(
+    () -> Dict{Tuple{Any, AbstractRange}, Vector{Expr}}())
+
+# Upper bound on the total number of `Expr`s held by `DESTRUCTURING_REWRITES_CACHE`.
+const DESTRUCTURING_REWRITES_CACHE_MAX_EXPRS = 2^20
+const DESTRUCTURING_REWRITES_CACHE_NEXPRS = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
+
+const DESTRUCTURING_MARKER = :__destructuring_rewrites_marker
+
+# `sizehint!`'s `shrink` keyword was added in Julia 1.11.
+@static if VERSION >= v"1.11"
+    _sizehint_noshrink!(d, n) = sizehint!(d, n; shrink = false)
+else
+    _sizehint_noshrink!(d, n) = sizehint!(d, n)
+end
+
+function build_destructured_elem_exprs(@nospecialize(name), @nospecialize(inds))
+    n = length(inds)::Int
+    exprs = Vector{Expr}(undef, n)
+    for i in 1:n
+        exprs[i] = destructured_elem_expr(name, inds[i])
+    end
+    return exprs
+end
+
+function destructured_elem_exprs(@nospecialize(name), @nospecialize(inds))
+    inds isa AbstractRange || return build_destructured_elem_exprs(name, inds)
+    cache = DESTRUCTURING_REWRITES_CACHE[]
+    key = (name, inds)
+    exprs = get(cache, key, nothing)
+    exprs === nothing || return exprs
+    exprs = build_destructured_elem_exprs(name, inds)
+    nexprs = DESTRUCTURING_REWRITES_CACHE_NEXPRS[]
+    if nexprs[] + length(exprs) > DESTRUCTURING_REWRITES_CACHE_MAX_EXPRS
+        empty!(cache)
+        nexprs[] = 0
+    end
+    cache[key] = exprs
+    nexprs[] += length(exprs)
+    return exprs
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Store the rewrites for a `create_bindings = false` `DestructuredArgs` directly into
+`st.rewrites` without materializing the `Vector{Assignment}` that
+[`get_assignments`](@ref) would allocate.
+
+The generated right-hand-side `Expr`s depend only on the destructured name and `inds`, so
+when `inds` is a range they are memoized in a task-local cache keyed on `(name, inds)` by
+value. Codegen for a system with many functions destructures the same arguments once per
+generated function; the cache turns every repeat into a lookup instead of `length(inds)`
+fresh `Expr` allocations. The cache holds no reference to `elems` and is bounded by the
+total number of cached `Expr`s.
+"""
+function store_destructuring_rewrites!(d::DestructuredArgs, st)
+    name = manual_dispatch_toexpr(d, st)
+    n = length(d.inds)::Int
+    elems = d.elems
+    key = (name, objectid(elems), objectid(d.inds))
+    # `Symbolics.codegen_function` generates the out-of-place and in-place variants with
+    # the same `rewrites` dict. The rewrites this function stores depend only on `key`,
+    # so mark the dict and skip the (identical) re-population on the second call.
+    # The marker's value keeps `elems` and `inds` alive so their `objectid`s cannot be
+    # recycled while `st.rewrites` is.
+    marker = (DESTRUCTURING_MARKER, key)
+    len_before = length(st.rewrites)
+    get!(st.rewrites, marker, (elems, d.inds))
+    length(st.rewrites) == len_before && return nothing
+
+    exprs = destructured_elem_exprs(name, d.inds)
+    _sizehint_noshrink!(st.rewrites, length(st.rewrites) + n)
+    for i in 1:n
+        store_rewrite!(st.rewrites, elems[i], exprs[i])
+    end
+    return nothing
+end
+
+function handle_let_pair!(dargs::Vector{Assignment}, x::Union{DestructuredArgs, Assignment}, st)
     if x isa DestructuredArgs
         if x.create_bindings
             for a in get_assignments(x, st)
                 handle_let_pair!(dargs, a, st)
             end
         else
-            for a in get_assignments(x, st)
-                st.rewrites[a.lhs] = a.rhs
-            end
+            store_destructuring_rewrites!(x, st)
         end
     elseif x isa Assignment
         lhs = x.lhs
@@ -721,9 +1059,7 @@ function handle_let_pair!(dargs::Vector{Assignment}, @nospecialize(x::Union{Dest
                 end
             else
                 handle_let_pair!(dargs, Assignment(lhs.name, x.rhs), st)
-                for a in get_assignments(lhs, st)
-                    st.rewrites[a.lhs] = a.rhs
-                end
+                store_destructuring_rewrites!(lhs, st)
             end
         else
             push!(dargs, x)
@@ -847,6 +1183,8 @@ julia> executable(1, 2.0, [2,3.0], x->string(x); var"z(t)" = sqrt(42))
 ```
 """
 Func
+
+include("symbolic_codegen_primitives.jl")
 
 toexpr_kw(f, st) = Expr(:kw, toexpr(f, st).args...)
 
@@ -1040,7 +1378,7 @@ function toexpr(a::MakeArray, st)
                      $elT,
                      Val{$ndim}(),
                      Val{$(size(a.elems))}(),
-                     $(map(x->toexpr(x, st), a.elems)...),)
+                     $([toexpr(x, st) for x in a.elems]...),)
     end
 end
 
@@ -1054,6 +1392,15 @@ end
     arr
 end
 
+"""
+    create_array(similarto, output_eltype, ::Val{ndims}, ::Val{dims}, elems...)
+
+Construct an array with dimensions `dims` and elements `elems`, using `similarto` to
+select the array type. `output_eltype` may be `nothing` to infer the element type.
+
+Array packages can support [`MakeArray`](@ref) code generation by defining methods for
+their array type.
+"""
 @inline function create_array(A::Type{<:Array}, T, ::Val, d::Val, elems...)
     _create_array(A, T, d, elems...)
 end
@@ -1094,7 +1441,7 @@ end
 end
 
 
-vhcat(sz::Tuple{Int,Int}, xs::T...) where {T} = typed_vhcat(T, sz, xs...)
+vhcat(sz::Tuple{Int,Int}, x::T, xs::T...) where {T} = typed_vhcat(T, sz, x, xs...)
 vhcat(sz::Tuple{Int,Int}, xs::Number...) = typed_vhcat(Base.promote_typeof(xs...), sz, xs...)
 vhcat(sz::Tuple{Int,Int}, xs...) = typed_vhcat(Base.promote_eltypeof(xs...), sz, xs...)
 
@@ -1125,8 +1472,16 @@ end
     create_array(P, S, nd, d, elems...)
 end
 
+@inline function create_array(A::Type{<:Adjoint{T,P}}, S, nd::Val, d::Val, elems...) where {T,P}
+    create_array(P, S, nd, d, elems...)
+end
+
 @inline function create_array(A::Type{<:UpperTriangular{T,P}}, S, nd::Val, d::Val, elems...) where {T,P}
     create_array(P, S, nd, d, elems...)
+end
+
+@inline function create_array(::Type{A}, S, ::Val{ND}, ::Val{D}, elems...) where {E, N, I, A <: Base.ReshapedArray{E, N, I}, ND, D}
+    create_array(I, S, Val(ND), Val(D), elems...)
 end
 
 ## SArray
@@ -1332,11 +1687,37 @@ function toexpr(f::ForLoop, st)
     end)
 end
 
+include("faster_code.jl")
+
 ### Code-related utilities
 
 ### Common subexprssion evaluation
 
 const CSE_PREFIX = Vector{UInt8}("##cse#")
+const IDXS_SYM_PREFIX = Vector{UInt8}("_")
+
+function get_numbered_symbol_with_prefix(prefix::Vector{UInt8}, idx)
+    buffer = UInt8[]
+    sizehint!(buffer, length(prefix) + ndigits(idx))
+    append!(buffer, prefix)
+    if idx == 0
+        push!(buffer, '0')
+    end
+    while idx > 0
+        push!(buffer, '0' + (idx % 10))
+        idx = div(idx, 10)
+    end
+    reverse!(@view(buffer[(length(prefix) + 1):end]))
+    return Symbol(buffer)
+end
+
+function get_cse_name(idx::Int)
+    return get_numbered_symbol_with_prefix(CSE_PREFIX, idx)
+end
+
+function codegen_arrayop_indexer(idx::Int)
+    return get_numbered_symbol_with_prefix(IDXS_SYM_PREFIX, idx)
+end
 
 """
     newsym!(state::CSEState, ::Type{T})
@@ -1348,15 +1729,8 @@ Generates new symbol of type `T` with unique name in `state`.
 
     idx = state.varid[]
     state.varid[] += 1
-    buffer = UInt8[]
-    sizehint!(buffer, length(CSE_PREFIX) + ndigits(idx))
-    append!(buffer, CSE_PREFIX)
-    while idx > 0
-        push!(buffer, '0' + (idx % 10))
-        idx = div(idx, 10)
-    end
-    reverse!(@view(buffer[(length(CSE_PREFIX) + 1):end]))
-    Sym{T}(Symbol(buffer); type = symtype, shape = sh)
+    name = get_cse_name(idx)
+    Sym{T}(name; type = symtype, shape = sh)
 end
 
 """
@@ -1367,6 +1741,26 @@ Return `true` if CSE should descend inside `sym`, which has operation `f`.
 function cse_inside_expr(sym, f)
     return true
 end
+
+# Keep the branches of `ifelse_branching` out of CSE so they are not hoisted ahead of the
+# conditional; the codegen for `ifelse_branching` emits them inside their `if`/`else` arms.
+cse_inside_expr(sym, ::typeof(ifelse_branching)) = false
+
+"""
+    $(TYPEDSIGNATURES)
+
+Only consulted when `cse_inside_expr` returns `false` for `sym`, which has operation
+`f`. Return `true` if CSE should still bind `sym` itself to a temporary variable — so that
+multiple references to it share a single computation — while leaving its arguments un-CSEd.
+The default `false` leaves the expression fully inline at each reference site.
+"""
+function cse_bind_expr(sym, f)
+    return false
+end
+
+# Bind the conditional itself so multiple references share one `if`/`else` instead of
+# duplicating it per use site. The branches remain un-CSEd (and therefore lazy).
+cse_bind_expr(sym, ::typeof(ifelse_branching)) = true
 
 """
     $(TYPEDEF)
@@ -1416,16 +1810,16 @@ end
 """
 $(SIGNATURES)
 
-Perform a topological sort on a symbolic expression represented as a Directed Acyclic 
+Perform a topological sort on a symbolic expression represented as a Directed Acyclic
 Graph (DAG).
 
-This function takes a symbolic expression `graph` (potentially containing shared common 
-sub-expressions) and returns an array of `Assignment` objects.  Each `Assignment` 
-represents a node in the sorted order, assigning a fresh symbol to its corresponding 
-expression. The order ensures that all dependencies of a node appear before the node itself 
+This function takes a symbolic expression `graph` (potentially containing shared common
+sub-expressions) and returns an array of `Assignment` objects.  Each `Assignment`
+represents a node in the sorted order, assigning a fresh symbol to its corresponding
+expression. The order ensures that all dependencies of a node appear before the node itself
 in the array.
 
-Hash consing is assumed, meaning that structurally identical expressions are represented by 
+Hash consing is assumed, meaning that structurally identical expressions are represented by
 the same object in memory. This allows for efficient equality checks using `IdDict`.
 """
 function topological_sort(graph)
@@ -1486,52 +1880,97 @@ and should have the same type as `x`.
 function cse! end
 
 function cse!(expr::BasicSymbolic{T}, state::CSEState) where {T}
-    cse_visitor = let expr = expr, state = state
-        function _cse_visitor()
-            @match expr begin
-                BSImpl.Const(;) => begin
-                    new_expr = expr
-                    sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
-                    push!(state.sorted_exprs, sym ← new_expr)
-                    return sym
+    cached = get(state.visited, expr.id, nothing)
+    cached === nothing || return cached::BasicSymbolic{T}
+    result = _cse_compute(expr, state)::BasicSymbolic{T}
+    state.visited[expr.id] = result
+    return result
+end
+
+function _cse_compute(expr::BasicSymbolic{T}, state::CSEState) where {T}
+    @match expr begin
+        BSImpl.Const(; val) => begin
+            # Scalar numbers stay literal: a hoisted exponent would hide it from `^`
+            # lowering, which needs a literal to emit `Base.literal_pow`.
+            val isa Number && return expr
+            new_expr = expr
+            sym = newsym!(state, T, symtype(new_expr), shape(new_expr))
+            push!(state.sorted_exprs, sym ← new_expr)
+            return sym
+        end
+        BSImpl.Sym(;) => return expr
+        BSImpl.ArrayOp(; term) => if term === nothing
+            sym = newsym!(state, T, symtype(expr), shape(expr))
+            push!(state.sorted_exprs, sym ← expr)
+            return sym
+        else
+            return cse!(term, state)
+        end
+        BSImpl.ArrayMaker(; regions, values, type, shape) => begin
+            values = copy(parent(values))
+            for i in eachindex(values)
+                values[i] = cse!(values[i], state)::BasicSymbolic{T}
+            end
+            return BSImpl.ArrayMaker{T}(regions, values; type, shape)
+        end
+        BSImpl.Term(; f, args, type, shape) && if f === SymbolicUtils.array_literal end => begin
+            args = copy(args)
+            # don't CSE the size
+            for i in Iterators.drop(eachindex(args), 1)
+                args[i] = cse!(args[i], state)::BasicSymbolic{T}
+            end
+            sym = newsym!(state, T, type, shape)
+            push!(state.sorted_exprs, sym ← BSImpl.Term{T}(f, args; type, shape))
+            return sym
+        end
+        BSImpl.Term(; f, args, type = atype, shape = ashape) && if f === with_allocator end => begin
+            allocop = @match args[2] begin
+                BSImpl.Term(; f = finner, args = argsinner, shape, type) && if finner === SymbolicUtils.array_literal end => begin
+                    argsinner = copy(argsinner)
+                    for i in Iterators.drop(eachindex(argsinner), 1)
+                        argsinner[i] = cse!(argsinner[i], state)::BasicSymbolic{T}
+                    end
+                    BSImpl.Term{T}(finner, argsinner; type, shape)
                 end
-                BSImpl.Sym(;) => return expr
-                BSImpl.ArrayOp(; term) => if term === nothing
-                    sym = newsym!(state, T, symtype(expr), shape(expr))
-                    push!(state.sorted_exprs, sym ← expr)
-                    return sym
-                else
-                    return cse!(term, state)
-                end
+                BSImpl.ArrayOp(;) => args[2]
                 BSImpl.ArrayMaker(; regions, values, type, shape) => begin
                     values = copy(parent(values))
                     for i in eachindex(values)
                         values[i] = cse!(values[i], state)::BasicSymbolic{T}
                     end
-                    return BSImpl.ArrayMaker{T}(regions, values; type, shape)
-                end
-                _ => begin
-                    op = operation(expr)
-                    args = arguments(expr)
-                    if op isa BasicSymbolic{T}
-                        SymbolicUtils.is_function_symbolic(op) || return expr
-                    end
-                    cse_inside_expr(expr, op)::Bool || return expr
-                    args = copy(parent(args))
-                    for i in eachindex(args)
-                        args[i] = cse!(args[i], state)::BasicSymbolic{T}
-                    end
-                    # use `term` instead of `maketerm` because we only care about the operation being performed
-                    # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
-                    new_expr = Term{T}(op, args; type = symtype(expr), shape = shape(expr))
-                    sym = newsym!(state, T, symtype(expr), shape(expr))
-                    push!(state.sorted_exprs, sym ← new_expr)
-                    return sym
+                    BSImpl.ArrayMaker{T}(regions, values; type, shape)
                 end
             end
+
+            return BSImpl.Term{T}(with_allocator, ArgsT{T}((args[1], allocop)); type = atype, shape = ashape)
+        end
+        _ => begin
+            op = operation(expr)
+            args = arguments(expr)
+            if op isa BasicSymbolic{T}
+                SymbolicUtils.is_function_symbolic(op) || return expr
+            end
+            if !(cse_inside_expr(expr, op)::Bool)
+                cse_bind_expr(expr, op)::Bool || return expr
+                # Bind the node as-is (arguments un-CSEd) so references share one
+                # computation. `cse!` caches the binding by node id, so every reference
+                # in this scope resolves to the same temporary.
+                sym = newsym!(state, T, symtype(expr), shape(expr))
+                push!(state.sorted_exprs, sym ← expr)
+                return sym
+            end
+            args = copy(parent(args))
+            for i in eachindex(args)
+                args[i] = cse!(args[i], state)::BasicSymbolic{T}
+            end
+            # use `term` instead of `maketerm` because we only care about the operation being performed
+            # and not the representation. This avoids issues with `newsym` symbols not having sizes, etc.
+            new_expr = Term{T}(op, args; type = symtype(expr), shape = shape(expr))
+            sym = newsym!(state, T, symtype(expr), shape(expr))
+            push!(state.sorted_exprs, sym ← new_expr)
+            return sym
         end
     end
-    return get!(cse_visitor, state.visited, expr.id)::BasicSymbolic{T}
 end
 
 cse!(x, ::CSEState) = x
@@ -1735,13 +2174,14 @@ function cse!(x::ForLoop, state::CSEState)
 end
 
 """
-    OptimizationRule(name, detector, transformer, priority)
+    OptimizationRule(name, detector, transformer, priority[, options])
 
 Defines an optimization rule with:
 - `name`: A string identifier for the optimization.
-- `detector`: A function that detects patterns in the IR. 
+- `detector`: A function that detects patterns in the IR.
 - `transformer`: A function that transforms the IR based on detected patterns, and returns updated IR
 - `priority`: Integer priority (higher = applied first)
+- `options`: User specified configuration for the rule, `nothing` by default
 
 The detector function should implement the signature
 
@@ -1754,13 +2194,36 @@ Likewise, the transformer function should implement the signature
 ```julia
 transformer(expr::Code.Let, match_data::Union{Nothing, Vector{<:AbstractMatched}}, state::Code.CSEState) -> Code.Let
 ```
+
+If `options !== nothing` it is passed as a trailing argument to both, so the
+corresponding methods need to accept it.
 """
-struct OptimizationRule{D, T}
+struct OptimizationRule{D, T, O}
     name::String
     detector::D
     transformer::T
     priority::Int
+    options::O
 end
+
+function OptimizationRule(name, detector, transformer, priority)
+    OptimizationRule(name, detector, transformer, priority, nothing)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return `rule` with its options replaced by `options`.
+"""
+function with_options(rule::OptimizationRule, options)
+    OptimizationRule(rule.name, rule.detector, rule.transformer, rule.priority, options)
+end
+
+run_detector(rule::OptimizationRule{D, T, Nothing}, args...) where {D, T} = rule.detector(args...)
+run_detector(rule::OptimizationRule, args...) = rule.detector(args..., rule.options)
+
+run_transformer(rule::OptimizationRule{D, T, Nothing}, args...) where {D, T} = rule.transformer(args...)
+run_transformer(rule::OptimizationRule, args...) = rule.transformer(args..., rule.options)
 
 abstract type AbstractMatched end
 
@@ -1819,13 +2282,13 @@ function substitute_in_ir(expr::Code.Let, substitution_map::Dict)
     return Code.Let(new_pairs, new_body, expr.let_block)
 end
 
-Base.isempty(l::Code.Let) = isempty(l.pairs)   
+Base.isempty(l::Code.Let) = isempty(l.pairs)
 
 # Apply optimization rules during CSE
 function apply_optimization_rule(expr::Code.Let, state::Union{Code.CSEState, Code.LazyState}, rules::OptimizationRule)
-    match_data = rules.detector(expr, state)
+    match_data = run_detector(rules, expr, state)
     if match_data !== nothing
-        return rules.transformer(expr, match_data, state)
+        return run_transformer(rules, expr, match_data, state)
     end
 
     return expr
@@ -1838,7 +2301,9 @@ function apply_optimization_rule(func::Code.Func, state, rule)
          func.pre)
 end
 
+apply_optimization_rules(expr, state, ::Nothing) = expr
 function apply_optimization_rules(expr, state, rules)
+    isnothing(rules) && return expr
     isempty(rules) && return expr
     for rule in sort(rules, by = x -> x.priority)
         expr_new = apply_optimization_rule(expr, state, rule)
@@ -1847,5 +2312,36 @@ function apply_optimization_rules(expr, state, rules)
 
     expr
 end
+
+apply_optimization_rules(ir::IRStructure, expr::Any, ::Nothing) = ir, expr
+function apply_optimization_rule(ir::IRStructure, expr, rules)
+    match_data = run_detector(rules, ir, expr)
+    if match_data !== nothing
+        new_ir, new_expr = run_transformer(rules, ir, expr, match_data)
+        return new_ir, new_expr
+    end
+
+    return ir, expr
+end
+
+function apply_optimization_rules(ir::IRStructure, expr, rules)
+    isnothing(rules) && return ir, expr
+    isempty(rules) && return ir, expr
+    for rule in sort(rules, by = x -> x.priority)
+        ir_new, expr_new = apply_optimization_rule(ir, expr, rule)
+        expr = expr_new
+        ir = ir_new
+    end
+
+    ir, expr
+end
+
+@public LazyState, create_array, cse_inside_expr, fast_toexpr, function_to_expr, get_rewrites
+@public supports_with_allocator, with_allocator, with_options
+# Extension points for the IR/`CodegenState` codegen path (parallel to `function_to_expr`).
+@public CodegenState, codegen!, codegen_function!, is_elementwise_call
+# Helpers that the `codegen_function!` implementer contract documents and requires.
+@public declare!, enter_scope, exit_scope!, rollback!
+@public FUSE_BROADCASTS_KEY, FUSE_UNALIAS_KEY, FUSE_OUTPUT_ELTYPE_KEY, USE_LITERAL_POW_KEY
 
 end

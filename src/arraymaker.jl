@@ -4,7 +4,7 @@ The `@makearray` definition must be of the form `ident[start1:stop1, start2:stop
 
 const INVALID_MAKEARRAY_SEQ_MSG = """
 The LHS of each sequence entry in `@makearray` must be of the form \
-`ident[start1:stop1, start2:stop2, ...]`.
+`ident[axis1, axis2, ...]`, where each axis is a unit range or a vector of indices.
 """
 
 """
@@ -34,8 +34,10 @@ on the result, and is only used as part of the macro syntax inside the `begin..e
 Each entry in the `begin..end` block is a pair denoting a subarray to assign, and the
 value to assign it. Note that each subarray thus assigned must have the same number
 of dimensions as the created array. In other words, inside the block `foo` can only be
-indexed using ranges with a unit step (`UnitRange{Int}`). `foo[3, 1] => 1` is invalid
-syntax and will error. The RHS of each pair (the value assigned to the subarray) must have
+indexed using ranges with a unit step (`UnitRange{Int}`) or vectors of indices, one per
+dimension, as `view` would take them. A vector of indices is split into one region per run
+of consecutive indices, each assigned the matching slice of the value. `foo[3, 1] => 1` is
+invalid syntax and will error. The RHS of each pair (the value assigned to the subarray) must have
 the same size as the subarray. Extra unit dimensions must be added as necessary, for
 example via the `1` in `@arrayop (1, i) y[i] + z[i]`. The identifier `foo` has no
 meaning if used in the RHS. It will simply refer to a variable named `foo` in the current
@@ -85,7 +87,7 @@ macro makearray(definition::Expr, sequence::Expr)
         the operation.
         """
         entry = entry::Expr
-        region = get_shape_from_ref_expr(entry.args[2], INVALID_MAKEARRAY_SEQ_MSG, true)
+        region = get_region_from_ref_expr(entry.args[2], INVALID_MAKEARRAY_SEQ_MSG)
         value = entry.args[3]
         push!(regions, region)
         push!(values, esc(value))
@@ -93,7 +95,7 @@ macro makearray(definition::Expr, sequence::Expr)
 
     @assert length(regions) == length(values)
     innerhead = length(regions) <= 10 ? :tuple : :vect
-    regions_expr = Expr(:call, RegionsT, tuple_or_vect(regions, innerhead))
+    regions_expr = tuple_or_vect(regions, innerhead)
     values_expr = tuple_or_vect(values, innerhead)
 
     result = :(let shape = $shape, values = $values_expr
@@ -105,7 +107,7 @@ macro makearray(definition::Expr, sequence::Expr)
     return result
 end
 
-function get_shape_from_ref_expr(def::Expr, err::String, parse_begin_end = false)
+function get_shape_from_ref_expr(def::Expr, err::String)
     @assert Meta.isexpr(def, :ref) err
 
     shape_tuple = Expr(:tuple)
@@ -117,17 +119,23 @@ function get_shape_from_ref_expr(def::Expr, err::String, parse_begin_end = false
         The ranges in `@makearray` must be unit ranges. They cannot have an explicit step \
         size. Found invalid range $arg.
         """
-        if parse_begin_end
-            arg = :(let var"begin" = $first(shape[$i]), var"end" = $last(shape[$i])
-                        $(esc(arg))
-                    end)
-        else
-            arg = esc(arg)
-        end
-        push!(shape_tuple.args, arg)
+        push!(shape_tuple.args, esc(arg))
     end
     shape_expr = Expr(:call, ShapeVecT, shape_tuple)
     return shape_expr
+end
+
+function get_region_from_ref_expr(def::Expr, err::String)
+    @assert Meta.isexpr(def, :ref) err
+
+    axes_tuple = Expr(:tuple)
+    sizehint!(axes_tuple.args, length(def.args) - 1)
+    for (i, arg) in enumerate(Iterators.drop(def.args, 1))
+        push!(axes_tuple.args, :(let var"begin" = $first(shape[$i]), var"end" = $last(shape[$i])
+                $(esc(arg))
+            end))
+    end
+    return axes_tuple
 end
 
 function tuple_or_vect(vals::Vector{Expr}, innerhead::Symbol)

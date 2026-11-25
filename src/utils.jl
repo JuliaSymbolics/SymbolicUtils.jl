@@ -63,10 +63,10 @@ expressions requiring special handling.
 """
 function has_trig_exp(term)
     !iscall(term) && return false
-    fns = (sin, cos, tan, cot, sec, csc, exp, cosh, sinh)
+    fns = (sin, cos, tan, cot, sec, csc, exp, cosh, sinh, tanh, coth, sech, csch)
     op = operation(term)
 
-    if Base.@nany 9 i->fns[i] === op
+    if Base.@nany 13 i->fns[i] === op
         return true
     else
         return any(has_trig_exp, parent(arguments(term)))

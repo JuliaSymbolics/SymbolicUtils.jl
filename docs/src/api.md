@@ -98,6 +98,7 @@ SymbolicUtils.Rewriters.PassThrough
 
 ```@docs
 SymbolicUtils.simplify
+SymbolicUtils.trig_reduce
 SymbolicUtils.expand
 SymbolicUtils.substitute
 ```

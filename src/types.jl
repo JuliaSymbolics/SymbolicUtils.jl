@@ -370,6 +370,41 @@ function _accumulate!(h::Dict{K, V}, key::K, val) where {K, V}
     end
     return h
 end
+# Copy `src` into `dst` without rehashing: the slot/key/val arrays are memcpy'd
+# and the metadata fields replicated. Reuses `dst`'s arrays when the capacity
+# already matches (the common case for the task-local accumulation buffers).
+function _dict_copy_into!(dst::Dict{K, V}, src::Dict{K, V}) where {K, V}
+    if length(dst.keys) == length(src.keys)
+        copyto!(dst.slots, src.slots)
+        copyto!(dst.keys, src.keys)
+        copyto!(dst.vals, src.vals)
+    else
+        dst.slots = copy(src.slots)
+        dst.keys = copy(src.keys)
+        dst.vals = copy(src.vals)
+    end
+    dst.ndel = src.ndel
+    dst.count = src.count
+    dst.age = src.age
+    dst.idxfloor = src.idxfloor
+    dst.maxprobe = src.maxprobe
+    return dst
+end
+# `zref` counts entries whose value became zero — either produced by a
+# cancelling `+` on a hit, or copied in verbatim from a non-canonical dict.
+function _accumulate!(h::Dict{K, V}, key::K, val, zref::Base.RefValue{Int}) where {K, V}
+    index, sh = Base.ht_keyindex2_shorthash!(h, key)
+    if index > 0
+        v2 = @inbounds h.vals[index] + val
+        @inbounds h.vals[index] = v2
+        iszero(v2) && (zref[] += 1)
+    else
+        v = val isa V ? val : convert(V, val)::V
+        iszero(v) && (zref[] += 1)
+        @inbounds Base._setindex!(h, v, key, -index, sh)
+    end
+    return h
+end
 
 
 """

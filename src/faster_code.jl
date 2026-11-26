@@ -569,13 +569,28 @@ function __allocator_is_returns_expr(::Type{T}, @nospecialize(ex)) where {T}
     return false
 end
 
-@noinline function batched_setindex!(buffer::AbstractArray{T, D}, values::NTuple{N, T}, idxs::NTuple{N, CartesianIndex{D}}) where {T, D, N}
+"""
+    batched_setindex!(buffer, idxs, values...)
+
+Write `values[i]` to index `idxs[i]` of `buffer`, in order.
+
+The values are separate arguments instead of a tuple. A tuple of them is built in memory
+by the caller and read back here, while some of the arguments are passed in registers.
+"""
+@noinline function batched_setindex!(buffer::AbstractArray{T, D}, idxs::NTuple{N, CartesianIndex{D}}, values::Vararg{T, N}) where {T, D, N}
     @inbounds for i in 1:N
         buffer[idxs[i]] = values[i]
     end
+    return nothing
 end
 
-BATCHED_SETINDEX_BATCH_SIZE::Int = 64
+"""
+Number of values written by one call of [`batched_setindex!`](@ref).
+
+Compile time is flat between 16 and 64, and the larger the batch, the slower the generated
+code runs.
+"""
+BATCHED_SETINDEX_BATCH_SIZE::Int = 16
 
 """
 Key in `CodegenState.rewrites` that enables fused broadcast codegen when set to `true`
@@ -1968,14 +1983,23 @@ function emit_scalar_writes!(
             declare!(cs, Expr(:ref, dest, idxs[k]), values[k])
         end
     else
-        for ks in Iterators.partition(rest, BATCHED_SETINDEX_BATCH_SIZE)
-            vals_expr = Expr(:tuple)
+        batches = collect(Iterators.partition(rest, BATCHED_SETINDEX_BATCH_SIZE))
+        for (b, ks) in enumerate(batches)
             idxs_expr = Expr(:tuple)
+            call = Expr(:call, batched_setindex!, dest, idxs_expr)
             for k in ks
-                push!(vals_expr.args, Expr(:call, convert, convert_to, values[k]))
                 push!(idxs_expr.args, idxs[k])
+                push!(call.args, Expr(:call, convert, convert_to, values[k]))
             end
-            declare!(cs, :_, Expr(:call, batched_setindex!, dest, vals_expr, idxs_expr))
+            if b == length(batches)
+                # The last call is inlined on purpose. If every statement of a function
+                # is free of effects other than calls that write to an argument, as it is
+                # for one that only computes the values, Julia runs its escape analysis on
+                # the function, which takes time quadratic in the number of values read
+                # from one array (JuliaLang/julia#65304). An inlined store is an effect.
+                call = Expr(:macrocall, GlobalRef(Base, Symbol("@inline")), LineNumberNode(0), call)
+            end
+            declare!(cs, :_, call)
         end
     end
     return nothing

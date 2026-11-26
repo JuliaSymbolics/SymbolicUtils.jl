@@ -14,6 +14,13 @@ build(elems; inbounds = false, rewrites = Dict{Any, Any}()) =
 without_tables() = Dict{Any, Any}(Code.SCALAR_WRITE_TABLES_KEY => false)
 call(ex, args...) = Base.invokelatest(eval(ex), args...)
 uses_tables(ex) = occursin(r"fill_constant_span!|fill_constant_runs!|fill_constant_at!|set_constants!", string(ex))
+# The calls of `batched_setindex!` in `ex`: `batched_setindex!(buffer, (indices...), values...)`.
+function batch_calls(ex, calls = Expr[])
+    ex isa Expr || return calls
+    ex.head === :call && ex.args[1] === Code.batched_setindex! && push!(calls, ex)
+    foreach(arg -> batch_calls(arg, calls), ex.args)
+    return calls
+end
 # The number of `a[i] = v` statements in `ex`.
 function indexed_assignments(ex)
     ex isa Expr || return 0
@@ -296,10 +303,14 @@ end
     @test call(ex, fill(NaN, 6, 8), pv) == expected
     # Only the non-constant values are left to the batches, in the order of the memory.
     ndynamic = count(((i, j),) -> (i + j) % 5 == 0, nz)
-    batch = only(m.captures[1] for m in eachmatch(r"batched_setindex!\)\([^,]+, \((.*?)\), \(CartesianIndex", str))
-    @test count("convert", batch) == ndynamic
-    cart = [parse.(Int, m.captures) for m in eachmatch(r"CartesianIndex\((\d+), (\d+)\)", last(split(str, batch)))][1:ndynamic]
-    @test issorted(cart; by = reverse)
+    calls = batch_calls(ex)
+    @test all(c -> length(c.args) - 3 == length(c.args[3].args) <= Code.BATCHED_SETINDEX_BATCH_SIZE, calls)
+    cart = reduce(vcat, [c.args[3].args for c in calls])
+    @test length(cart) == ndynamic && issorted(cart)
+    @test length(calls) == cld(ndynamic, Code.BATCHED_SETINDEX_BATCH_SIZE)
+    # The last call, and only that one, is inlined (see `emit_scalar_writes!`).
+    inlined(x) = x isa Expr && ((x.head === :macrocall && x.args[1] == GlobalRef(Base, Symbol("@inline")) && x.args[end] in calls) + sum(inlined, x.args; init = 0))
+    @test inlined(ex) == 1
     # Every value is converted to the element type, one element at a time.
     @test call(ex, fill(NaN32, 6, 8), pv) == Float32.(expected)
     res = call(ex, Matrix{BigFloat}(undef, 6, 8), pv)

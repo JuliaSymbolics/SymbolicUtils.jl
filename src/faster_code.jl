@@ -574,11 +574,6 @@ end
         buffer[idxs[i]] = values[i]
     end
 end
-@noinline function batched_setindex!(buffer::AbstractArray{T, D}, value::T, idxs::AbstractArray{CartesianIndex{D}}) where {T, D}
-    @inbounds for idx in idxs
-        buffer[idx] = value
-    end
-end
 
 BATCHED_SETINDEX_BATCH_SIZE::Int = 64
 
@@ -986,12 +981,6 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     # of the output, like other regions, instead of scalarizing them.
     scalarize_single_element_regions = get(cs.rewrites, :scalarize_single_element_regions, true)::Bool
     D = length(sh)::Int
-    # Utility buffers
-    one_regions = ShapeVecT[]
-    negone_regions = ShapeVecT[]
-    other_regions = ShapeVecT[]
-    other_values = Any[]
-
     eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
     old_fusion_eltype = get(cs.rewrites, FUSION_ELTYPE_KEY, nothing)::Union{Nothing, Symbol}
     cs.rewrites[FUSION_ELTYPE_KEY] = get(cs.rewrites, FUSE_OUTPUT_ELTYPE_KEY, false)::Bool ?
@@ -1000,46 +989,47 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     negone_expr = Expr(:call, :(-), one_expr)
 
     function materialize_scalar_writes()
-        empty!(one_regions)
-        empty!(negone_regions)
-        empty!(other_regions)
-        empty!(other_values)
-        # Batch all writes of +-1 together
-        for region in keys(scalar_idxs)
+        scalar_regions = collect(keys(scalar_idxs))
+        idxs = CartesianIndex{D}[CartesianIndex{D}(Tuple(map(first, region))) for region in scalar_regions]
+        # The regions are distinct, so the order of the writes is free: write in the
+        # order of the memory of an `Array`.
+        order = sortperm(idxs)
+        idxs = idxs[order]
+        tables = scalar_write_tables(cs)
+        values = Any[]
+        isconst = Bool[]
+        for region in view(scalar_regions, order)
             _val = scalar_idxs[region]
-            if _val === 1
-                push!(one_regions, region)
-            elseif _val === -1
-                push!(negone_regions, region)
+            if _val === 1 || _val === -1
+                # Evaluated once for all the indices it is written to.
+                push!(values, _val === 1 ? one_expr : negone_expr)
+                push!(isconst, true)
+            elseif _val isa ScalarConstant
+                push!(values, _val.value)
+                push!(isconst, true)
             else
-                push!(other_regions, region)
-                push!(other_values, _val)
+                # Anything that is not a number is the name of a variable holding the value.
+                push!(values, _val)
+                push!(isconst, tables && _val isa Number)
             end
         end
-        if !isempty(one_regions)
-            idxs_buffer = Vector{CartesianIndex{D}}(map(CartesianIndex{D} ∘ Tuple ∘ Base.Fix1(map, first), one_regions))
-            # Directly interpolating an array into an expression avoids the allocation.
-            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, one_expr, idxs_buffer))
+        emit_scalar_writes!(
+            cs, output_buffer, idxs, values, isconst;
+            inbounds = true, convert_to = eltype_expr
+        )
+    end
+
+    # The value of the element of a single-element region at `idx` in the IR: the number
+    # itself if it is a numeric constant that may be written from a table, and the name
+    # of the variable holding it otherwise.
+    function scalar_region_value(idx)
+        node = cs.ir[idx]
+        const_val = @match node begin
+            BSImpl.Const(; val) => val
+            _ => nothing
         end
-        if !isempty(negone_regions)
-            idxs_buffer = Vector{CartesianIndex{D}}(map(CartesianIndex{D} ∘ Tuple ∘ Base.Fix1(map, first), negone_regions))
-            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, negone_expr, idxs_buffer))
-        end
-        # Use `Iterators.partition` to avoid creating overly large tuples
-        for (regs, vals) in zip(
-                Iterators.partition(other_regions, BATCHED_SETINDEX_BATCH_SIZE),
-                Iterators.partition(other_values, BATCHED_SETINDEX_BATCH_SIZE)
-            )
-            vals_expr = Expr(:tuple)
-            for val in vals
-                push!(vals_expr.args, Expr(:call, convert, eltype_expr, val))
-            end
-            idxs_expr = Expr(:tuple)
-            for reg in regs
-                push!(idxs_expr.args, CartesianIndex{D}(Tuple(map(first, reg))))
-            end
-            declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, vals_expr, idxs_expr))
-        end
+        (const_val isa Number && scalar_write_tables(cs)) || return cs(node)
+        return ScalarConstant(const_val)
     end
 
     for cur_region in Iterators.drop(eachindex(regions), ndrop)
@@ -1065,12 +1055,12 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 end
                 BSImpl.Term(; f) && if f === SymbolicUtils.array_literal end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[2]
-                    scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    scalar_idxs[region] = scalar_region_value(first_val_idx)
                     true
                 end
                 BSImpl.Term(; f) && if f isa Union{DataType, UnionAll} && f <: StaticArraysCore.StaticArray end => begin
                     first_val_idx = Graphs.outneighbors(cs.ir.dependency_graph, val_idx)[1]
-                    scalar_idxs[region] = cs(cs.ir[first_val_idx])
+                    scalar_idxs[region] = scalar_region_value(first_val_idx)
                     true
                 end
                 # Any other value is an array expression. Scalarizing it indexes its inputs
@@ -1193,15 +1183,28 @@ function codegen_function!(
 
     eltype_expr = declare!(cs, get_misc_identifier(cs), Expr(:call, eltype, output_buffer))
     cart_idxs = CartesianIndices(Tuple(sh::ShapeVecT))
-    for iter in Iterators.partition(enumerate(Iterators.drop(args_idxs, 1)), BATCHED_SETINDEX_BATCH_SIZE)
-        vals_expr = Expr(:tuple)
-        idxs_expr = Expr(:tuple)
-        for (idx, arg_idx) in iter
-            push!(vals_expr.args, Expr(:call, convert, eltype_expr, cs(cs.ir[arg_idx])))
-            push!(idxs_expr.args, cart_idxs[idx])
+    idxs = vec(collect(cart_idxs))
+    tables = scalar_write_tables(cs)
+    values = Any[]
+    isconst = Bool[]
+    for arg_idx in Iterators.drop(args_idxs, 1)
+        arg = cs.ir[arg_idx]
+        const_val = @match arg begin
+            BSImpl.Const(; val) => val
+            _ => nothing
         end
-        declare!(cs, :_, Expr(:call, batched_setindex!, output_buffer, vals_expr, idxs_expr))
+        if tables && const_val isa Number
+            push!(values, const_val)
+            push!(isconst, true)
+        else
+            push!(values, cs(arg))
+            push!(isconst, false)
+        end
     end
+    emit_scalar_writes!(
+        cs, output_buffer, idxs, values, isconst;
+        inbounds = true, convert_to = eltype_expr
+    )
 
     return output_buffer
 end
@@ -1740,36 +1743,63 @@ function (cs::CodegenState{T})(fn::Func) where {T}
 end
 
 """
-Key in `CodegenState.rewrites` that controls whether the constant elements of a `SetArray`
-are written from tables instead of with one statement each (default `true`). See
-[`setarray_constant_writes!`](@ref).
+Key in `CodegenState.rewrites` that controls whether constants among the scalar writes of
+a `SetArray`, of the single-element regions of an `ArrayMaker` and of `array_literal` are
+written from tables instead of like the other values (default `true`). See
+[`emit_scalar_writes!`](@ref).
 
-The constants are written before the other elements, and equal constants together,
-instead of in the order of the elements. The result only differs for an output in which
-distinct indices share storage, such as a `view` with a repeated index.
+The constants are written before the other values, and equal constants together, instead
+of in the order of the elements. The result only differs for an output in which distinct
+indices share storage, such as a `view` with a repeated index. Which writes have happened
+when one of them throws differs as well.
 """
-const SETARRAY_CONSTANT_TABLES_KEY = :setarray_constant_tables
+const SCALAR_WRITE_TABLES_KEY = :scalar_write_tables
 
-"""
-A `SetArray` with fewer constant elements than this is generated as one statement per
-element.
-"""
-const SETARRAY_CONSTANT_TABLES_MIN = 16
+# A numeric constant that is the value of a single-element region of an `ArrayMaker`. The
+# integers `1` and `-1` stand for `one` of the element type and its negation there.
+struct ScalarConstant
+    value::Number
+end
 
-"""
-A constant has to repeat at least this often in a `SetArray` to be written to a list or to
-ranges of indices instead of from a table of values.
-"""
-const SETARRAY_CONSTANT_RUN_MIN = 8
-
-"""
-The indices of a repeated constant are written as ranges if the ranges average at least
-this many indices, and as a list of indices otherwise.
-"""
-const SETARRAY_CONSTANT_RUN_LENGTH = 8
+# Whether constants may be taken out of the order of the writes and out of the sight of a
+# hook on the left-hand sides.
+function scalar_write_tables(cs::CodegenState)
+    return get(cs.rewrites, SCALAR_WRITE_TABLES_KEY, true)::Bool &&
+        get(cs.rewrites, LHS_HOOK_KEY, nothing) === nothing
+end
 
 """
-    fill_constant_span!(buffer, value, span, runs, inbounds)
+Fewest numeric constants among the scalar writes of [`emit_scalar_writes!`](@ref) for them
+to be written from tables.
+"""
+const SCALAR_WRITE_TABLES_MIN = 16
+
+"""
+A constant has to repeat at least this often among the scalar writes of
+[`emit_scalar_writes!`](@ref) to be written to a list or to ranges of indices instead of
+from a table of values.
+"""
+const SCALAR_WRITE_RUN_MIN = 8
+
+"""
+The integer indices of a repeated constant are written as ranges if the ranges average at
+least this many indices, and as a list of indices otherwise.
+"""
+const SCALAR_WRITE_RUN_LENGTH = 8
+
+"""
+What the helpers of [`emit_scalar_writes!`](@ref) do with a value before writing it:
+`KeepValue()` passes it to `setindex!` as it is, `ConvertToEltype()` converts it to the
+element type of the array first. These are types so that the helpers are specialized on
+them.
+"""
+struct KeepValue end
+struct ConvertToEltype end
+@inline scalar_write_value(::KeepValue, buffer, value) = value
+@inline scalar_write_value(::ConvertToEltype, buffer, value) = convert(eltype(buffer), value)
+
+"""
+    fill_constant_span!(buffer, value, span, runs, inbounds, conversion)
 
 Write `value` to the indices of `buffer` in each range of `runs`. All of them are in the
 range `span`, and every other index in `span` is written afterwards.
@@ -1778,73 +1808,79 @@ For an `Array` the whole of `span` is filled instead, which is one loop instead 
 range. Other arrays may give meaning to a write that is later overwritten: a structured
 matrix rejects some values at some indices and a sparse array allocates.
 """
-@noinline function fill_constant_span!(buffer::Array, value, span::UnitRange{Int}, runs::Vector{UnitRange{Int}}, inbounds::Bool)
+@noinline function fill_constant_span!(
+        buffer::Array, value, span::UnitRange{Int}, runs::Vector{UnitRange{Int}},
+        inbounds::Bool, conversion
+    )
     if inbounds
         @inbounds for i in span
-            buffer[i] = value
+            buffer[i] = scalar_write_value(conversion, buffer, value)
         end
     else
         for i in span
-            buffer[i] = value
+            buffer[i] = scalar_write_value(conversion, buffer, value)
         end
     end
     return nothing
 end
-function fill_constant_span!(buffer, value, span::UnitRange{Int}, runs::Vector{UnitRange{Int}}, inbounds::Bool)
-    return fill_constant_runs!(buffer, value, runs, inbounds)
+function fill_constant_span!(
+        buffer, value, span::UnitRange{Int}, runs::Vector{UnitRange{Int}},
+        inbounds::Bool, conversion
+    )
+    return fill_constant_runs!(buffer, value, runs, inbounds, conversion)
 end
 
 """
-    fill_constant_runs!(buffer, value, runs, inbounds)
+    fill_constant_runs!(buffer, value, runs, inbounds, conversion)
 
 Write `value` to the indices of `buffer` in each range of `runs`.
 """
-@noinline function fill_constant_runs!(buffer, value, runs::Vector{UnitRange{Int}}, inbounds::Bool)
+@noinline function fill_constant_runs!(buffer, value, runs::Vector{UnitRange{Int}}, inbounds::Bool, conversion)
     if inbounds
         for run in runs
             @inbounds for i in run
-                buffer[i] = value
+                buffer[i] = scalar_write_value(conversion, buffer, value)
             end
         end
     else
         for run in runs, i in run
-            buffer[i] = value
+            buffer[i] = scalar_write_value(conversion, buffer, value)
         end
     end
     return nothing
 end
 
 """
-    fill_constant_at!(buffer, value, idxs, inbounds)
+    fill_constant_at!(buffer, value, idxs, inbounds, conversion)
 
 Write `value` to the indices `idxs` of `buffer`.
 """
-@noinline function fill_constant_at!(buffer, value, idxs::Vector{Int}, inbounds::Bool)
+@noinline function fill_constant_at!(buffer, value, idxs::Vector, inbounds::Bool, conversion)
     if inbounds
         @inbounds for i in idxs
-            buffer[i] = value
+            buffer[i] = scalar_write_value(conversion, buffer, value)
         end
     else
         for i in idxs
-            buffer[i] = value
+            buffer[i] = scalar_write_value(conversion, buffer, value)
         end
     end
     return nothing
 end
 
 """
-    set_constants!(buffer, values, idxs, inbounds)
+    set_constants!(buffer, values, idxs, inbounds, conversion)
 
 Write `values[i]` to index `idxs[i]` of `buffer`.
 """
-@noinline function set_constants!(buffer, values::Vector, idxs::Vector{Int}, inbounds::Bool)
+@noinline function set_constants!(buffer, values::Vector, idxs::Vector, inbounds::Bool, conversion)
     if inbounds
         @inbounds for i in eachindex(values, idxs)
-            buffer[idxs[i]] = values[i]
+            buffer[idxs[i]] = scalar_write_value(conversion, buffer, values[i])
         end
     else
         for i in eachindex(values, idxs)
-            buffer[idxs[i]] = values[i]
+            buffer[idxs[i]] = scalar_write_value(conversion, buffer, values[i])
         end
     end
     return nothing
@@ -1872,75 +1908,134 @@ function consecutive_runs(idxs::Vector{Int})
 end
 
 """
-    setarray_constant_writes!(cs, arr, consts, span, inbounds)
+    emit_scalar_writes!(cs, dest, idxs, values, isconst; inbounds, convert_to = nothing, span = nothing)
 
-Generate the writes of `consts`, the `index => value` pairs of the constant elements of a
-`SetArray`, to `arr`. They cost no statement each: the indices and values are arrays
-interpolated into the generated code.
+Generate the code that writes `values[k]` to index `idxs[k]` of the array `dest`, for
+every `k`. This is the one place that decides how many scalar writes are generated, for
+`SetArray`, for the single-element regions of an `ArrayMaker` and for `array_literal`.
 
-- If the indices the `SetArray` writes form the single range `span`, the most frequent
-  constant is written by [`fill_constant_span!`](@ref).
-- Another constant repeating at least `SETARRAY_CONSTANT_RUN_MIN` times is written to the
-  indices it occupies, given as ranges if they are mostly consecutive and as a list
+A value for which `isconst` holds is a constant, which the caller allows to be written
+before the other values and together with the constants identical to it. It is either
+
+- an expression, which is evaluated once and written to all the indices it is given for,
+  or
+- a number. If there are at least `SCALAR_WRITE_TABLES_MIN` of them, they and their
+  indices are arrays interpolated into the generated code, so that they cost no statement
+  each. Otherwise they are written like the other values.
+
+Any other value is the code of an expression that was already generated. Those are
+written in the order given.
+
+Of the numbers written from tables,
+
+- if `span` is given, all indices are integers that together make up that range. The most
+  frequent number is then written by [`fill_constant_span!`](@ref), if it takes up at
+  least half of the range.
+- Another one repeating at least `SCALAR_WRITE_RUN_MIN` times is written to the indices it
+  occupies: as ranges if they are integers and mostly consecutive, and as a list
   otherwise.
-- The remaining constants are written from one table of values per type.
+- The remaining ones are written from one table of values per type.
 
-Only identical (`===`) constants count as a repeat, so every element is written with the
-very value it holds: equal numbers of different types, `NaN`s with different payloads and
-distinct mutable numbers such as `BigFloat`s stay apart.
+Only identical (`===`) constants count as a repeat, so every index is written with the
+very value given for it: equal numbers of different types, `NaN`s with different payloads
+and distinct mutable numbers such as `BigFloat`s stay apart.
+
+# Keyword arguments
+
+- `inbounds`: whether the writes of the generated helpers skip bounds checks. A write
+  generated as a statement is left to the `@inbounds` of the caller.
+- `convert_to`: `nothing` to pass the values to `setindex!` as they are, with a statement
+  for each value that is not written from a table. Otherwise the name of a variable
+  holding the element type of `dest`: every value is converted to it before it is
+  written, and the values that are not written from tables go through
+  [`batched_setindex!`](@ref), `BATCHED_SETINDEX_BATCH_SIZE` at a time, which needs the
+  indices to be `CartesianIndex`es.
 """
-function setarray_constant_writes!(
-        cs::CodegenState, arr::Symbol, consts::Vector{Pair{Int, Any}},
-        span::Union{Nothing, UnitRange{Int}}, inbounds::Bool
+function emit_scalar_writes!(
+        cs::CodegenState, dest::Symbol, idxs::Vector, values::Vector{Any}, isconst::AbstractVector{Bool};
+        inbounds::Bool, convert_to::Union{Nothing, Symbol} = nothing,
+        span::Union{Nothing, UnitRange{Int}} = nothing
     )
-    by_value = IdDict{Any, Vector{Int}}()
-    values = Any[]
-    for (idx, val) in consts
-        idxs = get!(by_value, val) do
-            push!(values, val)
-            Int[]
+    numbers = count(k -> isconst[k] && !(values[k] isa Expr), eachindex(values)) >= SCALAR_WRITE_TABLES_MIN
+    tabled = Bool[isconst[k] && (numbers || values[k] isa Expr) for k in eachindex(values)]
+    if any(tabled)
+        conversion = convert_to === nothing ? KeepValue() : ConvertToEltype()
+        emit_constant_writes!(cs, dest, idxs[tabled], values[tabled], numbers ? span : nothing, inbounds, conversion)
+    end
+    rest = findall(!, tabled)
+    if convert_to === nothing
+        for k in rest
+            declare!(cs, Expr(:ref, dest, idxs[k]), values[k])
         end
-        push!(idxs, idx)
+    else
+        for ks in Iterators.partition(rest, BATCHED_SETINDEX_BATCH_SIZE)
+            vals_expr = Expr(:tuple)
+            idxs_expr = Expr(:tuple)
+            for k in ks
+                push!(vals_expr.args, Expr(:call, convert, convert_to, values[k]))
+                push!(idxs_expr.args, idxs[k])
+            end
+            declare!(cs, :_, Expr(:call, batched_setindex!, dest, vals_expr, idxs_expr))
+        end
+    end
+    return nothing
+end
+
+# The writes of the constants `values` to `idxs`, see `emit_scalar_writes!`.
+function emit_constant_writes!(
+        cs::CodegenState, dest::Symbol, idxs::Vector{I}, values::Vector{Any},
+        span::Union{Nothing, UnitRange{Int}}, inbounds::Bool, conversion::Union{KeepValue, ConvertToEltype}
+    ) where {I}
+    by_value = IdDict{Any, Vector{I}}()
+    order = Any[]
+    for (idx, val) in zip(idxs, values)
+        vidxs = get!(by_value, val) do
+            push!(order, val)
+            I[]
+        end
+        push!(vidxs, idx)
     end
     background = nothing
     if span !== nothing
-        val = argmax(val -> length(by_value[val]), values)
+        val = argmax(val -> val isa Expr ? 0 : length(by_value[val]), order)
+        vidxs = by_value[val]::Vector{Int}
         # Filling the span writes every index of it, so it has to be mostly this constant.
-        if length(by_value[val]) >= SETARRAY_CONSTANT_RUN_MIN && 2 * length(by_value[val]) >= length(span)
+        if !(val isa Expr) && length(vidxs) >= SCALAR_WRITE_RUN_MIN && 2 * length(vidxs) >= length(span)
             background = Some(val)
-            runs = consecutive_runs(sort!(by_value[val]))
-            declare!(cs, :_, Expr(:call, fill_constant_span!, arr, val, span, runs, inbounds))
+            runs = consecutive_runs(sort!(vidxs))
+            declare!(cs, :_, Expr(:call, fill_constant_span!, dest, val, span, runs, inbounds, conversion))
         end
     end
-    tables = Dict{DataType, Tuple{Vector{Any}, Vector{Int}}}()
+    tables = Dict{DataType, Tuple{Vector{Any}, Vector{I}}}()
     table_types = DataType[]
-    for val in values
+    for val in order
         background !== nothing && something(background) === val && continue
-        idxs = by_value[val]
-        if length(idxs) >= SETARRAY_CONSTANT_RUN_MIN
-            runs = consecutive_runs(sort!(idxs))
-            if SETARRAY_CONSTANT_RUN_LENGTH * length(runs) <= length(idxs)
-                declare!(cs, :_, Expr(:call, fill_constant_runs!, arr, val, runs, inbounds))
+        vidxs = by_value[val]
+        if val isa Expr || length(vidxs) >= SCALAR_WRITE_RUN_MIN
+            runs = vidxs isa Vector{Int} ? consecutive_runs(sort!(vidxs)) : nothing
+            if runs !== nothing && SCALAR_WRITE_RUN_LENGTH * length(runs) <= length(vidxs)
+                declare!(cs, :_, Expr(:call, fill_constant_runs!, dest, val, runs, inbounds, conversion))
             else
                 # Scattered indices: a range each would cost more than it saves.
-                declare!(cs, :_, Expr(:call, fill_constant_at!, arr, val, idxs, inbounds))
+                declare!(cs, :_, Expr(:call, fill_constant_at!, dest, val, vidxs, inbounds, conversion))
             end
         else
             VT = typeof(val)
             vals, tidxs = get!(tables, VT) do
                 push!(table_types, VT)
-                (Any[], Int[])
+                (Any[], I[])
             end
-            append!(vals, Iterators.repeated(val, length(idxs)))
-            append!(tidxs, idxs)
+            append!(vals, Iterators.repeated(val, length(vidxs)))
+            append!(tidxs, vidxs)
         end
     end
     for VT in table_types
         vals, tidxs = tables[VT]
-        declare!(cs, :_, Expr(:call, set_constants!, arr, Vector{VT}(vals), tidxs, inbounds))
+        declare!(cs, :_, Expr(:call, set_constants!, dest, Vector{VT}(vals), tidxs, inbounds, conversion))
     end
     return nothing
 end
+
 
 """
     setarray_constant(val)
@@ -1960,27 +2055,28 @@ end
 """
     setarray_constants(cs, elems)
 
-The constant elements among the `elems` of a `SetArray`, as `index => value` pairs, and the
-range its indices span, or `nothing` for the range if they do not form one. Returns
-`nothing` if the constants are not to be written from tables. That takes them out of the
-order of the writes, which needs every index to be a distinct integer, and out of the
-sight of a hook on the left-hand sides.
+The numeric constants among the `elems` of a `SetArray`, as a vector holding the constant
+or `nothing` for each element, and the range the indices of `elems` span, or `nothing`
+for the range if they do not form one. Returns `nothing` if the constants are not to be
+written from tables. That takes them out of the order of the writes, which needs every
+index to be a distinct integer.
 """
 function setarray_constants(cs::CodegenState, elems)
-    get(cs.rewrites, SETARRAY_CONSTANT_TABLES_KEY, true)::Bool || return nothing
-    get(cs.rewrites, LHS_HOOK_KEY, nothing) === nothing || return nothing
-    length(elems) >= SETARRAY_CONSTANT_TABLES_MIN || return nothing
-    consts = Pair{Int, Any}[]
+    scalar_write_tables(cs) || return nothing
+    length(elems) >= SCALAR_WRITE_TABLES_MIN || return nothing
     seen = Set{Int}()
     for (i, elem) in enumerate(elems)
-        idx, val = elem isa AtIndex ? (elem.i, elem.elem) : (i, elem)
+        idx = elem isa AtIndex ? elem.i : i
         idx isa Int || return nothing
         idx in seen && return nothing
         push!(seen, idx)
-        val = setarray_constant(val)
-        val isa Number && push!(consts, idx => val)
     end
-    length(consts) >= SETARRAY_CONSTANT_TABLES_MIN || return nothing
+    consts = Any[]
+    for elem in elems
+        val = setarray_constant(elem isa AtIndex ? elem.elem : elem)
+        push!(consts, val isa Number ? val : nothing)
+    end
+    count(!isnothing, consts) >= SCALAR_WRITE_TABLES_MIN || return nothing
     lo, hi = extrema(seen)
     span = hi - lo + 1 == length(seen) ? (lo:hi) : nothing
     return consts, span
@@ -1994,38 +2090,36 @@ function (cs::CodegenState)(ex::SetArray)
     if elems isa AbstractArray && !(elems isa Array)
         elems = collect(elems)
     end
-    peeled = elems isa Union{Array, Tuple} ? setarray_constants(cs, elems) : nothing
-    lhss = []
-    rhss = Symbol[]
-    if peeled === nothing
+    tabled = elems isa Union{Array, Tuple} ? setarray_constants(cs, elems) : nothing
+    values = Any[]
+    if tabled === nothing
+        idxs = Any[]
         for (i, elem) in enumerate(elems)
             if elem isa AtIndex
-                push!(lhss, cs(elem.i))
-                push!(rhss, cs(elem.elem))
+                push!(idxs, cs(elem.i))
+                push!(values, cs(elem.elem)::Symbol)
             else
-                push!(lhss, i)
-                push!(rhss, cs(elem))
+                push!(idxs, i)
+                push!(values, cs(elem)::Symbol)
             end
         end
+        isconst = falses(length(idxs))
+        span = nothing
     else
-        const_idxs = Set{Int}(first(c) for c in peeled[1])
+        consts, span = tabled
+        idxs = Int[]
         for (i, elem) in enumerate(elems)
             idx, val = elem isa AtIndex ? (elem.i, elem.elem) : (i, elem)
-            idx in const_idxs && continue
-            push!(lhss, idx)
-            push!(rhss, cs(val))
+            push!(idxs, idx)
+            push!(values, consts[i] === nothing ? cs(val)::Symbol : consts[i])
         end
+        isconst = map(!isnothing, consts)
     end
 
     scs, bm = enter_scope(cs)
     # Every element was evaluated above, so the constants can be written first even if
     # `arr` aliases an input.
-    if peeled !== nothing
-        setarray_constant_writes!(scs, arr, peeled[1], peeled[2], ex.inbounds)
-    end
-    for (lhs, rhs) in zip(lhss, rhss)
-        declare!(scs, Expr(:ref, arr, lhs), rhs)
-    end
+    emit_scalar_writes!(scs, arr, idxs, values, isconst; inbounds = ex.inbounds, span)
     declare!(scs, get_misc_identifier(cs), ex.return_arr ? arr : nothing)
     body = exit_scope!(scs, bm)
     if ex.inbounds

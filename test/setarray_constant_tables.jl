@@ -11,7 +11,7 @@ import SymbolicUtils as SU
 
 build(elems; inbounds = false, rewrites = Dict{Any, Any}()) =
     Code.fast_toexpr(Func([out, p], [], SetArray(inbounds, out, elems, true)), IRStructure{SymReal}(), rewrites)
-without_tables() = Dict{Any, Any}(Code.SETARRAY_CONSTANT_TABLES_KEY => false)
+without_tables() = Dict{Any, Any}(Code.SCALAR_WRITE_TABLES_KEY => false)
 call(ex, args...) = Base.invokelatest(eval(ex), args...)
 uses_tables(ex) = occursin(r"fill_constant_span!|fill_constant_runs!|fill_constant_at!|set_constants!", string(ex))
 # The number of `a[i] = v` statements in `ex`.
@@ -148,8 +148,8 @@ end
 end
 
 @testset "not applied" begin
-    # Fewer constants than `SETARRAY_CONSTANT_TABLES_MIN`.
-    few = Any[i <= Code.SETARRAY_CONSTANT_TABLES_MIN - 1 ? 1.0 : p[1] for i in 1:20]
+    # Fewer constants than `SCALAR_WRITE_TABLES_MIN`.
+    few = Any[i <= Code.SCALAR_WRITE_TABLES_MIN - 1 ? 1.0 : p[1] for i in 1:20]
     @test !uses_tables(build(few))
     # A repeated index: the later write wins, so the writes cannot be reordered.
     dup = Any[AtIndex(i, 1.0) for i in 1:20]
@@ -228,17 +228,174 @@ end
     @test Code.consecutive_runs(Int[]) == UnitRange{Int}[]
     @test Code.consecutive_runs([1, 2, 3, 7, 9, 10]) == [1:3, 7:7, 9:10]
     buf = zeros(Int, 10)
-    Code.fill_constant_runs!(buf, 2.0, [2:3, 9:10], false)
+    Code.fill_constant_runs!(buf, 2.0, [2:3, 9:10], false, Code.KeepValue())
     @test buf == [0, 2, 2, 0, 0, 0, 0, 0, 2, 2]
     # An `Array` is filled over the whole span, anything else only where the value goes.
-    Code.fill_constant_span!(buf, 5, 1:10, [1:2], false)
+    Code.fill_constant_span!(buf, 5, 1:10, [1:2], false, Code.KeepValue())
     @test all(==(5), buf)
     vw = view(buf, :)
-    Code.fill_constant_span!(vw, 6, 1:10, [1:2], false)
+    Code.fill_constant_span!(vw, 6, 1:10, [1:2], false, Code.KeepValue())
     @test buf == [6; 6; fill(5, 8)]
-    @test_throws BoundsError Code.fill_constant_span!(buf, 2, 1:11, [1:11], false)
-    @test_throws BoundsError Code.fill_constant_runs!(buf, 2.0, [9:11], false)
-    @test_throws BoundsError Code.fill_constant_at!(buf, 2.0, [0], false)
-    @test_throws BoundsError Code.set_constants!(buf, [1, 2], [1, 11], false)
-    @test_throws InexactError Code.set_constants!(buf, [1.5], [1], false)
+    @test_throws BoundsError Code.fill_constant_span!(buf, 2, 1:11, [1:11], false, Code.KeepValue())
+    @test_throws BoundsError Code.fill_constant_runs!(buf, 2.0, [9:11], false, Code.KeepValue())
+    @test_throws BoundsError Code.fill_constant_at!(buf, 2.0, [0], false, Code.KeepValue())
+    @test_throws BoundsError Code.set_constants!(buf, [1, 2], [1, 11], false, Code.KeepValue())
+    @test_throws InexactError Code.set_constants!(buf, [1.5], [1], false, Code.KeepValue())
+    # Converting to a given type, and `CartesianIndex` indices.
+    M = zeros(Float32, 2, 3)
+    Code.fill_constant_at!(M, 1, [CartesianIndex(1, 2), CartesianIndex(2, 3)], true, Code.ConvertToEltype())
+    Code.set_constants!(M, [7, 8], [CartesianIndex(2, 1), CartesianIndex(1, 3)], true, Code.ConvertToEltype())
+    @test M == Float32[0 1 8; 7 0 1]
+    big = Vector{BigFloat}(undef, 2)
+    Code.fill_constant_at!(big, 1, [1, 2], false, Code.ConvertToEltype())
+    @test big[1] == big[2] == 1 && big[1] !== big[2]
+end
+
+# The single-element regions of an `ArrayMaker` and `array_literal` go through the same code.
+@testset "ArrayMaker" begin
+    @syms mout[1:6, 1:8]::Real
+    iip = SU.Term{SymReal}(
+        Returns, SU.ArgsT{SymReal}((mout,));
+        type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
+    )
+    # A zero background, then one region per entry: ones, minus ones, a repeated
+    # constant, one-off constants of two types and non-constant values.
+    entry(i, j) = (i + j) % 5 == 0 ? p[mod1(i + j, 8)] * 2 :
+        j == 1 ? 1 : j == 2 ? -1 : j <= 5 ? 2.5 : j == 6 ? i : 0.25 * i
+    entryv(i, j) = (i + j) % 5 == 0 ? pv[mod1(i + j, 8)] * 2 :
+        j == 1 ? 1 : j == 2 ? -1 : j <= 5 ? 2.5 : j == 6 ? i : 0.25 * i
+    nz = [(i, j) for j in 1:8 for i in 1:6 if j != 8]
+    regions = vcat([[1:6, 1:8]], [[i:i, j:j] for (i, j) in nz])
+    vals = vcat(
+        Any[SU.Fill(SU.ShapeVecT((1:6, 1:8)))(SU.Const{SymReal}(0))],
+        Any[SU.Const{SymReal}(reshape([entry(i, j)], 1, 1)) for (i, j) in nz]
+    )
+    maker = SU.ArrayMaker{SymReal}(regions, vals)
+    ex = Code.fast_toexpr(Func([mout, p], [], Code.with_allocator(iip, maker)), IRStructure{SymReal}(), Dict{Any, Any}())
+    str = string(ex)
+    @test occursin("fill_constant_at!", str) && occursin("set_constants!", str)
+    expected = [j == 8 ? 0.0 : entryv(i, j) for i in 1:6, j in 1:8]
+    @test call(ex, fill(NaN, 6, 8), pv) == expected
+    # Only the non-constant values are left to the batches, in the order of the memory.
+    ndynamic = count(((i, j),) -> (i + j) % 5 == 0, nz)
+    batch = only(m.captures[1] for m in eachmatch(r"batched_setindex!\)\([^,]+, \((.*?)\), \(CartesianIndex", str))
+    @test count("convert", batch) == ndynamic
+    cart = [parse.(Int, m.captures) for m in eachmatch(r"CartesianIndex\((\d+), (\d+)\)", last(split(str, batch)))][1:ndynamic]
+    @test issorted(cart; by = reverse)
+    # Every value is converted to the element type, one element at a time.
+    @test call(ex, fill(NaN32, 6, 8), pv) == Float32.(expected)
+    res = call(ex, Matrix{BigFloat}(undef, 6, 8), pv)
+    @test res == expected
+    @test res[1, 3] == res[3, 3] == 2.5 && res[1, 3] !== res[3, 3]
+    @test res[1, 1] == 1 && res[1, 2] == -1
+end
+
+@testset "array_literal" begin
+    @syms lout[1:40]::Real
+    iip = SU.Term{SymReal}(
+        Returns, SU.ArgsT{SymReal}((lout,));
+        type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
+    )
+    elems = [i % 9 == 0 ? p[mod1(i, 8)] + 1 : i % 2 == 0 ? 7 : 0.5 * i for i in 1:40]
+    lit = SU.Const{SymReal}(elems)
+    ex = Code.fast_toexpr(Func([lout, p], [], Code.with_allocator(iip, lit)), IRStructure{SymReal}(), Dict{Any, Any}())
+    @test occursin("fill_constant_at!", string(ex)) && occursin("set_constants!", string(ex))
+    buf = fill(NaN, 40)
+    call(ex, buf, pv)
+    @test buf == [i % 9 == 0 ? pv[mod1(i, 8)] + 1 : i % 2 == 0 ? 7 : 0.5 * i for i in 1:40]
+    # Every element is evaluated before the first write, so the output may alias an input.
+    @syms q[1:40]::Real
+    iipq = SU.Term{SymReal}(
+        Returns, SU.ArgsT{SymReal}((q,));
+        type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
+    )
+    rev = SU.Const{SymReal}([i <= 20 ? q[41 - i] : 3 for i in 1:40])
+    ex = Code.fast_toexpr(Func([q], [], Code.with_allocator(iipq, rev)), IRStructure{SymReal}(), Dict{Any, Any}())
+    v = collect(1.0:40.0)
+    call(ex, v)
+    @test v == [i <= 20 ? 41.0 - i : 3.0 for i in 1:40]
+end
+
+# A number whose unwrapping has an effect: it happens once per element.
+struct CountedUnwrap <: Number end
+const UNWRAP_COUNT = Ref(0)
+SymbolicUtils.unwrap(::CountedUnwrap) = (UNWRAP_COUNT[] += 1)
+
+@testset "constants are unwrapped once" begin
+    UNWRAP_COUNT[] = 0
+    ex = build(Any[CountedUnwrap() for _ in 1:20])
+    @test uses_tables(ex) && UNWRAP_COUNT[] == 20
+    @test call(ex, zeros(Int, 60), pv)[1:20] == 1:20
+end
+
+@testset "ArrayMaker and array_literal: what tables must not change" begin
+    @syms vout[1:70]::Real
+    iip = SU.Term{SymReal}(
+        Returns, SU.ArgsT{SymReal}((vout,));
+        type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
+    )
+    lit(elems; rewrites = Dict{Any, Any}()) = Code.fast_toexpr(
+        Func([vout, p], [], Code.with_allocator(iip, SU.Const{SymReal}(elems))), IRStructure{SymReal}(), rewrites
+    )
+    maker(elems; rewrites = Dict{Any, Any}()) = Code.fast_toexpr(
+        Func([vout, p], [], Code.with_allocator(iip, SU.ArrayMaker{SymReal}([[k:k] for k in eachindex(elems)], Any[SU.Const{SymReal}([e]) for e in elems]))),
+        IRStructure{SymReal}(), rewrites
+    )
+    off() = Dict{Any, Any}(Code.SCALAR_WRITE_TABLES_KEY => false)
+
+    # Symbolic constants, as they are after building the elements symbolically.
+    elems = [i % 4 == 0 ? p[mod1(i, 8)] + 0 : SU.Const{SymReal}(i % 3 == 0 ? 2.5 : 4) for i in 1:70]
+    expected = [i % 4 == 0 ? pv[mod1(i, 8)] : i % 3 == 0 ? 2.5 : 4.0 for i in 1:70]
+    for build_ in (lit, maker)
+        ex = build_(elems)
+        @test uses_tables(ex)
+        buf = fill(NaN, 70); call(ex, buf, pv)
+        @test buf == expected
+        ref = build_(elems; rewrites = off())
+        @test !uses_tables(ref) || build_ === maker
+        buf = fill(NaN, 70); call(ref, buf, pv)
+        @test buf == expected
+    end
+
+    # A constant is written as it is: negating this one gives one.
+    wrap = [i == 1 ? SU.Const{SymReal}(UInt8(255)) : i == 2 ? SU.Const{SymReal}(1) : p[mod1(i, 8)] + 0 for i in 1:20]
+    for build_ in (lit, maker), rewrites in (Dict{Any, Any}(), off())
+        buf = zeros(70); call(build_(wrap; rewrites), buf, pv)
+        @test buf[1] == 255 && buf[2] == 1
+    end
+
+    # Reading across what used to be a batch boundary: element 70 reads element 1.
+    @syms q[1:70]::Real
+    iipq = SU.Term{SymReal}(
+        Returns, SU.ArgsT{SymReal}((q,));
+        type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
+    )
+    ex = Code.fast_toexpr(
+        Func([q], [], Code.with_allocator(iipq, SU.Const{SymReal}([i == 70 ? q[1] + 0 : i == 1 ? q[70] + 0 : 42 for i in 1:70]))),
+        IRStructure{SymReal}(), Dict{Any, Any}()
+    )
+    v = collect(1.0:70.0); call(ex, v)
+    @test v[1] == 70 && v[70] == 1 && all(==(42), v[2:69])
+
+    # `one` of the element type is evaluated once for all the ones, also below the
+    # number of constants that tables take.
+    few = [i == 1 || i == 2 ? 1 : i == 3 || i == 4 ? -1 : p[mod1(i, 8)] + 0 for i in 1:20]
+    ex = maker(few)
+    buf = Vector{BigFloat}(undef, 70); call(ex, buf, pv)
+    @test buf[1] === buf[2] && buf[3] === buf[4] && buf[1] == 1 && buf[3] == -1
+
+    # A hook on the left-hand sides sees every value of an `array_literal`.
+    seen = Ref(0)
+    hook = Dict{Any, Any}(Code.LHS_HOOK_KEY => (cs, i, lhs) -> (seen[] += 1; lhs))
+    consts = [i == 1 ? p[1] + 0 : 2.5 for i in 1:40]
+    @test uses_tables(lit(consts))
+    hooked = lit(consts; rewrites = hook)
+    @test !uses_tables(hooked) && seen[] >= 2
+
+    # An output in which distinct indices share storage is the one case in which the
+    # order matters. Without tables an `array_literal` writes in the order of its elements.
+    shared = [i == 1 ? p[1] + 0 : 2 for i in 1:20]
+    parent = [0.0]
+    call(lit(shared; rewrites = off()), view(parent, ones(Int, 20)), pv)
+    @test parent[1] == 2
 end

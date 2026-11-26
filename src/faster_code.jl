@@ -1986,6 +1986,73 @@ function setarray_constants(cs::CodegenState, elems)
     return consts, span
 end
 
+"""
+Key in `CodegenState.rewrites` that controls whether the non-constant elements of a large
+`SetArray` are written in batches by [`set_elements!`](@ref) instead of with one statement
+each (default `true`).
+
+A statement per element is the fastest code to run, but the slowest to compile: all of the
+stores end up in one basic block, and the time LLVM takes to schedule it grows faster than
+the number of stores. A batched write costs a call and passes the values through it, which
+made filling a sparse Jacobian of 16000 entries take 15 instead of 9 microseconds, and
+compiling it take 8 instead of 18 seconds.
+"""
+const SETARRAY_BATCHED_WRITES_KEY = :setarray_batched_writes
+
+"""
+A `SetArray` with fewer elements than this left to write, after those written from tables
+of constants, is not written in batches. Below it, compilation is fast enough for the
+slower writes not to be worth it.
+"""
+const SETARRAY_BATCHED_WRITES_MIN = 512
+
+"""
+Number of elements written by one call of [`set_elements!`](@ref).
+"""
+const SETARRAY_BATCH_SIZE = 16
+
+"""
+    set_elements!(buffer, idxs, inbounds, values...)
+
+Write `values[i]` to index `idxs[i]` of `buffer`, in order.
+"""
+@noinline function set_elements!(buffer, idxs::NTuple{N, Int}, inbounds::Bool, values::Vararg{T, N}) where {N, T}
+    if inbounds
+        @inbounds for i in 1:N
+            buffer[idxs[i]] = values[i]
+        end
+    else
+        for i in 1:N
+            buffer[idxs[i]] = values[i]
+        end
+    end
+    return nothing
+end
+# Values of different types: specializing on each combination of them is not worth it.
+@noinline function set_elements!(buffer, idxs::NTuple{N, Int}, inbounds::Bool, @nospecialize(values::Vararg{Any, N})) where {N}
+    for i in 1:N
+        if inbounds
+            @inbounds buffer[idxs[i]] = values[i]
+        else
+            buffer[idxs[i]] = values[i]
+        end
+    end
+    return nothing
+end
+
+"""
+    setarray_batchable(cs, elems)
+
+Whether the `elems` of a `SetArray` can be written in batches: there are enough of them,
+their indices are integers and no hook has to see the left-hand sides.
+"""
+function setarray_batchable(cs::CodegenState, elems)
+    get(cs.rewrites, SETARRAY_BATCHED_WRITES_KEY, true)::Bool || return false
+    get(cs.rewrites, LHS_HOOK_KEY, nothing) === nothing || return false
+    length(elems) >= SETARRAY_BATCHED_WRITES_MIN || return false
+    return all(elem -> !(elem isa AtIndex) || elem.i isa Int, elems)
+end
+
 function (cs::CodegenState)(ex::SetArray)
     arr = cs(ex.arr)::Symbol
     elems = ex.elems
@@ -1995,12 +2062,14 @@ function (cs::CodegenState)(ex::SetArray)
         elems = collect(elems)
     end
     peeled = elems isa Union{Array, Tuple} ? setarray_constants(cs, elems) : nothing
+    batchable = elems isa Union{Array, Tuple} && setarray_batchable(cs, elems)
     lhss = []
     rhss = Symbol[]
     if peeled === nothing
         for (i, elem) in enumerate(elems)
             if elem isa AtIndex
-                push!(lhss, cs(elem.i))
+                # An index known to be an integer is used as it is if it goes in a batch.
+                push!(lhss, batchable ? elem.i : cs(elem.i))
                 push!(rhss, cs(elem.elem))
             else
                 push!(lhss, i)
@@ -2023,8 +2092,26 @@ function (cs::CodegenState)(ex::SetArray)
     if peeled !== nothing
         setarray_constant_writes!(scs, arr, peeled[1], peeled[2], ex.inbounds)
     end
-    for (lhs, rhs) in zip(lhss, rhss)
-        declare!(scs, Expr(:ref, arr, lhs), rhs)
+    if batchable && length(lhss) >= SETARRAY_BATCHED_WRITES_MIN
+        # The elements are written in their order, so this needs no more than integer
+        # indices.
+        for rng in Iterators.partition(eachindex(lhss), SETARRAY_BATCH_SIZE)
+            idxs = Expr(:tuple)
+            append!(idxs.args, view(lhss, rng))
+            call = Expr(:call, set_elements!, arr, idxs, ex.inbounds)
+            append!(call.args, view(rhss, rng))
+            declare!(scs, :_, call)
+        end
+        # Without this, every statement of a function that does nothing but compute the
+        # values may be free of effects other than writing to an argument. Julia then
+        # runs its escape analysis on the function, which takes time quadratic in the
+        # number of values read from one array (JuliaLang/julia#65304). This call
+        # has an effect as far as the compiler is concerned, and generates no code.
+        declare!(scs, :_, Expr(:call, Base.donotdelete))
+    else
+        for (lhs, rhs) in zip(lhss, rhss)
+            declare!(scs, Expr(:ref, arr, lhs), rhs)
+        end
     end
     declare!(scs, get_misc_identifier(cs), ex.return_arr ? arr : nothing)
     body = exit_scope!(scs, bm)

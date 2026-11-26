@@ -444,3 +444,97 @@ end
     call(lit(shared; rewrites = off()), view(parent, ones(Int, 20)), pv)
     @test parent[1] == 2
 end
+
+# With `EAGER_SCALAR_WRITES_KEY` values are written as soon as there are enough for a call.
+@testset "eager scalar writes" begin
+    @syms eout[1:120]::Real
+    iip = SU.Term{SymReal}(
+        Returns, SU.ArgsT{SymReal}((eout,));
+        type = SU.FnType{Tuple, Any, Returns{Any}}, shape = SU.ShapeVecT()
+    )
+    eager() = Dict{Any, Any}(Code.EAGER_SCALAR_WRITES_KEY => true)
+    lit(elems; rewrites = Dict{Any, Any}()) = Code.fast_toexpr(
+        Func([eout, p], [], Code.with_allocator(iip, SU.Const{SymReal}(elems))), IRStructure{SymReal}(), rewrites
+    )
+    maker(regions, vals; rewrites = Dict{Any, Any}()) = Code.fast_toexpr(
+        Func([eout, p], [], Code.with_allocator(iip, SU.ArrayMaker{SymReal}(regions, vals))), IRStructure{SymReal}(), rewrites
+    )
+    # The statements of the function, flattened, as (position, expression) pairs.
+    function statements(ex, out = Any[])
+        if ex isa Expr && ex.head in (:block, :function, :macrocall, :let)
+            foreach(arg -> statements(arg, out), ex.args)
+        elseif ex isa Expr && ex.head in (:(=), :local)
+            push!(out, ex)
+            foreach(arg -> statements(arg, out), ex.args)
+        end
+        return out
+    end
+    # Whether a value is computed after the first call of `batched_setindex!`.
+    function interleaved(ex)
+        stmts = statements(ex)
+        first_write = findfirst(s -> !isempty(batch_calls(s)), stmts)
+        last_value = findlast(s -> s.head === :local, stmts)
+        return first_write !== nothing && last_value !== nothing && first_write < last_value
+    end
+    inlined(ex) = ex isa Expr ? (ex.head === :macrocall && ex.args[1] == GlobalRef(Base, Symbol("@inline"))) + sum(inlined, ex.args; init = 0) : 0
+
+    elems = [i % 5 == 0 ? SU.Const{SymReal}(i % 2 == 0 ? 2.5 : 4) : p[mod1(i, 8)] * i + 0 for i in 1:120]
+    expected = [i % 5 == 0 ? (i % 2 == 0 ? 2.5 : 4.0) : pv[mod1(i, 8)] * i for i in 1:120]
+    regions = [[k:k] for k in 1:120]
+    vals = Any[SU.Const{SymReal}([e]) for e in elems]
+    for (name, deferred, eagerly) in (
+            ("array_literal", lit(elems), lit(elems; rewrites = eager())),
+            ("ArrayMaker", maker(regions, vals), maker(regions, vals; rewrites = eager())),
+        )
+        @testset "$name" begin
+            @test !interleaved(deferred) && interleaved(eagerly)
+            # The same calls with the same indices, and one of them inlined.
+            calls = batch_calls(eagerly)
+            @test length(calls) == length(batch_calls(deferred)) == cld(96, Code.BATCHED_SETINDEX_BATCH_SIZE)
+            @test sort!(reduce(vcat, [c.args[3].args for c in calls])) == sort!(reduce(vcat, [c.args[3].args for c in batch_calls(deferred)]))
+            @test inlined(eagerly) == 1 && inlined(deferred) == 1
+            # The values arrive in the order of the memory, and are written in it.
+            @test issorted(reduce(vcat, [c.args[3].args for c in calls]))
+            # The constants are still written from tables.
+            @test uses_tables(eagerly)
+            for ex in (deferred, eagerly)
+                buf = fill(NaN, 120); call(ex, buf, pv)
+                @test buf == expected
+            end
+        end
+    end
+
+    # A region written again later: the later value is the one that stays, whether the
+    # earlier one was written already or not.
+    again = vcat(regions, [[3:3], [7:7], [118:118]])
+    again_vals = vcat(vals, Any[SU.Const{SymReal}([p[1] + 100]), SU.Const{SymReal}([9]), SU.Const{SymReal}([p[2] + 200])])
+    again_expected = copy(expected); again_expected[3] = pv[1] + 100; again_expected[7] = 9; again_expected[118] = pv[2] + 200
+    for rewrites in (Dict{Any, Any}(), eager())
+        buf = fill(NaN, 120); call(maker(again, again_vals; rewrites), buf, pv)
+        @test buf == again_expected
+    end
+
+    # A block written in the middle: the scalars before it are written before it.
+    @syms blk[1:10]::Real
+    mixed = vcat(regions[1:60], [[31:40]], regions[61:120])
+    mixed_vals = vcat(vals[1:60], Any[blk], vals[61:120])
+    mixed_expected = copy(expected); mixed_expected[31:40] .= 1:10
+    for rewrites in (Dict{Any, Any}(), eager())
+        ex = Code.fast_toexpr(
+            Func([eout, p, blk], [], Code.with_allocator(iip, SU.ArrayMaker{SymReal}(mixed, mixed_vals))), IRStructure{SymReal}(), rewrites
+        )
+        buf = fill(NaN, 120); call(ex, buf, pv, collect(1.0:10.0))
+        @test buf == mixed_expected
+    end
+
+    # Mostly constants: they are all left for the end.
+    heavy = [i % 40 == 0 ? p[1] + i : SU.Const{SymReal}(i % 7) for i in 1:120]
+    buf = fill(NaN, 120); call(lit(heavy; rewrites = eager()), buf, pv)
+    @test buf == [i % 40 == 0 ? pv[1] + i : i % 7 for i in 1:120]
+
+    # Fewer values than a call takes: nothing changes.
+    few = [p[mod1(i, 8)] + i for i in 1:20]
+    @test lit(few[1:(Code.BATCHED_SETINDEX_BATCH_SIZE - 1) + 4]; rewrites = eager()) isa Expr
+    buf = fill(NaN, 120); call(lit(few; rewrites = eager()), buf, pv)
+    @test buf[1:20] == [pv[mod1(i, 8)] + i for i in 1:20]
+end

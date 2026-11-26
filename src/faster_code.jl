@@ -1003,8 +1003,13 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
     one_expr = Expr(:call, one, eltype_expr)
     negone_expr = Expr(:call, :(-), one_expr)
 
-    function materialize_scalar_writes()
-        scalar_regions = collect(keys(scalar_idxs))
+    # With `EAGER_SCALAR_WRITES_KEY`: the regions whose value is in a variable and not
+    # written yet, and whether a call of `batched_setindex!` was inlined already.
+    eager = eager_scalar_writes(cs)
+    pending_regions = ShapeVecT[]
+    inlined_call = false
+
+    function materialize_scalar_writes(scalar_regions = collect(keys(scalar_idxs)))
         idxs = CartesianIndex{D}[CartesianIndex{D}(Tuple(map(first, region))) for region in scalar_regions]
         # The regions are distinct, so the order of the writes is free: write in the
         # order of the memory of an `Array`.
@@ -1028,10 +1033,22 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                 push!(isconst, tables && _val isa Number)
             end
         end
-        emit_scalar_writes!(
+        inlined_call |= emit_scalar_writes!(
             cs, output_buffer, idxs, values, isconst;
-            inbounds = true, convert_to = eltype_expr
+            inbounds = true, convert_to = eltype_expr, inline_last = !inlined_call
         )
+        return nothing
+    end
+
+    # Write the regions whose value is in a variable, so that those variables are not
+    # needed any longer. A region that was given another value since is skipped: the
+    # later one is what `scalar_idxs` holds.
+    function materialize_pending_writes()
+        ready = unique!(filter!(region -> get(scalar_idxs, region, nothing) isa Symbol, pending_regions))
+        isempty(ready) || materialize_scalar_writes(copy(ready))
+        foreach(region -> delete!(scalar_idxs, region), ready)
+        empty!(pending_regions)
+        return nothing
     end
 
     # The value of the element of a single-element region at `idx` in the IR: the number
@@ -1091,7 +1108,13 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
                     false
                 end
             end
-            deferred && continue
+            if deferred
+                if eager && scalar_idxs[region] isa Symbol
+                    push!(pending_regions, region)
+                    length(pending_regions) >= BATCHED_SETINDEX_BATCH_SIZE && materialize_pending_writes()
+                end
+                continue
+            end
         end
 
         # We are writing to a block. First, materialize all scalar writes that happened until now.
@@ -1101,6 +1124,7 @@ function codegen_function!(::Type{ArrayMaker{T}}, cs::CodegenState{T}, expr::Bas
             materialize_scalar_writes()
         end
         empty!(scalar_idxs)
+        empty!(pending_regions)
         # Materialize the view into the output buffer that we will write to.
         view_expr = Expr(:call, view, output_buffer)
         @union_split_smallvec region append!(view_expr.args, region)
@@ -1200,25 +1224,50 @@ function codegen_function!(
     cart_idxs = CartesianIndices(Tuple(sh::ShapeVecT))
     idxs = vec(collect(cart_idxs))
     tables = scalar_write_tables(cs)
+    eager = eager_scalar_writes(cs)
+    inlined_call = false
+    # What is left to write: indices, values and whether they are constants.
+    widxs = eltype(idxs)[]
     values = Any[]
     isconst = Bool[]
-    for arg_idx in Iterators.drop(args_idxs, 1)
+    # With `EAGER_SCALAR_WRITES_KEY`: the values in variables that are not written yet.
+    # They are written as soon as there are enough of them for a call, which leaves only
+    # constants in the vectors above.
+    pending_idxs = eltype(idxs)[]
+    pending_values = Any[]
+    for (idx, arg_idx) in zip(idxs, Iterators.drop(args_idxs, 1))
         arg = cs.ir[arg_idx]
         const_val = @match arg begin
             BSImpl.Const(; val) => val
             _ => nothing
         end
         if tables && const_val isa Number
+            push!(widxs, idx)
             push!(values, const_val)
             push!(isconst, true)
+        elseif eager
+            push!(pending_idxs, idx)
+            push!(pending_values, cs(arg))
+            if length(pending_idxs) == BATCHED_SETINDEX_BATCH_SIZE
+                inlined_call |= emit_scalar_writes!(
+                    cs, output_buffer, pending_idxs, pending_values, falses(length(pending_idxs));
+                    inbounds = true, convert_to = eltype_expr, inline_last = !inlined_call
+                )
+                empty!(pending_idxs)
+                empty!(pending_values)
+            end
         else
+            push!(widxs, idx)
             push!(values, cs(arg))
             push!(isconst, false)
         end
     end
+    append!(widxs, pending_idxs)
+    append!(values, pending_values)
+    append!(isconst, falses(length(pending_idxs)))
     emit_scalar_writes!(
-        cs, output_buffer, idxs, values, isconst;
-        inbounds = true, convert_to = eltype_expr
+        cs, output_buffer, widxs, values, isconst;
+        inbounds = true, convert_to = eltype_expr, inline_last = !inlined_call
     )
 
     return output_buffer
@@ -1784,6 +1833,30 @@ function scalar_write_tables(cs::CodegenState)
 end
 
 """
+Key in `CodegenState.rewrites` that makes the single-element regions of an `ArrayMaker` and
+the elements of an `array_literal` be written as soon as there are enough of them for a
+call of [`batched_setindex!`](@ref), instead of after all of them were evaluated (default
+`false`).
+
+Evaluating everything first keeps every value alive until the end of the function. With
+thousands of values, each of them needs a place on the stack, which takes the compiler time
+that grows faster than their number, and makes the generated code store and reload them.
+Writing them as they come avoids both. It changes what the generated function does in
+these ways, which is why it has to be asked for:
+
+- **The output must not alias anything the values are computed from.** An element
+  evaluated after a write would read what was written.
+- As for `SCALAR_WRITE_TABLES_KEY`, distinct indices of the output must not share storage,
+  since the order of the writes changes: the constants are written last.
+- A value that a later region of an `ArrayMaker` replaces may have been written already.
+  It is then converted to the element type and written, where it would otherwise have
+  been dropped.
+"""
+const EAGER_SCALAR_WRITES_KEY = :eager_scalar_writes
+
+eager_scalar_writes(cs::CodegenState) = get(cs.rewrites, EAGER_SCALAR_WRITES_KEY, false)::Bool
+
+"""
 Fewest numeric constants among the scalar writes of [`emit_scalar_writes!`](@ref) for them
 to be written from tables.
 """
@@ -1923,7 +1996,7 @@ function consecutive_runs(idxs::Vector{Int})
 end
 
 """
-    emit_scalar_writes!(cs, dest, idxs, values, isconst; inbounds, convert_to = nothing, span = nothing)
+    emit_scalar_writes!(cs, dest, idxs, values, isconst; inbounds, convert_to = nothing, span = nothing, inline_last = true)
 
 Generate the code that writes `values[k]` to index `idxs[k]` of the array `dest`, for
 every `k`. This is the one place that decides how many scalar writes are generated, for
@@ -1965,12 +2038,18 @@ and distinct mutable numbers such as `BigFloat`s stay apart.
   written, and the values that are not written from tables go through
   [`batched_setindex!`](@ref), `BATCHED_SETINDEX_BATCH_SIZE` at a time, which needs the
   indices to be `CartesianIndex`es.
+- `inline_last`: whether the last call of `batched_setindex!` is inlined. One such call
+  per function is needed, see the comment where it is done. A caller that writes the
+  scalars of one function in several steps asks for it once.
+
+Returns whether a call of `batched_setindex!` was inlined.
 """
 function emit_scalar_writes!(
         cs::CodegenState, dest::Symbol, idxs::Vector, values::Vector{Any}, isconst::AbstractVector{Bool};
         inbounds::Bool, convert_to::Union{Nothing, Symbol} = nothing,
-        span::Union{Nothing, UnitRange{Int}} = nothing
+        span::Union{Nothing, UnitRange{Int}} = nothing, inline_last::Bool = true
     )
+    inlined = false
     numbers = count(k -> isconst[k] && !(values[k] isa Expr), eachindex(values)) >= SCALAR_WRITE_TABLES_MIN
     tabled = Bool[isconst[k] && (numbers || values[k] isa Expr) for k in eachindex(values)]
     if any(tabled)
@@ -1991,7 +2070,8 @@ function emit_scalar_writes!(
                 push!(idxs_expr.args, idxs[k])
                 push!(call.args, Expr(:call, convert, convert_to, values[k]))
             end
-            if b == length(batches)
+            if inline_last && b == length(batches)
+                inlined = true
                 # The last call is inlined on purpose. If every statement of a function
                 # is free of effects other than calls that write to an argument, as it is
                 # for one that only computes the values, Julia runs its escape analysis on
@@ -2002,7 +2082,7 @@ function emit_scalar_writes!(
             declare!(cs, :_, call)
         end
     end
-    return nothing
+    return inlined
 end
 
 # The writes of the constants `values` to `idxs`, see `emit_scalar_writes!`.

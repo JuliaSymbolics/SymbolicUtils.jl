@@ -1739,21 +1739,290 @@ function (cs::CodegenState{T})(fn::Func) where {T}
     return declare!(cs, get_misc_identifier(cs), Expr(:function, fn_args, fn_body))
 end
 
+"""
+Key in `CodegenState.rewrites` that controls whether the constant elements of a `SetArray`
+are written from tables instead of with one statement each (default `true`). See
+[`setarray_constant_writes!`](@ref).
+
+The constants are written before the other elements, and equal constants together,
+instead of in the order of the elements. The result only differs for an output in which
+distinct indices share storage, such as a `view` with a repeated index.
+"""
+const SETARRAY_CONSTANT_TABLES_KEY = :setarray_constant_tables
+
+"""
+A `SetArray` with fewer constant elements than this is generated as one statement per
+element.
+"""
+const SETARRAY_CONSTANT_TABLES_MIN = 16
+
+"""
+A constant has to repeat at least this often in a `SetArray` to be written to a list or to
+ranges of indices instead of from a table of values.
+"""
+const SETARRAY_CONSTANT_RUN_MIN = 8
+
+"""
+The indices of a repeated constant are written as ranges if the ranges average at least
+this many indices, and as a list of indices otherwise.
+"""
+const SETARRAY_CONSTANT_RUN_LENGTH = 8
+
+"""
+    fill_constant_span!(buffer, value, span, runs, inbounds)
+
+Write `value` to the indices of `buffer` in each range of `runs`. All of them are in the
+range `span`, and every other index in `span` is written afterwards.
+
+For an `Array` the whole of `span` is filled instead, which is one loop instead of one per
+range. Other arrays may give meaning to a write that is later overwritten: a structured
+matrix rejects some values at some indices and a sparse array allocates.
+"""
+@noinline function fill_constant_span!(buffer::Array, value, span::UnitRange{Int}, runs::Vector{UnitRange{Int}}, inbounds::Bool)
+    if inbounds
+        @inbounds for i in span
+            buffer[i] = value
+        end
+    else
+        for i in span
+            buffer[i] = value
+        end
+    end
+    return nothing
+end
+function fill_constant_span!(buffer, value, span::UnitRange{Int}, runs::Vector{UnitRange{Int}}, inbounds::Bool)
+    return fill_constant_runs!(buffer, value, runs, inbounds)
+end
+
+"""
+    fill_constant_runs!(buffer, value, runs, inbounds)
+
+Write `value` to the indices of `buffer` in each range of `runs`.
+"""
+@noinline function fill_constant_runs!(buffer, value, runs::Vector{UnitRange{Int}}, inbounds::Bool)
+    if inbounds
+        for run in runs
+            @inbounds for i in run
+                buffer[i] = value
+            end
+        end
+    else
+        for run in runs, i in run
+            buffer[i] = value
+        end
+    end
+    return nothing
+end
+
+"""
+    fill_constant_at!(buffer, value, idxs, inbounds)
+
+Write `value` to the indices `idxs` of `buffer`.
+"""
+@noinline function fill_constant_at!(buffer, value, idxs::Vector{Int}, inbounds::Bool)
+    if inbounds
+        @inbounds for i in idxs
+            buffer[i] = value
+        end
+    else
+        for i in idxs
+            buffer[i] = value
+        end
+    end
+    return nothing
+end
+
+"""
+    set_constants!(buffer, values, idxs, inbounds)
+
+Write `values[i]` to index `idxs[i]` of `buffer`.
+"""
+@noinline function set_constants!(buffer, values::Vector, idxs::Vector{Int}, inbounds::Bool)
+    if inbounds
+        @inbounds for i in eachindex(values, idxs)
+            buffer[idxs[i]] = values[i]
+        end
+    else
+        for i in eachindex(values, idxs)
+            buffer[idxs[i]] = values[i]
+        end
+    end
+    return nothing
+end
+
+"""
+    consecutive_runs(idxs)
+
+The sorted distinct integers `idxs` as ranges of consecutive values.
+"""
+function consecutive_runs(idxs::Vector{Int})
+    runs = UnitRange{Int}[]
+    isempty(idxs) && return runs
+    start = stop = first(idxs)
+    for i in Iterators.drop(idxs, 1)
+        if i == stop + 1
+            stop = i
+        else
+            push!(runs, start:stop)
+            start = stop = i
+        end
+    end
+    push!(runs, start:stop)
+    return runs
+end
+
+"""
+    setarray_constant_writes!(cs, arr, consts, span, inbounds)
+
+Generate the writes of `consts`, the `index => value` pairs of the constant elements of a
+`SetArray`, to `arr`. They cost no statement each: the indices and values are arrays
+interpolated into the generated code.
+
+- If the indices the `SetArray` writes form the single range `span`, the most frequent
+  constant is written by [`fill_constant_span!`](@ref).
+- Another constant repeating at least `SETARRAY_CONSTANT_RUN_MIN` times is written to the
+  indices it occupies, given as ranges if they are mostly consecutive and as a list
+  otherwise.
+- The remaining constants are written from one table of values per type.
+
+Only identical (`===`) constants count as a repeat, so every element is written with the
+very value it holds: equal numbers of different types, `NaN`s with different payloads and
+distinct mutable numbers such as `BigFloat`s stay apart.
+"""
+function setarray_constant_writes!(
+        cs::CodegenState, arr::Symbol, consts::Vector{Pair{Int, Any}},
+        span::Union{Nothing, UnitRange{Int}}, inbounds::Bool
+    )
+    by_value = IdDict{Any, Vector{Int}}()
+    values = Any[]
+    for (idx, val) in consts
+        idxs = get!(by_value, val) do
+            push!(values, val)
+            Int[]
+        end
+        push!(idxs, idx)
+    end
+    background = nothing
+    if span !== nothing
+        val = argmax(val -> length(by_value[val]), values)
+        # Filling the span writes every index of it, so it has to be mostly this constant.
+        if length(by_value[val]) >= SETARRAY_CONSTANT_RUN_MIN && 2 * length(by_value[val]) >= length(span)
+            background = Some(val)
+            runs = consecutive_runs(sort!(by_value[val]))
+            declare!(cs, :_, Expr(:call, fill_constant_span!, arr, val, span, runs, inbounds))
+        end
+    end
+    tables = Dict{DataType, Tuple{Vector{Any}, Vector{Int}}}()
+    table_types = DataType[]
+    for val in values
+        background !== nothing && something(background) === val && continue
+        idxs = by_value[val]
+        if length(idxs) >= SETARRAY_CONSTANT_RUN_MIN
+            runs = consecutive_runs(sort!(idxs))
+            if SETARRAY_CONSTANT_RUN_LENGTH * length(runs) <= length(idxs)
+                declare!(cs, :_, Expr(:call, fill_constant_runs!, arr, val, runs, inbounds))
+            else
+                # Scattered indices: a range each would cost more than it saves.
+                declare!(cs, :_, Expr(:call, fill_constant_at!, arr, val, idxs, inbounds))
+            end
+        else
+            VT = typeof(val)
+            vals, tidxs = get!(tables, VT) do
+                push!(table_types, VT)
+                (Any[], Int[])
+            end
+            append!(vals, Iterators.repeated(val, length(idxs)))
+            append!(tidxs, idxs)
+        end
+    end
+    for VT in table_types
+        vals, tidxs = tables[VT]
+        declare!(cs, :_, Expr(:call, set_constants!, arr, Vector{VT}(vals), tidxs, inbounds))
+    end
+    return nothing
+end
+
+"""
+    setarray_constant(val)
+
+The value code generation gives the element `val` of a `SetArray`, if it is a constant.
+"""
+function setarray_constant(@nospecialize(val))
+    # Wrappers are unwrapped until nothing changes, as `cs(val)` does.
+    while true
+        unwrapped = unwrap(val)
+        unwrapped === val && break
+        val = unwrapped
+    end
+    return unwrap_const(val)
+end
+
+"""
+    setarray_constants(cs, elems)
+
+The constant elements among the `elems` of a `SetArray`, as `index => value` pairs, and the
+range its indices span, or `nothing` for the range if they do not form one. Returns
+`nothing` if the constants are not to be written from tables. That takes them out of the
+order of the writes, which needs every index to be a distinct integer, and out of the
+sight of a hook on the left-hand sides.
+"""
+function setarray_constants(cs::CodegenState, elems)
+    get(cs.rewrites, SETARRAY_CONSTANT_TABLES_KEY, true)::Bool || return nothing
+    get(cs.rewrites, LHS_HOOK_KEY, nothing) === nothing || return nothing
+    length(elems) >= SETARRAY_CONSTANT_TABLES_MIN || return nothing
+    consts = Pair{Int, Any}[]
+    seen = Set{Int}()
+    for (i, elem) in enumerate(elems)
+        idx, val = elem isa AtIndex ? (elem.i, elem.elem) : (i, elem)
+        idx isa Int || return nothing
+        idx in seen && return nothing
+        push!(seen, idx)
+        val = setarray_constant(val)
+        val isa Number && push!(consts, idx => val)
+    end
+    length(consts) >= SETARRAY_CONSTANT_TABLES_MIN || return nothing
+    lo, hi = extrema(seen)
+    span = hi - lo + 1 == length(seen) ? (lo:hi) : nothing
+    return consts, span
+end
+
 function (cs::CodegenState)(ex::SetArray)
     arr = cs(ex.arr)::Symbol
+    elems = ex.elems
+    # The constants are looked for before code is generated for any element. Elements
+    # that can only be iterated once are left to be generated one by one.
+    if elems isa AbstractArray && !(elems isa Array)
+        elems = collect(elems)
+    end
+    peeled = elems isa Union{Array, Tuple} ? setarray_constants(cs, elems) : nothing
     lhss = []
     rhss = Symbol[]
-    for (i, elem) in enumerate(ex.elems)
-        if elem isa AtIndex
-            push!(lhss, cs(elem.i))
-            push!(rhss, cs(elem.elem))
-        else
-            push!(lhss, i)
-            push!(rhss, cs(elem))
+    if peeled === nothing
+        for (i, elem) in enumerate(elems)
+            if elem isa AtIndex
+                push!(lhss, cs(elem.i))
+                push!(rhss, cs(elem.elem))
+            else
+                push!(lhss, i)
+                push!(rhss, cs(elem))
+            end
+        end
+    else
+        const_idxs = Set{Int}(first(c) for c in peeled[1])
+        for (i, elem) in enumerate(elems)
+            idx, val = elem isa AtIndex ? (elem.i, elem.elem) : (i, elem)
+            idx in const_idxs && continue
+            push!(lhss, idx)
+            push!(rhss, cs(val))
         end
     end
 
     scs, bm = enter_scope(cs)
+    # Every element was evaluated above, so the constants can be written first even if
+    # `arr` aliases an input.
+    if peeled !== nothing
+        setarray_constant_writes!(scs, arr, peeled[1], peeled[2], ex.inbounds)
+    end
     for (lhs, rhs) in zip(lhss, rhss)
         declare!(scs, Expr(:ref, arr, lhs), rhs)
     end

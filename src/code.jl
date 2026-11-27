@@ -1410,9 +1410,10 @@ end
 # Literals that are skipped when they are zero: the numbers of Base whose value is determined
 # by its type, so that `x === zero(x)` is exactly "a positive zero" (`-0.0` is kept). Other
 # number types are emitted like any other element.
-const _SkippableZero = Union{Bool, Base.BitInteger, Base.IEEEFloat,
-                             Complex{<:Union{Base.BitInteger, Base.IEEEFloat}},
-                             Rational{<:Base.BitInteger}}
+const _BitInt = Union{Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128}
+const _IEEEFloat = Union{Float16, Float32, Float64}
+const _SkippableZero = Union{Bool, _BitInt, _IEEEFloat, Complex{<:Union{_BitInt, _IEEEFloat}},
+                             Rational{<:_BitInt}}
 _is_zero_literal(x) = x isa _SkippableZero && x === zero(x)
 
 # An array of `dims` whose elements, except those at the sorted positions `stored` that the

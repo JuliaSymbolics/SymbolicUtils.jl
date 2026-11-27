@@ -40,6 +40,7 @@ if GROUP == "Core"
             @safetestset "Trig Reduce" begin include("trig_reduce.jl") end
             @safetestset "Inference" begin include("inference.jl") end
             @safetestset "Code" begin include("code.jl") end
+            @safetestset "Chunked array codegen" begin include("chunked_array.jl") end
             @safetestset "New codegen" begin include("new_code.jl") end
             @safetestset "Fused broadcast codegen" begin include("fused_broadcast.jl") end
             @safetestset "Symbolic codegen primitives" begin include("symbolic_codegen_primitives.jl") end

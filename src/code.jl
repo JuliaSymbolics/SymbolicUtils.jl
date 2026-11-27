@@ -1368,17 +1368,130 @@ MakeArray
 
 MakeArray(elems, similarto) = MakeArray(elems, similarto, nothing)
 
+# Arrays with at least this many elements are built from chunks (see `_chunked_array_expr`)
+# instead of one `create_array` call with one argument per element, whose compile time grows
+# faster than linearly with the number of arguments.
+const CHUNKED_ARRAY_MIN_ELEMS = 64
+# Number of element types promoted by each call when finding the element type.
+const ARRAY_CHUNK_SIZE = 32
+
 function toexpr(a::MakeArray, st)
     similarto = toexpr(a.similarto, st)
     T = similarto isa Type ? similarto : :(typeof($similarto))
     ndim = ndims(a.elems)
     elT = a.output_eltype
+    elems = [toexpr(x, st) for x in a.elems]
+    if _use_chunked_array(a, T, elems)
+        return _chunked_array_expr(elems, size(a.elems))
+    end
     quote
         $create_array($T,
                      $elT,
                      Val{$ndim}(),
                      Val{$(size(a.elems))}(),
-                     $([toexpr(x, st) for x in a.elems]...),)
+                     $(elems...),)
+    end
+end
+
+_is_numeric_element(x::BasicSymbolic) = symtype(x) <: Number
+_is_numeric_element(x) = x isa Number
+
+# Chunking applies to a `Vector` or `Matrix` of numbers whose element type is inferred, which
+# is the case `create_array` handles with `[elems...]` and `vhcat`. An `Irrational` literal
+# keeps the single call: its promotion with other types is not associative, so the element
+# type would depend on the order in which the types are folded, which differs between Julia
+# versions.
+function _use_chunked_array(a::MakeArray, T, elems)
+    T isa Type && T <: Array && a.output_eltype === nothing &&
+        ndims(a.elems) in (1, 2) && length(elems) >= CHUNKED_ARRAY_MIN_ELEMS &&
+        all(_is_numeric_element, a.elems) && !any(x -> x isa Irrational, elems)
+end
+
+# Literals that are skipped when they are zero: the numbers of Base whose value is determined
+# by its type, so that `x === zero(x)` is exactly "a positive zero" (`-0.0` is kept). Other
+# number types are emitted like any other element.
+const _SkippableZero = Union{Bool, Base.BitInteger, Base.IEEEFloat,
+                             Complex{<:Union{Base.BitInteger, Base.IEEEFloat}},
+                             Rational{<:Base.BitInteger}}
+_is_zero_literal(x) = x isa _SkippableZero && x === zero(x)
+
+# An array of `dims` whose elements, except those at the sorted positions `stored` that the
+# caller is about to set, are `value` converted to `T`. There is one conversion per element
+# unless `T` is a bits type, so that mutable element types are not aliased.
+function _filled_array(::Type{T}, value, stored, dims...) where {T}
+    arr = Array{T}(undef, dims...)
+    if isbitstype(T)
+        fill!(arr, convert(T, value))
+    else
+        next = 1
+        for i in eachindex(arr)
+            if next <= length(stored) && stored[next] == i
+                next += 1
+            else
+                arr[i] = value
+            end
+        end
+    end
+    return arr
+end
+
+# The promotion of `T` and the types of `xs`, from the left. A long list is folded in groups.
+_promote_into(::Type{T}) where {T} = T
+@inline function _promote_into(::Type{T}, x, xs...) where {T}
+    _promote_into(promote_type(T, typeof(x)), xs...)
+end
+
+# `create_array` takes one argument per element, and the time to compile one call grows faster
+# than linearly in the number of arguments. This evaluates the non-zero elements into local
+# variables instead and stores them into an array. The element type is found from their types
+# and the types of the skipped literal zeros, folded from the left in the order of the
+# elements, as `create_array` does on current Julia. That agrees with `create_array` as long as
+# `promote_type` is associative over these types, as it is for the numbers of Base apart from
+# `Irrational`, and a repeated type does not change the promotion. The array is filled with the
+# zero literal only if zeros were skipped. Literal zeros, the bulk of a dense Jacobian, are not
+# emitted. The code uses no local functions, so it can be compiled where closures are not
+# allowed. The temporaries have fresh names, so they cannot capture or shadow a binding of the
+# caller.
+function _chunked_array_expr(elems, dims)
+    # Only the most common type of zero literal is skipped, so one fill value suffices, and
+    # only when they are at least half of the elements, so that filling is not wasted work.
+    zero_types = Any[typeof(x) for x in elems if _is_zero_literal(x)]
+    zero_type = isempty(zero_types) ? nothing :
+                argmax(T -> count(==(T), zero_types), unique(zero_types))
+    if zero_type !== nothing && 2 * count(==(zero_type), zero_types) < length(elems)
+        zero_type = nothing
+    end
+    is_skipped(x) = _is_zero_literal(x) && typeof(x) === zero_type
+    nonzero = [i for i in eachindex(elems) if !is_skipped(elems[i])]
+    out, eltype_var = gensym(:array), gensym(:eltype)
+    names = Dict(i => gensym(:element) for i in nonzero)
+    evaluate = [:($(names[i]) = $(elems[i])) for i in nonzero]
+    stores = [:($out[$i] = $(names[i])) for i in nonzero]
+    # The elements and, as one zero each, the runs of skipped zeros between them, in order.
+    zero_value = zero_type === nothing ? nothing : zero(zero_type)
+    items = Any[]
+    for p in eachindex(elems)
+        if is_skipped(elems[p])
+            (isempty(items) || items[end] !== zero_value) && push!(items, zero_value)
+        else
+            push!(items, names[p])
+        end
+    end
+    folds = Expr[]
+    for group in Iterators.partition(items, ARRAY_CHUNK_SIZE)
+        push!(folds, :($eltype_var = $_promote_into($eltype_var, $(group...))))
+    end
+    alloc = zero_type === nothing ? :($Array{$eltype_var}($(Base.undef), $(dims...))) :
+            :($_filled_array($eltype_var, $zero_value, $nonzero, $(dims...)))
+    quote
+        let
+            $(evaluate...)
+            $eltype_var = $(Union{})
+            $(folds...)
+            $out = $alloc
+            $(stores...)
+            $out
+        end
     end
 end
 

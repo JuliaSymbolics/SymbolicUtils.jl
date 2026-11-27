@@ -1242,6 +1242,14 @@ in an `@inbounds`.
 
 `return_arr` is a flag which controls whether the generated `begin..end` block
 returns the `arr`. Defaults to `false`, in which case the block returns `nothing`.
+
+The writes are not necessarily made in the order of `elems`: `fast_toexpr` writes
+numeric constants first, from tables, when there are many of them. Distinct indices
+of `arr` must therefore not share storage (as they do in a `view` with a repeated
+index), or which of the values written to a shared element remains is unspecified, as
+is which writes were made if one of them throws. Setting
+`SymbolicUtils.Code.SCALAR_WRITE_TABLES_KEY` to `false` in the rewrites keeps the order
+of `elems`.
 """
 SetArray
 

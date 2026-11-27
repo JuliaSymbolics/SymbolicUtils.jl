@@ -231,6 +231,17 @@ end
     @test v == [fill(4.0, 39); 3.0]
 end
 
+@testset "distinct indices sharing storage" begin
+    # Documented: the constants are written first, so the order of `elems` only decides
+    # what remains in a shared element if tables are off.
+    elems = Any[i == 1 ? p[1] : 2.0 for i in 1:20]
+    parent = zeros(1)
+    call(build(elems; rewrites = without_tables()), view(parent, ones(Int, 20)), pv)
+    @test parent[1] == 2.0
+    call(build(elems), view(parent, ones(Int, 20)), pv)
+    @test parent[1] == pv[1]
+end
+
 @testset "helpers" begin
     @test Code.consecutive_runs(Int[]) == UnitRange{Int}[]
     @test Code.consecutive_runs([1, 2, 3, 7, 9, 10]) == [1:3, 7:7, 9:10]

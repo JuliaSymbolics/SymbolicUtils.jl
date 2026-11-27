@@ -1245,31 +1245,31 @@ end
 end
 
 @testset "batched_setindex!" begin
-    # NTuple of values, NTuple of CartesianIndex (1D)
+    # NTuple of CartesianIndex, then the values (1D)
     buf = zeros(Int, 5)
-    Code.batched_setindex!(buf, (10, 20, 30), (CartesianIndex(1), CartesianIndex(3), CartesianIndex(5)))
+    Code.batched_setindex!(buf, (CartesianIndex(1), CartesianIndex(3), CartesianIndex(5)), 10, 20, 30)
     @test buf == [10, 0, 20, 0, 30]
 
-    # NTuple of values, NTuple of CartesianIndex (2D)
+    # NTuple of CartesianIndex, then the values (2D)
     buf2d = zeros(Int, 3, 3)
-    Code.batched_setindex!(buf2d, (7, 8), (CartesianIndex(1, 2), CartesianIndex(3, 2)))
+    Code.batched_setindex!(buf2d, (CartesianIndex(1, 2), CartesianIndex(3, 2)), 7, 8)
     @test buf2d[1, 2] == 7
     @test buf2d[3, 2] == 8
     @test count(!iszero, buf2d) == 2
 
-    # Broadcast single value, array of CartesianIndex (1D)
+    # Single value, array of CartesianIndex (1D)
     buf = zeros(Int, 5)
-    Code.batched_setindex!(buf, 42, [CartesianIndex(1), CartesianIndex(3), CartesianIndex(5)])
+    Code.fill_constant_at!(buf, 42, [CartesianIndex(1), CartesianIndex(3), CartesianIndex(5)], true, Code.ConvertToEltype())
     @test buf == [42, 0, 42, 0, 42]
 
-    # Broadcast single value, array of CartesianIndex (2D)
+    # Single value, array of CartesianIndex (2D)
     buf2d = zeros(Int, 3, 3)
-    Code.batched_setindex!(buf2d, -1, [CartesianIndex(1, 1), CartesianIndex(2, 2), CartesianIndex(3, 3)])
+    Code.fill_constant_at!(buf2d, -1, [CartesianIndex(1, 1), CartesianIndex(2, 2), CartesianIndex(3, 3)], true, Code.ConvertToEltype())
     @test buf2d == [-1 0 0; 0 -1 0; 0 0 -1]
 
     # Empty index array is a no-op
     buf = zeros(Int, 3)
-    Code.batched_setindex!(buf, 99, CartesianIndex{1}[])
+    Code.fill_constant_at!(buf, 99, CartesianIndex{1}[], true, Code.ConvertToEltype())
     @test buf == [0, 0, 0]
 end
 
@@ -1280,8 +1280,7 @@ end
     # FILL_ARR_LIMIT == 16, so arrays of size > 16 use batched_setindex! for scalar writes.
     # Entries 1–3 are 1 (→ idxs_buffer broadcast path for value 1).
     # Entries 4–5 are -1 (→ idxs_buffer broadcast path for value -1).
-    # Entries 6–20 are symbolic (→ NTuple batching, split across multiple calls because
-    # BATCHED_SETINDEX_BATCH_SIZE == 8).
+    # Entries 6–20 are symbolic (→ written in batches of `BATCHED_SETINDEX_BATCH_SIZE`).
     w = @makearray w[1:20] begin
         w[1:1]   => [1]
         w[2:2]   => [1]

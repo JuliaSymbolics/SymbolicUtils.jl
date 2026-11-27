@@ -2038,28 +2038,37 @@ end
 
 
 """
-    setarray_constant(val)
+    setarray_unwrap(val)
 
-The value code generation gives the element `val` of a `SetArray`, if it is a constant.
+The element `val` of a `SetArray` with its wrappers removed, as `cs(val)` removes them.
 """
-function setarray_constant(@nospecialize(val))
-    # Wrappers are unwrapped until nothing changes, as `cs(val)` does.
+function setarray_unwrap(@nospecialize(val))
     while true
         unwrapped = unwrap(val)
         unwrapped === val && break
         val = unwrapped
     end
-    return unwrap_const(val)
+    return val
 end
+
+"""
+    setarray_constant(val)
+
+The value code generation gives the element `val` of a `SetArray`, if it is a constant.
+"""
+setarray_constant(@nospecialize(val)) = unwrap_const(setarray_unwrap(val))
 
 """
     setarray_constants(cs, elems)
 
-The numeric constants among the `elems` of a `SetArray`, as a vector holding the constant
-or `nothing` for each element, and the range the indices of `elems` span, or `nothing`
-for the range if they do not form one. Returns `nothing` if the constants are not to be
-written from tables. That takes them out of the order of the writes, which needs every
-index to be a distinct integer.
+Look for the numeric constants among the `elems` of a `SetArray`. Returns `nothing` if
+they are not looked for: writing them from tables takes them out of the order of the
+writes, which needs every index to be a distinct integer. Otherwise returns
+`(unwrapped, consts, span)`: the value of each element with its wrappers removed, which
+is what code has to be generated for, so that no element is unwrapped twice; the constant
+or `nothing` for each element, or `nothing` in place of the vector if there are too few
+constants for tables; and the range the indices span, or `nothing` if they do not form
+one.
 """
 function setarray_constants(cs::CodegenState, elems)
     scalar_write_tables(cs) || return nothing
@@ -2071,15 +2080,18 @@ function setarray_constants(cs::CodegenState, elems)
         idx in seen && return nothing
         push!(seen, idx)
     end
+    unwrapped = Any[]
     consts = Any[]
     for elem in elems
-        val = setarray_constant(elem isa AtIndex ? elem.elem : elem)
-        push!(consts, val isa Number ? val : nothing)
+        val = setarray_unwrap(elem isa AtIndex ? elem.elem : elem)
+        push!(unwrapped, val)
+        c = unwrap_const(val)
+        push!(consts, c isa Number ? c : nothing)
     end
-    count(!isnothing, consts) >= SCALAR_WRITE_TABLES_MIN || return nothing
+    count(!isnothing, consts) >= SCALAR_WRITE_TABLES_MIN || return unwrapped, nothing, nothing
     lo, hi = extrema(seen)
     span = hi - lo + 1 == length(seen) ? (lo:hi) : nothing
-    return consts, span
+    return unwrapped, consts, span
 end
 
 function (cs::CodegenState)(ex::SetArray)
@@ -2106,14 +2118,20 @@ function (cs::CodegenState)(ex::SetArray)
         isconst = falses(length(idxs))
         span = nothing
     else
-        consts, span = tabled
+        # Code is generated for the unwrapped values: unwrapping an element again could
+        # give something else.
+        unwrapped, consts, span = tabled
         idxs = Int[]
+        isconst = falses(length(elems))
         for (i, elem) in enumerate(elems)
-            idx, val = elem isa AtIndex ? (elem.i, elem.elem) : (i, elem)
-            push!(idxs, idx)
-            push!(values, consts[i] === nothing ? cs(val)::Symbol : consts[i])
+            push!(idxs, elem isa AtIndex ? elem.i : i)
+            if consts !== nothing && consts[i] !== nothing
+                push!(values, consts[i])
+                isconst[i] = true
+            else
+                push!(values, cs(unwrapped[i])::Symbol)
+            end
         end
-        isconst = map(!isnothing, consts)
     end
 
     scs, bm = enter_scope(cs)

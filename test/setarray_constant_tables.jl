@@ -188,16 +188,23 @@ SymbolicUtils.unwrap(w::Union{InnerWrapper, OuterWrapper}) = w.value
     @test all(i -> res[i] === ref[i] === 3, 1:20)
 end
 
+# A vector that counts how often each of its elements is read.
+struct CountedReads <: AbstractVector{Any}
+    elems::Vector{Any}
+    reads::Vector{Int}
+end
+Base.size(v::CountedReads) = size(v.elems)
+Base.getindex(v::CountedReads, i::Int) = (v.reads[i] += 1; v.elems[i])
+
 @testset "elements given as an iterator" begin
     # An iterator that can only be consumed once is generated element by element.
     ex = build(Iterators.Stateful(Any[i == 2 ? p[1] : 3.0 for i in 1:20]))
     @test !uses_tables(ex)
     @test call(ex, zeros(60), pv)[1:20] == [i == 2 ? pv[1] : 3.0 for i in 1:20]
     # Any other array is read once per element.
-    reads = Ref(0)
-    counted = Base.Generator(i -> (reads[] += 1; i == 2 ? p[1] : 3.0), 1:20)
-    ex = build(view(collect(Any, counted), :))
-    @test uses_tables(ex) && reads[] == 20
+    counted = CountedReads(Any[i == 2 ? p[1] : 3.0 for i in 1:20], zeros(Int, 20))
+    ex = build(counted)
+    @test uses_tables(ex) && all(==(1), counted.reads)
     @test call(ex, zeros(60), pv)[1:20] == [i == 2 ? pv[1] : 3.0 for i in 1:20]
     @test uses_tables(build(Tuple(Any[i == 2 ? p[1] : 3.0 for i in 1:20])))
 end
@@ -320,12 +327,28 @@ end
 struct CountedUnwrap <: Number end
 const UNWRAP_COUNT = Ref(0)
 SymbolicUtils.unwrap(::CountedUnwrap) = (UNWRAP_COUNT[] += 1)
+struct CountedSymbolic <: Number
+    value::Any
+end
+SymbolicUtils.unwrap(w::CountedSymbolic) = (UNWRAP_COUNT[] += 1; w.value)
 
 @testset "constants are unwrapped once" begin
     UNWRAP_COUNT[] = 0
     ex = build(Any[CountedUnwrap() for _ in 1:20])
     @test uses_tables(ex) && UNWRAP_COUNT[] == 20
     @test call(ex, zeros(Int, 60), pv)[1:20] == 1:20
+    # Also when there are too few constants for tables, with them on or off.
+    for rewrites in (Dict{Any, Any}(), without_tables())
+        UNWRAP_COUNT[] = 0
+        ex = build(Any[i <= 3 ? CountedUnwrap() : p[1] + i for i in 1:40]; rewrites)
+        @test !uses_tables(ex) && UNWRAP_COUNT[] == 3
+        @test call(ex, zeros(60), pv)[1:40] == [i <= 3 ? i : pv[1] + i for i in 1:40]
+    end
+    # A wrapper around something symbolic among enough constants for tables.
+    UNWRAP_COUNT[] = 0
+    ex = build(Any[i == 1 ? CountedSymbolic(p[1]) : 2.5 for i in 1:40])
+    @test uses_tables(ex) && UNWRAP_COUNT[] == 1
+    @test call(ex, zeros(60), pv)[1:40] == [i == 1 ? pv[1] : 2.5 for i in 1:40]
 end
 
 @testset "ArrayMaker and array_literal: what tables must not change" begin
